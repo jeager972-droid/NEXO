@@ -1,0 +1,44 @@
+name: NEXO CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-edge-cpp:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install C++ Deps
+      run: sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev libsqlite3-dev
+    - name: Build C++ Edge
+      run: |
+        cd "Logica de negocio/edge"
+        cmake --preset dev-x86
+        cmake --build --preset dev-x86
+    - name: Run Edge Tests
+      run: cd "Logica de negocio/edge" && ctest --preset dev-x86 --output-on-failure
+
+  build-webapp-react:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-node@v3
+      with: { node-version: 18 }
+    - name: Build Vite
+      run: cd WebApp && npm ci && npm run build
+
+  deploy-backend-railway:
+    needs: [build-edge-cpp, build-webapp-react]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Railway CLI
+      run: npm i -g @railway/cli
+    - name: Deploy to Railway
+      run: railway up -d -p "Logica de negocio/alojamiento"
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

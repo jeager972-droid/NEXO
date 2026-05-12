@@ -1,0 +1,55 @@
+# === Dependencias ===
+node_modules/
+vendor/
+target/
+Cargo.lock
+
+# === Entornos y secretos ===
+.env
+.env.*
+*.pem
+*.key
+*.secret
+
+# === Logs y temporales ===
+*.log
+logs/
+tmp/
+temp/
+.DS_Store
+Thumbs.db
+
+# === IDEs y sistema ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === Builds ===
+dist/
+build/
+out/
+*.exe
+*.dmg
+*.AppImage
+*.apk
+*.deb
+*.msi
+
+# === Docker ===
+.docker/
+
+# === Tauri ===
+src-tauri/target/
+src-tauri/gen/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# === Backup de repos anidados antiguos ===
+.git-backup-old/
