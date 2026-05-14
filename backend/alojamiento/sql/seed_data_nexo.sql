@@ -1,8 +1,8 @@
 -- NEXO SEED DATA - Ejecutar: psql $DATABASE_URL -f seed_data_nexo.sql
 
 INSERT INTO departments(department_id, department_name) VALUES('d1111111-1111-1111-1111-111111111111','Cundinamarca') ON CONFLICT DO NOTHING;
-INSERT INTO municipalities(municipality_id, department_id, municipality_name) VALUES('m2222222-2222-2222-2222-222222222222','d1111111-1111-1111-1111-111111111111','Bogotá D.C.') ON CONFLICT DO NOTHING;
-INSERT INTO schools(school_id, municipality_id, dane_code, school_name, address, phone, email, active) VALUES('s3333333-3333-3333-3333-333333333333','m2222222-2222-2222-2222-222222222222','111001000001','Colegio Nacional','Carrera 7 # 32-12','6012345678','contacto@colegionacional.edu.co',TRUE) ON CONFLICT DO NOTHING;
+INSERT INTO municipalities(municipality_id, department_id, municipality_name) VALUES('a2222222-2222-2222-2222-222222222222','d1111111-1111-1111-1111-111111111111','Bogotá D.C.') ON CONFLICT DO NOTHING;
+INSERT INTO schools(school_id, municipality_id, dane_code, school_name, address, phone, email, active) VALUES('s3333333-3333-3333-3333-333333333333','a2222222-2222-2222-2222-222222222222','111001000001','Colegio Nacional','Carrera 7 # 32-12','6012345678','contacto@colegionacional.edu.co',TRUE) ON CONFLICT DO NOTHING;
 
 INSERT INTO roles(role_id, role_name, description) VALUES (gen_random_uuid(),'SUPER_RECTOR','Super administrador'),(gen_random_uuid(),'RECTOR','Director'),(gen_random_uuid(),'COORDINADOR','Coordinador'),(gen_random_uuid(),'DOCENTE','Docente'),(gen_random_uuid(),'SECRETARIA','Secretaria'),(gen_random_uuid(),'PORTERO','Portero'),(gen_random_uuid(),'GUARDIAN','Acudiente') ON CONFLICT DO NOTHING;
 
@@ -10,10 +10,10 @@ INSERT INTO permissions(permission_id, permission_code, description) SELECT gen_
 
 WITH admin_role AS (SELECT role_id FROM roles WHERE role_name='SUPER_RECTOR' LIMIT 1)
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
-SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',role_id,'111111111','Administrador','NEXO','admin@nexo.edu','3000000000','$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi','salt',TRUE,NOW() FROM admin_role ON CONFLICT(email) DO NOTHING;
+SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',role_id,'111111111','Administrador','NEXO','admin@nexo.edu','3000000000','$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt',TRUE,NOW() FROM admin_role ON CONFLICT(email) DO NOTHING;
 
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
-SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',r.role_id,doc,fname,lname,email,'300'||(1000000+s)::TEXT,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi','salt',TRUE,NOW()
+SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',r.role_id,doc,fname,lname,email,'300'||(1000000+s)::TEXT,'$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt',TRUE,NOW()
 FROM (VALUES(1,'222222222','Carlos','Martinez','cmartinez@colegionacional.edu.co'),(2,'333333333','Ana','Rodriguez','arodriguez@colegionacional.edu.co'),(3,'444444444','Luis','Gonzalez','lgonzalez@colegionacional.edu.co'),(4,'555555555','Maria','Lopez','mlopez@colegionacional.edu.co'),(5,'666666666','Pedro','Sanchez','psanchez@colegionacional.edu.co')) AS t(s,doc,fname,lname,email)
 JOIN roles r ON r.role_name='DOCENTE' ON CONFLICT(email) DO NOTHING;
 
@@ -44,7 +44,7 @@ BEGIN
 FOR i IN 1..50 LOOP
 v_user:=gen_random_uuid(); v_guard:=gen_random_uuid();
 INSERT INTO users(user_id,school_id,role_id,document_number,first_name,last_name,email,phone,password_hash,password_salt,active,created_at)
-VALUES(v_user,'s3333333-3333-3333-3333-333333333333',(SELECT role_id FROM roles WHERE role_name='GUARDIAN'),'g'||(100000000+i)::TEXT,gnames[1+(i%10)],'Acudiente '||i,'guardian'||i||'@test.com',CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi','salt',TRUE,NOW()) ON CONFLICT(email) DO NOTHING;
+VALUES(v_user,'s3333333-3333-3333-3333-333333333333',(SELECT role_id FROM roles WHERE role_name='GUARDIAN'),'g'||(100000000+i)::TEXT,gnames[1+(i%10)],'Acudiente '||i,'guardian'||i||'@test.com',CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,'$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt',TRUE,NOW()) ON CONFLICT(email) DO NOTHING;
 INSERT INTO guardians(guardian_id,user_id,whatsapp_phone,emergency_contact,created_at)
 VALUES(v_guard,v_user,CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,CASE WHEN i%5=0 THEN TRUE ELSE FALSE END,NOW()) ON CONFLICT(user_id) DO NOTHING;
 END LOOP;
