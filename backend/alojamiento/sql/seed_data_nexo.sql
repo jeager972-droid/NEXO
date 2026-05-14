@@ -1,0 +1,84 @@
+-- NEXO SEED DATA - Ejecutar: psql $DATABASE_URL -f seed_data_nexo.sql
+
+INSERT INTO departments(department_id, department_name) VALUES('d1111111-1111-1111-1111-111111111111','Cundinamarca') ON CONFLICT DO NOTHING;
+INSERT INTO municipalities(municipality_id, department_id, municipality_name) VALUES('m2222222-2222-2222-2222-222222222222','d1111111-1111-1111-1111-111111111111','Bogotá D.C.') ON CONFLICT DO NOTHING;
+INSERT INTO schools(school_id, municipality_id, dane_code, school_name, address, phone, email, active) VALUES('s3333333-3333-3333-3333-333333333333','m2222222-2222-2222-2222-222222222222','111001000001','Colegio Nacional','Carrera 7 # 32-12','6012345678','contacto@colegionacional.edu.co',TRUE) ON CONFLICT DO NOTHING;
+
+INSERT INTO roles(role_id, role_name, description) VALUES (gen_random_uuid(),'SUPER_RECTOR','Super administrador'),(gen_random_uuid(),'RECTOR','Director'),(gen_random_uuid(),'COORDINADOR','Coordinador'),(gen_random_uuid(),'DOCENTE','Docente'),(gen_random_uuid(),'SECRETARIA','Secretaria'),(gen_random_uuid(),'PORTERO','Portero'),(gen_random_uuid(),'GUARDIAN','Acudiente') ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions(permission_id, permission_code, description) SELECT gen_random_uuid(),code,desc_text FROM (VALUES ('students.read','Ver estudiantes'),('students.write','Crear/editar'),('biometric.read','Ver biométricos'),('reports.read','Ver reportes'),('admin.full','Admin total'),('twilio.send','Enviar mensajes'),('devices.manage','Gestionar dispositivos')) AS t(code,desc_text) ON CONFLICT DO NOTHING;
+
+WITH admin_role AS (SELECT role_id FROM roles WHERE role_name='SUPER_RECTOR' LIMIT 1)
+INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
+SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',role_id,'111111111','Administrador','NEXO','admin@nexo.edu','3000000000','$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi','salt',TRUE,NOW() FROM admin_role ON CONFLICT(email) DO NOTHING;
+
+INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
+SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',r.role_id,doc,fname,lname,email,'300'||(1000000+s)::TEXT,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi','salt',TRUE,NOW()
+FROM (VALUES(1,'222222222','Carlos','Martinez','cmartinez@colegionacional.edu.co'),(2,'333333333','Ana','Rodriguez','arodriguez@colegionacional.edu.co'),(3,'444444444','Luis','Gonzalez','lgonzalez@colegionacional.edu.co'),(4,'555555555','Maria','Lopez','mlopez@colegionacional.edu.co'),(5,'666666666','Pedro','Sanchez','psanchez@colegionacional.edu.co')) AS t(s,doc,fname,lname,email)
+JOIN roles r ON r.role_name='DOCENTE' ON CONFLICT(email) DO NOTHING;
+
+INSERT INTO classrooms(classroom_id, school_id, classroom_name, building, created_at) VALUES('c1aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','s3333333-3333-3333-3333-333333333333','Salon 101','Bloque A',NOW()),('c2bbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','s3333333-3333-3333-3333-333333333333','Salon 102','Bloque A',NOW()),('c3cccccc-cccc-cccc-cccc-cccccccccccc','s3333333-3333-3333-3333-333333333333','Salon 201','Bloque B',NOW()),('c4dddddd-dddd-dddd-dddd-dddddddddddd','s3333333-3333-3333-3333-333333333333','Salon 202','Bloque B',NOW()),('c5eeeeee-eeee-eeee-eeee-eeeeeeeeeeee','s3333333-3333-3333-3333-333333333333','Laboratorio','Bloque C',NOW()) ON CONFLICT DO NOTHING;
+
+INSERT INTO academic_groups(group_id, school_id, group_name, grade_level, academic_year, created_at) VALUES('g10aaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','s3333333-3333-3333-3333-333333333333','6A','Sexto',2026,NOW()),('g20bbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','s3333333-3333-3333-3333-333333333333','6B','Sexto',2026,NOW()),('g30ccccc-cccc-cccc-cccc-cccccccccccc','s3333333-3333-3333-3333-333333333333','7A','Septimo',2026,NOW()),('g40ddddd-dddd-dddd-dddd-dddddddddddd','s3333333-3333-3333-3333-333333333333','7B','Septimo',2026,NOW()),('g50eeeee-eeee-eeee-eeee-eeeeeeeeeeee','s3333333-3333-3333-3333-333333333333','8A','Octavo',2026,NOW()) ON CONFLICT DO NOTHING;
+
+INSERT INTO subjects(subject_id, subject_name, created_at) VALUES(gen_random_uuid(),'Matematicas',NOW()),(gen_random_uuid(),'Ciencias',NOW()),(gen_random_uuid(),'Lengua',NOW()),(gen_random_uuid(),'Historia',NOW()),(gen_random_uuid(),'Educacion Fisica',NOW()),(gen_random_uuid(),'Ingles',NOW()),(gen_random_uuid(),'Tecnologia',NOW()) ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE i INT; groups UUID[]:=ARRAY['g10aaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','g20bbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','g30ccccc-cccc-cccc-cccc-cccccccccccc','g40ddddd-dddd-dddd-dddd-dddddddddddd','g50eeeee-eeee-eeee-eeee-eeeeeeeeeeee'];
+fnames TEXT[]:=ARRAY['Jhon','Carlos','Ana','Luis','Maria','Pedro','Sofia','Diego','Laura','Juan','Valentina','Andres','Camila','Daniel','Juliana','Miguel','Natalia','Alejandro','Isabella','Mateo'];
+lnames TEXT[]:=ARRAY['Edison','Garcia','Martinez','Rodriguez','Gonzalez','Lopez','Sanchez','Perez','Ramirez','Torres','Flores','Rivera','Castro','Ortiz','Reyes','Ruiz','Jimenez','Vargas','Moreno','Aguilar'];
+BEGIN
+FOR i IN 1..50 LOOP
+INSERT INTO students(student_id,school_id,document_number,first_name,last_name,birth_date,active,created_at)
+VALUES(CASE WHEN i=1 THEN 's-jhon-edison-1111-1111-111111111111' ELSE gen_random_uuid() END,'s3333333-3333-3333-3333-333333333333',(100000000+i)::TEXT,CASE WHEN i=1 THEN 'Jhon' ELSE fnames[1+(i%20)] END,CASE WHEN i=1 THEN 'Edison' ELSE lnames[1+((i*3)%20)] END,CURRENT_DATE-INTERVAL'12 years'-((i%36)||' months')::INTERVAL,TRUE,NOW()) ON CONFLICT(document_number) DO NOTHING;
+END LOOP;
+END $$;
+
+INSERT INTO student_group_assignments(assignment_id,student_id,group_id,active,start_date,created_at)
+SELECT gen_random_uuid(),s.student_id,CASE WHEN s.document_number BETWEEN '100000001' AND '100000010' THEN 'g10aaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' WHEN s.document_number BETWEEN '100000011' AND '100000020' THEN 'g20bbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' WHEN s.document_number BETWEEN '100000021' AND '100000030' THEN 'g30ccccc-cccc-cccc-cccc-cccccccccccc' WHEN s.document_number BETWEEN '100000031' AND '100000040' THEN 'g40ddddd-dddd-dddd-dddd-dddddddddddd' ELSE 'g50eeeee-eeee-eeee-eeee-eeeeeeeeeeee' END,TRUE,'2026-01-20',NOW() FROM students s ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE i INT; gnames TEXT[]:=ARRAY['Carlos Sr.','Ana Maria','Luis Alberto','Maria Elena','Pedro Jose','Sofia Isabel','Diego Fernando','Laura Cristina','Juan Pablo','Valentina'];
+v_user UUID; v_guard UUID;
+BEGIN
+FOR i IN 1..50 LOOP
+v_user:=gen_random_uuid(); v_guard:=gen_random_uuid();
+INSERT INTO users(user_id,school_id,role_id,document_number,first_name,last_name,email,phone,password_hash,password_salt,active,created_at)
+VALUES(v_user,'s3333333-3333-3333-3333-333333333333',(SELECT role_id FROM roles WHERE role_name='GUARDIAN'),'g'||(100000000+i)::TEXT,gnames[1+(i%10)],'Acudiente '||i,'guardian'||i||'@test.com',CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi','salt',TRUE,NOW()) ON CONFLICT(email) DO NOTHING;
+INSERT INTO guardians(guardian_id,user_id,whatsapp_phone,emergency_contact,created_at)
+VALUES(v_guard,v_user,CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,CASE WHEN i%5=0 THEN TRUE ELSE FALSE END,NOW()) ON CONFLICT(user_id) DO NOTHING;
+END LOOP;
+END $$;
+
+INSERT INTO guardian_student_relationships(relationship_id,guardian_id,student_id,relationship_type,primary_guardian,created_at)
+SELECT gen_random_uuid(),g.guardian_id,s.student_id,'PADRE/MADRE',TRUE,NOW() FROM (SELECT ROW_NUMBER() OVER() rn,guardian_id FROM guardians ORDER BY guardian_id) g JOIN (SELECT ROW_NUMBER() OVER() rn,student_id FROM students ORDER BY student_id) s ON g.rn=s.rn ON CONFLICT DO NOTHING;
+
+INSERT INTO edge_devices(device_id,school_id,classroom_id,device_name,active,created_at) VALUES(gen_random_uuid(),'s3333333-3333-3333-3333-333333333333','c1aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Lector Entrada Principal',TRUE,NOW()),(gen_random_uuid(),'s3333333-3333-3333-3333-333333333333','c2bbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','Lector Comedor',TRUE,NOW()),(gen_random_uuid(),'s3333333-3333-3333-3333-333333333333','c3cccccc-cccc-cccc-cccc-cccccccccccc','Lector Bloque B',TRUE,NOW()) ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE i INT; etypes TEXT[]:=ARRAY['INGRESO','SALIDA_ALMUERZO','REGRESO_ALMUERZO','SALIDA'];
+eresults TEXT[]:=ARRAY['SUCCESS','SUCCESS','SUCCESS','LATE','ABSENT']; sids UUID[]; dids UUID[];
+BEGIN SELECT array_agg(student_id) INTO sids FROM students WHERE school_id='s3333333-3333-3333-3333-333333333333';
+SELECT array_agg(device_id) INTO dids FROM edge_devices WHERE school_id='s3333333-3333-3333-3333-333333333333';
+FOR i IN 1..100 LOOP
+INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,confidence_score,event_timestamp,created_at)
+VALUES(gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',sids[1+((i*7)%array_length(sids,1))],dids[1+((i*3)%array_length(dids,1))],etypes[1+((i+1)%4)],eresults[1+(i%5)],85.0+(random()*14.9),CURRENT_DATE+((7+(i%10))::TEXT||':'||(15+(i%45))::TEXT||':00')::TIME,NOW());
+END LOOP;
+END $$;
+
+INSERT INTO attendance_incidents(incident_id,school_id,student_id,incident_type,detected_at,resolved,created_at) SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',student_id,CASE WHEN random()<0.3 THEN 'LATE_ARRIVAL' WHEN random()<0.6 THEN 'EARLY_DEPARTURE' ELSE 'UNAUTHORIZED_ABSENCE' END,CURRENT_DATE+((8+(random()*6)::INT)::TEXT||':00:00')::TIME,CASE WHEN random()<0.5 THEN TRUE ELSE FALSE END,NOW() FROM students WHERE school_id='s3333333-3333-3333-3333-333333333333' ORDER BY random() LIMIT 15;
+
+INSERT INTO sos_alerts(alert_id,school_id,emitted_by_user_id,classroom_id,alert_type,alert_description,resolved,emitted_at,created_at)
+SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',(SELECT user_id FROM users WHERE email='admin@nexo.edu'),classroom_id,CASE WHEN random()<0.33 THEN 'EMERGENCY_MEDICAL' WHEN random()<0.66 THEN 'SECURITY_THREAT' ELSE 'FIRE_ALARM' END,'Alerta simulada',TRUE,CURRENT_DATE+((10+(random()*4)::INT)::TEXT||':00:00')::TIME,NOW() FROM classrooms WHERE school_id='s3333333-3333-3333-3333-333333333333' ORDER BY random() LIMIT 5;
+
+INSERT INTO twilio_messages(twilio_message_id,school_id,student_id,guardian_id,sender_user_id,type_code,direction,phone_number,message_content,delivery_status,sent_at,created_at)
+VALUES(gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',(SELECT student_id FROM students WHERE first_name='Jhon' AND last_name='Edison'),(SELECT guardian_id FROM guardians WHERE whatsapp_phone='+573243607948'),(SELECT user_id FROM users WHERE email='admin@nexo.edu'),'CITATION','OUTBOUND','+573243607948','Estimado acudiente, su hijo Jhon Edison ha sido citado. Por favor comuniquese con la institucion.','SENT',NOW(),NOW()) ON CONFLICT DO NOTHING;
+
+INSERT INTO twilio_messages(twilio_message_id,school_id,student_id,guardian_id,sender_user_id,type_code,direction,phone_number,message_content,delivery_status,sent_at,created_at)
+SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',s.student_id,gsr.guardian_id,(SELECT user_id FROM users WHERE email='admin@nexo.edu'),'NOTIFICATION','OUTBOUND',g.whatsapp_phone','Mensaje de prueba para '||s.first_name||' '||s.last_name,CASE WHEN random()<0.8 THEN 'SENT' ELSE 'FAILED' END,NOW()-(random()*INTERVAL'7 days'),NOW() FROM students s JOIN guardian_student_relationships gsr ON gsr.student_id=s.student_id JOIN guardians g ON g.guardian_id=gsr.guardian_id WHERE s.school_id='s3333333-3333-3333-3333-333333333333' ORDER BY random() LIMIT 30;
+
+INSERT INTO user_commands(command_id,school_id,executed_by_user_id,command_type,target_entity_type,target_entity_id,command_payload,executed_at,created_at) SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',(SELECT user_id FROM users WHERE email='admin@nexo.edu'),CASE WHEN i%3=0 THEN 'STUDENT_UPDATE' WHEN i%3=1 THEN 'SEND_NOTIFICATION' ELSE 'GENERATE_REPORT' END,CASE WHEN i%3=0 THEN 'student' WHEN i%3=1 THEN 'guardian' ELSE 'report' END,gen_random_uuid(),jsonb_build_object('action','test','index',i),NOW()-(random()*INTERVAL'3 days'),NOW() FROM generate_series(1,15) i;
+
+INSERT INTO security_incidents(incident_id,school_id,related_student_id,related_user_id,incident_type,severity_level,description,detected_at,resolved,created_at) SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',(SELECT student_id FROM students ORDER BY random() LIMIT 1),(SELECT user_id FROM users WHERE email='admin@nexo.edu'),CASE WHEN random()<0.25 THEN 'UNAUTHORIZED_ACCESS' WHEN random()<0.5 THEN 'DATA_LEAK' WHEN random()<0.75 THEN 'PHYSICAL_THREAT' ELSE 'SUSPICIOUS_BEHAVIOR' END,CASE WHEN random()<0.33 THEN 'LOW' WHEN random()<0.66 THEN 'MEDIUM' ELSE 'HIGH' END,'Incidente simulado',NOW()-(random()*INTERVAL'7 days'),CASE WHEN random()<0.7 THEN TRUE ELSE FALSE END,NOW() FROM generate_series(1,10) i;
+
+INSERT INTO global_audit_logs(log_id,school_id,performed_by_user_id,action_type,entity_type,entity_id,action_details,ip_address,created_at) SELECT gen_random_uuid(),'s3333333-3333-3333-3333-333333333333',(SELECT user_id FROM users WHERE email='admin@nexo.edu'),CASE WHEN random()<0.25 THEN 'LOGIN' WHEN random()<0.5 THEN 'LOGOUT' WHEN random()<0.75 THEN 'DATA_ACCESS' ELSE 'CONFIG_CHANGE' END,CASE WHEN random()<0.33 THEN 'user' WHEN random()<0.66 THEN 'student' ELSE 'system' END,gen_random_uuid(),jsonb_build_object('event','audit_test'),'192.168.1.'||(10+(i%245))::TEXT,NOW()-(random()*INTERVAL'7 days') FROM generate_series(1,30) i;
