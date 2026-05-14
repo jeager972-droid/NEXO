@@ -14,16 +14,17 @@ export const AuthProvider = ({ children }) => {
       const data = await authApi.getMe();
       setUser(data.user);
     } catch (error) {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
       setUser(null);
+      if (window.location.pathname !== '/login') {
+        navigate('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
@@ -32,11 +33,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('user');
       }
     }
-    if (token) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
+    fetchUser();
   }, [fetchUser]);
 
   const login = useCallback(async (email, password) => {
@@ -44,11 +41,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authApi.login(email, password);
       
-      if (!data.token || !data.user) {
-        throw new Error('La API no retornó el token o el objeto de usuario esperado');
+      if (!data.user) {
+        throw new Error('La API no retornó el objeto de usuario esperado');
       }
 
-      localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       
       setUser(data.user);
@@ -66,7 +62,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error during logout', error);
     } finally {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
       setUser(null);
       navigate('/login');

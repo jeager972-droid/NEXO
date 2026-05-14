@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import {
   Search, 
@@ -19,6 +19,17 @@ const Consultation = () => {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState(null);
+  const [riskStudents, setRiskStudents] = useState([]);
+
+  useEffect(() => {
+    // Mock data para Análisis de Riesgo (simula respuesta del endpoint /behavior/risk)
+    setRiskStudents([
+      { student_id: 1, first_name: 'Juan', last_name: 'Pérez', group_name: '5A', risk_score: 85, risk_level: 'CRITICAL', late_count: 3, absence_count: 2 },
+      { student_id: 2, first_name: 'María', last_name: 'García', group_name: '4B', risk_score: 72, risk_level: 'HIGH', late_count: 5, absence_count: 1 },
+      { student_id: 3, first_name: 'Carlos', last_name: 'López', group_name: '6A', risk_score: 91, risk_level: 'CRITICAL', late_count: 2, absence_count: 4 },
+      { student_id: 4, first_name: 'Ana', last_name: 'Martínez', group_name: '3B', risk_score: 65, risk_level: 'HIGH', late_count: 6, absence_count: 0 },
+    ]);
+  }, []);
 
   // Definición de módulos por rol
   const rbacModules = {
@@ -40,20 +51,25 @@ const Consultation = () => {
       }
     ],
     [ROLES.PSICORIENTADOR]: [
-      { 
-        title: 'Mis Clases', 
-        icon: BookOpen, 
-        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso'] 
+      {
+        title: 'Análisis de Riesgo',
+        icon: ShieldAlert,
+        items: ['Análisis de Riesgo']
       },
-      { 
-        title: 'Historial Estudiantil', 
-        icon: History, 
-        items: ['Historial Asistencia', 'Historial Tardanzas', 'Mis Permisos', 'Incidentes Disciplinarios'] 
+      {
+        title: 'Mis Clases',
+        icon: BookOpen,
+        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso']
       },
-      { 
-        title: 'Mensajería', 
-        icon: MessageSquare, 
-        items: ['Mensajes Enviados', 'Respuestas Acudientes', 'Citaciones', 'Mensajes Internos'] 
+      {
+        title: 'Historial Estudiantil',
+        icon: History,
+        items: ['Historial Asistencia', 'Historial Tardanzas', 'Mis Permisos', 'Incidentes Disciplinarios']
+      },
+      {
+        title: 'Mensajería',
+        icon: MessageSquare,
+        items: ['Mensajes Enviados', 'Respuestas Acudientes', 'Citaciones', 'Mensajes Internos']
       }
     ],
     [ROLES.COORDINADOR]: [
@@ -121,9 +137,6 @@ const Consultation = () => {
       <div className="text-center space-y-4">
         <h2 className="text-5xl font-black text-gray-900 dark:text-white uppercase tracking-tight italic">Panel de Consulta</h2>
         <p className="text-gray-400 dark:text-slate-500 text-sm font-black uppercase tracking-[0.3em]">Acceso rápido a información por módulo</p>
-        {user?.role === ROLES.PSICORIENTADOR && (
-          <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.25em]">Psicorientador - expansión pendiente</p>
-        )}
       </div>
 
       <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800/50">
@@ -183,22 +196,79 @@ const Consultation = () => {
                 <X size={28} />
               </button>
             </div>
-            <div className="p-16 text-center space-y-8">
-              <div className="inline-flex p-10 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-900 dark:text-institutional-400 rounded-full shadow-inner">
-                <Database size={80} strokeWidth={1} className="animate-pulse" />
-              </div>
-              <div className="space-y-3">
-                <p className="text-gray-900 dark:text-white text-xl font-black uppercase tracking-widest">Sin datos disponibles</p>
-                <p className="text-gray-400 dark:text-slate-500 text-sm font-bold leading-relaxed max-w-md mx-auto">
-                  Este submódulo aún no tiene endpoint operativo. Se mostrará información real cuando esté conectado.
-                </p>
-              </div>
-              <button 
-                onClick={() => setActiveItem(null)}
-                className="w-full bg-institutional-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-xl shadow-institutional-900/20 transition-all hover:scale-105 active:scale-95"
-              >
-                Regresar al Panel
-              </button>
+            <div className="p-8 max-h-[70vh] overflow-y-auto">
+              {activeItem === 'Análisis de Riesgo' ? (
+                <div className="space-y-6">
+                  {riskStudents.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-gray-100 dark:border-slate-700">
+                            <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500">Estudiante</th>
+                            <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500">Grupo</th>
+                            <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500">Score</th>
+                            <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500">Nivel</th>
+                            <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 text-right">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                          {riskStudents.map((s) => (
+                            <tr key={s.student_id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                              <td className="py-4 px-4">
+                                <span className="font-bold text-gray-900 dark:text-white">{s.first_name} {s.last_name}</span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className="text-sm font-bold text-gray-500 dark:text-slate-400">{s.group_name}</span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className="text-sm font-black text-institutional-700 dark:text-institutional-400">{s.risk_score}</span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${s.risk_level === 'CRITICAL' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                                  {s.risk_level}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-right">
+                                <button className="text-[10px] font-black uppercase tracking-widest text-institutional-700 dark:text-institutional-400 hover:text-institutional-900 dark:hover:text-institutional-300 transition-colors">
+                                  Ver detalles
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10">
+                      <p className="text-gray-400 dark:text-slate-500 font-black uppercase tracking-widest text-sm">No hay estudiantes en riesgo HIGH/CRITICAL</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setActiveItem(null)}
+                    className="w-full bg-institutional-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-xl shadow-institutional-900/20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    Regresar al Panel
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center space-y-8">
+                  <div className="inline-flex p-10 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-900 dark:text-institutional-400 rounded-full shadow-inner">
+                    <Database size={80} strokeWidth={1} className="animate-pulse" />
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-gray-900 dark:text-white text-xl font-black uppercase tracking-widest">Sin datos disponibles</p>
+                    <p className="text-gray-400 dark:text-slate-500 text-sm font-bold leading-relaxed max-w-md mx-auto">
+                      Este submódulo aún no tiene endpoint operativo. Se mostrará información real cuando esté conectado.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveItem(null)}
+                    className="w-full bg-institutional-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest shadow-xl shadow-institutional-900/20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    Regresar al Panel
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

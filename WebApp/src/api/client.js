@@ -19,18 +19,15 @@ const client = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest', // FIX: CSRF protection header
   },
   timeout: DEFAULT_TIMEOUT,
+  withCredentials: true, // PILAR 2.2: Enviar cookies HttpOnly automáticamente
 });
 
-// Interceptor para incluir el token JWT y ajustar timeout por ruta
+// Interceptor para ajustar timeout por ruta
 client.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    // Timeout dinámico para rutas lentas (Fix 3.1)
     const url = config.url || '';
     if (SLOW_ROUTE_PATTERNS.some((p) => url.includes(p))) {
       config.timeout = SLOW_TIMEOUT;
@@ -45,7 +42,6 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
