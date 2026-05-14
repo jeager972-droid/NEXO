@@ -1,17 +1,19 @@
 FROM thecodingmachine/php:8.2-v4-fpm-nginx
 
-# Copiar código (ya lo hace la imagen, pero explícito)
+# Copiar todo el código del backend
 COPY backend/alojamiento/ /var/www/html/
 
-# Script para cambiar el puerto de nginx al que asigna Railway
-RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
-    echo 'PORT=${PORT:-80}' >> /usr/local/bin/start.sh && \
-    echo 'sed -i "s/listen 80;/listen ${PORT};/g" /etc/nginx/sites-enabled/default.conf' >> /usr/local/bin/start.sh && \
-    echo 'nginx -g "daemon off;"' >> /usr/local/bin/start.sh && \
-    chmod +x /usr/local/bin/start.sh
-
-# Exponer el puerto dinámico (Railway lo usa)
+# Exponer el puerto estándar (luego Railway lo reasigna)
 EXPOSE 80
 
-# Comando personalizado
-CMD ["/usr/local/bin/start.sh"]
+# El CMD de la imagen ya inicia nginx+php-fpm correctamente,
+# pero debemos asegurar que el puerto sea dinámico.
+# Para eso, usamos un script que reemplaza listen 80 por listen $PORT.
+# Si no haces esto, Railway seguirá dando 502.
+RUN echo '#!/bin/sh' > /custom-start.sh && \
+    echo 'PORT=${PORT:-80}' >> /custom-start.sh && \
+    echo 'sed -i "s/listen 80;/listen ${PORT};/g" /etc/nginx/sites-enabled/default.conf' >> /custom-start.sh && \
+    echo '/usr/local/bin/start-container' >> /custom-start.sh && \
+    chmod +x /custom-start.sh
+
+CMD ["/custom-start.sh"]
