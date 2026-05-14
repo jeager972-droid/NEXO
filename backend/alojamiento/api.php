@@ -3,32 +3,49 @@
  * NEXO GLOBAL API v7.5 - SECURE AUDIT & EDGE READY
  */
 
-if (!headers_sent()) {
-    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    $allowedOriginsRaw = getenv('CORS_ALLOW_ORIGINS') ?: 'http://localhost:5173,https://nexo-production-f0ef.up.railway.app';
-    $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $allowedOriginsRaw))));
+/* ============================================================
+   CORS HARDENING — ejecutado SIEMPRE antes de cualquier lógica
+   ============================================================ */
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$isAllowed = false;
 
-    if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
+if ($origin !== '') {
+    $envOrigins = getenv('CORS_ALLOW_ORIGINS') ?: 'http://localhost:5173,https://nexo-production-f0ef.up.railway.app';
+    $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $envOrigins))));
+
+    if (in_array($origin, $allowedOrigins, true)) {
+        $isAllowed = true;
+    } elseif (str_ends_with($origin, '.railway.app')) {
+        $isAllowed = true;
+    } elseif (str_ends_with($origin, ':5173') && str_contains($origin, 'localhost')) {
+        $isAllowed = true;
+    } elseif (str_ends_with($origin, '.vercel.app')) {
+        $isAllowed = true;
+    }
+
+    if ($isAllowed) {
         header("Access-Control-Allow-Origin: $origin");
         header('Vary: Origin');
         header('Access-Control-Allow-Credentials: true');
     }
-
-    header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-NEXO-TOKEN, X-Device-Token, X-Request-ID, X-Device-Signature');
-    header('Access-Control-Max-Age: 86400');
-
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(204);
-        exit();
-    }
-
-    header('X-Content-Type-Options: nosniff');
-    header('X-Frame-Options: DENY');
-    header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
-    header("Content-Security-Policy: default-src 'self'; connect-src 'self' http://localhost:5173; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none';");
 }
+
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-NEXO-TOKEN, X-Device-Token, X-Request-ID, X-Device-Signature');
+header('Access-Control-Max-Age: 86400');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header_remove('Content-Type');
+    http_response_code(204);
+    exit();
+}
+
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
+header("Content-Security-Policy: default-src 'self'; connect-src 'self' http://localhost:5173; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none';");
 
 require_once __DIR__ . '/db.php';
 $conn = $pdo;
