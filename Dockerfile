@@ -1,7 +1,7 @@
 FROM php:8.2-fpm-alpine
 
-# Instalar Nginx y dependencias
-RUN apk add --no-cache nginx libpq-dev && \
+# Instalar dependencias + autoconf para pecl
+RUN apk add --no-cache nginx libpq-dev autoconf build-base && \
     docker-php-ext-install pdo_pgsql mysqli && \
     pecl install redis && docker-php-ext-enable redis
 
