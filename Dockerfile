@@ -6,6 +6,4 @@ RUN apt-get update && apt-get install -y libpq-dev && \
 COPY backend/alojamiento/ /var/www/html/
 WORKDIR /var/www/html
 
-EXPOSE 8080
-
-CMD php -S 0.0.0.0:8080 -t . api.php
+CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t . api.php"]
