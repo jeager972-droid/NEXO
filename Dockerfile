@@ -1,19 +1,21 @@
-FROM thecodingmachine/php:8.2-v4-fpm-nginx
+FROM php:8.2-apache
 
-# Copiar todo el código del backend
+# Instalar extensiones necesarias
+RUN apt-get update && apt-get install -y libpq-dev && \
+    docker-php-ext-install pdo_pgsql mysqli && \
+    a2enmod rewrite
+
+# Copiar el código del backend
 COPY backend/alojamiento/ /var/www/html/
 
-# Exponer el puerto estándar (luego Railway lo reasigna)
+# Configurar Apache para que use el puerto que asigna Railway
+RUN echo "Listen \${PORT:-80}" >> /etc/apache2/ports.conf && \
+    sed -i "s/80/\${PORT:-80}/g" /etc/apache2/sites-available/000-default.conf
+
+# Permisos
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 755 /var/www/html
+
 EXPOSE 80
 
-# El CMD de la imagen ya inicia nginx+php-fpm correctamente,
-# pero debemos asegurar que el puerto sea dinámico.
-# Para eso, usamos un script que reemplaza listen 80 por listen $PORT.
-# Si no haces esto, Railway seguirá dando 502.
-RUN echo '#!/bin/sh' > /custom-start.sh && \
-    echo 'PORT=${PORT:-80}' >> /custom-start.sh && \
-    echo 'sed -i "s/listen 80;/listen ${PORT};/g" /etc/nginx/sites-enabled/default.conf' >> /custom-start.sh && \
-    echo '/usr/local/bin/start-container' >> /custom-start.sh && \
-    chmod +x /custom-start.sh
-
-CMD ["/custom-start.sh"]
+CMD ["apache2-foreground"]
