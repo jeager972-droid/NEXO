@@ -7,15 +7,21 @@ if (!headers_sent()) {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $allowedOriginsRaw = getenv('CORS_ALLOW_ORIGINS') ?: 'http://localhost:5173,https://nexo-production-f0ef.up.railway.app';
     $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $allowedOriginsRaw))));
+
     if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
         header("Access-Control-Allow-Origin: $origin");
-        header("Vary: Origin");
-        header("Access-Control-Allow-Credentials: true");
+        header('Vary: Origin');
+        header('Access-Control-Allow-Credentials: true');
     }
-    header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Device-Signature");
-    header("Access-Control-Max-Age: 86400");
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
+
+    header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-NEXO-TOKEN, X-Device-Token, X-Request-ID, X-Device-Signature');
+    header('Access-Control-Max-Age: 86400');
+
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(204);
+        exit();
+    }
 
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
