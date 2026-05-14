@@ -8,4 +8,5 @@ RUN apt-get update && apt-get install -y libpq-dev autoconf make gcc \
 COPY backend/alojamiento/ /var/www/html/
 WORKDIR /var/www/html
 
-CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-80} api.php"]
+# Railway asigna un puerto dinámico a la variable PORT. Si no existe, usa 8080 por defecto.
+CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} api.php"]
