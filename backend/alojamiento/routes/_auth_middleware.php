@@ -167,7 +167,7 @@ if (!function_exists('getRedisConnection')) {
         try {
             if (!class_exists('Redis')) return null;
             $redis = new Redis();
-            $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
             if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
             return $redis;
         } catch (Exception $e) {

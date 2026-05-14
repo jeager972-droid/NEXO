@@ -40,7 +40,7 @@ function securityLog($event, $details = '', $actorId = null, $schoolId = null, $
     // FIX: Encolar en Redis para procesamiento asíncrono por worker_audit.php
     try {
         $redis = new Redis();
-        $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
         $redis->lPush('queue:audit_logs', json_encode([
             'school_id' => $schoolId,
@@ -72,7 +72,7 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
     try {
         if (!class_exists('Redis')) return;
         $redis = new Redis();
-        $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
         $ip = getRealClientIp();
         $key = "rl:" . ($userId ? "u:{$userId}:" : "ip:") . md5($ip);
@@ -198,7 +198,7 @@ if (isset($input['payload'])) {
             if (!empty($nonce)) {
                 try {
                     $redis = new Redis();
-                    $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+                    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
                     if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
                     if (!$redis->set($nonce, '1', ['nx', 'ex' => 86400])) {
                         securityLog('EDGE_REPLAY_NONCE_DUPLICATE', "Nonce reusado: $nonce", null, null, $requestId);
@@ -217,7 +217,7 @@ if (isset($input['payload'])) {
                         // FIX: Incrementar contador diario en Redis para el dashboard
                         try {
                             $redis = new Redis();
-                            $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+                            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
                             if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
                             $today = gmdate('Y-m-d');
                             $eventSchoolId = $instId;

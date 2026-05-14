@@ -76,7 +76,7 @@ if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) &&
 
     try {
         $redis = new Redis();
-        $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
         $redis->lPush("device:{$deviceId}:commands", json_encode([
             'command' => $command,
@@ -122,7 +122,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
 
     try {
         $redis = new Redis();
-        $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
 
         $commands = [];

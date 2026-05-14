@@ -48,7 +48,7 @@ if ($cleanPath === 'metrics') {
     // Redis colas
     try {
         $redis = new Redis();
-        $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
 
         $auditQueueLen = $redis->lLen('queue:audit_logs');

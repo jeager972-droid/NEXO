@@ -27,7 +27,7 @@ function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
     try {
         $redis = new Redis();
-        $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
         $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
         if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;

@@ -21,7 +21,7 @@ if ($cleanPath === '/dashboard/stats') {
         $today = gmdate('Y-m-d');
         try {
             $redis = new Redis();
-            $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
             if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
             $cached = $redis->get("school:{$schoolId}:present:{$today}");
             if ($cached !== false) {
@@ -44,7 +44,7 @@ if ($cleanPath === '/dashboard/stats') {
             // Guardar en caché para próximas consultas (TTL 5 minutos)
             try {
                 $redis = new Redis();
-                $redis->connect(getenv('REDIS_HOST') ?: '127.0.0.1', getenv('REDIS_PORT') ?: 6379);
+                $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
                 if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
                 $redis->setex("school:{$schoolId}:present:{$today}", 300, (int)$presentCount);
             } catch (Exception $e) { /* Redis no disponible, se omite caché */ }
