@@ -1,27 +1,15 @@
-FROM php:8.2.28-fpm-alpine
+FROM php:8.2-apache
 
 # Instalar extensiones necesarias
-RUN docker-php-ext-install pdo_pgsql mysqli && \
-    docker-php-ext-enable pdo_pgsql
+RUN apt-get update && apt-get install -y libpq-dev && \
+    docker-php-ext-install pdo_pgsql mysqli && \
+    a2enmod rewrite
 
-# Instalar Redis extension
-RUN pecl install redis && docker-php-ext-enable redis
+# Copiar todo el contenido del backend (usa comodines para ignorar el espacio)
+COPY Logica*de*negocio/alojamiento/ /var/www/html/
 
-# Instalar Nginx
-RUN apk add --no-cache nginx
-
-# Copiar configuración de Nginx
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY default.conf /etc/nginx/conf.d/default.conf
-
-# Copiar aplicación
-COPY . /var/www/html/
-RUN chown -R www-data:www-data /var/www/html
-
-# Script de inicio
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Configurar permisos
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 755 /var/www/html
 
 EXPOSE 80
-
-CMD ["/start.sh"]
