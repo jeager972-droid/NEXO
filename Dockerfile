@@ -15,6 +15,9 @@ COPY backend/alojamiento/ /var/www/html/
 
 RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
 
+COPY backend/alojamiento/start.sh /start.sh
+RUN chmod +x /start.sh
+
 EXPOSE 80
 
-CMD sh -c "php-fpm -D && sleep 2 && nginx -g 'daemon off;'"
+CMD ["/start.sh"]
