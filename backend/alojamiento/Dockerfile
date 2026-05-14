@@ -19,9 +19,7 @@ COPY . /var/www/html/
 RUN chown -R www-data:www-data /var/www/html
 
 # Script de inicio
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
 
 EXPOSE 80
 
-CMD ["/start.sh"]
+CMD ["sh", "-c", "php-fpm -D && nginx -g "daemon off;""]
