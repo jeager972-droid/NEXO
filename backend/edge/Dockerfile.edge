@@ -1,0 +1,25 @@
+# Stage 1: Build
+FROM arm64v8/ubuntu:22.04 AS builder
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    build-essential cmake git libssl-dev libcurl4-openssl-dev \
+    libsqlite3-dev libgpiod-dev pkg-config
+
+WORKDIR /build
+COPY . .
+RUN cmake --preset cross-arm64-pi4 -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build --preset cross-arm64-pi4 --parallel $(nproc)
+
+# Stage 2: Runtime
+FROM arm64v8/ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    libssl3 libcurl4 libsqlite3-0 libgpiod2 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /build/build/arm64-pi4/bin/nexo-edge /app/nexo-edge
+
+CMD ["/app/nexo-edge"]

@@ -1,0 +1,54 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# PlatformIO (Arduino legacy)
+.pio/
+.vscode/.browse.c_cpp.db*
+.pioenvs/
+.piolibdeps/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database files (local dev)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Third-party binaries
+third_party/bin/
+third_party/lib/
+
+# Config secrets (local)
+.env
+*.key
+*.pem
+*.crt
+
+# Test results
+Testing/
+*.gcda
+*.gcno

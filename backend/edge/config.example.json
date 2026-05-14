@@ -1,0 +1,15 @@
+{
+  "api_url": "https://api.nexo.edu.co",
+  "db_path": "/var/lib/nexo/nexo_edge.db",
+  "log_path": "/var/log/nexo/edge.log",
+  "log_level": "info",
+  "gpio_pin_ok": 32,
+  "gpio_pin_error": 33,
+  "gpio_pin_buzzer": 34,
+  "sensor_baud_rate": 115200,
+  "sensor_port": "/dev/ttyUSB0",
+  "http_timeout": 30,
+  "http_verify_tls": true,
+  "device_id": "nexo-edge-001",
+  "device_token": ""
+}

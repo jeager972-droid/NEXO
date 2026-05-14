@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>NEXO - Interoperability Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet" referrerpolicy="strict-origin-when-cross-origin">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --neon-grey: #cbd5e1;
+      --neon-grey-glow: rgba(203, 213, 225, 0.8);
+      --dark-bg: #020617;
+      --accent-dim: rgba(255, 255, 255, 0.05);
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--dark-bg);
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    canvas#space {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridShift 40s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes gridShift {
+      0%   { background-position: 0 0; }
+      100% { background-position: 60px 60px; }
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .nexo-scene {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rings-wrap {
+      position: absolute;
+      width: min(980px, 92vw);
+      aspect-ratio: 1000 / 420;
+      height: auto;
+    }
+
+    .rings-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      filter: drop-shadow(0 0 10px rgba(203, 213, 225, 0.35))
+              drop-shadow(0 0 22px rgba(203, 213, 225, 0.18));
+    }
+
+    .ring-base {
+      fill: none;
+      stroke: rgba(203, 213, 225, 0.92);
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .ring-shine {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.95);
+      stroke-width: 3;
+      stroke-linecap: round;
+      vector-effect: non-scaling-stroke;
+      stroke-dasharray: 70 2000;
+      opacity: 0;
+      filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.85));
+      animation: ringShine 6.5s linear infinite;
+    }
+
+    .ring-shine.r2 {
+      animation-delay: 1.1s;
+    }
+
+    @keyframes ringShine {
+      0%   { opacity: 0; stroke-dashoffset: 0; }
+      10%  { opacity: 1; }
+      65%  { opacity: 1; stroke-dashoffset: -2200; }
+      80%  { opacity: 0; stroke-dashoffset: -2200; }
+      100% { opacity: 0; stroke-dashoffset: -2200; }
+    }
+
+    .nexo-core {
+      position: relative;
+      z-index: 20;
+      text-align: center;
+    }
+
+    .nexo-text {
+      font-family: 'Syncopate', sans-serif;
+      font-weight: 700;
+      font-size: clamp(60px, 15vw, 140px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4em;
+      color: var(--neon-grey);
+      position: relative;
+      line-height: 1;
+      text-transform: uppercase;
+      filter: drop-shadow(0 0 15px var(--neon-grey-glow))
+              drop-shadow(0 0 30px rgba(255, 255, 255, 0.2));
+      animation: neonPulse 4s ease-in-out infinite alternate;
+    }
+
+    @keyframes neonPulse {
+      0% {
+        opacity: 0.9;
+        filter: drop-shadow(0 0 10px var(--neon-grey-glow));
+        transform: scale(1);
+      }
+      100% {
+        opacity: 1;
+        filter: drop-shadow(0 0 25px var(--neon-grey-glow))
+                drop-shadow(0 0 45px rgba(255, 255, 255, 0.3));
+        transform: scale(1.02);
+      }
+    }
+
+    .char-span {
+      position: relative;
+      display: inline-block;
+    }
+
+    .char-span::before {
+      content: attr(data-char);
+      position: absolute;
+      inset: 0;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
+      z-index: -1;
+    }
+
+    .custom-e {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 0.7em;
+      width: 0.65em;
+      transform: translateY(-0.02em);
+    }
+
+    .e-line {
+      height: 0.14em;
+      background: var(--neon-grey);
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.8), 0 0 10px var(--neon-grey-glow);
+    }
+
+    .e-line:nth-child(1) { width: 100%; animation: ePulse 2s infinite alternate ease-in-out; }
+    .e-line:nth-child(2) { width: 75%;  animation: ePulse 2s infinite alternate ease-in-out 0.4s; }
+    .e-line:nth-child(3) { width: 100%; animation: ePulse 2s infinite alternate ease-in-out 0.8s; }
+
+    .e-line::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 50%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent);
+      animation: eShine 2.5s infinite;
+    }
+    .e-line:nth-child(2)::after { animation-delay: 0.3s; }
+    .e-line:nth-child(3)::after { animation-delay: 0.6s; }
+
+    @keyframes ePulse {
+      0% { filter: brightness(1); transform: scaleX(0.98); transform-origin: left; }
+      100% { filter: brightness(1.3); transform: scaleX(1.02); transform-origin: left; }
+    }
+
+    @keyframes eShine {
+      0% { left: -100%; }
+      50% { left: 200%; }
+      100% { left: 200%; }
+    }
+
+    .tagline {
+      margin-top: 20px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 300;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.4);
+      letter-spacing: 0.8em;
+      text-transform: uppercase;
+      animation: fadeIn 3s ease-out forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Estilos para el Botón Nodo de Nexo */
+    .nexo-node-container {
+      position: fixed;
+      bottom: 40px;
+      right: 40px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 20px;
+      border-radius: 50px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+    }
+
+    .nexo-node-button {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #334155;
+      position: relative;
+    }
+
+    .nexo-node-button.online {
+      background: #10b981;
+      box-shadow: 0 0 15px #10b981;
+      animation: pulseGreen 2s infinite;
+    }
+
+    @keyframes pulseGreen {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .nexo-node-label {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 500;
+    }
+
+  </style>
+</head>
+<body>
+
+  <canvas id="space"></canvas>
+  <div class="grid-overlay"></div>
+
+  <div class="stage">
+    <div class="nexo-scene">
+      <div class="rings-wrap">
+        <svg class="rings-svg" viewBox="0 0 1000 420" aria-hidden="true">
+          <ellipse class="ring-base" cx="520" cy="220" rx="460" ry="150" transform="rotate(12 520 220)"></ellipse>
+          <ellipse class="ring-base" cx="520" cy="220" rx="340" ry="110" transform="rotate(12 520 220)"></ellipse>
+
+          <ellipse class="ring-shine r1" cx="520" cy="220" rx="460" ry="150" transform="rotate(12 520 220)"></ellipse>
+          <ellipse class="ring-shine r2" cx="520" cy="220" rx="340" ry="110" transform="rotate(12 520 220)"></ellipse>
+        </svg>
+      </div>
+
+      <div class="nexo-core">
+        <h1 class="nexo-text">
+          <span class="char-span" data-char="N">N</span>
+          <span class="custom-e">
+            <span class="e-line"></span>
+            <span class="e-line"></span>
+            <span class="e-line"></span>
+          </span>
+          <span class="char-span" data-char="X">X</span>
+          <span class="char-span" data-char="O">O</span>
+        </h1>
+        <p class="tagline">Data Transmission Systems</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="nexo-node-container">
+    <div id="nodeButton" class="nexo-node-button online"></div>
+    <div class="nexo-node-label">Node Active</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('space');
+    const ctx    = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let stars = [];
+    function initStars() {
+      stars = Array.from({ length: 400 }, () => ({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        size: Math.random() * 1.5,
+        opacity: Math.random(),
+        speed: 0.05 + Math.random() * 0.1
+      }));
+    }
+    initStars();
+
+    window.addEventListener('resize', () => {
+      initStars();
+    });
+
+    function draw() {
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, W, H);
+
+      stars.forEach(star => {
+        ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        star.y -= star.speed;
+        if (star.y < 0) {
+          star.y = H;
+          star.x = Math.random() * W;
+        }
+      });
+
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>

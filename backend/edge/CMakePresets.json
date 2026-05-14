@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "dev-x86",
+      "displayName": "Development (x86_64)",
+      "binaryDir": "${sourceDir}/build/dev",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "release-x86",
+      "displayName": "Release (x86_64)",
+      "binaryDir": "${sourceDir}/build/release",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "cross-arm64-pi4",
+      "displayName": "Cross-compile (ARM64 for Raspberry Pi 4)",
+      "binaryDir": "${sourceDir}/build/arm64-pi4",
+      "generator": "Unix Makefiles",
+      "toolchainFile": "${sourceDir}/cmake/arm64-pi4-toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev-x86",
+      "configurePreset": "dev-x86"
+    },
+    {
+      "name": "release-x86",
+      "configurePreset": "release-x86"
+    },
+    {
+      "name": "cross-arm64-pi4",
+      "configurePreset": "cross-arm64-pi4"
+    }
+  ]
+}

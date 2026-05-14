@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # NIST CP-2: Contingency Planning (API Service Cluster)
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - NEXO_AES_KEY=${NEXO_AES_KEY}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
+      - JWT_KEY_ID=${JWT_KEY_ID}
+      - JWT_ACCESS_TTL_SECONDS=${JWT_ACCESS_TTL_SECONDS}
+      - JWT_ISSUER=${JWT_ISSUER}
+      - JWT_AUDIENCE=${JWT_AUDIENCE}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_WHATSAPP_FROM=${TWILIO_WHATSAPP_FROM}
+      - PGHOST=pgbouncer
+      - PGPORT=6432
+      - PGDATABASE=nexo_db
+      - PGUSER=nexo_user
+      - PGPASSWORD=${DB_PASSWORD}
+      - PORT=80
+    depends_on:
+      - db
+      - pgbouncer
+    networks:
+      - nexo-internal
+
+  # NIST SC-28: Protection of Information at Rest
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=nexo_db
+      - POSTGRES_USER=nexo_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - nexo-db-data:/var/lib/postgresql/data
+    networks:
+      - nexo-internal
+
+  # Audit Log Worker (procesa cola Redis de logs de auditoría)
+  audit-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: php /var/www/html/worker_audit.php
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PGHOST=pgbouncer
+      - PGPORT=6432
+      - PGDATABASE=nexo_db
+      - PGUSER=nexo_user
+      - PGPASSWORD=${DB_PASSWORD}
+    depends_on:
+      - db
+      - redis
+      - pgbouncer
+    networks:
+      - nexo-internal
+
+  # Redis (colas, cache, rate limiting, blocklist JWT)
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - nexo-redis-data:/data
+    networks:
+      - nexo-internal
+
+  # PgBouncer (pool de conexiones PostgreSQL)
+  pgbouncer:
+    build:
+      context: ./pgbouncer
+    environment:
+      - DB_USER=nexo_user
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_NAME=nexo_db
+    ports:
+      - "6432:6432"
+    depends_on:
+      - db
+    networks:
+      - nexo-internal
+
+networks:
+  nexo-internal:
+    driver: bridge
+
+volumes:
+  nexo-db-data:
+  nexo-redis-data:
