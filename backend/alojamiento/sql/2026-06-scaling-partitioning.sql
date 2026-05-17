@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS biometric_events (
     event_type VARCHAR(50) NOT NULL,
     event_timestamp TIMESTAMPTZ NOT NULL,
     source_device VARCHAR(100),
-    raw_payload_json JSONB
+    raw_payload_json JSONB,
+    -- FIX (SRE-1): Fingerprint de idempotencia para evitar duplicados
+    -- si el worker re-procesa un job tras un GC de zombies.
+    event_fingerprint VARCHAR(64) NOT NULL
 ) PARTITION BY RANGE (event_timestamp);
 
 -- 3. Particiones mensuales (ajustar según necesidad operativa)
@@ -46,6 +49,12 @@ CREATE TABLE IF NOT EXISTS biometric_events_default PARTITION OF biometric_event
 -- 4. Índices críticos sobre la tabla particionada (se propagan a cada partición)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_biometric_events_school_student_time
     ON biometric_events (school_id, student_id, event_timestamp DESC);
+
+-- FIX (SRE-1): Índice de unicidad para idempotencia. El fingerprint es SHA-256
+-- de school_id + doc + event_type + captured_at, garantizando que un evento
+-- re-encolado por el GC no cree duplicados.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_biometric_events_fingerprint
+    ON biometric_events (event_fingerprint);
 
 -- 5. Índices adicionales ya cubiertos en otros archivos; se mantienen aquí por referencia
 --    (ejecutar solo si aún no existen)

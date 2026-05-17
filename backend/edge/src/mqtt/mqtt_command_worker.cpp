@@ -66,6 +66,7 @@ void MqttCommandWorker::pushCommand(const std::string& cmd) {
 
 void MqttCommandWorker::runLoop() {
     while (!m_stop.load(std::memory_order_acquire) && m_mosq) {
+        m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
         int rc = mosquitto_loop(m_mosq, 1000, 1);
         if (rc != MOSQ_ERR_SUCCESS && rc != MOSQ_ERR_NO_CONN) {
             LOG_WARN("[MQTT] loop error: {}. Reconnect in 5s", mosquitto_strerror(rc));
@@ -77,6 +78,7 @@ void MqttCommandWorker::runLoop() {
 
 void MqttCommandWorker::onConnect(struct mosquitto* mosq, void* obj, int rc) {
     auto* self = static_cast<MqttCommandWorker*>(obj);
+    self->m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
     if (rc == 0) {
         self->m_connected.store(true, std::memory_order_release);
         LOG_INFO("[MQTT] Connected. Subscribing to {}", self->m_topic);
@@ -90,6 +92,7 @@ void MqttCommandWorker::onConnect(struct mosquitto* mosq, void* obj, int rc) {
 // ONLY push to queue. NEVER touch DB, OLED, ConfigManager here.
 void MqttCommandWorker::onMessage(struct mosquitto*, void* obj, const struct mosquitto_message* msg) {
     auto* self = static_cast<MqttCommandWorker*>(obj);
+    self->m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
     if (!msg->payload || msg->payloadlen <= 0) return;
     std::string payload(static_cast<char*>(msg->payload), static_cast<size_t>(msg->payloadlen));
     LOG_INFO("[MQTT] RX {} bytes on {}", msg->payloadlen, msg->topic);
@@ -97,6 +100,8 @@ void MqttCommandWorker::onMessage(struct mosquitto*, void* obj, const struct mos
 }
 
 void MqttCommandWorker::onDisconnect(struct mosquitto*, void* obj, int) {
-    static_cast<MqttCommandWorker*>(obj)->m_connected.store(false, std::memory_order_release);
+    auto* self = static_cast<MqttCommandWorker*>(obj);
+    self->m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
+    self->m_connected.store(false, std::memory_order_release);
     LOG_WARN("[MQTT] Disconnected");
 }

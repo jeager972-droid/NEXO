@@ -1,0 +1,23 @@
+.git/
+**/node_modules/**
+**/vendor/**
+**/build/**
+**/dist/**
+repomix-output.xml
+logs/
+.vscode/
+Gestion de Proyecto/
+Dockerfile.bak
+CMakeCache.txt
+Makefile
+CMakeFiles/
+*.o
+*.a
+*.so*
+*.map
+*.bin
+*.elf
+sqlite3.c
+sqlite3.h
+Logica de negocio/src/
+Logica de negocio/include/

@@ -22,6 +22,9 @@ public:
     void stop();
     bool isConnected() const;
 
+    // FIX (SRE-2): Timestamp de última actividad para HealthMonitor
+    std::chrono::steady_clock::time_point lastActivity() const { return m_lastActivity.load(std::memory_order_acquire); }
+
     // Thread-safe: main.cpp llama esto para extraer comandos de forma segura
     bool hasPendingCommand() const;
     std::string popCommand();  // Bloquea hasta comando o timeout (100ms)
@@ -34,6 +37,9 @@ private:
     std::thread m_loopThread;
     std::atomic<bool> m_stop{false};
     std::atomic<bool> m_connected{false};
+
+    // FIX (SRE-2): Última actividad observable para HealthMonitor
+    std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
 
     // Producer-Consumer queue (protegida por mutex)
     std::queue<std::string> m_cmdQueue;

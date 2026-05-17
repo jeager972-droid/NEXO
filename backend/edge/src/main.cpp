@@ -18,6 +18,8 @@
 #include <array>
 #include <memory>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 
 #include "utils/Logger.h"
 #include "utils/ConfigManager.h"
@@ -107,6 +109,10 @@ public:
 
     void nudge() { m_cv.notify_all(); }
 
+    // FIX (SRE-2): Timestamp de última actividad para HealthMonitor
+    std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
+    std::chrono::steady_clock::time_point lastActivity() const { return m_lastActivity.load(std::memory_order_acquire); }
+
 private:
     std::thread m_thread;
     std::atomic<bool> m_stop{false};
@@ -116,6 +122,7 @@ private:
     void run() {
         LOG_INFO("[SyncWorker] Cloud sync thread started");
         while (!m_stop.load(std::memory_order_acquire)) {
+            m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
             syncBatch();
             std::unique_lock<std::mutex> lk(m_mtx);
             m_cv.wait_for(lk, std::chrono::seconds(30), [this] {
@@ -137,6 +144,7 @@ private:
     }
 
     void syncBatch() {
+        m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
         std::vector<AuditRecord> audits; // <-- ACTUALIZADO
         auto& db = SqliteManager::getInstance();
         if (!db.getPendingAudits(audits) || audits.empty()) return;
@@ -363,42 +371,156 @@ bool checkSystemClock() {
 }
 
 // ============================================================
-// Security Provisioning Wizard
+// Security Provisioning Wizard (Headless-safe)
 // ============================================================
 bool runSecurityProvisioning() {
-    std::cout << "\n  NEXO: CONFIGURACION DE SEGURIDAD REQUERIDA\n";
-    std::cout << "Este nodo no tiene claves criptograficas configuradas.\n\n";
-
     Encryption& crypto = Encryption::getInstance();
-    if (!crypto.isKeyProvisioned()) {
-        std::cout << "PASO 1: Clave AES-256-GCM (32 caracteres exactos)\n";
-        std::cout << "Ingrese la clave: ";
-        std::string key;
-        if (!readLineNonBlocking(key, 60000) || key.length() != 32) {
-            LOG_ERROR("Invalid AES key length (need 32, got {})", key.length());
-            return false;
-        }
-        if (!crypto.provisionKey(key)) {
-            LOG_ERROR("Failed to provision AES key");
-            return false;
-        }
+
+    // Already provisioned — nothing to do.
+    if (crypto.isKeyProvisioned() && crypto.isTokenProvisioned()) {
+        return true;
     }
-    if (!crypto.isTokenProvisioned()) {
-        std::cout << "PASO 2: Token de Autenticacion API\n";
-        std::cout << "Ingrese el token: ";
-        std::string token;
-        if (!readLineNonBlocking(token, 60000) || token.empty()) {
-            LOG_ERROR("Empty API token");
-            return false;
+
+    const std::string provisionPath = "/boot/nexo_provision.json";
+
+    while (!crypto.isKeyProvisioned() || !crypto.isTokenProvisioned()) {
+        // FIX (SRE-3): Auto-provision from staging file injected via USB/MicroSD.
+        if (std::filesystem::exists(provisionPath)) {
+            try {
+                std::ifstream f(provisionPath);
+                if (!f.is_open()) {
+                    throw std::runtime_error("Cannot open provision file");
+                }
+                nlohmann::json j = nlohmann::json::parse(f);
+                f.close();
+
+                std::string key   = j.value("aes_key", "");
+                std::string token = j.value("api_token", "");
+
+                if (key.length() != 32) {
+                    throw std::runtime_error("Invalid AES key length in provision file");
+                }
+                if (token.empty()) {
+                    throw std::runtime_error("Empty API token in provision file");
+                }
+
+                if (!crypto.provisionKey(key)) {
+                    throw std::runtime_error("Failed to provision AES key from file");
+                }
+                if (!crypto.provisionToken(token)) {
+                    throw std::runtime_error("Failed to provision API token from file");
+                }
+
+                // Securely delete the one-time staging file
+                std::filesystem::remove(provisionPath);
+                LOG_INFO("Security provisioning completed from {}. File securely deleted.", provisionPath);
+                return true;
+            } catch (const std::exception& e) {
+                LOG_ERROR("Provision file error: {}. Retrying in 10s...", e.what());
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+            }
+            continue;
         }
-        if (!crypto.provisionToken(token)) {
-            LOG_ERROR("Failed to provision API token");
-            return false;
+
+        // Interactive fallback: only when a TTY is present (development)
+        if (isatty(STDIN_FILENO)) {
+            std::cout << "\n  NEXO: CONFIGURACION DE SEGURIDAD REQUERIDA\n";
+            std::cout << "Este nodo no tiene claves criptograficas configuradas.\n\n";
+
+            if (!crypto.isKeyProvisioned()) {
+                std::cout << "PASO 1: Clave AES-256-GCM (32 caracteres exactos)\n";
+                std::cout << "Ingrese la clave: ";
+                std::string key;
+                if (!readLineNonBlocking(key, 60000) || key.length() != 32) {
+                    LOG_ERROR("Invalid AES key length (need 32, got {})", key.length());
+                    return false;
+                }
+                if (!crypto.provisionKey(key)) {
+                    LOG_ERROR("Failed to provision AES key");
+                    return false;
+                }
+            }
+            if (!crypto.isTokenProvisioned()) {
+                std::cout << "PASO 2: Token de Autenticacion API\n";
+                std::cout << "Ingrese el token: ";
+                std::string token;
+                if (!readLineNonBlocking(token, 60000) || token.empty()) {
+                    LOG_ERROR("Empty API token");
+                    return false;
+                }
+                if (!crypto.provisionToken(token)) {
+                    LOG_ERROR("Failed to provision API token");
+                    return false;
+                }
+            }
+            LOG_INFO("Security provisioning completed via TTY");
+            return true;
         }
+
+        // Headless systemd: no TTY and no provision file. Wait and retry
+        // instead of crashing, preventing a systemd crash-loop.
+        LOG_WARN("No provision file at {} and no TTY. Waiting for staging...", provisionPath);
+        std::this_thread::sleep_for(std::chrono::seconds(10));
     }
-    LOG_INFO("Security provisioning completed");
+
     return true;
 }
+
+// ============================================================
+// Health Monitor: Detecta threads muertos y fuerza reinicio
+// ============================================================
+class HealthMonitor {
+public:
+    HealthMonitor(SyncWorker& syncWorker, MqttCommandWorker* mqttWorker)
+        : m_sync(syncWorker), m_mqtt(mqttWorker), m_stop(false) {}
+
+    void start() {
+        m_thread = std::thread([this] { run(); });
+    }
+
+    void stop() {
+        m_stop.store(true, std::memory_order_release);
+        if (m_thread.joinable()) m_thread.join();
+    }
+
+private:
+    SyncWorker& m_sync;
+    MqttCommandWorker* m_mqtt;
+    std::atomic<bool> m_stop;
+    std::thread m_thread;
+
+    static constexpr auto SYNC_MAX_STALE = std::chrono::seconds(180);
+    static constexpr auto MQTT_MAX_STALE = std::chrono::seconds(240);
+    static constexpr auto CHECK_INTERVAL = std::chrono::seconds(30);
+
+    void run() {
+        LOG_INFO("[HealthMonitor] Started (check every 30s)");
+        while (!m_stop.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(CHECK_INTERVAL);
+
+            auto now = std::chrono::steady_clock::now();
+
+            // Check SyncWorker heartbeat
+            auto syncDelta = now - m_sync.lastActivity();
+            if (syncDelta > SYNC_MAX_STALE) {
+                LOG_CRITICAL("[HealthMonitor] SyncWorker stale for {}s. Forcing self-destruction.",
+                             std::chrono::duration_cast<std::chrono::seconds>(syncDelta).count());
+                exit(1);
+            }
+
+            // Check MQTT heartbeat (only if mqtt is configured)
+            if (m_mqtt) {
+                auto mqttDelta = now - m_mqtt->lastActivity();
+                if (mqttDelta > MQTT_MAX_STALE) {
+                    LOG_CRITICAL("[HealthMonitor] MQTT thread stale for {}s. Forcing self-destruction.",
+                                 std::chrono::duration_cast<std::chrono::seconds>(mqttDelta).count());
+                    exit(1);
+                }
+            }
+        }
+        LOG_INFO("[HealthMonitor] Stopped");
+    }
+};
 
 // ============================================================
 // Business Logic: Handle biometric match (ZK9500)
@@ -419,7 +541,6 @@ void handleBiometricMatch(uint32_t huellaId,
         return;
     }
 
-    notification->notifySuccess();
     std::string status = checkLateStatus();
     auto t = getLocalTimeBogota();
     char timeBuf[16];
@@ -431,6 +552,22 @@ void handleBiometricMatch(uint32_t huellaId,
         maskedDoc.replace(0, maskedDoc.length() - 4, maskedDoc.length() - 4, '*');
     }
     LOG_INFO("Match: id_{} doc={} status={} time={}", est.huella_id, maskedDoc, status, timeBuf);
+
+    // FIX (SRE-3): Verificar persistencia local ANTES de permitir el acceso.
+    // Si SQLite falla (disco lleno, SD corrupta, RO), NO se permite el ingreso
+    // para evitar responsabilidad legal por pérdida de datos.
+    std::string eventType = "INGRESO_" + status;
+    if (!AuditTrail::logEvent(est.documento, eventType)) {
+        LOG_CRITICAL("[SRE-3] SQLite persistence FAILED for doc={}. BLOCKING ACCESS.", maskedDoc);
+        notification->notifyError();
+        display->showMessage("ERROR", "ALMACENAMIENTO LLENO");
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        display->clear();
+        return;
+    }
+
+    // Persistence confirmed: proceed with access
+    notification->notifySuccess();
     display->showMessage(est.nombre, "Ingreso " + status + " " + std::string(timeBuf));
 
     bool wasAbsent = db.checkInasistencia(est.documento);
@@ -443,8 +580,6 @@ void handleBiometricMatch(uint32_t huellaId,
     bool tarde = (t.hour >= 12);
     db.updatePattern(est.documento, temprano, tarde);
 
-    std::string eventType = "INGRESO_" + status;
-    AuditTrail::logEvent(est.documento, eventType);
     syncWorker.nudge();
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -614,6 +749,12 @@ int main() {
         LOG_WARN("mqtt_host not configured. Skipping MqttCommandWorker. Add mqtt_host to config.json for V2.");
     }
 
+    // FIX (SRE-2): HealthMonitor — detecta threads muertos (Sync/MQTT) que el
+    // hardware watchdog no ve, y fuerza exit(1) para que systemd reinicie.
+    HealthMonitor healthMonitor(syncWorker, mqttWorker.get());
+    healthMonitor.start();
+    LOG_INFO("[Main] HealthMonitor started");
+
     // Watchdog Real: pat() debe estar en el bucle principal. Si se atasca, la placa rebootea.
     HardwareWatchdog watchdog;
     if (!watchdog.isOpen()) {
@@ -720,6 +861,9 @@ int main() {
     }
 
     LOG_INFO("Shutting down...");
+    healthMonitor.stop();
+    LOG_INFO("HealthMonitor stopped");
+
     syncWorker.requestStop();
     syncWorker.join();
     LOG_INFO("Sync worker stopped");

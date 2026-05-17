@@ -25,10 +25,26 @@ if (!$host || !$dbname) {
 try {
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
     $pdo = new PDO($dsn, $user, $pass, [
+        // FIX (SRE-1): EMULATE_PREPARES=true elimina prepared statements del servidor,
+        // haciendo cada query autocontenida. Requerido para PgBouncer pool_mode=transaction.
         PDO::ATTR_PERSISTENT => true,
-        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_EMULATE_PREPARES => true,
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
     ]);
+
+    // FIX (SRE-1): DISCARD ALL destruye variables de sesión residuales (set_config)
+    // que podrían filtrarse de un request anterior reutilizando la misma conexión persistente.
+    // Esto mitiga Tenant Leakage cuando PgBouncer no resetea el backend.
+    $pdo->exec("DISCARD ALL");
+
+    // Al cerrar el request, sanitizamos la conexión antes de devolverla al pool.
+    register_shutdown_function(function () use ($pdo) {
+        try {
+            $pdo->exec("DISCARD ALL");
+        } catch (Throwable $e) {
+            // Silenciar: la conexión puede estar rota; no arrojar en shutdown.
+        }
+    });
 } catch (PDOException $e) {
     error_log("DB Error: " . $e->getMessage());
     header('Content-Type: application/json');

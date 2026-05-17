@@ -17,40 +17,30 @@ function verifyTwilioSignature() {
     if ($authToken === '' || $provided === '') {
         return false;
     }
-    // WARNING: En plataformas con proxy (Railway, Heroku), el URL visible para
-    // Twilio puede diferir del $_SERVER['REQUEST_URI'] por puertos/proxy.
-    // Si la validación falla consistentemente, usar la librería oficial twilio/sdk
-    // o definir TWILIO_WEBHOOK_URL con el URL exacto que Twilio ve.
 
-    $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
-    $scheme = $forwardedProto !== '' ? $forwardedProto : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
-    $host = $_SERVER['HTTP_HOST'] ?? '';
+    // FIX (SRE-4): Reconstrucción de URL basada EXCLUSIVAMENTE en la variable de entorno
+    // inmutable TWILIO_WEBHOOK_URL_BASE (ej: https://nexo.railway.app).
+    // NUNCA usar X-Forwarded-Proto ni HTTP_HOST porque un atacante puede spoofearlos
+    // y forzar una URL que coincida con su propia firma HMAC, bypasenado la validación.
+    $baseUrl = getenv('TWILIO_WEBHOOK_URL_BASE') ?: '';
+    if ($baseUrl === '') {
+        error_log('TWILIO_WEBHOOK_URL_BASE no definida. Rechazando webhook Twilio.');
+        return false;
+    }
+
     $uri = $_SERVER['REQUEST_URI'] ?? '';
-    $url = $scheme . '://' . $host . $uri;
-    $fixedUrl = getenv('TWILIO_WEBHOOK_URL') ?: '';
+    $url = rtrim($baseUrl, '/') . $uri;
+
     $params = $_POST ?: [];
     ksort($params);
-    $compute = function ($baseUrl) use ($params, $authToken) {
-        $data = $baseUrl;
-        foreach ($params as $k => $v) {
-            $data .= $k . $v;
-        }
-        return base64_encode(hash_hmac('sha1', $data, $authToken, true));
-    };
 
-    $expected1 = $compute($url);
-    if (hash_equals($expected1, $provided)) {
-        return true;
+    $data = $url;
+    foreach ($params as $k => $v) {
+        $data .= $k . $v;
     }
+    $expected = base64_encode(hash_hmac('sha1', $data, $authToken, true));
 
-    if ($fixedUrl !== '') {
-        $expected2 = $compute($fixedUrl);
-        if (hash_equals($expected2, $provided)) {
-            return true;
-        }
-    }
-
-    return false;
+    return hash_equals($expected, $provided);
 }
 
 if ($cleanPath === '/audit/logs') {

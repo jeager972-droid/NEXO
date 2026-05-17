@@ -30,12 +30,25 @@ function processJob(array $job, PDO $conn): bool {
 
     switch ($action) {
         case 'SYNC_ATTENDANCE':
+            $doc = trim($data['doc'] ?? '');
+            $evt = strtoupper($data['event'] ?? '');
+            $fingerprint = hash('sha256', implode(':', [
+                (string)$instId,
+                $doc,
+                $evt,
+                (string)$capturedAt
+            ]));
+
+            // FIX (SRE-1): Idempotencia vía fingerprint + ON CONFLICT DO NOTHING.
+            // Si el worker re-procesa un job (ej. tras GC de zombies), el INSERT
+            // es idempotente y no crea duplicados con distinto UUID.
             $stmt = $conn->prepare(
-                "INSERT INTO biometric_events(event_id,school_id,student_id,event_type,event_timestamp,source_device)
-                 SELECT uuid_generate_v4(),school_id,student_id,?,to_timestamp(?),'EDGE'
-                 FROM students WHERE document_number=? LIMIT 1"
+                "INSERT INTO biometric_events(event_id,school_id,student_id,event_type,event_timestamp,source_device,event_fingerprint)
+                 SELECT uuid_generate_v4(),school_id,student_id,?,to_timestamp(?),'EDGE',?
+                 FROM students WHERE document_number=? LIMIT 1
+                 ON CONFLICT (event_fingerprint) DO NOTHING"
             );
-            $stmt->execute([strtoupper($data['event'] ?? ''), $capturedAt, $data['doc'] ?? '']);
+            $stmt->execute([$evt, $capturedAt, $fingerprint, $doc]);
             return $stmt->rowCount() > 0;
 
         case 'REGISTER_STUDENT':
@@ -96,14 +109,67 @@ function processJob(array $job, PDO $conn): bool {
 // ============================================================
 // Reliable Queue: RPOPLPUSH atomically moves ingest -> processing
 // ============================================================
+
+// FIX (SRE-2): Script Lua atómico que hace RPOPLPUSH + inyecta timestamp.
+// Esto garantiza que, si el worker muere, el GC pueda medir cuánto tiempo
+// lleva el item en processing y reinsertarlo.
+$scriptReliablePop = <<<'LUA'
+local ingest = KEYS[1]
+local processing = KEYS[2]
+local now = tonumber(ARGV[1])
+local item = redis.call('RPOPLPUSH', ingest, processing)
+if item then
+    local ok, job = pcall(cjson.decode, item)
+    if ok and job then
+        job.processing_since = now
+        local newItem = cjson.encode(job)
+        redis.call('LREM', processing, 0, item)
+        redis.call('LPUSH', processing, newItem)
+        return newItem
+    end
+    return item
+end
+return nil
+LUA;
+
+// FIX (SRE-2): Garbage Collector — reinserta en ingest los jobs zombies
+// (más de 5 minutos en processing sin commit exitoso).
+$scriptGc = <<<'LUA'
+local processing = KEYS[1]
+local ingest = KEYS[2]
+local maxAge = tonumber(ARGV[1])
+local now = tonumber(ARGV[2])
+local items = redis.call('LRANGE', processing, 0, -1)
+local recovered = 0
+for i = 1, #items do
+    local item = items[i]
+    local ok, job = pcall(cjson.decode, item)
+    if ok and job and job.processing_since then
+        if (now - job.processing_since) > maxAge then
+            redis.call('LREM', processing, 0, item)
+            redis.call('LPUSH', ingest, item)
+            recovered = recovered + 1
+        end
+    else
+        redis.call('LREM', processing, 0, item)
+        redis.call('LPUSH', ingest, item)
+        recovered = recovered + 1
+    end
+end
+return recovered
+LUA;
+
+$GC_MAX_AGE_SEC = (int)(getenv('BIOMETRIC_GC_MAX_AGE') ?: 300);
+
 logW('START', 'Biometric async worker started');
 $redis = getRedis();
 $iterations = 0;
+$lastGc = 0;
 
 while (!$shutdown) {
     try {
-        // Atomic: pop from ingest, push to processing
-        $item = $redis->rPoplPush('queue:biometric_ingest', 'queue:biometric_processing');
+        // FIX (SRE-2): Atomic Lua pop + timestamp injection.
+        $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing'], 2, time());
         if (!$item) { usleep(50000); continue; }
 
         $job = json_decode($item, true);
@@ -132,6 +198,19 @@ while (!$shutdown) {
     } catch (Exception $e) {
         logW('FATAL', $e->getMessage());
         sleep(2); $redis = getRedis();
+    }
+
+    // FIX (SRE-2): Ejecutar GC de zombies cada 60 segundos.
+    if (time() - $lastGc >= 60) {
+        $lastGc = time();
+        try {
+            $recovered = $redis->eval($scriptGc, ['queue:biometric_processing', 'queue:biometric_ingest'], 2, $GC_MAX_AGE_SEC, time());
+            if ($recovered > 0) {
+                logW('GC_ZOMBIE', "Recovered {$recovered} zombie job(s) after {$GC_MAX_AGE_SEC}s");
+            }
+        } catch (Exception $e) {
+            logW('GC_ERR', $e->getMessage());
+        }
     }
 
     if (++$iterations % 1000 === 0) {
