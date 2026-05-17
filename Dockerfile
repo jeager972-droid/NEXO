@@ -30,12 +30,24 @@ COPY --from=builder /build/dist ./app/
 # Inyectar regla React SPA ANTES del front-controller en .htaccess
 RUN sed -i 's|# ROUTING: Front Controller Pattern|# React SPA: /app/* sin archivo → /app/index.html\n    RewriteCond %{REQUEST_URI} ^/app/\n    RewriteCond %{REQUEST_FILENAME} !-f\n    RewriteRule ^ /app/index.html [L]\n\n    # ROUTING: Front Controller Pattern|' .htaccess
 
+# Script de inicio: sobrescribe config Apache con PORT dinámico (no usa sed)
+RUN printf '#!/bin/sh\n\
+set -e\n\
+PORT=${PORT:-8080}\n\
+printf "Listen %%s\\n" "$PORT" > /etc/apache2/ports.conf\n\
+printf "<VirtualHost *:%%s>\\n\\\n\
+    DocumentRoot /var/www/html\\n\\\n\
+    <Directory /var/www/html>\\n\\\n\
+        Options -Indexes +FollowSymLinks\\n\\\n\
+        AllowOverride All\\n\\\n\
+        Require all granted\\n\\\n\
+    </Directory>\\n\\\n\
+    ErrorLog ${APACHE_LOG_DIR}/error.log\\n\\\n\
+    CustomLog ${APACHE_LOG_DIR}/access.log combined\\n\\\n\
+</VirtualHost>\\n" "$PORT" > /etc/apache2/sites-available/000-default.conf\n\
+echo "[NEXO] Apache configured for port $PORT"\n\
+exec apache2-foreground\n' > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+
 EXPOSE 8080
 
-# FIX CRÍTICO: PORT se sustituye en RUNTIME (no en build time)
-# Usar patrones exactos para evitar reemplazar 8080, timeout 180, etc.
-CMD ["sh", "-c", "set -e && \
-    sed -i \"s/^Listen 80$/Listen ${PORT:-8080}/\" /etc/apache2/ports.conf && \
-    sed -i \"s/<VirtualHost \\*:80>/<VirtualHost *:${PORT:-8080}>/\" /etc/apache2/sites-available/000-default.conf && \
-    echo \"[NEXO] Apache listening on port ${PORT:-8080}\" && \
-    apache2-foreground"]
+CMD ["/usr/local/bin/start.sh"]
