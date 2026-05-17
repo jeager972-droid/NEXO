@@ -10,18 +10,12 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $isAllowed = false;
 
 if ($origin !== '') {
-    $envOrigins = getenv('CORS_ALLOW_ORIGINS') ?: 'http://localhost:5173,https://nexo-production-f0ef.up.railway.app';
+    // PROD: CORS_ALLOW_ORIGINS debe ser una lista exacta sin wildcards.
+    // Ejemplo: https://mi-frontend.vercel.app,https://admin.mi-frontend.vercel.app
+    $envOrigins = getenv('CORS_ALLOW_ORIGINS') ?: 'http://localhost:5173';
     $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $envOrigins))));
 
-    if (in_array($origin, $allowedOrigins, true)) {
-        $isAllowed = true;
-    } elseif (str_ends_with($origin, '.railway.app')) {
-        $isAllowed = true;
-    } elseif (str_ends_with($origin, ':5173') && str_contains($origin, 'localhost')) {
-        $isAllowed = true;
-    } elseif (str_ends_with($origin, '.vercel.app')) {
-        $isAllowed = true;
-    }
+    $isAllowed = in_array($origin, $allowedOrigins, true);
 
     if ($isAllowed) {
         header("Access-Control-Allow-Origin: $origin");
@@ -47,6 +41,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
 header("Content-Security-Policy: default-src 'self'; connect-src 'self' http://localhost:5173; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none';");
 
+require_once __DIR__ . '/boot_check.php';
 require_once __DIR__ . '/db.php';
 $conn = $pdo;
 
@@ -229,7 +224,11 @@ if (isset($input['payload'])) {
                         http_response_code(403);
                         exit(json_encode(['status' => 'error', 'message' => 'Nonce already used']));
                     }
-                } catch (Exception $e) { /* Redis no disponible, se omite validación */ }
+                } catch (Exception $e) {
+                    securityLog('EDGE_REPLAY_NONCE_REDIS_DOWN', 'Nonce validation unavailable: ' . $e->getMessage(), null, null, $requestId);
+                    http_response_code(503);
+                    exit(json_encode(['status' => 'error', 'message' => 'Nonce validation unavailable']));
+                }
             }
             $action = $data['action'] ?? 'UNKNOWN';
             try {
@@ -268,18 +267,17 @@ if (isset($input['payload'])) {
 
                         $conn->beginTransaction();
                         try {
-                            $stmt = $conn->prepare("SELECT student_id FROM students WHERE document_number = ? AND school_id = ?");
-                            $stmt->execute([$doc, $schoolId]);
+                            // FIX: INSERT ON CONFLICT elimina la race condition TOCTOU
+                            $stmt = $conn->prepare("
+                                INSERT INTO students (school_id, document_number, first_name, last_name, active)
+                                VALUES (?, ?, ?, '', TRUE)
+                                ON CONFLICT (document_number) DO UPDATE SET
+                                    first_name = EXCLUDED.first_name,
+                                    active = TRUE
+                                RETURNING student_id
+                            ");
+                            $stmt->execute([$schoolId, $doc, $nombre]);
                             $studentId = $stmt->fetchColumn();
-
-                            if ($studentId) {
-                                $stmt = $conn->prepare("UPDATE students SET first_name = ?, active = TRUE WHERE student_id = ?");
-                                $stmt->execute([$nombre, $studentId]);
-                            } else {
-                                $stmt = $conn->prepare("INSERT INTO students (school_id, document_number, first_name, last_name, active) VALUES (?, ?, ?, '', TRUE) RETURNING student_id");
-                                $stmt->execute([$schoolId, $doc, $nombre]);
-                                $studentId = $stmt->fetchColumn();
-                            }
 
                             if (!empty($parentDoc) && !empty($parentName)) {
                                 $stmt = $conn->prepare("SELECT guardian_id FROM guardians WHERE document_number = ?");
@@ -317,14 +315,31 @@ if (isset($input['payload'])) {
                             http_response_code(400);
                             exit(json_encode(['status' => 'error', 'message' => 'Missing required field: doc']));
                         }
+                        // FIX: Derecho al olvido — limpiar biometric_hash en la nube
                         if ($schoolId > 0) {
-                            $stmt = $conn->prepare("UPDATE students SET active = FALSE WHERE document_number = ? AND school_id = ?");
+                            $stmt = $conn->prepare("UPDATE students SET active = FALSE, biometric_hash = NULL WHERE document_number = ? AND school_id = ? RETURNING student_id");
                             $stmt->execute([$doc, $schoolId]);
                         } else {
-                            $stmt = $conn->prepare("UPDATE students SET active = FALSE WHERE document_number = ?");
+                            $stmt = $conn->prepare("UPDATE students SET active = FALSE, biometric_hash = NULL WHERE document_number = ? RETURNING student_id");
                             $stmt->execute([$doc]);
                         }
-                        echo json_encode(['status' => 'ok', 'affected' => $stmt->rowCount()]);
+                        $deletedStudentId = $stmt->fetchColumn();
+
+                        // FIX: Notificar al Edge para que borre la huella del dispositivo local
+                        if ($deletedStudentId) {
+                            try {
+                                $redis->rPush('queue:device_commands', json_encode([
+                                    'action' => 'DELETE_BIOMETRIC',
+                                    'document_number' => $doc,
+                                    'student_id' => $deletedStudentId,
+                                    'school_id' => $schoolId,
+                                    'ts' => time()
+                                ], JSON_UNESCAPED_UNICODE));
+                            } catch (Exception $e) {
+                                securityLog('DELETE_STUDENT_EDGE_NOTIFY_FAIL', $e->getMessage(), null, null, $requestId);
+                            }
+                        }
+                        echo json_encode(['status' => 'ok', 'affected' => $stmt->rowCount(), 'biometric_cleared' => $deletedStudentId ? true : false]);
                         break;
                     default:
                         securityLog('EDGE_UNKNOWN_ACTION', "Action: $action", null, null, $requestId);
@@ -343,5 +358,46 @@ if (isset($input['payload'])) {
     exit(json_encode(['status'=>'error','message'=>'Integrity fail']));
 }
 
+// ============================================================
+// HEALTH CHECK: Estado de workers
+// ============================================================
+if ($cleanPath === '/health/workers') {
+    header('Content-Type: application/json; charset=utf-8');
+    $checks = [];
+    $allHealthy = true;
+    try {
+        $redisHealth = new Redis();
+        $redisHealth->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+        if ($pass = getenv('REDIS_PASSWORD')) $redisHealth->auth($pass);
+
+        // Audit worker
+        $auditHeartbeat = (int)$redisHealth->get('worker:audit:last_heartbeat');
+        $auditAge = time() - $auditHeartbeat;
+        $checks['audit_worker'] = [
+            'last_heartbeat' => $auditHeartbeat,
+            'seconds_ago' => $auditAge,
+            'healthy' => $auditAge <= 300
+        ];
+        if ($auditAge > 300) $allHealthy = false;
+
+        // Twilio worker
+        $twilioHeartbeat = (int)$redisHealth->get('worker:twilio:last_heartbeat');
+        $twilioAge = time() - $twilioHeartbeat;
+        $checks['twilio_worker'] = [
+            'last_heartbeat' => $twilioHeartbeat,
+            'seconds_ago' => $twilioAge,
+            'healthy' => $twilioAge <= 300
+        ];
+        if ($twilioAge > 300) $allHealthy = false;
+
+        http_response_code($allHealthy ? 200 : 503);
+        echo json_encode(['status' => $allHealthy ? 'ok' : 'degraded', 'checks' => $checks]);
+    } catch (Exception $e) {
+        http_response_code(503);
+        echo json_encode(['status' => 'error', 'message' => 'Health check unavailable: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
 http_response_code(404);
-echo json_encode(['status' => 'error', 'message' => 'Recurso no encontrado o ruta no manejada']);
+echo json_encode(['status' => 'error', 'message' => 'Recurso no encontrado o ruta no manejado']);

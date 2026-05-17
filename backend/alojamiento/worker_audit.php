@@ -94,6 +94,8 @@ while (!$shutdown) {
         if (!empty($batch)) {
             try {
                 insertBatch($conn, $batch);
+                // FIX: Heartbeat para health check
+                $redis->set('worker:audit:last_heartbeat', time(), 600);
             } catch (Exception $e) {
                 logWorker('BATCH_ERROR', $e->getMessage());
                 // Opcional: reencolar los logs fallidos en una cola de reintentos

@@ -107,7 +107,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
     // Validar token del dispositivo (bypass RLS temporal con SUPER_RECTOR)
     $deviceToken = $_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '';
     if (!empty($deviceToken)) {
-        $conn->exec("SET app.current_role = 'SUPER_RECTOR'");
+        $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)")->execute();
         $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
         $stmt->execute([$deviceId]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -159,7 +159,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
     // Validar token del dispositivo si está presente (bypass RLS temporal)
     $deviceToken = $_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '';
     if (!empty($deviceToken)) {
-        $conn->exec("SET app.current_role = 'SUPER_RECTOR'");
+        $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)")->execute();
         $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
         $stmt->execute([$deviceId]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);

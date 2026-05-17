@@ -7,13 +7,32 @@
 #include <openssl/rand.h>
 
 bool SqliteManager::initialize(const std::string& dbPath) {
-    if (sqlite3_open(dbPath.c_str(), &db) != SQLITE_OK) {
-        LOG_CRITICAL("Cannot open DB: {}", sqlite3_errmsg(db));
-        return false;
+    int rc = sqlite3_open(dbPath.c_str(), &db);
+    if (rc != SQLITE_OK) {
+        LOG_CRITICAL("Cannot open DB: {} (code: {})", sqlite3_errmsg(db), rc);
+        sqlite3_close(db);
+        db = nullptr;
+
+        // FIX: Si es base de datos corrupta, renombrar y recrear
+        if (rc == SQLITE_CORRUPT || rc == SQLITE_NOTADB) {
+            LOG_WARN("DB appears corrupt. Renaming to .bak and creating fresh DB.");
+            std::string bakPath = dbPath + ".bak";
+            std::rename(dbPath.c_str(), bakPath.c_str());
+            rc = sqlite3_open(dbPath.c_str(), &db);
+            if (rc != SQLITE_OK) {
+                LOG_CRITICAL("Failed to create fresh DB: {}", sqlite3_errmsg(db));
+                sqlite3_close(db);
+                db = nullptr;
+                return false;
+            }
+            LOG_INFO("Fresh DB created after corruption recovery. Sync from cloud required.");
+        } else {
+            return false;
+        }
     }
     sqlite3_busy_timeout(db, 5000); 
     sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db, "PRAGMA synchronous=NORMAL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "PRAGMA synchronous=EXTRA;", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "PRAGMA temp_store=MEMORY;", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
     return createTables();

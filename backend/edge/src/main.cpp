@@ -35,6 +35,7 @@
 // Globals
 // ============================================================
 std::atomic<bool> g_shutdownRequested(false);
+std::atomic<bool> g_clockValid(true);
 
 // ============================================================
 // Signal handler
@@ -539,7 +540,8 @@ int main() {
 
     // FIX: Verificar sincronización de reloj antes de procesar eventos con timestamp
     if (!checkNtpSync() || !checkSystemClock()) {
-        LOG_WARN("System clock may be desynchronized. Continuing with caution.");
+        g_clockValid.store(false, std::memory_order_release);
+        LOG_CRITICAL("System clock invalid. ENTERING LOCK STATE. Biometric reads disabled.");
     }
 
     struct sigaction sa{};
@@ -582,6 +584,11 @@ int main() {
     auto httpClient = std::make_unique<DevStubHttpClient>();
     LOG_INFO("HAL initialized (dev-stub mode)");
 
+    // FIX: Si el reloj es inválido, mostrar error en OLED y bloquear lecturas biométricas
+    if (!g_clockValid.load(std::memory_order_acquire)) {
+        display->showMessage("ERROR", "HORA NO SINCRONIZADA");
+    }
+
     SyncWorker syncWorker;
     syncWorker.start();
     LOG_INFO("Cloud sync worker started (background thread)");
@@ -599,6 +606,12 @@ int main() {
     LOG_INFO("NEXO EDGE ready. Ctrl+C or SIGTERM for graceful shutdown.");
 
     while (!g_shutdownRequested.load(std::memory_order_acquire)) {
+        // FIX: En systemd (sin TTY), no imprimir menú ni hacer busy-loop
+        if (!isatty(STDIN_FILENO)) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            continue;
+        }
+
         showMainMenu();
 
         std::string choice;
@@ -610,6 +623,13 @@ int main() {
 
         switch (choice[0]) {
             case '1': {
+                // FIX: Bloquear lecturas biométricas si el reloj no está sincronizado
+                if (!g_clockValid.load(std::memory_order_acquire)) {
+                    LOG_WARN("Biometric reads blocked: clock not synchronized");
+                    display->showMessage("ERROR", "HORA NO SINCRONIZADA");
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                    break;
+                }
                 LOG_INFO("Entering PERPETUAL mode (attendance)");
                 display->showMessage("NEXO", "Listo para scan");
                 while (!g_shutdownRequested.load()) {

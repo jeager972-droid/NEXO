@@ -94,32 +94,10 @@ function isLoginThrottled($email) {
     }
 }
 
-function verifyUserPassword($password, $hash, $salt = '') {
+function verifyUserPassword($password, $hash) {
     $password = (string)$password;
     $hash = (string)$hash;
-    $salt = (string)$salt;
-
-    // Esquema actual esperado: password + salt -> password_hash()
-    if ($salt !== '' && password_verify($password . $salt, $hash)) {
-        return true;
-    }
-
-    // Compatibilidad: password_hash() directo sin salt externo
-    if (password_verify($password, $hash)) {
-        return true;
-    }
-
-    // Compatibilidad legacy con crypt()
-    $crypt = crypt($password . $salt, $hash);
-    if (is_string($crypt) && hash_equals($hash, $crypt)) {
-        return true;
-    }
-    $cryptNoSalt = crypt($password, $hash);
-    if (is_string($cryptNoSalt) && hash_equals($hash, $cryptNoSalt)) {
-        return true;
-    }
-
-    return false;
+    return password_verify($password, $hash);
 }
 
 /**
@@ -183,7 +161,7 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
         }
 
         $stmt = $conn->prepare("
-            SELECT u.user_id, u.email, u.password_hash, u.password_salt, u.first_name, u.last_name, u.active,
+            SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, u.active,
                    r.role_name, s.school_id, s.school_name 
             FROM users u
             INNER JOIN roles r ON u.role_id = r.role_id
@@ -199,14 +177,14 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             exit(json_encode(['status' => 'error', 'message' => 'Cuenta inactiva o inexistente']));
         }
 
-        if (verifyUserPassword($password, $user['password_hash'], $user['password_salt'] ?? '')) {
+        if (verifyUserPassword($password, $user['password_hash'])) {
             securityLog('LOGIN_SUCCESS', "User authenticated: " . $user['user_id']);
 
             // Re-hash si el hash actual usa crypt() legacy o necesita upgrade
             if (password_needs_rehash($user['password_hash'], PASSWORD_BCRYPT, ['cost' => 12])) {
                 try {
                     $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-                    $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ?, password_salt = NULL WHERE user_id = ?");
+                    $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
                     $rehashStmt->execute([$newHash, $user['user_id']]);
                     securityLog('PASSWORD_REHASHED', 'User ' . $user['user_id'] . ' migrated to bcrypt cost=12');
                 } catch (Throwable $e) {

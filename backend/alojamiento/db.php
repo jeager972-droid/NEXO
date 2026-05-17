@@ -24,8 +24,11 @@ if (!$host || !$dbname) {
 
 try {
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
-    $pdo = new PDO($dsn, $user, $pass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = new PDO($dsn, $user, $pass, [
+        PDO::ATTR_PERSISTENT => true,
+        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+    ]);
 } catch (PDOException $e) {
     error_log("DB Error: " . $e->getMessage());
     header('Content-Type: application/json');

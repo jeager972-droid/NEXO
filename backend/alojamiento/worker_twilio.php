@@ -93,6 +93,13 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     $typeCode     = $job['type_code'] ?? 'OUTBOUND';
     $retries      = (int)($job['retries'] ?? 0);
 
+    // FIX: Dedup por número+contenido en ventana de 30s para evitar envenenamiento de cola
+    $dedupKey = 'twilio:dedup:' . md5($to . '|' . $body);
+    if ($redis->get($dedupKey)) {
+        securityLog('TWILIO_DEDUP_SKIP', "Skipped duplicate to $to within 30s window");
+        return;
+    }
+
     // FIX: Leaky Bucket rate limiter para no exceder límites de Twilio
     $now = microtime(true);
     $timeSinceLast = $now - $lastSend;
@@ -104,6 +111,8 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     $send = sendTwilioWhatsAppDirect($to, $body);
 
     if ($send['ok']) {
+        // Marcar dedup para evitar duplicados por 30 segundos
+        $redis->setex($dedupKey, 30, '1');
         logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
             ['action' => 'worker_sent'],
             $studentId, $guardianId, $senderUserId, $send['sid'], 'SENT');
@@ -158,7 +167,10 @@ while (!$shutdown) {
             $jobJson = $delayed[0];
             $redis->zRem($delayQueue, $jobJson);
             $job = json_decode($jobJson, true);
-            if ($job) processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+            if ($job) {
+                processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+                $redis->set('worker:twilio:last_heartbeat', time(), 600);
+            }
             continue;
         }
 
@@ -166,7 +178,10 @@ while (!$shutdown) {
         $result = $redis->blPop($mainQueue, 1);
         if ($result && isset($result[1])) {
             $job = json_decode($result[1], true);
-            if ($job) processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+            if ($job) {
+                processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+                $redis->set('worker:twilio:last_heartbeat', time(), 600);
+            }
         }
     } catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());

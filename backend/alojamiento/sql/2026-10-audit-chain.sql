@@ -26,8 +26,11 @@ DECLARE
     v_secret TEXT;
     v_payload TEXT;
 BEGIN
-    v_secret := COALESCE(current_setting('app.nexo_hmac_secret', true), 'default-secret-change-me');
-    v_payload := COALESCE(p_prev_hash, 'GENESIS') || '|' ||
+    v_secret := current_setting('app.nexo_hmac_secret', true);
+    IF v_secret IS NULL OR v_secret = '' THEN
+        RAISE EXCEPTION 'app.nexo_hmac_secret no configurado. Abortando auditoría para prevenir compromiso de cadena.';
+    END IF;
+    v_payload := COALESCE(p_prev_hash, 'GENESIS_' || v_secret) || '|' ||
                  COALESCE(p_school_id::TEXT, 'NULL') || '|' ||
                  COALESCE(p_actor_id::TEXT, 'NULL') || '|' ||
                  COALESCE(p_event_type, '') || '|' ||

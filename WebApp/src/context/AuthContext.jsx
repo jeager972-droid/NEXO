@@ -25,14 +25,8 @@ export const AuthProvider = ({ children }) => {
   }, [navigate]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch {
-        localStorage.removeItem('user');
-      }
-    }
+    // FIX: No confiar en localStorage para la fuente de verdad del usuario.
+    // Solo authApi.getMe() (cookie HttpOnly) determina el estado real.
     fetchUser();
   }, [fetchUser]);
 

@@ -54,27 +54,19 @@ if (!function_exists('issueJwtToken')) {
         $payloadB64 = b64url_encode(json_encode($tokenClaims, JSON_UNESCAPED_SLASHES));
         $signingInput = $headerB64 . '.' . $payloadB64;
 
-        if ($privateKeyPem !== '') {
-            $privateKey = openssl_pkey_get_private($privateKeyPem);
-            if ($privateKey) {
-                $signature = '';
-                $ok = openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-                openssl_free_key($privateKey);
-                if ($ok) {
-                    return $signingInput . '.' . b64url_encode($signature);
-                }
-            }
+        if ($privateKeyPem === '') {
+            throw new Exception('JWT_PRIVATE_KEY no configurada');
         }
-
-        $secret = getenv('JWT_SECRET') ?: '';
-        if ($secret === '') {
-            throw new Exception('JWT keys/secret no configurados');
+        $privateKey = openssl_pkey_get_private($privateKeyPem);
+        if (!$privateKey) {
+            throw new Exception('JWT_PRIVATE_KEY inválida');
         }
-
-        $header = ['alg' => 'HS256', 'typ' => 'JWT', 'kid' => $kid];
-        $headerB64 = b64url_encode(json_encode($header, JSON_UNESCAPED_SLASHES));
-        $signingInput = $headerB64 . '.' . $payloadB64;
-        $signature = hash_hmac('sha256', $signingInput, $secret, true);
+        $signature = '';
+        $ok = openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+        openssl_free_key($privateKey);
+        if (!$ok) {
+            throw new Exception('Fallo al firmar JWT con RS256');
+        }
         return $signingInput . '.' . b64url_encode($signature);
     }
 }
@@ -115,15 +107,6 @@ if (!function_exists('verifyJwtToken')) {
             $verified = openssl_verify($signingInput, $signature, $publicKey, OPENSSL_ALGO_SHA256);
             openssl_free_key($publicKey);
             if ($verified !== 1) {
-                throw new Exception('Firma JWT inválida');
-            }
-        } elseif ($alg === 'HS256') {
-            $secret = getenv('JWT_SECRET') ?: '';
-            if ($secret === '') {
-                throw new Exception('JWT_SECRET no configurado');
-            }
-            $expected = hash_hmac('sha256', $signingInput, $secret, true);
-            if (!hash_equals($expected, $signature)) {
                 throw new Exception('Firma JWT inválida');
             }
         } else {

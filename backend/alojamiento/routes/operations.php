@@ -205,6 +205,22 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
                     enqueueTwilioJob($target['guardian_user_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
                 }
+
+                // FIX: Persistir estado de conversación en Redis para que el webhook inbound
+                // resuelva el student_id exacto en lugar de usar LIMIT 1 arbitrario.
+                try {
+                    $redisConv = new Redis();
+                    $redisConv->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+                    if ($pass = getenv('REDIS_PASSWORD')) $redisConv->auth($pass);
+                    $convPayload = json_encode(['student_id' => (string)$studentId, 'guardian_id' => (string)$target['guardian_id'], 'school_id' => (string)$schoolId, 'ts' => time()], JSON_UNESCAPED_UNICODE);
+                    $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['whatsapp_phone']), 172800, $convPayload);
+                    if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
+                        $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['guardian_user_phone']), 172800, $convPayload);
+                    }
+                } catch (Exception $e) {
+                    securityLog('TWILIO_CONV_REDIS_SKIP', $e->getMessage());
+                }
+
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
                 echo json_encode(['status' => 'ok', 'message' => 'Citación encolada para envío al acudiente']);
                 break;

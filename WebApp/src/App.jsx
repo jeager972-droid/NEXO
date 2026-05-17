@@ -5,6 +5,7 @@ import ProtectedRoute from './routes/ProtectedRoute'
 import Layout from './layout/Layout'
 import { ROLES } from './config/roles'
 import PwaInstallPrompt from './components/PwaInstallPrompt'
+import ErrorBoundary from './components/ErrorBoundary'
 
 // Pages
 const Login = lazy(() => import('./pages/Login'))
@@ -42,52 +43,52 @@ function App() {
   }, [navigate])
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-institutional-900"><div className="text-white font-black text-2xl uppercase tracking-widest animate-pulse">NEXO</div></div>}>
       <Routes>
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/operacion" element={<Operation />} />
-            <Route path="/notificaciones" element={<Notifications />} />
-            
-            <Route 
-              path="/consulta" 
+            <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
+            <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
+
+            <Route
+              path="/consulta"
               element={
                 <ProtectedRoute allowedRoles={Object.values(ROLES)} />
               }
             >
-              <Route index element={<Consultation />} />
+              <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
             </Route>
-            
+
             {/* Rutas específicas por rol */}
-            <Route 
-              path="/auditoria" 
+            <Route
+              path="/auditoria"
               element={
                 <ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />
               }
             >
-              <Route index element={<Audit />} />
+              <Route index element={<ErrorBoundary><Audit /></ErrorBoundary>} />
             </Route>
 
-            <Route 
-              path="/informes" 
+            <Route
+              path="/informes"
               element={
                 <ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />
               }
             >
-              <Route index element={<Reports />} />
+              <Route index element={<ErrorBoundary><Reports /></ErrorBoundary>} />
             </Route>
 
-            <Route 
-              path="/enrolamiento" 
+            <Route
+              path="/enrolamiento"
               element={
                 <ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />
               }
             >
-              <Route index element={<Enrollment />} />
+              <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
             </Route>
           </Route>
         </Route>

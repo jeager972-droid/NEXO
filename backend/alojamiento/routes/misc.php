@@ -17,6 +17,10 @@ function verifyTwilioSignature() {
     if ($authToken === '' || $provided === '') {
         return false;
     }
+    // WARNING: En plataformas con proxy (Railway, Heroku), el URL visible para
+    // Twilio puede diferir del $_SERVER['REQUEST_URI'] por puertos/proxy.
+    // Si la validación falla consistentemente, usar la librería oficial twilio/sdk
+    // o definir TWILIO_WEBHOOK_URL con el URL exacto que Twilio ve.
 
     $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
     $scheme = $forwardedProto !== '' ? $forwardedProto : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
@@ -268,9 +272,27 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         ]);
 
         $trimBody = strtoupper(trim($body));
-        // TODO: Si un acudiente tiene múltiples hijos, LIMIT 1 ORDER BY created_at DESC
-        // asigna arbitrariamente al más reciente. Implementar: listar hijos y pedir
-        // respuesta con el código del estudiante (ej. "1-Juan, 2-Maria").
+
+        // FIX: Resolver student_id exacto desde Redis conversation state.
+        // Fallback a LIMIT 1 solo si no hay estado (citación antigua o Redis caído).
+        $resolvedStudentId = null;
+        try {
+            $redisConv = new Redis();
+            $redisConv->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+            if ($pass = getenv('REDIS_PASSWORD')) $redisConv->auth($pass);
+            $convRaw = $redisConv->get('conversation:' . $normalizedFrom);
+            if ($convRaw) {
+                $conv = json_decode($convRaw, true);
+                if (!empty($conv['student_id'])) {
+                    $resolvedStudentId = $conv['student_id'];
+                }
+                // Consumir conversación para evitar reuse
+                $redisConv->del('conversation:' . $normalizedFrom);
+            }
+        } catch (Exception $e) {
+            securityLog('TWILIO_CONV_REDIS_FALLBACK', $e->getMessage());
+        }
+
         if ($trimBody === '1') {
             $replyMsg = "Gracias por confirmar asistencia a la citación.";
             $sendAck = sendTwilioWhatsAppDetailed($from, $replyMsg);
@@ -291,26 +313,43 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 $sendAck['ok'] ? 'SENT' : 'FAILED',
                 json_encode(['source' => 'twilio-webhook-reply1', 'error' => $sendAck['error'] ?? null], JSON_UNESCAPED_UNICODE)
             ]);
-            $auditStmt = $conn->prepare("
-                INSERT INTO attendance_incidents (
-                    incident_id, school_id, student_id, incident_type, detected_at, metadata_json
-                ) VALUES (
-                    uuid_generate_v4(), ?, (
-                        SELECT s.student_id
-                        FROM guardian_student_relationships gsr
-                        JOIN students s ON s.student_id = gsr.student_id
-                        WHERE gsr.guardian_id = ?
-                        ORDER BY gsr.created_at DESC
-                        LIMIT 1
-                    ), 'CITACION_CONFIRMADA', NOW(), ?::jsonb
-                )
-            ");
-            $auditStmt->execute([
-                $schoolId,
-                $guardianId,
-                json_encode(['response' => '1', 'guardian_phone' => $from], JSON_UNESCAPED_UNICODE)
-            ]);
-            securityLog('CITACION_CONFIRMADA', "Guardian:$guardianId School:$schoolId");
+
+            if ($resolvedStudentId) {
+                $auditStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (
+                        incident_id, school_id, student_id, incident_type, detected_at, metadata_json
+                    ) VALUES (
+                        uuid_generate_v4(), ?, ?, 'CITACION_CONFIRMADA', NOW(), ?::jsonb
+                    )
+                ");
+                $auditStmt->execute([
+                    $schoolId,
+                    $resolvedStudentId,
+                    json_encode(['response' => '1', 'guardian_phone' => $from, 'source' => 'redis_conversation'], JSON_UNESCAPED_UNICODE)
+                ]);
+            } else {
+                // Fallback: LIMIT 1 arbitrario para citaciones sin estado en Redis
+                $auditStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (
+                        incident_id, school_id, student_id, incident_type, detected_at, metadata_json
+                    ) VALUES (
+                        uuid_generate_v4(), ?, (
+                            SELECT s.student_id
+                            FROM guardian_student_relationships gsr
+                            JOIN students s ON s.student_id = gsr.student_id
+                            WHERE gsr.guardian_id = ?
+                            ORDER BY gsr.created_at DESC
+                            LIMIT 1
+                        ), 'CITACION_CONFIRMADA', NOW(), ?::jsonb
+                    )
+                ");
+                $auditStmt->execute([
+                    $schoolId,
+                    $guardianId,
+                    json_encode(['response' => '1', 'guardian_phone' => $from, 'source' => 'fallback_limit1'], JSON_UNESCAPED_UNICODE)
+                ]);
+            }
+            securityLog('CITACION_CONFIRMADA', "Guardian:$guardianId School:$schoolId Student:" . ($resolvedStudentId ?? 'fallback'));
         } elseif ($trimBody === '2') {
             $replyMsg = "Solicitud de reagendamiento recibida. El profesor se comunicará con usted.";
             $sendAck = sendTwilioWhatsAppDetailed($from, $replyMsg);
