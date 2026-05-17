@@ -3,7 +3,7 @@
 
 global $cleanPath;
 
-if ($cleanPath === 'metrics') {
+if ($cleanPath === '/metrics') {
     $metrics = [];
 
     // Métricas HTTP

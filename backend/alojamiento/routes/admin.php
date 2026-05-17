@@ -3,7 +3,7 @@
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
-if ($cleanPath === 'admin/recalc-risk') {
+if ($cleanPath === '/admin/recalc-risk') {
     $authUser = requireAuth(['SUPER_RECTOR']);
     $schoolId = $input['school_id'] ?? null;
 

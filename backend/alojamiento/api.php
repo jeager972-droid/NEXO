@@ -116,6 +116,7 @@ header('Content-Type: application/json; charset=utf-8');
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $cleanPath = trim(urldecode(preg_replace('/^\/(v1|api\.php)/i', '', parse_url($uri, PHP_URL_PATH))), "/");
+$cleanPath = '/' . $cleanPath;
 
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];

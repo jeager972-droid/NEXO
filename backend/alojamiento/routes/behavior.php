@@ -3,7 +3,7 @@
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
-if ($cleanPath === 'behavior/risk') {
+if ($cleanPath === '/behavior/risk') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'] ?? null;
 
