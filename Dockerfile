@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /build
 COPY WebApp/package.json WebApp/package-lock.json* ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 COPY WebApp/ ./
 RUN npm run build
 
@@ -16,24 +16,29 @@ RUN install-php-extensions pdo_pgsql mysqli redis sockets
 
 RUN a2enmod rewrite headers
 
+# Permisos para Apache
 RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 
 WORKDIR /var/www/html
 ENV COMPOSER_ALLOW_SUPERUSER=1
+
 COPY backend/alojamiento/composer.json backend/alojamiento/composer.lock* ./
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 COPY backend/alojamiento/ ./
-
 COPY --from=builder /build/dist ./app/
 
-RUN sed -i 's|# ROUTING: Front Controller Pattern|# React SPA: /app/* sin archivo → /app/index.html\n    RewriteCond %{REQUEST_URI} ^/app/\n    RewriteCond %{REQUEST_FILENAME} !-f\n    RewriteRule ^ /app/index.html [L]\n\n    # ROUTING: Front Controller Pattern|' .htaccess
+# Crear .htaccess para React SPA
+RUN echo "RewriteEngine On\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteRule ^ index.html [QSA,L]" > /var/www/html/app/.htaccess
 
-RUN echo "RewriteEngine On" > /var/www/html/app/.htaccess && \
-    echo "RewriteCond %{REQUEST_FILENAME} !-f" >> /var/www/html/app/.htaccess && \
-    echo "RewriteCond %{REQUEST_FILENAME} !-d" >> /var/www/html/app/.htaccess && \
-    echo "RewriteRule ^ index.html [QSA,L]" >> /var/www/html/app/.htaccess
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 755 /var/www/html
 
-RUN chown -R www-data:www-data /var/www/html
+# EXPOSE dinámico — Railway usa esto para el ruteo
+EXPOSE 8080
 
-CMD sed -i "s/80/${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && apache2-foreground
+# Comando de inicio: 
+# 1. Ajusta puertos directamente en archivos de conf
+# 2. Inicia Apache en primer plano
+CMD sed -i "s/80/${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && \
+    apache2-foreground
