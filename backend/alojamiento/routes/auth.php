@@ -226,13 +226,13 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 'exp' => time() + $tokenTtlSeconds
             ]);
             
-            // PILAR 2.2: Cookie HttpOnly, Secure, SameSite=Strict
+            // PILAR 2.2: Cookie HttpOnly, Secure, SameSite=None (cross-domain)
             $cookieOpts = [
                 'expires' => time() + $tokenTtlSeconds,
                 'path' => '/',
                 'secure' => true,
                 'httponly' => true,
-                'samesite' => 'Strict'
+                'samesite' => 'None'
             ];
             setcookie('token', $token, $cookieOpts);
             
