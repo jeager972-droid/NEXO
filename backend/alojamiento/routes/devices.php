@@ -62,7 +62,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
     exit;
 }
 
-// Enviar comando a un dispositivo edge (M2M)
+// Enviar comando a un dispositivo edge (M2M) — V2: MQTT Pub/Sub con Redis fallback
 if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method === 'POST') {
     $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
     $deviceId = $matches[1];
@@ -74,25 +74,38 @@ if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) &&
         exit(json_encode(['status' => 'error', 'message' => 'command requerido']));
     }
 
+    $cmdPayload = [
+        'command' => $command,
+        'payload' => $payload,
+        'issued_at' => time(),
+        'issued_by' => $authUser['id']
+    ];
+
+    // V2: Intentar MQTT primero (Pub/Sub baja latencia)
+    $mqttOk = false;
+    if (file_exists(__DIR__ . '/../mqtt_publisher.php')) {
+        require_once __DIR__ . '/../mqtt_publisher.php';
+        $mqttOk = publishDeviceCommand($deviceId, $cmdPayload);
+    }
+
+    // Fallback: Redis para compatibilidad V1
     try {
         $redis = new Redis();
         $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-        $redis->lPush("device:{$deviceId}:commands", json_encode([
-            'command' => $command,
-            'payload' => $payload,
-            'issued_at' => time(),
-            'issued_by' => $authUser['id']
-        ], JSON_UNESCAPED_UNICODE));
+        $redis->lPush("device:{$deviceId}:commands", json_encode($cmdPayload, JSON_UNESCAPED_UNICODE));
         $redis->expire("device:{$deviceId}:commands", 86400);
-
-        securityLog('DEVICE_COMMAND_ISSUED', "Device: $deviceId Command: $command", $authUser['id'], $authUser['school_id']);
-        echo json_encode(['status' => 'ok', 'device_id' => $deviceId, 'command' => $command]);
     } catch (Exception $e) {
-        securityLog('DEVICE_COMMAND_ERROR', $e->getMessage());
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al encolar comando']);
+        if (!$mqttOk) {
+            securityLog('DEVICE_COMMAND_ERROR', $e->getMessage());
+            http_response_code(500);
+            exit(json_encode(['status' => 'error', 'message' => 'Error al encolar comando']));
+        }
     }
+
+    $channel = $mqttOk ? 'MQTT' : 'REDIS';
+    securityLog('DEVICE_COMMAND_ISSUED', "Device: $deviceId Command: $command Channel: $channel", $authUser['id'], $authUser['school_id']);
+    echo json_encode(['status' => 'ok', 'device_id' => $deviceId, 'command' => $command, 'channel' => $channel]);
     exit;
 }
 
@@ -104,21 +117,22 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         exit(json_encode(['status' => 'error', 'message' => 'device_id requerido']));
     }
 
-    // Validar token del dispositivo (bypass RLS temporal con SUPER_RECTOR)
+    // Validar token del dispositivo (obligatorio)
     $deviceToken = $_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '';
-    if (!empty($deviceToken)) {
-        $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)")->execute();
-        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
-        $stmt->execute([$deviceId]);
-        $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
-        }
-        // Activar contexto correcto para operaciones subsiguientes
-        $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
-        $stmtConfig->execute([(string)$device['school_id']]);
+    if (empty($deviceToken)) {
+        http_response_code(401);
+        exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
+    $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)")->execute();
+    $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
+    $stmt->execute([$deviceId]);
+    $device = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+    }
+    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+    $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
         $redis = new Redis();
@@ -156,21 +170,22 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         exit(json_encode(['status' => 'error', 'message' => 'device_id requerido']));
     }
 
-    // Validar token del dispositivo si está presente (bypass RLS temporal)
+    // Validar token del dispositivo (obligatorio)
     $deviceToken = $_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '';
-    if (!empty($deviceToken)) {
-        $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)")->execute();
-        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
-        $stmt->execute([$deviceId]);
-        $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
-        }
-        // Activar contexto correcto para operaciones subsiguientes
-        $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
-        $stmtConfig->execute([(string)$device['school_id']]);
+    if (empty($deviceToken)) {
+        http_response_code(401);
+        exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
+    $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)")->execute();
+    $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
+    $stmt->execute([$deviceId]);
+    $device = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+    }
+    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+    $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
         $stmt = $conn->prepare("

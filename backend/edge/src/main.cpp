@@ -25,6 +25,8 @@
 #include "base_de_datos/sqlite_manager.h"
 #include "base_de_datos/encryption.h"
 #include "base_de_datos/cloud_manager.h"
+#include "mqtt/mqtt_command_worker.h"
+#include "hardware/watchdog.h"
 #include "hardware/dev_stub/DevStubBiometricSensor.h"
 #include "hardware/dev_stub/DevStubDisplay.h"
 #include "hardware/dev_stub/DevStubNotification.h"
@@ -593,19 +595,59 @@ int main() {
     syncWorker.start();
     LOG_INFO("Cloud sync worker started (background thread)");
 
-    // FIX: CommandWorker para recibir comandos M2M desde la nube
-    CommandWorker commandWorker;
-    std::string apiBase = ConfigManager::getInstance().getApiUrl();
-    std::string deviceToken = std::getenv("NEXO_DEVICE_TOKEN") ? std::getenv("NEXO_DEVICE_TOKEN") : "";
+    // V2: MqttCommandWorker — conexión persistente MQTT en vez de polling HTTP cada 30s
+    std::unique_ptr<MqttCommandWorker> mqttWorker;
+    std::string mqttHost = ConfigManager::getInstance().getString("mqtt_host", "");
+    int mqttPort = ConfigManager::getInstance().getInt("mqtt_port", 1883);
     std::string deviceId = ConfigManager::getInstance().getDeviceId();
-    if (!deviceToken.empty()) {
-        commandWorker.start(apiBase, deviceToken, deviceId);
-        LOG_INFO("Command worker started (M2M polling every 30s)");
+    std::string mqttUser = ConfigManager::getInstance().getString("mqtt_user", "");
+    std::string mqttPass = ConfigManager::getInstance().getString("mqtt_pass", "");
+
+    if (!mqttHost.empty()) {
+        mqttWorker = std::make_unique<MqttCommandWorker>(mqttHost, mqttPort, deviceId, mqttUser, mqttPass);
+        if (mqttWorker->start()) {
+            LOG_INFO("MqttCommandWorker started (persistent MQTT connection)");
+        } else {
+            LOG_WARN("MqttCommandWorker failed to start. Commands will not be received via MQTT.");
+        }
+    } else {
+        LOG_WARN("mqtt_host not configured. Skipping MqttCommandWorker. Add mqtt_host to config.json for V2.");
+    }
+
+    // Watchdog Real: pat() debe estar en el bucle principal. Si se atasca, la placa rebootea.
+    HardwareWatchdog watchdog;
+    if (!watchdog.isOpen()) {
+        LOG_WARN("[Main] /dev/watchdog unavailable. Freeze reboot NOT protected.");
     }
 
     LOG_INFO("NEXO EDGE ready. Ctrl+C or SIGTERM for graceful shutdown.");
 
     while (!g_shutdownRequested.load(std::memory_order_acquire)) {
+        if (watchdog.isOpen()) watchdog.pat();
+
+        // V2: Safe MQTT command consumption — main thread only. Callback solo pushea a queue.
+        if (mqttWorker && mqttWorker->hasPendingCommand()) {
+            std::string rawCmd = mqttWorker->popCommand();
+            if (!rawCmd.empty()) {
+                try {
+                    auto j = nlohmann::json::parse(rawCmd);
+                    std::string cmd = j.value("command", "");
+                    LOG_INFO("[Main] Executing MQTT command: {}", cmd);
+                    if (cmd == "REBOOT") {
+                        LOG_WARN("[Main] REBOOT ordered by cloud");
+                    } else if (cmd == "RELOAD_CONFIG") {
+                        ConfigManager::getInstance().loadConfig();
+                    } else if (cmd == "FORCE_SYNC") {
+                        syncWorker.nudge();
+                    } else if (cmd == "UPDATE_FIRMWARE") {
+                        LOG_WARN("[Main] UPDATE_FIRMWARE placeholder");
+                    }
+                } catch (const std::exception& e) {
+                    LOG_WARN("[Main] Bad MQTT JSON: {}", e.what());
+                }
+            }
+        }
+
         // FIX: En systemd (sin TTY), no imprimir menú ni hacer busy-loop
         if (!isatty(STDIN_FILENO)) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -682,9 +724,10 @@ int main() {
     syncWorker.join();
     LOG_INFO("Sync worker stopped");
 
-    commandWorker.requestStop();
-    commandWorker.join();
-    LOG_INFO("Command worker stopped");
+    if (mqttWorker) {
+        mqttWorker->stop();
+        LOG_INFO("MqttCommandWorker stopped");
+    }
 
     display->clear();
     SqliteManager::getInstance().close();

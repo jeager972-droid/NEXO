@@ -113,10 +113,14 @@ while (!$shutdown) {
     // Pequeña pausa para no saturar CPU
     usleep(10000); // 10ms
 
-    // FIX: Reinicio limpio cada 1000 iteraciones para evitar memory leaks
+    // FIX: Forzar GC y monitorear memoria en vez de matar el proceso
     if (++$iterations % 1000 === 0) {
-        logWorker('RESTART', "Clean restart after {$iterations} iterations");
-        exit(0);
+        gc_collect_cycles();
+        $memPeak = memory_get_peak_usage(true) / 1024 / 1024;
+        if ($memPeak > 256) {
+            logWorker('MEMORY_LIMIT', "Peak {$memPeak}MB > 256MB. Graceful restart.");
+            exit(0);
+        }
     }
 }
 

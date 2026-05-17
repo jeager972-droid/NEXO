@@ -1,0 +1,12 @@
+{
+    "name": "nexo/nexo-api",
+    "description": "NEXO Backend API",
+    "type": "project",
+    "require": {
+        "php": ">=8.2",
+        "php-mqtt/client": "^1.8"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

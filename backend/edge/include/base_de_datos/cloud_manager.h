@@ -5,6 +5,7 @@
 /**
  * CloudManager — Linux-native cloud sync via libcurl.
  * Target: Raspberry Pi 4 → Railway (Postgres).
+ * URL leída de /opt/nexo/config.json (api_url) o env NEXO_API_URL.
  */
 class CloudManager {
 public:
@@ -28,9 +29,10 @@ public:
     int  getInstitutionId() const { return m_instId; }
 
 private:
-    CloudManager() = default;
-    std::string m_apiUrl = "https://nexo-production-f0ef.up.railway.app/api.php";
+    CloudManager();
+    std::string m_apiUrl;
     int m_instId = -1;
 
     std::string buildAuthenticatedRequest(const std::string& jsonData, int instId);
+    std::string loadApiUrl();
 };

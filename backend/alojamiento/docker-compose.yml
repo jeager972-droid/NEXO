@@ -66,6 +66,28 @@ services:
     networks:
       - nexo-internal
 
+  # Biometric Ingestion Worker (procesa cola Redis async)
+  biometric-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: php /var/www/html/worker_biometric.php
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PGHOST=pgbouncer
+      - PGPORT=6432
+      - PGDATABASE=nexo_db
+      - PGUSER=nexo_user
+      - PGPASSWORD=${DB_PASSWORD}
+    depends_on:
+      - db
+      - redis
+      - pgbouncer
+    networks:
+      - nexo-internal
+
   # Redis (colas, cache, rate limiting, blocklist JWT)
   redis:
     image: redis:7-alpine
@@ -91,6 +113,18 @@ services:
     networks:
       - nexo-internal
 
+  # Mosquitto MQTT Broker (V2 Pub/Sub para comandos M2M)
+  mosquitto:
+    image: eclipse-mosquitto:2.0-openssl
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - nexo-mosquitto-data:/mosquitto/data
+    networks:
+      - nexo-internal
+
 networks:
   nexo-internal:
     driver: bridge
@@ -98,3 +132,4 @@ networks:
 volumes:
   nexo-db-data:
   nexo-redis-data:
+  nexo-mosquitto-data:

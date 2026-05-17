@@ -3,6 +3,25 @@
 #include <curl/curl.h>
 #include <string>
 #include <nlohmann/json.hpp>
+#include <fstream>
+#include <cstdlib>
+
+CloudManager::CloudManager() : m_apiUrl(loadApiUrl()) {}
+
+std::string CloudManager::loadApiUrl() {
+    const char* envUrl = std::getenv("NEXO_API_URL");
+    if (envUrl && std::strlen(envUrl) > 0) return envUrl;
+    std::ifstream f("/opt/nexo/config.json");
+    if (f.good()) {
+        try {
+            nlohmann::json j;
+            f >> j;
+            if (j.contains("api_url") && j["api_url"].is_string()) return j["api_url"];
+        } catch (...) { LOG_WARN("Failed to parse /opt/nexo/config.json"); }
+    }
+    LOG_ERROR("NEXO_API_URL not set and config.json missing. Edge cannot sync.");
+    return "";
+}
 
 static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     static_cast<std::string*>(userp)->append(static_cast<char*>(contents), size * nmemb);

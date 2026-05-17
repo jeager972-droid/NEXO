@@ -12,8 +12,17 @@ import urllib.request
 import urllib.error
 import ssl
 
-# --- Configuración desde variables de entorno ---
-API_BASE = os.getenv('NEXO_API_BASE', 'https://nexo-production-f0ef.up.railway.app')
+def _load_config():
+    env = os.getenv('NEXO_API_BASE', '')
+    if env: return env
+    try:
+        with open('/opt/nexo/config.json') as f:
+            cfg = json.load(f)
+            return cfg.get('api_url', '')
+    except Exception:
+        return ''
+
+API_BASE = _load_config()
 DEVICE_TOKEN = os.getenv('NEXO_DEVICE_TOKEN', '')
 DEVICE_ID = os.getenv('NEXO_DEVICE_ID', '')
 INTERVAL_SECONDS = int(os.getenv('NEXO_HEARTBEAT_INTERVAL', '60'))

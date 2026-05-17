@@ -230,127 +230,38 @@ if (isset($input['payload'])) {
                     exit(json_encode(['status' => 'error', 'message' => 'Nonce validation unavailable']));
                 }
             }
+            // V2: 100% Async Ingestion — No tocar PostgreSQL en el request path
             $action = $data['action'] ?? 'UNKNOWN';
             try {
-                switch ($action) {
-                    case 'SYNC_ATTENDANCE':
-                        $stmt = $conn->prepare("INSERT INTO biometric_events (event_id, school_id, student_id, event_type, event_timestamp, source_device) SELECT uuid_generate_v4(), school_id, student_id, ?, to_timestamp(?), 'EDGE' FROM students WHERE document_number = ? LIMIT 1");
-                        $stmt->execute([strtoupper($data['event']), $capturedAt, $data['doc']]);
+                $redisIngest = new Redis();
+                $redisIngest->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+                if ($pass = getenv('REDIS_PASSWORD')) $redisIngest->auth($pass);
 
-                        // FIX: Incrementar contador diario en Redis para el dashboard
-                        try {
-                            $redis = new Redis();
-                            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-                            if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-                            $today = gmdate('Y-m-d');
-                            $eventSchoolId = $instId;
-                            if ($eventSchoolId > 0) {
-                                $redis->incr("school:{$eventSchoolId}:present:{$today}");
-                                $redis->expire("school:{$eventSchoolId}:present:{$today}", 86400);
-                            }
-                        } catch (Exception $e) { /* Redis no disponible, se omite contador */ }
+                $queuePayload = json_encode([
+                    'action' => $action,
+                    'data' => $data,
+                    'school_id' => $instId,
+                    'request_id' => $requestId,
+                    'received_at' => time()
+                ], JSON_UNESCAPED_UNICODE);
 
-                        echo json_encode(['status' => 'ok', 'sync' => time(), 'persisted' => $stmt->rowCount()]);
-                        break;
-                    case 'REGISTER_STUDENT':
-                        $schoolId = $instId; // Forzar school_id verificado del dispositivo
-                        $doc = trim($data['doc'] ?? '');
-                        $nombre = trim($data['nombre'] ?? '');
-                        $parentTel = trim($data['parent_tel'] ?? '');
-                        $parentDoc = trim($data['parent_doc'] ?? '');
-                        $parentName = trim($data['parent_name'] ?? '');
+                $redisIngest->rPush('queue:biometric_ingest', $queuePayload);
+                $redisIngest->expire('queue:biometric_ingest', 86400);
 
-                        if ($schoolId <= 0 || empty($doc) || empty($nombre)) {
-                            http_response_code(400);
-                            exit(json_encode(['status' => 'error', 'message' => 'Missing required fields: doc, nombre']));
-                        }
-
-                        $conn->beginTransaction();
-                        try {
-                            // FIX: INSERT ON CONFLICT elimina la race condition TOCTOU
-                            $stmt = $conn->prepare("
-                                INSERT INTO students (school_id, document_number, first_name, last_name, active)
-                                VALUES (?, ?, ?, '', TRUE)
-                                ON CONFLICT (document_number) DO UPDATE SET
-                                    first_name = EXCLUDED.first_name,
-                                    active = TRUE
-                                RETURNING student_id
-                            ");
-                            $stmt->execute([$schoolId, $doc, $nombre]);
-                            $studentId = $stmt->fetchColumn();
-
-                            if (!empty($parentDoc) && !empty($parentName)) {
-                                $stmt = $conn->prepare("SELECT guardian_id FROM guardians WHERE document_number = ?");
-                                $stmt->execute([$parentDoc]);
-                                $guardianId = $stmt->fetchColumn();
-
-                                if ($guardianId) {
-                                    $stmt = $conn->prepare("UPDATE guardians SET full_name = ?, whatsapp_phone = COALESCE(?, whatsapp_phone) WHERE guardian_id = ?");
-                                    $stmt->execute([$parentName, $parentTel, $guardianId]);
-                                } else {
-                                    $stmt = $conn->prepare("INSERT INTO guardians (document_number, full_name, whatsapp_phone) VALUES (?, ?, ?) RETURNING guardian_id");
-                                    $stmt->execute([$parentDoc, $parentName, $parentTel]);
-                                    $guardianId = $stmt->fetchColumn();
-                                }
-
-                                $stmt = $conn->prepare("SELECT 1 FROM guardian_student_relationships WHERE student_id = ? AND guardian_id = ?");
-                                $stmt->execute([$studentId, $guardianId]);
-                                if (!$stmt->fetchColumn()) {
-                                    $stmt = $conn->prepare("INSERT INTO guardian_student_relationships (student_id, guardian_id, primary_guardian, relationship_type) VALUES (?, ?, TRUE, 'ACUDIENTE')");
-                                    $stmt->execute([$studentId, $guardianId]);
-                                }
-                            }
-
-                            $conn->commit();
-                            echo json_encode(['status' => 'ok', 'student_id' => $studentId]);
-                        } catch (Exception $e) {
-                            $conn->rollBack();
-                            throw $e;
-                        }
-                        break;
-                    case 'DELETE_STUDENT':
-                        $doc = trim($data['doc'] ?? '');
-                        $schoolId = $instId; // Forzar school_id verificado del dispositivo
-                        if (empty($doc)) {
-                            http_response_code(400);
-                            exit(json_encode(['status' => 'error', 'message' => 'Missing required field: doc']));
-                        }
-                        // FIX: Derecho al olvido — limpiar biometric_hash en la nube
-                        if ($schoolId > 0) {
-                            $stmt = $conn->prepare("UPDATE students SET active = FALSE, biometric_hash = NULL WHERE document_number = ? AND school_id = ? RETURNING student_id");
-                            $stmt->execute([$doc, $schoolId]);
-                        } else {
-                            $stmt = $conn->prepare("UPDATE students SET active = FALSE, biometric_hash = NULL WHERE document_number = ? RETURNING student_id");
-                            $stmt->execute([$doc]);
-                        }
-                        $deletedStudentId = $stmt->fetchColumn();
-
-                        // FIX: Notificar al Edge para que borre la huella del dispositivo local
-                        if ($deletedStudentId) {
-                            try {
-                                $redis->rPush('queue:device_commands', json_encode([
-                                    'action' => 'DELETE_BIOMETRIC',
-                                    'document_number' => $doc,
-                                    'student_id' => $deletedStudentId,
-                                    'school_id' => $schoolId,
-                                    'ts' => time()
-                                ], JSON_UNESCAPED_UNICODE));
-                            } catch (Exception $e) {
-                                securityLog('DELETE_STUDENT_EDGE_NOTIFY_FAIL', $e->getMessage(), null, null, $requestId);
-                            }
-                        }
-                        echo json_encode(['status' => 'ok', 'affected' => $stmt->rowCount(), 'biometric_cleared' => $deletedStudentId ? true : false]);
-                        break;
-                    default:
-                        securityLog('EDGE_UNKNOWN_ACTION', "Action: $action", null, null, $requestId);
-                        http_response_code(400);
-                        echo json_encode(['status' => 'error', 'message' => 'Action not supported']);
+                // Contador diario en Redis para dashboard (no bloquea)
+                if ($action === 'SYNC_ATTENDANCE') {
+                    $today = gmdate('Y-m-d');
+                    $redisIngest->incr("school:{$instId}:present:{$today}");
+                    $redisIngest->expire("school:{$instId}:present:{$today}", 86400);
                 }
+
+                http_response_code(202);
+                echo json_encode(['status' => 'accepted', 'action' => $action, 'request_id' => $requestId]);
                 exit;
             } catch (Exception $e) {
-                securityLog('EDGE_INGESTION_ERROR', $e->getMessage(), null, null, $requestId);
-                http_response_code(500);
-                exit(json_encode(['status'=>'error','message'=>'DB Error']));
+                securityLog('EDGE_INGESTION_REDIS_FAIL', $e->getMessage(), null, null, $requestId);
+                http_response_code(503);
+                exit(json_encode(['status'=>'error','message'=>'Ingestion queue unavailable']));
             }
         }
     }

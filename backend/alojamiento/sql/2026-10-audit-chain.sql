@@ -50,11 +50,11 @@ DECLARE
 BEGIN
     -- Obtener el hash anterior de la misma escuela (o global si no hay escuela)
     -- FOR UPDATE bloquea la fila para evitar forks en la cadena bajo concurrencia
-    SELECT audit_id, chain_hash
+    SELECT log_id, chain_hash
       INTO v_prev_id, v_prev_hash
       FROM global_audit_logs
      WHERE (school_id IS NOT DISTINCT FROM NEW.school_id)
-     ORDER BY created_at DESC, audit_id DESC
+     ORDER BY created_at DESC, log_id DESC
      LIMIT 1
      FOR UPDATE;
 
@@ -62,10 +62,10 @@ BEGIN
     NEW.chain_hash := fn_calculate_audit_hash(
         v_prev_hash,
         NEW.school_id,
-        NEW.actor_id,
-        NEW.event_type,
-        NEW.description,
-        NEW.ip_address,
+        NEW.performed_by_user_id,
+        NEW.action_type,
+        NEW.action_details::TEXT,
+        NEW.ip_address::TEXT,
         NEW.created_at
     );
 
@@ -93,27 +93,27 @@ BEGIN
     v_prev_hash := NULL;
 
     FOR v_record IN
-        SELECT audit_id, school_id, actor_id, event_type, description,
+        SELECT log_id, school_id, performed_by_user_id, action_type, action_details,
                ip_address, created_at, chain_hash, prev_audit_id
         FROM global_audit_logs
         WHERE (p_school_id IS NULL OR school_id = p_school_id)
-        ORDER BY created_at ASC, audit_id ASC
+        ORDER BY created_at ASC, log_id ASC
     LOOP
         v_count := v_count + 1;
         v_expected_hash := fn_calculate_audit_hash(
             v_prev_hash,
             v_record.school_id,
-            v_record.actor_id,
-            v_record.event_type,
-            v_record.description,
-            v_record.ip_address,
+            v_record.performed_by_user_id,
+            v_record.action_type,
+            v_record.action_details::TEXT,
+            v_record.ip_address::TEXT,
             v_record.created_at
         );
 
         IF v_record.chain_hash = v_expected_hash THEN
             v_valid_count := v_valid_count + 1;
         ELSE
-            v_broken_at := v_record.audit_id;
+            v_broken_at := v_record.log_id;
             EXIT;
         END IF;
 
@@ -139,5 +139,5 @@ $$ LANGUAGE plpgsql;
 
 -- 6. Backfill: recalcular chain_hash para registros existentes sin hash
 UPDATE global_audit_logs
-   SET chain_hash = 'LEGACY_' || md5(audit_id::TEXT)
+   SET chain_hash = 'LEGACY_' || md5(log_id::TEXT)
  WHERE chain_hash IS NULL;

@@ -34,6 +34,8 @@ add_executable(nexo-edge
     src/hardware/dev_stub/DevStubNotification.cpp
     src/hardware/dev_stub/DevStubHttpClient.cpp
     src/interoperabilidad/audit_trail.cpp
+    src/mqtt/mqtt_command_worker.cpp
+    src/hardware/watchdog.cpp
 )
 
 target_include_directories(nexo-edge PRIVATE ${EDGE_INCLUDE_DIR})
@@ -43,6 +45,14 @@ find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MOSQUITTO REQUIRED libmosquitto)
+if(NOT MOSQUITTO_FOUND)
+    find_library(MOSQUITTO_LIB NAMES mosquitto)
+    if(NOT MOSQUITTO_LIB)
+        message(FATAL_ERROR "libmosquitto no encontrado. Instala: apt-get install libmosquitto-dev")
+    endif()
+endif()
 
 # nlohmann/json
 include(FetchContent)
@@ -66,7 +76,11 @@ target_link_libraries(nexo-edge PRIVATE
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     ${ZKFP_LIB}
+    ${MOSQUITTO_LIBRARIES}
+    ${MOSQUITTO_LIB}
 )
+
+target_include_directories(nexo-edge PRIVATE ${MOSQUITTO_INCLUDE_DIRS})
 
 # libgpiod — optional, only available on RPi4
 find_package(gpiod QUIET)
