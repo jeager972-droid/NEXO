@@ -1,44 +1,34 @@
-# ── Stage 1: Build React WebApp ───────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /build
 COPY WebApp/package.json WebApp/package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN npm ci
 COPY WebApp/ ./
 RUN npm run build
 
-# ── Stage 2: Apache + mod_php (producción) ────────────────────────────────────
 FROM php:8.2-apache
 
+# Instalar dependencias
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
 RUN install-php-extensions pdo_pgsql mysqli redis sockets
 
+# Habilitar mods
 RUN a2enmod rewrite headers
 
-# Permisos para Apache
-RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+# Configurar Apache para el puerto de Railway
+RUN sed -i 's/80/${PORT}/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
 
+# Copiar proyecto
 WORKDIR /var/www/html
-ENV COMPOSER_ALLOW_SUPERUSER=1
-
 COPY backend/alojamiento/composer.json backend/alojamiento/composer.lock* ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-
-COPY backend/alojamiento/ ./
+RUN composer install --no-dev --optimize-autoloader
+COPY backend/alojamiento/ .
 COPY --from=builder /build/dist ./app/
 
-# Crear .htaccess para React SPA
-RUN echo "RewriteEngine On\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteRule ^ index.html [QSA,L]" > /var/www/html/app/.htaccess
+# Permisos
+RUN chown -R www-data:www-data /var/www/html
+RUN chmod -R 755 /var/www/html
 
-RUN chown -R www-data:www-data /var/www/html && \
-    chmod -R 755 /var/www/html
-
-# EXPOSE dinámico — Railway usa esto para el ruteo
+# Asegurar que Apache use el puerto asignado por Railway
+ENV PORT=8080
 EXPOSE 8080
-
-# Comando de inicio: 
-# 1. Ajusta puertos directamente en archivos de conf
-# 2. Inicia Apache en primer plano
-CMD sed -i "s/80/${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && \
-    apache2-foreground
