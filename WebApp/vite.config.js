@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/app/',
   build: {
     sourcemap: false,
     target: 'es2020',
@@ -23,7 +24,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg'],
       workbox: {
-        navigateFallback: '/index.html',
+        navigateFallback: '/app/index.html',
         runtimeCaching: [
           {
             urlPattern: ({ url, request }) => url.pathname.startsWith('/api') && request.method === 'POST',
@@ -58,12 +59,12 @@ export default defineConfig({
         ]
       },
       manifest: {
-        id: '/',
+        id: '/app/',
         name: 'NEXO Institucional',
         short_name: 'NEXO',
         description: 'Plataforma Institucional de Gestión',
-        start_url: '/',
-        scope: '/',
+        start_url: '/app/',
+        scope: '/app/',
         display: 'standalone',
         orientation: 'portrait',
         theme_color: '#1e40af',
@@ -73,13 +74,13 @@ export default defineConfig({
           {
             name: 'Panel',
             short_name: 'Panel',
-            url: '/',
+            url: '/app/',
             icons: [{ src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' }]
           },
           {
             name: 'Operación',
             short_name: 'Operación',
-            url: '/operacion',
+            url: '/app/operacion',
             icons: [{ src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' }]
           }
         ],

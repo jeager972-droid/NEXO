@@ -66,8 +66,8 @@ client.interceptors.response.use(
     emitLatency(error.config, error.response?.status ?? 0);
     if (error.response?.status === 401) {
       localStorage.removeItem('user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (!window.location.pathname.startsWith('/app/login')) {
+        window.location.href = '/app/login';
       }
     }
     return Promise.reject(error);
