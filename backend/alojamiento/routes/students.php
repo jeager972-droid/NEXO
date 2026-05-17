@@ -47,13 +47,13 @@ if ($cleanPath === '/students') {
 
     try {
         $limit = min(100, max(1, (int)($_GET['limit'] ?? 50)));
-        $lastId = (int)($_GET['last_id'] ?? 0);
+        $lastId = trim($_GET['last_id'] ?? '');
         $search = trim($_GET['search'] ?? '');
 
         $params = [$schoolId];
         $whereClauses = ['s.school_id = ?'];
 
-        if ($lastId > 0) {
+        if ($lastId !== '') {
             $whereClauses[] = 's.student_id > ?';
             $params[] = $lastId;
         }
@@ -90,7 +90,7 @@ if ($cleanPath === '/students') {
         $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $nextLastId = count($students) > 0 ? (int)$students[count($students) - 1]['id'] : $lastId;
+        $nextLastId = count($students) > 0 ? $students[count($students) - 1]['student_id'] : $lastId;
 
         echo json_encode([
             'status' => 'ok',

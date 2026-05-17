@@ -116,8 +116,8 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
             exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
         }
         // Activar contexto correcto para operaciones subsiguientes
-        $conn->exec("SET app.current_school_id = " . (int)$device['school_id']);
-        $conn->exec("SET app.current_role = 'EDGE_NODE'");
+        $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+        $stmtConfig->execute([(string)$device['school_id']]);
     }
 
     try {
@@ -168,8 +168,8 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
             exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
         }
         // Activar contexto correcto para operaciones subsiguientes
-        $conn->exec("SET app.current_school_id = " . (int)$device['school_id']);
-        $conn->exec("SET app.current_role = 'EDGE_NODE'");
+        $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+        $stmtConfig->execute([(string)$device['school_id']]);
     }
 
     try {

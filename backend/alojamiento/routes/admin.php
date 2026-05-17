@@ -14,7 +14,7 @@ if ($cleanPath === '/admin/recalc-risk') {
         if ($schoolId) {
             // Recalcular una escuela específica
             $stmt = $conn->prepare("SELECT fn_recalculate_school_metrics(?)");
-            $stmt->execute([(int)$schoolId]);
+            $stmt->execute([$schoolId]);
             $count = $stmt->fetchColumn();
             $processed = (int)$count;
         } else {

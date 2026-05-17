@@ -33,8 +33,8 @@ const Operation = () => {
           studentsApi.getGroups(),
           studentsApi.getAll()
         ]);
-        setGroups(groupsData);
-        setStudents(studentsData);
+        setGroups(groupsData || []);
+        setStudents(studentsData?.students || []);
       } catch (error) {
         console.error('Error fetching operations data', error);
       } finally {
@@ -240,7 +240,7 @@ const CommandModal = ({ command, onClose, groups, students }) => {
     }
   };
 
-  const filteredStudents = students.filter((s) => (s.group || '') === formData.group);
+  const filteredStudents = (students || []).filter((s) => (s.group || '') === formData.group);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
@@ -295,7 +295,7 @@ const CommandModal = ({ command, onClose, groups, students }) => {
                     className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all appearance-none"
                   >
                     <option value="">-- Elige un Grupo --</option>
-                    {groups.map((g) => {
+                    {(groups || []).map((g) => {
                       const groupName = g?.name || g?.group_name || '';
                       return (
                         <option key={g?.id || groupName} value={groupName}>
@@ -317,7 +317,7 @@ const CommandModal = ({ command, onClose, groups, students }) => {
                     className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all appearance-none"
                   >
                     <option value="">-- Selecciona el Estudiante --</option>
-                    {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {(filteredStudents || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
               )}
