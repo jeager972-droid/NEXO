@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from './hooks/useAuth'
 import ProtectedRoute from './routes/ProtectedRoute'
 import Layout from './layout/Layout'
@@ -42,60 +43,83 @@ function App() {
     setupDeepLink()
   }, [navigate])
 
+  const shellKey = user ? 'authenticated' : 'unauthenticated'
+
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-institutional-900"><div className="text-white font-black text-2xl uppercase tracking-widest animate-pulse">NEXO</div></div>}>
-      <Routes>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-        <Route path="/unauthorized" element={<Unauthorized />} />
+    <Suspense fallback={
+      <div
+        className="min-h-screen flex flex-col items-center justify-center gap-3"
+        style={{ backgroundColor: '#003366' }}
+      >
+        <div
+          className="text-white font-black uppercase"
+          style={{ fontSize: '18px', letterSpacing: '0.3em' }}
+        >
+          NEXO
+        </div>
+        <div
+          className="text-white/40 font-bold uppercase"
+          style={{ fontSize: '9px', letterSpacing: '0.25em' }}
+        >
+          Cargando módulo…
+        </div>
+      </div>
+    }>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={shellKey}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22, ease: 'easeInOut' }}
+          style={{ minHeight: '100vh' }}
+        >
+          <Routes>
+            <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<Layout />}>
-            <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-            <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
-            <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
+                <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
 
-            <Route
-              path="/consulta"
-              element={
-                <ProtectedRoute allowedRoles={Object.values(ROLES)} />
-              }
-            >
-              <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
+                <Route
+                  path="/consulta"
+                  element={<ProtectedRoute allowedRoles={Object.values(ROLES)} />}
+                >
+                  <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
+                </Route>
+
+                {/* Rutas específicas por rol */}
+                <Route
+                  path="/auditoria"
+                  element={<ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />}
+                >
+                  <Route index element={<ErrorBoundary><Audit /></ErrorBoundary>} />
+                </Route>
+
+                <Route
+                  path="/informes"
+                  element={<ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />}
+                >
+                  <Route index element={<ErrorBoundary><Reports /></ErrorBoundary>} />
+                </Route>
+
+                <Route
+                  path="/enrolamiento"
+                  element={<ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />}
+                >
+                  <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
+                </Route>
+              </Route>
             </Route>
 
-            {/* Rutas específicas por rol */}
-            <Route
-              path="/auditoria"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />
-              }
-            >
-              <Route index element={<ErrorBoundary><Audit /></ErrorBoundary>} />
-            </Route>
-
-            <Route
-              path="/informes"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />
-              }
-            >
-              <Route index element={<ErrorBoundary><Reports /></ErrorBoundary>} />
-            </Route>
-
-            <Route
-              path="/enrolamiento"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />
-              }
-            >
-              <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
-            </Route>
-          </Route>
-        </Route>
-
-        <Route path="/descargas" element={<Downloads />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+            <Route path="/descargas" element={<Downloads />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </motion.div>
+      </AnimatePresence>
       <PwaInstallPrompt />
     </Suspense>
   )

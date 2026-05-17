@@ -1,22 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import {
-  AlertOctagon, 
-  ShieldCheck, 
-  ShieldAlert,
-  MapPin, 
-  Clock, 
-  MessageSquare, 
-  Bus, 
-  Calendar,
-  Wrench,
-  Send,
-  X,
-  UserCheck
+  AlertOctagon, ShieldCheck, ShieldAlert,
+  MapPin, Clock, Bus, Calendar,
+  Wrench, Send, X, UserCheck, ChevronRight,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
-import { cn } from '../utils/cn';
 import { ROLES } from '../config/roles';
 
 const Operation = () => {
@@ -114,81 +105,161 @@ const Operation = () => {
 
   const filteredCommands = commands.filter(cmd => cmd.roles.includes(user?.role));
 
-  if (loading) return <div className="min-h-[60vh] flex items-center justify-center font-black text-institutional-900 uppercase tracking-widest animate-pulse">Sincronizando datos institucionales...</div>;
-
-  return (
-    <div className="space-y-12 animate-in fade-in duration-500">
-      <div className="text-center space-y-4">
-        <h2 className="text-5xl font-black text-gray-900 dark:text-white uppercase tracking-tight italic">Operación Institucional</h2>
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-12 h-1 bg-institutional-400 rounded-full"></div>
-          <p className="text-gray-400 dark:text-slate-500 text-sm font-black uppercase tracking-[0.3em]">Comandos de control y acción</p>
-          <div className="w-12 h-1 bg-institutional-400 rounded-full"></div>
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <div className="h-2 w-20 bg-slate-200 dark:bg-slate-800 rounded-sm animate-pulse mb-2" />
+          <div className="h-4 w-48 bg-slate-200 dark:bg-slate-800 rounded-sm animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
+          ))}
         </div>
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-        {filteredCommands.map((cmd) => (
-          <button
-            key={cmd.id}
-            onClick={() => setActiveCommand(cmd)}
-            className={cn(
-              "group relative overflow-hidden bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800 transition-all duration-500 hover:scale-[1.02] flex flex-col items-center text-center gap-6",
-              cmd.isUrgent && "border-red-100 dark:border-red-900/30 hover:border-red-500 bg-red-50/30 dark:bg-red-900/5"
-            )}
-          >
-            <div className={cn(
-              "p-6 rounded-3xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3",
-              cmd.isUrgent 
-                ? "bg-red-500 text-white shadow-xl shadow-red-500/20" 
-                : "bg-institutional-50 dark:bg-institutional-900/20 text-institutional-900 dark:text-institutional-400 shadow-inner"
-            )}>
-              <cmd.icon size={40} strokeWidth={1.5} />
-            </div>
-            <div className="space-y-2">
-              <span className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest">{cmd.title}</span>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 font-black uppercase tracking-[0.1em]">{cmd.warning ? '⚠️ Acción con notificación global' : 'Comando de sistema'}</p>
-            </div>
-          </button>
+  return (
+    <div className="space-y-5">
+      <div>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
+          Operación Institucional
+        </p>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px', letterSpacing: '-0.01em' }}
+           className="dark:text-slate-200">
+          Comandos de control y acción
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredCommands.map((cmd, i) => (
+          <ActionCard key={cmd.id} cmd={cmd} index={i} onClick={() => setActiveCommand(cmd)} />
         ))}
       </div>
 
-      {activeCommand && (
-        <CommandModal 
-          command={activeCommand} 
-          onClose={() => setActiveCommand(null)} 
-          groups={groups}
-          students={students}
-        />
-      )}
+      <AnimatePresence>
+        {activeCommand && (
+          <CommandDrawer
+            command={activeCommand}
+            onClose={() => setActiveCommand(null)}
+            groups={groups}
+            students={students}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-const CommandModal = ({ command, onClose, groups, students }) => {
-  const [step, setStep] = useState(command.warning ? 'warning' : 'form');
+// ── Action Card ───────────────────────────────────────────────────────────────
+
+const ActionCard = ({ cmd, index, onClick }) => {
+  const isSOS = cmd.isUrgent;
+
+  return (
+    <motion.button
+      onClick={onClick}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, delay: index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
+      whileTap={{ scale: 0.985 }}
+      className="relative overflow-hidden flex items-center gap-4 w-full text-left p-5 transition-colors duration-200 group"
+      style={{
+        border:          isSOS ? '1.5px solid #7F1D1D' : '1.5px solid #E2E8F0',
+        backgroundColor: isSOS ? '#1A0606'             : '#FFFFFF',
+      }}
+    >
+      {/* SOS sonar pulse ring */}
+      {isSOS && (
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{ border: '2px solid rgba(153,27,27,0.35)' }}
+          animate={{ scale: [1, 1.07], opacity: [0.6, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut' }}
+        />
+      )}
+
+      {/* Icon box */}
+      <div
+        className="shrink-0 flex items-center justify-center w-10 h-10"
+        style={{
+          backgroundColor: isSOS ? '#7F1D1D' : 'rgba(0,51,102,0.06)',
+          color:           isSOS ? '#FFFFFF' : '#003366',
+        }}
+      >
+        <cmd.icon size={20} strokeWidth={isSOS ? 2.5 : 2} />
+      </div>
+
+      {/* Text */}
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-sm font-bold uppercase truncate"
+          style={{ letterSpacing: '0.08em', color: isSOS ? '#FCA5A5' : '#1E293B' }}
+        >
+          {cmd.title}
+        </p>
+        <p
+          className="mt-0.5 truncate"
+          style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', color: isSOS ? 'rgba(252,165,165,0.55)' : '#94A3B8', textTransform: 'uppercase' }}
+        >
+          {cmd.warning ? 'Notificación global' : isSOS ? 'Protocolo de emergencia' : 'Comando de sistema'}
+        </p>
+      </div>
+
+      <ChevronRight
+        size={14} strokeWidth={2}
+        style={{ color: isSOS ? 'rgba(252,165,165,0.4)' : '#CBD5E1' }}
+        className="shrink-0 group-hover:translate-x-0.5 transition-transform"
+      />
+
+      {/* Non-SOS hover overlay */}
+      {!isSOS && (
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none"
+             style={{ backgroundColor: 'rgba(0,51,102,0.03)' }} />
+      )}
+    </motion.button>
+  );
+};
+
+// ── Drawer shared input styles ────────────────────────────────────────────────
+
+const FIELD_LABEL_STYLE = {
+  fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em',
+  color: '#94A3B8', textTransform: 'uppercase', display: 'block', marginBottom: '6px',
+};
+const INPUT_BASE = {
+  width: '100%', padding: '10px 12px', outline: 'none', fontSize: '13px',
+  fontWeight: 500, color: '#0F172A', backgroundColor: '#F8FAFC',
+  border: '1.5px solid #E2E8F0', transition: 'border-color 0.2s',
+};
+const focusBorder  = e => { e.target.style.borderColor = '#003366'; };
+const blurBorder   = e => { e.target.style.borderColor = '#E2E8F0'; };
+
+const FormField = ({ label, children }) => (
+  <div>
+    <label style={FIELD_LABEL_STYLE}>{label}</label>
+    {children}
+  </div>
+);
+
+// ── Command Drawer ────────────────────────────────────────────────────────────
+
+const CommandDrawer = ({ command, onClose, groups, students }) => {
+  const [step, setStep]               = useState(command.warning ? 'warning' : 'form');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
-  const [formData, setFormData] = useState({
-    group: '',
-    student: '',
-    date: '',
-    time: '',
-    timeStart: '',
-    timeEnd: '',
-    location: '',
-    message: '',
-    reason: '',
-    targetRole: '',
-    description: '',
-    targets: []
+  const [formData, setFormData]         = useState({
+    group: '', student: '', date: '', time: '', timeStart: '', timeEnd: '',
+    location: '', message: '', reason: '', targetRole: '', description: '', targets: [],
   });
 
   const roles = Object.values(ROLES);
   const incidentTargets = [
-    { id: 'rector', label: 'Rectoría' },
-    { id: 'coordinacion', label: 'Coordinación' },
-    { id: 'padre', label: 'Padre de Familia' }
+    { id: 'rector',       label: 'Rectoría'        },
+    { id: 'coordinacion', label: 'Coordinación'     },
+    { id: 'padre',        label: 'Padre de Familia' },
   ];
 
   const handleSubmit = async (e) => {
@@ -196,42 +267,19 @@ const CommandModal = ({ command, onClose, groups, students }) => {
     setIsSubmitting(true);
     setSubmitStatus({ type: '', message: '' });
     try {
-      let response;
       switch (command.id) {
-        case 'sos':
-          response = await operationsApi.sos(formData);
-          break;
-        case 'inasistencia':
-          response = await operationsApi.inasistencia(formData);
-          break;
-        case 'citar':
-          response = await operationsApi.citacion(formData);
-          break;
-        case 'autorizar':
-          response = await operationsApi.salida(formData);
-          break;
-        case 'permiso':
-          response = await operationsApi.permiso(formData);
-          break;
-        case 'solicitud':
-          response = await operationsApi.execute('solicitud', formData, '/operations/solicitud');
-          break;
-        case 'daño':
-          response = await operationsApi.execute('daño', formData, '/operations/daño');
-          break;
-        case 'pedagogica':
-          response = await operationsApi.execute('pedagogica', formData, '/operations/pedagogica');
-          break;
-        case 'horario':
-          response = await operationsApi.execute('horario', formData, '/operations/horario');
-          break;
-        case 'incidente':
-          response = await operationsApi.execute('incidente', formData, '/operations/incidente');
-          break;
-        default:
-          throw new Error('Comando no soportado');
+        case 'sos':         await operationsApi.sos(formData);                                         break;
+        case 'inasistencia':await operationsApi.inasistencia(formData);                                break;
+        case 'citar':       await operationsApi.citacion(formData);                                    break;
+        case 'autorizar':   await operationsApi.salida(formData);                                      break;
+        case 'permiso':     await operationsApi.permiso(formData);                                     break;
+        case 'solicitud':   await operationsApi.execute('solicitud',  formData, '/operations/solicitud');  break;
+        case 'daño':        await operationsApi.execute('daño',       formData, '/operations/daño');       break;
+        case 'pedagogica':  await operationsApi.execute('pedagogica', formData, '/operations/pedagogica'); break;
+        case 'horario':     await operationsApi.execute('horario',    formData, '/operations/horario');    break;
+        case 'incidente':   await operationsApi.execute('incidente',  formData, '/operations/incidente');  break;
+        default: throw new Error('Comando no soportado');
       }
-      
       onClose();
     } catch (error) {
       setSubmitStatus({ type: 'error', message: error.response?.data?.message || 'Error al ejecutar el comando institucional' });
@@ -240,220 +288,244 @@ const CommandModal = ({ command, onClose, groups, students }) => {
     }
   };
 
-  const filteredStudents = (students || []).filter((s) => (s.group || '') === formData.group);
+  const set = (field) => (e) => setFormData(prev => ({ ...prev, [field]: e.target.value }));
+  const filteredStudents = (students || []).filter(s => (s.group || '') === formData.group);
+  const isSOS = command.isUrgent;
+  const accentColor = isSOS ? '#7F1D1D' : '#003366';
+  const submitBg    = isSOS ? '#7F1D1D' : '#003366';
+  const submitHover = isSOS ? '#991B1B' : '#052955';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3.5rem] shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden">
-        
-        {/* Header del Modal */}
-        <div className="px-10 py-8 border-b border-gray-50 dark:border-slate-800/50 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={cn(
-              "p-4 rounded-2xl",
-              command.isUrgent ? "bg-red-50 text-red-600" : "bg-institutional-50 text-institutional-900"
-            )}>
-              <command.icon size={24} />
+    <>
+      {/* Overlay */}
+      <motion.div
+        key="overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-40"
+        style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+        onClick={onClose}
+      />
+
+      {/* Drawer panel */}
+      <motion.div
+        key="drawer"
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+        className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
+        style={{ maxWidth: '440px', borderLeft: '1.5px solid #E2E8F0' }}
+      >
+        {/* Drawer header */}
+        <div
+          className="shrink-0 flex items-center justify-between px-6 py-4"
+          style={{ borderBottom: '1.5px solid #F1F5F9' }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center w-9 h-9 shrink-0"
+              style={{ backgroundColor: isSOS ? '#7F1D1D' : 'rgba(0,51,102,0.08)', color: isSOS ? '#FCA5A5' : '#003366' }}
+            >
+              <command.icon size={18} strokeWidth={2.5} />
             </div>
             <div>
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{command.title}</h3>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Configuración de Comando</p>
+              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>
+                {command.title}
+              </p>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                Configuración de Comando
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-3 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
-            <X size={28} />
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
+            <X size={18} strokeWidth={2} />
           </button>
         </div>
 
-        {/* Contenido del Modal */}
-        <div className="p-10">
+        {/* Drawer body */}
+        <div className="flex-1 overflow-y-auto p-6">
           {step === 'warning' ? (
-            <div className="space-y-8 text-center py-6">
-              <div className="inline-flex p-6 bg-amber-50 text-amber-600 rounded-full">
-                <Clock size={48} />
+            <div className="space-y-6 py-4">
+              <div
+                className="flex items-start gap-3 p-4"
+                style={{ border: '1.5px solid #FEF3C7', backgroundColor: '#FFFBEB' }}
+              >
+                <Clock size={16} strokeWidth={2} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-sm font-semibold text-amber-700 leading-snug">{command.warning}</p>
               </div>
-              <div className="space-y-3">
-                <h4 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">¡Atención!</h4>
-                <p className="text-gray-500 dark:text-gray-400 font-bold leading-relaxed max-w-md mx-auto">{command.warning}</p>
-              </div>
-              <div className="flex gap-4">
-                <button onClick={onClose} className="flex-1 py-5 rounded-2xl font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors text-xs">Cancelar</button>
-                <button onClick={() => setStep('form')} className="flex-1 bg-institutional-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-institutional-900/20 transition-all hover:scale-105 text-xs">Aceptar y Continuar</button>
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3 text-xs font-bold uppercase text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+                  style={{ border: '1.5px solid #E2E8F0', letterSpacing: '0.15em' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => setStep('form')}
+                  className="flex-1 py-3 text-xs font-bold uppercase text-white transition-colors"
+                  style={{ backgroundColor: accentColor, letterSpacing: '0.15em' }}
+                >
+                  Aceptar y Continuar
+                </button>
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              
-              {/* Selectores de Grupo y Estudiante */}
+            <form onSubmit={handleSubmit} className="space-y-5">
               {command.fields.includes('group') && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Seleccionar Grupo</label>
-                  <select 
-                    required
-                    value={formData.group}
-                    onChange={(e) => setFormData({...formData, group: e.target.value, student: ''})}
-                    className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all appearance-none"
-                  >
-                    <option value="">-- Elige un Grupo --</option>
-                    {(groups || []).map((g) => {
-                      const groupName = g?.name || g?.group_name || '';
-                      return (
-                        <option key={g?.id || groupName} value={groupName}>
-                          {groupName}
-                        </option>
-                      );
+                <FormField label="Grupo">
+                  <select required value={formData.group}
+                    onChange={e => setFormData(p => ({ ...p, group: e.target.value, student: '' }))}
+                    className="dark:bg-slate-800 dark:text-white appearance-none"
+                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
+                    <option value="">— Elegir grupo —</option>
+                    {(groups || []).map(g => {
+                      const n = g?.name || g?.group_name || '';
+                      return <option key={g?.id || n} value={n}>{n}</option>;
                     })}
                   </select>
-                </div>
+                </FormField>
               )}
 
               {command.fields.includes('student') && formData.group && (
-                <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Seleccionar Estudiante</label>
-                  <select 
-                    required
-                    value={formData.student}
-                    onChange={(e) => setFormData({...formData, student: e.target.value})}
-                    className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all appearance-none"
-                  >
-                    <option value="">-- Selecciona el Estudiante --</option>
-                    {(filteredStudents || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <FormField label="Estudiante">
+                  <select required value={formData.student} onChange={set('student')}
+                    className="dark:bg-slate-800 dark:text-white appearance-none"
+                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
+                    <option value="">— Seleccionar estudiante —</option>
+                    {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                </div>
+                </FormField>
               )}
 
-              {/* Otros Campos */}
               {command.fields.includes('targetRole') && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Enviar Solicitud a:</label>
-                  <select 
-                    required
-                    value={formData.targetRole}
-                    onChange={(e) => setFormData({...formData, targetRole: e.target.value})}
-                    className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all appearance-none"
-                  >
-                    <option value="">-- Seleccionar Rol --</option>
+                <FormField label="Enviar a">
+                  <select required value={formData.targetRole} onChange={set('targetRole')}
+                    className="dark:bg-slate-800 dark:text-white appearance-none"
+                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
+                    <option value="">— Seleccionar rol —</option>
                     {roles.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
-                </div>
+                </FormField>
               )}
 
               {command.fields.includes('location') && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Ubicación Actual</label>
+                <FormField label="Ubicación">
                   <div className="relative">
-                    <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300" size={20} />
-                    <input 
-                      type="text" required
-                      value={formData.location}
-                      onChange={(e) => setFormData({...formData, location: e.target.value})}
-                      placeholder="Ej: Patio Central, Aula 102..."
-                      className="w-full pl-14 pr-6 py-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all"
-                    />
+                    <MapPin size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                    <input type="text" required value={formData.location} onChange={set('location')}
+                      placeholder="Patio Central, Aula 102…"
+                      className="dark:bg-slate-800 dark:text-white"
+                      style={{ ...INPUT_BASE, paddingLeft: '32px' }}
+                      onFocus={focusBorder} onBlur={blurBorder} />
                   </div>
-                </div>
+                </FormField>
               )}
 
               {command.fields.includes('date') && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Fecha de Citación</label>
-                  <input 
-                    type="date" required
-                    value={formData.date}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
-                    className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all"
-                  />
-                </div>
+                <FormField label="Fecha">
+                  <input type="date" required value={formData.date} onChange={set('date')}
+                    className="dark:bg-slate-800 dark:text-white"
+                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder} />
+                </FormField>
               )}
 
               {command.fields.includes('time') && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Hora de Salida</label>
-                  <input 
-                    type="time" required
-                    value={formData.time}
-                    onChange={(e) => setFormData({...formData, time: e.target.value})}
-                    className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all"
-                  />
-                </div>
+                <FormField label="Hora">
+                  <input type="time" required value={formData.time} onChange={set('time')}
+                    className="dark:bg-slate-800 dark:text-white"
+                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder} />
+                </FormField>
               )}
 
               {command.fields.includes('timeRange') && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Desde</label>
-                    <input type="time" required value={formData.timeStart} onChange={(e) => setFormData({...formData, timeStart: e.target.value})} className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Hasta</label>
-                    <input type="time" required value={formData.timeEnd} onChange={(e) => setFormData({...formData, timeEnd: e.target.value})} className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all" />
-                  </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Desde">
+                    <input type="time" required value={formData.timeStart} onChange={set('timeStart')}
+                      className="dark:bg-slate-800 dark:text-white"
+                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder} />
+                  </FormField>
+                  <FormField label="Hasta">
+                    <input type="time" required value={formData.timeEnd} onChange={set('timeEnd')}
+                      className="dark:bg-slate-800 dark:text-white"
+                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder} />
+                  </FormField>
                 </div>
               )}
 
               {command.fields.includes('targets') && (
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Enviar Reporte a (Múltiple):</label>
-                  <div className="flex flex-wrap gap-3">
-                    {incidentTargets.map(t => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => {
-                          const newTargets = formData.targets.includes(t.id)
-                            ? formData.targets.filter(id => id !== t.id)
-                            : [...formData.targets, t.id];
-                          setFormData({...formData, targets: newTargets});
-                        }}
-                        className={cn(
-                          "px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all border-2",
-                          formData.targets.includes(t.id)
-                            ? "bg-institutional-900 border-institutional-900 text-white"
-                            : "bg-transparent border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-500"
-                        )}
-                      >
+                <FormField label="Enviar reporte a">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'rector',       label: 'Rectoría'        },
+                      { id: 'coordinacion', label: 'Coordinación'     },
+                      { id: 'padre',        label: 'Padre de Familia' },
+                    ].map(t => (
+                      <button key={t.id} type="button"
+                        onClick={() => setFormData(p => ({
+                          ...p, targets: p.targets.includes(t.id)
+                            ? p.targets.filter(id => id !== t.id)
+                            : [...p.targets, t.id]
+                        }))}
+                        className="px-3 py-1.5 text-xs font-bold uppercase transition-colors"
+                        style={{
+                          letterSpacing: '0.12em',
+                          border: '1.5px solid',
+                          borderColor:     formData.targets.includes(t.id) ? '#003366' : '#E2E8F0',
+                          backgroundColor: formData.targets.includes(t.id) ? '#003366' : 'transparent',
+                          color:           formData.targets.includes(t.id) ? '#FFFFFF' : '#94A3B8',
+                        }}>
                         {t.label}
                       </button>
                     ))}
                   </div>
-                </div>
+                </FormField>
               )}
 
-              {command.fields.includes('reason') || command.fields.includes('message') || command.fields.includes('description') ? (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-2">Mensaje / Motivo</label>
-                  <textarea 
+              {(command.fields.includes('reason') || command.fields.includes('message') || command.fields.includes('description')) && (
+                <FormField label="Mensaje / Motivo">
+                  <textarea
                     value={formData.reason || formData.message || formData.description}
-                    onChange={(e) => setFormData({...formData, reason: e.target.value, message: e.target.value, description: e.target.value})}
-                    className="w-full p-5 bg-gray-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-2xl outline-none focus:border-institutional-400 dark:text-white font-bold transition-all h-32 resize-none"
-                    placeholder="Escribe aquí los detalles..."
+                    onChange={e => setFormData(p => ({ ...p, reason: e.target.value, message: e.target.value, description: e.target.value }))}
+                    placeholder="Escribe aquí los detalles…"
+                    rows={4}
+                    className="resize-none dark:bg-slate-800 dark:text-white"
+                    style={INPUT_BASE}
+                    onFocus={focusBorder} onBlur={blurBorder}
                   />
-                </div>
-              ) : null}
+                </FormField>
+              )}
 
-              <button 
+              {submitStatus.message && (
+                <p className="text-xs font-semibold text-red-500">{submitStatus.message}</p>
+              )}
+
+              <motion.button
                 type="submit"
                 disabled={isSubmitting}
-                className={cn(
-                  "w-full py-6 rounded-3xl font-black uppercase tracking-[0.2em] text-white shadow-2xl transition-all hover:scale-[1.02] active:scale-95 mt-4 disabled:opacity-50",
-                  command.isUrgent ? "bg-red-600 shadow-red-900/20" : "bg-institutional-900 shadow-institutional-900/20"
-                )}
+                whileTap={!isSubmitting ? { scale: 0.985 } : {}}
+                whileHover={!isSubmitting ? { backgroundColor: submitHover } : {}}
+                className="w-full py-3.5 text-sm font-bold uppercase text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ backgroundColor: submitBg, letterSpacing: '0.15em' }}
               >
-                {isSubmitting ? 'Procesando...' : 'Ejecutar Comando'}
-              </button>
-              {submitStatus.message && (
-                <p className={cn(
-                  "text-xs font-bold text-center mt-2",
-                  submitStatus.type === 'error' ? "text-red-500" : "text-gray-500"
-                )}>
-                  {submitStatus.message}
-                </p>
-              )}
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-white/70" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    Procesando comando…
+                  </span>
+                ) : 'Ejecutar Comando'}
+              </motion.button>
             </form>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </>
   );
 };
 

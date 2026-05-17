@@ -1,96 +1,143 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { SIDEBAR_ITEMS } from '../config/roles';
-import { LogOut, X, Sun, Moon } from 'lucide-react';
-import { cn } from '../utils/cn';
+import { SIDEBAR_ITEMS, getRoleDisplay } from '../config/roles';
+import { LogOut, Sun, Moon, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
 import { useTheme } from '../context/ThemeContext';
-import { ROLES } from '../config/roles';
+
+const SectionLabel = ({ children }) => (
+  <p
+    className="px-4 mb-1 mt-5 first:mt-0 select-none"
+    style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase' }}
+  >
+    {children}
+  </p>
+);
+
+const NavItem = ({ item, onNavigate }) => (
+  <NavLink to={item.path} end={item.path === '/'} onClick={onNavigate} className="block group">
+    {({ isActive }) => (
+      <span
+        className="flex items-center gap-3 py-2.5 pr-4 text-sm font-semibold transition-colors duration-200"
+        style={{
+          paddingLeft: '13px',
+          borderLeft: isActive ? '3px solid #003366' : '3px solid transparent',
+          color:           isActive ? '#003366' : undefined,
+          backgroundColor: isActive ? 'rgba(0,51,102,0.05)' : undefined,
+        }}
+      >
+        <item.icon
+          size={20}
+          strokeWidth={isActive ? 2.5 : 2}
+          style={{ color: isActive ? '#003366' : undefined }}
+          className={!isActive ? 'text-slate-400 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors' : ''}
+        />
+        <span className={isActive ? '' : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200'}>
+          {item.title}
+        </span>
+      </span>
+    )}
+  </NavLink>
+);
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
 
-  const filteredItems = SIDEBAR_ITEMS.filter(item => 
-    item.roles.includes(user?.role)
-  );
-  const roleLabel = user?.role === ROLES.PSICORIENTADOR
-    ? `${user?.role} (pendiente de expansión)`
-    : user?.role;
+  const filteredItems = SIDEBAR_ITEMS.filter(item => item.roles.includes(user?.role));
+  const roleDisplay   = getRoleDisplay(user?.role);
+  const initial       = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
+  const closeOnMobile = () => { if (window.innerWidth < 1024) toggleSidebar(); };
 
   return (
     <>
-      {/* Overlay for mobile */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={toggleSidebar}
-        />
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 lg:hidden"
+            style={{ backgroundColor: 'rgba(2,6,23,0.45)', backdropFilter: 'blur(2px)' }}
+            onClick={toggleSidebar}
+          />
+        )}
+      </AnimatePresence>
 
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0",
-        isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
-      )}>
-        <div className="flex items-center justify-between h-24 px-8 border-b border-gray-50 dark:border-slate-800/50">
-          <LogoNexo className="h-10" />
-          <button onClick={toggleSidebar} className="lg:hidden text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
-            <X size={24} />
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 flex flex-col
+          bg-white dark:bg-slate-900
+          transform transition-transform duration-300
+          lg:relative lg:translate-x-0
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+        style={{ width: '220px', borderRight: '1.5px solid #E2E8F0' }}
+      >
+        {/* Logo strip — height synced with header (56px) */}
+        <div
+          className="flex items-center justify-between px-4 shrink-0"
+          style={{ height: '56px', borderBottom: '1.5px solid #F1F5F9' }}
+        >
+          <LogoNexo className="h-7" />
+          <button
+            onClick={toggleSidebar}
+            className="lg:hidden text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors p-1"
+          >
+            <X size={17} strokeWidth={2} />
           </button>
         </div>
 
-        <div className="flex flex-col h-[calc(100vh-96px)] justify-between py-6">
-          <nav className="px-4 space-y-2">
-            {filteredItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={() => window.innerWidth < 1024 && toggleSidebar()}
-                className={({ isActive }) => cn(
-                  "flex items-center gap-3 px-5 py-4 rounded-2xl transition-all duration-200 group",
-                  isActive 
-                    ? "bg-institutional-900 text-white shadow-lg shadow-institutional-900/20 dark:shadow-none" 
-                    : "text-gray-500 dark:text-slate-400 hover:bg-institutional-50 dark:hover:bg-slate-800 hover:text-institutional-900 dark:hover:text-white"
-                )}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon 
-                      size={22} 
-                      className={cn(
-                        "transition-colors", 
-                        isActive ? "text-white" : "group-hover:text-institutional-700"
-                      )} 
-                    />
-                    <span className="font-bold tracking-tight">{item.title}</span>
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </nav>
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-3" style={{ scrollbarWidth: 'none' }}>
+          <SectionLabel>Módulos</SectionLabel>
+          {filteredItems.map(item => (
+            <NavItem key={item.path} item={item} onNavigate={closeOnMobile} />
+          ))}
+        </nav>
 
-          <div className="px-6 space-y-6">
-            <button
-              onClick={toggleDarkMode}
-              className="flex items-center gap-3 w-full px-5 py-4 rounded-2xl text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-gray-100 dark:hover:border-slate-700"
+        {/* Bottom panel */}
+        <div className="shrink-0 p-3 space-y-1" style={{ borderTop: '1.5px solid #F1F5F9' }}>
+          <button
+            onClick={toggleDarkMode}
+            className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+          >
+            {darkMode ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
+            <span>{darkMode ? 'Modo Claro' : 'Modo Oscuro'}</span>
+          </button>
+
+          {/* User identity card */}
+          <div
+            className="flex items-center gap-2.5 px-3 py-2.5 mt-1"
+            style={{ backgroundColor: 'rgba(0,51,102,0.04)', border: '1.5px solid #E2E8F0' }}
+          >
+            <div
+              className="shrink-0 flex items-center justify-center w-8 h-8 text-xs font-black text-white"
+              style={{ backgroundColor: '#003366' }}
             >
-              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-              <span className="font-bold text-sm">{darkMode ? 'Modo Claro' : 'Modo Oscuro'}</span>
-            </button>
-
-            <div className="p-5 bg-gray-50 dark:bg-slate-800/50 rounded-3xl border border-gray-100 dark:border-slate-800/50">
-              <div className="mb-4">
-                <p className="text-sm font-black text-gray-900 dark:text-white truncate">{user?.nombre}</p>
-                <p className="text-[10px] text-institutional-600 dark:text-institutional-400 font-black uppercase tracking-[0.2em] mt-1">{roleLabel}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="flex items-center gap-3 w-full text-red-500 hover:text-red-600 transition-colors py-1"
-              >
-                <LogOut size={18} />
-                <span className="font-bold text-xs">Cerrar Sesión</span>
-              </button>
+              {initial}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-800 dark:text-white truncate leading-none">
+                {user?.nombre}
+              </p>
+              <p
+                className="mt-0.5 truncate leading-none"
+                style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', color: '#00A67E', textTransform: 'uppercase' }}
+              >
+                {roleDisplay}
+              </p>
+            </div>
+            <button
+              onClick={logout}
+              title="Cerrar sesión"
+              className="shrink-0 p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              <LogOut size={14} strokeWidth={2} />
+            </button>
           </div>
         </div>
       </aside>

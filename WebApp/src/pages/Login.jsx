@@ -1,22 +1,52 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ArrowRight, Shield, Activity } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
 
+const STAGGER = {
+  container: {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.07, delayChildren: 0.15 } },
+  },
+  item: {
+    hidden: { opacity: 0, y: 14 },
+    show:   { opacity: 1, y: 0, transition: { duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] } },
+  },
+};
+
+const CARD = {
+  hidden: { opacity: 0, y: 28, scale: 0.985 },
+  show:   { opacity: 1, y: 0, scale: 1, transition: { duration: 0.52, ease: [0.25, 0.46, 0.45, 0.94] } },
+};
+
+const FieldWrapper = ({ label, icon: Icon, children }) => (
+  <motion.div variants={STAGGER.item} className="space-y-2">
+    <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-0.5 select-none">
+      {label}
+    </label>
+    <div className="relative group">
+      <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-300 group-focus-within:text-[#003366] transition-colors duration-250">
+        <Icon size={17} strokeWidth={2} />
+      </span>
+      {children}
+    </div>
+  </motion.div>
+);
+
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const { login }   = useAuth();
+  const navigate    = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await login(email, password);
       navigate('/');
@@ -29,90 +59,252 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 px-4 py-12 transition-colors duration-300">
-      <div className="max-w-xl w-full">
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-soft dark:shadow-soft-dark overflow-hidden border border-gray-100 dark:border-slate-800/50">
-          <div className="px-10 py-12 text-center border-b border-gray-50 dark:border-slate-800/50">
-            <div className="flex justify-center mb-8">
-              <LogoNexo className="h-16" />
-            </div>
-            <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight uppercase">
-              Portal Institucional
-            </h2>
-            <p className="text-gray-400 dark:text-slate-500 text-sm mt-3 font-bold uppercase tracking-widest">
-              Panel de Monitoreo Biométrico
-            </p>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-14 font-sans"
+      style={{ backgroundColor: '#F8FAFC' }}
+    >
+      {/* Classification strip — top */}
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        className="mb-8 flex items-center gap-2 select-none"
+      >
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.25em] rounded-sm"
+          style={{
+            border: '1.5px solid #003366',
+            color:  '#003366',
+            backgroundColor: 'transparent',
+          }}
+        >
+          <Shield size={10} strokeWidth={2.5} />
+          Sistema Restringido
+        </span>
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.25em] rounded-sm"
+          style={{
+            border: '1.5px solid #00A67E',
+            color:  '#00A67E',
+            backgroundColor: 'transparent',
+          }}
+        >
+          <Activity size={10} strokeWidth={2.5} />
+          Biometría Activa
+        </span>
+      </motion.div>
+
+      {/* Main card */}
+      <motion.div
+        variants={CARD}
+        initial="hidden"
+        animate="show"
+        className="w-full max-w-md"
+        style={{
+          backgroundColor: '#FFFFFF',
+          border: '1.5px solid #E2E8F0',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px -1px rgba(0,51,102,0.06), 0 1px 3px -1px rgba(0,51,102,0.04)',
+        }}
+      >
+        {/* Header */}
+        <div
+          className="px-10 pt-10 pb-8"
+          style={{ borderBottom: '1.5px solid #F1F5F9' }}
+        >
+          <div className="flex items-start justify-between mb-8">
+            <LogoNexo className="h-10" />
+            <span
+              className="text-[9px] font-bold uppercase tracking-[0.22em] mt-1 select-none"
+              style={{ color: '#94A3B8' }}
+            >
+              v2.0 — SRE
+            </span>
           </div>
 
-          <form onSubmit={handleSubmit} className="px-12 py-12 space-y-8">
-            {error && (
-              <div className="flex items-center gap-4 p-5 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-2xl text-sm font-bold border border-red-100 dark:border-red-900/20 animate-in fade-in zoom-in duration-300">
-                <AlertCircle size={22} className="flex-shrink-0" />
-                <p>{error}</p>
-              </div>
-            )}
+          <h1
+            className="text-2xl font-black uppercase tracking-tight"
+            style={{ color: '#003366', letterSpacing: '-0.01em' }}
+          >
+            Portal de Acceso
+          </h1>
+          <p
+            className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]"
+            style={{ color: '#94A3B8' }}
+          >
+            Panel de Monitoreo Biométrico
+          </p>
 
-            <div className="space-y-3">
-              <label className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1">
-                Correo Electrónico
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-gray-300 dark:text-slate-600 group-focus-within:text-institutional-600 transition-colors">
-                  <Mail size={20} />
-                </div>
-                <input
-                  type="email"
-                  required
-                  className="block w-full pl-14 pr-6 py-5 bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-institutional-500/10 focus:border-institutional-500 transition-all outline-none text-gray-900 dark:text-white font-medium text-lg"
-                  placeholder="usuario@inst.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1">
-                Contraseña
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-gray-300 dark:text-slate-600 group-focus-within:text-institutional-600 transition-colors">
-                  <Lock size={20} />
-                </div>
-                <input
-                  type="password"
-                  required
-                  className="block w-full pl-14 pr-6 py-5 bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-institutional-500/10 focus:border-institutional-500 transition-all outline-none text-gray-900 dark:text-white font-medium text-lg"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-institutional-900 hover:bg-institutional-800 dark:bg-institutional-700 dark:hover:bg-institutional-600 text-white font-black py-6 px-8 rounded-3xl transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed shadow-xl shadow-institutional-900/20 dark:shadow-none text-lg uppercase tracking-widest group"
+          {/* Security tier indicator */}
+          <div className="mt-5 flex items-center gap-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-1 flex-1 rounded-full"
+                style={{ backgroundColor: i <= 3 ? '#003366' : '#E2E8F0' }}
+              />
+            ))}
+            <span
+              className="text-[9px] font-bold uppercase tracking-[0.2em] ml-1 select-none"
+              style={{ color: '#003366' }}
             >
-              {loading ? (
-                <div className="h-6 w-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <span>Ingresar al Sistema</span>
-                  <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="px-12 py-8 bg-gray-50 dark:bg-slate-800/30 text-center border-t border-gray-100 dark:border-slate-800/50">
-            <p className="text-[10px] text-gray-400 dark:text-slate-600 font-bold uppercase tracking-[0.2em]">
-              Acceso Restringido • Institución Educativa NEXO
-            </p>
+              Nivel 3
+            </span>
           </div>
         </div>
-      </div>
+
+        {/* Form */}
+        <motion.form
+          onSubmit={handleSubmit}
+          variants={STAGGER.container}
+          initial="hidden"
+          animate="show"
+          className="px-10 py-8 space-y-6"
+        >
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                transition={{ duration: 0.25 }}
+                className="flex items-start gap-3 p-4 text-sm font-semibold"
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  border: '1.5px solid #FEE2E2',
+                  borderRadius: '4px',
+                  color: '#DC2626',
+                }}
+              >
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" strokeWidth={2.5} />
+                <p className="leading-snug">{error}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <FieldWrapper label="Correo Electrónico" icon={Mail}>
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              className="block w-full pl-10 pr-4 py-3.5 text-sm font-medium outline-none transition-all duration-250"
+              style={{
+                backgroundColor: '#F8FAFC',
+                border: '1.5px solid #E2E8F0',
+                borderRadius: '4px',
+                color: '#0F172A',
+                boxShadow: 'inset 0 1px 3px 0 rgba(0,51,102,0.04)',
+              }}
+              placeholder="usuario@institución.edu"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#003366';
+                e.target.style.boxShadow   = '0 0 0 3px rgba(0,51,102,0.08), inset 0 1px 3px 0 rgba(0,51,102,0.04)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#E2E8F0';
+                e.target.style.boxShadow   = 'inset 0 1px 3px 0 rgba(0,51,102,0.04)';
+              }}
+            />
+          </FieldWrapper>
+
+          <FieldWrapper label="Contraseña de Acceso" icon={Lock}>
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              className="block w-full pl-10 pr-4 py-3.5 text-sm font-medium outline-none transition-all duration-250"
+              style={{
+                backgroundColor: '#F8FAFC',
+                border: '1.5px solid #E2E8F0',
+                borderRadius: '4px',
+                color: '#0F172A',
+                boxShadow: 'inset 0 1px 3px 0 rgba(0,51,102,0.04)',
+              }}
+              placeholder="••••••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#003366';
+                e.target.style.boxShadow   = '0 0 0 3px rgba(0,51,102,0.08), inset 0 1px 3px 0 rgba(0,51,102,0.04)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#E2E8F0';
+                e.target.style.boxShadow   = 'inset 0 1px 3px 0 rgba(0,51,102,0.04)';
+              }}
+            />
+          </FieldWrapper>
+
+          <motion.div variants={STAGGER.item} className="pt-2">
+            <motion.button
+              type="submit"
+              disabled={loading}
+              whileTap={!loading ? { scale: 0.985 } : {}}
+              whileHover={!loading ? { backgroundColor: '#052955' } : {}}
+              className="w-full flex items-center justify-center gap-3 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition-colors duration-250 disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: '#003366',
+                borderRadius: '4px',
+                border: '1.5px solid transparent',
+                boxShadow: '0 4px 24px -4px rgba(0,51,102,0.28)',
+              }}
+            >
+              {loading ? (
+                <span className="flex items-center gap-2.5">
+                  <svg className="animate-spin h-4 w-4 text-white/70" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Verificando Credenciales
+                </span>
+              ) : (
+                <>
+                  <span>Autenticar Acceso</span>
+                  <ArrowRight size={16} strokeWidth={2.5} />
+                </>
+              )}
+            </motion.button>
+          </motion.div>
+        </motion.form>
+
+        {/* Footer */}
+        <div
+          className="px-10 py-5 flex items-center justify-between"
+          style={{ borderTop: '1.5px solid #F1F5F9', backgroundColor: '#F8FAFC' }}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className="block h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: '#00A67E' }}
+            />
+            <span
+              className="text-[9px] font-bold uppercase tracking-[0.22em] select-none"
+              style={{ color: '#00A67E' }}
+            >
+              Sistema Operativo
+            </span>
+          </div>
+          <p
+            className="text-[9px] font-bold uppercase tracking-[0.18em] select-none"
+            style={{ color: '#CBD5E1' }}
+          >
+            NEXO · Acceso Restringido
+          </p>
+        </div>
+      </motion.div>
+
+      {/* Bottom classification */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.7 }}
+        className="mt-8 text-[9px] font-bold uppercase tracking-[0.25em] select-none"
+        style={{ color: '#CBD5E1' }}
+      >
+        Uso exclusivo de personal autorizado — Monitoreo activo
+      </motion.p>
     </div>
   );
 };

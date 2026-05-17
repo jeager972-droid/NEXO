@@ -63,3 +63,16 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.SECRETARIA]
   }
 ];
+
+export const ROLE_DISPLAY = {
+  [ROLES.SUPER_RECTOR]:  'Super Rector',
+  [ROLES.RECTOR]:        'Rector',
+  [ROLES.COORDINADOR]:   'Coordinador',
+  [ROLES.DOCENTE]:       'Docente',
+  [ROLES.SECRETARIA]:    'Secretaria',
+  [ROLES.PORTERO]:       'Portero',
+  [ROLES.AUXILIAR]:      'Auxiliar',
+  [ROLES.PSICORIENTADOR]: 'Psicorientador',
+};
+
+export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;

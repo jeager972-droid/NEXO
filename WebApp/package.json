@@ -13,18 +13,20 @@
     "tauri-build": "tauri build"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@tauri-apps/api": "^2.0.0-rc",
+    "@tauri-apps/plugin-biometric": "^2.0.0-rc",
+    "@tauri-apps/plugin-deep-link": "^2.0.0-rc",
+    "@tauri-apps/plugin-store": "^2.0.0-rc",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "framer-motion": "^11.18.2",
     "lucide-react": "^0.378.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.23.1",
-    "tailwind-merge": "^2.3.0",
-    "@tauri-apps/api": "^2.0.0-rc",
-    "@tauri-apps/plugin-biometric": "^2.0.0-rc",
-    "@tauri-apps/plugin-deep-link": "^2.0.0-rc",
-    "@tauri-apps/plugin-store": "^2.0.0-rc"
+    "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0-rc.18",

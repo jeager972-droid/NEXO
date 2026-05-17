@@ -2,319 +2,350 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, 
-  Activity, 
-  AlertTriangle, 
-  UserMinus, 
-  ChevronRight,
-  ClipboardList,
-  Users2,
-  LogOut,
-  Bell
+  Users, Activity, AlertTriangle, UserMinus,
+  ChevronRight, LogOut, Bell, FileText, Search,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
-import { cn } from '../utils/cn';
-import LogoNexo from '../components/LogoNexo';
-
 import { ROLES } from '../config/roles';
 
 const EMPTY_STATS = {
-  presentCount: 0,
-  absentCount: 0,
-  alertsCount: 0,
-  pendingTasks: [],
-  studentsByGroup: {},
-  groupStats: {
-    present: 0,
-    absent: 0,
-    alerts: 0,
-    outside: 0
-  }
+  presentCount: 0, absentCount: 0, alertsCount: 0,
+  pendingTasks: [], studentsByGroup: {},
+  groupStats: { present: 0, absent: 0, alerts: 0, outside: 0 },
 };
+
+// ── Skeleton primitives ───────────────────────────────────────────────────────
+
+const Pulse = ({ className = '' }) => (
+  <div className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded-sm ${className}`} />
+);
+
+const KpiSkeleton = () => (
+  <div className="p-6 space-y-3 bg-white dark:bg-slate-900">
+    <Pulse className="h-2 w-20" />
+    <Pulse className="h-10 w-16" />
+    <Pulse className="h-2 w-28" />
+  </div>
+);
+
+const StreamSkeleton = () => (
+  <div className="space-y-0">
+    {[1, 2, 3, 4, 5].map(i => (
+      <div key={i} className="flex items-center gap-3 py-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
+        <Pulse className="h-1.5 w-1.5 rounded-full shrink-0" />
+        <Pulse className="h-2 flex-1" />
+        <Pulse className="h-2 w-12" />
+      </div>
+    ))}
+  </div>
+);
+
+// ── Shared UI primitives ──────────────────────────────────────────────────────
+
+const SectionLabel = ({ title, sub }) => (
+  <div className="mb-3">
+    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
+      {title}
+    </p>
+    {sub && (
+      <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px', letterSpacing: '-0.01em' }}
+         className="dark:text-slate-200">
+        {sub}
+      </p>
+    )}
+  </div>
+);
+
+const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0 }) => (
+  <motion.div
+    className="bg-white dark:bg-slate-900 p-6 space-y-3"
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.28, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+  >
+    <div className="flex items-center justify-between">
+      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+      <Icon size={15} strokeWidth={2} style={{ color: accent }} />
+    </div>
+    <p className="dark:text-slate-100"
+       style={{ fontSize: '44px', fontWeight: 900, color: '#0F172A', lineHeight: 1, letterSpacing: '-0.02em' }}>
+      {value}
+    </p>
+    <p style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+      {sub}
+    </p>
+  </motion.div>
+);
+
+const StreamRow = ({ label, time, type = 'default', index }) => {
+  const dot = type === 'alert' ? '#EF4444' : type === 'bio' ? '#00A67E' : '#003366';
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -4 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.045, duration: 0.2 }}
+      className="flex items-center gap-3 py-2.5"
+      style={{ borderBottom: '1px solid #F1F5F9' }}
+    >
+      <span className="shrink-0 block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
+      <span className="flex-1 text-xs font-medium text-slate-600 dark:text-slate-400 truncate">{label}</span>
+      <span style={{ fontSize: '9px', color: '#CBD5E1', fontWeight: 600 }}>{time}</span>
+    </motion.div>
+  );
+};
+
+// ── Dashboard router ──────────────────────────────────────────────────────────
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState(EMPTY_STATS);
+  const [stats,   setStats]   = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      const schoolId = user?.school_id || user?.inst_id || user?.institucion_id;
-      if (!schoolId) {
-        setStats(EMPTY_STATS);
-        setLoading(false);
-        return;
-      }
-      try {
-        const data = await dashboardApi.getStats(schoolId);
-        setStats({ ...EMPTY_STATS, ...(data || {}) });
-      } catch (err) {
-        console.error(err);
-        setStats(EMPTY_STATS);
-      } finally {
-        setLoading(false);
-      }
+    const load = async () => {
+      const id = user?.school_id || user?.inst_id || user?.institucion_id;
+      if (!id) { setLoading(false); return; }
+      try { setStats({ ...EMPTY_STATS, ...(await dashboardApi.getStats(id) || {}) }); }
+      catch (e) { console.error(e); setStats(EMPTY_STATS); }
+      finally { setLoading(false); }
     };
-    fetchStats();
+    load();
   }, [user]);
 
-  if (loading) return <div className="min-h-[60vh] flex items-center justify-center font-black text-institutional-900 uppercase tracking-widest animate-pulse">Sincronizando datos institucionales...</div>;
-
-  // Renderiza el dashboard según el rol unificado
-  return (
-    <div className="animate-in fade-in duration-500">
-      {(() => {
-        switch (user?.role) {
-          case ROLES.SUPER_RECTOR:
-          case ROLES.RECTOR:
-          case ROLES.COORDINADOR:
-            return <AdminDashboard user={user} stats={stats} />;
-          case ROLES.SECRETARIA:
-            return <SecretaryDashboard user={user} tasks={stats.pendingTasks || []} />;
-          case ROLES.DOCENTE:
-          case ROLES.PSICORIENTADOR:
-            return <TeacherDashboard user={user} stats={stats || EMPTY_STATS} />;
-          case ROLES.PORTERO:
-          case ROLES.AUXILIAR:
-            return <StaffDashboard user={user} stats={stats} navigate={navigate} logout={logout} />;
-          default:
-            return <div className="dark:text-white text-center py-20 font-black uppercase tracking-widest">Acceso no autorizado - Rol: {user?.role || 'NINGUNO'}</div>;
-        }
-      })()}
-    </div>
-  );
+  switch (user?.role) {
+    case ROLES.SUPER_RECTOR:
+    case ROLES.RECTOR:
+    case ROLES.COORDINADOR:
+      return <AdminDashboard stats={stats} loading={loading} navigate={navigate} />;
+    case ROLES.SECRETARIA:
+      return <SecretaryDashboard tasks={stats.pendingTasks || []} loading={loading} />;
+    case ROLES.DOCENTE:
+    case ROLES.PSICORIENTADOR:
+      return <TeacherDashboard stats={stats} loading={loading} />;
+    case ROLES.PORTERO:
+    case ROLES.AUXILIAR:
+      return <StaffDashboard navigate={navigate} logout={logout} />;
+    default:
+      return (
+        <p className="text-center py-20 text-slate-400 dark:text-slate-600 text-xs uppercase tracking-widest">
+          Rol no autorizado: {user?.role ?? 'ninguno'}
+        </p>
+      );
+  }
 };
 
-/**
- * DASHBOARD: RECTOR Y COORDINADOR
- */
-const AdminDashboard = ({ user, stats }) => {
-  const statCards = [
-    { label: 'Estudiantes Presentes', value: stats?.presentCount || '0', icon: Users, color: 'text-institutional-600', darkColor: 'dark:text-institutional-500', bg: 'bg-institutional-50', darkBg: 'dark:bg-institutional-900/20', sub: 'Ingresos hoy' },
-    { label: 'Inasistencias', value: stats?.absentCount || '0', icon: UserMinus, color: 'text-institutional-700', darkColor: 'dark:text-institutional-600', bg: 'bg-institutional-50', darkBg: 'dark:bg-institutional-900/20', sub: 'Sin reporte aún' },
-    { label: 'Alertas', value: stats?.alertsCount || '0', icon: AlertTriangle, color: 'text-red-600', darkColor: 'dark:text-red-400', bg: 'bg-red-50', darkBg: 'dark:bg-red-900/20', sub: 'Requieren atención' },
+// ── Command Center — Admin / Rector / Coordinador ─────────────────────────────
+
+const AdminDashboard = ({ stats, loading, navigate }) => {
+  const kpis = [
+    { label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: '#003366', delay: 0    },
+    { label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: '#0D4080', delay: 0.06 },
+    { label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12 },
+  ];
+
+  const stream = (stats.pendingTasks || []).slice(0, 8).map((t, i) => ({
+    label: t.title || t.description || 'Evento registrado',
+    time:  t.time  || '—',
+    type:  t.type  === 'alert' ? 'alert' : 'default',
+    index: i,
+  }));
+
+  const shortcuts = [
+    { label: 'Operación', icon: Activity, path: '/operacion' },
+    { label: 'Informes',  icon: FileText, path: '/informes'  },
+    { label: 'Consulta',  icon: Search,   path: '/consulta'  },
+    { label: 'Auditoría', icon: Users,    path: '/auditoria' },
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-16 py-12 animate-in fade-in duration-700">
-      <div className="text-center space-y-4">
-        <h2 className="text-5xl font-black text-gray-900 dark:text-white uppercase tracking-tight italic">Panel de Control</h2>
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-12 h-1 bg-institutional-400 rounded-full"></div>
-          <p className="text-gray-400 dark:text-slate-500 text-sm font-black uppercase tracking-[0.3em]">Estado institucional hoy</p>
-          <div className="w-12 h-1 bg-institutional-400 rounded-full"></div>
+    <div className="space-y-6">
+      {/* ── Real-Time Insights ── */}
+      <section>
+        <SectionLabel title="Real-Time Insights" sub="Estado biométrico en tiempo real" />
+        <div className="grid grid-cols-1 md:grid-cols-3" style={{ border: '1.5px solid #E2E8F0' }}>
+          {loading
+            ? [1, 2, 3].map(i => <KpiSkeleton key={i} />)
+            : kpis.map((k, i) => (
+                <div key={i} style={{ borderRight: i < 2 ? '1.5px solid #E2E8F0' : 'none' }}>
+                  <KpiCard {...k} />
+                </div>
+              ))
+          }
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-        {statCards.map((stat, index) => (
-          <div key={index} className="bg-white dark:bg-slate-900 p-12 rounded-[3rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800/50 flex flex-col items-center text-center group hover:border-institutional-400 transition-all duration-500">
-            <div className={cn("p-8 rounded-3xl mb-8 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner", stat.bg, stat.darkBg, stat.color, stat.darkColor)}>
-              <stat.icon size={56} strokeWidth={1.5} />
-            </div>
-            <span className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-2">{stat.label}</span>
-            <span className="text-6xl font-black text-gray-900 dark:text-white mb-3 tracking-tighter">{stat.value}</span>
-            <span className="text-sm text-gray-400 dark:text-slate-500 font-bold uppercase tracking-widest">{stat.sub}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* ── Live Stream ── */}
+        <section className="lg:col-span-2">
+          <SectionLabel title="Live Stream" sub="Eventos institucionales recientes" />
+          <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
+            {loading
+              ? <StreamSkeleton />
+              : stream.length > 0
+                ? stream.map((ev, i) => <StreamRow key={i} {...ev} index={i} />)
+                : (
+                  <div className="flex items-center justify-center h-40">
+                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                      Sin eventos recientes
+                    </p>
+                  </div>
+                )
+            }
           </div>
-        ))}
+        </section>
+
+        {/* ── Action Shortcuts ── */}
+        <section>
+          <SectionLabel title="Accesos Rápidos" sub="Módulos del sistema" />
+          <div style={{ border: '1.5px solid #E2E8F0' }}>
+            {shortcuts.map((s, i, arr) => (
+              <button
+                key={s.path}
+                onClick={() => navigate(s.path)}
+                className="group flex items-center gap-3 w-full px-4 py-3.5 bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-150"
+                style={{ borderBottom: i < arr.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}
+              >
+                <s.icon size={15} strokeWidth={2} className="text-gov-900 group-hover:text-white transition-colors shrink-0" />
+                <span className="flex-1 text-xs font-bold uppercase text-slate-700 dark:text-slate-300 group-hover:text-white transition-colors"
+                      style={{ letterSpacing: '0.1em' }}>
+                  {s.label}
+                </span>
+                <ChevronRight size={13} className="text-slate-300 group-hover:text-white/60 transition-colors shrink-0" />
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
 };
 
-/**
- * DASHBOARD: SECRETARIA
- * Enfoque en Tareas Pendientes.
- */
-const SecretaryDashboard = ({ user, tasks }) => {
-  const [showTasks, setShowTasks] = useState(false);
+// ── Secretaria ────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="max-w-4xl mx-auto min-h-[70vh] flex flex-col items-center justify-center space-y-12">
-      <div className="text-center space-y-4">
-        <h2 className="text-5xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Tareas Pendientes</h2>
-        <p className="text-gray-400 dark:text-slate-500 text-sm font-black uppercase tracking-[0.2em]">Gestión administrativa institucional</p>
-      </div>
-
-      {!showTasks ? (
-        <button 
-          onClick={() => setShowTasks(true)}
-          className="group bg-white dark:bg-slate-900 p-20 rounded-[4rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800/50 transition-all hover:scale-105 flex flex-col items-center gap-6 hover:border-institutional-400"
-        >
-          <div className="p-8 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-700 dark:text-institutional-400 rounded-3xl group-hover:rotate-6 transition-transform">
-            <ClipboardList size={80} strokeWidth={1} />
-          </div>
-          <span className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-widest">Ver lista de tareas ({tasks.length})</span>
-        </button>
-      ) : (
-        <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          {tasks.length > 0 ? (
-            tasks.map(task => (
-              <div key={task.id} className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] border border-gray-50 dark:border-slate-800 shadow-soft dark:shadow-soft-dark flex items-center justify-between group hover:border-institutional-400 transition-all duration-300">
-                <div className="flex items-center gap-8">
-                  <div className="w-4 h-4 rounded-full bg-institutional-400 animate-pulse"></div>
-                  <div>
-                    <span className="text-xl font-black text-gray-900 dark:text-white block">{task.title}</span>
-                    <span className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mt-1">{task.time}</span>
-                  </div>
+const SecretaryDashboard = ({ tasks, loading }) => (
+  <div className="space-y-5">
+    <SectionLabel title="Panel Secretaría" sub="Tareas administrativas pendientes" />
+    <div style={{ border: '1.5px solid #E2E8F0' }} className="bg-white dark:bg-slate-900">
+      {loading
+        ? <div className="p-6"><StreamSkeleton /></div>
+        : tasks.length > 0
+          ? tasks.map((t, i) => (
+              <div key={t.id || i}
+                   className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                   style={{ borderBottom: i < tasks.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
+                <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: '#00A67E' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
+                  <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t.time}</p>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl group-hover:bg-institutional-900 group-hover:text-white transition-all">
-                  <ChevronRight size={24} />
-                </div>
+                <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
               </div>
             ))
-          ) : (
-            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-gray-100 dark:border-slate-800">
-              <p className="text-gray-400 dark:text-slate-500 font-black uppercase tracking-widest text-sm">No hay tareas pendientes</p>
+          : (
+            <div className="flex items-center justify-center py-16">
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                No hay tareas pendientes
+              </p>
             </div>
-          )}
-          <button 
-            onClick={() => setShowTasks(false)}
-            className="w-full py-8 text-gray-400 dark:text-slate-600 font-black text-xs uppercase tracking-[0.3em] hover:text-institutional-600 transition-colors"
-          >
-            [ Volver al panel central ]
-          </button>
-        </div>
-      )}
+          )
+      }
     </div>
-  );
-};
+  </div>
+);
 
-/**
- * DASHBOARD: DOCENTE
- */
-const TeacherDashboard = ({ user, stats }) => {
+// ── Docente / Psicorientador ──────────────────────────────────────────────────
+
+const TeacherDashboard = ({ stats, loading }) => {
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [showStudents, setShowGroupList] = useState(false);
-  
   const groupStats = [
-    { label: 'Permiso fuera', value: stats?.groupStats?.outside || '0', color: 'text-institutional-400', darkColor: 'dark:text-institutional-400', bg: 'bg-institutional-50', darkBg: 'dark:bg-institutional-900/20' },
-    { label: 'Alertas', value: stats?.groupStats?.alerts || '0', color: 'text-red-600', darkColor: 'dark:text-red-400', bg: 'bg-red-50', darkBg: 'dark:bg-red-900/20' },
-    { label: 'Presentes', value: stats?.groupStats?.present || '0', color: 'text-institutional-600', darkColor: 'dark:text-institutional-500', bg: 'bg-institutional-50', darkBg: 'dark:bg-institutional-900/20' },
-    { label: 'Inasistentes', value: stats?.groupStats?.absent || '0', color: 'text-institutional-800', darkColor: 'dark:text-institutional-300', bg: 'bg-institutional-50', darkBg: 'dark:bg-institutional-900/20' },
+    { label: 'Presentes',    value: stats?.groupStats?.present || 0, accent: '#003366' },
+    { label: 'Inasistentes', value: stats?.groupStats?.absent  || 0, accent: '#0D4080' },
+    { label: 'Alertas',      value: stats?.groupStats?.alerts  || 0, accent: '#DC2626' },
+    { label: 'Fuera',        value: stats?.groupStats?.outside || 0, accent: '#00A67E' },
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-16 py-12 animate-in fade-in duration-700">
-      <div className="text-center space-y-4">
-        <h2 className="text-5xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Panel Docente</h2>
-        <p className="text-gray-400 dark:text-slate-500 text-sm font-black uppercase tracking-[0.2em]">Control de asistencia por grupo</p>
-      </div>
+    <div className="space-y-5">
+      <SectionLabel title="Panel Docente" sub="Control de asistencia por grupo" />
 
-      <div className="bg-white dark:bg-slate-900 p-16 rounded-[3rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800/50 flex flex-col items-center gap-10 group hover:border-institutional-400 transition-all duration-500">
-        <div className="p-8 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-800 dark:text-institutional-400 rounded-3xl group-hover:scale-110 transition-transform">
-          <Users2 size={64} strokeWidth={1} />
+      {loading ? (
+        <div style={{ border: '1.5px solid #E2E8F0' }} className="p-6 space-y-3 bg-white dark:bg-slate-900">
+          {[1, 2].map(i => <Pulse key={i} className="h-10 w-full" />)}
         </div>
-        <div className="w-full max-w-md space-y-4">
-          <label className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] text-center block">Seleccionar Grupo de Monitoreo</label>
-          <div className="relative">
-            <select 
+      ) : (
+        <>
+          <div style={{ border: '1.5px solid #E2E8F0' }} className="p-5 bg-white dark:bg-slate-900">
+            <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Seleccionar Grupo
+            </p>
+            <select
               value={selectedGroup}
-              onChange={(e) => {
-                setSelectedGroup(e.target.value);
-                setShowGroupList(false);
-              }}
-              className="w-full p-6 text-2xl font-black border-2 border-gray-100 dark:border-slate-800 rounded-3xl focus:border-institutional-500 outline-none transition-all appearance-none text-center bg-gray-50 dark:bg-slate-800 dark:text-white"
+              onChange={e => setSelectedGroup(e.target.value)}
+              className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
+              style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
             >
-              <option value="">-- Elegir Grupo --</option>
-              {Object.keys(stats?.studentsByGroup || {}).map((group) => (
-                <option key={group} value={group}>{group}</option>
+              <option value="">— Elegir grupo —</option>
+              {Object.keys(stats?.studentsByGroup || {}).map(g => (
+                <option key={g} value={g}>{g}</option>
               ))}
             </select>
           </div>
-        </div>
-        <button 
-          onClick={() => selectedGroup && setShowGroupList(true)}
-          disabled={!selectedGroup}
-          className="bg-institutional-900 hover:bg-institutional-800 dark:bg-institutional-700 dark:hover:bg-institutional-600 text-white px-12 py-6 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-institutional-900/20 dark:shadow-none hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-        >
-          Asignar Grupo
-        </button>
-      </div>
 
-      {showStudents && (
-        <div className="bg-white dark:bg-slate-900 p-12 rounded-[3rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800/50 animate-in slide-in-from-bottom-8 duration-500">
-          <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-8">Estudiantes del Grupo {selectedGroup}</h3>
-          {(stats?.studentsByGroup?.[selectedGroup] || []).length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(stats?.studentsByGroup?.[selectedGroup] || []).map((student, i) => (
-                <div key={i} className="p-6 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-institutional-900 text-white flex items-center justify-center font-black text-xs">
-                    {student.name.charAt(0)}
-                  </div>
-                  <span className="font-bold text-gray-800 dark:text-gray-200">{student.name}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-sm text-gray-400">Sin registros</div>
-          )}
-        </div>
+          <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid #E2E8F0' }}>
+            {groupStats.map((s, i) => (
+              <div key={i}
+                   className="bg-white dark:bg-slate-900 text-center py-5 px-4"
+                   style={{ borderRight: i < 3 ? '1.5px solid #E2E8F0' : 'none' }}>
+                <p style={{ fontSize: '40px', fontWeight: 900, color: s.accent, lineHeight: 1 }}>{s.value}</p>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase', marginTop: '6px' }}>
+                  {s.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {groupStats.map((stat, index) => (
-          <div key={index} className={cn("p-10 rounded-3xl border border-gray-50 dark:border-slate-800/50 text-center flex flex-col items-center transition-all shadow-soft dark:shadow-soft-dark hover:scale-105 bg-white dark:bg-slate-900", stat.darkBg)}>
-            <span className="text-4xl font-black text-gray-900 dark:text-white mb-2">{stat.value}</span>
-            <span className={cn("text-[10px] font-black uppercase tracking-[0.15em]", stat.color, stat.darkColor)}>{stat.label}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };
 
-/**
- * PANTALLA: PORTERO / AUXILIAR
- * Bienvenida institucional y navegación directa.
- */
-const StaffDashboard = ({ user, navigate, logout }) => {
-  return (
-    <div className="max-w-4xl mx-auto min-h-[75vh] flex flex-col items-center justify-center text-center space-y-16">
-      <div className="space-y-6">
-        <div className="inline-flex p-10 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-900 dark:text-institutional-400 rounded-full mb-6 shadow-inner">
-          <LogoNexo className="h-24" showText={false} />
-        </div>
-        <h2 className="text-6xl font-black text-gray-900 dark:text-white tracking-tighter uppercase">¡Bienvenido!</h2>
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-8 h-1 bg-institutional-400 rounded-full"></div>
-          <p className="text-gray-400 dark:text-slate-500 text-sm font-black uppercase tracking-[0.3em]">Gestión Institucional NEXO</p>
-          <div className="w-8 h-1 bg-institutional-400 rounded-full"></div>
-        </div>
-      </div>
+// ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10 w-full">
-        <button 
-          onClick={() => navigate('/operacion')}
-          className="group bg-white dark:bg-slate-900 p-16 rounded-[3rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800 hover:border-institutional-400 transition-all duration-500 flex flex-col items-center gap-6"
+const StaffDashboard = ({ navigate, logout }) => (
+  <div className="space-y-5">
+    <SectionLabel title="Panel de Servicio" sub="Accesos operacionales rápidos" />
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {[
+        { label: 'Panel de Operación', icon: Activity, path: '/operacion',    accent: '#003366' },
+        { label: 'Notificaciones',     icon: Bell,     path: '/notificaciones', accent: '#00A67E' },
+      ].map(s => (
+        <button
+          key={s.path}
+          onClick={() => navigate(s.path)}
+          className="group flex flex-col items-start gap-4 p-7 bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-200 text-left"
+          style={{ border: '1.5px solid #E2E8F0' }}
         >
-          <div className="p-6 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-700 dark:text-institutional-400 rounded-3xl group-hover:scale-110 group-hover:rotate-6 transition-all">
-            <Activity size={48} strokeWidth={1.5} />
-          </div>
-          <span className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest">Panel de Operación</span>
+          <s.icon size={22} strokeWidth={1.5} style={{ color: s.accent }} className="group-hover:text-white transition-colors" />
+          <span className="text-sm font-black uppercase text-slate-800 dark:text-white group-hover:text-white transition-colors"
+                style={{ letterSpacing: '0.1em' }}>
+            {s.label}
+          </span>
         </button>
-
-        <button 
-          onClick={() => navigate('/notificaciones')}
-          className="group bg-white dark:bg-slate-900 p-16 rounded-[3rem] shadow-soft dark:shadow-soft-dark border border-gray-50 dark:border-slate-800 hover:border-institutional-400 transition-all duration-500 flex flex-col items-center gap-6"
-        >
-          <div className="p-6 bg-institutional-50 dark:bg-institutional-900/20 text-institutional-700 dark:text-institutional-400 rounded-3xl group-hover:scale-110 group-hover:-rotate-6 transition-all">
-            <Bell size={48} strokeWidth={1.5} />
-          </div>
-          <span className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest">Notificaciones</span>
-        </button>
-      </div>
-
-      <button 
-        onClick={logout}
-        className="text-red-500 dark:text-red-400 font-black text-xs uppercase tracking-[0.3em] flex items-center gap-3 hover:opacity-70 transition-all"
-      >
-        <LogOut size={20} />
-        [ Finalizar Sesión ]
-      </button>
+      ))}
     </div>
-  );
-};
+    <button
+      onClick={logout}
+      className="flex items-center gap-2 text-slate-400 hover:text-red-500 transition-colors"
+      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase' }}
+    >
+      <LogOut size={14} strokeWidth={2} />
+      Finalizar Sesión
+    </button>
+  </div>
+);
 
 export default Dashboard;
