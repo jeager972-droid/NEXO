@@ -85,3 +85,46 @@ INSERT INTO user_commands(command_id,school_id,executed_by_user_id,command_type,
 INSERT INTO security_incidents(incident_id,school_id,related_student_id,related_user_id,incident_type,severity_level,description,detected_at,resolved) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,(SELECT student_id FROM students ORDER BY random() LIMIT 1),(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),CASE WHEN random()<0.25 THEN 'UNAUTHORIZED_ACCESS' WHEN random()<0.5 THEN 'DATA_LEAK' WHEN random()<0.75 THEN 'PHYSICAL_THREAT' ELSE 'SUSPICIOUS_BEHAVIOR' END,CASE WHEN random()<0.33 THEN 'LOW' WHEN random()<0.66 THEN 'MEDIUM' ELSE 'HIGH' END,'Incidente simulado',NOW()-(random()*INTERVAL'7 days'),CASE WHEN random()<0.7 THEN TRUE ELSE FALSE END FROM generate_series(1,10) i;
 
 INSERT INTO global_audit_logs(log_id,school_id,performed_by_user_id,action_type,entity_type,entity_id,action_details,ip_address,created_at) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),CASE WHEN random()<0.25 THEN 'LOGIN' WHEN random()<0.5 THEN 'LOGOUT' WHEN random()<0.75 THEN 'DATA_ACCESS' ELSE 'CONFIG_CHANGE' END,CASE WHEN random()<0.33 THEN 'user' WHEN random()<0.66 THEN 'student' ELSE 'system' END,gen_random_uuid(),jsonb_build_object('event','audit_test'),('192.168.1.'||(10+(i%245))::TEXT)::INET,NOW()-(random()*INTERVAL'7 days') FROM generate_series(1,30) i;
+
+INSERT INTO role_permissions(role_permission_id,role_id,permission_id) SELECT gen_random_uuid(),r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_name IN ('SUPER_RECTOR','RECTOR') ON CONFLICT DO NOTHING;
+
+INSERT INTO student_record_audit(audit_id,school_id,student_id,performed_by_user_id,action_type,previous_data,new_data,performed_at) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,s.student_id,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),CASE WHEN random()<0.5 THEN 'UPDATE' ELSE 'DELETE' END,jsonb_build_object('old','data'),jsonb_build_object('new','data'),NOW()-(random()*INTERVAL'30 days') FROM students s WHERE s.school_id='a3333333-3333-3333-3333-333333333333'::UUID ORDER BY random() LIMIT 20;
+
+INSERT INTO staff_records(staff_record_id,school_id,user_id,hired_at,position_name,active) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,u.user_id,'2020-01-01','Docente de Aula',TRUE FROM users u JOIN roles r ON r.role_id=u.role_id WHERE r.role_name='DOCENTE' LIMIT 8;
+
+INSERT INTO schedules(schedule_id,group_id,subject_id,classroom_id,teacher_user_id,day_of_week,block_number,start_time,end_time) SELECT gen_random_uuid(),ag.group_id,s.subject_id,c.classroom_id,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),1+(i%5)::INT,i,('08:00'::TIME+((i%6)::TEXT||' hours')::INTERVAL),('09:30'::TIME+((i%6)::TEXT||' hours')::INTERVAL) FROM academic_groups ag CROSS JOIN subjects s CROSS JOIN classrooms c, generate_series(1,15) i WHERE ag.school_id='a3333333-3333-3333-3333-333333333333'::UUID LIMIT 30;
+
+INSERT INTO class_exit_authorizations(authorization_id,school_id,student_id,authorized_by_user_id,schedule_id,authorization_reason,exit_time,return_time) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,s.student_id,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),(SELECT schedule_id FROM schedules WHERE school_id='a3333333-3333-3333-3333-333333333333'::UUID ORDER BY random() LIMIT 1),'Salida anticipada',CURRENT_DATE+CURRENT_TIME,CURRENT_DATE+CURRENT_TIME+INTERVAL'2 hours' FROM students s WHERE s.school_id='a3333333-3333-3333-3333-333333333333'::UUID ORDER BY random() LIMIT 10;
+
+INSERT INTO school_exit_authorizations(authorization_id,school_id,student_id,authorized_by_user_id,authorization_reason,exit_time,expected_return_time,status) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,s.student_id,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),'Salida pedagógica',CURRENT_DATE+CURRENT_TIME,CURRENT_DATE+CURRENT_TIME+INTERVAL'4 hours','APPROVED' FROM students s WHERE s.school_id='a3333333-3333-3333-3333-333333333333'::UUID ORDER BY random() LIMIT 5;
+
+INSERT INTO pedagogical_trip_authorizations(authorization_id,school_id,student_id,authorized_by_user_id,destination,departure_time,return_time,purpose) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,s.student_id,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),'Museo de Bogotá',CURRENT_DATE+CURRENT_TIME,CURRENT_DATE+CURRENT_TIME+INTERVAL'6 hours','Visita educativa' FROM students s WHERE s.school_id='a3333333-3333-3333-3333-333333333333'::UUID ORDER BY random() LIMIT 5;
+
+INSERT INTO internal_messages(message_id,school_id,sender_user_id,receiver_user_id,subject,message_content,sent_at) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),u.user_id,'Asunto '||i,'Mensaje de prueba número '||i,NOW()-(random()*INTERVAL'3 days') FROM users u, generate_series(1,5) i WHERE u.school_id='a3333333-3333-3333-3333-333333333333'::UUID LIMIT 15;
+
+INSERT INTO report_exports(report_export_id,school_id,generated_by_user_id,report_type,file_format,generated_at) SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,(SELECT user_id FROM users WHERE email='admin@nexo.edu' LIMIT 1),CASE WHEN i%3=0 THEN 'ATTENDANCE' WHEN i%3=1 THEN 'BEHAVIOR' ELSE 'BIOMETRIC' END,'PDF',NOW()-(random()*INTERVAL'7 days') FROM generate_series(1,10) i;
+
+INSERT INTO twilio_message_types(type_code,description) VALUES('CITATION','Citación a acudiente'),('NOTIFICATION','Notificación general'),('ABSENCE_ALERT','Alerta de inasistencia'),('LATE_ALERT','Alerta de llegada tardía'),('EMERGENCY','Emergencia') ON CONFLICT DO NOTHING;
+
+INSERT INTO user_sessions(session_id,user_id,refresh_token_hash,ip_address,user_agent,expires_at,revoked) SELECT gen_random_uuid(),u.user_id,md5(u.user_id::TEXT||NOW()::TEXT),('192.168.1.'||(10+(i%245))::TEXT)::INET,'Chrome/Windows',NOW()+INTERVAL'24 hours',FALSE FROM users u, generate_series(1,20) i WHERE u.school_id='a3333333-3333-3333-3333-333333333333'::UUID LIMIT 20;
+
+INSERT INTO student_behavior_metrics(school_id,student_id,calculated_at,late_count,absence_count,total_events,risk_score,risk_level,calculation_window_days) SELECT 'a3333333-3333-3333-3333-333333333333'::UUID,s.student_id,NOW()-(random()*INTERVAL'7 days'),(random()*5)::INT,(random()*3)::INT,20+(random()*80)::INT,LEAST(100.00,(random()*100)),CASE WHEN random()<0.25 THEN 'CRITICAL' WHEN random()<0.5 THEN 'HIGH' WHEN random()<0.75 THEN 'MEDIUM' ELSE 'LOW' END,30 FROM students s WHERE s.school_id='a3333333-3333-3333-3333-333333333333'::UUID ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE i INT; etypes TEXT[]:=ARRAY['INGRESO','SALIDA_ALMUERZO','REGRESO_ALMUERZO','SALIDA'];
+eresults TEXT[]:=ARRAY['SUCCESS','SUCCESS','SUCCESS','LATE','ABSENT']; sids UUID[]; dids UUID[];
+BEGIN SELECT array_agg(student_id::UUID) INTO sids FROM students WHERE school_id='a3333333-3333-3333-3333-333333333333'::UUID;
+SELECT array_agg(device_id::UUID) INTO dids FROM edge_devices WHERE school_id='a3333333-3333-3333-3333-333333333333'::UUID;
+FOR i IN 1..300 LOOP
+INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,confidence_score,event_timestamp)
+VALUES(gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,sids[1+((i*7)%array_length(sids,1))],dids[1+((i*3)%array_length(dids,1))],etypes[1+((i+1)%4)],eresults[1+(i%5)],85.0+(random()*14.9),'2026-06-01'::DATE+((i%30)||' days')::INTERVAL+((7+(i%10))::TEXT||':'||(15+(i%45))::TEXT||':00')::TIME);
+END LOOP;
+FOR i IN 1..300 LOOP
+INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,confidence_score,event_timestamp)
+VALUES(gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,sids[1+((i*7)%array_length(sids,1))],dids[1+((i*3)%array_length(dids,1))],etypes[1+((i+1)%4)],eresults[1+(i%5)],85.0+(random()*14.9),'2026-07-01'::DATE+((i%31)||' days')::INTERVAL+((7+(i%10))::TEXT||':'||(15+(i%45))::TEXT||':00')::TIME);
+END LOOP;
+FOR i IN 1..300 LOOP
+INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,confidence_score,event_timestamp)
+VALUES(gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,sids[1+((i*7)%array_length(sids,1))],dids[1+((i*3)%array_length(dids,1))],etypes[1+((i+1)%4)],eresults[1+(i%5)],85.0+(random()*14.9),'2026-08-01'::DATE+((i%31)||' days')::INTERVAL+((7+(i%10))::TEXT||':'||(15+(i%45))::TEXT||':00')::TIME);
+END LOOP;
+END $$;
