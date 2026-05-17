@@ -131,6 +131,7 @@ require_once __DIR__ . '/routes/audit_integrity.php';
 require_once __DIR__ . '/routes/behavior.php';
 require_once __DIR__ . '/routes/admin.php';
 require_once __DIR__ . '/routes/metrics.php';
+require_once __DIR__ . '/routes/telemetry.php';
 
 /**
  * @OA\Post(

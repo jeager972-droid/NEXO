@@ -17,10 +17,11 @@ name = "nexo"
 path = "src/main.rs"
 
 [build-dependencies]
-tauri-build = { version = "2.0.0-rc", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0-rc", features = [] }
-tauri-plugin-store = "2.0.0-rc"
-tauri-plugin-biometric = "2.0.0-rc"
-tauri-plugin-deep-link = "2.0.0-rc"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-store = "2"
+tauri-plugin-biometric = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-http = "2"

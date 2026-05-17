@@ -53,3 +53,5 @@ venv/
 
 # === Backup de repos anidados antiguos ===
 .git-backup-old/
+.vercel
+.env*.local

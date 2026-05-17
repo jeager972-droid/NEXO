@@ -25,22 +25,45 @@ const client = axios.create({
   withCredentials: true, // PILAR 2.2: Enviar cookies HttpOnly automáticamente
 });
 
-// Interceptor para ajustar timeout por ruta
+// Interceptor de request: timeout adaptativo + timestamp para telemetría
 client.interceptors.request.use(
   (config) => {
     const url = config.url || '';
     if (SLOW_ROUTE_PATTERNS.some((p) => url.includes(p))) {
       config.timeout = SLOW_TIMEOUT;
     }
+    config._t0 = performance.now();
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Interceptor para manejar errores globales (ej. 401 Unauthorized)
+function emitLatency(config, status) {
+  if (!config?._t0) return;
+  const duration_ms = Math.round(performance.now() - config._t0);
+  window.dispatchEvent(
+    new CustomEvent('nexo:telemetry', {
+      detail: {
+        type: 'API_LATENCY',
+        payload: {
+          path:        config.url ?? '',
+          method:      (config.method ?? 'GET').toUpperCase(),
+          status,
+          duration_ms,
+        },
+      },
+    })
+  );
+}
+
+// Interceptor de response: telemetría de latencia + manejo de errores globales
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    emitLatency(response.config, response.status);
+    return response;
+  },
   (error) => {
+    emitLatency(error.config, error.response?.status ?? 0);
     if (error.response?.status === 401) {
       localStorage.removeItem('user');
       if (window.location.pathname !== '/login') {

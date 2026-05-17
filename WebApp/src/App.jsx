@@ -7,6 +7,7 @@ import Layout from './layout/Layout'
 import { ROLES } from './config/roles'
 import PwaInstallPrompt from './components/PwaInstallPrompt'
 import ErrorBoundary from './components/ErrorBoundary'
+import { initTelemetry } from './api/telemetry'
 
 // Pages
 const Login = lazy(() => import('./pages/Login'))
@@ -23,6 +24,8 @@ const Downloads = lazy(() => import('./pages/Downloads'))
 function App() {
   const { user } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => { initTelemetry() }, [])
 
   useEffect(() => {
     const setupDeepLink = async () => {
