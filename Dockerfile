@@ -30,23 +30,29 @@ COPY --from=builder /build/dist ./app/
 # Inyectar regla React SPA ANTES del front-controller en .htaccess
 RUN sed -i 's|# ROUTING: Front Controller Pattern|# React SPA: /app/* sin archivo → /app/index.html\n    RewriteCond %{REQUEST_URI} ^/app/\n    RewriteCond %{REQUEST_FILENAME} !-f\n    RewriteRule ^ /app/index.html [L]\n\n    # ROUTING: Front Controller Pattern|' .htaccess
 
-# Script de inicio: sobrescribe config Apache con PORT dinámico (no usa sed)
-RUN printf '#!/bin/sh\n\
-set -e\n\
-PORT=${PORT:-8080}\n\
-printf "Listen %%s\\n" "$PORT" > /etc/apache2/ports.conf\n\
-printf "<VirtualHost *:%%s>\\n\\\n\
-    DocumentRoot /var/www/html\\n\\\n\
-    <Directory /var/www/html>\\n\\\n\
-        Options -Indexes +FollowSymLinks\\n\\\n\
-        AllowOverride All\\n\\\n\
-        Require all granted\\n\\\n\
-    </Directory>\\n\\\n\
-    ErrorLog ${APACHE_LOG_DIR}/error.log\\n\\\n\
-    CustomLog ${APACHE_LOG_DIR}/access.log combined\\n\\\n\
-</VirtualHost>\\n" "$PORT" > /etc/apache2/sites-available/000-default.conf\n\
-echo "[NEXO] Apache configured for port $PORT"\n\
-exec apache2-foreground\n' > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+# Crear .htaccess para React SPA en /app/
+RUN echo "RewriteEngine On" > /var/www/html/app/.htaccess && \
+    echo "RewriteCond %{REQUEST_FILENAME} !-f" >> /var/www/html/app/.htaccess && \
+    echo "RewriteCond %{REQUEST_FILENAME} !-d" >> /var/www/html/app/.htaccess && \
+    echo "RewriteRule ^ index.html [QSA,L]" >> /var/www/html/app/.htaccess
+
+# Script de inicio: construido línea por línea para evitar colapso de \n
+RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
+    echo 'set -e' >> /usr/local/bin/start.sh && \
+    echo 'PORT=${PORT:-8080}' >> /usr/local/bin/start.sh && \
+    echo 'echo "Listen $PORT" > /etc/apache2/ports.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "<VirtualHost *:$PORT>" > /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "    DocumentRoot /var/www/html" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "    <Directory /var/www/html>" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "        Options Indexes FollowSymLinks" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "        AllowOverride All" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "        Require all granted" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "    </Directory>" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "    ErrorLog \${APACHE_LOG_DIR}/error.log" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "    CustomLog \${APACHE_LOG_DIR}/access.log combined" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'echo "</VirtualHost>" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
+    echo 'exec apache2-foreground' >> /usr/local/bin/start.sh && \
+    chmod +x /usr/local/bin/start.sh
 
 EXPOSE 8080
 
