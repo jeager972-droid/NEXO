@@ -66,7 +66,7 @@ function App() {
             <Route 
               path="/auditoria" 
               element={
-                <ProtectedRoute allowedRoles={[ROLES.RECTOR]} />
+                <ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />
               }
             >
               <Route index element={<Audit />} />
@@ -75,7 +75,7 @@ function App() {
             <Route 
               path="/informes" 
               element={
-                <ProtectedRoute allowedRoles={[ROLES.RECTOR]} />
+                <ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />
               }
             >
               <Route index element={<Reports />} />

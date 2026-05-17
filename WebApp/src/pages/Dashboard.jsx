@@ -66,6 +66,7 @@ const Dashboard = () => {
     <div className="animate-in fade-in duration-500">
       {(() => {
         switch (user?.role) {
+          case ROLES.SUPER_RECTOR:
           case ROLES.RECTOR:
           case ROLES.COORDINADOR:
             return <AdminDashboard user={user} stats={stats} />;
