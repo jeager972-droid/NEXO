@@ -33,4 +33,9 @@ RUN sed -i 's|# ROUTING: Front Controller Pattern|# React SPA: /app/* sin archiv
 EXPOSE 8080
 
 # FIX CRÍTICO: PORT se sustituye en RUNTIME (no en build time)
-CMD ["sh", "-c", "sed -i \"s/Listen 80/Listen ${PORT:-8080}/\" /etc/apache2/ports.conf && sed -i \"s/*:80/*:${PORT:-8080}/\" /etc/apache2/sites-available/000-default.conf && apache2-foreground"]
+# Usar patrones exactos para evitar reemplazar 8080, timeout 180, etc.
+CMD ["sh", "-c", "set -e && \
+    sed -i \"s/^Listen 80$/Listen ${PORT:-8080}/\" /etc/apache2/ports.conf && \
+    sed -i \"s/<VirtualHost \\*:80>/<VirtualHost *:${PORT:-8080}>/\" /etc/apache2/sites-available/000-default.conf && \
+    echo \"[NEXO] Apache listening on port ${PORT:-8080}\" && \
+    apache2-foreground"]
