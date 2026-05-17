@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' tauri: ipc: asset:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: asset:; connect-src 'self' https://nexo-production.up.railway.app wss://nexo-production.up.railway.app"
+      "csp": "default-src 'self' tauri: ipc: asset:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: asset:; connect-src 'self' https://nexo-production-13c0.up.railway.app wss://nexo-production-13c0.up.railway.app"
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",
@@ -81,7 +81,7 @@
     "http": {
       "danger": {
         "allowedUrls": [
-          "https://nexo-production.up.railway.app",
+          "https://nexo-production-13c0.up.railway.app",
           "https://*.nexo.edu.co"
         ]
       }
