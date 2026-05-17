@@ -317,9 +317,9 @@ if (!function_exists('requireAuth')) {
                 exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
             }
 
-            // FIX: Configurar el contexto de PostgreSQL para Row-Level Security (RLS)
-            $conn->exec("SET app.current_school_id = " . (int)$user['school_id']);
-            $conn->exec("SET app.current_role = '" . addslashes($normalizedRole) . "'");
+            // FIX: Configurar el contexto de PostgreSQL para Row-Level Security (RLS) usando set_config
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', ?, false)");
+            $stmtConfig->execute([(string)$user['school_id'], $normalizedRole]);
 
             return [
                 'id' => $user['user_id'],

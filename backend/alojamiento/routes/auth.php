@@ -33,6 +33,7 @@ const ROLES = [
 function normalizeRole($dbRole) {
     $dbRole = strtoupper(trim($dbRole));
     $map = [
+        'SUPER_RECTOR' => 'SUPER_RECTOR',
         'PROFESOR' => 'DOCENTE',
         'PROFESORA' => 'DOCENTE',
         'DOCENTE' => 'DOCENTE',
