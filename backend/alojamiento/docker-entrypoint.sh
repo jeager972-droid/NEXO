@@ -33,37 +33,26 @@ http {
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';" always;
 
-        location ~* /\. { deny all; }
-        location ^~ /_dev/ { deny all; }
+        # Bloquear archivos sensibles
+        location ~ /\. { deny all; return 403; }
+        location ^~ /_dev/ { deny all; return 403; }
 
-        # Servir index.html directamente para /
+        # Root: servir index.html
         location = / {
-            try_files /index.html =404;
+            index index.html;
         }
 
-        # Rutas API → api.php
-        location ~ ^/(v1|api)/ {
-            try_files \$uri /api.php\$is_args\$args;
-        }
-
-        # Archivos estáticos (CSS, JS, imágenes)
-        location ~* \.(css|js|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot)\$ {
-            try_files \$uri =404;
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-
-        # PHP solo para api.php
-        location = /api.php {
+        # API routes
+        location /api.php {
             fastcgi_pass unix:/run/php/php-fpm.sock;
             include fastcgi_params;
-            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            fastcgi_param SCRIPT_FILENAME \$document_root/api.php;
             fastcgi_hide_header X-Powered-By;
         }
 
-        # Cualquier otra cosa → 404
+        # Catch-all: archivos estáticos o 404
         location / {
-            try_files \$uri =404;
+            try_files \$uri \$uri/ =404;
         }
     }
 }
@@ -85,6 +74,9 @@ pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 FPMCONF
+
+echo "[nexo] VERIFICANDO ARCHIVOS EN /var/www/html:"
+ls -lah /var/www/html/ | head -20
 
 echo "[nexo] Probando config nginx..."
 nginx -t
