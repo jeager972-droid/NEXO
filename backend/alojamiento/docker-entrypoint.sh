@@ -1,8 +1,12 @@
 #!/bin/sh
 set -e
 
+echo "[nexo] ===== VARIABLES DE ENTORNO COMPLETAS ====="
+env | grep -E '(PORT|RAILWAY|HOST|BIND)' | sort
+echo "[nexo] =========================================="
+
 PORT="${PORT:-8080}"
-echo "[nexo] PORT=$PORT"
+echo "[nexo] USANDO PORT=$PORT"
 
 # Reemplazar nginx.conf COMPLETO — sin depender de symlinks ni includes problemáticos
 cat > /etc/nginx/nginx.conf <<EOF
