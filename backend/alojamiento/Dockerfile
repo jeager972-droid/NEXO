@@ -23,4 +23,5 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
+CMD []
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -10,6 +10,7 @@ echo "[nexo] USANDO PORT=$PORT"
 
 # Reemplazar nginx.conf COMPLETO — sin depender de symlinks ni includes problemáticos
 cat > /etc/nginx/nginx.conf <<EOF
+user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
 error_log /dev/stderr warn;
@@ -28,7 +29,7 @@ http {
 
     server {
         listen ${PORT} default_server;
-        listen [::]:${PORT} default_server;
+        listen [::]:${PORT} default_server ipv6only=on;
         root /var/www/html;
         index index.html index.php;
 
@@ -44,9 +45,9 @@ http {
 
         # Health check para Railway
         location /health {
-            access_log off;
             return 200 "OK\n";
             add_header Content-Type text/plain;
+            add_header Content-Length 3;
         }
 
         # Root: servir index.html
@@ -95,6 +96,14 @@ nginx -t
 
 echo "[nexo] Iniciando php-fpm..."
 php-fpm -D
+
+echo "[nexo] Esperando socket php-fpm..."
+for i in $(seq 1 30); do
+    [ -S /run/php/php-fpm.sock ] && break
+    echo "[nexo] Intento $i: socket no listo, esperando..."
+    sleep 1
+done
+[ -S /run/php/php-fpm.sock ] && echo "[nexo] Socket listo." || echo "[nexo] WARN: socket no encontrado, continuando igual"
 
 echo "[nexo] Arrancando nginx en puerto ${PORT}..."
 exec nginx -g "daemon off;"
