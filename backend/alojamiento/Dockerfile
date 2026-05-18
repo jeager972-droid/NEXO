@@ -14,7 +14,8 @@ RUN install-php-extensions pdo_pgsql mysqli redis sockets zip
 
 # Módulos Apache para .htaccess + AllowOverride
 RUN a2enmod rewrite headers \
-    && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+    && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf \
+    && echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 WORKDIR /var/www/html
 COPY composer.json composer.lock* ./

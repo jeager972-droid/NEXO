@@ -11,7 +11,7 @@ $isAllowed = false;
 
 if ($origin !== '') {
     // PROD: CORS_ALLOW_ORIGINS debe ser una lista exacta sin wildcards.
-    // Ejemplo: https://mi-frontend.vercel.app,https://admin.mi-frontend.vercel.app
+    // Ejemplo: https://nexo-production-13c0.up.railway.app,https://nexo.edu.co
     $envOrigins = getenv('CORS_ALLOW_ORIGINS') ?: 'http://localhost:5173';
     $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $envOrigins))));
 
