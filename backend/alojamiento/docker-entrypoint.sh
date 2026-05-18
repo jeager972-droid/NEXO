@@ -23,7 +23,8 @@ http {
     access_log /dev/stdout;
 
     server {
-        listen 0.0.0.0:${PORT} default_server;
+        listen ${PORT} default_server;
+        listen [::]:${PORT} default_server;
         root /var/www/html;
         index index.html index.php;
 
