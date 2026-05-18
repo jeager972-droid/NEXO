@@ -2,34 +2,55 @@
 set -e
 
 PORT="${PORT:-8080}"
-echo "[nexo] Configurando Apache en puerto: $PORT"
+echo "[nexo] Iniciando nginx+php-fpm en puerto: $PORT"
 
-# Reescribe ports.conf COMPLETAMENTE — heredoc, sin pattern matching
-cat > /etc/apache2/ports.conf <<CONF
-Listen ${PORT}
-CONF
+# Escribir nginx.conf completo con el puerto correcto
+cat > /etc/nginx/sites-available/default <<NGINXCONF
+server {
+    listen ${PORT};
+    root /var/www/html;
+    index index.html index.php;
+    server_tokens off;
 
-# Reescribe VirtualHost COMPLETAMENTE — heredoc, sin pattern matching
-# \${APACHE_LOG_DIR} se escapa para que Apache lo expanda, no el shell
-cat > /etc/apache2/sites-available/000-default.conf <<CONF
-<VirtualHost *:${PORT}>
-    ServerAdmin webmaster@localhost
-    DocumentRoot /var/www/html
-    <Directory /var/www/html>
-        AllowOverride All
-        Require all granted
-    </Directory>
-    ErrorLog \${APACHE_LOG_DIR}/error.log
-    CustomLog \${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-CONF
+    # Headers de seguridad (equivalente al mod_headers del .htaccess)
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';" always;
 
-# MPM fix: elimina todos, activa solo prefork
-rm -f /etc/apache2/mods-enabled/mpm_*
-ln -sf /etc/apache2/mods-available/mpm_prefork.load \
-       /etc/apache2/mods-enabled/mpm_prefork.load
-ln -sf /etc/apache2/mods-available/mpm_prefork.conf \
-       /etc/apache2/mods-enabled/mpm_prefork.conf
+    # Bloquear archivos sensibles
+    location ~ /\.(git|env|htaccess|dockerignore) { deny all; return 403; }
+    location ~ \.(md|log|sh|gitignore|lock)$       { deny all; return 403; }
+    location ^~ /_dev/                              { deny all; return 403; }
+    location = /Dockerfile                          { deny all; return 403; }
 
-echo "[nexo] Apache listo, arrancando en puerto $PORT..."
-exec apache2-foreground
+    # Bloquear cualquier PHP que NO sea api.php
+    location ~ ^/(?!api\.php\$).+\.php\$ { deny all; return 403; }
+
+    # Front Controller: si no es archivo/directorio real → api.php
+    location / {
+        try_files \$uri \$uri/ /api.php\$is_args\$args;
+    }
+
+    # PHP-FPM
+    location ~ \.php\$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param PATH_INFO \$fastcgi_path_info;
+        fastcgi_hide_header X-Powered-By;
+    }
+}
+NGINXCONF
+
+# Arrancar php-fpm en background
+php-fpm -D
+echo "[nexo] php-fpm arrancado"
+
+# Arrancar nginx en foreground (PID principal)
+echo "[nexo] nginx listo en puerto ${PORT}"
+exec nginx -g "daemon off;"
