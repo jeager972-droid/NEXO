@@ -58,4 +58,12 @@ echo "[nexo] Iniciando php-fpm..."
 php-fpm -D
 
 echo "[nexo] Arrancando nginx en 0.0.0.0:${PORT}..."
-exec nginx -g "daemon off;"
+nginx -g "daemon off;" &
+NGINX_PID=$!
+
+sleep 2
+echo "[nexo] DIAGNÓSTICO - Puertos escuchando:"
+netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || echo "netstat/ss no disponible"
+
+echo "[nexo] nginx PID: $NGINX_PID"
+wait $NGINX_PID
