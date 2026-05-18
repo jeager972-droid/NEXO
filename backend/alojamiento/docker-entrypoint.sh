@@ -28,8 +28,10 @@ http {
     access_log /dev/stdout;
 
     server {
-        listen ${PORT} default_server;
-        listen [::]:${PORT} default_server ipv6only=on;
+        listen 80 default_server;
+        listen [::]:80 default_server ipv6only=on;
+        listen ${PORT};
+        listen [::]:${PORT} ipv6only=on;
         root /var/www/html;
         index index.html index.php;
 
