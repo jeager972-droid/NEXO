@@ -534,7 +534,6 @@ WebApp/
 .gitignore
 .repomixignore
 ARCHITECTURE.md
-Dockerfile
 Logica
 Nuevo documento de texto.txt
 railway.json
@@ -4351,40 +4350,6 @@ public:
 private:
     std::ofstream m_wdt;
     bool m_open{false};
-};
-</file>
-
-<file path="backend/edge/include/utils/ConfigManager.h">
-#pragma once
-
-#include <string>
-#include <nlohmann/json.hpp>
-
-class ConfigManager {
-public:
-    static ConfigManager& getInstance() {
-        static ConfigManager instance;
-        return instance;
-    }
-
-    bool loadConfig(const std::string& path = "config.json");
-
-    std::string getString(const std::string& key, const std::string& defaultVal = "") const;
-    int getInt(const std::string& key, int defaultVal = 0) const;
-    bool getBool(const std::string& key, bool defaultVal = false) const;
-
-    // Convenience accessors
-    std::string getApiUrl() const { return getString("api_url", "https://nexo-production-f0ef.up.railway.app/api.php"); }
-    std::string getDbPath() const { return getString("db_path", "nexo_edge.db"); }
-    std::string getLogPath() const { return getString("log_path", "nexo-edge.log"); }
-    std::string getLogLevel() const { return getString("log_level", "info"); }
-    std::string getDeviceId() const { return getString("device_id", "NEXO-EDGE-001"); }
-    std::string getDeviceToken() const { return getString("device_token", ""); }
-    int getMatchThreshold() const { return getInt("sensor_match_threshold", 45); }
-
-private:
-    ConfigManager() = default;
-    nlohmann::json m_config;
 };
 </file>
 
@@ -27963,10 +27928,6 @@ nexo-client/      (React + Tauri + Capacitor + PWA)
 
 </file>
 
-<file path="Nuevo documento de texto.txt">
-https://nexo-production-f0ef.up.railway.app
-</file>
-
 <file path="README.md">
 # NEXO — Plataforma Educativa de Control de Asistencia Biométrica
 
@@ -29016,6 +28977,40 @@ private:
 
     void runLoop();
     void pushCommand(const std::string& cmd);
+};
+</file>
+
+<file path="backend/edge/include/utils/ConfigManager.h">
+#pragma once
+
+#include <string>
+#include <nlohmann/json.hpp>
+
+class ConfigManager {
+public:
+    static ConfigManager& getInstance() {
+        static ConfigManager instance;
+        return instance;
+    }
+
+    bool loadConfig(const std::string& path = "config.json");
+
+    std::string getString(const std::string& key, const std::string& defaultVal = "") const;
+    int getInt(const std::string& key, int defaultVal = 0) const;
+    bool getBool(const std::string& key, bool defaultVal = false) const;
+
+    // Convenience accessors
+    std::string getApiUrl() const { return getString("api_url", "https://nexo-production-13c0.up.railway.app/api.php"); }
+    std::string getDbPath() const { return getString("db_path", "nexo_edge.db"); }
+    std::string getLogPath() const { return getString("log_path", "nexo-edge.log"); }
+    std::string getLogLevel() const { return getString("log_level", "info"); }
+    std::string getDeviceId() const { return getString("device_id", "NEXO-EDGE-001"); }
+    std::string getDeviceToken() const { return getString("device_token", ""); }
+    int getMatchThreshold() const { return getInt("sensor_match_threshold", 45); }
+
+private:
+    ConfigManager() = default;
+    nlohmann::json m_config;
 };
 </file>
 
@@ -30887,108 +30882,6 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-http = "2"
 </file>
 
-<file path="WebApp/src-tauri/tauri.conf.json">
-{
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "NEXO",
-  "version": "1.0.0",
-  "identifier": "co.edu.nexo.app",
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "withGlobalTauri": false,
-    "windows": [
-      {
-        "label": "main",
-        "title": "NEXO Institucional",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 960,
-        "minHeight": 600,
-        "resizable": true,
-        "fullscreen": true,
-        "decorations": false,
-        "titleBarStyle": "overlay",
-        "center": true,
-        "shadow": true
-      }
-    ],
-    "security": {
-      "csp": "default-src 'self' tauri: ipc: asset:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: asset:; connect-src 'self' https://nexo-production.up.railway.app wss://nexo-production.up.railway.app"
-    },
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "android": {
-      "minSdkVersion": 24
-    },
-    "iOS": {
-      "minimumSystemVersion": "16.0",
-      "infoPlist": {
-        "NSCameraUsageDescription": "NEXO requiere la cámara para registrar evidencia fotográfica y biometría facial de estudiantes.",
-        "NSFaceIDUsageDescription": "NEXO usa Face ID para autenticar de forma segura el acceso a datos sensibles institucionales.",
-        "NSLocalAuthenticationUsageDescription": "NEXO usa autenticación biométrica (Face ID / Touch ID) para proteger el acceso a registros de estudiantes.",
-        "NSPhotoLibraryUsageDescription": "NEXO accede a la galería para adjuntar evidencia fotográfica en reportes de incidencias.",
-        "NSPhotoLibraryAddUsageDescription": "NEXO guarda capturas de evidencia en tu galería.",
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIRequiresFullScreen": true,
-        "UIStatusBarHidden": false,
-        "UISupportedInterfaceOrientations": [
-          "UIInterfaceOrientationPortrait",
-          "UIInterfaceOrientationLandscapeLeft",
-          "UIInterfaceOrientationLandscapeRight"
-        ],
-        "UISupportedInterfaceOrientations~ipad": [
-          "UIInterfaceOrientationPortrait",
-          "UIInterfaceOrientationPortraitUpsideDown",
-          "UIInterfaceOrientationLandscapeLeft",
-          "UIInterfaceOrientationLandscapeRight"
-        ],
-        "UIBackgroundModes": ["fetch", "remote-notification"]
-      }
-    }
-  },
-  "plugins": {
-    "store": {
-      "autoSave": 300
-    },
-    "http": {
-      "danger": {
-        "allowedUrls": [
-          "https://nexo-production.up.railway.app",
-          "https://*.nexo.edu.co"
-        ]
-      }
-    },
-    "deep-link": {
-      "mobile": {
-        "host": "nexo.edu.co",
-        "pathPrefix": ["/app"]
-      },
-      "desktop": {
-        "schemes": ["nexo"]
-      }
-    }
-  }
-}
-</file>
-
 <file path="WebApp/.gitignore">
 .vercel
 .env*.local
@@ -31017,55 +30910,6 @@ tauri-plugin-http = "2"
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
-</file>
-
-<file path="WebApp/package.json">
-{
-  "name": "webapp-institucional",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri-dev": "tauri dev",
-    "tauri-build": "tauri build"
-  },
-  "dependencies": {
-    "@fontsource-variable/inter": "^5.2.8",
-    "@tauri-apps/api": "^2.11.0",
-    "@tauri-apps/plugin-biometric": "^2.3.2",
-    "@tauri-apps/plugin-deep-link": "^2.4.9",
-    "@tauri-apps/plugin-store": "^2.4.3",
-    "axios": "^1.16.0",
-    "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
-    "framer-motion": "^11.18.2",
-    "lucide-react": "^0.378.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.23.1",
-    "tailwind-merge": "^2.3.0"
-  },
-  "devDependencies": {
-    "@tauri-apps/cli": "^2.11.2",
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.19",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.34.1",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.6",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.3",
-    "vite": "^5.2.0",
-    "vite-plugin-pwa": "^0.20.0"
-  }
-}
 </file>
 
 <file path="WebApp/tailwind.config.js">
@@ -31364,6 +31208,10 @@ venv/
 .git-backup-old/
 .vercel
 .env*.local
+</file>
+
+<file path="Nuevo documento de texto.txt">
+https://nexo-production-13c0.up.railway.app
 </file>
 
 <file path="backend/alojamiento/routes/admin.php">
@@ -34644,6 +34492,157 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 </file>
 
+<file path="WebApp/src-tauri/tauri.conf.json">
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NEXO",
+  "version": "1.0.0",
+  "identifier": "co.edu.nexo.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "NEXO Institucional",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": true,
+        "decorations": false,
+        "titleBarStyle": "overlay",
+        "center": true,
+        "shadow": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri: ipc: asset:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: asset:; connect-src 'self' https://nexo-production-13c0.up.railway.app wss://nexo-production-13c0.up.railway.app"
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "minSdkVersion": 24
+    },
+    "iOS": {
+      "minimumSystemVersion": "16.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "NEXO requiere la cámara para registrar evidencia fotográfica y biometría facial de estudiantes.",
+        "NSFaceIDUsageDescription": "NEXO usa Face ID para autenticar de forma segura el acceso a datos sensibles institucionales.",
+        "NSLocalAuthenticationUsageDescription": "NEXO usa autenticación biométrica (Face ID / Touch ID) para proteger el acceso a registros de estudiantes.",
+        "NSPhotoLibraryUsageDescription": "NEXO accede a la galería para adjuntar evidencia fotográfica en reportes de incidencias.",
+        "NSPhotoLibraryAddUsageDescription": "NEXO guarda capturas de evidencia en tu galería.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiresFullScreen": true,
+        "UIStatusBarHidden": false,
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UIBackgroundModes": ["fetch", "remote-notification"]
+      }
+    }
+  },
+  "plugins": {
+    "store": {
+      "autoSave": 300
+    },
+    "http": {
+      "danger": {
+        "allowedUrls": [
+          "https://nexo-production-13c0.up.railway.app",
+          "https://*.nexo.edu.co"
+        ]
+      }
+    },
+    "deep-link": {
+      "mobile": {
+        "host": "nexo.edu.co",
+        "pathPrefix": ["/app"]
+      },
+      "desktop": {
+        "schemes": ["nexo"]
+      }
+    }
+  }
+}
+</file>
+
+<file path="WebApp/package.json">
+{
+  "name": "webapp-institucional",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri-dev": "tauri dev",
+    "tauri-build": "tauri build"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-biometric": "^2.3.2",
+    "@tauri-apps/plugin-deep-link": "^2.4.9",
+    "@tauri-apps/plugin-store": "^2.4.3",
+    "axios": "^1.16.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^0.378.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.23.1",
+    "tailwind-merge": "^2.3.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.2.0",
+    "vite-plugin-pwa": "^0.20.0"
+  }
+}
+</file>
+
 <file path="backend/alojamiento/routes/_auth_middleware.php">
 <?php
 // Shared auth/RBAC helpers for all routes.
@@ -34968,282 +34967,6 @@ if (!function_exists('requireAuth')) {
     }
 }
 ?>
-</file>
-
-<file path="backend/alojamiento/routes/auth.php">
-<?php
-// routes/auth.php - Manejo de autenticación
-global $cleanPath, $conn, $input, $method;
-require_once __DIR__ . '/_auth_middleware.php';
-
-/**
- * @OA\Info(
- *     title="NEXO API",
- *     version="7.5.0",
- *     description="API REST para la plataforma educativa NEXO - Control de asistencia biométrica"
- * )
- * @OA\Server(url="https://nexo-production-f0ef.up.railway.app", description="Production")
- * @OA\Server(url="http://localhost:8080", description="Local Development")
- */
-
-/**
- * UNIFICACIÓN GLOBAL DE ROLES (Fuente de Verdad Única)
- * Todos los roles se normalizan a estos identificadores constantes.
- */
-const ROLES = [
-    'RECTOR' => 'RECTOR',
-    'COORDINADOR' => 'COORDINADOR',
-    'DOCENTE' => 'DOCENTE',
-    'SECRETARIA' => 'SECRETARIA',
-    'PORTERO' => 'PORTERO',
-    'AUXILIAR' => 'AUXILIAR',
-    'PSICORIENTADOR' => 'PSICORIENTADOR'
-];
-
-/**
- * Normaliza cualquier variante de rol del backend a la constante oficial.
- */
-function normalizeRole($dbRole) {
-    $dbRole = strtoupper(trim($dbRole));
-    $map = [
-        'SUPER_RECTOR' => 'SUPER_RECTOR',
-        'PROFESOR' => 'DOCENTE',
-        'PROFESORA' => 'DOCENTE',
-        'DOCENTE' => 'DOCENTE',
-        'TEACHER' => 'DOCENTE',
-        'ADMINISTRADOR' => 'RECTOR',
-        'RECTOR' => 'RECTOR',
-        'RECTORA' => 'RECTOR',
-        'ADMIN' => 'RECTOR',
-        'COORDINADOR' => 'COORDINADOR',
-        'COORDINADORA' => 'COORDINADOR',
-        'SECRETARIA' => 'SECRETARIA',
-        'SECRETARIO' => 'SECRETARIA',
-        'PORTERO' => 'PORTERO',
-        'PORTERA' => 'PORTERO',
-        'AUXILIAR' => 'AUXILIAR',
-        'PSICORIENTADOR' => 'PSICORIENTADOR',
-        'PSICORIENTADORA' => 'PSICORIENTADOR',
-        'SUPER_ADMIN' => 'RECTOR'
-    ];
-    return $map[$dbRole] ?? 'DOCENTE'; // Fallback seguro al rol funcional
-}
-
-function isLoginThrottled($email) {
-    global $conn;
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    $key = 'login:' . hash('sha256', strtolower(trim($email)) . '|' . $ip);
-    $window = 900;
-    $maxAttempts = 8;
-
-    if (!$conn) {
-        return false; // Sin DB no podemos verificar — log en enforceRateLimit ya cubre
-    }
-    try {
-        $sql = "
-            INSERT INTO rate_limits (rl_key, window_start, hits)
-            VALUES (:k, NOW(), 1)
-            ON CONFLICT (rl_key) DO UPDATE SET
-                window_start = CASE
-                    WHEN EXTRACT(EPOCH FROM (NOW() - rate_limits.window_start)) > :w
-                    THEN NOW()
-                    ELSE rate_limits.window_start
-                END,
-                hits = CASE
-                    WHEN EXTRACT(EPOCH FROM (NOW() - rate_limits.window_start)) > :w
-                    THEN 1
-                    ELSE rate_limits.hits + 1
-                END
-            RETURNING hits
-        ";
-        $stmt = $conn->prepare($sql);
-        $stmt->bindValue(':k', $key, PDO::PARAM_STR);
-        $stmt->bindValue(':w', $window, PDO::PARAM_INT);
-        $stmt->execute();
-        $hits = (int)$stmt->fetchColumn();
-        return $hits > $maxAttempts;
-    } catch (Throwable $e) {
-        return false;
-    }
-}
-
-function verifyUserPassword($password, $hash) {
-    $password = (string)$password;
-    $hash = (string)$hash;
-    return password_verify($password, $hash);
-}
-
-/**
- * @OA\Post(
- *     path="/auth/login",
- *     summary="Iniciar sesión",
- *     description="Autentica un usuario y devuelve un JWT en cookie HttpOnly",
- *     tags={"Autenticación"},
- *     @OA\RequestBody(
- *         required=true,
- *         @OA\JsonContent(
- *             required={"email", "password"},
- *             @OA\Property(property="email", type="string", format="email", example="rector@colegio.edu"),
- *             @OA\Property(property="password", type="string", format="password", example="SecurePass123!")
- *         )
- *     ),
- *     @OA\Response(
- *         response=200,
- *         description="Login exitoso",
- *         @OA\JsonContent(
- *             @OA\Property(property="status", type="string", example="ok"),
- *             @OA\Property(property="user", type="object",
- *                 @OA\Property(property="id", type="integer"),
- *                 @OA\Property(property="email", type="string"),
- *                 @OA\Property(property="role", type="string", enum={"RECTOR","COORDINADOR","DOCENTE","SECRETARIA","PORTERO","AUXILIAR","PSICORIENTADOR"}),
- *                 @OA\Property(property="school_id", type="integer"),
- *                 @OA\Property(property="school_name", type="string")
- *             )
- *         )
- *     ),
- *     @OA\Response(response=400, description="Email o contraseña faltantes"),
- *     @OA\Response(response=401, description="Credenciales inválidas"),
- *     @OA\Response(response=429, description="Demasiados intentos (rate limited)")
- * )
- */
-if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
-    $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
-    $password = $input['password'] ?? '';
-    error_log(json_encode($input));
-    error_log('EMAIL=' . $email);
-
-    if (empty($email) || empty($password)) {
-        http_response_code(400);
-        exit(json_encode(['status' => 'error', 'message' => 'Email y contraseña requeridos']));
-    }
-    if (isLoginThrottled($email)) {
-        http_response_code(429);
-        exit(json_encode(['status' => 'error', 'message' => 'Demasiados intentos de acceso. Intente más tarde.']));
-    }
-
-    try {
-        if (!$conn) throw new Exception("Conexión a BD no disponible");
-
-        $checkUser = $conn->prepare("SELECT user_id, school_id, role_id, active FROM users WHERE email = :email");
-        $checkUser->execute(['email' => $email]);
-        $rawUser = $checkUser->fetch(PDO::FETCH_ASSOC);
-
-        if (!$rawUser) {
-            http_response_code(401);
-            exit(json_encode(['status' => 'error', 'message' => 'Credenciales incorrectas (U1)']));
-        }
-
-        $stmt = $conn->prepare("
-            SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, u.active,
-                   r.role_name, s.school_id, s.school_name 
-            FROM users u
-            INNER JOIN roles r ON u.role_id = r.role_id
-            INNER JOIN schools s ON u.school_id = s.school_id
-            WHERE u.user_id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$rawUser['user_id']]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user || !$user['active']) {
-            http_response_code(401);
-            exit(json_encode(['status' => 'error', 'message' => 'Cuenta inactiva o inexistente']));
-        }
-
-        if (verifyUserPassword($password, $user['password_hash'])) {
-            securityLog('LOGIN_SUCCESS', "User authenticated: " . $user['user_id']);
-
-            // Re-hash si el hash actual usa crypt() legacy o necesita upgrade
-            if (password_needs_rehash($user['password_hash'], PASSWORD_BCRYPT, ['cost' => 12])) {
-                try {
-                    $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-                    $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
-                    $rehashStmt->execute([$newHash, $user['user_id']]);
-                    securityLog('PASSWORD_REHASHED', 'User ' . $user['user_id'] . ' migrated to bcrypt cost=12');
-                } catch (Throwable $e) {
-                    securityLog('PASSWORD_REHASH_FAILED', $e->getMessage());
-                }
-            }
-
-            $updateStmt = $conn->prepare("UPDATE users SET last_login_at = NOW() WHERE user_id = ?");
-            $updateStmt->execute([$user['user_id']]);
-
-            $normalizedRole = normalizeRole($user['role_name']);
-            $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
-            $token = issueJwtToken([
-                'sub' => (string)$user['user_id'],
-                'email' => $user['email'],
-                'role' => $normalizedRole,
-                'school_id' => $user['school_id'],
-                'exp' => time() + $tokenTtlSeconds
-            ]);
-            
-            // PILAR 2.2: Cookie HttpOnly, Secure, SameSite=None (cross-domain)
-            $cookieOpts = [
-                'expires' => time() + $tokenTtlSeconds,
-                'path' => '/',
-                'secure' => true,
-                'httponly' => true,
-                'samesite' => 'None'
-            ];
-            setcookie('token', $token, $cookieOpts);
-            
-            echo json_encode([
-                'status' => 'ok',
-                'user' => [
-                    'id' => $user['user_id'],
-                    'nombre' => $user['first_name'] . ' ' . $user['last_name'],
-                    'email' => $user['email'],
-                    'role' => $normalizedRole,
-                    'school_id' => $user['school_id'],
-                    'school_name' => $user['school_name']
-                ]
-            ]);
-        } else {
-            http_response_code(401);
-            exit(json_encode(['status' => 'error', 'message' => 'Credenciales incorrectas (P)']));
-        }
-    } catch (Throwable $e) {
-        error_log($e->getMessage());
-        error_log($e->getFile());
-        error_log((string)$e->getLine());
-        securityLog('AUTH_CRITICAL_ERROR', $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
-        http_response_code(500);
-        exit(json_encode(['status' => 'error', 'message' => 'Error de autenticación']));
-    }
-    exit;
-}
-
-if ($cleanPath === '/auth/logout') {
-    $token = extractBearerToken();
-    if ($token) {
-        try {
-            $claims = verifyJwtToken($token);
-            revokeJwt($claims['jti'], $claims['exp']);
-        } catch (Exception $e) {
-            securityLog('AUTH_LOGOUT_TOKEN_IGNORED', $e->getMessage());
-        }
-    }
-    echo json_encode(['status' => 'ok', 'message' => 'Sesión cerrada']);
-    exit;
-}
-
-if ($cleanPath === '/auth/me') {
-    securityLog('AUTH_ME_REQUEST', 'Validating session from JWT');
-    $authUser = requireAuth();
-    echo json_encode([
-        'status' => 'ok',
-        'user' => [
-            'id' => $authUser['id'],
-            'nombre' => $authUser['nombre'],
-            'email' => $authUser['email'],
-            'role' => $authUser['role'],
-            'school_id' => $authUser['school_id'],
-            'school_name' => $authUser['school_name']
-        ]
-    ]);
-    exit;
-}
 </file>
 
 <file path="backend/alojamiento/db.php">
@@ -36528,84 +36251,280 @@ int main() {
 }
 </file>
 
-<file path="WebApp/src/api/client.js">
-import axios from 'axios';
+<file path="backend/alojamiento/routes/auth.php">
+<?php
+// routes/auth.php - Manejo de autenticación
+global $cleanPath, $conn, $input, $method;
+require_once __DIR__ . '/_auth_middleware.php';
 
-// Base URL: VITE_API_BASE_URL debe apuntar al backend (sin /v1 trailing).
-// El backend normaliza rutas via cleanPath, así que usamos la raíz.
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  'https://nexo-production-f0ef.up.railway.app/v1';
+/**
+ * @OA\Info(
+ *     title="NEXO API",
+ *     version="7.5.0",
+ *     description="API REST para la plataforma educativa NEXO - Control de asistencia biométrica"
+ * )
+ * @OA\Server(url="https://nexo-production-13c0.up.railway.app", description="Production")
+ * @OA\Server(url="http://localhost:8080", description="Local Development")
+ */
 
-if (import.meta.env.PROD && !API_BASE_URL.startsWith('https://')) {
-  throw new Error('VITE_API_BASE_URL debe usar HTTPS en producción');
+/**
+ * UNIFICACIÓN GLOBAL DE ROLES (Fuente de Verdad Única)
+ * Todos los roles se normalizan a estos identificadores constantes.
+ */
+const ROLES = [
+    'RECTOR' => 'RECTOR',
+    'COORDINADOR' => 'COORDINADOR',
+    'DOCENTE' => 'DOCENTE',
+    'SECRETARIA' => 'SECRETARIA',
+    'PORTERO' => 'PORTERO',
+    'AUXILIAR' => 'AUXILIAR',
+    'PSICORIENTADOR' => 'PSICORIENTADOR'
+];
+
+/**
+ * Normaliza cualquier variante de rol del backend a la constante oficial.
+ */
+function normalizeRole($dbRole) {
+    $dbRole = strtoupper(trim($dbRole));
+    $map = [
+        'SUPER_RECTOR' => 'SUPER_RECTOR',
+        'PROFESOR' => 'DOCENTE',
+        'PROFESORA' => 'DOCENTE',
+        'DOCENTE' => 'DOCENTE',
+        'TEACHER' => 'DOCENTE',
+        'ADMINISTRADOR' => 'RECTOR',
+        'RECTOR' => 'RECTOR',
+        'RECTORA' => 'RECTOR',
+        'ADMIN' => 'RECTOR',
+        'COORDINADOR' => 'COORDINADOR',
+        'COORDINADORA' => 'COORDINADOR',
+        'SECRETARIA' => 'SECRETARIA',
+        'SECRETARIO' => 'SECRETARIA',
+        'PORTERO' => 'PORTERO',
+        'PORTERA' => 'PORTERO',
+        'AUXILIAR' => 'AUXILIAR',
+        'PSICORIENTADOR' => 'PSICORIENTADOR',
+        'PSICORIENTADORA' => 'PSICORIENTADOR',
+        'SUPER_ADMIN' => 'RECTOR'
+    ];
+    return $map[$dbRole] ?? 'DOCENTE'; // Fallback seguro al rol funcional
 }
 
-// Rutas que pueden tardar más (envío masivo de WhatsApp, reportes, etc.)
-const SLOW_ROUTE_PATTERNS = ['/operations/', '/reports/'];
-const DEFAULT_TIMEOUT = 15000;
-const SLOW_TIMEOUT = 45000;
+function isLoginThrottled($email) {
+    global $conn;
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $key = 'login:' . hash('sha256', strtolower(trim($email)) . '|' . $ip);
+    $window = 900;
+    $maxAttempts = 8;
 
-const client = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest', // FIX: CSRF protection header
-  },
-  timeout: DEFAULT_TIMEOUT,
-  withCredentials: true, // PILAR 2.2: Enviar cookies HttpOnly automáticamente
-});
-
-// Interceptor de request: timeout adaptativo + timestamp para telemetría
-client.interceptors.request.use(
-  (config) => {
-    const url = config.url || '';
-    if (SLOW_ROUTE_PATTERNS.some((p) => url.includes(p))) {
-      config.timeout = SLOW_TIMEOUT;
+    if (!$conn) {
+        return false; // Sin DB no podemos verificar — log en enforceRateLimit ya cubre
     }
-    config._t0 = performance.now();
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-function emitLatency(config, status) {
-  if (!config?._t0) return;
-  const duration_ms = Math.round(performance.now() - config._t0);
-  window.dispatchEvent(
-    new CustomEvent('nexo:telemetry', {
-      detail: {
-        type: 'API_LATENCY',
-        payload: {
-          path:        config.url ?? '',
-          method:      (config.method ?? 'GET').toUpperCase(),
-          status,
-          duration_ms,
-        },
-      },
-    })
-  );
+    try {
+        $sql = "
+            INSERT INTO rate_limits (rl_key, window_start, hits)
+            VALUES (:k, NOW(), 1)
+            ON CONFLICT (rl_key) DO UPDATE SET
+                window_start = CASE
+                    WHEN EXTRACT(EPOCH FROM (NOW() - rate_limits.window_start)) > :w
+                    THEN NOW()
+                    ELSE rate_limits.window_start
+                END,
+                hits = CASE
+                    WHEN EXTRACT(EPOCH FROM (NOW() - rate_limits.window_start)) > :w
+                    THEN 1
+                    ELSE rate_limits.hits + 1
+                END
+            RETURNING hits
+        ";
+        $stmt = $conn->prepare($sql);
+        $stmt->bindValue(':k', $key, PDO::PARAM_STR);
+        $stmt->bindValue(':w', $window, PDO::PARAM_INT);
+        $stmt->execute();
+        $hits = (int)$stmt->fetchColumn();
+        return $hits > $maxAttempts;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
-// Interceptor de response: telemetría de latencia + manejo de errores globales
-client.interceptors.response.use(
-  (response) => {
-    emitLatency(response.config, response.status);
-    return response;
-  },
-  (error) => {
-    emitLatency(error.config, error.response?.status ?? 0);
-    if (error.response?.status === 401) {
-      localStorage.removeItem('user');
-      if (!window.location.pathname.startsWith('/app/login')) {
-        window.location.href = '/app/login';
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+function verifyUserPassword($password, $hash) {
+    $password = (string)$password;
+    $hash = (string)$hash;
+    return password_verify($password, $hash);
+}
 
-export default client;
+/**
+ * @OA\Post(
+ *     path="/auth/login",
+ *     summary="Iniciar sesión",
+ *     description="Autentica un usuario y devuelve un JWT en cookie HttpOnly",
+ *     tags={"Autenticación"},
+ *     @OA\RequestBody(
+ *         required=true,
+ *         @OA\JsonContent(
+ *             required={"email", "password"},
+ *             @OA\Property(property="email", type="string", format="email", example="rector@colegio.edu"),
+ *             @OA\Property(property="password", type="string", format="password", example="SecurePass123!")
+ *         )
+ *     ),
+ *     @OA\Response(
+ *         response=200,
+ *         description="Login exitoso",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="status", type="string", example="ok"),
+ *             @OA\Property(property="user", type="object",
+ *                 @OA\Property(property="id", type="integer"),
+ *                 @OA\Property(property="email", type="string"),
+ *                 @OA\Property(property="role", type="string", enum={"RECTOR","COORDINADOR","DOCENTE","SECRETARIA","PORTERO","AUXILIAR","PSICORIENTADOR"}),
+ *                 @OA\Property(property="school_id", type="integer"),
+ *                 @OA\Property(property="school_name", type="string")
+ *             )
+ *         )
+ *     ),
+ *     @OA\Response(response=400, description="Email o contraseña faltantes"),
+ *     @OA\Response(response=401, description="Credenciales inválidas"),
+ *     @OA\Response(response=429, description="Demasiados intentos (rate limited)")
+ * )
+ */
+if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
+    $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $password = $input['password'] ?? '';
+    error_log(json_encode($input));
+    error_log('EMAIL=' . $email);
+
+    if (empty($email) || empty($password)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'Email y contraseña requeridos']));
+    }
+    if (isLoginThrottled($email)) {
+        http_response_code(429);
+        exit(json_encode(['status' => 'error', 'message' => 'Demasiados intentos de acceso. Intente más tarde.']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $checkUser = $conn->prepare("SELECT user_id, school_id, role_id, active FROM users WHERE email = :email");
+        $checkUser->execute(['email' => $email]);
+        $rawUser = $checkUser->fetch(PDO::FETCH_ASSOC);
+
+        if (!$rawUser) {
+            http_response_code(401);
+            exit(json_encode(['status' => 'error', 'message' => 'Credenciales incorrectas (U1)']));
+        }
+
+        $stmt = $conn->prepare("
+            SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, u.active,
+                   r.role_name, s.school_id, s.school_name 
+            FROM users u
+            INNER JOIN roles r ON u.role_id = r.role_id
+            INNER JOIN schools s ON u.school_id = s.school_id
+            WHERE u.user_id = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$rawUser['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !$user['active']) {
+            http_response_code(401);
+            exit(json_encode(['status' => 'error', 'message' => 'Cuenta inactiva o inexistente']));
+        }
+
+        if (verifyUserPassword($password, $user['password_hash'])) {
+            securityLog('LOGIN_SUCCESS', "User authenticated: " . $user['user_id']);
+
+            // Re-hash si el hash actual usa crypt() legacy o necesita upgrade
+            if (password_needs_rehash($user['password_hash'], PASSWORD_BCRYPT, ['cost' => 12])) {
+                try {
+                    $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+                    $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
+                    $rehashStmt->execute([$newHash, $user['user_id']]);
+                    securityLog('PASSWORD_REHASHED', 'User ' . $user['user_id'] . ' migrated to bcrypt cost=12');
+                } catch (Throwable $e) {
+                    securityLog('PASSWORD_REHASH_FAILED', $e->getMessage());
+                }
+            }
+
+            $updateStmt = $conn->prepare("UPDATE users SET last_login_at = NOW() WHERE user_id = ?");
+            $updateStmt->execute([$user['user_id']]);
+
+            $normalizedRole = normalizeRole($user['role_name']);
+            $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
+            $token = issueJwtToken([
+                'sub' => (string)$user['user_id'],
+                'email' => $user['email'],
+                'role' => $normalizedRole,
+                'school_id' => $user['school_id'],
+                'exp' => time() + $tokenTtlSeconds
+            ]);
+            
+            // PILAR 2.2: Cookie HttpOnly, Secure, SameSite=None (cross-domain)
+            $cookieOpts = [
+                'expires' => time() + $tokenTtlSeconds,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'None'
+            ];
+            setcookie('token', $token, $cookieOpts);
+            
+            echo json_encode([
+                'status' => 'ok',
+                'user' => [
+                    'id' => $user['user_id'],
+                    'nombre' => $user['first_name'] . ' ' . $user['last_name'],
+                    'email' => $user['email'],
+                    'role' => $normalizedRole,
+                    'school_id' => $user['school_id'],
+                    'school_name' => $user['school_name']
+                ]
+            ]);
+        } else {
+            http_response_code(401);
+            exit(json_encode(['status' => 'error', 'message' => 'Credenciales incorrectas (P)']));
+        }
+    } catch (Throwable $e) {
+        error_log($e->getMessage());
+        error_log($e->getFile());
+        error_log((string)$e->getLine());
+        securityLog('AUTH_CRITICAL_ERROR', $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+        http_response_code(500);
+        exit(json_encode(['status' => 'error', 'message' => 'Error de autenticación']));
+    }
+    exit;
+}
+
+if ($cleanPath === '/auth/logout') {
+    $token = extractBearerToken();
+    if ($token) {
+        try {
+            $claims = verifyJwtToken($token);
+            revokeJwt($claims['jti'], $claims['exp']);
+        } catch (Exception $e) {
+            securityLog('AUTH_LOGOUT_TOKEN_IGNORED', $e->getMessage());
+        }
+    }
+    echo json_encode(['status' => 'ok', 'message' => 'Sesión cerrada']);
+    exit;
+}
+
+if ($cleanPath === '/auth/me') {
+    securityLog('AUTH_ME_REQUEST', 'Validating session from JWT');
+    $authUser = requireAuth();
+    echo json_encode([
+        'status' => 'ok',
+        'user' => [
+            'id' => $authUser['id'],
+            'nombre' => $authUser['nombre'],
+            'email' => $authUser['email'],
+            'role' => $authUser['role'],
+            'school_id' => $authUser['school_id'],
+            'school_name' => $authUser['school_name']
+        ]
+    ]);
+    exit;
+}
 </file>
 
 <file path="backend/alojamiento/routes/devices.php">
@@ -36997,6 +36916,86 @@ END LOOP;
 END $$;
 </file>
 
+<file path="WebApp/src/api/client.js">
+import axios from 'axios';
+
+// Base URL: VITE_API_BASE_URL debe apuntar al backend (sin /v1 trailing).
+// El backend normaliza rutas via cleanPath, así que usamos la raíz.
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://nexo-production-13c0.up.railway.app/v1';
+
+if (import.meta.env.PROD && !API_BASE_URL.startsWith('https://')) {
+  throw new Error('VITE_API_BASE_URL debe usar HTTPS en producción');
+}
+
+// Rutas que pueden tardar más (envío masivo de WhatsApp, reportes, etc.)
+const SLOW_ROUTE_PATTERNS = ['/operations/', '/reports/'];
+const DEFAULT_TIMEOUT = 15000;
+const SLOW_TIMEOUT = 45000;
+
+const client = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest', // FIX: CSRF protection header
+  },
+  timeout: DEFAULT_TIMEOUT,
+  withCredentials: true, // PILAR 2.2: Enviar cookies HttpOnly automáticamente
+});
+
+// Interceptor de request: timeout adaptativo + timestamp para telemetría
+client.interceptors.request.use(
+  (config) => {
+    const url = config.url || '';
+    if (SLOW_ROUTE_PATTERNS.some((p) => url.includes(p))) {
+      config.timeout = SLOW_TIMEOUT;
+    }
+    config._t0 = performance.now();
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+function emitLatency(config, status) {
+  if (!config?._t0) return;
+  const duration_ms = Math.round(performance.now() - config._t0);
+  window.dispatchEvent(
+    new CustomEvent('nexo:telemetry', {
+      detail: {
+        type: 'API_LATENCY',
+        payload: {
+          path:        config.url ?? '',
+          method:      (config.method ?? 'GET').toUpperCase(),
+          status,
+          duration_ms,
+        },
+      },
+    })
+  );
+}
+
+// Interceptor de response: telemetría de latencia + manejo de errores globales
+client.interceptors.response.use(
+  (response) => {
+    emitLatency(response.config, response.status);
+    return response;
+  },
+  (error) => {
+    emitLatency(error.config, error.response?.status ?? 0);
+    if (error.response?.status === 401) {
+      localStorage.removeItem('user');
+      if (!window.location.pathname.startsWith('/app/login')) {
+        window.location.href = '/app/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default client;
+</file>
+
 <file path="WebApp/src/App.jsx">
 import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
@@ -37129,62 +37128,6 @@ function App() {
 }
 
 export default App
-</file>
-
-<file path="railway.json">
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
-  },
-  "deploy": {
-    "numReplicas": 1,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
-  }
-}
-</file>
-
-<file path="backend/alojamiento/Dockerfile">
-FROM php:8.2.28-fpm-alpine
-
-# 1. Instalador profesional de extensiones PHP (esto arregla el error de autoconf/phpize)
-COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
-
-# 2. Instalar Nginx, Composer y extensiones necesarias de un solo golpe
-RUN apk add --no-cache nginx composer gettext && \
-    mkdir -p /run/nginx && \
-    install-php-extensions pdo_pgsql mysqli redis sockets
-
-# 3. Inyectar configuración de Nginx (Self-contained)
-RUN printf "server { \n\
-    listen ${PORT:-8080}; \n\
-    root /var/www/html; \n\
-    index api.php index.php index.html; \n\
-    location / { \n\
-        try_files \$uri \$uri/ /api.php?\$query_string; \n\
-    } \n\
-    location ~ \\.php$ { \n\
-        fastcgi_pass 127.0.0.1:9000; \n\
-        fastcgi_index index.php; \n\
-        include fastcgi_params; \n\
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name; \n\
-    } \n\
-}" > /etc/nginx/http.d/default.conf.template
-
-# 4. Preparar la aplicación
-WORKDIR /var/www/html
-COPY composer.json composer.lock* /var/www/html/
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-
-COPY . /var/www/html/
-RUN chown -R www-data:www-data /var/www/html
-
-EXPOSE ${PORT:-8080}
-
-# 5. Comando de arranque (PHP + Nginx)
-CMD ["sh", "-c", "export PORT=${PORT:-8080} && envsubst '${PORT}' < /etc/nginx/http.d/default.conf.template > /etc/nginx/http.d/default.conf && php-fpm -D && nginx -g 'daemon off;'"]
 </file>
 
 <file path="backend/alojamiento/api.php">
@@ -37505,66 +37448,82 @@ http_response_code(404);
 echo json_encode(['status' => 'error', 'message' => 'Recurso no encontrado o ruta no manejado']);
 </file>
 
-<file path="Dockerfile">
-# ── Stage 1: Build React WebApp ───────────────────────────────────────────────
-FROM node:20-alpine AS builder
-WORKDIR /build
-COPY WebApp/package.json WebApp/package-lock.json* ./
-RUN npm ci --ignore-scripts
-COPY WebApp/ ./
-RUN npm run build
+<file path="railway.json">
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "backend/alojamiento/Dockerfile"
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+</file>
 
-# ── Stage 2: Apache + mod_php (producción) ────────────────────────────────────
+<file path="backend/alojamiento/Dockerfile">
+# ═══════════════════════════════════════════════════════════════════════════════
+# STAGE 1: Composer Dependencies (imagen limpia con git/unzip ya incluidos)
+# ═══════════════════════════════════════════════════════════════════════════════
+FROM composer:2 AS composer-stage
+
+WORKDIR /app
+
+# Copiar archivos de dependencias
+COPY composer.json composer.lock* ./
+
+# Instalar dependencias de Composer (esta imagen YA tiene git y unzip nativos)
+# No contamina Apache, no genera conflictos de MPM
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction \
+    --no-scripts \
+    --prefer-dist
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STAGE 2: Runtime Apache (imagen VIRGEN sin tocar apt-get)
+# ═══════════════════════════════════════════════════════════════════════════════
 FROM php:8.2-apache
 
+# 1. Instalar extensiones PHP SIN tocar apt-get (mlocati lo hace internamente de forma segura)
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN install-php-extensions pdo_pgsql mysqli redis sockets zip
 
-RUN install-php-extensions pdo_pgsql mysqli redis sockets
+# 2. SOLUCIÓN AGRESIVA AL BUG DE MPM:
+#    - NO usamos apt-get (que activa mpm_event/mpm_worker automáticamente)
+#    - Borramos físicamente los symlinks conflictivos si existen
+#    - Forzamos mpm_prefork (único compatible con mod_php)
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.load \
+          /etc/apache2/mods-enabled/mpm_event.conf \
+          /etc/apache2/mods-enabled/mpm_worker.load \
+          /etc/apache2/mods-enabled/mpm_worker.conf && \
+    a2enmod mpm_prefork rewrite headers
 
-# Habilitar mod_rewrite y mod_headers
-RUN a2enmod rewrite headers
+# 3. HARDENING: Habilitar AllowOverride para que .htaccess funcione
+#    (La imagen base trae AllowOverride None por defecto)
+RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' \
+    /etc/apache2/apache2.conf
 
-# FIX CRÍTICO: php:8.2-apache trae AllowOverride None → .htaccess se ignora
-RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
-
+# 4. Copiar código de la aplicación
 WORKDIR /var/www/html
-ENV COMPOSER_ALLOW_SUPERUSER=1
-COPY backend/alojamiento/composer.json backend/alojamiento/composer.lock* ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-COPY backend/alojamiento/ ./
-COPY --from=builder /build/dist ./app/
 
-# Inyectar regla React SPA ANTES del front-controller en .htaccess
-RUN sed -i 's|# ROUTING: Front Controller Pattern|# React SPA: /app/* sin archivo → /app/index.html\n    RewriteCond %{REQUEST_URI} ^/app/\n    RewriteCond %{REQUEST_FILENAME} !-f\n    RewriteRule ^ /app/index.html [L]\n\n    # ROUTING: Front Controller Pattern|' .htaccess
+# Copiar vendor/ desde el stage de Composer (evita instalar git/unzip en Apache)
+COPY --from=composer-stage /app/vendor ./vendor
 
-# Crear .htaccess para React SPA en /app/
-RUN echo "RewriteEngine On" > /var/www/html/app/.htaccess && \
-    echo "RewriteCond %{REQUEST_FILENAME} !-f" >> /var/www/html/app/.htaccess && \
-    echo "RewriteCond %{REQUEST_FILENAME} !-d" >> /var/www/html/app/.htaccess && \
-    echo "RewriteRule ^ index.html [QSA,L]" >> /var/www/html/app/.htaccess
+# Copiar el resto del código
+COPY . .
 
-# Script de inicio: construido línea por línea para evitar colapso de \n
-RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
-    echo 'set -e' >> /usr/local/bin/start.sh && \
-    echo 'PORT=${PORT:-8080}' >> /usr/local/bin/start.sh && \
-    echo 'echo "Listen $PORT" > /etc/apache2/ports.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "<VirtualHost *:$PORT>" > /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "    DocumentRoot /var/www/html" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "    <Directory /var/www/html>" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "        Options Indexes FollowSymLinks" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "        AllowOverride All" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "        Require all granted" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "    </Directory>" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "    ErrorLog \${APACHE_LOG_DIR}/error.log" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "    CustomLog \${APACHE_LOG_DIR}/access.log combined" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'echo "</VirtualHost>" >> /etc/apache2/sites-available/000-default.conf' >> /usr/local/bin/start.sh && \
-    echo 'exec apache2-foreground' >> /usr/local/bin/start.sh && \
-    chmod +x /usr/local/bin/start.sh
+# 5. Permisos de seguridad (www-data es el usuario de Apache)
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 755 /var/www/html
 
-EXPOSE 8080
-
-CMD ["/usr/local/bin/start.sh"]
+# 6. INYECCIÓN DINÁMICA DEL PUERTO DE RAILWAY (Runtime, no Build time)
+#    Railway asigna $PORT en el arranque del contenedor, no en la construcción
+#    Usamos docker-php-entrypoint (wrapper oficial) para garantizar que PHP se inicialice
+CMD sed -i "s/Listen 80/Listen ${PORT:-8080}/g" /etc/apache2/ports.conf && \
+    sed -i "s/:80/:${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf && \
+    docker-php-entrypoint apache2-foreground
 </file>
 
 </files>
