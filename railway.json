@@ -5,6 +5,7 @@
     "dockerfilePath": "backend/alojamiento/Dockerfile"
   },
   "deploy": {
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
   }
 }
