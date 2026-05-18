@@ -36,16 +36,34 @@ http {
         location ~* /\. { deny all; }
         location ^~ /_dev/ { deny all; }
 
-        location / {
-            try_files \$uri \$uri/ /api.php\$is_args\$args;
+        # Servir index.html directamente para /
+        location = / {
+            try_files /index.html =404;
         }
 
-        location ~* \.php\$ {
+        # Rutas API → api.php
+        location ~ ^/(v1|api)/ {
+            try_files \$uri /api.php\$is_args\$args;
+        }
+
+        # Archivos estáticos (CSS, JS, imágenes)
+        location ~* \.(css|js|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot)\$ {
+            try_files \$uri =404;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # PHP solo para api.php
+        location = /api.php {
             fastcgi_pass unix:/run/php/php-fpm.sock;
-            fastcgi_index index.php;
             include fastcgi_params;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
             fastcgi_hide_header X-Powered-By;
+        }
+
+        # Cualquier otra cosa → 404
+        location / {
+            try_files \$uri =404;
         }
     }
 }
