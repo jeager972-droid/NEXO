@@ -41,7 +41,7 @@ http {
         }
 
         location ~* \.php\$ {
-            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_pass unix:/run/php/php-fpm.sock;
             fastcgi_index index.php;
             include fastcgi_params;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
@@ -50,6 +50,23 @@ http {
     }
 }
 EOF
+
+echo "[nexo] Configurando php-fpm para socket Unix..."
+mkdir -p /run/php
+cat > /usr/local/etc/php-fpm.d/www.conf <<FPMCONF
+[www]
+user = www-data
+group = www-data
+listen = /run/php/php-fpm.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+pm = dynamic
+pm.max_children = 5
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 3
+FPMCONF
 
 echo "[nexo] Probando config nginx..."
 nginx -t
