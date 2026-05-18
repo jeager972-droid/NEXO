@@ -9,10 +9,8 @@ RUN apt-mark hold apache2 apache2-bin apache2-data apache2-utils \
     && apt-get install -y --no-install-recommends git unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Las extensiones PHP (mlocati instala sus propias dependencias de sistema)
 RUN install-php-extensions pdo_pgsql mysqli redis sockets zip
 
-# Módulos Apache para .htaccess + AllowOverride
 RUN a2enmod rewrite headers \
     && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf \
     && echo "ServerName localhost" >> /etc/apache2/apache2.conf
@@ -25,11 +23,10 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 COPY . .
 RUN chown -R www-data:www-data /var/www/html
 
-# CORRECCIÓN MPM EN RUNTIME: corre justo antes de Apache, nada puede interferir después.
-# Borra todos los MPM cargados, fuerza solo mpm_prefork, luego inyecta el puerto y arranca.
-CMD rm -f /etc/apache2/mods-enabled/mpm_* \
-    && ln -sf /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load \
-    && ln -sf /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf \
-    && sed -i "s/Listen 80/Listen ${PORT:-8080}/g" /etc/apache2/ports.conf \
-    && sed -i "s/:80/:${PORT:-8080}/g" /etc/apache2/sites-available/000-default.conf \
-    && apache2-foreground
+# Copiar y activar el entrypoint DESPUÉS del COPY . . para que no sobreescriba
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
