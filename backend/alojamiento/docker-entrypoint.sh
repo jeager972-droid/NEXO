@@ -96,18 +96,5 @@ nginx -t
 echo "[nexo] Iniciando php-fpm..."
 php-fpm -D
 
-echo "[nexo] Arrancando nginx en 0.0.0.0:${PORT}..."
-nginx -g "daemon off;" &
-NGINX_PID=$!
-
-sleep 5
-echo "[nexo] DIAGNÓSTICO - Puertos escuchando:"
-netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || echo "netstat/ss no disponible"
-
-echo "[nexo] nginx PID: $NGINX_PID"
-
-echo "[nexo] TEST LOCAL - curl a localhost:${PORT}:"
-curl -v http://localhost:${PORT}/ 2>&1 | head -30
-
-echo "[nexo] Si el curl funcionó, el problema es Railway proxy. Si falló, es nginx."
-wait $NGINX_PID
+echo "[nexo] Arrancando nginx en puerto ${PORT}..."
+exec nginx -g "daemon off;"
