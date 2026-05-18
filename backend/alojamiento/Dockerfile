@@ -18,23 +18,17 @@ RUN composer install \
     --prefer-dist
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# STAGE 2: Runtime Apache (imagen VIRGEN sin tocar apt-get)
+# STAGE 2: Runtime Apache (imagen VIRGEN - dejamos que maneje su propio MPM)
 # ═══════════════════════════════════════════════════════════════════════════════
 FROM php:8.2-apache
 
-# 1. Instalar extensiones PHP SIN tocar apt-get (mlocati lo hace internamente de forma segura)
+# 1. Instalar extensiones PHP (mlocati lo hace de forma segura sin tocar apt-get)
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 RUN install-php-extensions pdo_pgsql mysqli redis sockets zip
 
-# 2. SOLUCIÓN AGRESIVA AL BUG DE MPM:
-#    - NO usamos apt-get (que activa mpm_event/mpm_worker automáticamente)
-#    - Borramos físicamente los symlinks conflictivos si existen
-#    - Forzamos mpm_prefork (único compatible con mod_php)
-RUN rm -f /etc/apache2/mods-enabled/mpm_event.load \
-          /etc/apache2/mods-enabled/mpm_event.conf \
-          /etc/apache2/mods-enabled/mpm_worker.load \
-          /etc/apache2/mods-enabled/mpm_worker.conf && \
-    a2enmod mpm_prefork rewrite headers
+# 2. Habilitar módulos de Apache necesarios para .htaccess
+#    NO tocamos los MPM - la imagen base ya viene con mpm_prefork configurado correctamente
+RUN a2enmod rewrite headers
 
 # 3. HARDENING: Habilitar AllowOverride para que .htaccess funcione
 #    (La imagen base trae AllowOverride None por defecto)
