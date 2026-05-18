@@ -93,4 +93,9 @@ echo "[nexo] DIAGNÓSTICO - Puertos escuchando:"
 netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || echo "netstat/ss no disponible"
 
 echo "[nexo] nginx PID: $NGINX_PID"
+
+echo "[nexo] TEST LOCAL - curl a localhost:${PORT}:"
+curl -v http://localhost:${PORT}/ 2>&1 | head -30
+
+echo "[nexo] Si el curl funcionó, el problema es Railway proxy. Si falló, es nginx."
 wait $NGINX_PID
