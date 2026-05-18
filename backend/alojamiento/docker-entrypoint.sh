@@ -6,9 +6,9 @@ echo "[nexo] PORT=$PORT"
 
 # Reemplazar nginx.conf COMPLETO — sin depender de symlinks ni includes problemáticos
 cat > /etc/nginx/nginx.conf <<EOF
-user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
+error_log /dev/stderr warn;
 
 events {
     worker_connections 1024;
@@ -20,6 +20,7 @@ http {
     sendfile on;
     keepalive_timeout 65;
     server_tokens off;
+    access_log /dev/stdout;
 
     server {
         listen 0.0.0.0:${PORT} default_server;
