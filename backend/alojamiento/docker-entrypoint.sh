@@ -38,6 +38,13 @@ http {
         location ~ /\. { deny all; return 403; }
         location ^~ /_dev/ { deny all; return 403; }
 
+        # Health check para Railway
+        location /health {
+            access_log off;
+            return 200 "OK\n";
+            add_header Content-Type text/plain;
+        }
+
         # Root: servir index.html
         location = / {
             index index.html;
@@ -89,7 +96,7 @@ echo "[nexo] Arrancando nginx en 0.0.0.0:${PORT}..."
 nginx -g "daemon off;" &
 NGINX_PID=$!
 
-sleep 2
+sleep 5
 echo "[nexo] DIAGNÓSTICO - Puertos escuchando:"
 netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || echo "netstat/ss no disponible"
 
