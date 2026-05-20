@@ -22,7 +22,6 @@
         "resizable": true,
         "fullscreen": true,
         "decorations": false,
-        "titleBarStyle": "overlay",
         "center": true,
         "shadow": true
       }
@@ -48,31 +47,6 @@
     "android": {
       "minSdkVersion": 24
     },
-    "iOS": {
-      "minimumSystemVersion": "16.0",
-      "infoPlist": {
-        "NSCameraUsageDescription": "NEXO requiere la cámara para registrar evidencia fotográfica y biometría facial de estudiantes.",
-        "NSFaceIDUsageDescription": "NEXO usa Face ID para autenticar de forma segura el acceso a datos sensibles institucionales.",
-        "NSLocalAuthenticationUsageDescription": "NEXO usa autenticación biométrica (Face ID / Touch ID) para proteger el acceso a registros de estudiantes.",
-        "NSPhotoLibraryUsageDescription": "NEXO accede a la galería para adjuntar evidencia fotográfica en reportes de incidencias.",
-        "NSPhotoLibraryAddUsageDescription": "NEXO guarda capturas de evidencia en tu galería.",
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIRequiresFullScreen": true,
-        "UIStatusBarHidden": false,
-        "UISupportedInterfaceOrientations": [
-          "UIInterfaceOrientationPortrait",
-          "UIInterfaceOrientationLandscapeLeft",
-          "UIInterfaceOrientationLandscapeRight"
-        ],
-        "UISupportedInterfaceOrientations~ipad": [
-          "UIInterfaceOrientationPortrait",
-          "UIInterfaceOrientationPortraitUpsideDown",
-          "UIInterfaceOrientationLandscapeLeft",
-          "UIInterfaceOrientationLandscapeRight"
-        ],
-        "UIBackgroundModes": ["fetch", "remote-notification"]
-      }
-    }
   },
   "plugins": {
     "store": {
