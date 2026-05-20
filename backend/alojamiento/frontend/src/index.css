@@ -1,0 +1,107 @@
+@import "tailwindcss" source(none);
+@source "../index.html";
+@source "./**/*.{js,jsx,ts,tsx}";
+
+/* ── Design Tokens ───────────────────────────────────────────────────────────── */
+:root {
+  --nx-green:       #00e676;
+  --nx-green-dim:   #00c05a;
+  --nx-dark:        #0a0f0d;
+  --nx-surface:     #111614;
+  --nx-muted:       #6b7f74;
+  --nx-light:       #f4f7f5;
+  --nx-white:       #ffffff;
+  --nx-font-sans:   'Plus Jakarta Sans', system-ui, sans-serif;
+  --nx-font-mono:   'JetBrains Mono', monospace;
+  --nx-section-px:  clamp(2.5rem, 8vw, 10rem);
+}
+
+/* ── Base Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: auto; }
+
+body {
+  font-family: var(--nx-font-sans);
+  background: var(--nx-dark);
+  color: var(--nx-white);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Stacking Sections — CSS sticky card-stack ──────────────────────────────── */
+[data-section] {
+  position: sticky;
+  top: 0;
+  min-height: 100vh;
+  padding-left:  var(--nx-section-px);
+  padding-right: var(--nx-section-px);
+  background: transparent;
+  will-change: transform, opacity;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+
+  /* Smooth fade-in/out transition for the active section */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Default state for hero so it is visible on initial load */
+[data-section="hero"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-section][data-active="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-section][data-active="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Section-specific backgrounds */
+[data-section="hero"]          { background: transparent; z-index: 1; }
+[data-section="vision"]        { background: transparent; z-index: 2; }
+[data-section="exploded"]      { background: transparent; z-index: 3; }
+[data-section="cifrado"]       { background: transparent;        z-index: 4; }
+[data-section="ecosistema"]    { background: transparent; z-index: 5; }
+[data-section="escalabilidad"] { background: transparent; z-index: 6; }
+[data-section="descargas"] {
+  background:  var(--nx-light);
+  position:    relative;
+  z-index:     10;
+  box-shadow:  0 -24px 48px rgba(0,0,0,0.18);
+}
+
+/* Subtle top-edge depth shadow on each stacking card (except hero and descargas) */
+[data-section]:not([data-section="hero"]):not([data-section="descargas"])::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar              { width: 4px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: var(--nx-green-dim); border-radius: 2px; }
+
+/* ── Canvas Container Layout ────────────────────────────────────────────────── */
+#nexo-canvas-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: auto;
+}
+
+

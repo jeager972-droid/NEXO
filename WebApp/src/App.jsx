@@ -19,7 +19,7 @@ const Consultation = lazy(() => import('./pages/Consultation'))
 const Enrollment = lazy(() => import('./pages/Enrollment'))
 const Unauthorized = lazy(() => import('./pages/Unauthorized'))
 const Audit = lazy(() => import('./pages/Audit'))
-const Downloads = lazy(() => import('./pages/Downloads'))
+const Downloads  = lazy(() => import('./pages/Downloads'))
 
 function App() {
   const { user } = useAuth()
@@ -94,7 +94,6 @@ function App() {
                   <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
                 </Route>
 
-                {/* Rutas específicas por rol */}
                 <Route
                   path="/auditoria"
                   element={<ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />}
