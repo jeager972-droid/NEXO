@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import NexoCanvas from '../components/NexoCanvas'
+import { View } from '@react-three/drei'
+import NexoModelViewer from '../../components/canvas/NexoModelViewer'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -187,7 +188,11 @@ export default function ExplodedSection() {
           opacity: 0,
         }}
       >
-        {isInView && <NexoCanvas type="exploded" scale={1.25} />}
+        {isInView && (
+          <View track={canvasWrapperRef} style={{ width: '100%', height: '100%' }}>
+            <NexoModelViewer type="exploded" scale={1.25} />
+          </View>
+        )}
       </div>
       {/* ── Top center badge ── */}
       <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '2rem', pointerEvents: 'auto' }}>

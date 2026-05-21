@@ -5,15 +5,15 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(ScrollTrigger)
 
 const PLATFORMS = [
-  { name: 'iOS',     sub: 'App Store',       icon: '🍎', color: '#1c1c1e' },
-  { name: 'Android', sub: 'APK / Play Store', icon: '🤖', color: '#1c6c34' },
-  { name: 'Web App', sub: 'Browser',          icon: '🌐', color: '#0a5fa3' },
-  { name: 'Windows', sub: 'Installer x64',    icon: '🪟', color: '#0078d4' },
-  { name: 'macOS',   sub: 'DMG / Silicon',    icon: '💻', color: '#555' },
+  { name: 'iOS',     sub: 'App Store',       icon: '🍎', color: '#1c1c1e', downloadUrl: '#' },
+  { name: 'Android', sub: 'APK / Play Store', icon: '🤖', color: '#1c6c34', downloadUrl: '/assets/downloads/nexo.apk' },
+  { name: 'Web App', sub: 'Browser',          icon: '🌐', color: '#0a5fa3', downloadUrl: '#' },
+  { name: 'Windows', sub: 'Installer x64',    icon: '🪟', color: '#0078d4', downloadUrl: '#' },
+  { name: 'macOS',   sub: 'DMG / Silicon',    icon: '💻', color: '#555', downloadUrl: '#' },
 ]
 
 // ── 3D Tilt Card ──────────────────────────────────────────────────────────────
-function TiltCard({ name, sub, icon, color, index }) {
+function TiltCard({ name, sub, icon, color, downloadUrl, index }) {
   const cardRef = useRef()
 
   const handleMove = (e) => {
@@ -56,13 +56,16 @@ function TiltCard({ name, sub, icon, color, index }) {
   }
 
   return (
-    <div
+    <a
       ref={cardRef}
-      id={`download-card-${name.toLowerCase().replace(' ', '-')}`}
+      href={downloadUrl}
+      download={name === 'Android' ? 'nexo.apk' : undefined}
+      id={`download-card-${name.toLowerCase().replace(' ', '-')}—link`}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
       onMouseEnter={handleEnter}
       style={{
+        textDecoration:  'none',
         position:        'relative',
         background:      '#ffffff',
         borderRadius:    '1.2rem',
@@ -73,7 +76,7 @@ function TiltCard({ name, sub, icon, color, index }) {
         flexDirection:   'column',
         alignItems:      'center',
         gap:             '0.6rem',
-        cursor:          'pointer',
+        cursor:          downloadUrl !== '#' ? 'pointer' : 'default',
         transformStyle:  'preserve-3d',
         transition:      'transform 0.1s ease',
         minWidth:        150,
@@ -140,14 +143,14 @@ function TiltCard({ name, sub, icon, color, index }) {
         fontFamily:  "'Plus Jakarta Sans', sans-serif",
         fontWeight:   600,
         fontSize:    '0.78rem',
-        color:       '#00a84a',
+        color:       downloadUrl !== '#' ? '#00a84a' : 'rgba(0,0,0,0.25)',
         display:     'flex',
         alignItems:  'center',
         gap:         '0.3rem',
       }}>
-        ↓ Descargar
+        {downloadUrl !== '#' ? '↓ Descargar' : 'Próximamente'}
       </div>
-    </div>
+    </a>
   )
 }
 

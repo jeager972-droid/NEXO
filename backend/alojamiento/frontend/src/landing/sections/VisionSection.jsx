@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import NexoCanvas from '../components/NexoCanvas'
+import { View } from '@react-three/drei'
+import NexoModelViewer from '../../components/canvas/NexoModelViewer'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -99,7 +100,11 @@ export default function VisionSection() {
           opacity: 0,
         }}
       >
-        {isInView && <NexoCanvas type="vision" scale={1.1} />}
+        {isInView && (
+          <View track={canvasWrapperRef} style={{ width: '100%', height: '100%' }}>
+            <NexoModelViewer type="vision" scale={1.1} />
+          </View>
+        )}
       </div>
       {/* Left content column */}
       <div className="max-w-[520px] relative z-10 pointer-events-auto">

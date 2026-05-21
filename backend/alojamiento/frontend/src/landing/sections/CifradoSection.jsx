@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import NexoCanvas from '../components/NexoCanvas'
+import { View } from '@react-three/drei'
+import NexoModelViewer from '../../components/canvas/NexoModelViewer'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -112,7 +113,11 @@ export default function CifradoSection() {
           opacity: 0,
         }}
       >
-        {isInView && <NexoCanvas type="cifrado" scale={1.2} showShield={true} />}
+        {isInView && (
+          <View track={canvasWrapperRef} style={{ width: '100%', height: '100%' }}>
+            <NexoModelViewer type="cifrado" scale={1.2} showShield={true} />
+          </View>
+        )}
       </div>
       {/* ── Left content column ── */}
       <div className="max-w-[540px] relative z-10 pointer-events-auto">

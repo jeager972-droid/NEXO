@@ -46,7 +46,7 @@
     ],
     "android": {
       "minSdkVersion": 24
-    },
+    }
   },
   "plugins": {
     "store": {
@@ -61,10 +61,12 @@
       }
     },
     "deep-link": {
-      "mobile": {
-        "host": "nexo.edu.co",
-        "pathPrefix": ["/app"]
-      },
+      "mobile": [
+        {
+          "host": "nexo.edu.co",
+          "pathPrefix": ["/app"]
+        }
+      ],
       "desktop": {
         "schemes": ["nexo"]
       }
