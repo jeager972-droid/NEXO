@@ -12,6 +12,13 @@ import DescargasSection     from './sections/DescargasSection'
 
 gsap.registerPlugin(ScrollTrigger)
 
+// Module-level scroll state — plain object, no React re-renders.
+// Any component can import and read this to drive GSAP targets.
+export const scrollState = {
+  activeSection: 'hero',
+  progress: 0,
+}
+
 export default function LandingPage() {
   const containerRef = useRef()
 
@@ -20,21 +27,30 @@ export default function LandingPage() {
     if (!sections.length) return
 
     const ctx = gsap.context(() => {
-      // Toggle active state based on active section
       sections.forEach((section, i) => {
+        const sectionId = section.dataset.section
+
         ScrollTrigger.create({
           trigger: section,
-          start:  'top center',
-          end:    'bottom center',
+          start: 'top center',
+          end:   'bottom center',
+
           onEnter: () => {
-            sections.forEach((s, idx) => {
+            scrollState.activeSection = sectionId
+            sections.forEach((s, idx) =>
               s.setAttribute('data-active', idx === i ? 'true' : 'false')
-            })
+            )
           },
+
           onEnterBack: () => {
-            sections.forEach((s, idx) => {
+            scrollState.activeSection = sectionId
+            sections.forEach((s, idx) =>
               s.setAttribute('data-active', idx === i ? 'true' : 'false')
-            })
+            )
+          },
+
+          onUpdate: (self) => {
+            scrollState.progress = self.progress
           },
         })
       })
