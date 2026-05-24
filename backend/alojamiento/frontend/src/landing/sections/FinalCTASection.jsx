@@ -119,14 +119,15 @@ export default function FinalCTASection() {
             <h2
               ref={titleRef}
               style={{
-                fontSize:      'clamp(1.9rem, 4vw, 2.75rem)',
+                fontSize:      'clamp(1.6rem, 3.2vw, 2.4rem)',
                 fontWeight:     800,
                 letterSpacing: '-0.03em',
-                lineHeight:     1.12,
+                lineHeight:     1.35,
                 color:         'var(--nx-white)',
                 marginBottom:  '1.25rem',
                 overflow:      'visible',
-                paddingBottom: '0.15em',
+                paddingBottom: '0.25em',
+                wordBreak:     'break-word',
               }}
               aria-label="El próximo semestre puede empezar diferente."
             >

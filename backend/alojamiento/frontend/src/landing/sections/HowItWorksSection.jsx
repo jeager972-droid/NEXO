@@ -86,7 +86,7 @@ export default function HowItWorksSection() {
       })
 
       // PASO 4: Cada paso aparece con toggleActions cuando el scroll llega a su respectivo umbral
-      const thresholds = [0, 35, 70, 105]
+      const thresholds = [0, 45, 90, 135]
 
       STEPS.forEach((_, i) => {
         ScrollTrigger.create({
@@ -121,7 +121,7 @@ export default function HowItWorksSection() {
           ease: 'power3.out',
           scrollTrigger: {
             trigger: wrapper,
-            start: 'top -110%',
+            start: 'top -155%',
             toggleActions: 'play none none none',
           }
         }
@@ -136,7 +136,7 @@ export default function HowItWorksSection() {
       ref={wrapperRef}
       className="section-wrapper section-wrapper--tall"
       id="como-funciona"
-      style={{ height: '280vh' }}
+      style={{ height: '380vh' }}
     >
       <section
         ref={innerRef}
