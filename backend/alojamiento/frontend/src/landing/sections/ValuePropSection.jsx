@@ -2,8 +2,7 @@ import { useRef, useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useStickyScroll } from '../components/useStickyScroll'
-
-gsap.registerPlugin(ScrollTrigger)
+// gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 05 — PROPUESTA DE VALOR
 // CAMBIO 6: Sticky scroll, columna izquierda desde x:-60px, columna derecha desde x:+60px, con ease expo.out, stagger de filas.
@@ -58,7 +57,7 @@ export default function ValuePropSection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: wrapper,
-        start:   'top 60%',
+        start:   'top 75%', // Bug 4: content trigger at 75%
         toggleActions: 'play none none none',
       },
     })

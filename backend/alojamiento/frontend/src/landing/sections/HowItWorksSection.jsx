@@ -3,8 +3,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'
-
-gsap.registerPlugin(ScrollTrigger)
+// gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 04 — HOW IT WORKS
 // Psychological trigger: cognitive clarity — the user feels they already know how to use it
@@ -63,18 +62,18 @@ export default function HowItWorksSection() {
         {
           opacity: 1,
           y: 0,
-          duration: 0.8,
-          stagger: 0.15,
+          duration: 0.85,    // Bug 4: subtítulos 0.85s
+          stagger: 0.15,     // Bug 4: stagger 0.15s
           ease: 'power3.out',
           scrollTrigger: {
             trigger: wrapper,
-            start: 'top 70%',
+            start: 'top 75%', // Bug 4: content trigger at 75%
             toggleActions: 'play none none none',
           }
         }
       )
 
-      // PASO 4: Dibujar la línea conectora con scrub:1 indexada al scroll del wrapper
+      // Bug 4: Línea SVG con scrub:1
       gsap.to(line, {
         strokeDashoffset: 0,
         ease: 'none',
@@ -82,7 +81,7 @@ export default function HowItWorksSection() {
           trigger: wrapper,
           start: 'top top',
           end: 'bottom bottom',
-          scrub: 1,
+          scrub: 1,   // Bug 4: line-draw scrub = 1
         }
       })
 

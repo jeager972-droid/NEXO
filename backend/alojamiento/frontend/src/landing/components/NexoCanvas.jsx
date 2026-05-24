@@ -1,6 +1,6 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Environment } from '@react-three/drei'
-import { Suspense, useRef, useMemo, useState } from 'react'
+import { Environment } from '@react-three/drei'
+import { Suspense, useRef, useMemo, useState, useEffect, useCallback } from 'react'
 import * as THREE from 'three'
 import NexoModel from '../core/NexoModel'
 
@@ -258,50 +258,168 @@ function InstitutionalNetwork({ onHoverChange }) {
   )
 }
 
-export default function NexoCanvas({ type, scale = 1.0, showShield = false, coldLight = false, interactive = true, scrollProgress }) {
-  const orbitRef = useRef()
-  const [zoomEnabled, setZoomEnabled] = useState(false)
+// Drag overlay component that captures orbital drag without blocking page scroll
+function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
+  const overlayRef = useRef()
+
+  useEffect(() => {
+    const el = overlayRef.current
+    if (!el) return
+
+    let isDragging = false
+    let prev = { x: 0, y: 0 }
+    let resumeTimer = null
+
+    const startDrag = (x, y) => {
+      isDragging = true
+      prev = { x, y }
+      el.style.cursor = 'grabbing'
+      clearTimeout(resumeTimer)
+      if (onDragStart) onDragStart()
+    }
+
+    const moveDrag = (x, y) => {
+      if (!isDragging) return
+      const dx = x - prev.x
+      const dy = y - prev.y
+      prev = { x, y }
+      if (onDrag) onDrag(dx, dy)
+    }
+
+    const endDrag = () => {
+      if (!isDragging) return
+      isDragging = false
+      el.style.cursor = 'grab'
+      // Resume auto-rotation after 2s
+      resumeTimer = setTimeout(() => {
+        if (onDragEnd) onDragEnd()
+      }, 2000)
+    }
+
+    // Mouse
+    const onMouseDown = (e) => startDrag(e.clientX, e.clientY)
+    const onMouseMove = (e) => moveDrag(e.clientX, e.clientY)
+    const onMouseUp = () => endDrag()
+
+    // Touch — passive so page scroll still works
+    const onTouchStart = (e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)
+    const onTouchMove = (e) => moveDrag(e.touches[0].clientX, e.touches[0].clientY)
+    const onTouchEnd = () => endDrag()
+
+    el.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      clearTimeout(resumeTimer)
+      el.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [onDrag, onDragStart, onDragEnd])
 
   return (
-    <Canvas
-      camera={{ position: [0, 0, type === 'grid' ? 9 : 6], fov: 45 }}
-      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      dpr={[1, 1.5]}
-      shadows
-      style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}
-    >
-      <ambientLight intensity={coldLight ? 0.5 : 0.8} color={coldLight ? '#cce4ff' : '#ffffff'} />
-      <directionalLight position={[5, 8, 5]} intensity={coldLight ? 1.8 : 2.2} color={coldLight ? '#b8d4ff' : '#ffffff'} castShadow />
-      <directionalLight position={[-4, 2, -4]} intensity={coldLight ? 1.2 : 0.8} color={coldLight ? '#0A84FF' : '#ffffff'} />
-      <pointLight position={[0, 4, 2]} intensity={coldLight ? 2.0 : 1.5} color={coldLight ? '#0A84FF' : '#00e676'} />
-      <Environment preset="city" />
+    <div
+      ref={overlayRef}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 10,
+        cursor: 'grab',
+        touchAction: 'pan-y', // allow vertical scroll, capture horizontal drag only on overlay
+      }}
+    />
+  )
+}
 
-      <OrbitControls
-        ref={orbitRef}
-        enableZoom={interactive && zoomEnabled}
-        enablePan={interactive}
-        enableRotate={interactive}
-        dampingFactor={0.06}
-        enableDamping
-        autoRotate={!interactive && scrollProgress === undefined}
-        autoRotateSpeed={0.6}
-        minPolarAngle={Math.PI * 0.05}
-        maxPolarAngle={Math.PI * 0.95}
-      />
+export default function NexoCanvas({ type, scale = 1.0, showShield = false, coldLight = false, interactive = true, scrollProgress }) {
+  const [isUserDragging, setIsUserDragging] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const dragDeltaRef = useRef({ dx: 0, dy: 0 })
+  const modelRef = useRef(null)
 
-      <Suspense fallback={null}>
-        {type === 'grid' ? (
-          <InstitutionalNetwork onHoverChange={setZoomEnabled} />
-        ) : (
-          <NexoModel 
-            type={type} 
-            scale={scale} 
-            showShield={showShield} 
-            onHoverChange={setZoomEnabled} 
-            scrollProgress={scrollProgress}
-          />
-        )}
-      </Suspense>
-    </Canvas>
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Callbacks passed to DragOverlay
+  const handleDrag = useCallback((dx, dy) => {
+    dragDeltaRef.current = { dx, dy }
+    setIsUserDragging(true)
+  }, [])
+
+  const handleDragStart = useCallback(() => {
+    setIsUserDragging(true)
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    setIsUserDragging(false)
+    dragDeltaRef.current = { dx: 0, dy: 0 }
+  }, [])
+
+  // 3-point professional lighting setup
+  const keyLightColor   = coldLight ? '#B8D4FF' : '#ffffff'
+  const keyIntensity    = coldLight ? 2.5 : 2.2
+  const fillLightColor  = coldLight ? '#0A84FF' : '#FFE8D6'
+  const fillIntensity   = coldLight ? 1.2 : 0.8
+  const rimLightColor   = coldLight ? '#4FACFE' : '#4FACFE'
+  const rimIntensity    = coldLight ? 1.8 : 1.5
+
+  const finalScale = isMobile ? scale * 0.7 : scale
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* Canvas — pointer-events: none so it NEVER blocks page scroll */}
+      <Canvas
+        camera={{ position: [0, 0, type === 'grid' ? 9 : 6], fov: 45 }}
+        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        dpr={[1, Math.min(window.devicePixelRatio, 2)]}
+        shadows
+        style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
+      >
+        {/* 3-point lighting */}
+        <ambientLight intensity={0.3} color="#ffffff" />
+        <directionalLight position={[5, 5, 5]} intensity={keyIntensity} color={keyLightColor} castShadow />
+        <directionalLight position={[-5, -2, 3]} intensity={fillIntensity} color={fillLightColor} />
+        <directionalLight position={[-3, 5, -5]} intensity={rimIntensity} color={rimLightColor} />
+        <Environment preset="city" />
+
+        <Suspense fallback={null}>
+          {type === 'grid' ? (
+            <InstitutionalNetwork />
+          ) : (
+            <NexoModel
+              type={type}
+              scale={finalScale}
+              showShield={showShield}
+              scrollProgress={scrollProgress}
+              isUserDragging={isUserDragging}
+              dragDeltaRef={dragDeltaRef}
+              modelRef={modelRef}
+            />
+          )}
+        </Suspense>
+      </Canvas>
+
+      {/* Drag overlay — sits above canvas, captures drag without blocking scroll */}
+      {type !== 'grid' && (
+        <DragOverlay
+          onDrag={handleDrag}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        />
+      )}
+    </div>
   )
 }

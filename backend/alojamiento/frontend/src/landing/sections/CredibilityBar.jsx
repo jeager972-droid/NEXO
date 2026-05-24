@@ -3,8 +3,7 @@ import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-
-gsap.registerPlugin(ScrollTrigger)
+// gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 02 — CREDIBILITY BAR
 // Psychological trigger: social proof + risk reduction
@@ -55,7 +54,7 @@ export default function CredibilityBar() {
   useEffect(() => {
     const trigger = ScrollTrigger.create({
       trigger: wrapperRef.current,
-      start: 'top 60%',
+      start: 'top 75%', // Bug 4: content trigger at 75%
       onEnter: () => setActive(true),
       once: true
     })
@@ -63,7 +62,7 @@ export default function CredibilityBar() {
   }, [])
 
   return (
-    <div ref={wrapperRef} className="section-wrapper" id="credibilidad" style={{ height: '140vh' }}>
+    <div ref={wrapperRef} className="section-wrapper" id="credibilidad">
       <section
         ref={innerRef}
         className="section-inner"

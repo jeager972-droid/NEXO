@@ -1,93 +1,52 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, MeshDistortMaterial } from '@react-three/drei'
 import * as THREE from 'three'
-import gsap from 'gsap'
+
+// BUG 1 FIX — rotación automática continua en eje Y usando Three.js clock (no GSAP)
+// BUG 1 FIX — drag orbital vía dragDeltaRef (overlay externo, no OrbitControls)
+// El canvas tiene pointer-events: none; el overlay captura el drag sin bloquear el scroll.
 
 const MODEL_PATH = '/assets/models/nodo.glb'
+const AUTO_ROTATION_SPEED = 0.004 // rad/frame  ≈ 0.24°/frame @ 60fps
 
-export default function NexoModel({ type, scale = 1.0, showShield = false, onHoverChange, scrollProgress }) {
+export default function NexoModel({ type, scale = 1.0, showShield = false, scrollProgress, isUserDragging, dragDeltaRef }) {
+  const { gl } = useThree()
   const { scene } = useGLTF(MODEL_PATH)
   const outerRef = useRef()
   const innerRef = useRef()
   const shieldRef = useRef()
-  const isHoveredRef = useRef(false)
+  const hasNormalized = useRef(false)
 
-  // Clone the scene so that each canvas has its own independent hierarchy
+  // Clone the scene so each canvas has its own independent hierarchy
   const clonedScene = useMemo(() => {
     if (!scene) return null
     const cl = scene.clone()
-    // Make sure shadows are enabled on the cloned meshes
+
+    // Enable shadows + max anisotropy on every mesh
+    const maxAnisotropy = gl.capabilities.getMaxAnisotropy()
     cl.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true
         child.receiveShadow = true
+        if (child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material]
+          mats.forEach(mat => {
+            if (mat.map) mat.map.anisotropy = maxAnisotropy
+          })
+        }
       }
     })
     return cl
-  }, [scene])
+  }, [scene, gl])
 
-  // Continuous rotation of the model or scrollProgress based rotation
-  useFrame((state, delta) => {
-    if (innerRef.current) {
-      if (scrollProgress !== undefined) {
-        // CAMBIO 6: Rotación progresiva en Y usando scrollProgress
-        innerRef.current.rotation.y = scrollProgress * Math.PI * 0.4
-      } else {
-        innerRef.current.rotation.y += delta * 0.12
-      }
-    }
-
-    if (shieldRef.current && shieldRef.current.material) {
-      const isHovered = isHoveredRef.current
-      const time = state.clock.getElapsedTime()
-      
-      const targetDistort = isHovered ? 0.22 : 0.05
-      const targetSpeed = isHovered ? 1.4 : 0.4
-      
-      const mat = shieldRef.current.material
-      mat.distort = THREE.MathUtils.lerp(mat.distort, targetDistort, 0.08)
-      mat.speed = THREE.MathUtils.lerp(mat.speed, targetSpeed, 0.08)
-
-      const floatSpeedScale = isHovered ? 1.5 : 0.3
-      const floatAmp = isHovered ? 0.015 : 0.004
-      
-      shieldRef.current.position.y = 0.1 + Math.sin(time * floatSpeedScale) * floatAmp
-      shieldRef.current.position.x = Math.cos(time * (floatSpeedScale * 0.7)) * (floatAmp * 0.5)
-
-      const rotSpeed = isHovered ? 0.2 : 0.04
-      shieldRef.current.rotation.y -= delta * rotSpeed
-      shieldRef.current.rotation.z += delta * (rotSpeed * 0.6)
-    }
-  })
-
-  // PASO 4: Durante el sticky del Nodo, responde levemente al movimiento del mouse
+  // BUG 1: Normalize model position to bounding box center on first load
   useEffect(() => {
-    // Solo aplicar en el nodo interactivo de la sección de hardware (sin scrollProgress)
-    if (type !== 'solo' || scrollProgress !== undefined) return
+    if (!clonedScene || !outerRef.current || !innerRef.current || hasNormalized.current) return
+    hasNormalized.current = true
 
-    const handleMouseMove = (e) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 16
-      const y = (e.clientY / window.innerHeight - 0.5) * 16
-      if (outerRef.current) {
-        gsap.to(outerRef.current.rotation, {
-          x: y * (Math.PI / 180),
-          y: x * (Math.PI / 180),
-          duration: 1.8,
-          ease: 'power2.out'
-        })
-      }
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [type, scrollProgress])
-
-  useEffect(() => {
-    if (!clonedScene || !outerRef.current || !innerRef.current) return
-
-    const box    = new THREE.Box3().setFromObject(clonedScene)
-    const size   = new THREE.Vector3()
+    const box = new THREE.Box3().setFromObject(clonedScene)
+    const size = new THREE.Vector3()
     const center = new THREE.Vector3()
     box.getSize(size)
     box.getCenter(center)
@@ -97,40 +56,61 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, onHov
       const TARGET_SIZE = 2.6 * scale
       const s = TARGET_SIZE / maxDim
       outerRef.current.scale.setScalar(s)
+
+      // Centrar en bounding box real (Bug 1 fix)
       innerRef.current.position.set(-center.x, -center.y, -center.z)
     }
   }, [clonedScene, scale])
 
-  const handlePointerOver = (e) => {
-    e.stopPropagation()
-    isHoveredRef.current = true
-    if (onHoverChange) onHoverChange(true)
-  }
+  // BUG 1: Auto-rotation + drag orbital (useFrame runs at ~60fps, no GSAP conflict)
+  useFrame((_state, delta) => {
+    if (!innerRef.current) return
 
-  const handlePointerOut = (e) => {
-    e.stopPropagation()
-    isHoveredRef.current = false
-    if (onHoverChange) onHoverChange(false)
-  }
+    if (scrollProgress !== undefined) {
+      // Hero mode: rotate Y proportional to scroll progress (0 → 0.4π)
+      innerRef.current.rotation.y = scrollProgress * Math.PI * 0.4
+    } else if (isUserDragging && dragDeltaRef?.current) {
+      // User dragging: apply orbital rotation from overlay deltas
+      const { dx, dy } = dragDeltaRef.current
+      innerRef.current.rotation.y += dx * 0.008
+      innerRef.current.rotation.x += dy * 0.008
+
+      // Clamp X rotation so model doesn't flip upside down
+      innerRef.current.rotation.x = Math.max(
+        -Math.PI / 4,
+        Math.min(Math.PI / 4, innerRef.current.rotation.x)
+      )
+
+      // Reset deltas after consuming them
+      dragDeltaRef.current = { dx: 0, dy: 0 }
+    } else {
+      // Auto-rotation: continuous slow Y spin at 60fps
+      innerRef.current.rotation.y += AUTO_ROTATION_SPEED
+    }
+
+    // Shield animation (independent of main model)
+    if (shieldRef.current && shieldRef.current.material) {
+      const time = _state.clock.getElapsedTime()
+      const mat = shieldRef.current.material
+      mat.distort = THREE.MathUtils.lerp(mat.distort, 0.05, 0.08)
+      mat.speed   = THREE.MathUtils.lerp(mat.speed, 0.4, 0.08)
+      shieldRef.current.position.y = 0.1 + Math.sin(time * 0.3) * 0.004
+      shieldRef.current.rotation.y -= delta * 0.04
+      shieldRef.current.rotation.z += delta * 0.024
+    }
+  })
 
   return (
-    <group 
-      ref={outerRef} 
-      position={[0, 0, 0]}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
-    >
+    <group ref={outerRef} position={[0, 0, 0]}>
       <group ref={innerRef}>
         {clonedScene && <primitive object={clonedScene} />}
       </group>
 
       {showShield && (
-        <mesh 
-          ref={shieldRef} 
-          scale={[1.15, 1.15, 1.15]} 
+        <mesh
+          ref={shieldRef}
+          scale={[1.15, 1.15, 1.15]}
           position={[0, 0.1, 0]}
-          onPointerOver={handlePointerOver}
-          onPointerOut={handlePointerOut}
         >
           <sphereGeometry args={[1.3, 32, 32]} />
           <MeshDistortMaterial

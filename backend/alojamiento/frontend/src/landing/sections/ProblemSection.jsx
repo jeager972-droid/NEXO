@@ -3,8 +3,7 @@ import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-
-gsap.registerPlugin(ScrollTrigger)
+// gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 03 — DECLARACIÓN DEL PROBLEMA
 // CAMBIO 2: Redacción en tercera persona generalizada. Tono diagnóstico, no acusatorio.
@@ -84,7 +83,7 @@ export default function ProblemSection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: wrapper,
-        start: 'top 60%',
+        start: 'top 75%', // Bug 4: section content trigger at 75%
         toggleActions: 'play none none none',
       }
     })

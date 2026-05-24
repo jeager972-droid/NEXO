@@ -4,8 +4,7 @@ import { useStickyScroll } from '../components/useStickyScroll'
 import NexoCanvas from '../components/NexoCanvas'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-
-gsap.registerPlugin(ScrollTrigger)
+// gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 06 — THE NODE
 // Left: large interactive 3D model with hotspot overlay
@@ -130,7 +129,7 @@ export default function NodeSection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: wrapper,
-        start: 'top 60%',
+        start: 'top 75%', // Bug 4: content trigger at 75%
         toggleActions: 'play none none none',
       }
     })

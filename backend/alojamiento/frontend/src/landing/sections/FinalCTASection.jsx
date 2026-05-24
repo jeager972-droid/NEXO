@@ -3,8 +3,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ContactModal from '../components/ContactModal'
 import { useStickyScroll } from '../components/useStickyScroll'
-
-gsap.registerPlugin(ScrollTrigger)
+// gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 10 — FINAL CTA
 // CAMBIO 5: CTA → "Quiero que NEXO llegue a mi institución" + modal
@@ -49,7 +48,7 @@ export default function FinalCTASection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger:  wrapper,
-        start:    'top 65%',
+        start:    'top 75%', // Bug 4: content trigger at 75%
         toggleActions: 'play none none none',
       },
     })

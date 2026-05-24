@@ -146,6 +146,9 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       })
     }
 
+    // Desactivar animaciones de hover/tilt en pantallas táctiles
+    if (window.matchMedia('(pointer: coarse)').matches) return
+
     card.addEventListener('mouseenter', handleMouseEnter)
     card.addEventListener('mouseleave', handleMouseLeave)
     card.addEventListener('mousemove',  handleMouseMove)

@@ -16,11 +16,17 @@ import FinalCTASection   from './sections/FinalCTASection'
 import Footer            from './sections/Footer'
 import CustomCursor      from './components/CustomCursor'
 
-gsap.registerPlugin(ScrollTrigger)
+gsap.registerPlugin(ScrollTrigger) // SINGLE registration point for the entire app
 
 export default function LandingPage() {
   useEffect(() => {
-    // PASO 6: Debounce del refresh de ScrollTrigger en resize de ventana
+    // Bug 5: ScrollTrigger.refresh() called ONCE after full DOM paint
+    // setTimeout(0) ensures all child components have mounted and rendered
+    const refreshTimer = setTimeout(() => {
+      ScrollTrigger.refresh()
+    }, 0)
+
+    // Bug 5: Debounced refresh on resize (250ms cooldown)
     let resizeTimer
     const handleResize = () => {
       clearTimeout(resizeTimer)
@@ -31,6 +37,7 @@ export default function LandingPage() {
 
     window.addEventListener('resize', handleResize)
     return () => {
+      clearTimeout(refreshTimer)
       clearTimeout(resizeTimer)
       window.removeEventListener('resize', handleResize)
     }

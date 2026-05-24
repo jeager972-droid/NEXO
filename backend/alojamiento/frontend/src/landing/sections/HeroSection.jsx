@@ -4,8 +4,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import NexoCanvas from '../components/NexoCanvas'
 import ContactModal from '../components/ContactModal'
 import { useStickyScroll } from '../components/useStickyScroll'
-
-gsap.registerPlugin(ScrollTrigger)
+// NOTE: gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 01 — HERO
 // CAMBIO 5: CTA → "Quiero que NEXO llegue a mi institución" + modal
@@ -23,80 +22,59 @@ export default function HeroSection() {
   const canvasRef   = useRef()
 
   const [modalOpen, setModalOpen] = useState(false)
-  const [scrollProgress, setScrollProgress] = useState(0)
 
-  // Aplicar arquitectura sticky scroll
+  // Aplicar arquitectura sticky scroll (isFirst: true = no entrance anim, has exit anim)
   useStickyScroll(wrapperRef, innerRef, { isFirst: true })
 
   useEffect(() => {
     const wrapper = wrapperRef.current
     if (!wrapper) return
 
-    // PASO 4: Animaciones de contenido interno con toggleActions (solo una vez)
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: wrapper,
-        start: 'top 60%',
-        toggleActions: 'play none none none',
-      }
-    })
+    // Cinematic entrance — fires once on mount (hero is always visible at load)
+    const tl = gsap.timeline({ delay: 0.1 })
 
-    // Eyebrow desliza desde arriba
+    // Eyebrow slides in from top
     tl.fromTo(eyebrowRef.current,
       { opacity: 0, y: -12 },
-      { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }
+      { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out' }
     )
 
-    // H1 SplitText-style en líneas: Y:60px + opacity:0, stagger: 0.15s, ease: "expo.out", duration: 1.1s
+    // H1: two lines stagger — Bug 4: duration 1.0s, expo.out, stagger 0.15s
     .fromTo([line1Ref.current, line2Ref.current],
       { opacity: 0, y: 60 },
-      { opacity: 1, y: 0, duration: 1.1, ease: 'expo.out', stagger: 0.15 },
-      '-=0.35'
+      { opacity: 1, y: 0, duration: 1.0, ease: 'expo.out', stagger: 0.15 },
+      '-=0.4'
     )
 
-    // Subtítulo: Y:24px + opacity:0, delay: 0.5s (desde el título), duration: 0.9s
+    // Subtitle — Bug 4: duration 0.85s, power3.out
     .fromTo(subtitleRef.current,
       { opacity: 0, y: 24 },
-      { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out' },
-      0.5
+      { opacity: 1, y: 0, duration: 0.85, ease: 'power3.out' },
+      '-=0.6'
     )
 
-    // CTAs: Y:16px + opacity:0, delay: 0.8s, stagger: 0.12s
+    // CTAs — Bug 4: duration 0.75s, stagger 0.12s
     .fromTo(ctaRef.current?.children || [],
       { opacity: 0, y: 16 },
       { opacity: 1, y: 0, duration: 0.75, ease: 'power3.out', stagger: 0.12 },
-      0.8
+      '-=0.5'
     )
 
     // Microcopy
     .fromTo(microRef.current,
       { opacity: 0 },
       { opacity: 1, duration: 0.6, ease: 'power2.out' },
-      '-=0.2'
+      '-=0.3'
     )
 
-    // Canvas del nodo
+    // Canvas 3D entrance
     .fromTo(canvasRef.current,
       { opacity: 0, scale: 0.96 },
       { opacity: 1, scale: 1, duration: 1.5, ease: 'expo.out' },
-      0.35
+      0.2
     )
 
-    // PASO 4: Modelo 3D rotación Y progresiva usando progreso de ScrollTrigger
-    const rotationTrigger = ScrollTrigger.create({
-      trigger: wrapper,
-      start: 'top top',
-      end: 'bottom top',
-      scrub: true,
-      onUpdate: (self) => {
-        setScrollProgress(self.progress)
-      }
-    })
-
-    return () => {
-      tl.kill()
-      rotationTrigger.kill()
-    }
+    return () => tl.kill()
   }, [])
 
   return (
@@ -211,7 +189,7 @@ export default function HeroSection() {
                 willChange:   'transform, opacity',
               }}
             >
-              <NexoCanvas type="solo" scale={1.1} coldLight interactive={false} scrollProgress={scrollProgress} />
+              <NexoCanvas type="solo" scale={1.1} coldLight />
 
               {/* Label de hardware */}
               <div aria-hidden="true" style={{
