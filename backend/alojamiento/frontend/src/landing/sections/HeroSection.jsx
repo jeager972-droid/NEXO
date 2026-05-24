@@ -184,7 +184,7 @@ export default function HeroSection() {
               style={{
                 height:       '520px',
                 borderRadius: '1.5rem',
-                overflow:     'hidden',
+                overflow:     isMobile ? 'visible' : 'hidden',
                 position:     'relative',
                 opacity:       0,
                 willChange:   'transform, opacity',

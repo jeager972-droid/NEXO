@@ -82,8 +82,9 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
           Math.min(Math.PI / 4, innerRef.current.rotation.x)
         )
         dragDeltaRef.current = { dx: 0, dy: 0 }
-        needsUpdate = true
       }
+      // Dedo apoyado sin mover: mantener posición, seguir invalidando para que el frame no muera
+      needsUpdate = true
     } else {
       // Rotación automática continua
       innerRef.current.rotation.y += 0.004

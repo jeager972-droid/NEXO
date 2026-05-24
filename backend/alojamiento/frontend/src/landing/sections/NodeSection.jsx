@@ -218,7 +218,7 @@ export default function NodeSection() {
               style={{ position: 'relative', height: '520px' }}
             >
               {/* Live 3D canvas */}
-              <div style={{ width: '100%', height: '100%', borderRadius: '1.25rem', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '100%', borderRadius: isMobile ? '0' : '1.25rem', overflow: isMobile ? 'visible' : 'hidden' }}>
                 <NexoCanvas
                   type="solo"
                   scale={canvasScale}
