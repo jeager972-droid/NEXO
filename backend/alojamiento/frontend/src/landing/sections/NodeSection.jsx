@@ -112,7 +112,15 @@ export default function NodeSection() {
   const innerRef = useRef()
   const [active, setActive] = useState(null)
   const [canvasScale, setCanvasScale] = useState(1.12)
+  const [isMobile, setIsMobile] = useState(false)
   useReveal(innerRef)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Aplicar arquitectura sticky scroll
   useStickyScroll(wrapperRef, innerRef)
@@ -176,6 +184,7 @@ export default function NodeSection() {
         className="section-inner"
         style={{
           background: 'var(--nx-deep)',
+          overflow:   isMobile ? 'visible' : 'hidden',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
           display: 'flex',

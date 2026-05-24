@@ -22,6 +22,14 @@ export default function HeroSection() {
   const canvasRef   = useRef()
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Aplicar arquitectura sticky scroll (isFirst: true = no entrance anim, has exit anim)
   useStickyScroll(wrapperRef, innerRef, { isFirst: true })
@@ -81,7 +89,7 @@ export default function HeroSection() {
           style={{
             background:    'var(--nx-void)',
             position:      'relative',
-            overflow:      'hidden',
+            overflow:      isMobile ? 'visible' : 'hidden',
             paddingLeft:   'var(--nx-section-px)',
             paddingRight:  'var(--nx-section-px)',
             display:       'flex',

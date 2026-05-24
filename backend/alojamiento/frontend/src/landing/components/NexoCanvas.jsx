@@ -421,7 +421,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
           : [1, Math.min(window.devicePixelRatio, 2)]
         }
         shadows={!isMobile}            // sin sombras en móvil
-        frameloop="demand"             // solo renderiza cuando hay cambios
+        frameloop={isMobile ? "always" : "demand"} // móvil: always garantiza rotación automática
         style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
       >
         {/* 3-point lighting */}
@@ -437,13 +437,13 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
           intensity={fillIntensity}
           color={fillLightColor}
         />
-        {!isMobile && (
-          <directionalLight
-            position={[-3, 5, -5]}
-            intensity={rimIntensity}
-            color={rimLightColor}
-          />
-        )}
+        {/* RIM LIGHT: activa en móvil y desktop */}
+        <directionalLight
+          position={[-3, 5, -5]}
+          intensity={rimIntensity}
+          color={rimLightColor}
+        />
+        {/* Environment: solo desktop por performance */}
         {!isMobile && <Environment preset="city" />}
 
         <Suspense fallback={null}>
