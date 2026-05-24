@@ -183,7 +183,7 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
         textDecoration: 'none',
         transition:     'border-color 0.3s',
       }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(10,132,255,0.4)'}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
     >
       <div
@@ -202,7 +202,7 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       <div
         ref={iconRef}
         style={{
-          color:          'var(--nx-blue)',
+          color:          'var(--nx-green)',
           position:       'relative',
           zIndex:         1,
           transformStyle: 'preserve-3d',

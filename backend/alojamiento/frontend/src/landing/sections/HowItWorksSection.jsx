@@ -60,9 +60,9 @@ export default function HowItWorksSection() {
         if (!el) return
         const node = el.querySelector('.nx-timeline__node')
         if (node) {
-          node.style.borderColor  = 'var(--nx-blue)'
-          node.style.color        = 'var(--nx-blue)'
-          node.style.backgroundColor = 'rgba(10,132,255,0.08)'
+          node.style.borderColor  = 'var(--nx-green)'
+          node.style.color        = 'var(--nx-green)'
+          node.style.backgroundColor = 'rgba(45, 110, 48, 0.08)'
         }
       })
       return
@@ -117,10 +117,10 @@ export default function HowItWorksSection() {
               ease: 'power3.out',
             })
             gsap.to(stepsRef.current[i].querySelector('.nx-timeline__node'), {
-              borderColor: 'var(--nx-blue)',
-              color: 'var(--nx-blue)',
-              backgroundColor: 'rgba(10,132,255,0.08)',
-              boxShadow: '0 0 20px rgba(10,132,255,0.3)',
+              borderColor: 'var(--nx-green)',
+              color: 'var(--nx-green)',
+              backgroundColor: 'rgba(45, 110, 48, 0.08)',
+              boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
               duration: 0.4,
             })
           }
@@ -218,12 +218,12 @@ export default function HowItWorksSection() {
                 y1="1"
                 x2="100%"
                 y2="1"
-                stroke="var(--nx-blue)"
+                stroke="var(--nx-green)"
                 strokeWidth="2"
                 strokeDasharray="1200"
                 strokeDashoffset="1200"
                 style={{
-                  filter: 'drop-shadow(0 0 4px rgba(10,132,255,0.6))',
+                  filter: 'drop-shadow(0 0 4px rgba(45, 110, 48, 0.6))',
                 }}
               />
             </svg>

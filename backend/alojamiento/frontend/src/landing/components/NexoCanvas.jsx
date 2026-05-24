@@ -15,7 +15,7 @@ function createAvatarTexture(avatarType) {
   ctx.clearRect(0, 0, 256, 256)
 
   // 1. Outer dashed indicator orbit ring
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)'
+  ctx.strokeStyle = 'rgba(45, 110, 48, 0.45)'
   ctx.lineWidth = 3
   ctx.setLineDash([8, 12])
   ctx.beginPath()
@@ -25,10 +25,10 @@ function createAvatarTexture(avatarType) {
   // Reset line dash
   ctx.setLineDash([])
 
-  // 2. Base glowing circle with a gradient from primary green to cyan
+  // 2. Base glowing circle with a gradient from primary green to light green
   const grad = ctx.createRadialGradient(128, 128, 60, 128, 128, 116)
-  grad.addColorStop(0, '#00e676') // brand green
-  grad.addColorStop(1, '#00e5ff') // cyan glow
+  grad.addColorStop(0, '#56b85a') // light green glow
+  grad.addColorStop(1, '#2d6e30') // brand green
   ctx.fillStyle = grad
   ctx.beginPath()
   ctx.arc(128, 128, 114, 0, Math.PI * 2)
@@ -41,8 +41,8 @@ function createAvatarTexture(avatarType) {
   ctx.arc(128, 128, 110, 0, Math.PI * 2)
   ctx.stroke()
 
-  // 4. Draw user avatar shapes in deep landing background color
-  ctx.fillStyle = '#0a0f0d'
+  // 4. Draw user avatar shapes in light mode background color
+  ctx.fillStyle = '#ffffff'
 
   const drawUser = (cx, cy, scale) => {
     // Head circle
@@ -83,9 +83,9 @@ function createDotTexture() {
   ctx.clearRect(0, 0, 64, 64)
   
   const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30)
-  grad.addColorStop(0, '#00e5ff')
-  grad.addColorStop(0.3, 'rgba(0, 230, 118, 0.8)')
-  grad.addColorStop(1, 'rgba(0, 230, 118, 0)')
+  grad.addColorStop(0, '#56b85a')
+  grad.addColorStop(0.3, 'rgba(45, 110, 48, 0.8)')
+  grad.addColorStop(1, 'rgba(45, 110, 48, 0)')
   
   ctx.fillStyle = grad
   ctx.beginPath()
@@ -167,7 +167,7 @@ function FloatingParticles({ count = 80 }) {
           args={[positions, 3]}
         />
       </bufferGeometry>
-      <pointsMaterial color="#00e5ff" size={0.06} transparent opacity={0.65} />
+      <pointsMaterial color="#56b85a" size={0.06} transparent opacity={0.65} />
     </points>
   )
 }
@@ -238,7 +238,7 @@ function InstitutionalNetwork({ onHoverChange }) {
 
       {/* ── Network Connection Lines ── */}
       <lineSegments geometry={connections}>
-        <lineBasicMaterial color="#00e5ff" transparent opacity={0.25} linewidth={1} />
+        <lineBasicMaterial color="#2d6e30" transparent opacity={0.25} linewidth={1} />
       </lineSegments>
 
       {/* ── Network Nodes (Sprites that always face the camera) ── */}
@@ -380,12 +380,12 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
     dragDeltaRef.current = { dx: 0, dy: 0 }
   }, [])
 
-  // 3-point professional lighting setup
-  const keyLightColor   = coldLight ? '#B8D4FF' : '#ffffff'
+  // 3-point professional lighting setup — light-mode palette
+  const keyLightColor   = coldLight ? '#ffffff'  : '#ffffff'
   const keyIntensity    = coldLight ? 2.5 : 2.2
-  const fillLightColor  = coldLight ? '#0A84FF' : '#FFE8D6'
+  const fillLightColor  = coldLight ? '#edf7ed'  : '#f7fcf7'
   const fillIntensity   = coldLight ? 1.2 : 0.8
-  const rimLightColor   = coldLight ? '#4FACFE' : '#4FACFE'
+  const rimLightColor   = coldLight ? '#1a4a1f'  : '#2d6e30'
   const rimIntensity    = coldLight ? 1.8 : 1.5
 
   const finalScale = scale  // Scale controlled per-section, no global mobile penalty
@@ -478,7 +478,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
             fontWeight: 600,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            color: 'rgba(107,127,163,0.7)',
+            color: 'rgba(74, 110, 76, 0.7)',
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
             zIndex: 20,

@@ -63,7 +63,7 @@ function Hotspot({ spec, isActive, onClick }) {
         className="nx-hotspot__dot"
         style={{
           transform: isActive ? 'scale(1.4)' : 'scale(1)',
-          boxShadow: isActive ? '0 0 0 4px rgba(10,132,255,0.3)' : 'none',
+          boxShadow: isActive ? '0 0 0 4px rgba(45, 110, 48, 0.3)' : 'none',
           transition: 'transform 0.2s var(--nx-ease), box-shadow 0.2s',
         }}
       />
@@ -86,7 +86,7 @@ function Hotspot({ spec, isActive, onClick }) {
             animation: 'tooltipIn 0.2s var(--nx-ease)',
           }}
         >
-          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--nx-blue)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--nx-green)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>
             {spec.label}
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--nx-text)', lineHeight: 1.55 }}>
@@ -276,17 +276,17 @@ export default function NodeSection() {
                     borderBottom: '1px solid var(--nx-border)',
                     cursor: 'pointer',
                     borderRadius: '0.5rem',
-                    background: active === id ? 'rgba(10,132,255,0.05)' : 'transparent',
+                    background: active === id ? 'rgba(45, 110, 48, 0.05)' : 'transparent',
                     transition: 'background 0.25s',
                   }}
                 >
                   {/* Number circle */}
                   <div style={{
                     width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                    border: `1.5px solid ${active === id ? 'var(--nx-blue)' : 'var(--nx-border)'}`,
+                    border: `1.5px solid ${active === id ? 'var(--nx-green)' : 'var(--nx-border)'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '0.65rem', fontWeight: 700,
-                    color: active === id ? 'var(--nx-blue)' : 'var(--nx-muted)',
+                    color: active === id ? 'var(--nx-green)' : 'var(--nx-muted)',
                     marginTop: '2px',
                     transition: 'border-color 0.25s, color 0.25s',
                   }}>

@@ -87,7 +87,7 @@ export default function HeroSection() {
           ref={innerRef}
           className="section-inner"
           style={{
-            background:    'var(--nx-void)',
+            background:    'var(--nx-hero-gradient)',
             position:      'relative',
             overflow:      isMobile ? 'visible' : 'hidden',
             paddingLeft:   'var(--nx-section-px)',
@@ -96,7 +96,7 @@ export default function HeroSection() {
             alignItems:    'center',
           }}
         >
-          {/* Glow ambiental azul detrás del nodo */}
+          {/* Glow ambiental verde menta detrás del nodo */}
           <div aria-hidden="true" className="nx-hero-glow-ambient" style={{
             position:        'absolute',
             right:           '5%',
@@ -104,7 +104,7 @@ export default function HeroSection() {
             transform:       'translateY(-50%)',
             width:           '580px',
             height:          '580px',
-            background:      'radial-gradient(circle, rgba(10,132,255,0.09) 0%, transparent 65%)',
+            background:      'radial-gradient(circle, rgba(45, 110, 48, 0.12) 0%, transparent 65%)',
             borderRadius:    '50%',
             pointerEvents:   'none',
             zIndex:           0,

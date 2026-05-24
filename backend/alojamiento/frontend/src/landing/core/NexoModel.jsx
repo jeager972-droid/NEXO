@@ -119,7 +119,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
           <sphereGeometry args={[1.3, 32, 32]} />
           <MeshDistortMaterial
             attach="material"
-            color="#01260f"
+            color="#2d6e30"
             distort={0.05}
             speed={0.4}
             roughness={0.25}

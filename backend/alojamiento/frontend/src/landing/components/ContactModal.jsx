@@ -178,8 +178,8 @@ export default function ContactModal({ onClose }) {
           <div style={{ textAlign: 'center', padding: '2rem 0' }}>
             {/* Ícono check animado */}
             <svg width="56" height="56" viewBox="0 0 56 56" fill="none" style={{ margin: '0 auto 1.5rem', display: 'block', animation: 'successPop 0.5s cubic-bezier(0.175,0.885,0.32,1.275)' }}>
-              <circle cx="28" cy="28" r="26" stroke="var(--nx-blue)" strokeWidth="1.5"/>
-              <path d="M18 28l7 7 14-14" stroke="var(--nx-blue)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="28" cy="28" r="26" stroke="var(--nx-green)" strokeWidth="1.5"/>
+              <path d="M18 28l7 7 14-14" stroke="var(--nx-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--nx-white)', marginBottom: '0.75rem' }}>
               Tu solicitud fue recibida.
@@ -207,7 +207,7 @@ export default function ContactModal({ onClose }) {
                 <input type="text" value={form.nombre} onChange={set('nombre')}
                   placeholder="Tu nombre completo"
                   style={inputStyle('nombre')}
-                  onFocus={e => e.target.style.borderColor = 'rgba(10,132,255,0.5)'}
+                  onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = errors.nombre ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
                 {errors.nombre && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.nombre}</p>}
@@ -221,7 +221,7 @@ export default function ContactModal({ onClose }) {
                 <select value={form.cargo} onChange={set('cargo')}
                   style={{ ...inputStyle('cargo'), appearance: 'none', cursor: 'pointer' }}>
                   {CARGO_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value} style={{ background: '#0D1117' }}>{o.label}</option>
+                    <option key={o.value} value={o.value} style={{ background: '#f7fcf7' }}>{o.label}</option>
                   ))}
                 </select>
                 {errors.cargo && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.cargo}</p>}
@@ -235,7 +235,7 @@ export default function ContactModal({ onClose }) {
                 <input type="text" value={form.institucion} onChange={set('institucion')}
                   placeholder="I.E. San Carlos, Colegio..."
                   style={inputStyle('institucion')}
-                  onFocus={e => e.target.style.borderColor = 'rgba(10,132,255,0.5)'}
+                  onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = errors.institucion ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
                 {errors.institucion && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.institucion}</p>}
@@ -249,7 +249,7 @@ export default function ContactModal({ onClose }) {
                 <input type="text" value={form.municipio} onChange={set('municipio')}
                   placeholder="Medellín, Antioquia"
                   style={inputStyle('municipio')}
-                  onFocus={e => e.target.style.borderColor = 'rgba(10,132,255,0.5)'}
+                  onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = errors.municipio ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
                 {errors.municipio && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.municipio}</p>}
@@ -263,7 +263,7 @@ export default function ContactModal({ onClose }) {
                 <input type="email" value={form.email} onChange={set('email')}
                   placeholder="nombre@institución.edu.co"
                   style={inputStyle('email')}
-                  onFocus={e => e.target.style.borderColor = 'rgba(10,132,255,0.5)'}
+                  onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = errors.email ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
                 {errors.email && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.email}</p>}
@@ -277,7 +277,7 @@ export default function ContactModal({ onClose }) {
                 <input type="tel" value={form.whatsapp} onChange={set('whatsapp')}
                   placeholder="+57 310 000 0000"
                   style={inputStyle('whatsapp')}
-                  onFocus={e => e.target.style.borderColor = 'rgba(10,132,255,0.5)'}
+                  onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = errors.whatsapp ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
                 {errors.whatsapp && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.whatsapp}</p>}
@@ -297,7 +297,7 @@ export default function ContactModal({ onClose }) {
                   placeholder="Cuéntanos el contexto de tu institución..."
                   rows={3}
                   style={{ ...inputStyle('mensaje'), resize: 'vertical', minHeight: '80px' }}
-                  onFocus={e => e.target.style.borderColor = 'rgba(10,132,255,0.5)'}
+                  onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = 'var(--nx-border)'}
                 />
                 <p style={{ fontSize: '0.68rem', color: 'var(--nx-muted-2)', marginTop: '0.25rem', textAlign: 'right' }}>

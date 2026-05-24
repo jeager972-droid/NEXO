@@ -81,15 +81,15 @@ function Shield() {
     >
       <path
         d="M60 8L12 28v38c0 30 20 56 48 64 28-8 48-34 48-64V28L60 8z"
-        stroke="rgba(10,132,255,0.4)"
+        stroke="rgba(45,110,48,0.4)"
         strokeWidth="1.5"
         fill="none"
       />
       <path
         d="M60 20L24 36v28c0 22 15 42 36 48 21-6 36-26 36-48V36L60 20z"
-        stroke="rgba(10,132,255,0.6)"
+        stroke="rgba(45,110,48,0.6)"
         strokeWidth="1"
-        fill="rgba(10,132,255,0.04)"
+        fill="rgba(45,110,48,0.04)"
       />
       <path
         d="M44 68l12 12 20-20"
@@ -98,7 +98,7 @@ function Shield() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="60" cy="68" r="24" stroke="rgba(10,132,255,0.15)" strokeWidth="1" fill="none"/>
+      <circle cx="60" cy="68" r="24" stroke="rgba(45,110,48,0.15)" strokeWidth="1" fill="none"/>
     </svg>
   )
 }
@@ -185,8 +185,8 @@ export default function SecuritySection() {
                 className="nx-card nx-reveal nx-reveal-delay-5"
                 style={{
                   padding: '1.5rem',
-                  background: 'rgba(10,132,255,0.05)',
-                  borderColor: 'rgba(10,132,255,0.2)',
+                  background: 'rgba(45,110,48,0.05)',
+                  borderColor: 'rgba(45,110,48,0.2)',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',

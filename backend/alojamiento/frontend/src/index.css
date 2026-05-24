@@ -6,19 +6,37 @@
 
 /* ── Design Tokens ───────────────────────────────────────────────────────────── */
 :root {
-  --nx-void:        #05070F;
-  --nx-deep:        #080C17;
-  --nx-surface:     #0E1525;
-  --nx-surface-2:   #111C30;
-  --nx-border:      #1C2B4A;
-  --nx-border-dim:  #0F1A2E;
-  --nx-blue:        #0A84FF;
-  --nx-blue-dim:    #0066CC;
-  --nx-blue-glow:   rgba(10, 132, 255, 0.15);
-  --nx-text:        #E8EDF5;
-  --nx-muted:       #6B7FA3;
-  --nx-muted-2:     #4A5878;
-  --nx-white:       #FFFFFF;
+  /* ── Light Mode — NEXO Premium Corporativo ── */
+  --nx-void:        #ffffff;
+  --nx-deep:        #f7fcf7;
+  --nx-surface:     #edf7ed;
+  --nx-surface-2:   #e4f3e4;
+  --nx-card:        #ffffff;
+  --nx-border:      rgba(200, 230, 200, 0.6);
+  --nx-border-dim:  rgba(200, 230, 200, 0.35);
+
+  /* Verdes de marca */
+  --nx-green:       #2d6e30;
+  --nx-green-dark:  #1a4a1f;
+  --nx-green-mid:   #3d8f40;
+  --nx-green-light: #56b85a;
+  --nx-accent:      #2d6e30;
+  --nx-glow:        #56b85a;
+
+  /* Alias heredados → ahora apuntan a la paleta verde */
+  --nx-blue:        #2d6e30;
+  --nx-blue-dim:    #1a4a1f;
+  --nx-blue-glow:   rgba(45, 110, 48, 0.15);
+
+  /* Texto */
+  --nx-white:       #0f2d12;   /* Antiguo blanco → ahora texto primario verde bosque */
+  --nx-text:        #2d5e30;   /* Texto de cuerpo */
+  --nx-muted:       #4a6e4c;   /* Subtítulos / muted */
+  --nx-muted-2:     #6b9e6e;   /* Placeholders / muy muted */
+
+  /* Hero gradient */
+  --nx-hero-gradient: linear-gradient(160deg, #ffffff 0%, #f0f9f0 55%, #dff0df 100%);
+
   --nx-font:        'Plus Jakarta Sans', system-ui, sans-serif;
   --nx-ease:        cubic-bezier(0.16, 1, 0.3, 1);
   --nx-ease-out:    cubic-bezier(0.25, 1, 0.5, 1);
@@ -51,7 +69,7 @@ a { color: inherit; text-decoration: none; }
 /* ── Scrollbar ───────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar              { width: 3px; }
 ::-webkit-scrollbar-track        { background: transparent; }
-::-webkit-scrollbar-thumb        { background: var(--nx-blue-dim); border-radius: 2px; }
+::-webkit-scrollbar-thumb        { background: var(--nx-green); border-radius: 2px; }
 
 /* ── Canvas fixed bg ─────────────────────────────────────────────────────────── */
 #nexo-canvas-container {
@@ -92,7 +110,7 @@ a { color: inherit; text-decoration: none; }
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--nx-blue);
+  color: var(--nx-accent);
   margin-bottom: 1.5rem;
 }
 
@@ -134,8 +152,8 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 0.5rem;
   padding: 0.85rem 1.75rem;
-  background: var(--nx-blue);
-  color: #fff;
+  background: #1a4a1f;
+  color: #ffffff;
   font-size: 0.9rem;
   font-weight: 600;
   border-radius: 100px;
@@ -145,9 +163,9 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 .nx-btn-primary:hover {
-  background: var(--nx-blue-dim);
+  background: #2d6e30;
   transform: translateY(-1px);
-  box-shadow: 0 8px 32px rgba(10, 132, 255, 0.35);
+  box-shadow: 0 8px 32px rgba(45, 110, 48, 0.28);
 }
 .nx-btn-primary:active {
   transform: scale(0.98);
@@ -159,18 +177,19 @@ a { color: inherit; text-decoration: none; }
   gap: 0.4rem;
   padding: 0.85rem 1.75rem;
   background: transparent;
-  color: var(--nx-text);
+  color: #1a4a1f;
   font-size: 0.9rem;
   font-weight: 500;
   border-radius: 100px;
-  border: 1px solid var(--nx-border);
+  border: 1px solid #2d6e30;
   cursor: pointer;
-  transition: border-color 0.3s var(--nx-ease), color 0.3s var(--nx-ease), transform 0.2s var(--nx-ease);
+  transition: border-color 0.3s var(--nx-ease), color 0.3s var(--nx-ease), background 0.3s var(--nx-ease), transform 0.2s var(--nx-ease);
   white-space: nowrap;
 }
 .nx-btn-ghost:hover {
-  border-color: var(--nx-blue);
-  color: var(--nx-blue);
+  border-color: #1a4a1f;
+  color: #1a4a1f;
+  background: #edf7ed;
   transform: translateY(-1px);
 }
 
@@ -188,15 +207,17 @@ a { color: inherit; text-decoration: none; }
 
 /* ── Card / surface ──────────────────────────────────────────────────────────── */
 .nx-card {
-  background: var(--nx-surface);
+  background: #ffffff;
   border: 1px solid var(--nx-border);
   border-radius: 1.25rem;
   padding: 2rem;
-  transition: border-color 0.3s var(--nx-ease), background 0.3s var(--nx-ease);
+  box-shadow: 0 4px 20px rgba(15, 45, 18, 0.05), 0 1px 3px rgba(15, 45, 18, 0.02);
+  transition: border-color 0.3s var(--nx-ease), background 0.3s var(--nx-ease), box-shadow 0.3s var(--nx-ease);
 }
 .nx-card:hover {
-  border-color: rgba(10, 132, 255, 0.3);
-  background: var(--nx-surface-2);
+  border-color: rgba(45, 110, 48, 0.3);
+  background: #f7fcf7;
+  box-shadow: 0 8px 32px rgba(15, 45, 18, 0.08), 0 2px 6px rgba(15, 45, 18, 0.03);
 }
 
 /* ── Section divider ─────────────────────────────────────────────────────────── */
@@ -235,12 +256,13 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 2.5rem;
   padding: 0.7rem 1.25rem 0.7rem 1.5rem;
-  background: rgba(8, 12, 23, 0.75);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(28, 43, 74, 0.8);
+  border: 1px solid rgba(200, 230, 200, 0.7);
   border-radius: 100px;
   white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(15, 45, 18, 0.06);
 }
 
 .nx-navbar__logo {
@@ -272,9 +294,9 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  background: rgba(10, 132, 255, 0.08);
-  border: 1px solid rgba(10, 132, 255, 0.15);
-  color: var(--nx-blue);
+  background: rgba(45, 110, 48, 0.08);
+  border: 1px solid rgba(45, 110, 48, 0.15);
+  color: var(--nx-green);
   flex-shrink: 0;
 }
 
@@ -299,8 +321,8 @@ a { color: inherit; text-decoration: none; }
   border-right: none;
 }
 .nx-tab.active {
-  color: var(--nx-white);
-  border-bottom-color: var(--nx-blue);
+  color: var(--nx-green-dark);
+  border-bottom-color: var(--nx-green);
 }
 .nx-tab:hover:not(.active) { color: var(--nx-text); }
 
@@ -317,7 +339,7 @@ a { color: inherit; text-decoration: none; }
 .nx-hotspot__dot {
   width: 12px; height: 12px;
   border-radius: 50%;
-  background: var(--nx-blue);
+  background: #2d6e30;
   position: relative;
   z-index: 1;
 }
@@ -326,7 +348,7 @@ a { color: inherit; text-decoration: none; }
   top: 0; left: 0;
   width: 12px; height: 12px;
   border-radius: 50%;
-  background: var(--nx-blue);
+  background: #2d6e30;
   animation: pulse-ring 1.8s var(--nx-ease-out) infinite;
 }
 
@@ -350,7 +372,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--nx-blue);
+  color: var(--nx-green);
   font-size: 1.2rem;
 }
 .nx-ba-header {
@@ -361,7 +383,7 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 1.5rem;
 }
 .nx-ba-header--before { color: var(--nx-muted-2); }
-.nx-ba-header--after  { color: var(--nx-blue); }
+.nx-ba-header--after  { color: var(--nx-green); }
 .nx-ba-row {
   display: flex;
   align-items: flex-start;
@@ -381,7 +403,7 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
 }
 .nx-ba-dot--before { background: var(--nx-muted-2); }
-.nx-ba-dot--after  { background: var(--nx-blue); }
+.nx-ba-dot--after  { background: var(--nx-green); }
 
 /* ── Security grid ───────────────────────────────────────────────────────────── */
 .nx-security-grid {
@@ -415,9 +437,9 @@ a { color: inherit; text-decoration: none; }
 .nx-timeline__line-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--nx-blue), rgba(10,132,255,0.4));
+  background: linear-gradient(90deg, #1a4a1f, rgba(26, 74, 31, 0.4));
   transition: width 1.2s var(--nx-ease);
-  box-shadow: 0 0 12px rgba(10,132,255,0.6);
+  box-shadow: 0 0 12px rgba(26, 74, 31, 0.4);
 }
 .nx-timeline__step {
   flex: 1;
@@ -445,10 +467,10 @@ a { color: inherit; text-decoration: none; }
   transition: border-color 0.4s, color 0.4s, background 0.4s, box-shadow 0.4s;
 }
 .nx-timeline__step.active .nx-timeline__node {
-  border-color: var(--nx-blue);
-  color: var(--nx-blue);
-  background: rgba(10,132,255,0.08);
-  box-shadow: 0 0 20px rgba(10,132,255,0.3);
+  border-color: #2d6e30;
+  color: #2d6e30;
+  background: rgba(45, 110, 48, 0.08);
+  box-shadow: 0 0 20px rgba(45, 110, 48, 0.2);
 }
 .nx-timeline__title {
   font-size: 0.9rem;
@@ -483,7 +505,7 @@ a { color: inherit; text-decoration: none; }
   transition: border-color 0.3s, background 0.3s, transform 0.2s;
 }
 .nx-platform-card:hover {
-  border-color: var(--nx-blue);
+  border-color: var(--nx-green);
   background: var(--nx-surface-2);
   transform: translateY(-3px);
 }
@@ -495,7 +517,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ── CTA Final section ───────────────────────────────────────────────────────── */
 .nx-cta-final {
-  background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(10,132,255,0.12) 0%, transparent 70%),
+  background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(45, 110, 48, 0.08) 0%, transparent 70%),
               var(--nx-void);
 }
 
@@ -564,7 +586,7 @@ body.custom-cursor-active * {
 #cursor-dot {
   width: 6px;
   height: 6px;
-  background: white;
+  background: var(--nx-green-dark);
   border-radius: 50%;
   position: fixed;
   pointer-events: none;
@@ -577,7 +599,7 @@ body.custom-cursor-active * {
 #cursor-ring {
   width: 32px;
   height: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(26, 74, 31, 0.35);
   border-radius: 50%;
   position: fixed;
   pointer-events: none;
@@ -727,7 +749,7 @@ body.custom-cursor-active * {
   width: 100vw;
   height: 100svh;
   position: relative;
-  background: var(--nx-deep);
+  background: var(--nx-surface);
 }
 
 /* ── Touch drag cursor hint — animated on first load ── */

@@ -49,7 +49,7 @@ export default function Preloader() {
       ref={overlayRef}
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: '#05070F',
+        background: '#f7fcf7',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         gap: '1.5rem',
@@ -64,21 +64,21 @@ export default function Preloader() {
         style={{ animation: 'nxPulse 1.8s ease-in-out infinite' }}
         aria-label="NEXO"
       >
-        <rect x="2" y="2" width="60" height="60" rx="12" stroke="#0A84FF" strokeWidth="2" />
-        <path d="M14 50L32 14L50 50" stroke="#0A84FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M20 38H44" stroke="#0A84FF" strokeWidth="2" strokeLinecap="round" />
+        <rect x="2" y="2" width="60" height="60" rx="12" stroke="#2d6e30" strokeWidth="2" />
+        <path d="M14 50L32 14L50 50" stroke="#2d6e30" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M20 38H44" stroke="#2d6e30" strokeWidth="2" strokeLinecap="round" />
       </svg>
 
       {/* Progress bar */}
-      <div style={{ width: '96px', height: '1px', background: '#1C2B4A', borderRadius: '1px', overflow: 'hidden' }}>
+      <div style={{ width: '96px', height: '1px', background: 'rgba(200, 230, 200, 0.6)', borderRadius: '1px', overflow: 'hidden' }}>
         <div
           style={{
             height: '100%',
-            background: 'linear-gradient(90deg, #0A84FF, rgba(10,132,255,0.45))',
+            background: 'linear-gradient(90deg, #2d6e30, rgba(45, 110, 48, 0.45))',
             borderRadius: '1px',
             width: `${progress}%`,
             transition: 'width 0.1s linear',
-            boxShadow: '0 0 8px rgba(10,132,255,0.5)',
+            boxShadow: '0 0 8px rgba(45, 110, 48, 0.5)',
           }}
         />
       </div>
@@ -87,7 +87,7 @@ export default function Preloader() {
         fontFamily: "'Plus Jakarta Sans', sans-serif",
         fontSize: '0.62rem',
         letterSpacing: '0.18em',
-        color: '#4A5878',
+        color: '#4a6e4c',
         textTransform: 'uppercase',
       }}>
         {progress}%
