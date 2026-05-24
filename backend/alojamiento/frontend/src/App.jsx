@@ -1,20 +1,18 @@
-import { useRef } from 'react'
-import LandingPage from './landing/LandingPage'
-import Preloader from './landing/sections/Preloader'
+import { Suspense } from 'react'
+import LandingPage   from './landing/LandingPage'
+import Preloader     from './landing/sections/Preloader'
 import ErrorBoundary from './landing/components/ErrorBoundary'
-import GlobalCanvas from './components/canvas/GlobalCanvas'
+
+// NexoCanvas instances are embedded directly inside HeroSection and NodeSection
+// as standalone R3F <Canvas> elements — no global View.Port canvas needed.
 
 export default function App() {
-  const containerRef = useRef(null)
-
   return (
     <ErrorBoundary>
-      <div ref={containerRef} id="nx-app-container" style={{ position: 'relative', width: '100%' }}>
+      <Suspense fallback={null}>
         <Preloader />
         <LandingPage />
-        <GlobalCanvas eventSource={containerRef} />
-      </div>
+      </Suspense>
     </ErrorBoundary>
   )
 }
-

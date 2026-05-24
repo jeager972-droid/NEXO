@@ -258,7 +258,7 @@ function InstitutionalNetwork({ onHoverChange }) {
   )
 }
 
-export default function NexoCanvas({ type, scale = 1.0, showShield = false }) {
+export default function NexoCanvas({ type, scale = 1.0, showShield = false, coldLight = false, interactive = true }) {
   const orbitRef = useRef()
   const [zoomEnabled, setZoomEnabled] = useState(false)
 
@@ -270,18 +270,21 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false }) {
       shadows
       style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}
     >
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[5, 8, 5]} intensity={2.2} castShadow />
-      <directionalLight position={[-4, 2, -4]} intensity={0.8} />
-      <pointLight position={[0, 4, 2]} intensity={1.5} color="#00e676" />
+      <ambientLight intensity={coldLight ? 0.5 : 0.8} color={coldLight ? '#cce4ff' : '#ffffff'} />
+      <directionalLight position={[5, 8, 5]} intensity={coldLight ? 1.8 : 2.2} color={coldLight ? '#b8d4ff' : '#ffffff'} castShadow />
+      <directionalLight position={[-4, 2, -4]} intensity={coldLight ? 1.2 : 0.8} color={coldLight ? '#0A84FF' : '#ffffff'} />
+      <pointLight position={[0, 4, 2]} intensity={coldLight ? 2.0 : 1.5} color={coldLight ? '#0A84FF' : '#00e676'} />
       <Environment preset="city" />
 
       <OrbitControls
         ref={orbitRef}
-        enableZoom={zoomEnabled}
-        enablePan={true}
+        enableZoom={interactive && zoomEnabled}
+        enablePan={interactive}
+        enableRotate={interactive}
         dampingFactor={0.06}
         enableDamping
+        autoRotate={!interactive}
+        autoRotateSpeed={0.6}
         minPolarAngle={Math.PI * 0.05}
         maxPolarAngle={Math.PI * 0.95}
       />
