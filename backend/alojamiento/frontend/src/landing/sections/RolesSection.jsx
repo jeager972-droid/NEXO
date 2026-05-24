@@ -106,20 +106,21 @@ export default function RolesSection() {
   // PASO 4: Tabs stagger horizontal de 0.08s desde opacity:0
   useEffect(() => {
     const isMobile = window.innerWidth <= 768
+    const tabs = tabsContainerRef.current?.querySelectorAll('.nx-tab')
+
     if (isMobile) {
-      const tabs = tabsContainerRef.current?.querySelectorAll('.nx-tab')
       if (tabs) gsap.set(tabs, { opacity: 1, y: 0 })
       return
     }
 
-    gsap.set(tabs, { opacity: 0, y: 15 })
+    if (tabs) gsap.set(tabs, { opacity: 0, y: 15 })
 
     const trigger = ScrollTrigger.create({
       trigger: wrapperRef.current,
       start: 'top 75%', // Bug 4: content trigger at 75%
       toggleActions: 'play none none none',
       onEnter: () => {
-        gsap.to(tabs, {
+        if (tabs) gsap.to(tabs, {
           opacity: 1,
           y: 0,
           duration: 0.6,
