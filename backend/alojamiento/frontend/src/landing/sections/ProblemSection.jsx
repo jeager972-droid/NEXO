@@ -1,50 +1,62 @@
 import { useRef } from 'react'
 import { useReveal } from '../components/useReveal'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
-// MODULE 03 — PROBLEM STATEMENT
-// Psychological trigger: cognitive mirror — describing the pain precisely = authority over solution
+gsap.registerPlugin(ScrollTrigger)
+
+// MODULE 03 — DECLARACIÓN DEL PROBLEMA
+// CAMBIO 2: Redacción en tercera persona generalizada. Tono diagnóstico, no acusatorio.
+// Título reemplazado. Sin cifras específicas de tiempo. Sin "tu institución".
 
 const PROBLEMS = [
   {
     id: 'lista',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor"
+        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <rect x="4" y="3" width="20" height="22" rx="2"/>
         <line x1="9" y1="9" x2="19" y2="9"/>
         <line x1="9" y1="14" x2="19" y2="14"/>
         <line x1="9" y1="19" x2="15" y2="19"/>
       </svg>
     ),
-    title: 'La lista de asistencia manual',
-    body: '30 minutos por profesor, por día. Multiplicado por cada docente de tu institución. Ese tiempo no vuelve — y nunca fue tiempo administrativo. Era tiempo de cátedra.',
+    title: 'El registro manual de asistencia',
+    // Sin cifras específicas de tiempo — varía por institución y metodología
+    body: 'En la mayoría de las instituciones educativas colombianas, el registro de asistencia consume tiempo de clase que los docentes no pueden recuperar. Ese tiempo existe, se acumula día tras día, y es irrecuperable. No es tiempo administrativo: es tiempo de cátedra que los estudiantes no reciben.',
   },
   {
     id: 'salida',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor"
+        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M18 14H4M4 14l4-4M4 14l4 4"/>
         <path d="M12 5h9a2 2 0 012 2v14a2 2 0 01-2 2h-9"/>
       </svg>
     ),
-    title: 'El estudiante que nadie vio salir',
-    body: 'Entre cambio de clase y cambio de clase, entre un baño y el siguiente, hay un espacio donde la institución pierde visibilidad. Cuando algo ocurre en ese espacio, la responsabilidad recae sobre todos.',
+    title: 'Los estudiantes que nadie ve salir',
+    body: 'Entre el cambio de una clase y la siguiente, entre una salida al baño y el regreso, hay intervalos donde las instituciones pierden trazabilidad sobre sus estudiantes. Cuando ocurre un incidente en ese margen invisible, la responsabilidad institucional queda expuesta sin respaldo documental.',
   },
   {
     id: 'padre',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor"
+        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M20 4H8a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2z"/>
         <line x1="14" y1="10" x2="14" y2="16"/>
         <circle cx="14" cy="19" r="0.5" fill="currentColor"/>
       </svg>
     ),
-    title: 'El padre que se enteró tarde',
-    body: 'La inasistencia registrada en papel, archivada en una carpeta, comunicada tres días después — o nunca. La familia no estaba en el circuito. La institución tampoco.',
+    title: 'Las familias fuera del circuito',
+    body: 'Las inasistencias registradas en papel o en sistemas desconectados llegan a los acudientes con retrasos de días — o no llegan. Las familias no forman parte del circuito de información en tiempo real, lo que genera brechas de comunicación que ninguna institución puede permitirse cuando está en juego la seguridad de un menor.',
   },
 ]
 
 export default function ProblemSection() {
   const sectionRef = useRef()
+  const columnsRef = useRef([])
+
+  // CAMBIO 6: ScrollTrigger con stagger en columnas + SplitText manual en título
   useReveal(sectionRef)
 
   return (
@@ -66,12 +78,15 @@ export default function ProblemSection() {
           El diagnóstico
         </div>
 
-        {/* Title */}
-        <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '680px', marginBottom: '5rem' }}>
-          El problema no era la voluntad.<br />Era la infraestructura.
+        {/* CAMBIO 2: Nuevo título — diagnóstico, no acusatorio */}
+        <h2
+          className="nx-h2 nx-reveal nx-reveal-delay-1"
+          style={{ maxWidth: '700px', marginBottom: '5rem' }}
+        >
+          Hay vacíos que el sistema educativo colombiano lleva décadas sin cerrar.
         </h2>
 
-        {/* 3-column problem grid */}
+        {/* 3-column problem grid — CAMBIO 6: stagger entry */}
         <div
           style={{
             display: 'grid',
@@ -82,27 +97,24 @@ export default function ProblemSection() {
           {PROBLEMS.map(({ id, icon, title, body }, i) => (
             <div
               key={id}
+              ref={el => columnsRef.current[i] = el}
               className={`nx-reveal nx-reveal-delay-${i + 2}`}
               style={{
                 borderTop: '1px solid var(--nx-border)',
                 paddingTop: '2rem',
               }}
             >
-              {/* Icon */}
               <div className="nx-icon" style={{ marginBottom: '1.5rem' }}>
                 {icon}
               </div>
-
-              {/* Title */}
               <h3 className="nx-h3" style={{ marginBottom: '0.85rem' }}>{title}</h3>
-
-              {/* Body */}
+              {/* CAMBIO 2: cuerpo en tercera persona, tono de diagnóstico técnico */}
               <p className="nx-body" style={{ fontSize: '0.9rem' }}>{body}</p>
             </div>
           ))}
         </div>
 
-        {/* Closing statement */}
+        {/* Closing — CAMBIO 2: tercera persona generalizada */}
         <div
           className="nx-reveal nx-reveal-delay-5"
           style={{
@@ -113,17 +125,17 @@ export default function ProblemSection() {
             justifyContent: 'center',
           }}
         >
-          <p
-            style={{
-              maxWidth: '640px',
-              textAlign: 'center',
-              fontSize: '1rem',
-              lineHeight: 1.7,
-              color: 'var(--nx-text)',
-              fontStyle: 'italic',
-            }}
-          >
-            NEXO no es una aplicación más. Es la infraestructura que cierra estos tres vacíos simultáneamente, en tiempo real, sin depender de la conexión a internet de la institución.
+          <p style={{
+            maxWidth: '640px',
+            textAlign: 'center',
+            fontSize: '1rem',
+            lineHeight: 1.75,
+            color: 'var(--nx-text)',
+            fontStyle: 'italic',
+          }}>
+            NEXO no es una aplicación más. Es la infraestructura que cierra estos tres vacíos
+            simultáneamente, en tiempo real, sin depender de la conexión a internet
+            de las instituciones.
           </p>
         </div>
       </div>

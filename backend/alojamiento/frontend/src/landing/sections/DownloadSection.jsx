@@ -1,74 +1,234 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
+import gsap from 'gsap'
 
 // MODULE 08 — APP DOWNLOAD
-// Psychological trigger: low-commitment action — first small "yes"
+// CAMBIO 4: Eliminado mockup de la app. Íconos al doble de tamaño.
+// GSAP magnetic/tilt + scale hover por plataforma con glow representativo.
 
 const PLATFORMS = [
   {
     id: 'android',
     name: 'Android',
+    glowColor: 'rgba(61,220,132,0.35)',   // Android green
+    href: '#download-android',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 10h14v12a2 2 0 01-2 2H9a2 2 0 01-2-2V10z"/>
-        <path d="M10 10V7a4 4 0 018 0v3"/>
-        <line x1="10" y1="17" x2="10" y2="17.01"/>
-        <line x1="14" y1="17" x2="14" y2="17.01"/>
-        <line x1="18" y1="17" x2="18" y2="17.01"/>
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
+        strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+        {/* Android robot icon */}
+        <path d="M14 20h28v24a4 4 0 01-4 4H18a4 4 0 01-4-4V20z"/>
+        <path d="M20 20V14a8 8 0 0116 0v6"/>
+        <circle cx="21" cy="33" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="35" cy="33" r="2" fill="currentColor" stroke="none"/>
+        <line x1="10" y1="26" x2="10" y2="36"/>
+        <line x1="46" y1="26" x2="46" y2="36"/>
       </svg>
     ),
-    href: '#download-android',
   },
   {
     id: 'ios',
     name: 'iOS',
+    glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
+    href: '#download-ios',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18.5 2C17 2 15.5 3 14 3s-3-1-4.5-1C6 2 3 5 3 9.5 3 16 7 24 10 24c1.5 0 2-1 4-1s2.5 1 4 1c3 0 7-8 7-14.5C25 5 22 2 18.5 2z"/>
-        <path d="M14 3V1"/>
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
+        strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M37 4C34 4 31 6 28 6s-6-2-9-2C12 4 6 10 6 19c0 13 8 31 14 31 3 0 4-2 8-2s5 2 8 2c6 0 14-18 14-29C50 10 44 4 37 4z"/>
+        <path d="M28 6V2"/>
       </svg>
     ),
-    href: '#download-ios',
   },
   {
     id: 'windows',
     name: 'Windows',
+    glowColor: 'rgba(0,120,212,0.35)',     // Windows blue
+    href: '#download-windows',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="2" width="12" height="12" rx="1"/>
-        <rect x="16" y="2" width="10" height="12" rx="1"/>
-        <rect x="2" y="16" width="12" height="10" rx="1"/>
-        <rect x="16" y="16" width="10" height="10" rx="1"/>
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
+        strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4"  y="4"  width="22" height="22" rx="2"/>
+        <rect x="30" y="4"  width="22" height="22" rx="2"/>
+        <rect x="4"  y="30" width="22" height="22" rx="2"/>
+        <rect x="30" y="30" width="22" height="22" rx="2"/>
       </svg>
     ),
-    href: '#download-windows',
   },
   {
     id: 'mac',
     name: 'Mac',
+    glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
+    href: '#download-mac',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="4" y="4" width="20" height="16" rx="2"/>
-        <line x1="2" y1="24" x2="26" y2="24"/>
-        <line x1="10" y1="20" x2="18" y2="20"/>
-        <line x1="14" y1="20" x2="14" y2="24"/>
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
+        strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="6" y="6" width="44" height="32" rx="4"/>
+        <line x1="2"  y1="48" x2="54" y2="48"/>
+        <line x1="20" y1="38" x2="36" y2="38"/>
+        <line x1="28" y1="38" x2="28" y2="48"/>
       </svg>
     ),
-    href: '#download-mac',
   },
   {
     id: 'linux',
     name: 'Linux',
+    glowColor: 'rgba(255,185,0,0.30)',     // Tux yellow
+    href: '#download-linux',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2c-5.5 0-8 4-8 9v2c0 1.5-.5 3-1.5 4.5C3.5 19 3 20 3 21c0 1.5 2 3 5.5 3 1.5 0 3-.5 4-1.5.5.5 1 .5 1.5.5s1 0 1.5-.5c1 1 2.5 1.5 4 1.5C23 24 25 22.5 25 21c0-1-0.5-2-1.5-3.5C22.5 16 22 14.5 22 13v-2c0-5-2.5-9-8-9z"/>
-        <circle cx="10.5" cy="12" r="1"/>
-        <circle cx="17.5" cy="12" r="1"/>
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
+        strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M28 4c-11 0-16 8-16 18v4c0 3-1 6-3 9C7 38 6 40 6 42c0 3 4 6 11 6 3 0 6-1 8-3 1 1 2 1 3 1s2 0 3-1c2 2 5 3 8 3 7 0 11-3 11-6 0-2-1-4-3-7-2-3-3-6-3-9v-4C44 12 39 4 28 4z"/>
+        <circle cx="21" cy="24" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="35" cy="24" r="2" fill="currentColor" stroke="none"/>
+        <path d="M22 34c1.5 2 4 3 6 3s4.5-1 6-3"/>
       </svg>
     ),
-    href: '#download-linux',
   },
 ]
+
+// CAMBIO 4: GSAP magnetic tilt + scale + glow on hover
+function PlatformCard({ id, name, icon, href, glowColor }) {
+  const cardRef    = useRef()
+  const glowRef    = useRef()
+  const iconRef    = useRef()
+
+  useEffect(() => {
+    const card = cardRef.current
+    const glow = glowRef.current
+    const iconEl = iconRef.current
+    if (!card) return
+
+    // Tilt/magnetic: tracks cursor position within card, max ±12 deg
+    const handleMouseMove = (e) => {
+      const rect = card.getBoundingClientRect()
+      const cx   = rect.left + rect.width / 2
+      const cy   = rect.top  + rect.height / 2
+      const dx   = (e.clientX - cx) / (rect.width  / 2)  // -1 to 1
+      const dy   = (e.clientY - cy) / (rect.height / 2)
+
+      // Tilt the icon — gentle magnetic pull (max 8deg)
+      gsap.to(iconEl, {
+        rotateX: -dy * 8,
+        rotateY:  dx * 8,
+        duration: 0.25,
+        ease: 'power2.out',
+      })
+    }
+
+    // Hover in: scale + translateY + glow
+    const handleMouseEnter = () => {
+      gsap.to(card, {
+        scale: 1.12,
+        y: -6,
+        duration: 0.3,
+        ease: 'power2.out',
+      })
+      gsap.to(glow, {
+        opacity: 1,
+        duration: 0.3,
+        ease: 'power2.out',
+      })
+    }
+
+    // Hover out: return to base state
+    const handleMouseLeave = () => {
+      gsap.to(card, {
+        scale: 1,
+        y: 0,
+        duration: 0.25,
+        ease: 'power2.inOut',
+      })
+      gsap.to(iconEl, {
+        rotateX: 0,
+        rotateY: 0,
+        duration: 0.35,
+        ease: 'power2.inOut',
+      })
+      gsap.to(glow, {
+        opacity: 0,
+        duration: 0.25,
+        ease: 'power2.inOut',
+      })
+    }
+
+    card.addEventListener('mouseenter', handleMouseEnter)
+    card.addEventListener('mouseleave', handleMouseLeave)
+    card.addEventListener('mousemove',  handleMouseMove)
+
+    return () => {
+      card.removeEventListener('mouseenter', handleMouseEnter)
+      card.removeEventListener('mouseleave', handleMouseLeave)
+      card.removeEventListener('mousemove',  handleMouseMove)
+    }
+  }, [])
+
+  return (
+    <a
+      ref={cardRef}
+      href={href}
+      id={`download-btn-${id}`}
+      aria-label={`Descargar NEXO para ${name}`}
+      style={{
+        display:        'flex',
+        flexDirection:  'column',
+        alignItems:     'center',
+        gap:            '1rem',
+        padding:        '2.25rem 2rem',
+        background:     'var(--nx-surface)',
+        border:         '1px solid var(--nx-border)',
+        borderRadius:   '1.25rem',
+        cursor:         'pointer',
+        position:       'relative',
+        overflow:       'hidden',
+        willChange:     'transform',
+        // Preserve 3D for tilt effect
+        transformStyle: 'preserve-3d',
+        textDecoration: 'none',
+        transition:     'border-color 0.3s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(10,132,255,0.4)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
+    >
+      {/* Platform-specific glow — hidden by default, revealed on hover */}
+      <div
+        ref={glowRef}
+        aria-hidden="true"
+        style={{
+          position:     'absolute',
+          inset:        0,
+          background:   `radial-gradient(circle at center, ${glowColor} 0%, transparent 70%)`,
+          opacity:      0,
+          pointerEvents: 'none',
+          borderRadius: '1.25rem',
+        }}
+      />
+
+      {/* Icon — double size vs original 28px → 56px */}
+      <div
+        ref={iconRef}
+        style={{
+          color:          'var(--nx-blue)',
+          position:       'relative',
+          zIndex:         1,
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        {icon}
+      </div>
+
+      {/* Platform name */}
+      <span style={{
+        fontSize:      '0.8rem',
+        fontWeight:    600,
+        color:         'var(--nx-text)',
+        letterSpacing: '0.04em',
+        position:      'relative',
+        zIndex:        1,
+      }}>
+        {name}
+      </span>
+    </a>
+  )
+}
 
 export default function DownloadSection() {
   const sectionRef = useRef()
@@ -89,124 +249,39 @@ export default function DownloadSection() {
     >
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
         {/* Header — centered */}
-        <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '5rem' }}>
           <div className="nx-eyebrow nx-reveal" style={{ justifyContent: 'center', display: 'flex' }}>
             La aplicación
           </div>
-          <h2
-            className="nx-h2 nx-reveal nx-reveal-delay-1"
-            style={{ marginBottom: '1rem' }}
-          >
+          <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ marginBottom: '1rem' }}>
             Tu panel de control institucional.
           </h2>
-          <p
-            className="nx-body nx-reveal nx-reveal-delay-2"
-            style={{ maxWidth: '480px', margin: '0 auto 2rem' }}
-          >
+          <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
             Disponible para Android, iOS, Windows, Mac y Linux.
             La misma información, en tiempo real, donde estés.
           </p>
         </div>
 
-        {/* App mockup placeholder */}
+        {/* CAMBIO 4: Platform cards — íconos protagonistas, sin mockup */}
         <div
           className="nx-reveal nx-reveal-delay-3"
           style={{
-            background: 'var(--nx-surface)',
-            border: '1px solid var(--nx-border)',
-            borderRadius: '1.5rem',
-            padding: '2.5rem',
-            marginBottom: '3rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '240px',
-            position: 'relative',
-            overflow: 'hidden',
+            display:         'flex',
+            gap:             '1.25rem',
+            justifyContent:  'center',
+            flexWrap:        'wrap',
           }}
         >
-          {/* Simulated app UI */}
-          <div style={{ width: '100%', maxWidth: '800px', display: 'grid', gridTemplateColumns: '220px 1fr', gap: '1.5rem' }}>
-            {/* Sidebar */}
-            <div style={{
-              background: 'var(--nx-void)',
-              borderRadius: '1rem',
-              padding: '1.25rem',
-              border: '1px solid var(--nx-border)',
-            }}>
-              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--nx-blue)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>NEXO</div>
-              {['Dashboard', 'Asistencia', 'Alertas', 'Reportes', 'Configuración'].map((item, i) => (
-                <div key={item} style={{
-                  fontSize: '0.78rem',
-                  color: i === 0 ? 'var(--nx-white)' : 'var(--nx-muted)',
-                  padding: '0.5rem 0.75rem',
-                  borderRadius: '0.5rem',
-                  background: i === 0 ? 'rgba(10,132,255,0.1)' : 'transparent',
-                  marginBottom: '0.25rem',
-                  fontWeight: i === 0 ? 600 : 400,
-                }}>
-                  {item}
-                </div>
-              ))}
-            </div>
-            {/* Main panel */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                {[{ n: '847', l: 'Estudiantes activos' }, { n: '12', l: 'Instituciones' }, { n: '0', l: 'Alertas críticas' }].map(({ n, l }) => (
-                  <div key={l} style={{
-                    background: 'var(--nx-void)',
-                    border: '1px solid var(--nx-border)',
-                    borderRadius: '0.75rem',
-                    padding: '1rem',
-                  }}>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--nx-white)' }}>{n}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--nx-muted)', marginTop: '0.2rem' }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{
-                background: 'var(--nx-void)',
-                border: '1px solid var(--nx-border)',
-                borderRadius: '0.75rem',
-                padding: '1rem',
-                flex: 1,
-              }}>
-                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--nx-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Actividad en tiempo real
-                </div>
-                {['Grado 10° — Matemáticas — 100% asistencia', 'Grado 9° — Español — 2 ausencias detectadas', 'Grado 11° — Física — Alerta: 1 salida no autorizada'].map((row, i) => (
-                  <div key={row} style={{
-                    fontSize: '0.75rem',
-                    color: i === 2 ? 'var(--nx-blue)' : 'var(--nx-muted)',
-                    padding: '0.4rem 0',
-                    borderBottom: i < 2 ? '1px solid var(--nx-border)' : 'none',
-                  }}>
-                    {row}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Platform download buttons */}
-        <div className="nx-reveal nx-reveal-delay-4" style={{ display: 'flex', justifyContent: 'center' }}>
-          <div className="nx-platform-grid">
-            {PLATFORMS.map(({ id, name, icon, href }) => (
-              <a key={id} href={href} className="nx-platform-card" id={`download-btn-${id}`} aria-label={`Descargar para ${name}`}>
-                <div style={{ color: 'var(--nx-blue)' }}>{icon}</div>
-                <span className="nx-platform-card__name">{name}</span>
-              </a>
-            ))}
-          </div>
+          {PLATFORMS.map(p => (
+            <PlatformCard key={p.id} {...p} />
+          ))}
         </div>
 
         {/* Micro-copy */}
-        <p
-          className="nx-micro nx-reveal nx-reveal-delay-5"
-          style={{ textAlign: 'center', marginTop: '1.75rem' }}
-        >
-          Descarga gratuita para instituciones vinculadas · El acceso completo se activa cuando tu institución implementa NEXO.
+        <p className="nx-micro nx-reveal nx-reveal-delay-4"
+          style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+          Descarga gratuita para instituciones vinculadas ·
+          El acceso completo se activa cuando la institución implementa NEXO.
         </p>
       </div>
     </section>

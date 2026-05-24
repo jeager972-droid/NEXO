@@ -1,11 +1,15 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
 import NexoCanvas from '../components/NexoCanvas'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
 
 // MODULE 06 — THE NODE
 // Left: large interactive 3D model with hotspot overlay
 // Right: spec list synced to hotspot clicks
-// Impact (Hero: no explanation) → Discovery (here: full exploration)
+// CAMBIO 6: Zoom out del modelo 3D (1.15 -> 1.0) y stagger de hotspots (0.2s)
 
 const SPECS = [
   {
@@ -106,7 +110,47 @@ function Hotspot({ spec, isActive, onClick }) {
 export default function NodeSection() {
   const sectionRef = useRef()
   const [active, setActive] = useState(null)
+  const [canvasScale, setCanvasScale] = useState(1.15)
   useReveal(sectionRef)
+
+  useEffect(() => {
+    const section = sectionRef.current
+    if (!section) return
+
+    // Ocultar hotspots al inicio para la animación de entrada
+    const hotspots = section.querySelectorAll('.nx-hotspot')
+    gsap.set(hotspots, { opacity: 0, scale: 0 })
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: section,
+        start: 'top 60%',
+        once: true,
+      }
+    })
+
+    // CAMBIO 6: Slow zoom out del modelo 3D al entrar en viewport
+    const scaleObj = { val: 1.15 }
+    tl.to(scaleObj, {
+      val: 1.0,
+      duration: 1.2,
+      ease: 'power3.out',
+      onUpdate: () => {
+        setCanvasScale(scaleObj.val)
+      }
+    })
+
+    // CAMBIO 6: Hotspots aparecen uno a uno con stagger 0.2s después de terminar la entrada
+    tl.to(hotspots, {
+      opacity: 1,
+      scale: 1,
+      duration: 0.5,
+      stagger: 0.2,
+      ease: 'back.out(1.7)',
+    }, '-=0.2') // Solapado levemente para mayor fluidez
+
+    return () => tl.kill()
+  }, [])
 
   const toggle = (id) => setActive(prev => prev === id ? null : id)
 
@@ -152,7 +196,7 @@ export default function NodeSection() {
             <div style={{ width: '100%', height: '100%', borderRadius: '1.25rem', overflow: 'hidden' }}>
               <NexoCanvas
                 type="solo"
-                scale={1.15}
+                scale={canvasScale}
                 coldLight={true}
                 interactive={true}
               />

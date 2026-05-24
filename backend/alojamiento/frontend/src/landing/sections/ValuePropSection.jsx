@@ -1,20 +1,25 @@
-import { useRef } from 'react'
-import { useReveal } from '../components/useReveal'
+import { useRef, useEffect } from 'react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
-// MODULE 05 — VALUE PROPOSITION
-// Psychological trigger: before/after value anchor — highest persuasive density
+gsap.registerPlugin(ScrollTrigger)
+
+// MODULE 05 — PROPUESTA DE VALOR
+// CAMBIO 6: columna Sin-NEXO entra desde translateX(-60px)
+//           columna Con-NEXO entra desde translateX(+60px)
+//           cada fila se anima con stagger vertical 0.1s
 
 const ROWS = [
   {
-    before: 'Lista de asistencia manual, 30 min/día por docente',
+    before: 'Lista de asistencia manual — tiempo de cátedra que no vuelve',
     after:  'Registro automático en menos de 1 segundo por estudiante',
   },
   {
-    before: 'El padre se entera de la inasistencia días después',
-    after:  'Notificación WhatsApp en tiempo real, el mismo momento',
+    before: 'Los acudientes se enteran de la inasistencia días después',
+    after:  'Notificación vía WhatsApp en tiempo real, el mismo momento',
   },
   {
-    before: 'El coordinador no sabe quién salió al baño ni cuántas veces',
+    before: 'Los coordinadores no saben quién salió ni cuántas veces',
     after:  'Panel de alertas con patrones detectados automáticamente',
   },
   {
@@ -28,8 +33,73 @@ const ROWS = [
 ]
 
 export default function ValuePropSection() {
-  const sectionRef = useRef()
-  useReveal(sectionRef)
+  const sectionRef  = useRef()
+  const eyebrowRef  = useRef()
+  const titleRef    = useRef()
+  const subtitleRef = useRef()
+  const beforeRef   = useRef()
+  const afterRef    = useRef()
+  const ctaRef      = useRef()
+
+  useEffect(() => {
+    const section = sectionRef.current
+    if (!section) return
+
+    // Timeline disparado por ScrollTrigger
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: section,
+        start:   'top 60%',
+        once:    true,
+      },
+    })
+
+    // Eyebrow + título
+    tl.fromTo(eyebrowRef.current,
+      { opacity: 0, y: -10 },
+      { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' }
+    )
+    .fromTo(titleRef.current,
+      { opacity: 0, y: 40 },
+      { opacity: 1, y: 0, duration: 0.9, ease: 'expo.out' },
+      '-=0.3'
+    )
+    .fromTo(subtitleRef.current,
+      { opacity: 0, y: 18 },
+      { opacity: 1, y: 0, duration: 0.75, ease: 'power3.out' },
+      '-=0.5'
+    )
+
+    // CAMBIO 6: Columna "Sin NEXO" → desde la izquierda
+    .fromTo(beforeRef.current,
+      { opacity: 0, x: -60 },
+      { opacity: 1, x: 0, duration: 0.9, ease: 'expo.out' },
+      '-=0.2'
+    )
+
+    // CAMBIO 6: Columna "Con NEXO" → desde la derecha, con delay pequeño
+    .fromTo(afterRef.current,
+      { opacity: 0, x: 60 },
+      { opacity: 1, x: 0, duration: 0.9, ease: 'expo.out' },
+      '-=0.75'
+    )
+
+    // CAMBIO 6: Filas de comparación — stagger 0.1s vertical dentro de cada columna
+    .fromTo(
+      section.querySelectorAll('.nx-ba-row'),
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out', stagger: 0.1 },
+      '-=0.6'
+    )
+
+    .fromTo(ctaRef.current,
+      { opacity: 0, y: 12 },
+      { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' },
+      '-=0.1'
+    )
+
+    return () => tl.kill()
+  }, [])
 
   return (
     <section
@@ -37,34 +107,30 @@ export default function ValuePropSection() {
       id="propuesta-de-valor"
       className="nx-section"
       style={{
-        background: 'var(--nx-void)',
-        paddingTop: '7rem',
+        background:    'var(--nx-void)',
+        paddingTop:    '7rem',
         paddingBottom: '7rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
+        paddingLeft:   'var(--nx-section-px)',
+        paddingRight:  'var(--nx-section-px)',
       }}
     >
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
         {/* Header */}
-        <div className="nx-eyebrow nx-reveal">Transformación</div>
-        <h2
-          className="nx-h2 nx-reveal nx-reveal-delay-1"
-          style={{ maxWidth: '720px', marginBottom: '1rem' }}
-        >
+        <div ref={eyebrowRef} className="nx-eyebrow" style={{ marginBottom: '1rem', opacity: 0 }}>
+          Transformación
+        </div>
+        <h2 ref={titleRef} className="nx-h2" style={{ maxWidth: '720px', marginBottom: '1rem', opacity: 0 }}>
           De la operación reactiva<br />a la custodia proactiva.
         </h2>
-        <p
-          className="nx-body nx-reveal nx-reveal-delay-2"
-          style={{ maxWidth: '580px', marginBottom: '3.5rem' }}
-        >
+        <p ref={subtitleRef} className="nx-body" style={{ maxWidth: '580px', marginBottom: '3.5rem', opacity: 0 }}>
           Las instituciones que operan con NEXO no esperan que algo ocurra para actuar.
           Saben qué ocurre, cuándo ocurre y quién es responsable — antes de que escale.
         </p>
 
         {/* Before / After table */}
-        <div className="nx-ba-table nx-reveal nx-reveal-delay-3">
-          {/* SIN NEXO column */}
-          <div className="nx-ba-col nx-ba-col--before">
+        <div className="nx-ba-table">
+          {/* SIN NEXO */}
+          <div ref={beforeRef} className="nx-ba-col nx-ba-col--before" style={{ opacity: 0 }}>
             <div className="nx-ba-header nx-ba-header--before">Sin NEXO</div>
             {ROWS.map(({ before }) => (
               <div key={before} className="nx-ba-row">
@@ -81,8 +147,8 @@ export default function ValuePropSection() {
             </svg>
           </div>
 
-          {/* CON NEXO column */}
-          <div className="nx-ba-col nx-ba-col--after">
+          {/* CON NEXO */}
+          <div ref={afterRef} className="nx-ba-col nx-ba-col--after" style={{ opacity: 0 }}>
             <div className="nx-ba-header nx-ba-header--after">Con NEXO</div>
             {ROWS.map(({ after }) => (
               <div key={after} className="nx-ba-row nx-ba-row--after">
@@ -94,10 +160,7 @@ export default function ValuePropSection() {
         </div>
 
         {/* Secondary CTA */}
-        <div
-          className="nx-reveal nx-reveal-delay-4"
-          style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'center' }}
-        >
+        <div ref={ctaRef} style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'center', opacity: 0 }}>
           <a href="#descarga-resumen" className="nx-link-arrow" style={{ fontSize: '0.875rem' }}>
             Descarga el resumen ejecutivo para secretarías de educación
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
@@ -109,13 +172,9 @@ export default function ValuePropSection() {
 
       <style>{`
         @media (max-width: 768px) {
-          .nx-ba-table {
-            grid-template-columns: 1fr !important;
-          }
+          .nx-ba-table { grid-template-columns: 1fr !important; }
           .nx-ba-divider { display: none !important; }
-          .nx-ba-col--after {
-            border-top: 1px solid var(--nx-border);
-          }
+          .nx-ba-col--after { border-top: 1px solid var(--nx-border); }
         }
       `}</style>
     </section>

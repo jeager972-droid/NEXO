@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '../components/useReveal'
@@ -7,6 +7,7 @@ gsap.registerPlugin(ScrollTrigger)
 
 // MODULE 04 — HOW IT WORKS
 // Psychological trigger: cognitive clarity — the user feels they already know how to use it
+// CAMBIO 6: Línea conectora que se dibuja con el scroll, pasos escalados de 0.9 a 1.0 + opacity 0
 
 const STEPS = [
   {
@@ -34,29 +35,53 @@ const STEPS = [
 export default function HowItWorksSection() {
   const sectionRef = useRef()
   const lineRef = useRef()
-  const [activeStep, setActiveStep] = useState(-1)
+  const stepsRef = useRef([])
   useReveal(sectionRef)
 
   useEffect(() => {
-    const trigger = ScrollTrigger.create({
-      trigger: sectionRef.current,
-      start: 'top 60%',
-      onEnter: () => {
-        // Animate the connecting line
-        if (lineRef.current) {
-          gsap.to(lineRef.current, {
-            width: '100%',
-            duration: 1.4,
-            ease: 'power2.inOut',
-          })
-        }
-        // Activate steps sequentially
-        STEPS.forEach((_, i) => {
-          setTimeout(() => setActiveStep(i), i * 300 + 200)
-        })
-      },
+    const section = sectionRef.current
+    const line = lineRef.current
+    if (!section || !line) return
+
+    // Ocultar pasos inicialmente
+    gsap.set(stepsRef.current, { opacity: 0, scale: 0.9 })
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: section,
+        start: 'top 50%',
+        end: 'bottom 70%',
+        scrub: 0.8, // Inercia suave sincronizada con el scroll
+      }
     })
-    return () => trigger.kill()
+
+    // CAMBIO 6: Dibujar progresivamente la línea conectora con el scroll
+    tl.to(line, {
+      width: '100%',
+      ease: 'none',
+      duration: 4,
+    })
+
+    // CAMBIO 6: Cada paso aparece cuando la línea llega a él
+    STEPS.forEach((_, i) => {
+      const startTime = i * (4 / (STEPS.length - 1 || 1))
+      tl.to(stepsRef.current[i], {
+        opacity: 1,
+        scale: 1,
+        duration: 0.5,
+        ease: 'power2.out',
+      }, startTime === 0 ? 0 : startTime - 0.2)
+      // Activar visualmente el nodo (iluminación azul)
+      .to(stepsRef.current[i].querySelector('.nx-timeline__node'), {
+        borderColor: 'var(--nx-blue)',
+        color: 'var(--nx-blue)',
+        backgroundColor: 'rgba(10,132,255,0.08)',
+        boxShadow: '0 0 20px rgba(10,132,255,0.3)',
+        duration: 0.3,
+      }, startTime === 0 ? 0 : startTime - 0.1)
+    })
+
+    return () => tl.kill()
   }, [])
 
   return (
@@ -89,7 +114,7 @@ export default function HowItWorksSection() {
         </p>
 
         {/* Timeline */}
-        <div className="nx-timeline nx-reveal nx-reveal-delay-3" style={{ position: 'relative' }}>
+        <div className="nx-timeline" style={{ position: 'relative' }}>
           {/* Background line (rail) */}
           <div
             style={{
@@ -114,7 +139,6 @@ export default function HowItWorksSection() {
               width: '0%',
               background: `linear-gradient(90deg, var(--nx-blue), rgba(10,132,255,0.4))`,
               boxShadow: '0 0 10px rgba(10,132,255,0.5)',
-              transition: 'none',
               zIndex: 1,
             }}
             aria-hidden="true"
@@ -124,7 +148,8 @@ export default function HowItWorksSection() {
           {STEPS.map(({ num, title, body }, i) => (
             <div
               key={num}
-              className={`nx-timeline__step${activeStep >= i ? ' active' : ''}`}
+              ref={el => stepsRef.current[i] = el}
+              className="nx-timeline__step"
               style={{ position: 'relative', zIndex: 2 }}
             >
               <div className="nx-timeline__node">{num}</div>

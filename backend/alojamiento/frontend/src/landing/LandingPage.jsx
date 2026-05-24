@@ -11,10 +11,18 @@ import DownloadSection   from './sections/DownloadSection'
 import SecuritySection   from './sections/SecuritySection'
 import FinalCTASection   from './sections/FinalCTASection'
 import Footer            from './sections/Footer'
+import CustomCursor      from './components/CustomCursor'
+import { useLenis }      from './components/useLenis'
 
 export default function LandingPage() {
+  // CAMBIO 6: Integrar Lenis como wrapper de scroll suave institucional
+  useLenis()
+
   return (
     <>
+      {/* CAMBIO 6: Efecto de cursor global */}
+      <CustomCursor />
+
       {/* Fixed floating navbar */}
       <Navbar />
 
