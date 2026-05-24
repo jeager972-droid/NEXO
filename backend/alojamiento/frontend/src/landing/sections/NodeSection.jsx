@@ -124,7 +124,7 @@ export default function NodeSection() {
 
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
-      setCanvasScale(1.0)
+      setCanvasScale(1.15)  // Slightly larger in the expanded container
       gsap.set(
         document.querySelectorAll('#el-nodo .nx-hotspot'),
         { display: 'none' }
@@ -228,9 +228,10 @@ export default function NodeSection() {
                 />
               ))}
 
-              {/* Cursor hint */}
+              {/* Cursor hint — desktop only */}
               <div
                 aria-hidden="true"
+                className="nx-cursor-hint-desktop"
                 style={{
                   position: 'absolute',
                   bottom: '1rem',
@@ -315,13 +316,21 @@ export default function NodeSection() {
             gap: 2rem !important;
           }
           #el-nodo .nx-node-canvas-wrap {
-            height: 320px !important;
-            border-radius: var(--nx-radius-card) !important;
+            height: 65svh !important;
+            min-height: 320px !important;
+            border-radius: 0 !important;
+            margin-left: calc(-1 * var(--nx-mobile-px)) !important;
+            margin-right: calc(-1 * var(--nx-mobile-px)) !important;
+            width: calc(100% + 2 * var(--nx-mobile-px)) !important;
+            margin-bottom: 0.5rem !important;
           }
           .nx-hotspot { display: none !important; }
-          #el-nodo .nx-node-specs { padding-left: 0 !important; }
+          /* Hide desktop cursor hint, show mobile touch hint instead */
+          #el-nodo .nx-cursor-hint-desktop { display: none !important; }
+          #el-nodo .nx-node-specs { padding-left: 0 !important; padding-top: 1.5rem !important; }
           #el-nodo .nx-node-specs > div {
-            margin-bottom: 1rem !important;
+            padding: 1rem 0.5rem !important;
+            gap: 0.75rem !important;
           }
         }
       `}</style>

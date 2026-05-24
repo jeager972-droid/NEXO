@@ -301,16 +301,28 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     const onMouseMove = (e) => moveDrag(e.clientX, e.clientY)
     const onMouseUp = () => endDrag()
 
-    // Touch — passive so page scroll still works
+    // Touch — discriminate between vertical scroll and horizontal rotation
     const onTouchStart = (e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)
-    const onTouchMove = (e) => moveDrag(e.touches[0].clientX, e.touches[0].clientY)
+    const onTouchMove = (e) => {
+      if (!isDragging) return
+      const dx = e.touches[0].clientX - prev.x
+      const dy = e.touches[0].clientY - prev.y
+      // If movement is mostly vertical → release to page scroll
+      if (Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(dx) < 8) {
+        endDrag()
+        return
+      }
+      // Horizontal or diagonal → rotate the model
+      e.preventDefault() // only called when rotating, not scrolling
+      moveDrag(e.touches[0].clientX, e.touches[0].clientY)
+    }
     const onTouchEnd = () => endDrag()
 
     el.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
     el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false }) // non-passive so preventDefault works
     el.addEventListener('touchend', onTouchEnd, { passive: true })
 
     return () => {
@@ -319,7 +331,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
       el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchmove', onTouchMove) // non-passive cleanup
       el.removeEventListener('touchend', onTouchEnd)
     }
   }, [onDrag, onDragStart, onDragEnd])
@@ -332,7 +344,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
         inset: 0,
         zIndex: 10,
         cursor: 'grab',
-        touchAction: 'pan-y', // allow vertical scroll, capture horizontal drag only on overlay
+        touchAction: 'none', // JS discriminates scroll vs rotation in onTouchMove
       }}
     />
   )
@@ -376,7 +388,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
   const rimLightColor   = coldLight ? '#4FACFE' : '#4FACFE'
   const rimIntensity    = coldLight ? 1.8 : 1.5
 
-  const finalScale = isMobile ? scale * 0.7 : scale
+  const finalScale = scale  // Scale controlled per-section, no global mobile penalty
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -431,6 +443,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
               isUserDragging={isUserDragging}
               dragDeltaRef={dragDeltaRef}
               modelRef={modelRef}
+              dragSensitivity={isMobile ? 0.015 : 0.008}
             />
           )}
         </Suspense>
@@ -443,6 +456,30 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         />
+      )}
+
+      {/* Touch rotation hint — mobile only, animated on first load */}
+      {type !== 'grid' && isMobile && (
+        <div
+          aria-hidden="true"
+          className="nx-touch-rotate-hint"
+          style={{
+            position: 'absolute',
+            bottom: '0.85rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: '0.6rem',
+            fontWeight: 600,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'rgba(107,127,163,0.7)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 20,
+          }}
+        >
+          ← Desliza para rotar →
+        </div>
       )}
     </div>
   )

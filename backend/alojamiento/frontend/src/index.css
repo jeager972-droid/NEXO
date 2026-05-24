@@ -677,6 +677,35 @@ body.custom-cursor-active * {
     font-size: 0.875rem;
     padding: 0.875rem 1.5rem;
   }
+
+  /* ── Nodo interactivo: touch hint animado ── */
+  @keyframes touchSwipeHint {
+    0%   { opacity: 0; transform: translateX(-50%) translateX(0); }
+    20%  { opacity: 1; }
+    50%  { transform: translateX(-50%) translateX(6px); }
+    80%  { transform: translateX(-50%) translateX(-6px); }
+    100% { opacity: 0; transform: translateX(-50%) translateX(0); }
+  }
+
+  /* ── Tipografía hero móvil refinada ── */
+  .nx-h1 {
+    font-size: clamp(1.65rem, 7vw, 2.1rem) !important;
+    line-height: 1.12 !important;
+    letter-spacing: -0.01em !important;
+  }
+
+  /* ── CTA primario: más aire en móvil ── */
+  .nx-btn-primary {
+    padding: 1rem 1.5rem !important;
+    font-size: 0.9rem !important;
+    border-radius: 0.875rem !important;
+  }
+
+  /* ── Reducir bottom padding en sections con canvas full-bleed ── */
+  #hero .section-inner,
+  #el-nodo .section-inner {
+    padding-bottom: 3rem !important;
+  }
 }
 
 /* Reducir repaints en elementos animados */
@@ -691,4 +720,8 @@ body.custom-cursor-active * {
   will-change: transform, opacity;
 }
 
-
+/* ── Touch drag cursor hint — animated on first load ── */
+.nx-touch-rotate-hint {
+  animation: touchSwipeHint 2.8s ease-in-out 1.2s 1 forwards;
+  opacity: 0;
+}

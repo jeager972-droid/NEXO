@@ -89,7 +89,7 @@ export default function HeroSection() {
           }}
         >
           {/* Glow ambiental azul detrás del nodo */}
-          <div aria-hidden="true" style={{
+          <div aria-hidden="true" className="nx-hero-glow-ambient" style={{
             position:        'absolute',
             right:           '5%',
             top:             '50%',
@@ -236,18 +236,34 @@ export default function HeroSection() {
                 justify-content: flex-start !important;
                 padding-top: 5.5rem !important;
               }
+              /* Reorder: canvas above copy, flex column */
               #hero .nx-hero-grid {
                 grid-template-columns: 1fr !important;
-                gap: 2.5rem !important;
+                gap: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
               }
               #hero .nx-hero-canvas {
-                height: 300px !important;
-                border-radius: 1rem !important;
+                order: -1 !important;
+                height: 55svh !important;
+                min-height: 280px !important;
+                border-radius: 0 !important;
+                margin-left: calc(-1 * var(--nx-mobile-px)) !important;
+                margin-right: calc(-1 * var(--nx-mobile-px)) !important;
+                width: calc(100% + 2 * var(--nx-mobile-px)) !important;
+                margin-bottom: 2rem !important;
               }
-              #hero [style*="radial-gradient"] {
-                width: 300px !important;
+              #hero .nx-hero-copy {
+                order: 1 !important;
+              }
+              /* Glow: full-width behind canvas on mobile */
+              #hero .nx-hero-glow-ambient {
+                width: 100% !important;
                 height: 300px !important;
-                right: -10% !important;
+                right: 0 !important;
+                top: 0 !important;
+                transform: none !important;
+                border-radius: 0 !important;
               }
               #hero .nx-link-arrow {
                 display: none;
