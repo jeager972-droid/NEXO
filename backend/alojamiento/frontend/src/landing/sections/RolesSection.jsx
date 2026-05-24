@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -7,7 +8,7 @@ gsap.registerPlugin(ScrollTrigger)
 
 // MODULE 07 — ROLES & USE CASES
 // CAMBIO 3: Bug fix — GSAP-driven tab transitions instead of CSS animation
-// CAMBIO 6: Tabs de rol entran con stagger horizontal de 0.1s al entrar al viewport
+// CAMBIO 6: Sticky scroll, tabs stagger (0.08s) y switchTab animado con GSAP
 
 const ROLES = [
   {
@@ -90,15 +91,20 @@ const ROLES = [
 ]
 
 export default function RolesSection() {
-  const sectionRef   = useRef()
+  const wrapperRef   = useRef()
+  const innerRef     = useRef()
   const tabsContainerRef = useRef()
   const panelRef     = useRef()
   const [activeRole, setActiveRole] = useState(0)
   const currentRole  = useRef(0)
   const isAnimating  = useRef(false)
-  useReveal(sectionRef)
 
-  // CAMBIO 6: Stagger de entrada horizontal de los tabs al entrar en viewport
+  useReveal(innerRef)
+
+  // Aplicar arquitectura sticky scroll
+  useStickyScroll(wrapperRef, innerRef)
+
+  // PASO 4: Tabs stagger horizontal de 0.08s desde opacity:0
   useEffect(() => {
     const container = tabsContainerRef.current
     if (!container) return
@@ -107,15 +113,15 @@ export default function RolesSection() {
     gsap.set(tabs, { opacity: 0, y: 15 })
 
     const trigger = ScrollTrigger.create({
-      trigger: container,
-      start: 'top 80%',
-      once: true,
+      trigger: wrapperRef.current,
+      start: 'top 60%',
+      toggleActions: 'play none none none',
       onEnter: () => {
         gsap.to(tabs, {
           opacity: 1,
           y: 0,
           duration: 0.6,
-          stagger: 0.1,
+          stagger: 0.08,
           ease: 'power3.out',
         })
       }
@@ -124,15 +130,16 @@ export default function RolesSection() {
     return () => trigger.kill()
   }, [])
 
-  // CAMBIO 3: Transición GSAP (fade out 150ms -> fade in 250ms)
+  // PASO 4: Transición entre pestañas (switchTab) con GSAP timeline
   const switchRole = useCallback((idx) => {
     if (idx === currentRole.current || isAnimating.current) return
     isAnimating.current = true
 
+    // Exit: yPercent / y: -12, opacity: 0, duration: 0.18s
     gsap.to(panelRef.current, {
       opacity: 0,
-      y: 8,
-      duration: 0.15,
+      y: -12,
+      duration: 0.18,
       ease: 'power2.in',
       onComplete: () => {
         setActiveRole(idx)
@@ -141,6 +148,7 @@ export default function RolesSection() {
     })
   }, [])
 
+  // Entrance: opacity: 1, y: 0, duration: 0.28s, ease: power3.out
   useEffect(() => {
     if (!panelRef.current) return
     gsap.fromTo(
@@ -159,108 +167,109 @@ export default function RolesSection() {
   const role = ROLES[activeRole]
 
   return (
-    <section
-      ref={sectionRef}
-      id="roles"
-      className="nx-section"
-      style={{
-        background: 'var(--nx-void)',
-        paddingTop: '7rem',
-        paddingBottom: '7rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
-      }}
-    >
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Header */}
-        <div className="nx-eyebrow nx-reveal">Por rol</div>
-        <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '700px', marginBottom: '1rem' }}>
-          NEXO opera diferente para cada rol.
-        </h2>
-        <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '500px', marginBottom: '3.5rem' }}>
-          Pero todos ven lo mismo: control total.
-        </p>
+    <div ref={wrapperRef} className="section-wrapper" id="roles">
+      <section
+        ref={innerRef}
+        className="section-inner"
+        style={{
+          background: 'var(--nx-void)',
+          paddingLeft: 'var(--nx-section-px)',
+          paddingRight: 'var(--nx-section-px)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          {/* Header */}
+          <div className="nx-eyebrow nx-reveal">Por rol</div>
+          <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '700px', marginBottom: '1rem' }}>
+            NEXO opera diferente para cada rol.
+          </h2>
+          <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '500px', marginBottom: '3.5rem' }}>
+            Pero todos ven lo mismo: control total.
+          </p>
 
-        {/* Tabs con ref para el stagger horizontal de 0.1s */}
-        <div
-          ref={tabsContainerRef}
-          className="nx-tabs"
-          role="tablist"
-          aria-label="Roles de usuario"
-        >
-          {ROLES.map((r, i) => (
-            <button
-              key={r.id}
-              id={`tab-${r.id}`}
-              className={`nx-tab${activeRole === i ? ' active' : ''}`}
-              onClick={() => switchRole(i)}
-              aria-selected={activeRole === i}
-              aria-controls={`panel-${r.id}`}
-              role="tab"
-              type="button"
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab panel controlado por GSAP */}
-        <div
-          ref={panelRef}
-          id={`panel-${role.id}`}
-          role="tabpanel"
-          aria-labelledby={`tab-${role.id}`}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            gap: '3.5rem',
-            alignItems: 'start',
-            opacity: 1,
-            willChange: 'opacity, transform',
-          }}
-        >
-          {/* Icon */}
+          {/* Tabs */}
           <div
-            className="nx-icon"
-            style={{ width: '3.5rem', height: '3.5rem', borderRadius: '1rem', marginTop: '0.25rem' }}
+            ref={tabsContainerRef}
+            className="nx-tabs"
+            role="tablist"
+            aria-label="Roles de usuario"
           >
-            {role.icon}
+            {ROLES.map((r, i) => (
+              <button
+                key={r.id}
+                id={`tab-${r.id}`}
+                className={`nx-tab${activeRole === i ? ' active' : ''}`}
+                onClick={() => switchRole(i)}
+                aria-selected={activeRole === i}
+                aria-controls={`panel-${r.id}`}
+                role="tab"
+                type="button"
+              >
+                {r.label}
+              </button>
+            ))}
           </div>
 
-          <div>
-            {/* Role label */}
-            <div style={{
-              fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.12em',
-              textTransform: 'uppercase', color: 'var(--nx-blue)', marginBottom: '0.75rem',
-            }}>
-              {role.label}
+          {/* Tab panel controlado por GSAP */}
+          <div
+            ref={panelRef}
+            id={`panel-${role.id}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${role.id}`}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              gap: '3.5rem',
+              alignItems: 'start',
+              opacity: 1,
+              willChange: 'opacity, transform',
+            }}
+          >
+            {/* Icon */}
+            <div
+              className="nx-icon"
+              style={{ width: '3.5rem', height: '3.5rem', borderRadius: '1rem', marginTop: '0.25rem' }}
+            >
+              {role.icon}
             </div>
 
-            {/* Headline */}
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--nx-white)', marginBottom: '0.85rem', lineHeight: 1.2 }}>
-              {role.headline}
-            </h3>
+            <div>
+              {/* Role label */}
+              <div style={{
+                fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.12em',
+                textTransform: 'uppercase', color: 'var(--nx-blue)', marginBottom: '0.75rem',
+              }}>
+                {role.label}
+              </div>
 
-            {/* Body */}
-            <p className="nx-body" style={{ marginBottom: '2rem', maxWidth: '560px' }}>
-              {role.body}
-            </p>
+              {/* Headline */}
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--nx-white)', marginBottom: '0.85rem', lineHeight: 1.2 }}>
+                {role.headline}
+              </h3>
 
-            {/* Feature list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {role.features.map(f => (
-                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.875rem', color: 'var(--nx-text)' }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                    <circle cx="8" cy="8" r="7" stroke="var(--nx-blue)" strokeWidth="1"/>
-                    <path d="M5 8l2 2 4-4" stroke="var(--nx-blue)" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  {f}
-                </div>
-              ))}
+              {/* Body */}
+              <p className="nx-body" style={{ marginBottom: '2rem', maxWidth: '560px' }}>
+                {role.body}
+              </p>
+
+              {/* Feature list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {role.features.map(f => (
+                  <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.875rem', color: 'var(--nx-text)' }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                      <circle cx="8" cy="8" r="7" stroke="var(--nx-blue)" strokeWidth="1"/>
+                      <path d="M5 8l2 2 4-4" stroke="var(--nx-blue)" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {f}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <style>{`
         @media (max-width: 640px) {
@@ -271,6 +280,6 @@ export default function RolesSection() {
           .nx-tab  { font-size: 0.75rem; padding: 0.6rem 0.85rem; white-space: nowrap; }
         }
       `}</style>
-    </section>
+    </div>
   )
 }

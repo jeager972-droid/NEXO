@@ -1,10 +1,12 @@
 import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
 import gsap from 'gsap'
 
 // MODULE 08 — APP DOWNLOAD
 // CAMBIO 4: Eliminado mockup de la app. Íconos al doble de tamaño.
 // GSAP magnetic/tilt + scale hover por plataforma con glow representativo.
+// CAMBIO 6: Sticky scroll
 
 const PLATFORMS = [
   {
@@ -15,7 +17,6 @@ const PLATFORMS = [
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
-        {/* Android robot icon */}
         <path d="M14 20h28v24a4 4 0 01-4 4H18a4 4 0 01-4-4V20z"/>
         <path d="M20 20V14a8 8 0 0116 0v6"/>
         <circle cx="21" cy="33" r="2" fill="currentColor" stroke="none"/>
@@ -85,7 +86,6 @@ const PLATFORMS = [
   },
 ]
 
-// CAMBIO 4: GSAP magnetic tilt + scale + glow on hover
 function PlatformCard({ id, name, icon, href, glowColor }) {
   const cardRef    = useRef()
   const glowRef    = useRef()
@@ -97,15 +97,13 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
     const iconEl = iconRef.current
     if (!card) return
 
-    // Tilt/magnetic: tracks cursor position within card, max ±12 deg
     const handleMouseMove = (e) => {
       const rect = card.getBoundingClientRect()
       const cx   = rect.left + rect.width / 2
       const cy   = rect.top  + rect.height / 2
-      const dx   = (e.clientX - cx) / (rect.width  / 2)  // -1 to 1
+      const dx   = (e.clientX - cx) / (rect.width  / 2)
       const dy   = (e.clientY - cy) / (rect.height / 2)
 
-      // Tilt the icon — gentle magnetic pull (max 8deg)
       gsap.to(iconEl, {
         rotateX: -dy * 8,
         rotateY:  dx * 8,
@@ -114,7 +112,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       })
     }
 
-    // Hover in: scale + translateY + glow
     const handleMouseEnter = () => {
       gsap.to(card, {
         scale: 1.12,
@@ -129,7 +126,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       })
     }
 
-    // Hover out: return to base state
     const handleMouseLeave = () => {
       gsap.to(card, {
         scale: 1,
@@ -180,7 +176,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
         position:       'relative',
         overflow:       'hidden',
         willChange:     'transform',
-        // Preserve 3D for tilt effect
         transformStyle: 'preserve-3d',
         textDecoration: 'none',
         transition:     'border-color 0.3s',
@@ -188,7 +183,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(10,132,255,0.4)'}
       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
     >
-      {/* Platform-specific glow — hidden by default, revealed on hover */}
       <div
         ref={glowRef}
         aria-hidden="true"
@@ -202,7 +196,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
         }}
       />
 
-      {/* Icon — double size vs original 28px → 56px */}
       <div
         ref={iconRef}
         style={{
@@ -215,7 +208,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
         {icon}
       </div>
 
-      {/* Platform name */}
       <span style={{
         fontSize:      '0.8rem',
         fontWeight:    600,
@@ -231,59 +223,64 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
 }
 
 export default function DownloadSection() {
-  const sectionRef = useRef()
-  useReveal(sectionRef)
+  const wrapperRef = useRef()
+  const innerRef = useRef()
+  useReveal(innerRef)
+
+  // Aplicar arquitectura sticky scroll
+  useStickyScroll(wrapperRef, innerRef)
 
   return (
-    <section
-      ref={sectionRef}
-      id="descarga"
-      className="nx-section"
-      style={{
-        background: 'var(--nx-deep)',
-        paddingTop: '7rem',
-        paddingBottom: '7rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
-      }}
-    >
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Header — centered */}
-        <div style={{ textAlign: 'center', marginBottom: '5rem' }}>
-          <div className="nx-eyebrow nx-reveal" style={{ justifyContent: 'center', display: 'flex' }}>
-            La aplicación
+    <div ref={wrapperRef} className="section-wrapper" id="descarga">
+      <section
+        ref={innerRef}
+        className="section-inner"
+        style={{
+          background: 'var(--nx-deep)',
+          paddingLeft: 'var(--nx-section-px)',
+          paddingRight: 'var(--nx-section-px)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          {/* Header — centered */}
+          <div style={{ textAlign: 'center', marginBottom: '5rem' }}>
+            <div className="nx-eyebrow nx-reveal" style={{ justifyContent: 'center', display: 'flex' }}>
+              La aplicación
+            </div>
+            <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ marginBottom: '1rem' }}>
+              Tu panel de control institucional.
+            </h2>
+            <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
+              Disponible para Android, iOS, Windows, Mac y Linux.
+              La misma información, en tiempo real, donde estés.
+            </p>
           </div>
-          <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ marginBottom: '1rem' }}>
-            Tu panel de control institucional.
-          </h2>
-          <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
-            Disponible para Android, iOS, Windows, Mac y Linux.
-            La misma información, en tiempo real, donde estés.
+
+          {/* Platform cards */}
+          <div
+            className="nx-reveal nx-reveal-delay-3"
+            style={{
+              display:         'flex',
+              gap:             '1.25rem',
+              justifyContent:  'center',
+              flexWrap:        'wrap',
+            }}
+          >
+            {PLATFORMS.map(p => (
+              <PlatformCard key={p.id} {...p} />
+            ))}
+          </div>
+
+          {/* Micro-copy */}
+          <p className="nx-micro nx-reveal nx-reveal-delay-4"
+            style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+            Descarga gratuita para instituciones vinculadas ·
+            El acceso completo se activa cuando la institución implementa NEXO.
           </p>
         </div>
-
-        {/* CAMBIO 4: Platform cards — íconos protagonistas, sin mockup */}
-        <div
-          className="nx-reveal nx-reveal-delay-3"
-          style={{
-            display:         'flex',
-            gap:             '1.25rem',
-            justifyContent:  'center',
-            flexWrap:        'wrap',
-          }}
-        >
-          {PLATFORMS.map(p => (
-            <PlatformCard key={p.id} {...p} />
-          ))}
-        </div>
-
-        {/* Micro-copy */}
-        <p className="nx-micro nx-reveal nx-reveal-delay-4"
-          style={{ textAlign: 'center', marginTop: '2.5rem' }}>
-          Descarga gratuita para instituciones vinculadas ·
-          El acceso completo se activa cuando la institución implementa NEXO.
-        </p>
-      </div>
-    </section>
+      </section>
+    </div>
   )
 }

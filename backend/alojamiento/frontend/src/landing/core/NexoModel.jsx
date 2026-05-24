@@ -2,10 +2,11 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF, MeshDistortMaterial } from '@react-three/drei'
 import * as THREE from 'three'
+import gsap from 'gsap'
 
 const MODEL_PATH = '/assets/models/nodo.glb'
 
-export default function NexoModel({ type, scale = 1.0, showShield = false, onHoverChange }) {
+export default function NexoModel({ type, scale = 1.0, showShield = false, onHoverChange, scrollProgress }) {
   const { scene } = useGLTF(MODEL_PATH)
   const outerRef = useRef()
   const innerRef = useRef()
@@ -26,10 +27,15 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, onHov
     return cl
   }, [scene])
 
-  // Continuous rotation of the model
+  // Continuous rotation of the model or scrollProgress based rotation
   useFrame((state, delta) => {
     if (innerRef.current) {
-      innerRef.current.rotation.y += delta * 0.12
+      if (scrollProgress !== undefined) {
+        // CAMBIO 6: Rotación progresiva en Y usando scrollProgress
+        innerRef.current.rotation.y = scrollProgress * Math.PI * 0.4
+      } else {
+        innerRef.current.rotation.y += delta * 0.12
+      }
     }
 
     if (shieldRef.current && shieldRef.current.material) {
@@ -54,6 +60,28 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, onHov
       shieldRef.current.rotation.z += delta * (rotSpeed * 0.6)
     }
   })
+
+  // PASO 4: Durante el sticky del Nodo, responde levemente al movimiento del mouse
+  useEffect(() => {
+    // Solo aplicar en el nodo interactivo de la sección de hardware (sin scrollProgress)
+    if (type !== 'solo' || scrollProgress !== undefined) return
+
+    const handleMouseMove = (e) => {
+      const x = (e.clientX / window.innerWidth - 0.5) * 16
+      const y = (e.clientY / window.innerHeight - 0.5) * 16
+      if (outerRef.current) {
+        gsap.to(outerRef.current.rotation, {
+          x: y * (Math.PI / 180),
+          y: x * (Math.PI / 180),
+          duration: 1.8,
+          ease: 'power2.out'
+        })
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [type, scrollProgress])
 
   useEffect(() => {
     if (!clonedScene || !outerRef.current || !innerRef.current) return

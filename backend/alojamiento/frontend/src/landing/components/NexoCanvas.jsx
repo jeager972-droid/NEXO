@@ -258,7 +258,7 @@ function InstitutionalNetwork({ onHoverChange }) {
   )
 }
 
-export default function NexoCanvas({ type, scale = 1.0, showShield = false, coldLight = false, interactive = true }) {
+export default function NexoCanvas({ type, scale = 1.0, showShield = false, coldLight = false, interactive = true, scrollProgress }) {
   const orbitRef = useRef()
   const [zoomEnabled, setZoomEnabled] = useState(false)
 
@@ -283,7 +283,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
         enableRotate={interactive}
         dampingFactor={0.06}
         enableDamping
-        autoRotate={!interactive}
+        autoRotate={!interactive && scrollProgress === undefined}
         autoRotateSpeed={0.6}
         minPolarAngle={Math.PI * 0.05}
         maxPolarAngle={Math.PI * 0.95}
@@ -298,6 +298,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
             scale={scale} 
             showShield={showShield} 
             onHoverChange={setZoomEnabled} 
+            scrollProgress={scrollProgress}
           />
         )}
       </Suspense>

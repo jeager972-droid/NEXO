@@ -1,5 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -7,7 +8,7 @@ gsap.registerPlugin(ScrollTrigger)
 
 // MODULE 03 — DECLARACIÓN DEL PROBLEMA
 // CAMBIO 2: Redacción en tercera persona generalizada. Tono diagnóstico, no acusatorio.
-// Título reemplazado. Sin cifras específicas de tiempo. Sin "tu institución".
+// CAMBIO 6: Sticky scroll, animación de título por palabras y stagger de columnas
 
 const PROBLEMS = [
   {
@@ -22,7 +23,6 @@ const PROBLEMS = [
       </svg>
     ),
     title: 'El registro manual de asistencia',
-    // Sin cifras específicas de tiempo — varía por institución y metodología
     body: 'En la mayoría de las instituciones educativas colombianas, el registro de asistencia consume tiempo de clase que los docentes no pueden recuperar. Ese tiempo existe, se acumula día tras día, y es irrecuperable. No es tiempo administrativo: es tiempo de cátedra que los estudiantes no reciben.',
   },
   {
@@ -53,92 +53,159 @@ const PROBLEMS = [
 ]
 
 export default function ProblemSection() {
-  const sectionRef = useRef()
+  const wrapperRef = useRef()
+  const innerRef = useRef()
+  const titleRef = useRef()
   const columnsRef = useRef([])
+  const eyebrowRef = useRef()
+  const closingRef = useRef()
 
-  // CAMBIO 6: ScrollTrigger con stagger en columnas + SplitText manual en título
-  useReveal(sectionRef)
+  useReveal(innerRef)
+
+  // Aplicar arquitectura sticky scroll
+  useStickyScroll(wrapperRef, innerRef)
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+
+    // Descomponer el título en palabras para simular SplitText por palabras
+    const titleEl = titleRef.current
+    if (titleEl) {
+      const words = titleEl.textContent.trim().split(/\s+/)
+      titleEl.innerHTML = words
+        .map(word => `<span style="display:inline-block;opacity:0;transform:translateY(40px)">${word}</span>`)
+        .join('&nbsp;')
+    }
+
+    // Set columns initial hidden state
+    gsap.set(columnsRef.current, { opacity: 0, y: 50 })
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: wrapper,
+        start: 'top 60%',
+        toggleActions: 'play none none none',
+      }
+    })
+
+    // Eyebrow
+    tl.fromTo(eyebrowRef.current,
+      { opacity: 0, y: -10 },
+      { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }
+    )
+
+    // Título: palabras con stagger 0.07s
+    .to(titleRef.current?.querySelectorAll('span') || [], {
+      opacity: 1,
+      y: 0,
+      duration: 0.6,
+      stagger: 0.07,
+      ease: 'power3.out',
+    }, '-=0.25')
+
+    // Tres columnas: stagger 0.15s, Y:50px + opacity:0 -> natural
+    .to(columnsRef.current, {
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+      stagger: 0.15,
+      ease: 'power3.out',
+    }, '-=0.25')
+
+    // Closing
+    .fromTo(closingRef.current,
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' },
+      '-=0.4'
+    )
+
+    return () => tl.kill()
+  }, [])
 
   return (
-    <section
-      ref={sectionRef}
-      id="el-problema"
-      className="nx-section"
-      style={{
-        background: 'var(--nx-void)',
-        paddingTop: '7rem',
-        paddingBottom: '7rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
-      }}
-    >
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Eyebrow */}
-        <div className="nx-eyebrow nx-reveal" style={{ marginBottom: '1rem' }}>
-          El diagnóstico
-        </div>
+    <div ref={wrapperRef} className="section-wrapper" id="el-problema">
+      <section
+        ref={innerRef}
+        className="section-inner"
+        style={{
+          background: 'var(--nx-void)',
+          paddingLeft: 'var(--nx-section-px)',
+          paddingRight: 'var(--nx-section-px)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          {/* Eyebrow */}
+          <div ref={eyebrowRef} className="nx-eyebrow nx-reveal" style={{ marginBottom: '1rem', opacity: 0 }}>
+            El diagnóstico
+          </div>
 
-        {/* CAMBIO 2: Nuevo título — diagnóstico, no acusatorio */}
-        <h2
-          className="nx-h2 nx-reveal nx-reveal-delay-1"
-          style={{ maxWidth: '700px', marginBottom: '5rem' }}
-        >
-          Hay vacíos que el sistema educativo colombiano lleva décadas sin cerrar.
-        </h2>
+          {/* CAMBIO 2: Nuevo título — diagnóstico, no acusatorio */}
+          <h2
+            ref={titleRef}
+            className="nx-h2"
+            style={{ maxWidth: '700px', marginBottom: '5rem' }}
+          >
+            Hay vacíos que el sistema educativo colombiano lleva décadas sin cerrar.
+          </h2>
 
-        {/* 3-column problem grid — CAMBIO 6: stagger entry */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '2.5rem',
-          }}
-        >
-          {PROBLEMS.map(({ id, icon, title, body }, i) => (
-            <div
-              key={id}
-              ref={el => columnsRef.current[i] = el}
-              className={`nx-reveal nx-reveal-delay-${i + 2}`}
-              style={{
-                borderTop: '1px solid var(--nx-border)',
-                paddingTop: '2rem',
-              }}
-            >
-              <div className="nx-icon" style={{ marginBottom: '1.5rem' }}>
-                {icon}
+          {/* 3-column problem grid */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '2.5rem',
+            }}
+          >
+            {PROBLEMS.map(({ id, icon, title, body }, i) => (
+              <div
+                key={id}
+                ref={el => columnsRef.current[i] = el}
+                className="nx-reveal"
+                style={{
+                  borderTop: '1px solid var(--nx-border)',
+                  paddingTop: '2rem',
+                }}
+              >
+                <div className="nx-icon" style={{ marginBottom: '1.5rem' }}>
+                  {icon}
+                </div>
+                <h3 className="nx-h3" style={{ marginBottom: '0.85rem' }}>{title}</h3>
+                <p className="nx-body" style={{ fontSize: '0.9rem' }}>{body}</p>
               </div>
-              <h3 className="nx-h3" style={{ marginBottom: '0.85rem' }}>{title}</h3>
-              {/* CAMBIO 2: cuerpo en tercera persona, tono de diagnóstico técnico */}
-              <p className="nx-body" style={{ fontSize: '0.9rem' }}>{body}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {/* Closing — CAMBIO 2: tercera persona generalizada */}
-        <div
-          className="nx-reveal nx-reveal-delay-5"
-          style={{
-            marginTop: '4.5rem',
-            paddingTop: '2.5rem',
-            borderTop: '1px solid var(--nx-border)',
-            display: 'flex',
-            justifyContent: 'center',
-          }}
-        >
-          <p style={{
-            maxWidth: '640px',
-            textAlign: 'center',
-            fontSize: '1rem',
-            lineHeight: 1.75,
-            color: 'var(--nx-text)',
-            fontStyle: 'italic',
-          }}>
-            NEXO no es una aplicación más. Es la infraestructura que cierra estos tres vacíos
-            simultáneamente, en tiempo real, sin depender de la conexión a internet
-            de las instituciones.
-          </p>
+          {/* Closing */}
+          <div
+            ref={closingRef}
+            className="nx-reveal"
+            style={{
+              marginTop: '4.5rem',
+              paddingTop: '2.5rem',
+              borderTop: '1px solid var(--nx-border)',
+              display: 'flex',
+              justifyContent: 'center',
+              opacity: 0,
+            }}
+          >
+            <p style={{
+              maxWidth: '640px',
+              textAlign: 'center',
+              fontSize: '1rem',
+              lineHeight: 1.75,
+              color: 'var(--nx-text)',
+              fontStyle: 'italic',
+            }}>
+              NEXO no es una aplicación más. Es la infraestructura que cierra estos tres vacíos
+              simultáneamente, en tiempo real, sin depender de la conexión a internet
+              de las instituciones.
+            </p>
+          </div>
         </div>
-      </div>
+      </section>
 
       <style>{`
         @media (max-width: 768px) {
@@ -147,6 +214,6 @@ export default function ProblemSection() {
           }
         }
       `}</style>
-    </section>
+    </div>
   )
 }

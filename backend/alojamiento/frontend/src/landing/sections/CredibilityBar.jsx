@@ -1,5 +1,10 @@
 import { useRef, useEffect, useState } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
 
 // MODULE 02 — CREDIBILITY BAR
 // Psychological trigger: social proof + risk reduction
@@ -39,101 +44,107 @@ function AnimatedNumber({ target, suffix, active }) {
 }
 
 export default function CredibilityBar() {
-  const sectionRef = useRef()
+  const wrapperRef = useRef()
+  const innerRef = useRef()
   const [active, setActive] = useState(false)
-  useReveal(sectionRef)
+  useReveal(innerRef)
+
+  // Aplicar arquitectura sticky scroll
+  useStickyScroll(wrapperRef, innerRef)
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setActive(true) },
-      { threshold: 0.3 }
-    )
-    if (sectionRef.current) observer.observe(sectionRef.current)
-    return () => observer.disconnect()
+    const trigger = ScrollTrigger.create({
+      trigger: wrapperRef.current,
+      start: 'top 60%',
+      onEnter: () => setActive(true),
+      once: true
+    })
+    return () => trigger.kill()
   }, [])
 
   return (
-    <section
-      ref={sectionRef}
-      id="credibilidad"
-      className="nx-section"
-      style={{
-        background: 'var(--nx-deep)',
-        borderTop: '1px solid var(--nx-border)',
-        borderBottom: '1px solid var(--nx-border)',
-        paddingTop: '5rem',
-        paddingBottom: '5rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
-      }}
-    >
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Anchor text */}
-        <p
-          className="nx-reveal nx-micro"
-          style={{
-            textAlign: 'center',
-            marginBottom: '2.5rem',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            fontSize: '0.72rem',
-          }}
-        >
-          Implementado en instituciones educativas de Colombia
-        </p>
+    <div ref={wrapperRef} className="section-wrapper" id="credibilidad" style={{ height: '140vh' }}>
+      <section
+        ref={innerRef}
+        className="section-inner"
+        style={{
+          background: 'var(--nx-deep)',
+          borderTop: '1px solid var(--nx-border)',
+          borderBottom: '1px solid var(--nx-border)',
+          paddingLeft: 'var(--nx-section-px)',
+          paddingRight: 'var(--nx-section-px)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          {/* Anchor text */}
+          <p
+            className="nx-reveal nx-micro"
+            style={{
+              textAlign: 'center',
+              marginBottom: '2.5rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              fontSize: '0.72rem',
+            }}
+          >
+            Implementado en instituciones educativas de Colombia
+          </p>
 
-        {/* Placeholder institution names */}
-        <div
-          className="nx-reveal nx-reveal-delay-1"
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '3rem',
-            marginBottom: '3rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          {['I.E. San Carlos', 'Colegio Mayor', 'Escuela Técnica N°4', 'I.E. La Primavera'].map(name => (
-            <span
-              key={name}
-              style={{
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: 'var(--nx-muted-2)',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              {name}
-            </span>
-          ))}
-        </div>
+          {/* Placeholder institution names */}
+          <div
+            className="nx-reveal nx-reveal-delay-1"
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '3rem',
+              marginBottom: '3rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            {['I.E. San Carlos', 'Colegio Mayor', 'Escuela Técnica N°4', 'I.E. La Primavera'].map(name => (
+              <span
+                key={name}
+                style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--nx-muted-2)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {name}
+              </span>
+            ))}
+          </div>
 
-        {/* Divider */}
-        <div className="nx-divider nx-reveal nx-reveal-delay-2" style={{ marginBottom: '3rem' }} />
+          {/* Divider */}
+          <div className="nx-divider nx-reveal nx-reveal-delay-2" style={{ marginBottom: '3rem' }} />
 
-        {/* Metrics */}
-        <div
-          className="nx-reveal nx-reveal-delay-3"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            gap: '1rem',
-          }}
-        >
-          {METRICS.map(({ num, suffix, label }) => (
-            <div
-              key={label}
-              style={{ textAlign: 'center', padding: '0.5rem' }}
-            >
-              <div className="nx-metric-num">
-                <AnimatedNumber target={num} suffix={suffix} active={active} />
+          {/* Metrics */}
+          <div
+            className="nx-reveal nx-reveal-delay-3"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, 1fr)',
+              gap: '1rem',
+            }}
+          >
+            {METRICS.map(({ num, suffix, label }) => (
+              <div
+                key={label}
+                style={{ textAlign: 'center', padding: '0.5rem' }}
+              >
+                <div className="nx-metric-num">
+                  <AnimatedNumber target={num} suffix={suffix} active={active} />
+                </div>
+                <div className="nx-metric-label">{label}</div>
               </div>
-              <div className="nx-metric-label">{label}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
 
       <style>{`
         @media (max-width: 768px) {
@@ -142,6 +153,6 @@ export default function CredibilityBar() {
           }
         }
       `}</style>
-    </section>
+    </div>
   )
 }

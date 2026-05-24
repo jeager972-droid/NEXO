@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
 import NexoCanvas from '../components/NexoCanvas'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -9,7 +10,7 @@ gsap.registerPlugin(ScrollTrigger)
 // MODULE 06 — THE NODE
 // Left: large interactive 3D model with hotspot overlay
 // Right: spec list synced to hotspot clicks
-// CAMBIO 6: Zoom out del modelo 3D (1.15 -> 1.0) y stagger de hotspots (0.2s)
+// CAMBIO 6: Sticky scroll, zoom del modelo (1.12 -> 1.0) y hotspots stagger (0.18s)
 
 const SPECS = [
   {
@@ -108,46 +109,51 @@ function Hotspot({ spec, isActive, onClick }) {
 }
 
 export default function NodeSection() {
-  const sectionRef = useRef()
+  const wrapperRef = useRef()
+  const innerRef = useRef()
   const [active, setActive] = useState(null)
-  const [canvasScale, setCanvasScale] = useState(1.15)
-  useReveal(sectionRef)
+  const [canvasScale, setCanvasScale] = useState(1.12)
+  useReveal(innerRef)
+
+  // Aplicar arquitectura sticky scroll
+  useStickyScroll(wrapperRef, innerRef)
 
   useEffect(() => {
-    const section = sectionRef.current
-    if (!section) return
+    const wrapper = wrapperRef.current
+    const inner = innerRef.current
+    if (!wrapper || !inner) return
 
-    // Ocultar hotspots al inicio para la animación de entrada
-    const hotspots = section.querySelectorAll('.nx-hotspot')
+    // Ocultar hotspots al inicio
+    const hotspots = inner.querySelectorAll('.nx-hotspot')
     gsap.set(hotspots, { opacity: 0, scale: 0 })
 
     const tl = gsap.timeline({
       scrollTrigger: {
-        trigger: section,
+        trigger: wrapper,
         start: 'top 60%',
-        once: true,
+        toggleActions: 'play none none none',
       }
     })
 
-    // CAMBIO 6: Slow zoom out del modelo 3D al entrar en viewport
-    const scaleObj = { val: 1.15 }
+    // PASO 4: Modelo empieza con scale:1.12 y llega a 1.0 en 1.4s con power2.out
+    const scaleObj = { val: 1.12 }
     tl.to(scaleObj, {
       val: 1.0,
-      duration: 1.2,
-      ease: 'power3.out',
+      duration: 1.4,
+      ease: 'power2.out',
       onUpdate: () => {
         setCanvasScale(scaleObj.val)
       }
     })
 
-    // CAMBIO 6: Hotspots aparecen uno a uno con stagger 0.2s después de terminar la entrada
+    // PASO 4: Los hotspots aparecen con stagger 0.18s después de que el nodo termine su entrada
     tl.to(hotspots, {
       opacity: 1,
       scale: 1,
       duration: 0.5,
-      stagger: 0.2,
+      stagger: 0.18,
       ease: 'back.out(1.7)',
-    }, '-=0.2') // Solapado levemente para mayor fluidez
+    }, '-=0.1') // Empieza justo al final de la escala
 
     return () => tl.kill()
   }, [])
@@ -155,139 +161,140 @@ export default function NodeSection() {
   const toggle = (id) => setActive(prev => prev === id ? null : id)
 
   return (
-    <section
-      ref={sectionRef}
-      id="el-nodo"
-      className="nx-section"
-      style={{
-        background: 'var(--nx-deep)',
-        paddingTop: '7rem',
-        paddingBottom: '7rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
-      }}
-    >
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Header */}
-        <div className="nx-eyebrow nx-reveal">El hardware</div>
-        <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '680px', marginBottom: '1rem' }}>
-          Construido para durar en las condiciones reales de una institución educativa colombiana.
-        </h2>
-        <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '520px', marginBottom: '4rem' }}>
-          No diseñado en un laboratorio ideal. Diseñado para cortes de luz, para humedad,
-          para el uso diario de cientos de estudiantes — y para seguir funcionando.
-        </p>
+    <div ref={wrapperRef} className="section-wrapper" id="el-nodo">
+      <section
+        ref={innerRef}
+        className="section-inner"
+        style={{
+          background: 'var(--nx-deep)',
+          paddingLeft: 'var(--nx-section-px)',
+          paddingRight: 'var(--nx-section-px)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
+          {/* Header */}
+          <div className="nx-eyebrow nx-reveal">El hardware</div>
+          <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '680px', marginBottom: '1rem' }}>
+            Construido para durar en las condiciones reales de una institución educativa colombiana.
+          </h2>
+          <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '520px', marginBottom: '4rem' }}>
+            No diseñado en un laboratorio ideal. Diseñado para cortes de luz, para humedad,
+            para el uso diario de cientos de estudiantes — y para seguir funcionando.
+          </p>
 
-        {/* Grid: 3D canvas left, spec list right */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '4rem',
-            alignItems: 'center',
-          }}
-        >
-          {/* ── LEFT: 3D model with hotspot overlay ── */}
+          {/* Grid: 3D canvas left, spec list right */}
           <div
-            className="nx-reveal nx-reveal-delay-3"
-            style={{ position: 'relative', height: '520px' }}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '4rem',
+              alignItems: 'center',
+            }}
           >
-            {/* Live 3D canvas */}
-            <div style={{ width: '100%', height: '100%', borderRadius: '1.25rem', overflow: 'hidden' }}>
-              <NexoCanvas
-                type="solo"
-                scale={canvasScale}
-                coldLight={true}
-                interactive={true}
-              />
-            </div>
-
-            {/* Hotspot overlay — sits on top of canvas */}
-            {SPECS.map(spec => (
-              <Hotspot
-                key={spec.id}
-                spec={spec}
-                isActive={active === spec.id}
-                onClick={toggle}
-              />
-            ))}
-
-            {/* Cursor hint */}
+            {/* ── LEFT: 3D model with hotspot overlay ── */}
             <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                bottom: '1rem',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontSize: '0.65rem',
-                color: 'var(--nx-muted-2)',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-                pointerEvents: 'none',
-              }}
+              className="nx-reveal nx-reveal-delay-3"
+              style={{ position: 'relative', height: '520px' }}
             >
-              Rota con el cursor · Toca los puntos
-            </div>
-          </div>
+              {/* Live 3D canvas */}
+              <div style={{ width: '100%', height: '100%', borderRadius: '1.25rem', overflow: 'hidden' }}>
+                <NexoCanvas
+                  type="solo"
+                  scale={canvasScale}
+                  coldLight={true}
+                  interactive={true}
+                />
+              </div>
 
-          {/* ── RIGHT: Spec list synced to hotspots ── */}
-          <div className="nx-reveal nx-reveal-delay-4">
-            {SPECS.map(({ id, label, meaning }, i) => (
+              {/* Hotspot overlay — sits on top of canvas */}
+              {SPECS.map(spec => (
+                <Hotspot
+                  key={spec.id}
+                  spec={spec}
+                  isActive={active === spec.id}
+                  onClick={toggle}
+                />
+              ))}
+
+              {/* Cursor hint */}
               <div
-                key={id}
-                onClick={() => toggle(id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && toggle(id)}
-                aria-pressed={active === id}
+                aria-hidden="true"
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '1rem',
-                  padding: '1.4rem 0.75rem',
-                  borderBottom: '1px solid var(--nx-border)',
-                  cursor: 'pointer',
-                  borderRadius: '0.5rem',
-                  background: active === id ? 'rgba(10,132,255,0.05)' : 'transparent',
-                  transition: 'background 0.25s',
+                  position: 'absolute',
+                  bottom: '1rem',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '0.65rem',
+                  color: 'var(--nx-muted-2)',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
                 }}
               >
-                {/* Number circle */}
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                  border: `1.5px solid ${active === id ? 'var(--nx-blue)' : 'var(--nx-border)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.65rem', fontWeight: 700,
-                  color: active === id ? 'var(--nx-blue)' : 'var(--nx-muted)',
-                  marginTop: '2px',
-                  transition: 'border-color 0.25s, color 0.25s',
-                }}>
-                  {String(i + 1).padStart(2, '0')}
-                </div>
-
-                <div>
-                  <div style={{
-                    fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.3rem',
-                    color: active === id ? 'var(--nx-white)' : 'var(--nx-text)',
-                    transition: 'color 0.25s',
-                  }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--nx-muted)', lineHeight: 1.55 }}>
-                    {meaning}
-                  </div>
-                </div>
+                Rota con el cursor · Toca los puntos
               </div>
-            ))}
+            </div>
 
-            <p className="nx-micro" style={{ marginTop: '1.5rem', paddingLeft: '0.75rem' }}>
-              El 70% de los costos de daño por causas naturales o ambientales son cubiertos por NEXO durante la vigencia del contrato.
-            </p>
+            {/* ── RIGHT: Spec list synced to hotspots ── */}
+            <div className="nx-reveal nx-reveal-delay-4">
+              {SPECS.map(({ id, label, meaning }, i) => (
+                <div
+                  key={id}
+                  onClick={() => toggle(id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && toggle(id)}
+                  aria-pressed={active === id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '1rem',
+                    padding: '1.4rem 0.75rem',
+                    borderBottom: '1px solid var(--nx-border)',
+                    cursor: 'pointer',
+                    borderRadius: '0.5rem',
+                    background: active === id ? 'rgba(10,132,255,0.05)' : 'transparent',
+                    transition: 'background 0.25s',
+                  }}
+                >
+                  {/* Number circle */}
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                    border: `1.5px solid ${active === id ? 'var(--nx-blue)' : 'var(--nx-border)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.65rem', fontWeight: 700,
+                    color: active === id ? 'var(--nx-blue)' : 'var(--nx-muted)',
+                    marginTop: '2px',
+                    transition: 'border-color 0.25s, color 0.25s',
+                  }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </div>
+
+                  <div>
+                    <div style={{
+                      fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.3rem',
+                      color: active === id ? 'var(--nx-white)' : 'var(--nx-text)',
+                      transition: 'color 0.25s',
+                    }}>
+                      {label}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--nx-muted)', lineHeight: 1.55 }}>
+                      {meaning}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <p className="nx-micro" style={{ marginTop: '1.5rem', paddingLeft: '0.75rem' }}>
+                El 70% de los costos de daño por causas naturales o ambientales son cubiertos por NEXO durante la vigencia del contrato.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <style>{`
         @keyframes tooltipIn {
@@ -303,6 +310,6 @@ export default function NodeSection() {
           }
         }
       `}</style>
-    </section>
+    </div>
   )
 }

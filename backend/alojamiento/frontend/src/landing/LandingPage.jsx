@@ -1,4 +1,7 @@
 // LandingPage — orchestrates all 10 modules of the NEXO world-class landing
+import { useEffect } from 'react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Navbar            from './components/Navbar'
 import HeroSection       from './sections/HeroSection'
 import CredibilityBar    from './sections/CredibilityBar'
@@ -12,11 +15,26 @@ import SecuritySection   from './sections/SecuritySection'
 import FinalCTASection   from './sections/FinalCTASection'
 import Footer            from './sections/Footer'
 import CustomCursor      from './components/CustomCursor'
-import { useLenis }      from './components/useLenis'
+
+gsap.registerPlugin(ScrollTrigger)
 
 export default function LandingPage() {
-  // CAMBIO 6: Integrar Lenis como wrapper de scroll suave institucional
-  useLenis()
+  useEffect(() => {
+    // PASO 6: Debounce del refresh de ScrollTrigger en resize de ventana
+    let resizeTimer
+    const handleResize = () => {
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        ScrollTrigger.refresh()
+      }, 250)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      clearTimeout(resizeTimer)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   return (
     <>

@@ -1,8 +1,10 @@
 import { useRef } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
 
 // MODULE 09 — SECURITY & TRUST
 // Psychological trigger: fear elimination + regulatory authority (Colombian MEN / SIC)
+// CAMBIO 6: Sticky scroll
 
 const TRUST_POINTS = [
   {
@@ -67,7 +69,6 @@ const TRUST_POINTS = [
   },
 ]
 
-// Animated shield SVG
 function Shield() {
   return (
     <svg
@@ -78,21 +79,18 @@ function Shield() {
       fill="none"
       aria-hidden="true"
     >
-      {/* Outer shield */}
       <path
         d="M60 8L12 28v38c0 30 20 56 48 64 28-8 48-34 48-64V28L60 8z"
         stroke="rgba(10,132,255,0.4)"
         strokeWidth="1.5"
         fill="none"
       />
-      {/* Inner shield */}
       <path
         d="M60 20L24 36v28c0 22 15 42 36 48 21-6 36-26 36-48V36L60 20z"
         stroke="rgba(10,132,255,0.6)"
         strokeWidth="1"
         fill="rgba(10,132,255,0.04)"
       />
-      {/* Check */}
       <path
         d="M44 68l12 12 20-20"
         stroke="var(--nx-blue)"
@@ -100,110 +98,111 @@ function Shield() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Glow ring */}
       <circle cx="60" cy="68" r="24" stroke="rgba(10,132,255,0.15)" strokeWidth="1" fill="none"/>
     </svg>
   )
 }
 
 export default function SecuritySection() {
-  const sectionRef = useRef()
-  useReveal(sectionRef)
+  const wrapperRef = useRef()
+  const innerRef = useRef()
+  useReveal(innerRef)
+
+  // Aplicar arquitectura sticky scroll
+  useStickyScroll(wrapperRef, innerRef)
 
   return (
-    <section
-      ref={sectionRef}
-      id="seguridad"
-      className="nx-section"
-      style={{
-        background: 'var(--nx-void)',
-        paddingTop: '7rem',
-        paddingBottom: '7rem',
-        paddingLeft: 'var(--nx-section-px)',
-        paddingRight: 'var(--nx-section-px)',
-      }}
-    >
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Layout: shield left + content right */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1.4fr',
-            gap: '5rem',
-            alignItems: 'center',
-          }}
-        >
-          {/* Left — shield + title */}
-          <div className="nx-reveal">
-            <div className="nx-eyebrow" style={{ marginBottom: '1rem' }}>Seguridad</div>
-            <h2 className="nx-h2" style={{ marginBottom: '1.25rem' }}>
-              Los datos de tus estudiantes no son un activo de nadie más.
-            </h2>
-            <p className="nx-body" style={{ marginBottom: '2.5rem' }}>
-              NEXO fue diseñado desde cero con protección de datos como principio de arquitectura, no como característica adicional.
-            </p>
-
-            <Shield />
-
-            <p
-              style={{
-                marginTop: '2rem',
-                fontSize: '0.875rem',
-                fontStyle: 'italic',
-                color: 'var(--nx-muted)',
-                lineHeight: 1.6,
-                maxWidth: '380px',
-              }}
-            >
-              La confianza de una institución pública no se gana con palabras. Se demuestra con arquitectura.
-            </p>
-          </div>
-
-          {/* Right — trust points grid */}
+    <div ref={wrapperRef} className="section-wrapper" id="seguridad">
+      <section
+        ref={innerRef}
+        className="section-inner"
+        style={{
+          background: 'var(--nx-void)',
+          paddingLeft: 'var(--nx-section-px)',
+          paddingRight: 'var(--nx-section-px)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
           <div
-            className="nx-security-grid nx-reveal nx-reveal-delay-2"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1.4fr',
+              gap: '5rem',
+              alignItems: 'center',
+            }}
           >
-            {TRUST_POINTS.map(({ id, icon, title, body }, i) => (
-              <div
-                key={id}
-                className={`nx-card nx-reveal nx-reveal-delay-${i + 1}`}
-                style={{ padding: '1.5rem' }}
-              >
-                <div className="nx-icon" style={{ marginBottom: '1rem' }}>
-                  {icon}
-                </div>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--nx-white)', marginBottom: '0.4rem' }}>
-                  {title}
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--nx-muted)', lineHeight: 1.6 }}>
-                  {body}
-                </p>
-              </div>
-            ))}
+            {/* Left — shield + title */}
+            <div className="nx-reveal">
+              <div className="nx-eyebrow" style={{ marginBottom: '1rem' }}>Seguridad</div>
+              <h2 className="nx-h2" style={{ marginBottom: '1.25rem' }}>
+                Los datos de tus estudiantes no son un activo de nadie más.
+              </h2>
+              <p className="nx-body" style={{ marginBottom: '2.5rem' }}>
+                NEXO fue diseñado desde cero con protección de datos como principio de arquitectura, no como característica adicional.
+              </p>
 
-            {/* 6th cell — compliance badge */}
-            <div
-              className="nx-card nx-reveal nx-reveal-delay-5"
-              style={{
-                padding: '1.5rem',
-                background: 'rgba(10,132,255,0.05)',
-                borderColor: 'rgba(10,132,255,0.2)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                textAlign: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--nx-blue)' }}>Ley 1581</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--nx-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                Protección de Datos Colombia
+              <Shield />
+
+              <p
+                style={{
+                  marginTop: '2rem',
+                  fontSize: '0.875rem',
+                  fontStyle: 'italic',
+                  color: 'var(--nx-muted)',
+                  lineHeight: 1.6,
+                  maxWidth: '380px',
+                }}
+              >
+                La confianza de una institución pública no se gana con palabras. Se demuestra con arquitectura.
+              </p>
+            </div>
+
+            {/* Right — trust points grid */}
+            <div className="nx-security-grid nx-reveal nx-reveal-delay-2">
+              {TRUST_POINTS.map(({ id, icon, title, body }, i) => (
+                <div
+                  key={id}
+                  className={`nx-card nx-reveal nx-reveal-delay-${i + 1}`}
+                  style={{ padding: '1.5rem' }}
+                >
+                  <div className="nx-icon" style={{ marginBottom: '1rem' }}>
+                    {icon}
+                  </div>
+                  <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--nx-white)', marginBottom: '0.4rem' }}>
+                    {title}
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--nx-muted)', lineHeight: 1.6 }}>
+                    {body}
+                  </p>
+                </div>
+              ))}
+
+              {/* 6th cell — compliance badge */}
+              <div
+                className="nx-card nx-reveal nx-reveal-delay-5"
+                style={{
+                  padding: '1.5rem',
+                  background: 'rgba(10,132,255,0.05)',
+                  borderColor: 'rgba(10,132,255,0.2)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--nx-blue)' }}>Ley 1581</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--nx-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Protección de Datos Colombia
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <style>{`
         @media (max-width: 768px) {
@@ -215,6 +214,6 @@ export default function SecuritySection() {
           }
         }
       `}</style>
-    </section>
+    </div>
   )
 }
