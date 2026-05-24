@@ -54,7 +54,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
 
     const maxDim = Math.max(size.x, size.y, size.z)
     if (maxDim > 0) {
-      const TARGET_SIZE = (isMobile ? 3.8 : 2.6) * scale
+      const TARGET_SIZE = 2.6 * scale
       const s = TARGET_SIZE / maxDim
       outerRef.current.scale.setScalar(s)
 

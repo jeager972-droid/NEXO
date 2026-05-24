@@ -390,25 +390,15 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
 
   const finalScale = scale  // Scale controlled per-section, no global mobile penalty
 
-  // Contenedor inmersivo en móvil: rompe el padding del padre y ocupa 100vw × 100svh
-  const containerStyle = isMobile
-    ? {
-        position: 'relative',
-        width: '100vw',
-        height: '100svh',
-        marginLeft: 'calc(-1 * var(--nx-mobile-px))',
-        marginRight: 'calc(-1 * var(--nx-mobile-px))',
-        maxWidth: 'none',
-      }
-    : { position: 'relative', width: '100%', height: '100%' }
+  const containerStyle = { position: 'relative', width: '100%', height: '100%' }
 
   return (
     <div style={containerStyle}>
       {/* Canvas — pointer-events: none so it NEVER blocks page scroll */}
       <Canvas
         camera={{
-          position: [0, 0, type === 'grid' ? 9 : (isMobile ? 3.8 : 6)],
-          fov: isMobile ? 52 : 45,
+          position: [0, 0, type === 'grid' ? 9 : 6],
+          fov: 45,
         }}
         gl={{
           antialias: !isMobile,        // sin antialiasing en móvil (gran ahorro)

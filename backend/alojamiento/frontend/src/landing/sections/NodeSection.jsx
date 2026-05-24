@@ -325,19 +325,10 @@ export default function NodeSection() {
             gap: 2rem !important;
           }
           #el-nodo .nx-node-canvas-wrap {
-            height: 100svh !important;
-            min-height: 0 !important;
-            border-radius: 0 !important;
-            overflow: visible !important;
-            margin-left: calc(-1 * var(--nx-mobile-px)) !important;
-            margin-right: calc(-1 * var(--nx-mobile-px)) !important;
-            width: 100vw !important;
-            margin-bottom: 0.5rem !important;
-          }
-          /* Quitar clip del inner wrapper que recorta el canvas */
-          #el-nodo .nx-node-canvas-wrap > div:first-child {
-            border-radius: 0 !important;
-            overflow: visible !important;
+            height: 420px !important;
+            border-radius: 1rem !important;
+            overflow: hidden !important;
+            margin-bottom: 1.5rem !important;
           }
           .nx-hotspot { display: none !important; }
           /* Hide desktop cursor hint, show mobile touch hint instead */

@@ -253,14 +253,10 @@ export default function HeroSection() {
               }
               #hero .nx-hero-canvas {
                 order: -1 !important;
-                height: 100svh !important;
-                min-height: 0 !important;
-                border-radius: 0 !important;
-                overflow: visible !important;
-                margin-left: calc(-1 * var(--nx-mobile-px)) !important;
-                margin-right: calc(-1 * var(--nx-mobile-px)) !important;
-                width: 100vw !important;
-                margin-bottom: 0 !important;
+                height: 380px !important;
+                border-radius: 1rem !important;
+                overflow: hidden !important;
+                margin-bottom: 1.5rem !important;
               }
               #hero .nx-hero-copy {
                 order: 1 !important;
