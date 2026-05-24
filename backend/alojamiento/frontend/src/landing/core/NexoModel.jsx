@@ -70,38 +70,37 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
   useFrame((_state, delta) => {
     if (!innerRef.current) return
 
-    if (scrollProgress !== undefined) {
-      // Hero mode: rotate Y proportional to scroll progress (0 → 0.4π)
-      innerRef.current.rotation.y = scrollProgress * Math.PI * 0.4
-    } else if (isUserDragging && dragDeltaRef?.current) {
-      // User dragging: apply orbital rotation from overlay deltas
+    let needsUpdate = false
+
+    if (isUserDragging && dragDeltaRef?.current) {
       const { dx, dy } = dragDeltaRef.current
-      innerRef.current.rotation.y += dx * 0.008
-      innerRef.current.rotation.x += dy * 0.008
-
-      // Clamp X rotation so model doesn't flip upside down
-      innerRef.current.rotation.x = Math.max(
-        -Math.PI / 4,
-        Math.min(Math.PI / 4, innerRef.current.rotation.x)
-      )
-
-      // Reset deltas after consuming them
-      dragDeltaRef.current = { dx: 0, dy: 0 }
+      if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
+        innerRef.current.rotation.y += dx * 0.008
+        innerRef.current.rotation.x += dy * 0.008
+        innerRef.current.rotation.x = Math.max(
+          -Math.PI / 4,
+          Math.min(Math.PI / 4, innerRef.current.rotation.x)
+        )
+        dragDeltaRef.current = { dx: 0, dy: 0 }
+        needsUpdate = true
+      }
     } else {
-      // Auto-rotation: continuous slow Y spin at 60fps
-      innerRef.current.rotation.y += AUTO_ROTATION_SPEED
+      // Rotación automática continua
+      innerRef.current.rotation.y += 0.004
+      needsUpdate = true
     }
 
-    // Shield animation (independent of main model)
-    if (shieldRef.current && shieldRef.current.material) {
+    // Shield animation
+    if (shieldRef.current?.material) {
       const time = _state.clock.getElapsedTime()
       const mat = shieldRef.current.material
       mat.distort = THREE.MathUtils.lerp(mat.distort, 0.05, 0.08)
-      mat.speed   = THREE.MathUtils.lerp(mat.speed, 0.4, 0.08)
       shieldRef.current.position.y = 0.1 + Math.sin(time * 0.3) * 0.004
       shieldRef.current.rotation.y -= delta * 0.04
-      shieldRef.current.rotation.z += delta * 0.024
+      needsUpdate = true
     }
+
+    if (needsUpdate) _state.invalidate()
   })
 
   return (

@@ -383,17 +383,41 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
       {/* Canvas — pointer-events: none so it NEVER blocks page scroll */}
       <Canvas
         camera={{ position: [0, 0, type === 'grid' ? 9 : 6], fov: 45 }}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-        dpr={[1, Math.min(window.devicePixelRatio, 2)]}
-        shadows
+        gl={{
+          antialias: !isMobile,        // sin antialiasing en móvil (gran ahorro)
+          alpha: true,
+          powerPreference: 'high-performance',
+          precision: isMobile ? 'mediump' : 'highp',
+        }}
+        dpr={isMobile
+          ? [1, Math.min(window.devicePixelRatio, 1.5)]
+          : [1, Math.min(window.devicePixelRatio, 2)]
+        }
+        shadows={!isMobile}            // sin sombras en móvil
+        frameloop="demand"             // solo renderiza cuando hay cambios
         style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
       >
         {/* 3-point lighting */}
-        <ambientLight intensity={0.3} color="#ffffff" />
-        <directionalLight position={[5, 5, 5]} intensity={keyIntensity} color={keyLightColor} castShadow />
-        <directionalLight position={[-5, -2, 3]} intensity={fillIntensity} color={fillLightColor} />
-        <directionalLight position={[-3, 5, -5]} intensity={rimIntensity} color={rimLightColor} />
-        <Environment preset="city" />
+        <ambientLight intensity={isMobile ? 0.6 : 0.3} />
+        <directionalLight
+          position={[5, 5, 5]}
+          intensity={keyIntensity}
+          color={keyLightColor}
+          castShadow={!isMobile}
+        />
+        <directionalLight
+          position={[-5, -2, 3]}
+          intensity={fillIntensity}
+          color={fillLightColor}
+        />
+        {!isMobile && (
+          <directionalLight
+            position={[-3, 5, -5]}
+            intensity={rimIntensity}
+            color={rimLightColor}
+          />
+        )}
+        {!isMobile && <Environment preset="city" />}
 
         <Suspense fallback={null}>
           {type === 'grid' ? (
@@ -413,7 +437,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
       </Canvas>
 
       {/* Drag overlay — sits above canvas, captures drag without blocking scroll */}
-      {type !== 'grid' && !isMobile && (
+      {type !== 'grid' && (
         <DragOverlay
           onDrag={handleDrag}
           onDragStart={handleDragStart}

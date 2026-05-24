@@ -27,51 +27,43 @@ export default function HeroSection() {
   useStickyScroll(wrapperRef, innerRef, { isFirst: true })
 
   useEffect(() => {
+    const isMobile = window.innerWidth <= 768
     const wrapper = wrapperRef.current
     if (!wrapper) return
 
-    // Cinematic entrance — fires once on mount (hero is always visible at load)
-    const tl = gsap.timeline({ delay: 0.1 })
+    const tl = gsap.timeline({ delay: isMobile ? 0.2 : 0.1 })
 
-    // Eyebrow slides in from top
     tl.fromTo(eyebrowRef.current,
-      { opacity: 0, y: -12 },
-      { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out' }
+      { opacity: 0, y: isMobile ? -8 : -12 },
+      { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }
     )
-
-    // H1: two lines stagger — Bug 4: duration 1.0s, expo.out, stagger 0.15s
     .fromTo([line1Ref.current, line2Ref.current],
-      { opacity: 0, y: 60 },
-      { opacity: 1, y: 0, duration: 1.0, ease: 'expo.out', stagger: 0.15 },
-      '-=0.4'
+      { opacity: 0, y: isMobile ? 30 : 60 },
+      { opacity: 1, y: 0, duration: isMobile ? 0.7 : 1.0,
+        ease: 'expo.out', stagger: 0.12 },
+      '-=0.35'
     )
-
-    // Subtitle — Bug 4: duration 0.85s, power3.out
     .fromTo(subtitleRef.current,
-      { opacity: 0, y: 24 },
-      { opacity: 1, y: 0, duration: 0.85, ease: 'power3.out' },
-      '-=0.6'
-    )
-
-    // CTAs — Bug 4: duration 0.75s, stagger 0.12s
-    .fromTo(ctaRef.current?.children || [],
-      { opacity: 0, y: 16 },
-      { opacity: 1, y: 0, duration: 0.75, ease: 'power3.out', stagger: 0.12 },
+      { opacity: 0, y: isMobile ? 15 : 24 },
+      { opacity: 1, y: 0, duration: 0.75, ease: 'power3.out' },
       '-=0.5'
     )
-
-    // Microcopy
+    .fromTo(ctaRef.current?.children || [],
+      { opacity: 0, y: 12 },
+      { opacity: 1, y: 0, duration: 0.65, ease: 'power3.out',
+        stagger: 0.1 },
+      '-=0.4'
+    )
     .fromTo(microRef.current,
       { opacity: 0 },
-      { opacity: 1, duration: 0.6, ease: 'power2.out' },
-      '-=0.3'
+      { opacity: 1, duration: 0.5, ease: 'power2.out' },
+      '-=0.2'
     )
-
-    // Canvas 3D entrance
     .fromTo(canvasRef.current,
-      { opacity: 0, scale: 0.96 },
-      { opacity: 1, scale: 1, duration: 1.5, ease: 'expo.out' },
-      0.2
+      { opacity: 0, scale: isMobile ? 0.98 : 0.96 },
+      { opacity: 1, scale: 1,
+        duration: isMobile ? 1.0 : 1.5, ease: 'expo.out' },
+      0.3
     )
 
     return () => tl.kill()
@@ -234,25 +226,34 @@ export default function HeroSection() {
 
           <style>{`
             @keyframes heroScrollIn { to { opacity: 1; } }
-            @keyframes scrollBlink { 0%,100%{opacity:.25} 50%{opacity:1} }
+            @keyframes scrollBlink {
+              0%,100% { opacity: .2; }
+              50%      { opacity: 1;  }
+            }
 
             @media (max-width: 768px) {
+              #hero .section-inner {
+                justify-content: flex-start !important;
+                padding-top: 5.5rem !important;
+              }
               #hero .nx-hero-grid {
                 grid-template-columns: 1fr !important;
-                gap: 2rem !important;
+                gap: 2.5rem !important;
               }
               #hero .nx-hero-canvas {
-                height: 280px !important;
-                margin: 0 -1.25rem;
-                border-radius: 0 !important;
+                height: 300px !important;
+                border-radius: 1rem !important;
               }
-              #hero .nx-hero-copy {
-                order: 1;
+              #hero [style*="radial-gradient"] {
+                width: 300px !important;
+                height: 300px !important;
+                right: -10% !important;
               }
-              #hero .nx-hero-canvas {
-                order: 2;
+              #hero .nx-link-arrow {
+                display: none;
               }
-              #hero [style*="580px"] {
+              #hero [style*="scroll indicator"],
+              #hero [style*="Desliza"] {
                 display: none;
               }
             }

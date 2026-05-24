@@ -70,11 +70,9 @@ export default function ProblemSection() {
 
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
-      gsap.set([eyebrowRef.current, titleRef.current, columnsRef.current, closingRef.current], {
-        opacity: 1,
-        y: 0,
-        clearProps: 'all'
-      })
+      gsap.set([columnsRef.current, eyebrowRef.current, closingRef.current], { opacity: 1, y: 0 })
+      gsap.set(titleRef.current?.querySelectorAll('span') || [],
+        { opacity: 1, y: 0 })
       return
     }
 
@@ -221,10 +219,11 @@ export default function ProblemSection() {
         @media (max-width: 768px) {
           #el-problema .nx-problem-grid {
             grid-template-columns: 1fr !important;
-            gap: 1.5rem !important;
+            gap: 1.25rem !important;
           }
           #el-problema .nx-problem-card {
             padding: 1.5rem !important;
+            border-radius: var(--nx-radius-card) !important;
           }
         }
       `}</style>

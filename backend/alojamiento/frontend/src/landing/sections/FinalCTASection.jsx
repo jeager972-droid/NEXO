@@ -30,6 +30,13 @@ export default function FinalCTASection() {
     // CAMBIO 6: El título entra carácter a carácter (materialización)
     // Descomponemos el título en spans de carácter para el stagger
     const titleEl = titleRef.current
+    const isMobile = window.innerWidth <= 768
+    if (isMobile && titleEl) {
+      gsap.set(titleEl, { opacity: 1 })
+      gsap.set([subtitleRef.current, btnsRef.current?.querySelectorAll('button, a') || [], microRef.current, contactRef.current], { opacity: 1, y: 0 })
+      return
+    }
+
     if (titleEl) {
       const original = titleEl.textContent.trim()
       titleEl.innerHTML = original
@@ -230,16 +237,28 @@ export default function FinalCTASection() {
 
         <style>{`
           @media (max-width: 768px) {
+            #contacto .section-inner {
+              text-align: left !important;
+            }
+            #contacto h2 {
+              font-size: clamp(1.5rem, 6vw, 1.85rem) !important;
+              overflow: visible !important;
+              padding-bottom: 0.3em !important;
+            }
             .nx-cta-buttons {
               flex-direction: column !important;
-              align-items: stretch !important;
-              gap: 0.875rem !important;
+              align-items:    stretch !important;
+              gap:            0.875rem !important;
             }
             .nx-cta-buttons button,
             .nx-cta-buttons a {
-              width: 100% !important;
-              justify-content: center;
-              text-align: center;
+              width:            100% !important;
+              justify-content:  center !important;
+              text-align:       center !important;
+            }
+            #contacto [style*="flexWrap"] {
+              justify-content: flex-start !important;
+              gap: 1rem !important;
             }
           }
         `}</style>

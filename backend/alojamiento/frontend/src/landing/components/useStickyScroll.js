@@ -12,54 +12,43 @@ export function useStickyScroll(
     const inner   = innerRef.current
     if (!wrapper || !inner) return
 
-    // En móvil: sin sticky, sin GSAP scroll.
-    // Las secciones fluyen normalmente con CSS.
-    // Solo aplica un fade-in simple via IntersectionObserver.
     const isMobile = window.innerWidth <= 768
 
     if (isMobile) {
-      // Asegura que todo sea visible en móvil sin animaciones de scroll
       gsap.set(inner, { clearProps: 'all' })
-
-      // Fade-in suave al entrar en viewport
       if (!isFirst) {
-        gsap.set(inner, { opacity: 0, y: 20 })
+        gsap.set(inner, { opacity: 0, y: 24 })
         const observer = new IntersectionObserver(
           ([entry]) => {
             if (entry.isIntersecting) {
               gsap.to(inner, {
-                opacity: 1,
-                y: 0,
-                duration: 0.6,
-                ease: 'power2.out',
+                opacity: 1, y: 0,
+                duration: 0.55, ease: 'power2.out',
               })
               observer.disconnect()
             }
           },
-          { threshold: 0.1 }
+          { threshold: 0.08 }
         )
         observer.observe(inner)
         return () => observer.disconnect()
-      } else {
-        gsap.set(inner, { opacity: 1, y: 0 })
       }
+      gsap.set(inner, { opacity: 1, y: 0 })
       return
     }
 
-    // DESKTOP: comportamiento sticky original intacto
+    // DESKTOP — sticky scroll cinematográfico
     const ctx = gsap.context(() => {
       if (!isFirst) {
         gsap.fromTo(inner,
           { yPercent: 6, opacity: 0, scale: 0.98 },
           {
-            yPercent: 0,
-            opacity: 1,
-            scale: 1,
+            yPercent: 0, opacity: 1, scale: 1,
             ease: 'none',
             scrollTrigger: {
               trigger: wrapper,
               start: 'top 90%',
-              end: 'top 20%',
+              end:   'top 20%',
               scrub: 0.8,
             }
           }
@@ -72,14 +61,12 @@ export function useStickyScroll(
         gsap.fromTo(inner,
           { yPercent: 0, opacity: 1, scale: 1 },
           {
-            yPercent: -6,
-            opacity: 0,
-            scale: 0.98,
+            yPercent: -6, opacity: 0, scale: 0.98,
             ease: 'none',
             scrollTrigger: {
               trigger: wrapper,
               start: 'bottom 30%',
-              end: 'bottom top',
+              end:   'bottom top',
               scrub: 0.8,
             }
           }

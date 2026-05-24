@@ -125,6 +125,10 @@ export default function NodeSection() {
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
       setCanvasScale(1.0)
+      gsap.set(
+        document.querySelectorAll('#el-nodo .nx-hotspot'),
+        { display: 'none' }
+      )
       return
     }
 
@@ -312,12 +316,12 @@ export default function NodeSection() {
           }
           #el-nodo .nx-node-canvas-wrap {
             height: 320px !important;
+            border-radius: var(--nx-radius-card) !important;
           }
-          .nx-hotspot {
-            display: none !important;
-          }
-          #el-nodo .nx-node-specs {
-            padding-left: 0 !important;
+          .nx-hotspot { display: none !important; }
+          #el-nodo .nx-node-specs { padding-left: 0 !important; }
+          #el-nodo .nx-node-specs > div {
+            margin-bottom: 1rem !important;
           }
         }
       `}</style>

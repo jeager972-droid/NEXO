@@ -105,14 +105,10 @@ export default function RolesSection() {
 
   // PASO 4: Tabs stagger horizontal de 0.08s desde opacity:0
   useEffect(() => {
-    const container = tabsContainerRef.current
-    if (!container) return
-
-    const tabs = container.querySelectorAll('.nx-tab')
     const isMobile = window.innerWidth <= 768
-
     if (isMobile) {
-      gsap.set(tabs, { opacity: 1, y: 0, clearProps: 'transform' })
+      const tabs = tabsContainerRef.current?.querySelectorAll('.nx-tab')
+      if (tabs) gsap.set(tabs, { opacity: 1, y: 0 })
       return
     }
 
@@ -262,17 +258,17 @@ export default function RolesSection() {
               </p>
 
               {/* Feature list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <ul className="nx-role-features" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', listStyle: 'none', padding: 0 }}>
                 {role.features.map(f => (
-                  <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.875rem', color: 'var(--nx-text)' }}>
+                  <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.875rem', color: 'var(--nx-text)' }}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
                       <circle cx="8" cy="8" r="7" stroke="var(--nx-blue)" strokeWidth="1"/>
                       <path d="M5 8l2 2 4-4" stroke="var(--nx-blue)" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                     {f}
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </div>
         </div>
@@ -282,13 +278,15 @@ export default function RolesSection() {
         @media (max-width: 768px) {
           .nx-role-panel-grid {
             grid-template-columns: 1fr !important;
+            gap: 1.25rem !important;
           }
           .nx-role-panel-grid > div:first-child {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.5rem;
+            gap: 0.875rem;
           }
+          .nx-role-features { margin-top: 1rem !important; }
+          .nx-role-features li { font-size: 0.85rem !important; }
         }
       `}</style>
     </div>

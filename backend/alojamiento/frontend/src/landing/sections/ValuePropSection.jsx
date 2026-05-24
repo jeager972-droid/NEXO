@@ -48,6 +48,16 @@ export default function ValuePropSection() {
     const inner = innerRef.current
     if (!wrapper || !inner) return
 
+    const isMobile = window.innerWidth <= 768
+    if (isMobile) {
+      gsap.set(
+        [beforeRef.current, afterRef.current, titleRef.current,
+         subtitleRef.current, ctaRef.current, eyebrowRef.current],
+        { opacity: 1, x: 0, y: 0 }
+      )
+      return
+    }
+
     // Set initial hidden states
     gsap.set(beforeRef.current, { opacity: 0, x: -60 })
     gsap.set(afterRef.current, { opacity: 0, x: 60 })
@@ -182,9 +192,16 @@ export default function ValuePropSection() {
 
       <style>{`
         @media (max-width: 768px) {
-          .nx-ba-table { grid-template-columns: 1fr !important; }
-          .nx-ba-divider { display: none !important; }
-          .nx-ba-col--after { border-top: 1px solid var(--nx-border); }
+          #propuesta-de-valor .nx-ba-col {
+            border-radius: var(--nx-radius-card) !important;
+            padding: 1.25rem !important;
+          }
+          #propuesta-de-valor .nx-ba-col--before {
+            margin-bottom: 1rem;
+          }
+          #propuesta-de-valor [style*="marginTop: '2.5rem'"] {
+            margin-top: 1.5rem !important;
+          }
         }
       `}</style>
     </div>

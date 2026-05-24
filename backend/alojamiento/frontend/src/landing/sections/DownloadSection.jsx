@@ -290,7 +290,11 @@ export default function DownloadSection() {
           .nx-platform-grid {
             display: grid !important;
             grid-template-columns: repeat(2, 1fr) !important;
-            gap: 1rem !important;
+            gap: 0.875rem !important;
+          }
+          .nx-platform-grid > div,
+          .nx-platform-grid > a {
+            padding: 1.25rem 1rem !important;
           }
         }
       `}</style>

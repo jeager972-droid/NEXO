@@ -52,10 +52,18 @@ export default function HowItWorksSection() {
     const line = lineRef.current
     if (!wrapper || !line) return
 
-    if (window.innerWidth <= 768) {
+    const isMobile = window.innerWidth <= 768
+    if (isMobile) {
       gsap.set([eyebrowRef.current, titleRef.current, subtitleRef.current, microRef.current], { opacity: 1, y: 0 })
-      STEPS.forEach((_, i) => {
-        gsap.set(stepsRef.current[i], { opacity: 1, scale: 1 })
+      gsap.set(stepsRef.current, { opacity: 1, scale: 1 })
+      stepsRef.current.forEach(el => {
+        if (!el) return
+        const node = el.querySelector('.nx-timeline__node')
+        if (node) {
+          node.style.borderColor  = 'var(--nx-blue)'
+          node.style.color        = 'var(--nx-blue)'
+          node.style.backgroundColor = 'rgba(10,132,255,0.08)'
+        }
       })
       return
     }
@@ -251,6 +259,22 @@ export default function HowItWorksSection() {
           </p>
         </div>
       </section>
+
+      <style>{`
+        @media (max-width: 768px) {
+          #como-funciona .section-inner {
+            min-height: auto !important;
+            padding-bottom: 3rem !important;
+          }
+          #como-funciona h2 {
+            margin-bottom: 2.5rem !important;
+          }
+          #como-funciona .nx-micro {
+            text-align: left !important;
+            padding-left: 0 !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }
