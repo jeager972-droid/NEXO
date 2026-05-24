@@ -11,7 +11,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 const MODEL_PATH = '/assets/models/nodonuevo.glb'
 const AUTO_ROTATION_SPEED = 0.004 // rad/frame  ≈ 0.24°/frame @ 60fps
 
-export default function NexoModel({ type, scale = 1.0, showShield = false, scrollProgress, isUserDragging, dragDeltaRef, dragSensitivity = 0.008 }) {
+export default function NexoModel({ type, scale = 1.0, showShield = false, scrollProgress, isUserDragging, dragDeltaRef, dragSensitivity = 0.008, isMobile = false }) {
   const { gl } = useThree()
   const { scene } = useGLTF(MODEL_PATH)
   const outerRef = useRef()
@@ -54,7 +54,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
 
     const maxDim = Math.max(size.x, size.y, size.z)
     if (maxDim > 0) {
-      const TARGET_SIZE = 2.6 * scale
+      const TARGET_SIZE = (isMobile ? 3.8 : 2.6) * scale
       const s = TARGET_SIZE / maxDim
       outerRef.current.scale.setScalar(s)
 

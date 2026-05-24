@@ -720,6 +720,16 @@ body.custom-cursor-active * {
   will-change: transform, opacity;
 }
 
+/* ── Nodo full-screen en móvil ───────────────────────────────────────────────── */
+/* Aplicar al contenedor canvas en HeroSection / NodeSection cuando isMobile */
+.nx-node-fullscreen-mobile {
+  display: block;
+  width: 100vw;
+  height: 100svh;
+  position: relative;
+  background: var(--nx-deep);
+}
+
 /* ── Touch drag cursor hint — animated on first load ── */
 .nx-touch-rotate-hint {
   animation: touchSwipeHint 2.8s ease-in-out 1.2s 1 forwards;
