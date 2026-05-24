@@ -413,7 +413,7 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
       </Canvas>
 
       {/* Drag overlay — sits above canvas, captures drag without blocking scroll */}
-      {type !== 'grid' && (
+      {type !== 'grid' && !isMobile && (
         <DragOverlay
           onDrag={handleDrag}
           onDragStart={handleDragStart}

@@ -263,7 +263,7 @@ export default function DownloadSection() {
 
           {/* Platform cards */}
           <div
-            className="nx-reveal nx-reveal-delay-3"
+            className="nx-platform-grid nx-reveal nx-reveal-delay-3"
             style={{
               display:         'flex',
               gap:             '1.25rem',
@@ -284,6 +284,16 @@ export default function DownloadSection() {
           </p>
         </div>
       </section>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .nx-platform-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 1rem !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

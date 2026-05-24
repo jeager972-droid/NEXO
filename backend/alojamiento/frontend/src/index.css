@@ -585,4 +585,107 @@ body.custom-cursor-active * {
   transition: width 0.3s, height 0.3s, border-color 0.3s;
 }
 
+@media (max-width: 768px) {
+
+  /* ── Desactivar arquitectura sticky en móvil ── */
+  .section-wrapper {
+    height: auto !important;
+    min-height: 100svh;
+  }
+  .section-wrapper--tall {
+    height: auto !important;
+    min-height: auto;
+  }
+  .section-inner {
+    position: relative !important;
+    height: auto !important;
+    min-height: 100svh;
+    padding-top: 5rem;
+    padding-bottom: 4rem;
+    overflow: visible !important;
+  }
+
+  /* ── Padding lateral reducido en móvil ── */
+  :root {
+    --nx-section-px: 1.25rem;
+  }
+
+  /* ── Tipografía ajustada a pantalla pequeña ── */
+  .nx-h1 { font-size: clamp(1.8rem, 7vw, 2.4rem); }
+  .nx-h2 { font-size: clamp(1.5rem, 6vw, 2rem); }
+  .nx-h3 { font-size: 1rem; }
+  .nx-body { font-size: 0.9rem; line-height: 1.7; }
+
+  /* ── Navbar móvil ── */
+  .nx-navbar {
+    padding: 0 1.25rem;
+  }
+  .nx-navbar__links {
+    display: none;
+  }
+
+  /* ── Grids globales a 1 columna ── */
+  .nx-ba-table {
+    grid-template-columns: 1fr !important;
+  }
+  .nx-ba-divider {
+    display: none;
+  }
+  .nx-security-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Timeline horizontal → vertical ── */
+  .nx-timeline {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .nx-timeline__line,
+  .nx-timeline svg {
+    display: none !important;
+  }
+  .nx-timeline__step {
+    flex-direction: row;
+    text-align: left;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0 0 2rem 0;
+    width: 100%;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .nx-timeline__node {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  /* ── Tabs de roles: scroll horizontal ── */
+  .nx-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .nx-tabs::-webkit-scrollbar { display: none; }
+  .nx-tab {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.9rem;
+    white-space: nowrap;
+  }
+
+  /* ── Cursor personalizado desactivado en móvil ── */
+  #cursor-dot,
+  #cursor-ring {
+    display: none !important;
+  }
+  body.custom-cursor-active,
+  body.custom-cursor-active * {
+    cursor: auto !important;
+  }
+}
+
 

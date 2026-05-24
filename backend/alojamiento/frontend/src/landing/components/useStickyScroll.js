@@ -2,16 +2,52 @@ import { useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
-export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast = false } = {}) {
+export function useStickyScroll(
+  wrapperRef,
+  innerRef,
+  { isFirst = false, isLast = false } = {}
+) {
   useEffect(() => {
     const wrapper = wrapperRef.current
-    const inner = innerRef.current
+    const inner   = innerRef.current
     if (!wrapper || !inner) return
 
-    const ctx = gsap.context(() => {
+    // En móvil: sin sticky, sin GSAP scroll.
+    // Las secciones fluyen normalmente con CSS.
+    // Solo aplica un fade-in simple via IntersectionObserver.
+    const isMobile = window.innerWidth <= 768
 
-      // ENTRADA: la sección emerge desde abajo al hacer scroll down
-      // scrub bidireccional — al subir regresa suavemente a su estado "from"
+    if (isMobile) {
+      // Asegura que todo sea visible en móvil sin animaciones de scroll
+      gsap.set(inner, { clearProps: 'all' })
+
+      // Fade-in suave al entrar en viewport
+      if (!isFirst) {
+        gsap.set(inner, { opacity: 0, y: 20 })
+        const observer = new IntersectionObserver(
+          ([entry]) => {
+            if (entry.isIntersecting) {
+              gsap.to(inner, {
+                opacity: 1,
+                y: 0,
+                duration: 0.6,
+                ease: 'power2.out',
+              })
+              observer.disconnect()
+            }
+          },
+          { threshold: 0.1 }
+        )
+        observer.observe(inner)
+        return () => observer.disconnect()
+      } else {
+        gsap.set(inner, { opacity: 1, y: 0 })
+      }
+      return
+    }
+
+    // DESKTOP: comportamiento sticky original intacto
+    const ctx = gsap.context(() => {
       if (!isFirst) {
         gsap.fromTo(inner,
           { yPercent: 6, opacity: 0, scale: 0.98 },
@@ -19,7 +55,7 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
             yPercent: 0,
             opacity: 1,
             scale: 1,
-            ease: 'none',        // ease:none es OBLIGATORIO para scrub bidireccional
+            ease: 'none',
             scrollTrigger: {
               trigger: wrapper,
               start: 'top 90%',
@@ -29,12 +65,9 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
           }
         )
       } else {
-        // Primera sección: siempre completamente visible
         gsap.set(inner, { yPercent: 0, opacity: 1, scale: 1 })
       }
 
-      // SALIDA: la sección sube y desaparece al hacer scroll down
-      // scrub bidireccional — al subir regresa visiblemente
       if (!isLast) {
         gsap.fromTo(inner,
           { yPercent: 0, opacity: 1, scale: 1 },
@@ -42,7 +75,7 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
             yPercent: -6,
             opacity: 0,
             scale: 0.98,
-            ease: 'none',        // ease:none es OBLIGATORIO para scrub bidireccional
+            ease: 'none',
             scrollTrigger: {
               trigger: wrapper,
               start: 'bottom 30%',
@@ -52,7 +85,6 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
           }
         )
       }
-
     })
 
     return () => ctx.revert()

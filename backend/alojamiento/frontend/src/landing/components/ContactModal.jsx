@@ -130,6 +130,7 @@ export default function ContactModal({ onClose }) {
     >
       <div
         ref={panelRef}
+        className="nx-modal-panel"
         onClick={e => e.stopPropagation()}
         style={{
           background:   'var(--nx-deep)',
@@ -356,6 +357,23 @@ export default function ContactModal({ onClose }) {
           [aria-label="Formulario de contacto NEXO"] > div {
             padding: 1.75rem 1.25rem !important;
             max-height: 95vh !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .nx-modal-panel {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            top: auto !important;
+            transform: none !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            border-radius: 1.25rem 1.25rem 0 0 !important;
+            max-height: 92svh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
           }
         }
       `}</style>

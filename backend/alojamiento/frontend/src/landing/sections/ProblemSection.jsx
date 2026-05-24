@@ -68,6 +68,16 @@ export default function ProblemSection() {
     const wrapper = wrapperRef.current
     if (!wrapper) return
 
+    const isMobile = window.innerWidth <= 768
+    if (isMobile) {
+      gsap.set([eyebrowRef.current, titleRef.current, columnsRef.current, closingRef.current], {
+        opacity: 1,
+        y: 0,
+        clearProps: 'all'
+      })
+      return
+    }
+
     // Descomponer el título en palabras para simular SplitText por palabras
     const titleEl = titleRef.current
     if (titleEl) {
@@ -152,6 +162,7 @@ export default function ProblemSection() {
 
           {/* 3-column problem grid */}
           <div
+            className="nx-problem-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
@@ -162,7 +173,7 @@ export default function ProblemSection() {
               <div
                 key={id}
                 ref={el => columnsRef.current[i] = el}
-                className="nx-reveal"
+                className="nx-problem-card nx-reveal"
                 style={{
                   borderTop: '1px solid var(--nx-border)',
                   paddingTop: '2rem',
@@ -208,8 +219,12 @@ export default function ProblemSection() {
 
       <style>{`
         @media (max-width: 768px) {
-          #el-problema [style*="repeat(3, 1fr)"] {
+          #el-problema .nx-problem-grid {
             grid-template-columns: 1fr !important;
+            gap: 1.5rem !important;
+          }
+          #el-problema .nx-problem-card {
+            padding: 1.5rem !important;
           }
         }
       `}</style>

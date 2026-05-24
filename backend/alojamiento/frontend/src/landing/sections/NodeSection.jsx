@@ -122,6 +122,12 @@ export default function NodeSection() {
     const inner = innerRef.current
     if (!wrapper || !inner) return
 
+    const isMobile = window.innerWidth <= 768
+    if (isMobile) {
+      setCanvasScale(1.0)
+      return
+    }
+
     // Ocultar hotspots al inicio
     const hotspots = inner.querySelectorAll('.nx-hotspot')
     gsap.set(hotspots, { opacity: 0, scale: 0 })
@@ -185,6 +191,7 @@ export default function NodeSection() {
 
           {/* Grid: 3D canvas left, spec list right */}
           <div
+            className="nx-node-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
@@ -194,7 +201,7 @@ export default function NodeSection() {
           >
             {/* ── LEFT: 3D model with hotspot overlay ── */}
             <div
-              className="nx-reveal nx-reveal-delay-3"
+              className="nx-node-canvas-wrap nx-reveal nx-reveal-delay-3"
               style={{ position: 'relative', height: '520px' }}
             >
               {/* Live 3D canvas */}
@@ -238,7 +245,7 @@ export default function NodeSection() {
             </div>
 
             {/* ── RIGHT: Spec list synced to hotspots ── */}
-            <div className="nx-reveal nx-reveal-delay-4">
+            <div className="nx-node-specs nx-reveal nx-reveal-delay-4">
               {SPECS.map(({ id, label, meaning }, i) => (
                 <div
                   key={id}
@@ -296,16 +303,21 @@ export default function NodeSection() {
       </section>
 
       <style>{`
-        @keyframes tooltipIn {
-          from { opacity: 0; transform: translateX(-50%) translateY(6px); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
+        .nx-hotspot__tooltip { z-index: 20; }
+
         @media (max-width: 768px) {
-          #el-nodo [style*="repeat(2, 1fr)"] {
+          #el-nodo .nx-node-grid {
             grid-template-columns: 1fr !important;
+            gap: 2rem !important;
           }
-          #el-nodo [style*="height: 520px"] {
+          #el-nodo .nx-node-canvas-wrap {
             height: 320px !important;
+          }
+          .nx-hotspot {
+            display: none !important;
+          }
+          #el-nodo .nx-node-specs {
+            padding-left: 0 !important;
           }
         }
       `}</style>

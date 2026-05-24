@@ -110,7 +110,7 @@ export default function HeroSection() {
             zIndex:           0,
           }} />
 
-          <div style={{
+          <div className="nx-hero-grid" style={{
             position:            'relative',
             zIndex:               1,
             display:             'grid',
@@ -122,7 +122,7 @@ export default function HeroSection() {
             width:               '100%',
           }}>
             {/* ── LEFT: Copy ── */}
-            <div>
+            <div className="nx-hero-copy">
               {/* Eyebrow */}
               <div ref={eyebrowRef} className="nx-eyebrow" style={{ opacity: 0 }}>
                 Sistema de Custodia Educativa en Tiempo Real — Colombia
@@ -179,6 +179,7 @@ export default function HeroSection() {
             {/* ── RIGHT: 3D Node ── */}
             <div
               ref={canvasRef}
+              className="nx-hero-canvas"
               aria-label="Modelo 3D del nodo NEXO"
               style={{
                 height:       '520px',
@@ -234,9 +235,26 @@ export default function HeroSection() {
           <style>{`
             @keyframes heroScrollIn { to { opacity: 1; } }
             @keyframes scrollBlink { 0%,100%{opacity:.25} 50%{opacity:1} }
+
             @media (max-width: 768px) {
-              #hero [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
-              #hero [aria-label="Modelo 3D del nodo NEXO"] { height: 300px !important; }
+              #hero .nx-hero-grid {
+                grid-template-columns: 1fr !important;
+                gap: 2rem !important;
+              }
+              #hero .nx-hero-canvas {
+                height: 280px !important;
+                margin: 0 -1.25rem;
+                border-radius: 0 !important;
+              }
+              #hero .nx-hero-copy {
+                order: 1;
+              }
+              #hero .nx-hero-canvas {
+                order: 2;
+              }
+              #hero [style*="580px"] {
+                display: none;
+              }
             }
           `}</style>
         </section>

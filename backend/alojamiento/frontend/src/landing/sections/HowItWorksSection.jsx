@@ -52,6 +52,14 @@ export default function HowItWorksSection() {
     const line = lineRef.current
     if (!wrapper || !line) return
 
+    if (window.innerWidth <= 768) {
+      gsap.set([eyebrowRef.current, titleRef.current, subtitleRef.current, microRef.current], { opacity: 1, y: 0 })
+      STEPS.forEach((_, i) => {
+        gsap.set(stepsRef.current[i], { opacity: 1, scale: 1 })
+      })
+      return
+    }
+
     // Ocultar pasos inicialmente
     gsap.set(stepsRef.current, { opacity: 0, scale: 0.9 })
 

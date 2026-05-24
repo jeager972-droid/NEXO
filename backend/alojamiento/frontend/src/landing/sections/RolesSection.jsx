@@ -109,6 +109,13 @@ export default function RolesSection() {
     if (!container) return
 
     const tabs = container.querySelectorAll('.nx-tab')
+    const isMobile = window.innerWidth <= 768
+
+    if (isMobile) {
+      gsap.set(tabs, { opacity: 1, y: 0, clearProps: 'transform' })
+      return
+    }
+
     gsap.set(tabs, { opacity: 0, y: 15 })
 
     const trigger = ScrollTrigger.create({
@@ -214,6 +221,7 @@ export default function RolesSection() {
           {/* Tab panel controlado por GSAP */}
           <div
             ref={panelRef}
+            className="nx-role-panel-grid"
             id={`panel-${role.id}`}
             role="tabpanel"
             aria-labelledby={`tab-${role.id}`}
@@ -271,12 +279,16 @@ export default function RolesSection() {
       </section>
 
       <style>{`
-        @media (max-width: 640px) {
-          #roles [style*="grid-template-columns: auto 1fr"] {
+        @media (max-width: 768px) {
+          .nx-role-panel-grid {
             grid-template-columns: 1fr !important;
           }
-          .nx-tabs { overflow-x: auto; gap: 0; }
-          .nx-tab  { font-size: 0.75rem; padding: 0.6rem 0.85rem; white-space: nowrap; }
+          .nx-role-panel-grid > div:first-child {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+          }
         }
       `}</style>
     </div>

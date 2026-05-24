@@ -126,6 +126,7 @@ export default function SecuritySection() {
       >
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
           <div
+            className="nx-security-layout"
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1.4fr',
@@ -206,11 +207,9 @@ export default function SecuritySection() {
 
       <style>{`
         @media (max-width: 768px) {
-          #seguridad [style*="repeat(2, 1fr)"] {
+          .nx-security-layout {
             grid-template-columns: 1fr !important;
-          }
-          #seguridad > div > div {
-            grid-template-columns: 1fr !important;
+            gap: 2rem !important;
           }
         }
       `}</style>

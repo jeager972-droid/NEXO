@@ -147,6 +147,7 @@ export default function FinalCTASection() {
             {/* Botones */}
             <div
               ref={btnsRef}
+              className="nx-cta-buttons"
               style={{
                 display:        'flex',
                 gap:            '1rem',
@@ -226,6 +227,22 @@ export default function FinalCTASection() {
             </div>
           </div>
         </section>
+
+        <style>{`
+          @media (max-width: 768px) {
+            .nx-cta-buttons {
+              flex-direction: column !important;
+              align-items: stretch !important;
+              gap: 0.875rem !important;
+            }
+            .nx-cta-buttons button,
+            .nx-cta-buttons a {
+              width: 100% !important;
+              justify-content: center;
+              text-align: center;
+            }
+          }
+        `}</style>
       </div>
     </>
   )
