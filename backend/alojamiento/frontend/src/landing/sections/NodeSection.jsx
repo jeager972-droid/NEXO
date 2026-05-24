@@ -160,7 +160,7 @@ export default function NodeSection() {
   const toggle = (id) => setActive(prev => prev === id ? null : id)
 
   return (
-    <div ref={wrapperRef} className="section-wrapper" id="el-nodo">
+    <div ref={wrapperRef} className="section-wrapper section-wrapper--tall" id="el-nodo">
       <section
         ref={innerRef}
         className="section-inner"

@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, MeshDistortMaterial } from '@react-three/drei'
 import * as THREE from 'three'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 // BUG 1 FIX — rotación automática continua en eje Y usando Three.js clock (no GSAP)
 // BUG 1 FIX — drag orbital vía dragDeltaRef (overlay externo, no OrbitControls)
@@ -59,6 +60,9 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
 
       // Centrar en bounding box real (Bug 1 fix)
       innerRef.current.position.set(-center.x, -center.y, -center.z)
+
+      // Al terminar la normalización, el modelo está en el DOM con dimensiones reales
+      setTimeout(() => ScrollTrigger.refresh(), 100)
     }
   }, [clonedScene, scale])
 

@@ -21,10 +21,10 @@ gsap.registerPlugin(ScrollTrigger) // SINGLE registration point for the entire a
 export default function LandingPage() {
   useEffect(() => {
     // Bug 5: ScrollTrigger.refresh() called ONCE after full DOM paint
-    // setTimeout(0) ensures all child components have mounted and rendered
+    // setTimeout(1200) ensures all child components and 3D models have mounted and rendered
     const refreshTimer = setTimeout(() => {
       ScrollTrigger.refresh()
-    }, 0)
+    }, 1200)
 
     // Bug 5: Debounced refresh on resize (250ms cooldown)
     let resizeTimer
@@ -54,7 +54,7 @@ export default function LandingPage() {
       {/* Main content flow */}
       <main id="nx-landing">
         <HeroSection />         {/* 01 — Hero */}
-        <CredibilityBar />      {/* 02 — Credibilidad */}
+        {/* <CredibilityBar /> */} {/* 02 — Credibilidad */}
         <ProblemSection />      {/* 03 — Problema */}
         <HowItWorksSection />   {/* 04 — Cómo funciona */}
         <ValuePropSection />    {/* 05 — Propuesta de valor */}

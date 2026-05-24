@@ -131,7 +131,7 @@ export default function HowItWorksSection() {
   }, [])
 
   return (
-    <div ref={wrapperRef} className="section-wrapper" id="como-funciona">
+    <div ref={wrapperRef} className="section-wrapper section-wrapper--tall" id="como-funciona">
       <section
         ref={innerRef}
         className="section-inner"

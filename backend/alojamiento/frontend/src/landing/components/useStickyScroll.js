@@ -23,9 +23,9 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
             ease: "power3.out",
             scrollTrigger: {
               trigger: wrapper,
-              start: "top 90%",   // Bug 4: entrance at top 90%
-              end: "top 25%",
-              scrub: 1.0,         // Bug 4: entrance scrub 1.0
+              start: "top 85%",
+              end: "top 15%",
+              scrub: 0.8,
             }
           }
         )
@@ -43,9 +43,9 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
           ease: "none",
           scrollTrigger: {
             trigger: wrapper,
-            start: "bottom 80%",  // Bug 4: exit starts at bottom 80%
-            end: "bottom top",
-            scrub: 1.2,           // Bug 4: section transition scrub 1.2
+            start: "bottom 90%",
+            end: "bottom 10%",
+            scrub: 0.8,
           }
         })
       }
