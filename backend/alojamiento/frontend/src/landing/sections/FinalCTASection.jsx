@@ -125,6 +125,8 @@ export default function FinalCTASection() {
                 lineHeight:     1.12,
                 color:         'var(--nx-white)',
                 marginBottom:  '1.25rem',
+                overflow:      'visible',
+                paddingBottom: '0.15em',
               }}
               aria-label="El próximo semestre puede empezar diferente."
             >

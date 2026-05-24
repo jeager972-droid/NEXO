@@ -86,11 +86,12 @@ export default function HowItWorksSection() {
       })
 
       // PASO 4: Cada paso aparece con toggleActions cuando el scroll llega a su respectivo umbral
+      const thresholds = [0, 35, 70, 105]
+
       STEPS.forEach((_, i) => {
-        const threshold = i * 25 // 0%, 25%, 50%, 75%
         ScrollTrigger.create({
           trigger: wrapper,
-          start: `top -${threshold}%`,
+          start: `top -${thresholds[i]}%`,
           toggleActions: 'play none none none',
           onEnter: () => {
             gsap.to(stepsRef.current[i], {
@@ -120,7 +121,7 @@ export default function HowItWorksSection() {
           ease: 'power3.out',
           scrollTrigger: {
             trigger: wrapper,
-            start: 'bottom 90%',
+            start: 'top -110%',
             toggleActions: 'play none none none',
           }
         }
@@ -131,7 +132,12 @@ export default function HowItWorksSection() {
   }, [])
 
   return (
-    <div ref={wrapperRef} className="section-wrapper section-wrapper--tall" id="como-funciona">
+    <div
+      ref={wrapperRef}
+      className="section-wrapper section-wrapper--tall"
+      id="como-funciona"
+      style={{ height: '280vh' }}
+    >
       <section
         ref={innerRef}
         className="section-inner"

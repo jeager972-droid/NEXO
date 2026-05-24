@@ -55,3 +55,4 @@ venv/
 .git-backup-old/
 .vercel
 .env*.local
+*.zip

@@ -37,14 +37,14 @@ export function useStickyScroll(wrapperRef, innerRef, { isFirst = false, isLast 
       // PASO 3: ANIMACIÓN DE SALIDA (la sección actual sube y desaparece)
       if (!isLast) {
         gsap.to(inner, {
-          yPercent: -8,
+          yPercent: -6,
           opacity: 0,
-          scale: 0.97,
+          scale: 0.98,
           ease: "none",
           scrollTrigger: {
             trigger: wrapper,
-            start: "bottom 90%",
-            end: "bottom 10%",
+            start: "bottom 30%",
+            end: "bottom top",
             scrub: 0.8,
           }
         })

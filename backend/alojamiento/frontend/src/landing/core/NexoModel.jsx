@@ -8,7 +8,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // BUG 1 FIX — drag orbital vía dragDeltaRef (overlay externo, no OrbitControls)
 // El canvas tiene pointer-events: none; el overlay captura el drag sin bloquear el scroll.
 
-const MODEL_PATH = '/assets/models/nodo.glb'
+const MODEL_PATH = '/assets/models/nodonuevo.glb'
 const AUTO_ROTATION_SPEED = 0.004 // rad/frame  ≈ 0.24°/frame @ 60fps
 
 export default function NexoModel({ type, scale = 1.0, showShield = false, scrollProgress, isUserDragging, dragDeltaRef }) {
@@ -134,4 +134,4 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
   )
 }
 
-useGLTF.preload(MODEL_PATH)
+useGLTF.preload('/assets/models/nodonuevo.glb')
