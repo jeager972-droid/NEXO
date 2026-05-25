@@ -14,7 +14,7 @@ const PLATFORMS = [
     id: 'android',
     name: 'Android',
     glowColor: 'rgba(61,220,132,0.35)',   // Android green
-    href: '/assets/downloads/nexo.apk',
+    href: 'https://nexo-bay-mu.vercel.app/app/',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">

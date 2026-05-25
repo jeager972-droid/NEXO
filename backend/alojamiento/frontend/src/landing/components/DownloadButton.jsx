@@ -34,13 +34,8 @@ export default function AnimatedDownloadButton({
         ease: 'power2.out',
       })
 
-    // Iniciar descarga directa
-    const a = document.createElement('a')
-    a.href = href
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    // Abrir PWA en nueva pestaña
+    window.open('https://nexo-bay-mu.vercel.app/app/', '_blank', 'noopener,noreferrer')
   }
 
   return (
