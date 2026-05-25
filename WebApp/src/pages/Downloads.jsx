@@ -26,10 +26,11 @@ const Downloads = () => {
   const platforms = {
     android: {
       id: 'android',
-      label: 'Android (PWA)',
+      label: 'Android (APK)',
       icon: <Smartphone className="w-6 h-6" />,
-      url: 'https://nexo-bay-mu.vercel.app/app/',
-      description: 'Aplicación web progresiva para celulares y tablets Android. Instala desde el navegador.',
+      url: '/assets/downloads/nexo.apk',
+      filename: 'nexo.apk',
+      description: 'Aplicación nativa para celulares y tablets Android (requiere habilitar orígenes desconocidos).',
       disabled: false,
       badge: 'Recomendado'
     },
@@ -37,37 +38,37 @@ const Downloads = () => {
       id: 'windows',
       label: 'Windows',
       icon: <Monitor className="w-6 h-6" />,
-      url: 'https://nexo-bay-mu.vercel.app/app/',
-      description: 'Accede a NEXO desde tu navegador en Windows 10 y 11. Compatible con PWA.',
-      disabled: false,
-      badge: 'Disponible'
+      url: null,
+      description: 'Cliente de escritorio nativo para Windows 10 y 11 con inicio automatizado.',
+      disabled: true,
+      badge: 'Próximamente'
     },
     macos: {
       id: 'macos',
       label: 'macOS',
       icon: <Apple className="w-6 h-6" />,
-      url: 'https://nexo-bay-mu.vercel.app/app/',
-      description: 'Versión web optimizada para Apple Silicon (M1/M2/M3) y procesadores Intel.',
-      disabled: false,
-      badge: 'Disponible'
+      url: null,
+      description: 'Versión nativa optimizada para Apple Silicon (M1/M2/M3) y procesadores Intel.',
+      disabled: true,
+      badge: 'Próximamente'
     },
     linux: {
       id: 'linux',
       label: 'Linux',
       icon: <Monitor className="w-6 h-6" />,
-      url: 'https://nexo-bay-mu.vercel.app/app/',
-      description: 'Aplicación web compatible con las principales distribuciones Linux.',
-      disabled: false,
-      badge: 'Disponible'
+      url: null,
+      description: 'Instalador universal AppImage compatible con las principales distribuciones.',
+      disabled: true,
+      badge: 'Próximamente'
     },
     ios: {
       id: 'ios',
-      label: 'iOS (Safari)',
+      label: 'iOS (App Store)',
       icon: <Smartphone className="w-6 h-6" />,
-      url: 'https://nexo-bay-mu.vercel.app/app/',
-      description: 'Aplicación web para iPhone y iPad. Instala desde Safari añadiendo a pantalla de inicio.',
-      disabled: false,
-      badge: 'Disponible'
+      url: null,
+      description: 'Aplicación oficial para iPhone y iPad disponible próximamente en App Store.',
+      disabled: true,
+      badge: 'Próximamente'
     }
   };
 
@@ -162,13 +163,13 @@ const Downloads = () => {
               </p>
             </div>
 
-            {/* PWA Installation Instructions */}
-            {!activePlatform.disabled && (
+            {/* Android Specific Instruction Badge */}
+            {!activePlatform.disabled && activePlatform.id === 'android' && (
               <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-slate-800/50 rounded-2xl border border-blue-100 dark:border-slate-800 text-sm text-blue-800 dark:text-slate-300">
                 <Info className="w-5 h-5 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
                 <div>
-                  <span className="font-bold block mb-0.5">Aplicación Web Progresiva (PWA):</span>
-                  <span>Haz clic en "Abrir Aplicación" para acceder. Puedes instalarla en tu dispositivo desde el navegador para usarla como una app nativa.</span>
+                  <span className="font-bold block mb-0.5">Instrucciones de Instalación:</span>
+                  <span>Al finalizar la descarga, abre el archivo APK. Si tu navegador lo solicita, permite la instalación de aplicaciones desde fuentes desconocidas en la configuración de seguridad.</span>
                 </div>
               </div>
             )}
@@ -180,15 +181,23 @@ const Downloads = () => {
               <span className="text-sm font-bold text-gray-700 dark:text-slate-300">Gratuita y Segura</span>
             </div>
 
-            <a
-              href={activePlatform.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-institutional-900 text-white hover:bg-institutional-800 active:scale-95 px-8 py-4 rounded-2xl font-black uppercase transition-all shadow-lg shadow-institutional-900/20"
-            >
-              <Download size={20} />
-              Abrir Aplicación
-            </a>
+            {activePlatform.disabled ? (
+              <button
+                disabled
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-gray-200 dark:bg-slate-800 text-gray-400 dark:text-slate-500 px-8 py-4 rounded-2xl font-black uppercase cursor-not-allowed"
+              >
+                No Disponible
+              </button>
+            ) : (
+              <a
+                href={activePlatform.url}
+                download={activePlatform.filename}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-institutional-900 text-white hover:bg-institutional-800 active:scale-95 px-8 py-4 rounded-2xl font-black uppercase transition-all shadow-lg shadow-institutional-900/20"
+              >
+                <Download size={20} />
+                Comenzar Descarga
+              </a>
+            )}
           </div>
         </div>
       </div>
