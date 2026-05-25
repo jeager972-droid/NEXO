@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Download, Smartphone, Monitor, Globe, Info, CheckCircle } from 'lucide-react'
+import { Download, CheckCircle, Globe, AlertCircle } from 'lucide-react'
 
 // Detectar navegador
 function detectBrowser() {
@@ -18,11 +18,11 @@ function isMobile() {
 }
 
 const PLATFORMS = {
-  android: { title: 'Android', color: '#3DDC84', icon: 'smartphone' },
-  ios:     { title: 'iPhone / iPad', color: '#B4B4B9', icon: 'smartphone' },
-  windows: { title: 'Windows', color: '#0078D4', icon: 'monitor' },
-  mac:     { title: 'Mac', color: '#B4B4B9', icon: 'monitor' },
-  linux:   { title: 'Linux', color: '#FFB900', icon: 'monitor' },
+  android: { title: 'Android', icon: 'smartphone' },
+  ios:     { title: 'iPhone / iPad', icon: 'smartphone' },
+  windows: { title: 'Windows', icon: 'monitor' },
+  mac:     { title: 'Mac', icon: 'monitor' },
+  linux:   { title: 'Linux', icon: 'monitor' },
 }
 
 export default function InstallPage() {
@@ -78,184 +78,373 @@ export default function InstallPage() {
   ]
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, #003366 0%, #001a3a 100%)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem 1rem',
-    }}>
-      {/* Logo */}
-      <div style={{
-        position: 'absolute', top: '2rem',
-        fontSize: '32px', fontWeight: '900',
-        letterSpacing: '0.3em', color: 'white',
-        textTransform: 'uppercase'
-      }}>NEXO</div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
 
-      <div style={{
-        maxWidth: '520px', width: '100%',
-        background: 'rgba(255,255,255,0.98)',
-        borderRadius: '24px', padding: '2.5rem 2rem',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-        marginTop: '4rem'
+        .install-page * {
+          font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .install-card {
+          animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
+        }
+
+        .btn-primary {
+          transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+        }
+
+        .btn-primary:hover {
+          background: #2d6e30 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 8px 32px rgba(45,110,48,0.28);
+        }
+
+        .btn-ghost {
+          transition: all 0.2s ease;
+        }
+
+        .btn-ghost:hover {
+          background: #edf7ed !important;
+          border-color: #2d6e30 !important;
+        }
+      `}</style>
+
+      <div className="install-page" style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(160deg, #ffffff 0%, #f0f9f0 55%, #dff0df 100%)',
+        position: 'relative',
       }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ fontSize: '48px', marginBottom: '0.75rem' }}>
-            {content.icon === 'smartphone' ? '📱' : '💻'}
-          </div>
-          <h1 style={{
-            fontSize: '24px', fontWeight: '800',
-            color: '#003366', margin: '0 0 0.5rem 0'
-          }}>
-            Instala NEXO en {content.title}
-          </h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-            Accede como app nativa desde tu dispositivo
-          </p>
-        </div>
-
-        {/* Estado: ya instalado */}
-        {installed && (
+        {/* Header fijo tipo navbar */}
+        <header style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          background: 'rgba(255,255,255,0.85)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(45,110,48,0.12)',
+          padding: '1rem',
+        }}>
           <div style={{
-            background: '#f0fdf4', border: '2px solid #22c55e',
-            borderRadius: '12px', padding: '1.25rem',
-            display: 'flex', alignItems: 'center', gap: '0.75rem',
-            marginBottom: '1.5rem'
+            textAlign: 'center',
+            fontSize: '1.5rem',
+            fontWeight: '800',
+            letterSpacing: '-0.02em',
+            color: '#0f2d12',
           }}>
-            <CheckCircle size={24} color="#16a34a" />
-            <div>
-              <p style={{ margin: 0, fontWeight: '700', color: '#15803d' }}>¡NEXO instalado!</p>
-              <p style={{ margin: 0, fontSize: '13px', color: '#16a34a' }}>Ábrela desde tu pantalla de inicio</p>
-            </div>
+            NEXO
           </div>
-        )}
+        </header>
 
-        {/* CASO 1: Puede instalar con botón nativo */}
-        {canInstallNatively && !installed && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '14px', color: '#374151', textAlign: 'center', marginBottom: '1rem' }}>
-              Tu navegador soporta instalación directa. Un solo clic:
-            </p>
-            <button onClick={handleInstall} style={{
-              width: '100%', background: '#1a4a1f', color: 'white',
-              padding: '1.1rem', borderRadius: '12px', border: 'none',
-              fontSize: '16px', fontWeight: '700', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              gap: '0.5rem', letterSpacing: '0.02em'
+        {/* Contenido principal */}
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '6rem 1rem 3rem',
+        }}>
+          <div className="install-card" style={{
+            maxWidth: '560px',
+            width: '100%',
+            background: '#ffffff',
+            borderRadius: '1.5rem',
+            border: '1px solid rgba(45,110,48,0.18)',
+            boxShadow: '0 4px 20px rgba(15,45,18,0.07)',
+            padding: '2.5rem 2rem',
+          }}>
+            {/* Eyebrow tag */}
+            <div style={{
+              textAlign: 'center',
+              fontSize: '0.65rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.18em',
+              color: '#2d6e30',
+              fontWeight: '600',
+              marginBottom: '0.75rem',
             }}>
-              <Download size={20} />
-              Instalar NEXO ahora
-            </button>
-          </div>
-        )}
+              ● {content.title}
+            </div>
 
-        {/* CASO 2: iOS — necesita Safari */}
-        {isIos && needsSafari && (
-          <div style={{
-            background: '#FEF3C7', border: '2px solid #F59E0B',
-            borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem'
-          }}>
-            <p style={{ margin: '0 0 0.5rem 0', fontWeight: '700', color: '#92400E', fontSize: '14px' }}>
-              ⚠️ Abre esta página en Safari
-            </p>
-            <p style={{ margin: 0, fontSize: '13px', color: '#78350F' }}>
-              iOS solo permite instalar PWAs desde Safari. Copia la URL y ábrela en Safari.
-            </p>
-          </div>
-        )}
+            {/* Título */}
+            <h1 style={{
+              fontSize: 'clamp(1.8rem, 3.5vw, 2.4rem)',
+              fontWeight: '800',
+              color: '#0f2d12',
+              letterSpacing: '-0.02em',
+              textAlign: 'center',
+              margin: '0 0 0.5rem 0',
+              lineHeight: 1.2,
+            }}>
+              Instala NEXO
+            </h1>
 
-        {/* CASO 3: iOS en Safari — pasos manuales */}
-        {isIos && isSafari && !installed && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            {iosSteps.map((step, idx) => (
-              <div key={idx} style={{
-                display: 'flex', gap: '0.875rem',
-                alignItems: 'flex-start', marginBottom: '0.875rem'
+            {/* Subtítulo */}
+            <p style={{
+              fontSize: '1rem',
+              color: '#4a6e4c',
+              textAlign: 'center',
+              lineHeight: 1.75,
+              margin: '0 0 2rem 0',
+            }}>
+              Accede como app nativa desde tu dispositivo
+            </p>
+
+            {/* Estado: ya instalado */}
+            {installed && (
+              <div style={{
+                background: '#edf7ed',
+                border: '1px solid rgba(45,110,48,0.3)',
+                borderRadius: '1rem',
+                padding: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.875rem',
+                marginBottom: '1.5rem',
               }}>
-                <div style={{
-                  minWidth: '28px', height: '28px', borderRadius: '50%',
-                  background: '#1a4a1f', color: 'white', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                  fontSize: '13px', fontWeight: '700', flexShrink: 0
-                }}>{idx + 1}</div>
-                <p style={{ fontSize: '14px', color: '#1f2937', margin: '0.25rem 0 0 0', lineHeight: 1.5 }}>
-                  {step}
+                <CheckCircle size={24} color="#2d6e30" strokeWidth={2.5} />
+                <div>
+                  <p style={{ margin: 0, fontWeight: '700', color: '#0f2d12', fontSize: '0.95rem' }}>
+                    ¡NEXO instalado!
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c' }}>
+                    Ábrela desde tu pantalla de inicio
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* CASO 1: Puede instalar con botón nativo */}
+            {canInstallNatively && !installed && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: '#4a6e4c',
+                  textAlign: 'center',
+                  marginBottom: '1rem',
+                  lineHeight: 1.6,
+                }}>
+                  Tu navegador soporta instalación directa. Un solo clic:
+                </p>
+                <button
+                  onClick={handleInstall}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    background: '#1a4a1f',
+                    color: 'white',
+                    padding: '0.85rem 2rem',
+                    borderRadius: '100px',
+                    border: 'none',
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <Download size={18} strokeWidth={2.5} />
+                  Instalar NEXO ahora
+                </button>
+              </div>
+            )}
+
+            {/* CASO 2: iOS — necesita Safari */}
+            {isIos && needsSafari && (
+              <div style={{
+                background: 'rgba(45,110,48,0.06)',
+                border: '1px solid rgba(45,110,48,0.2)',
+                borderRadius: '1rem',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.5rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <AlertCircle size={20} color="#2d6e30" strokeWidth={2.5} style={{ marginTop: '0.15rem', flexShrink: 0 }} />
+                  <div>
+                    <p style={{
+                      margin: '0 0 0.25rem 0',
+                      fontWeight: '700',
+                      color: '#2d5e30',
+                      fontSize: '0.9rem',
+                    }}>
+                      Abre esta página en Safari
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                      iOS solo permite instalar PWAs desde Safari. Copia la URL y ábrela en Safari.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CASO 3: iOS en Safari — pasos manuales */}
+            {isIos && isSafari && !installed && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                {iosSteps.map((step, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      gap: '1rem',
+                      alignItems: 'flex-start',
+                      marginBottom: idx < iosSteps.length - 1 ? '1rem' : 0,
+                    }}
+                  >
+                    <div style={{
+                      minWidth: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      background: 'rgba(45,110,48,0.08)',
+                      border: '1px solid rgba(45,110,48,0.2)',
+                      color: '#2d6e30',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.95rem',
+                      fontWeight: '700',
+                      flexShrink: 0,
+                    }}>
+                      {idx + 1}
+                    </div>
+                    <p style={{
+                      fontSize: '0.95rem',
+                      color: '#0f2d12',
+                      margin: '0.6rem 0 0 0',
+                      lineHeight: 1.6,
+                    }}>
+                      {step}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CASO 4: Firefox — no soporta PWA */}
+            {isFirefox && !isIos && !canInstallNatively && (
+              <div style={{
+                background: 'rgba(45,110,48,0.06)',
+                border: '1px solid rgba(45,110,48,0.2)',
+                borderRadius: '1rem',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.5rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <AlertCircle size={20} color="#2d6e30" strokeWidth={2.5} style={{ marginTop: '0.15rem', flexShrink: 0 }} />
+                  <div>
+                    <p style={{
+                      margin: '0 0 0.25rem 0',
+                      fontWeight: '700',
+                      color: '#2d5e30',
+                      fontSize: '0.9rem',
+                    }}>
+                      Firefox no soporta instalación PWA
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                      Abre esta página en Chrome, Edge, Brave o Vivaldi para instalar NEXO.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CASO 5: Otro navegador compatible pero sin prompt aún */}
+            {!canInstallNatively && !isIos && !isFirefox && !installed && (
+              <div style={{
+                background: 'rgba(45,110,48,0.06)',
+                border: '1px solid rgba(45,110,48,0.2)',
+                borderRadius: '1rem',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.5rem',
+              }}>
+                <p style={{
+                  margin: '0 0 0.25rem 0',
+                  fontWeight: '700',
+                  color: '#2d5e30',
+                  fontSize: '0.9rem',
+                }}>
+                  Busca el ícono de instalación
+                </p>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                  En la barra de direcciones de tu navegador debe aparecer un ícono ⊕ o similar. Haz clic ahí para instalar NEXO.
                 </p>
               </div>
-            ))}
+            )}
+
+            {/* Botón secundario */}
+            {!installed && (
+              <Link
+                to="/login"
+                className="btn-ghost"
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  color: '#1a4a1f',
+                  padding: '0.85rem 2rem',
+                  borderRadius: '100px',
+                  border: '1px solid #2d6e30',
+                  fontSize: '0.9rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  textDecoration: 'none',
+                }}
+              >
+                <Globe size={18} strokeWidth={2.5} />
+                Abrir NEXO en el navegador
+              </Link>
+            )}
+
+            {installed && (
+              <Link
+                to="/login"
+                className="btn-primary"
+                style={{
+                  width: '100%',
+                  background: '#1a4a1f',
+                  color: 'white',
+                  padding: '0.85rem 2rem',
+                  borderRadius: '100px',
+                  border: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  textDecoration: 'none',
+                }}
+              >
+                Ir al login →
+              </Link>
+            )}
           </div>
-        )}
 
-        {/* CASO 4: Firefox — no soporta PWA */}
-        {isFirefox && !isIos && !canInstallNatively && (
-          <div style={{
-            background: '#FEF3C7', border: '2px solid #F59E0B',
-            borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem'
+          {/* Footer micro-copy */}
+          <p style={{
+            fontSize: '0.75rem',
+            color: '#6b9e6e',
+            textAlign: 'center',
+            marginTop: '2rem',
+            letterSpacing: '0.05em',
           }}>
-            <p style={{ margin: '0 0 0.25rem 0', fontWeight: '700', color: '#92400E', fontSize: '14px' }}>
-              Firefox no soporta instalación PWA
-            </p>
-            <p style={{ margin: 0, fontSize: '13px', color: '#78350F' }}>
-              Abre esta página en Chrome, Edge, Brave o Vivaldi para instalar NEXO.
-            </p>
-          </div>
-        )}
-
-        {/* CASO 5: Otro navegador compatible pero sin prompt aún */}
-        {!canInstallNatively && !isIos && !isFirefox && !installed && (
-          <div style={{
-            background: '#eff6ff', border: '2px solid #93c5fd',
-            borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem'
-          }}>
-            <p style={{ margin: '0 0 0.25rem 0', fontWeight: '700', color: '#1e40af', fontSize: '14px' }}>
-              Busca el ícono de instalación
-            </p>
-            <p style={{ margin: 0, fontSize: '13px', color: '#1d4ed8' }}>
-              En la barra de direcciones de tu navegador debe aparecer un ícono ⊕ o similar. Haz clic ahí para instalar NEXO.
-            </p>
-          </div>
-        )}
-
-        {/* Botón secundario */}
-        {!installed && (
-          <Link to="/login" style={{
-            width: '100%', background: 'transparent', color: '#003366',
-            padding: '0.875rem', borderRadius: '12px', border: '2px solid #003366',
-            fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: '0.5rem', textDecoration: 'none'
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#003366'; e.currentTarget.style.color = 'white' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#003366' }}
-          >
-            <Globe size={18} />
-            Abrir NEXO en el navegador
-          </Link>
-        )}
-
-        {installed && (
-          <Link to="/login" style={{
-            width: '100%', background: '#1a4a1f', color: 'white',
-            padding: '0.875rem', borderRadius: '12px', border: 'none',
-            fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: '0.5rem', textDecoration: 'none'
-          }}>
-            Ir al login →
-          </Link>
-        )}
+            Solo disponible para instituciones vinculadas
+          </p>
+        </div>
       </div>
-
-      <p style={{
-        fontSize: '11px', color: 'rgba(255,255,255,0.4)',
-        textAlign: 'center', marginTop: '1.5rem', letterSpacing: '0.05em'
-      }}>
-        Solo disponible para instituciones vinculadas
-      </p>
-    </div>
+    </>
   )
 }
