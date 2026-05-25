@@ -20,6 +20,7 @@ const Enrollment = lazy(() => import('./pages/Enrollment'))
 const Unauthorized = lazy(() => import('./pages/Unauthorized'))
 const Audit = lazy(() => import('./pages/Audit'))
 const Downloads  = lazy(() => import('./pages/Downloads'))
+const InstallPage = lazy(() => import('./pages/InstallPage'))
 
 function App() {
   const { user } = useAuth()
@@ -118,6 +119,7 @@ function App() {
             </Route>
 
             <Route path="/descargas" element={<Downloads />} />
+            <Route path="/instalar/:platform" element={<InstallPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </motion.div>
