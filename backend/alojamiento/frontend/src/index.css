@@ -12,8 +12,8 @@
   --nx-surface:     #edf7ed;
   --nx-surface-2:   #e4f3e4;
   --nx-card:        #ffffff;
-  --nx-border:      rgba(200, 230, 200, 0.6);
-  --nx-border-dim:  rgba(200, 230, 200, 0.35);
+  --nx-border:      rgba(45, 110, 48, 0.18);
+  --nx-border-dim:  rgba(45, 110, 48, 0.12);
 
   /* Verdes de marca */
   --nx-green:       #2d6e30;
@@ -21,7 +21,7 @@
   --nx-green-mid:   #3d8f40;
   --nx-green-light: #56b85a;
   --nx-accent:      #2d6e30;
-  --nx-glow:        #56b85a;
+  --nx-glow:        rgba(45, 110, 48, 0.25);
 
   /* Alias heredados → ahora apuntan a la paleta verde */
   --nx-blue:        #2d6e30;

@@ -381,11 +381,11 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
   }, [])
 
   // 3-point professional lighting setup — light-mode palette
-  const keyLightColor   = coldLight ? '#ffffff'  : '#ffffff'
+  const keyLightColor   = '#ffffff'
   const keyIntensity    = coldLight ? 2.5 : 2.2
-  const fillLightColor  = coldLight ? '#edf7ed'  : '#f7fcf7'
+  const fillLightColor  = '#c8e6c8'
   const fillIntensity   = coldLight ? 1.2 : 0.8
-  const rimLightColor   = coldLight ? '#1a4a1f'  : '#2d6e30'
+  const rimLightColor   = '#2d6e30'
   const rimIntensity    = coldLight ? 1.8 : 1.5
 
   const finalScale = scale  // Scale controlled per-section, no global mobile penalty
