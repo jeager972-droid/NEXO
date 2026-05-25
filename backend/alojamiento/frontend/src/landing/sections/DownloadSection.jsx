@@ -219,22 +219,22 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
     </>
   )
 
-  // Si es Android, usar AnimatedDownloadButton con efectos 3D
+  // Si es Android, usar AnimatedDownloadButton
   if (id === 'android') {
     return (
-      <AnimatedDownloadButton
-        href={href}
-        filename="nexo.apk"
-        id={`download-btn-${id}`}
-        aria-label={`Descargar NEXO para ${name}`}
-        style={cardStyle}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
-      >
-        <div ref={cardRef} style={{ width: '100%', display: 'contents' }}>
+      <div ref={cardRef}>
+        <AnimatedDownloadButton
+          href={href}
+          filename="nexo.apk"
+          id={`download-btn-${id}`}
+          aria-label={`Descargar NEXO para ${name}`}
+          style={cardStyle}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
+        >
           {cardContent}
-        </div>
-      </AnimatedDownloadButton>
+        </AnimatedDownloadButton>
+      </div>
     )
   }
 
