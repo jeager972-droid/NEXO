@@ -32,11 +32,9 @@ function App() {
     const handler = (e) => {
       e.preventDefault()
       window.__nexoPwaPrompt = e
-      sessionStorage.setItem('pwaPromptAvailable', 'true')
     }
     const installedHandler = () => {
       window.__nexoPwaPrompt = null
-      sessionStorage.removeItem('pwaPromptAvailable')
     }
     window.addEventListener('beforeinstallprompt', handler)
     window.addEventListener('appinstalled', installedHandler)
