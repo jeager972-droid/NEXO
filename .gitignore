@@ -33,7 +33,6 @@ out/
 *.exe
 *.dmg
 *.AppImage
-*.apk
 *.deb
 *.msi
 
