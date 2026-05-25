@@ -34,8 +34,16 @@ function App() {
       window.__nexoPwaPrompt = e
       sessionStorage.setItem('pwaPromptAvailable', 'true')
     }
+    const installedHandler = () => {
+      window.__nexoPwaPrompt = null
+      sessionStorage.removeItem('pwaPromptAvailable')
+    }
     window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', installedHandler)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('appinstalled', installedHandler)
+    }
   }, [])
 
   useEffect(() => {

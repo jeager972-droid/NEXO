@@ -40,6 +40,8 @@ export default function InstallPage() {
   const [installed, setInstalled] = useState(false)
   const [browser, setBrowser] = useState(null)
   const [mobile, setMobile] = useState(false)
+  const [showManualInstall, setShowManualInstall] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
 
   useEffect(() => {
     if (!PLATFORMS[platform]) navigate('/login')
@@ -77,6 +79,20 @@ export default function InstallPage() {
     }, 3000)
     return () => clearTimeout(timer)
   }, [deferredPrompt])
+
+  useEffect(() => {
+    // Para android/windows/mac/linux: después de 2s, si no hay prompt y no hay flag,
+    // mostrar botón con instrucciones manuales
+    if (platform === 'ios') return
+    
+    const timer = setTimeout(() => {
+      const promptAvailable = sessionStorage.getItem('pwaPromptAvailable') === 'true'
+      if (!deferredPrompt && !promptAvailable) {
+        setShowManualInstall(true)
+      }
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [platform, deferredPrompt])
 
   const handleInstall = async () => {
     if (!deferredPrompt) return
@@ -440,63 +456,82 @@ export default function InstallPage() {
               </div>
             )}
 
-            {/* CASO 5B: Chrome desktop — instrucciones específicas */}
-            {!canInstallNatively && !promptLost && isChromiumDesktop && !isIos && !isFirefox && !installed && (
-              <div style={{
-                background: 'rgba(45,110,48,0.06)',
-                border: '1px solid rgba(45,110,48,0.2)',
-                borderRadius: '1rem',
-                padding: '1rem 1.25rem',
-                marginBottom: '1.5rem',
-              }}>
-                <p style={{
-                  margin: '0 0 0.5rem 0',
-                  fontWeight: '700',
-                  color: '#2d5e30',
-                  fontSize: '0.9rem',
-                }}>
-                  Busca el ícono de instalación
-                </p>
-                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
-                  Busca el ícono <strong>⊕</strong> en la barra de direcciones de tu navegador (a la derecha de la URL) y haz clic para instalar NEXO.
-                </p>
-                <svg
-                  width="100%"
-                  height="48"
-                  viewBox="0 0 280 48"
-                  style={{ marginTop: '0.5rem' }}
-                >
-                  <rect x="0" y="8" width="280" height="32" rx="16" fill="#f0f9f0" stroke="#2d6e30" strokeWidth="1.5" />
-                  <text x="14" y="28" fontSize="12" fill="#4a6e4c" fontWeight="600">nexo.edu.co</text>
-                  <circle cx="252" cy="24" r="10" fill="#2d6e30" />
-                  <text x="248" y="29" fontSize="16" fill="white" fontWeight="700">⊕</text>
-                  <path d="M 238 24 L 228 18 L 228 30 Z" fill="#2d6e30" />
-                </svg>
+            {/* CASO 5B: android/windows/mac/linux — botón directo con instrucciones */}
+            {!canInstallNatively && !promptLost && !isIos && !isFirefox && !installed && showManualInstall && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                {!showInstructions ? (
+                  <>
+                    <div style={{
+                      background: 'rgba(45,110,48,0.06)',
+                      border: '1px solid rgba(45,110,48,0.2)',
+                      borderRadius: '1rem',
+                      padding: '1rem 1.25rem',
+                      marginBottom: '1rem',
+                    }}>
+                      <p style={{
+                        margin: '0 0 0.5rem 0',
+                        fontWeight: '700',
+                        color: '#2d5e30',
+                        fontSize: '0.9rem',
+                      }}>
+                        ¿No ves el botón de instalación?
+                      </p>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                        Tu navegador puede instalar NEXO. Busca el ícono <strong>⊕</strong> en la barra de direcciones.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowInstructions(true)}
+                      className="btn-primary"
+                      style={{
+                        width: '100%',
+                        background: '#1a4a1f',
+                        color: 'white',
+                        padding: '0.85rem 2rem',
+                        borderRadius: '100px',
+                        border: 'none',
+                        fontSize: '0.95rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <Download size={18} strokeWidth={2.5} />
+                      Ver instrucciones de instalación
+                    </button>
+                  </>
+                ) : (
+                  <div style={{
+                    background: 'rgba(45,110,48,0.06)',
+                    border: '1px solid rgba(45,110,48,0.2)',
+                    borderRadius: '1rem',
+                    padding: '1rem 1.25rem',
+                    marginBottom: '1.5rem',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                      <AlertCircle size={20} color="#2d6e30" strokeWidth={2.5} style={{ marginTop: '0.15rem', flexShrink: 0 }} />
+                      <div>
+                        <p style={{
+                          margin: '0 0 0.25rem 0',
+                          fontWeight: '700',
+                          color: '#2d5e30',
+                          fontSize: '0.9rem',
+                        }}>
+                          Busca el ícono de instalación
+                        </p>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                          Busca el ícono <strong>⊕</strong> en la barra de direcciones de tu navegador y haz clic para instalar NEXO.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* CASO 5C: Otro navegador compatible pero sin prompt aún */}
-            {!canInstallNatively && !promptLost && !isChromiumDesktop && !isIos && !isFirefox && !installed && (
-              <div style={{
-                background: 'rgba(45,110,48,0.06)',
-                border: '1px solid rgba(45,110,48,0.2)',
-                borderRadius: '1rem',
-                padding: '1rem 1.25rem',
-                marginBottom: '1.5rem',
-              }}>
-                <p style={{
-                  margin: '0 0 0.25rem 0',
-                  fontWeight: '700',
-                  color: '#2d5e30',
-                  fontSize: '0.9rem',
-                }}>
-                  Busca el ícono de instalación
-                </p>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
-                  En la barra de direcciones de tu navegador debe aparecer un ícono ⊕ o similar. Haz clic ahí para instalar NEXO.
-                </p>
-              </div>
-            )}
 
             {/* Botón secundario */}
             {!installed && (

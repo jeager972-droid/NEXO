@@ -29,8 +29,7 @@ if ($origin !== '') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     while (ob_get_level() > 0) { ob_end_clean(); }
-    header_remove('Content-Type');
-    http_response_code(204);
+    http_response_code(200);
     exit();
 }
 
