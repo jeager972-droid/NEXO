@@ -31,7 +31,7 @@ const PLATFORMS = [
     id: 'ios',
     name: 'iOS',
     glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
-    href: '#download-ios',
+    href: 'https://nexo-bay-mu.vercel.app/app/',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -44,7 +44,7 @@ const PLATFORMS = [
     id: 'windows',
     name: 'Windows',
     glowColor: 'rgba(0,120,212,0.35)',     // Windows blue
-    href: '#download-windows',
+    href: 'https://nexo-bay-mu.vercel.app/app/',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -59,7 +59,7 @@ const PLATFORMS = [
     id: 'mac',
     name: 'Mac',
     glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
-    href: '#download-mac',
+    href: 'https://nexo-bay-mu.vercel.app/app/',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -74,7 +74,7 @@ const PLATFORMS = [
     id: 'linux',
     name: 'Linux',
     glowColor: 'rgba(255,185,0,0.30)',     // Tux yellow
-    href: '#download-linux',
+    href: 'https://nexo-bay-mu.vercel.app/app/',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
