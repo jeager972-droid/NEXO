@@ -15,10 +15,16 @@ import SecuritySection   from './sections/SecuritySection'
 import FinalCTASection   from './sections/FinalCTASection'
 import Footer            from './sections/Footer'
 import CustomCursor      from './components/CustomCursor'
+import { useCookieConsent } from './hooks/useCookieConsent'
+import CookieBanner from './components/CookieBanner'
+import CookieManager from './components/CookieManager'
+import CookieFloatingButton from './components/CookieFloatingButton'
 
 gsap.registerPlugin(ScrollTrigger) // SINGLE registration point for the entire app
 
 export default function LandingPage() {
+  const cookieConsent = useCookieConsent()
+
   useEffect(() => {
     // Bug 5: ScrollTrigger.refresh() called ONCE after full DOM paint
     // setTimeout(1200) ensures all child components and 3D models have mounted and rendered
@@ -66,6 +72,29 @@ export default function LandingPage() {
       </main>
 
       <Footer />
+
+      {cookieConsent.showBanner && (
+        <CookieBanner
+          onAcceptAll={cookieConsent.acceptAll}
+          onRejectAll={cookieConsent.rejectAll}
+          onManage={() => cookieConsent.setShowManager(true)}
+        />
+      )}
+
+      {cookieConsent.showManager && (
+        <CookieManager
+          onSave={cookieConsent.saveCustom}
+          onAcceptAll={cookieConsent.acceptAll}
+          onClose={() => cookieConsent.setShowManager(false)}
+          initialValues={cookieConsent.consent?.categories}
+        />
+      )}
+
+      {cookieConsent.consent && !cookieConsent.showBanner && (
+        <CookieFloatingButton
+          onClick={() => cookieConsent.setShowManager(true)}
+        />
+      )}
     </>
   )
 }
