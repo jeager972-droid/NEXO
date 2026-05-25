@@ -44,51 +44,28 @@ http {
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://raw.githack.com https://cdn.jsdelivr.net https://raw.githubusercontent.com blob:; worker-src 'self' blob:; frame-ancestors 'none';" always;
 
         # Bloquear archivos sensibles
-        location ~ /\. { deny all; return 403; }
-        location ^~ /_dev/ { deny all; return 403; }
+        location ~ /\. { deny all; }
+        location ^~ /_dev/ { deny all; }
 
         # Health check para Railway
-        location /health {
+        location = /health {
+            add_header Content-Type text/plain always;
             return 200 "OK\n";
-            add_header Content-Type text/plain;
-            add_header Content-Length 3;
         }
 
-        # Root: servir index.html
-        location = / {
-            index index.html;
-        }
-
-        # CORS para todas las rutas API
-        location ~ ^/(api\.php|v1/) {
-            # OPTIONS preflight — responder directamente sin PHP
-            if (\$request_method = 'OPTIONS') {
-                add_header 'Access-Control-Allow-Origin' 'https://nexo-bay-mu.vercel.app' always;
-                add_header 'Access-Control-Allow-Credentials' 'true' always;
-                add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, PATCH, OPTIONS' always;
-                add_header 'Access-Control-Allow-Headers' 'Content-Type, X-Requested-With, Authorization, X-Device-Token' always;
-                add_header 'Access-Control-Max-Age' '86400' always;
-                add_header 'Content-Length' '0' always;
-                add_header 'Content-Type' 'text/plain' always;
-                return 204;
-            }
-
-            # Headers CORS para requests reales (GET, POST, etc.)
-            add_header 'Access-Control-Allow-Origin' 'https://nexo-bay-mu.vercel.app' always;
-            add_header 'Access-Control-Allow-Credentials' 'true' always;
-
-            fastcgi_pass unix:/run/php/php-fpm.sock;
-            include fastcgi_params;
-            fastcgi_param SCRIPT_FILENAME \$document_root/api.php;
-            fastcgi_hide_header X-Powered-By;
-        }
-
-        # Catch-all: archivos estáticos o 404
+        # Catch-all: intenta archivo estático, si no existe → api.php
         location / {
-            try_files \$uri \$uri/ =404;
+            try_files \$uri \$uri/ /api.php?\$query_string;
+        }
+
+        # PHP handler — api.php maneja CORS internamente
+        location ~ \.php\$ {
+            include fastcgi_params;
+            fastcgi_pass unix:/run/php/php-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            fastcgi_hide_header X-Powered-By;
         }
     }
 }
