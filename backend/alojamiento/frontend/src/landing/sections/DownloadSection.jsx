@@ -225,7 +225,6 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       <div ref={cardRef}>
         <AnimatedDownloadButton
           href={href}
-          filename="nexo.apk"
           id={`download-btn-${id}`}
           aria-label={`Descargar NEXO para ${name}`}
           style={cardStyle}
