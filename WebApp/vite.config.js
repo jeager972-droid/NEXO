@@ -6,6 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   base: '/app/',
   build: {
+    outDir: 'dist',
+    emptyOutDir: true,
     sourcemap: false,
     target: 'es2020',
     cssCodeSplit: true,
