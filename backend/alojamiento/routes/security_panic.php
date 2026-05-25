@@ -22,10 +22,10 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
         $stmt = $conn->prepare("DELETE FROM jwt_blocklist WHERE revoked_at < NOW() - INTERVAL '90 days'");
         $stmt->execute();
         
-        // Insertar un JTI de emergencia para invalidar todo (si el middleware soporta wildcard)
-        // O simplemente truncar (más drástico)
-        $stmt = $conn->prepare("TRUNCATE TABLE jwt_blocklist CASCADE");
-        $stmt->execute();
+        // NOTA CRÍTICA: NO truncar jwt_blocklist. La tabla jwt_blocklist es una lista negra (blacklist).
+        // Truncarla restauraría acceso a tokens previamente revocados por razones de seguridad,
+        // permitiendo que sesiones comprometidas vuelvan a ser válidas. En su lugar, limpiar solo
+        // entradas antiguas (>90 días) es suficiente para mantener el rendimiento.
         
         // 2. Desactivar TODOS los edge_devices del sistema
         $stmt = $conn->prepare("UPDATE edge_devices SET active = FALSE, last_ping = NOW()");

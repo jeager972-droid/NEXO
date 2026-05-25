@@ -21,12 +21,11 @@ if ($origin !== '') {
         header("Access-Control-Allow-Origin: $origin");
         header('Vary: Origin');
         header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH');
+        header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, Authorization, Accept, X-NEXO-TOKEN, X-Device-Token, X-Request-ID, X-Device-Signature');
+        header('Access-Control-Max-Age: 86400');
     }
 }
-
-header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-NEXO-TOKEN, X-Device-Token, X-Request-ID, X-Device-Signature');
-header('Access-Control-Max-Age: 86400');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     while (ob_get_level() > 0) { ob_end_clean(); }

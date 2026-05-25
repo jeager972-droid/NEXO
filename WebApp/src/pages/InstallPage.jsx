@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Download, CheckCircle, Globe, AlertCircle } from 'lucide-react'
+import { Download, CheckCircle, Globe, AlertCircle, RefreshCw } from 'lucide-react'
 
 // Detectar navegador
 function detectBrowser() {
@@ -15,6 +15,14 @@ function detectBrowser() {
 // Detectar si es móvil
 function isMobile() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+}
+
+// Detectar si es Chrome/Edge/Brave/Vivaldi desktop
+function isChromeDesktop() {
+  const ua = navigator.userAgent
+  const isChromium = /Chrome|Edg|Brave|Vivaldi/i.test(ua)
+  const isMobileUA = /Android|iPhone|iPad|iPod/i.test(ua)
+  return isChromium && !isMobileUA
 }
 
 const PLATFORMS = {
@@ -51,11 +59,24 @@ export default function InstallPage() {
       setDeferredPrompt(e)
     }
     window.addEventListener('beforeinstallprompt', handler)
-    window.addEventListener('appinstalled', () => setInstalled(true))
+    window.addEventListener('appinstalled', () => {
+      setInstalled(true)
+      sessionStorage.removeItem('pwaPromptAvailable')
+    })
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
     }
   }, [])
+
+  useEffect(() => {
+    // Intentar recuperar el prompt después de 3s si aún no está disponible
+    const timer = setTimeout(() => {
+      if (!deferredPrompt && window.__nexoPwaPrompt) {
+        setDeferredPrompt(window.__nexoPwaPrompt)
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [deferredPrompt])
 
   const handleInstall = async () => {
     if (!deferredPrompt) return
@@ -64,6 +85,11 @@ export default function InstallPage() {
     if (outcome === 'accepted') setInstalled(true)
     setDeferredPrompt(null)
     window.__nexoPwaPrompt = null
+    sessionStorage.removeItem('pwaPromptAvailable')
+  }
+
+  const handleReload = () => {
+    window.location.reload()
   }
 
   const content = PLATFORMS[platform]
@@ -75,6 +101,9 @@ export default function InstallPage() {
   const isFirefox = browser === 'firefox'
   const canInstallNatively = !!deferredPrompt
   const needsSafari = isIos && !isSafari
+  const promptWasAvailable = sessionStorage.getItem('pwaPromptAvailable') === 'true'
+  const promptLost = promptWasAvailable && !deferredPrompt
+  const isChromiumDesktop = isChromeDesktop()
 
   // Instrucciones manuales para iOS Safari (único caso que las necesita)
   const iosSteps = [
@@ -364,8 +393,90 @@ export default function InstallPage() {
               </div>
             )}
 
-            {/* CASO 5: Otro navegador compatible pero sin prompt aún */}
-            {!canInstallNatively && !isIos && !isFirefox && !installed && (
+            {/* CASO 5A: Prompt se perdió pero estaba disponible — botón de recarga */}
+            {promptLost && !installed && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{
+                  background: 'rgba(45,110,48,0.06)',
+                  border: '1px solid rgba(45,110,48,0.2)',
+                  borderRadius: '1rem',
+                  padding: '1rem 1.25rem',
+                  marginBottom: '1rem',
+                }}>
+                  <p style={{
+                    margin: '0 0 0.25rem 0',
+                    fontWeight: '700',
+                    color: '#2d5e30',
+                    fontSize: '0.9rem',
+                  }}>
+                    Instalación disponible
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                    Tu navegador puede instalar NEXO. Recarga la página para activar el botón de instalación.
+                  </p>
+                </div>
+                <button
+                  onClick={handleReload}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    background: '#1a4a1f',
+                    color: 'white',
+                    padding: '0.85rem 2rem',
+                    borderRadius: '100px',
+                    border: 'none',
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <RefreshCw size={18} strokeWidth={2.5} />
+                  Recargar para instalar
+                </button>
+              </div>
+            )}
+
+            {/* CASO 5B: Chrome desktop — instrucciones específicas */}
+            {!canInstallNatively && !promptLost && isChromiumDesktop && !isIos && !isFirefox && !installed && (
+              <div style={{
+                background: 'rgba(45,110,48,0.06)',
+                border: '1px solid rgba(45,110,48,0.2)',
+                borderRadius: '1rem',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.5rem',
+              }}>
+                <p style={{
+                  margin: '0 0 0.5rem 0',
+                  fontWeight: '700',
+                  color: '#2d5e30',
+                  fontSize: '0.9rem',
+                }}>
+                  Busca el ícono de instalación
+                </p>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#4a6e4c', lineHeight: 1.6 }}>
+                  Busca el ícono <strong>⊕</strong> en la barra de direcciones de tu navegador (a la derecha de la URL) y haz clic para instalar NEXO.
+                </p>
+                <svg
+                  width="100%"
+                  height="48"
+                  viewBox="0 0 280 48"
+                  style={{ marginTop: '0.5rem' }}
+                >
+                  <rect x="0" y="8" width="280" height="32" rx="16" fill="#f0f9f0" stroke="#2d6e30" strokeWidth="1.5" />
+                  <text x="14" y="28" fontSize="12" fill="#4a6e4c" fontWeight="600">nexo.edu.co</text>
+                  <circle cx="252" cy="24" r="10" fill="#2d6e30" />
+                  <text x="248" y="29" fontSize="16" fill="white" fontWeight="700">⊕</text>
+                  <path d="M 238 24 L 228 18 L 228 30 Z" fill="#2d6e30" />
+                </svg>
+              </div>
+            )}
+
+            {/* CASO 5C: Otro navegador compatible pero sin prompt aún */}
+            {!canInstallNatively && !promptLost && !isChromiumDesktop && !isIos && !isFirefox && !installed && (
               <div style={{
                 background: 'rgba(45,110,48,0.06)',
                 border: '1px solid rgba(45,110,48,0.2)',
