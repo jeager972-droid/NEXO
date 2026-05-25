@@ -1,22 +1,10 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "routes": [
+  "rewrites": [
     {
-      "src": "/app/assets/(.*)",
-      "dest": "/assets/$1"
-    },
-    {
-      "src": "/app/(.*\\.(js|css|woff2|svg|png|ico|webmanifest))",
-      "dest": "/$1"
-    },
-    {
-      "src": "/app/(.*)",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/app/:path*",
+      "destination": "/index.html"
     }
   ],
   "headers": [

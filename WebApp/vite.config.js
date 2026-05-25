@@ -26,7 +26,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg'],
       workbox: {
-        navigateFallback: '/app/index.html',
+        navigateFallback: '/index.html',
         runtimeCaching: [
           {
             urlPattern: ({ url, request }) => url.pathname.startsWith('/api') && request.method === 'POST',
