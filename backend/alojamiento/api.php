@@ -7,28 +7,19 @@
    CORS HARDENING — ejecutado SIEMPRE antes de cualquier lógica
    ============================================================ */
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$isAllowed = false;
+$allowedOrigins = array_filter(array_map('trim', explode(',', 
+    getenv('CORS_ALLOW_ORIGINS') ?: 'https://nexo-bay-mu.vercel.app'
+)));
 
-if ($origin !== '') {
-    // PROD: CORS_ALLOW_ORIGINS debe ser una lista exacta sin wildcards.
-    // Ejemplo: https://nexo-production-13c0.up.railway.app,https://nexo.edu.co
-    $envOrigins = getenv('CORS_ALLOW_ORIGINS') ?: 'https://nexo-bay-mu.vercel.app';
-    $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $envOrigins))));
+$finalOrigin = in_array($origin, $allowedOrigins) ? $origin : $allowedOrigins[0];
 
-    $isAllowed = in_array($origin, $allowedOrigins, true);
-
-    if ($isAllowed) {
-        header("Access-Control-Allow-Origin: $origin");
-        header('Vary: Origin');
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH');
-        header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, Authorization, Accept, X-NEXO-TOKEN, X-Device-Token, X-Request-ID, X-Device-Signature');
-        header('Access-Control-Max-Age: 86400');
-    }
-}
+header('Access-Control-Allow-Origin: ' . $finalOrigin);
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, Authorization, X-Device-Token');
+header('Access-Control-Max-Age: 86400');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    while (ob_get_level() > 0) { ob_end_clean(); }
     http_response_code(200);
     exit();
 }
