@@ -23,6 +23,17 @@ const Downloads  = lazy(() => import('./pages/Downloads'))
 const InstallPage = lazy(() => import('./pages/InstallPage'))
 
 function App() {
+  const currentPath = window.location.pathname
+
+  if (currentPath.startsWith('/app/instalar/')) {
+    const platform = currentPath.split('/app/instalar/')[1]
+    return (
+      <Suspense fallback={null}>
+        <InstallPage platformOverride={platform} />
+      </Suspense>
+    )
+  }
+
   const { user } = useAuth()
   const navigate = useNavigate()
 

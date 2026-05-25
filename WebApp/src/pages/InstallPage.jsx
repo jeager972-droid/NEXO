@@ -73,13 +73,14 @@ const PLATFORM_CONTENT = {
   }
 }
 
-export default function InstallPage() {
-  const { platform } = useParams()
+export default function InstallPage({ platformOverride }) {
+  const params = useParams()
+  const platform = platformOverride || params.platform
   const navigate = useNavigate()
   const [deferredPrompt, setDeferredPrompt] = useState(null)
 
   useEffect(() => {
-    if (!PLATFORM_CONTENT[platform]) {
+    if (!PLATFORM_CONTENT[platform] && navigate) {
       navigate('/login')
     }
   }, [platform, navigate])
