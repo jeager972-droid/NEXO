@@ -80,7 +80,7 @@ export default function InstallPage() {
 
   useEffect(() => {
     if (!PLATFORM_CONTENT[platform]) {
-      navigate('/app/login')
+      navigate('/login')
     }
   }, [platform, navigate])
 
@@ -259,7 +259,7 @@ export default function InstallPage() {
           )}
 
           <Link
-            to="/app/login"
+            to="/login"
             style={{
               width: '100%',
               background: 'transparent',
