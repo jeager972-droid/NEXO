@@ -62,8 +62,24 @@ http {
             index index.html;
         }
 
-        # API routes
-        location /api.php {
+        # CORS para todas las rutas API
+        location ~ ^/(api\.php|v1/) {
+            # OPTIONS preflight — responder directamente sin PHP
+            if (\$request_method = 'OPTIONS') {
+                add_header 'Access-Control-Allow-Origin' 'https://nexo-bay-mu.vercel.app' always;
+                add_header 'Access-Control-Allow-Credentials' 'true' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, PATCH, OPTIONS' always;
+                add_header 'Access-Control-Allow-Headers' 'Content-Type, X-Requested-With, Authorization, X-Device-Token' always;
+                add_header 'Access-Control-Max-Age' '86400' always;
+                add_header 'Content-Length' '0' always;
+                add_header 'Content-Type' 'text/plain' always;
+                return 204;
+            }
+
+            # Headers CORS para requests reales (GET, POST, etc.)
+            add_header 'Access-Control-Allow-Origin' 'https://nexo-bay-mu.vercel.app' always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+
             fastcgi_pass unix:/run/php/php-fpm.sock;
             include fastcgi_params;
             fastcgi_param SCRIPT_FILENAME \$document_root/api.php;
