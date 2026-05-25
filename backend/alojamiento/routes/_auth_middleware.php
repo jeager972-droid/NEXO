@@ -2,6 +2,53 @@
 // Shared auth/RBAC helpers for all routes.
 global $conn;
 
+/**
+ * UNIFICACIÓN GLOBAL DE ROLES (Fuente de Verdad Única)
+ * Todos los roles se normalizan a estos identificadores constantes.
+ */
+if (!defined('ROLES')) {
+    define('ROLES', [
+        'RECTOR' => 'RECTOR',
+        'COORDINADOR' => 'COORDINADOR',
+        'DOCENTE' => 'DOCENTE',
+        'SECRETARIA' => 'SECRETARIA',
+        'PORTERO' => 'PORTERO',
+        'AUXILIAR' => 'AUXILIAR',
+        'PSICORIENTADOR' => 'PSICORIENTADOR'
+    ]);
+}
+
+/**
+ * Normaliza cualquier variante de rol del backend a la constante oficial.
+ */
+if (!function_exists('normalizeRole')) {
+    function normalizeRole($dbRole) {
+        $dbRole = strtoupper(trim($dbRole));
+        $map = [
+            'SUPER_RECTOR' => 'SUPER_RECTOR',
+            'PROFESOR' => 'DOCENTE',
+            'PROFESORA' => 'DOCENTE',
+            'DOCENTE' => 'DOCENTE',
+            'TEACHER' => 'DOCENTE',
+            'ADMINISTRADOR' => 'RECTOR',
+            'RECTOR' => 'RECTOR',
+            'RECTORA' => 'RECTOR',
+            'ADMIN' => 'RECTOR',
+            'COORDINADOR' => 'COORDINADOR',
+            'COORDINADORA' => 'COORDINADOR',
+            'SECRETARIA' => 'SECRETARIA',
+            'SECRETARIO' => 'SECRETARIA',
+            'PORTERO' => 'PORTERO',
+            'PORTERA' => 'PORTERO',
+            'AUXILIAR' => 'AUXILIAR',
+            'PSICORIENTADOR' => 'PSICORIENTADOR',
+            'PSICORIENTADORA' => 'PSICORIENTADOR',
+            'SUPER_ADMIN' => 'RECTOR'
+        ];
+        return $map[$dbRole] ?? 'DOCENTE'; // Fallback seguro al rol funcional
+    }
+}
+
 if (!function_exists('b64url_encode')) {
     function b64url_encode($data) {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
@@ -242,14 +289,18 @@ if (!function_exists('extractBearerToken')) {
             }
         }
         if (preg_match('/Bearer\s+([A-Za-z0-9\-\._]+)/', $authHeader, $matches)) {
+            error_log('[AUTH] Token extracted from Authorization header');
             return $matches[1];
         }
 
         // 2. Si no hay header, intentar desde cookie (nuevo flujo con HttpOnly)
+        error_log('[AUTH] Cookies available: ' . json_encode(array_keys($_COOKIE)));
         if (isset($_COOKIE['token']) && !empty($_COOKIE['token'])) {
+            error_log('[AUTH] Token extracted from cookie (length: ' . strlen($_COOKIE['token']) . ')');
             return $_COOKIE['token'];
         }
 
+        error_log('[AUTH] No token found in Authorization header or cookie');
         return null;
     }
 }

@@ -12,49 +12,7 @@ global $cleanPath, $conn, $input, $method;
  * @OA\Server(url="http://localhost:8080", description="Local Development")
  */
 
-/**
- * UNIFICACIÓN GLOBAL DE ROLES (Fuente de Verdad Única)
- * Todos los roles se normalizan a estos identificadores constantes.
- */
-const ROLES = [
-    'RECTOR' => 'RECTOR',
-    'COORDINADOR' => 'COORDINADOR',
-    'DOCENTE' => 'DOCENTE',
-    'SECRETARIA' => 'SECRETARIA',
-    'PORTERO' => 'PORTERO',
-    'AUXILIAR' => 'AUXILIAR',
-    'PSICORIENTADOR' => 'PSICORIENTADOR'
-];
-
-/**
- * Normaliza cualquier variante de rol del backend a la constante oficial.
- */
-function normalizeRole($dbRole) {
-    $dbRole = strtoupper(trim($dbRole));
-    $map = [
-        'SUPER_RECTOR' => 'SUPER_RECTOR',
-        'PROFESOR' => 'DOCENTE',
-        'PROFESORA' => 'DOCENTE',
-        'DOCENTE' => 'DOCENTE',
-        'TEACHER' => 'DOCENTE',
-        'ADMINISTRADOR' => 'RECTOR',
-        'RECTOR' => 'RECTOR',
-        'RECTORA' => 'RECTOR',
-        'ADMIN' => 'RECTOR',
-        'COORDINADOR' => 'COORDINADOR',
-        'COORDINADORA' => 'COORDINADOR',
-        'SECRETARIA' => 'SECRETARIA',
-        'SECRETARIO' => 'SECRETARIA',
-        'PORTERO' => 'PORTERO',
-        'PORTERA' => 'PORTERO',
-        'AUXILIAR' => 'AUXILIAR',
-        'PSICORIENTADOR' => 'PSICORIENTADOR',
-        'PSICORIENTADORA' => 'PSICORIENTADOR',
-        'SUPER_ADMIN' => 'RECTOR'
-    ];
-    return $map[$dbRole] ?? 'DOCENTE'; // Fallback seguro al rol funcional
-}
-
+// ROLES y normalizeRole() ahora están en _auth_middleware.php para disponibilidad global
 require_once __DIR__ . '/_auth_middleware.php';
 
 function isLoginThrottled($email) {
@@ -137,8 +95,9 @@ function verifyUserPassword($password, $hash) {
 if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
     $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
     $password = $input['password'] ?? '';
-    error_log(json_encode($input));
-    error_log('EMAIL=' . $email);
+    error_log('[LOGIN] Input: ' . json_encode($input));
+    error_log('[LOGIN] EMAIL=' . $email);
+    error_log('[LOGIN] $conn available: ' . ($conn ? 'YES' : 'NO'));
 
     if (empty($email) || empty($password)) {
         http_response_code(400);
@@ -232,12 +191,17 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             exit(json_encode(['status' => 'error', 'message' => 'Credenciales incorrectas (P)']));
         }
     } catch (Throwable $e) {
-        error_log($e->getMessage());
-        error_log($e->getFile());
-        error_log((string)$e->getLine());
+        $errorDetails = sprintf(
+            '[LOGIN EXCEPTION] %s in %s:%d | Trace: %s',
+            $e->getMessage(),
+            $e->getFile(),
+            $e->getLine(),
+            $e->getTraceAsString()
+        );
+        error_log($errorDetails);
         securityLog('AUTH_CRITICAL_ERROR', $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
         http_response_code(500);
-        exit(json_encode(['status' => 'error', 'message' => 'Error de autenticación']));
+        exit(json_encode(['status' => 'error', 'message' => 'Error de autenticación', 'debug' => getenv('APP_ENV') === 'development' ? $e->getMessage() : null]));
     }
     exit;
 }
