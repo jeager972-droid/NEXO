@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ContactModal from '../components/ContactModal'
+import AnimatedDownloadButton from '../components/DownloadButton'
 import { useStickyScroll } from '../components/useStickyScroll'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
@@ -172,15 +173,15 @@ export default function FinalCTASection() {
               >
                 Quiero que NEXO llegue a mi institución
               </button>
-              <a
+              <AnimatedDownloadButton
                 href="/assets/downloads/nexo.apk"
+                filename="nexo.apk"
                 id="final-cta-proposal"
                 className="nx-btn-ghost"
                 style={{ fontSize: '0.95rem', padding: '1rem 2rem', opacity: 0 }}
-                download
               >
                 Descargar propuesta técnica
-              </a>
+              </AnimatedDownloadButton>
             </div>
 
             {/* Micro-copy */}

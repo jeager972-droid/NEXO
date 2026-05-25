@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'
+import AnimatedDownloadButton from '../components/DownloadButton'
 import gsap from 'gsap'
 
 // MODULE 08 — APP DOWNLOAD
@@ -160,33 +161,26 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
     }
   }, [])
 
-  return (
-    <a
-      ref={cardRef}
-      href={href}
-      download={id === 'android' ? 'nexo.apk' : undefined}
-      id={`download-btn-${id}`}
-      aria-label={`Descargar NEXO para ${name}`}
-      style={{
-        display:        'flex',
-        flexDirection:  'column',
-        alignItems:     'center',
-        gap:            '1rem',
-        padding:        '2.25rem 2rem',
-        background:     'var(--nx-surface)',
-        border:         '1px solid var(--nx-border)',
-        borderRadius:   '1.25rem',
-        cursor:         'pointer',
-        position:       'relative',
-        overflow:       'hidden',
-        willChange:     'transform',
-        transformStyle: 'preserve-3d',
-        textDecoration: 'none',
-        transition:     'border-color 0.3s',
-      }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
-    >
+  const cardStyle = {
+    display:        'flex',
+    flexDirection:  'column',
+    alignItems:     'center',
+    gap:            '1rem',
+    padding:        '2.25rem 2rem',
+    background:     'var(--nx-surface)',
+    border:         '1px solid var(--nx-border)',
+    borderRadius:   '1.25rem',
+    cursor:         'pointer',
+    position:       'relative',
+    overflow:       'hidden',
+    willChange:     'transform',
+    transformStyle: 'preserve-3d',
+    textDecoration: 'none',
+    transition:     'border-color 0.3s',
+  }
+
+  const cardContent = (
+    <>
       <div
         ref={glowRef}
         aria-hidden="true"
@@ -222,6 +216,40 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
       }}>
         {name}
       </span>
+    </>
+  )
+
+  // Si es Android, usar AnimatedDownloadButton con efectos 3D
+  if (id === 'android') {
+    return (
+      <AnimatedDownloadButton
+        href={href}
+        filename="nexo.apk"
+        id={`download-btn-${id}`}
+        aria-label={`Descargar NEXO para ${name}`}
+        style={cardStyle}
+        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
+      >
+        <div ref={cardRef} style={{ width: '100%', display: 'contents' }}>
+          {cardContent}
+        </div>
+      </AnimatedDownloadButton>
+    )
+  }
+
+  // Para otras plataformas, usar link simple
+  return (
+    <a
+      ref={cardRef}
+      href={href}
+      id={`download-btn-${id}`}
+      aria-label={`Descargar NEXO para ${name}`}
+      style={cardStyle}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
+    >
+      {cardContent}
     </a>
   )
 }

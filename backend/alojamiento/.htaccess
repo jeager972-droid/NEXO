@@ -16,6 +16,9 @@ ServerSignature Off
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Permitir descarga directa de archivos APK
+    RewriteRule \.apk$ - [L]
+
     # ROUTING: Front Controller Pattern
     # Redirige todo lo que no sea un archivo o directorio real a api.php
     RewriteCond %{REQUEST_FILENAME} !-f
