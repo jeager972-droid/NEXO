@@ -5,8 +5,6 @@
  */
 
 $required = [
-    'JWT_PRIVATE_KEY'   => 'Llave privada RS256 para firma de tokens',
-    'JWT_PUBLIC_KEY'    => 'Llave pública RS256 para verificación de tokens',
     'DATABASE_URL'      => 'URL de conexión PostgreSQL (o PGHOST/PGDATABASE/PGUSER/PGPASSWORD)',
     'NEXO_AES_KEY'      => 'Clave AES-256-GCM para cifrado de datos sensibles',
     'REDISHOST'         => 'Host de Redis para colas y rate limiting',
@@ -18,6 +16,17 @@ foreach ($required as $key => $desc) {
     if ($val === false || trim($val) === '') {
         $missing[] = "$key ($desc)";
     }
+}
+
+// JWT: require RS256 keys (JWT_PRIVATE_KEY + JWT_PUBLIC_KEY) OR HMAC secret (JWT_SECRET)
+$jwtPrivate = getenv('JWT_PRIVATE_KEY');
+$jwtPublic  = getenv('JWT_PUBLIC_KEY');
+$jwtSecret  = getenv('JWT_SECRET');
+$hasRS256   = ($jwtPrivate !== false && trim($jwtPrivate) !== '') && ($jwtPublic !== false && trim($jwtPublic) !== '');
+$hasHMAC    = ($jwtSecret !== false && trim($jwtSecret) !== '');
+$hasRawKey  = ($jwtPrivate !== false && trim($jwtPrivate) !== ''); // JWT_PRIVATE_KEY as HMAC fallback
+if (!$hasRS256 && !$hasHMAC && !$hasRawKey) {
+    $missing[] = 'JWT_PRIVATE_KEY + JWT_PUBLIC_KEY (RS256) o JWT_SECRET (HS256) — se necesita al menos un método de firma JWT';
 }
 
 // Validación opcional pero recomendada

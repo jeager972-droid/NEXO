@@ -84,8 +84,8 @@ if (!function_exists('loadPemFromEnv')) {
 if (!function_exists('issueJwtToken')) {
     function issueJwtToken($claims) {
         $privateKeyPem = loadPemFromEnv('JWT_PRIVATE_KEY');
-        $kid = getenv('JWT_KEY_ID') ?: 'nexo-rs256-key-1';
-        $header = ['alg' => 'RS256', 'typ' => 'JWT', 'kid' => $kid];
+        $hmacSecret = getenv('JWT_SECRET') ?: '';
+        $kid = getenv('JWT_KEY_ID') ?: 'nexo-key-1';
         $now = time();
         $issuer = getenv('JWT_ISSUER') ?: 'nexo-api';
         $audience = getenv('JWT_AUDIENCE') ?: 'nexo-webapp';
@@ -97,23 +97,39 @@ if (!function_exists('issueJwtToken')) {
             'jti' => bin2hex(random_bytes(16))
         ], $claims);
 
+        // Determine signing algorithm: RS256 if valid PEM, else HS256 fallback
+        $alg = 'HS256';
+        $rsaKey = null;
+        if ($privateKeyPem !== '') {
+            $rsaKey = @openssl_pkey_get_private($privateKeyPem);
+            if ($rsaKey) {
+                $alg = 'RS256';
+            } else {
+                error_log('[JWT] JWT_PRIVATE_KEY set but not valid RSA PEM, falling back to HS256');
+            }
+        }
+
+        $header = ['alg' => $alg, 'typ' => 'JWT', 'kid' => $kid];
         $headerB64 = b64url_encode(json_encode($header, JSON_UNESCAPED_SLASHES));
         $payloadB64 = b64url_encode(json_encode($tokenClaims, JSON_UNESCAPED_SLASHES));
         $signingInput = $headerB64 . '.' . $payloadB64;
 
-        if ($privateKeyPem === '') {
-            throw new Exception('JWT_PRIVATE_KEY no configurada');
+        if ($alg === 'RS256') {
+            $signature = '';
+            $ok = openssl_sign($signingInput, $signature, $rsaKey, OPENSSL_ALGO_SHA256);
+            if (PHP_VERSION_ID < 80000) @openssl_free_key($rsaKey);
+            if (!$ok) {
+                throw new Exception('Fallo al firmar JWT con RS256');
+            }
+        } else {
+            // HS256: prefer JWT_SECRET, fallback to raw JWT_PRIVATE_KEY value
+            $secret = $hmacSecret !== '' ? $hmacSecret : $privateKeyPem;
+            if ($secret === '') {
+                throw new Exception('JWT: no signing key. Configure JWT_PRIVATE_KEY (RSA PEM) or JWT_SECRET (HMAC)');
+            }
+            $signature = hash_hmac('sha256', $signingInput, $secret, true);
         }
-        $privateKey = openssl_pkey_get_private($privateKeyPem);
-        if (!$privateKey) {
-            throw new Exception('JWT_PRIVATE_KEY inválida');
-        }
-        $signature = '';
-        $ok = openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        openssl_free_key($privateKey);
-        if (!$ok) {
-            throw new Exception('Fallo al firmar JWT con RS256');
-        }
+
         return $signingInput . '.' . b64url_encode($signature);
     }
 }
@@ -147,17 +163,29 @@ if (!function_exists('verifyJwtToken')) {
             if ($publicKeyPem === '') {
                 throw new Exception('JWT_PUBLIC_KEY no configurada');
             }
-            $publicKey = openssl_pkey_get_public($publicKeyPem);
+            $publicKey = @openssl_pkey_get_public($publicKeyPem);
             if (!$publicKey) {
                 throw new Exception('JWT_PUBLIC_KEY inválida');
             }
             $verified = openssl_verify($signingInput, $signature, $publicKey, OPENSSL_ALGO_SHA256);
-            openssl_free_key($publicKey);
+            if (PHP_VERSION_ID < 80000) @openssl_free_key($publicKey);
             if ($verified !== 1) {
                 throw new Exception('Firma JWT inválida');
             }
+        } elseif ($alg === 'HS256') {
+            $hmacSecret = getenv('JWT_SECRET') ?: '';
+            if ($hmacSecret === '') {
+                $hmacSecret = loadPemFromEnv('JWT_PRIVATE_KEY');
+            }
+            if ($hmacSecret === '') {
+                throw new Exception('JWT_SECRET no configurada para verificar HS256');
+            }
+            $expected = hash_hmac('sha256', $signingInput, $hmacSecret, true);
+            if (!hash_equals($expected, $signature)) {
+                throw new Exception('Firma JWT inválida');
+            }
         } else {
-            throw new Exception('Algoritmo JWT no permitido');
+            throw new Exception('Algoritmo JWT no permitido: ' . $alg);
         }
 
         $now = time();
