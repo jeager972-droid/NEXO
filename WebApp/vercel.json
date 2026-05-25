@@ -3,6 +3,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/app/assets/:file*",
+      "destination": "/assets/:file*"
+    },
+    {
       "source": "/app/((?!assets/).*)",
       "destination": "/index.html"
     }
