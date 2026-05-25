@@ -1,7 +1,6 @@
 <?php
 // routes/auth.php - Manejo de autenticación
 global $cleanPath, $conn, $input, $method;
-require_once __DIR__ . '/_auth_middleware.php';
 
 /**
  * @OA\Info(
@@ -55,6 +54,8 @@ function normalizeRole($dbRole) {
     ];
     return $map[$dbRole] ?? 'DOCENTE'; // Fallback seguro al rol funcional
 }
+
+require_once __DIR__ . '/_auth_middleware.php';
 
 function isLoginThrottled($email) {
     global $conn;

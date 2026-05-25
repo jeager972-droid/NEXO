@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       localStorage.removeItem('user');
       setUser(null);
-      const publicPaths = ['/login', '/instalar/'];
+      const publicPaths = ['/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
       const isPublic = publicPaths.some(p => currentPath.includes(p));
       if (!isPublic) {
