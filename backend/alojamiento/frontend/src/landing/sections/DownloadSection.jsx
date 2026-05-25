@@ -222,18 +222,17 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
   // Si es Android, usar AnimatedDownloadButton
   if (id === 'android') {
     return (
-      <div ref={cardRef}>
-        <AnimatedDownloadButton
-          href={href}
-          id={`download-btn-${id}`}
-          aria-label={`Descargar NEXO para ${name}`}
-          style={cardStyle}
-          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
-        >
-          {cardContent}
-        </AnimatedDownloadButton>
-      </div>
+      <AnimatedDownloadButton
+        ref={cardRef}
+        href={href}
+        id={`download-btn-${id}`}
+        aria-label={`Descargar NEXO para ${name}`}
+        style={cardStyle}
+        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
+      >
+        {cardContent}
+      </AnimatedDownloadButton>
     )
   }
 
@@ -322,9 +321,18 @@ export default function DownloadSection() {
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 0.875rem !important;
           }
-          .nx-platform-grid > div,
-          .nx-platform-grid > a {
+          /* Uniform size for ALL platform cards (a + button) */
+          .nx-platform-grid > a,
+          .nx-platform-grid > button {
             padding: 1.25rem 1rem !important;
+            min-height: 120px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          .nx-platform-grid > a svg,
+          .nx-platform-grid > button svg {
+            width: 40px !important;
+            height: 40px !important;
           }
         }
       `}</style>

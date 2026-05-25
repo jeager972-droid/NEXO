@@ -336,6 +336,8 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     }
   }, [onDrag, onDragStart, onDragEnd])
 
+  const isMobileDevice = typeof window !== 'undefined' && window.innerWidth <= 768
+
   return (
     <div
       ref={overlayRef}
@@ -344,7 +346,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
         inset: 0,
         zIndex: 10,
         cursor: 'grab',
-        touchAction: 'none', // JS discriminates scroll vs rotation in onTouchMove
+        touchAction: isMobileDevice ? 'pan-y' : 'none', // Mobile: allow vertical scroll, JS handles horizontal rotation
       }}
     />
   )
@@ -401,15 +403,12 @@ export default function NexoCanvas({ type, scale = 1.0, showShield = false, cold
           fov: 45,
         }}
         gl={{
-          antialias: !isMobile,        // sin antialiasing en móvil (gran ahorro)
+          antialias: true,             // antialias ON for mobile quality
           alpha: true,
           powerPreference: 'high-performance',
           precision: isMobile ? 'mediump' : 'highp',
         }}
-        dpr={isMobile
-          ? [1, Math.min(window.devicePixelRatio, 1.5)]
-          : [1, Math.min(window.devicePixelRatio, 2)]
-        }
+        dpr={[1, Math.min(window.devicePixelRatio, 2)]}
         shadows={!isMobile}            // sin sombras en móvil
         frameloop={isMobile ? "always" : "demand"} // móvil: always garantiza rotación automática
         style={{ width: '100%', height: '100%', pointerEvents: 'none' }}

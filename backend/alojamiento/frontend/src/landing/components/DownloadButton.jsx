@@ -1,17 +1,19 @@
-import { useRef } from 'react'
+import { useRef, forwardRef, useImperativeHandle } from 'react'
 import gsap from 'gsap'
 
 // Componente de descarga simple con efecto de rebote
 
-export default function AnimatedDownloadButton({ 
+const AnimatedDownloadButton = forwardRef(function AnimatedDownloadButton({ 
   href, 
   filename = 'nexo.apk',
   children,
   className = '',
   id,
   ...props 
-}) {
+}, ref) {
   const buttonRef = useRef()
+
+  useImperativeHandle(ref, () => buttonRef.current)
 
   const handleDownload = (e) => {
     e.preventDefault()
@@ -52,4 +54,6 @@ export default function AnimatedDownloadButton({
       {children}
     </button>
   )
-}
+})
+
+export default AnimatedDownloadButton

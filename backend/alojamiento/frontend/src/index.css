@@ -709,6 +709,9 @@ body.custom-cursor-active * {
     100% { opacity: 0; transform: translateX(-50%) translateX(0); }
   }
 
+  /* Hide "desliza para rotar" hint inside hero on mobile */
+  #hero .nx-touch-rotate-hint { display: none !important; }
+
   /* ── Tipografía hero móvil refinada ── */
   .nx-h1 {
     font-size: clamp(1.65rem, 7vw, 2.1rem) !important;

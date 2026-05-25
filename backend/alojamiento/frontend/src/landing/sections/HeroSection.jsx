@@ -150,6 +150,25 @@ export default function HeroSection() {
                 sin excusas y sin puntos de falla.
               </p>
 
+              {/* Mobile-only: 3D node inline between subtitle and CTA */}
+              {isMobile && (
+                <div
+                  ref={canvasRef}
+                  className="nx-hero-canvas nx-hero-canvas--inline"
+                  aria-label="Modelo 3D del nodo NEXO"
+                  style={{
+                    height:       '340px',
+                    borderRadius: '1rem',
+                    overflow:     'hidden',
+                    position:     'relative',
+                    marginBottom: '1.5rem',
+                    width:        '100%',
+                  }}
+                >
+                  <NexoCanvas type="solo" scale={1.1} coldLight />
+                </div>
+              )}
+
               {/* CTAs */}
               <div ref={ctaRef} style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
                 {/* CAMBIO 5: Nuevo CTA — abre modal */}
@@ -176,42 +195,44 @@ export default function HeroSection() {
               </p>
             </div>
 
-            {/* ── RIGHT: 3D Node ── */}
-            <div
-              ref={canvasRef}
-              className="nx-hero-canvas"
-              aria-label="Modelo 3D del nodo NEXO"
-              style={{
-                height:       '520px',
-                borderRadius: '1.5rem',
-                overflow:     isMobile ? 'visible' : 'hidden',
-                position:     'relative',
-                opacity:       0,
-                willChange:   'transform, opacity',
-              }}
-            >
-              <NexoCanvas type="solo" scale={1.1} coldLight />
+            {/* ── RIGHT: 3D Node (desktop only — mobile renders inline above) ── */}
+            {!isMobile && (
+              <div
+                ref={canvasRef}
+                className="nx-hero-canvas"
+                aria-label="Modelo 3D del nodo NEXO"
+                style={{
+                  height:       '520px',
+                  borderRadius: '1.5rem',
+                  overflow:     'hidden',
+                  position:     'relative',
+                  opacity:       0,
+                  willChange:   'transform, opacity',
+                }}
+              >
+                <NexoCanvas type="solo" scale={1.1} coldLight />
 
-              {/* Label de hardware */}
-              <div aria-hidden="true" style={{
-                position:      'absolute',
-                bottom:        '1.25rem',
-                left:          '50%',
-                transform:     'translateX(-50%)',
-                fontSize:      '0.65rem',
-                fontWeight:     600,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color:         'var(--nx-muted-2)',
-                whiteSpace:    'nowrap',
-              }}>
-                Nodo NEXO — Hardware biométrico
+                {/* Label de hardware */}
+                <div aria-hidden="true" style={{
+                  position:      'absolute',
+                  bottom:        '1.25rem',
+                  left:          '50%',
+                  transform:     'translateX(-50%)',
+                  fontSize:      '0.65rem',
+                  fontWeight:     600,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color:         'var(--nx-muted-2)',
+                  whiteSpace:    'nowrap',
+                }}>
+                  Nodo NEXO — Hardware biométrico
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Scroll indicator */}
-          <div aria-hidden="true" style={{
+          {/* Scroll indicator — hidden on mobile */}
+          <div aria-hidden="true" className="nx-hero-scroll-indicator" style={{
             position:   'absolute',
             bottom:     '2.5rem',
             left:       '50%',
@@ -244,22 +265,26 @@ export default function HeroSection() {
                 justify-content: flex-start !important;
                 padding-top: 5.5rem !important;
               }
-              /* Reorder: canvas above copy, flex column */
+              /* Mobile: single column, natural flow */
               #hero .nx-hero-grid {
                 grid-template-columns: 1fr !important;
                 gap: 0 !important;
                 display: flex !important;
                 flex-direction: column !important;
               }
+              /* Copy first, canvas second — inner reorder via child flex order */
+              #hero .nx-hero-copy {
+                order: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+              }
+              /* Canvas sits between subtitle and CTA */
               #hero .nx-hero-canvas {
-                order: -1 !important;
-                height: 380px !important;
+                order: 1 !important;
+                height: 340px !important;
                 border-radius: 1rem !important;
                 overflow: hidden !important;
                 margin-bottom: 1.5rem !important;
-              }
-              #hero .nx-hero-copy {
-                order: 1 !important;
               }
               /* Glow: full-width behind canvas on mobile */
               #hero .nx-hero-glow-ambient {
@@ -273,9 +298,8 @@ export default function HeroSection() {
               #hero .nx-link-arrow {
                 display: none;
               }
-              #hero [style*="scroll indicator"],
-              #hero [style*="Desliza"] {
-                display: none;
+              #hero .nx-hero-scroll-indicator {
+                display: none !important;
               }
             }
           `}</style>
