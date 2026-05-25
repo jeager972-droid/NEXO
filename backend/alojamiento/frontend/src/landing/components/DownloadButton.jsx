@@ -35,7 +35,7 @@ export default function AnimatedDownloadButton({
       })
 
     // Abrir PWA en nueva pestaña
-    window.open('https://nexo-bay-mu.vercel.app/app/', '_blank', 'noopener,noreferrer')
+    window.open(href, '_blank', 'noopener,noreferrer')
   }
 
   return (

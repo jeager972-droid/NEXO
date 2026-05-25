@@ -242,6 +242,8 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
     <a
       ref={cardRef}
       href={href}
+      target="_blank"
+      rel="noopener noreferrer"
       id={`download-btn-${id}`}
       aria-label={`Descargar NEXO para ${name}`}
       style={cardStyle}
