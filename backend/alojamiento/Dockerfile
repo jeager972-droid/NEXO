@@ -1,5 +1,5 @@
 FROM php:8.2-fpm
-# CORS fix applied - Railway rebuild required - v2.0
+# CORS fix applied - nginx catch-all → api.php - v3.0
 
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
