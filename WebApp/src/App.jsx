@@ -29,6 +29,15 @@ function App() {
   useEffect(() => { initTelemetry() }, [])
 
   useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault()
+      window.__nexoPwaPrompt = e
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  useEffect(() => {
     const setupDeepLink = async () => {
       try {
         const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link')

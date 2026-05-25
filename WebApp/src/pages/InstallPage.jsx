@@ -40,8 +40,14 @@ export default function InstallPage() {
   }, [platform, navigate])
 
   useEffect(() => {
+    // Recuperar prompt capturado globalmente si ya se disparó
+    if (window.__nexoPwaPrompt) {
+      setDeferredPrompt(window.__nexoPwaPrompt)
+    }
+
     const handler = (e) => {
       e.preventDefault()
+      window.__nexoPwaPrompt = e
       setDeferredPrompt(e)
     }
     window.addEventListener('beforeinstallprompt', handler)
@@ -57,6 +63,7 @@ export default function InstallPage() {
     const { outcome } = await deferredPrompt.userChoice
     if (outcome === 'accepted') setInstalled(true)
     setDeferredPrompt(null)
+    window.__nexoPwaPrompt = null
   }
 
   const content = PLATFORMS[platform]
