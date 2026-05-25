@@ -8,6 +8,10 @@ import { ROLES } from './config/roles'
 import PwaInstallPrompt from './components/PwaInstallPrompt'
 import ErrorBoundary from './components/ErrorBoundary'
 import { initTelemetry } from './api/telemetry'
+import { useCookieConsent } from './hooks/useCookieConsent'
+import CookieBanner from './components/CookieBanner'
+import CookieManager from './components/CookieManager'
+import CookieFloatingButton from './components/CookieFloatingButton'
 
 // Pages
 const Login = lazy(() => import('./pages/Login'))
@@ -24,6 +28,7 @@ const Downloads  = lazy(() => import('./pages/Downloads'))
 function App() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const cookieConsent = useCookieConsent()
 
   useEffect(() => { initTelemetry() }, [])
 
@@ -123,6 +128,29 @@ function App() {
         </motion.div>
       </AnimatePresence>
       <PwaInstallPrompt />
+      
+      {cookieConsent.showBanner && (
+        <CookieBanner
+          onAcceptAll={cookieConsent.acceptAll}
+          onRejectAll={cookieConsent.rejectAll}
+          onManage={() => cookieConsent.setShowManager(true)}
+        />
+      )}
+
+      {cookieConsent.showManager && (
+        <CookieManager
+          onSave={cookieConsent.saveCustom}
+          onAcceptAll={cookieConsent.acceptAll}
+          onClose={() => cookieConsent.setShowManager(false)}
+          initialValues={cookieConsent.consent?.categories}
+        />
+      )}
+
+      {cookieConsent.consent && !cookieConsent.showBanner && (
+        <CookieFloatingButton
+          onClick={() => cookieConsent.setShowManager(true)}
+        />
+      )}
     </Suspense>
   )
 }
