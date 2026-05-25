@@ -32,6 +32,8 @@ header("Content-Security-Policy: default-src 'self'; connect-src 'self' http://l
 
 require_once __DIR__ . '/boot_check.php';
 require_once __DIR__ . '/db.php';
+
+// FIX: Asignar $conn INMEDIATAMENTE después de db.php para que esté disponible en todas las rutas
 $conn = $pdo;
 
 // E15: securityLog() ASÍNCRONO — encola en Redis, no INSERT síncrono

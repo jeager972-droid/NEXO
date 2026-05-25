@@ -66,7 +66,11 @@ client.interceptors.response.use(
     emitLatency(error.config, error.response?.status ?? 0);
     if (error.response?.status === 401) {
       localStorage.removeItem('user');
-      if (!window.location.pathname.startsWith('/app/login')) {
+      // FIX: No redirigir si estamos en rutas públicas
+      const publicRoutes = ['/app/login', '/app/instalar/', '/app/descargas'];
+      const currentPath = window.location.pathname;
+      const isPublicRoute = publicRoutes.some(route => currentPath.startsWith(route) || currentPath.includes(route));
+      if (!isPublicRoute) {
         window.location.href = '/app/login';
       }
     }
