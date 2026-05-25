@@ -15,12 +15,12 @@ const Downloads = () => {
 
   const getDownloadLink = () => {
     switch (os) {
-      case 'windows': return { url: '/downloads/nexo-setup.exe', icon: <Monitor />, label: 'Descargar para Windows' };
-      case 'macos': return { url: '/downloads/nexo-mac.dmg', icon: <Apple />, label: 'Descargar para macOS' };
-      case 'linux': return { url: '/downloads/nexo-linux.AppImage', icon: <Monitor />, label: 'Descargar para Linux' };
-      case 'android': return { url: '/downloads/nexo.apk', icon: <Smartphone />, label: 'Descargar APK Android' };
-      case 'ios': return { url: '#', icon: <Smartphone />, label: 'Próximamente en App Store' };
-      default: return { url: '#', icon: <Download />, label: 'Selecciona tu plataforma' };
+      case 'windows': return { url: null, icon: <Monitor />, label: 'Windows - Próximamente', disabled: true };
+      case 'macos': return { url: null, icon: <Apple />, label: 'macOS - Próximamente', disabled: true };
+      case 'linux': return { url: null, icon: <Monitor />, label: 'Linux - Próximamente', disabled: true };
+      case 'android': return { url: '/app/downloads/nexo.apk', icon: <Smartphone />, label: 'Descargar APK Android', disabled: false };
+      case 'ios': return { url: null, icon: <Smartphone />, label: 'iOS - Próximamente', disabled: true };
+      default: return { url: null, icon: <Download />, label: 'Selecciona tu plataforma', disabled: true };
     }
   };
 
@@ -42,14 +42,24 @@ const Downloads = () => {
         <h2 className="text-2xl font-bold mb-6 dark:text-white">
           Sistema detectado: <span className="capitalize">{os}</span>
         </h2>
-        <a 
-          href={activeDownload.url}
-          download
-          className="inline-flex items-center gap-3 bg-institutional-900 text-white px-8 py-4 rounded-2xl font-black uppercase hover:scale-105 transition-all"
-        >
-          <Download size={20} />
-          {activeDownload.label}
-        </a>
+        {activeDownload.disabled ? (
+          <button
+            disabled
+            className="inline-flex items-center gap-3 bg-gray-400 text-white px-8 py-4 rounded-2xl font-black uppercase cursor-not-allowed opacity-50"
+          >
+            <Download size={20} />
+            {activeDownload.label}
+          </button>
+        ) : (
+          <a 
+            href={activeDownload.url}
+            download="nexo.apk"
+            className="inline-flex items-center gap-3 bg-institutional-900 text-white px-8 py-4 rounded-2xl font-black uppercase hover:scale-105 transition-all"
+          >
+            <Download size={20} />
+            {activeDownload.label}
+          </a>
+        )}
       </div>
     </div>
   );
