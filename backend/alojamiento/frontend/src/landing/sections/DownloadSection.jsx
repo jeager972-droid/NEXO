@@ -13,7 +13,7 @@ const PLATFORMS = [
     id: 'android',
     name: 'Android',
     glowColor: 'rgba(61,220,132,0.35)',   // Android green
-    href: '#download-android',
+    href: '/assets/downloads/nexo.apk',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -164,6 +164,7 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
     <a
       ref={cardRef}
       href={href}
+      download={id === 'android' ? 'nexo.apk' : undefined}
       id={`download-btn-${id}`}
       aria-label={`Descargar NEXO para ${name}`}
       style={{
