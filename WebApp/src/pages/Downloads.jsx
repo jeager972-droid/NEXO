@@ -18,7 +18,7 @@ const Downloads = () => {
       case 'windows': return { url: '/downloads/nexo-setup.exe', icon: <Monitor />, label: 'Descargar para Windows' };
       case 'macos': return { url: '/downloads/nexo-mac.dmg', icon: <Apple />, label: 'Descargar para macOS' };
       case 'linux': return { url: '/downloads/nexo-linux.AppImage', icon: <Monitor />, label: 'Descargar para Linux' };
-      case 'android': return { url: '/downloads/nexo-android.apk', icon: <Smartphone />, label: 'Descargar APK Android' };
+      case 'android': return { url: '/downloads/nexo.apk', icon: <Smartphone />, label: 'Descargar APK Android' };
       case 'ios': return { url: '#', icon: <Smartphone />, label: 'Próximamente en App Store' };
       default: return { url: '#', icon: <Download />, label: 'Selecciona tu plataforma' };
     }
@@ -44,6 +44,7 @@ const Downloads = () => {
         </h2>
         <a 
           href={activeDownload.url}
+          download
           className="inline-flex items-center gap-3 bg-institutional-900 text-white px-8 py-4 rounded-2xl font-black uppercase hover:scale-105 transition-all"
         >
           <Download size={20} />
