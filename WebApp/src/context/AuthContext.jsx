@@ -16,7 +16,10 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       localStorage.removeItem('user');
       setUser(null);
-      if (window.location.pathname !== '/login') {
+      const publicPaths = ['/login', '/instalar/'];
+      const currentPath = window.location.pathname;
+      const isPublic = publicPaths.some(p => currentPath.includes(p));
+      if (!isPublic) {
         navigate('/login');
       }
     } finally {
