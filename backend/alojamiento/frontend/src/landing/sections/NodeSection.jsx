@@ -36,12 +36,6 @@ const SPECS = [
     meaning: 'Los datos biométricos viajan y se almacenan con encriptación completa en cada capa del sistema.',
     hotspotPos: { top: '30%', right: '18%' },
   },
-  {
-    id: 'warranty',
-    label: 'Cobertura total o parcial ante daños',
-    meaning: '',
-    hotspotPos: { top: '62%', right: '14%' },
-  },
 ]
 
 function Hotspot({ spec, isActive, onClick, isMobile }) {
@@ -54,7 +48,6 @@ function Hotspot({ spec, isActive, onClick, isMobile }) {
     <div
       className="nx-hotspot"
       style={{ position: 'absolute', ...spec.hotspotPos, zIndex: 10 }}
-      onClick={handlePointerUp}
       onPointerUp={handlePointerUp}
       onKeyDown={e => e.key === 'Enter' && onClick(spec.id)}
       role="button"
@@ -62,94 +55,76 @@ function Hotspot({ spec, isActive, onClick, isMobile }) {
       aria-label={`Ver detalle: ${spec.label}`}
       aria-pressed={isActive}
     >
-      {/* Pulse ring */}
       <div className="nx-hotspot__ring" />
-      {/* Solid dot — larger tap target on mobile */}
       <div
         className="nx-hotspot__dot"
         style={{
           width: isMobile ? '18px' : '12px',
           height: isMobile ? '18px' : '12px',
-          transform: isActive ? 'scale(1.4)' : 'scale(1)',
-          boxShadow: isActive ? '0 0 0 4px rgba(45, 110, 48, 0.3)' : 'none',
+          transform: isActive ? 'scale(1.5)' : 'scale(1)',
+          boxShadow: isActive ? '0 0 0 5px rgba(45, 110, 48, 0.25)' : 'none',
           transition: 'transform 0.2s var(--nx-ease), box-shadow 0.2s',
         }}
       />
+    </div>
+  )
+}
 
-      {/* Tooltip — positioned for mobile or desktop */}
-      {isActive && (
+function SpecPanel({ active, specs, onClose }) {
+  const activeSpec = specs.find(s => s.id === active)
+
+  return (
+    <div
+      className="nx-node-panel nx-reveal nx-reveal-delay-4"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        minHeight: '200px',
+      }}
+    >
+      {activeSpec ? (
         <div
-          role="tooltip"
-          className="nx-hotspot-tooltip"
-          style={{
-            position: isMobile ? 'fixed' : 'absolute',
-            ...(isMobile ? {
-              bottom: '1.5rem',
-              left: '1rem',
-              right: '1rem',
-              transform: 'none',
-            } : {
-              bottom: 'calc(100% + 10px)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '200px',
-            }),
-            background: 'var(--nx-card)',
-            border: '1px solid var(--nx-border)',
-            borderRadius: '0.75rem',
-            padding: isMobile ? '1rem 1.25rem' : '0.75rem 1rem',
-            pointerEvents: isMobile ? 'auto' : 'none',
-            animation: 'tooltipIn 0.2s var(--nx-ease)',
-            zIndex: 100,
-            fontFamily: 'var(--nx-font)',
-            boxShadow: isMobile ? '0 8px 32px rgba(15, 45, 18, 0.12)' : 'none',
-          }}
+          key={active}
+          style={{ animation: 'panelIn 0.2s var(--nx-ease)' }}
         >
-          {/* Close button — mobile only */}
-          {isMobile && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onClick(spec.id); }}
-              onPointerUp={(e) => { e.stopPropagation(); onClick(spec.id); }}
-              aria-label="Cerrar"
-              style={{
-                position: 'absolute',
-                top: '0.5rem',
-                right: '0.5rem',
-                background: 'none',
-                border: 'none',
-                width: '28px',
-                height: '28px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: 'var(--nx-muted)',
-                borderRadius: '50%',
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <line x1="3" y1="3" x2="11" y2="11" /><line x1="11" y1="3" x2="3" y2="11" />
-              </svg>
-            </button>
-          )}
-          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--nx-green)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>
-            {spec.label}
+          <div style={{
+            fontSize: '0.65rem', fontWeight: 700, color: 'var(--nx-green)',
+            textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '1rem',
+          }}>
+            Especificación
           </div>
-          <div style={{ fontSize: isMobile ? '0.82rem' : '0.78rem', color: 'var(--nx-text)', lineHeight: 1.55 }}>
-            {spec.meaning}
-          </div>
-          {/* Arrow — desktop only */}
-          {!isMobile && (
-            <div style={{
-              position: 'absolute', bottom: '-5px', left: '50%',
-              transform: 'translateX(-50%) rotate(45deg)',
-              width: '8px', height: '8px',
-              background: 'var(--nx-surface)',
-              borderRight: '1px solid var(--nx-border)',
-              borderBottom: '1px solid var(--nx-border)',
-            }} />
-          )}
+          <h3 style={{
+            fontSize: '1.25rem', fontWeight: 800, color: 'var(--nx-white)',
+            lineHeight: 1.2, marginBottom: '1rem',
+          }}>
+            {activeSpec.label}
+          </h3>
+          <p style={{ fontSize: '0.9rem', color: 'var(--nx-muted)', lineHeight: 1.65 }}>
+            {activeSpec.meaning}
+          </p>
+          <button
+            type="button"
+            onPointerUp={onClose}
+            style={{
+              marginTop: '1.5rem', background: 'none', border: '1px solid var(--nx-border)',
+              borderRadius: '100px', padding: '0.4rem 1rem', fontSize: '0.75rem',
+              color: 'var(--nx-muted)', cursor: 'pointer', fontFamily: 'var(--nx-font)',
+              transition: 'border-color 0.2s, color 0.2s', alignSelf: 'flex-start',
+            }}
+            aria-label="Cerrar panel"
+          >
+            Cerrar ×
+          </button>
+        </div>
+      ) : (
+        <div style={{ opacity: 0.45 }}>
+          <div style={{
+            width: '40px', height: '1px', background: 'var(--nx-border)', marginBottom: '1.25rem',
+          }} />
+          <p style={{ fontSize: '0.8rem', color: 'var(--nx-muted)', lineHeight: 1.65 }}>
+            Toca un punto parpadeante para explorar las especificaciones del nodo.
+          </p>
         </div>
       )}
     </div>
@@ -228,7 +203,7 @@ export default function NodeSection() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background: 'var(--nx-deep)',
+          background: 'linear-gradient(180deg, var(--nx-surface) 0%, var(--nx-deep) 100%)',
           overflow:   isMobile ? 'visible' : 'hidden',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
@@ -304,81 +279,28 @@ export default function NodeSection() {
               </div>
             </div>
 
-            {/* ── RIGHT: Spec list synced to hotspots ── */}
-            <div className="nx-node-specs nx-reveal nx-reveal-delay-4">
-              {SPECS.map(({ id, label, meaning }, i) => (
-                <div
-                  key={id}
-                  onClick={() => toggle(id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && toggle(id)}
-                  aria-pressed={active === id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '1rem',
-                    padding: '1.4rem 0.75rem',
-                    borderBottom: '1px solid var(--nx-border)',
-                    cursor: 'pointer',
-                    borderRadius: '0.5rem',
-                    background: active === id ? 'rgba(45, 110, 48, 0.05)' : 'transparent',
-                    transition: 'background 0.25s',
-                  }}
-                >
-                  {/* Number circle */}
-                  <div style={{
-                    width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                    border: `1.5px solid ${active === id ? 'var(--nx-green)' : 'var(--nx-border)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.65rem', fontWeight: 700,
-                    color: active === id ? 'var(--nx-green)' : 'var(--nx-muted)',
-                    marginTop: '2px',
-                    transition: 'border-color 0.25s, color 0.25s',
-                  }}>
-                    {String(i + 1).padStart(2, '0')}
-                  </div>
-
-                  <div>
-                    <div style={{
-                      fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.3rem',
-                      color: active === id ? 'var(--nx-white)' : 'var(--nx-text)',
-                      transition: 'color 0.25s',
-                    }}>
-                      {label}
-                    </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--nx-muted)', lineHeight: 1.55 }}>
-                      {meaning}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <p className="nx-micro" style={{ marginTop: '1.5rem', paddingLeft: '0.75rem' }}>
-                El 70% de los costos de daño por causas naturales o ambientales son cubiertos por NEXO durante los primeros 5 años.
-              </p>
-            </div>
+            {/* ── RIGHT: Dynamic spec panel (PC: beside canvas, Mobile: below) ── */}
+            <SpecPanel active={active} specs={SPECS} onClose={() => setActive(null)} />
           </div>
         </div>
       </section>
 
       <style>{`
-        .nx-hotspot__tooltip { z-index: 20; }
-        @keyframes tooltipIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes panelIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
 
         @media (max-width: 768px) {
           #el-nodo .nx-node-grid {
             grid-template-columns: 1fr !important;
-            gap: 2rem !important;
+            gap: 1.5rem !important;
           }
           #el-nodo .nx-node-canvas-wrap {
             height: 360px !important;
             border-radius: 1rem !important;
             overflow: visible !important;
-            margin-bottom: 1.5rem !important;
+            margin-bottom: 0 !important;
           }
           #el-nodo .nx-hotspot {
             display: block !important;
@@ -390,12 +312,13 @@ export default function NodeSection() {
             width: 18px !important;
             height: 18px !important;
           }
-          /* Hide desktop cursor hint, show mobile touch hint instead */
           #el-nodo .nx-cursor-hint-desktop { display: none !important; }
-          #el-nodo .nx-node-specs { padding-left: 0 !important; padding-top: 1.5rem !important; }
-          #el-nodo .nx-node-specs > div {
-            padding: 1rem 0.5rem !important;
-            gap: 0.75rem !important;
+          #el-nodo .nx-node-panel {
+            padding: 1.25rem !important;
+            background: var(--nx-surface) !important;
+            border: 1px solid var(--nx-border) !important;
+            border-radius: 1rem !important;
+            min-height: auto !important;
           }
         }
       `}</style>

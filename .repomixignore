@@ -1,23 +1,81 @@
+# === Git, IDE, CI ===
 .git/
+.git-backup-old/
+.vscode/
+.vercel/
+.agents/
+
+# === Dependencias ===
 **/node_modules/**
 **/vendor/**
-**/build/**
+
+# === Build artifacts ===
 **/dist/**
-repomix-output.xml
-logs/
-.vscode/
-Gestion de Proyecto/
-Dockerfile.bak
+**/build/**
 CMakeCache.txt
-Makefile
 CMakeFiles/
+Makefile
+
+# === Bundles Vite compilados (no son código fuente) ===
+backend/alojamiento/assets/index-*.js
+backend/alojamiento/assets/index-*.css
+backend/alojamiento/assets/three-vendor-*.js
+backend/alojamiento/assets/gsap-vendor-*.js
+
+# === Texturas, modelos 3D y assets binarios ===
+**/*.glb
+**/*.gltf
+backend/alojamiento/assets/environments/
+backend/alojamiento/assets/texturas-arena/
+backend/alojamiento/assets/textures/
+backend/alojamiento/assets/logo/
+backend/alojamiento/assets-3d/
+backend/alojamiento/assets/downloads/
+WebApp/public/assets/
+WebApp/public/downloads/
+
+# === Binarios compilados ===
 *.o
 *.a
 *.so*
 *.map
 *.bin
 *.elf
+backend/lib/
 sqlite3.c
 sqlite3.h
-Logica de negocio/src/
-Logica de negocio/include/
+
+# === PHP: instaladores y binarios de Composer ===
+backend/alojamiento/composer.phar
+backend/alojamiento/composer-setup.php
+
+# === Secretos y claves ===
+*.pem
+*.key
+.env
+.env.*
+.env*.local
+
+# === Logs y archivos temporales ===
+logs/
+*.log
+backend/alojamiento/frontend/dev_server_log.txt
+
+# === Archivos comprimidos ===
+*.zip
+
+# === Scripts de debug y scratch ===
+backend/alojamiento/frontend/scratch/
+backend/alojamiento/_dev/
+backend/alojamiento/debug_db.php
+
+# === Archivos sueltos sin valor ===
+Dockerfile.bak
+Logica
+Nuevo documento de texto.txt
+skills-lock.json
+
+# === Ruido de repomix ===
+repomix-output.xml
+repomix-output.txt
+repomix-output.md

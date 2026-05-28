@@ -61,6 +61,9 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
       // Centrar en bounding box real (Bug 1 fix)
       innerRef.current.position.set(-center.x, -center.y, -center.z)
 
+      // Reset rotation so model always faces front on load
+      innerRef.current.rotation.set(0, 0, 0)
+
       // Al terminar la normalización, el modelo está en el DOM con dimensiones reales
       setTimeout(() => ScrollTrigger.refresh(), 100)
     }
@@ -86,8 +89,8 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
       // Dedo apoyado sin mover: mantener posición, seguir invalidando para que el frame no muera
       needsUpdate = true
     } else {
-      // Rotación automática continua
-      innerRef.current.rotation.y += 0.004
+      // Rotación automática continua — delta-based for frame-rate-independent speed
+      innerRef.current.rotation.y += 0.24 * delta
       needsUpdate = true
     }
 

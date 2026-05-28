@@ -67,7 +67,7 @@ export default function CredibilityBar() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background: 'var(--nx-deep)',
+          background: 'linear-gradient(180deg, var(--nx-surface-2) 0%, var(--nx-deep) 100%)',
           borderTop: '1px solid var(--nx-border)',
           borderBottom: '1px solid var(--nx-border)',
           paddingLeft: 'var(--nx-section-px)',

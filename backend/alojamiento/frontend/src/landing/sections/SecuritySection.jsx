@@ -117,7 +117,7 @@ export default function SecuritySection() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background: 'var(--nx-void)',
+          background: 'linear-gradient(180deg, var(--nx-deep) 0%, var(--nx-void) 100%)',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
           display: 'flex',

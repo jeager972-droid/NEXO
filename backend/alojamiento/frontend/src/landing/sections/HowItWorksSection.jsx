@@ -158,7 +158,7 @@ export default function HowItWorksSection() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background: 'var(--nx-deep)',
+          background: 'linear-gradient(180deg, var(--nx-deep) 0%, var(--nx-surface) 100%)',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
           display: 'flex',
@@ -237,8 +237,10 @@ export default function HowItWorksSection() {
                 style={{ position: 'relative', zIndex: 2 }}
               >
                 <div className="nx-timeline__node">{num}</div>
-                <div className="nx-timeline__title">{title}</div>
-                <p className="nx-timeline__body">{body}</p>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="nx-timeline__title">{title}</div>
+                  <p className="nx-timeline__body">{body}</p>
+                </div>
               </div>
             ))}
           </div>

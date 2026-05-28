@@ -268,7 +268,7 @@ export default function DownloadSection() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background: 'var(--nx-deep)',
+          background: 'linear-gradient(180deg, var(--nx-void) 0%, var(--nx-surface) 50%, var(--nx-deep) 100%)',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
           display: 'flex',

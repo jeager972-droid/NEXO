@@ -40,15 +40,14 @@ export default function FinalCTASection() {
     }
 
     if (titleEl) {
-      const original = titleEl.textContent.trim()
-      titleEl.innerHTML = original
-        .split('')
-        .map(char =>
+      const segments = titleEl.innerHTML.split(/<br\s*\/?>/i)
+      titleEl.innerHTML = segments
+        .map(seg => seg.trim().split('').map(char =>
           char === ' '
             ? '<span style="display:inline-block;width:0.28em">&nbsp;</span>'
             : `<span style="display:inline-block;opacity:0;transform:scale(0.8)">${char}</span>`
-        )
-        .join('')
+        ).join(''))
+        .join('<br/>')
     }
 
     const chars = titleRef.current?.querySelectorAll('span') || []
@@ -141,7 +140,7 @@ export default function FinalCTASection() {
               }}
               aria-label="El próximo semestre puede empezar diferente."
             >
-              El próximo semestre puede empezar diferente.
+              El próximo semestre puede empezar<br />diferente.
             </h2>
 
             {/* Subtítulo */}

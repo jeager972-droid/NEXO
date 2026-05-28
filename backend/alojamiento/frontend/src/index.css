@@ -58,11 +58,11 @@ body {
   font-family: var(--nx-font);
   background: linear-gradient(
     180deg,
-    var(--nx-void) 0%,
-    var(--nx-deep) 25%,
-    var(--nx-void) 50%,
-    var(--nx-surface) 75%,
-    var(--nx-void) 100%
+    var(--nx-void)     0%,
+    var(--nx-surface-2) 25%,
+    var(--nx-deep)     50%,
+    var(--nx-surface)  75%,
+    var(--nx-void)     100%
   );
   color: var(--nx-text);
   overflow-x: hidden;
@@ -736,7 +736,7 @@ body.custom-cursor-active * {
   /* ── Reducir bottom padding en sections con canvas full-bleed ── */
   #hero .section-inner,
   #el-nodo .section-inner {
-    padding-bottom: 3rem !important;
+    padding-bottom: 1.5rem !important;
   }
 }
 

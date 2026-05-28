@@ -157,11 +157,11 @@ export default function HeroSection() {
                   className="nx-hero-canvas nx-hero-canvas--inline"
                   aria-label="Modelo 3D del nodo NEXO"
                   style={{
-                    height:       '420px',
+                    height:       '300px',
                     borderRadius: '1rem',
                     overflow:     'hidden',
                     position:     'relative',
-                    marginBottom: '0.75rem',
+                    marginBottom: '1rem',
                     width:        '100%',
                   }}
                 >
@@ -202,7 +202,7 @@ export default function HeroSection() {
                 className="nx-hero-canvas"
                 aria-label="Modelo 3D del nodo NEXO"
                 style={{
-                  height:       '520px',
+                  height:       '440px',
                   borderRadius: '1.5rem',
                   overflow:     'hidden',
                   position:     'relative',
@@ -281,7 +281,7 @@ export default function HeroSection() {
               /* Canvas sits between subtitle and CTA */
               #hero .nx-hero-canvas {
                 order: 1 !important;
-                height: 420px !important;
+                height: 300px !important;
                 border-radius: 1rem !important;
                 overflow: hidden !important;
                 margin-bottom: 0.75rem !important;
