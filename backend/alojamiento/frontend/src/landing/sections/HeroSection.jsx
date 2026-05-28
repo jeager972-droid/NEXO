@@ -135,11 +135,11 @@ export default function HeroSection() {
               >
                 {/* Línea 1 */}
                 <span ref={line1Ref} style={{ display: 'block', opacity: 0, shortcut: 'none', willChange: 'transform, opacity' }}>
-                  Hoy por hoy, hay una brecha de control sobre la custodia y presencia de un estudiante,
+                  La presencia estudiantil
                 </span>
                 {/* Línea 2 — stagger 0.15s */}
                 <span ref={line2Ref} style={{ display: 'block', opacity: 0, shortcut: 'none', willChange: 'transform, opacity' }}>
-                  poniéndolos en riesgo a ellos y a quienes participan en su proceso educativo.
+                  ya no puede ser un punto ciego.
                 </span>
               </h1>
 

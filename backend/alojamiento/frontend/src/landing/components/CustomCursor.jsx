@@ -20,6 +20,7 @@ export default function CustomCursor() {
 
     let mouseX = 0, mouseY = 0
     let ringX = 0, ringY = 0
+    let rafId = 0
     const lerpFactor = 0.12
 
     const onMouseMove = (e) => {
@@ -34,7 +35,7 @@ export default function CustomCursor() {
       ringX += (mouseX - ringX) * lerpFactor
       ringY += (mouseY - ringY) * lerpFactor
       gsap.set(ring, { x: ringX, y: ringY })
-      requestAnimationFrame(animateRing)
+      rafId = requestAnimationFrame(animateRing)
     }
     animateRing()
 
@@ -61,6 +62,7 @@ export default function CustomCursor() {
     })
 
     return () => {
+      cancelAnimationFrame(rafId)
       document.body.classList.remove('custom-cursor-active')
       document.removeEventListener('mousemove', onMouseMove)
       interactives.forEach(el => {
