@@ -56,7 +56,14 @@ html {
 
 body {
   font-family: var(--nx-font);
-  background: var(--nx-void);
+  background: linear-gradient(
+    180deg,
+    var(--nx-void) 0%,
+    var(--nx-deep) 25%,
+    var(--nx-void) 50%,
+    var(--nx-surface) 75%,
+    var(--nx-void) 100%
+  );
   color: var(--nx-text);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -399,7 +406,7 @@ a { color: inherit; text-decoration: none; }
 .nx-ba-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  margin-top: 0.45rem;
+  margin-top: 0.5rem;
   flex-shrink: 0;
 }
 .nx-ba-dot--before { background: var(--nx-muted-2); }

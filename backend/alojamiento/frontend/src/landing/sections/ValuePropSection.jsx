@@ -10,7 +10,7 @@ import { useStickyScroll } from '../components/useStickyScroll'
 const ROWS = [
   {
     before: 'Lista de asistencia manual — tiempo de cátedra que no vuelve',
-    after:  'Registro automático en menos de 1 segundo por estudiante',
+    after:  'Registro automático al instante por estudiante',
   },
   {
     before: 'Los acudientes se enteran de la inasistencia días después',
@@ -119,7 +119,7 @@ export default function ValuePropSection() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background:    'var(--nx-void)',
+          background:    'linear-gradient(180deg, var(--nx-deep) 0%, var(--nx-void) 100%)',
           paddingLeft:   'var(--nx-section-px)',
           paddingRight:  'var(--nx-section-px)',
           display:       'flex',

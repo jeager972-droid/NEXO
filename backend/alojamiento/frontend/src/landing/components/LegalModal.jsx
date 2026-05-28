@@ -128,10 +128,21 @@ export default function LegalModal({ type, onClose }) {
   useEffect(() => {
     const handleEsc = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleEsc)
+    // Prevent body scroll while modal is open
+    const scrollY = window.scrollY
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', handleEsc)
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
       document.body.style.overflow = ''
+      window.scrollTo(0, scrollY)
     }
   }, [onClose])
 
@@ -145,17 +156,20 @@ export default function LegalModal({ type, onClose }) {
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
+      onTouchEnd={(e) => { if (e.target === overlayRef.current) onClose() }}
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
         background: 'rgba(0, 0, 0, 0.75)',
         backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '2rem',
+        padding: '1rem',
         animation: 'legalFadeIn 0.2s ease',
+        touchAction: 'none',
       }}
     >
       <div
@@ -196,20 +210,23 @@ export default function LegalModal({ type, onClose }) {
           </h3>
           <button
             onClick={onClose}
+            onTouchEnd={(e) => { e.preventDefault(); onClose(); }}
             type="button"
             aria-label="Cerrar"
             style={{
               background: 'none',
               border: '1px solid var(--nx-border, #2a2d35)',
               borderRadius: '0.5rem',
-              width: '36px',
-              height: '36px',
+              width: '44px',
+              height: '44px',
+              minWidth: '44px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
               color: 'var(--nx-muted, #8a8f9a)',
               transition: 'color 0.2s, border-color 0.2s',
+              touchAction: 'manipulation',
             }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--nx-white)'; e.currentTarget.style.borderColor = 'var(--nx-muted)' }}
             onMouseLeave={e => { e.currentTarget.style.color = 'var(--nx-muted)'; e.currentTarget.style.borderColor = 'var(--nx-border)' }}
@@ -223,8 +240,10 @@ export default function LegalModal({ type, onClose }) {
 
         {/* Body */}
         <div style={{
-          padding: '2rem',
+          padding: '1.5rem 2rem',
           overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-y',
           fontSize: '0.85rem',
           lineHeight: 1.75,
           color: 'var(--nx-text, #c8ccd4)',

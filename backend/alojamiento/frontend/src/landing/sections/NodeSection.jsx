@@ -44,12 +44,18 @@ const SPECS = [
   },
 ]
 
-function Hotspot({ spec, isActive, onClick }) {
+function Hotspot({ spec, isActive, onClick, isMobile }) {
+  const handlePointerUp = (e) => {
+    e.stopPropagation()
+    onClick(spec.id)
+  }
+
   return (
     <div
       className="nx-hotspot"
       style={{ position: 'absolute', ...spec.hotspotPos, zIndex: 10 }}
-      onClick={() => onClick(spec.id)}
+      onClick={handlePointerUp}
+      onPointerUp={handlePointerUp}
       onKeyDown={e => e.key === 'Enter' && onClick(spec.id)}
       role="button"
       tabIndex={0}
@@ -58,49 +64,92 @@ function Hotspot({ spec, isActive, onClick }) {
     >
       {/* Pulse ring */}
       <div className="nx-hotspot__ring" />
-      {/* Solid dot */}
+      {/* Solid dot — larger tap target on mobile */}
       <div
         className="nx-hotspot__dot"
         style={{
+          width: isMobile ? '18px' : '12px',
+          height: isMobile ? '18px' : '12px',
           transform: isActive ? 'scale(1.4)' : 'scale(1)',
           boxShadow: isActive ? '0 0 0 4px rgba(45, 110, 48, 0.3)' : 'none',
           transition: 'transform 0.2s var(--nx-ease), box-shadow 0.2s',
         }}
       />
 
-      {/* Tooltip — appears above the dot */}
+      {/* Tooltip — positioned for mobile or desktop */}
       {isActive && (
         <div
           role="tooltip"
+          className="nx-hotspot-tooltip"
           style={{
-            position: 'absolute',
-            bottom: 'calc(100% + 10px)',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'var(--nx-surface)',
+            position: isMobile ? 'fixed' : 'absolute',
+            ...(isMobile ? {
+              bottom: '1.5rem',
+              left: '1rem',
+              right: '1rem',
+              transform: 'none',
+            } : {
+              bottom: 'calc(100% + 10px)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '200px',
+            }),
+            background: 'var(--nx-card)',
             border: '1px solid var(--nx-border)',
             borderRadius: '0.75rem',
-            padding: '0.75rem 1rem',
-            width: '200px',
-            pointerEvents: 'none',
+            padding: isMobile ? '1rem 1.25rem' : '0.75rem 1rem',
+            pointerEvents: isMobile ? 'auto' : 'none',
             animation: 'tooltipIn 0.2s var(--nx-ease)',
+            zIndex: 100,
+            fontFamily: 'var(--nx-font)',
+            boxShadow: isMobile ? '0 8px 32px rgba(15, 45, 18, 0.12)' : 'none',
           }}
         >
+          {/* Close button — mobile only */}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClick(spec.id); }}
+              onPointerUp={(e) => { e.stopPropagation(); onClick(spec.id); }}
+              aria-label="Cerrar"
+              style={{
+                position: 'absolute',
+                top: '0.5rem',
+                right: '0.5rem',
+                background: 'none',
+                border: 'none',
+                width: '28px',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'var(--nx-muted)',
+                borderRadius: '50%',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="3" y1="3" x2="11" y2="11" /><line x1="11" y1="3" x2="3" y2="11" />
+              </svg>
+            </button>
+          )}
           <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--nx-green)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>
             {spec.label}
           </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--nx-text)', lineHeight: 1.55 }}>
+          <div style={{ fontSize: isMobile ? '0.82rem' : '0.78rem', color: 'var(--nx-text)', lineHeight: 1.55 }}>
             {spec.meaning}
           </div>
-          {/* Arrow */}
-          <div style={{
-            position: 'absolute', bottom: '-5px', left: '50%',
-            transform: 'translateX(-50%) rotate(45deg)',
-            width: '8px', height: '8px',
-            background: 'var(--nx-surface)',
-            borderRight: '1px solid var(--nx-border)',
-            borderBottom: '1px solid var(--nx-border)',
-          }} />
+          {/* Arrow — desktop only */}
+          {!isMobile && (
+            <div style={{
+              position: 'absolute', bottom: '-5px', left: '50%',
+              transform: 'translateX(-50%) rotate(45deg)',
+              width: '8px', height: '8px',
+              background: 'var(--nx-surface)',
+              borderRight: '1px solid var(--nx-border)',
+              borderBottom: '1px solid var(--nx-border)',
+            }} />
+          )}
         </div>
       )}
     </div>
@@ -132,11 +181,7 @@ export default function NodeSection() {
 
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
-      setCanvasScale(1.15)  // Slightly larger in the expanded container
-      gsap.set(
-        document.querySelectorAll('#el-nodo .nx-hotspot'),
-        { display: 'none' }
-      )
+      setCanvasScale(1.0)  // Slightly smaller on mobile to leave room for hotspots
       return
     }
 
@@ -234,6 +279,7 @@ export default function NodeSection() {
                   spec={spec}
                   isActive={active === spec.id}
                   onClick={toggle}
+                  isMobile={isMobile}
                 />
               ))}
 
@@ -318,6 +364,10 @@ export default function NodeSection() {
 
       <style>{`
         .nx-hotspot__tooltip { z-index: 20; }
+        @keyframes tooltipIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
 
         @media (max-width: 768px) {
           #el-nodo .nx-node-grid {
@@ -325,12 +375,21 @@ export default function NodeSection() {
             gap: 2rem !important;
           }
           #el-nodo .nx-node-canvas-wrap {
-            height: 420px !important;
+            height: 360px !important;
             border-radius: 1rem !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             margin-bottom: 1.5rem !important;
           }
-          .nx-hotspot { display: none !important; }
+          #el-nodo .nx-hotspot {
+            display: block !important;
+            width: 28px !important;
+            height: 28px !important;
+            touch-action: manipulation;
+          }
+          #el-nodo .nx-hotspot__ring {
+            width: 18px !important;
+            height: 18px !important;
+          }
           /* Hide desktop cursor hint, show mobile touch hint instead */
           #el-nodo .nx-cursor-hint-desktop { display: none !important; }
           #el-nodo .nx-node-specs { padding-left: 0 !important; padding-top: 1.5rem !important; }

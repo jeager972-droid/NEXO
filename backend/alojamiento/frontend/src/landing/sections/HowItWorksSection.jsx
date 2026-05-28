@@ -17,8 +17,8 @@ const STEPS = [
   },
   {
     num: '02',
-    title: 'El sistema detecta la ausencia',
-    body: 'Si un estudiante no registró presencia, NEXO lo identifica automáticamente y notifica al acudiente vía WhatsApp — sin intervención humana, sin formularios, sin demoras.',
+    title: 'El sistema protege la trazabilidad',
+    body: 'Si un estudiante no registró su ingreso al inicio de la jornada, el acudiente recibe una notificación automática vía WhatsApp. Si registró ingreso pero no aparece en una clase posterior, coordinación recibe una alerta inmediata para actuar antes de que la situación escale.',
   },
   {
     num: '03',

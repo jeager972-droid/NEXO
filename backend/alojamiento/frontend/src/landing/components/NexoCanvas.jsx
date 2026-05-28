@@ -290,10 +290,10 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
       if (!isDragging) return
       isDragging = false
       el.style.cursor = 'grab'
-      // Resume auto-rotation after 2s
+      // Resume auto-rotation after 600ms — feels responsive and fluid
       resumeTimer = setTimeout(() => {
         if (onDragEnd) onDragEnd()
-      }, 2000)
+      }, 600)
     }
 
     // Mouse

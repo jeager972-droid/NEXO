@@ -129,7 +129,7 @@ export default function ProblemSection() {
         ref={innerRef}
         className="section-inner"
         style={{
-          background: 'var(--nx-void)',
+          background: 'linear-gradient(180deg, var(--nx-void) 0%, var(--nx-deep) 100%)',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
           display: 'flex',

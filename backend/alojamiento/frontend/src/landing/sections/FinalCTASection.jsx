@@ -114,7 +114,7 @@ export default function FinalCTASection() {
           style={{
             paddingLeft:   'var(--nx-section-px)',
             paddingRight:  'var(--nx-section-px)',
-            background:    'var(--nx-void)',
+            background:    'linear-gradient(180deg, var(--nx-void) 0%, var(--nx-deep) 100%)',
             display:       'flex',
             alignItems:    'center',
           }}
