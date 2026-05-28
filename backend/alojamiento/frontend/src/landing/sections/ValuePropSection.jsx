@@ -22,7 +22,7 @@ const ROWS = [
   },
   {
     before: 'Los registros existen en papel, vulnerables y dispersos',
-    after:  'Auditoría digital inalterable, descargable en Word o Excel',
+    after:  'Registro automatizado digital disponible para su descarga en Word o Excel',
   },
   {
     before: 'Si se va la luz o el internet, el sistema colapsa',
@@ -38,7 +38,6 @@ export default function ValuePropSection() {
   const subtitleRef = useRef()
   const beforeRef   = useRef()
   const afterRef    = useRef()
-  const ctaRef      = useRef()
 
   // Aplicar arquitectura sticky scroll
   useStickyScroll(wrapperRef, innerRef)
@@ -52,7 +51,7 @@ export default function ValuePropSection() {
     if (isMobile) {
       gsap.set(
         [beforeRef.current, afterRef.current, titleRef.current,
-         subtitleRef.current, ctaRef.current, eyebrowRef.current],
+         subtitleRef.current, eyebrowRef.current],
         { opacity: 1, x: 0, y: 0 }
       )
       return
@@ -110,12 +109,6 @@ export default function ValuePropSection() {
       ease: 'power3.out',
       stagger: 0.08,
     }, '-=0.6')
-
-    .fromTo(ctaRef.current,
-      { opacity: 0, y: 12 },
-      { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' },
-      '-=0.1'
-    )
 
     return () => tl.kill()
   }, [])
@@ -178,15 +171,6 @@ export default function ValuePropSection() {
             </div>
           </div>
 
-          {/* Secondary CTA */}
-          <div ref={ctaRef} style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'center', opacity: 0 }}>
-            <a href="#descarga-resumen" className="nx-link-arrow" style={{ fontSize: '0.875rem' }}>
-              Descarga el resumen ejecutivo para secretarías de educación
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-                <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </a>
-          </div>
         </div>
       </section>
 

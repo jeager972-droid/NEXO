@@ -34,7 +34,7 @@ const PROBLEMS = [
       </svg>
     ),
     title: 'Los estudiantes que nadie ve salir',
-    body: 'Entre el cambio de una clase y la siguiente, entre una salida al baño y el regreso, hay intervalos donde las instituciones pierden trazabilidad sobre sus estudiantes. Cuando ocurre un incidente en ese margen invisible, la responsabilidad institucional queda expuesta sin respaldo documental.',
+    body: 'Entre el cambio de una clase y la siguiente, entre una salida al baño y el regreso, hay intervalos donde las instituciones pierden trazabilidad sobre sus estudiantes. Cuando ocurre un incidente en ese margen invisible, la responsabilidad institucional queda expuesta sin capacidad de acción.',
   },
   {
     id: 'padre',
@@ -47,7 +47,7 @@ const PROBLEMS = [
       </svg>
     ),
     title: 'Las familias fuera del circuito',
-    body: 'Las inasistencias registradas en papel o en sistemas desconectados llegan a los acudientes con retrasos de días — o no llegan. Las familias no forman parte del circuito de información en tiempo real, lo que genera brechas de comunicación que ninguna institución puede permitirse cuando está en juego la seguridad de un menor.',
+    body: 'Las inasistencias registradas en papel o en sistemas desconectados llegan a los acudientes con retrasos de días — o no llegan. Las familias no forman parte del circuito de información en tiempo real, lo que genera brechas de comunicación que ninguna institución puede permitirse cuando está en cuestión el cuidado y la custodia de un menor.',
   },
 ]
 
@@ -56,7 +56,6 @@ export default function ProblemSection() {
   const innerRef = useRef()
   const titleRef = useRef()
   const columnsRef = useRef([])
-  const eyebrowRef = useRef()
   const closingRef = useRef()
 
   useReveal(innerRef)
@@ -70,7 +69,7 @@ export default function ProblemSection() {
 
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
-      gsap.set([columnsRef.current, eyebrowRef.current, closingRef.current], { opacity: 1, y: 0 })
+      gsap.set([columnsRef.current, closingRef.current], { opacity: 1, y: 0 })
       gsap.set(titleRef.current?.querySelectorAll('span') || [],
         { opacity: 1, y: 0 })
       return
@@ -96,14 +95,8 @@ export default function ProblemSection() {
       }
     })
 
-    // Eyebrow
-    tl.fromTo(eyebrowRef.current,
-      { opacity: 0, y: -10 },
-      { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }
-    )
-
     // Título: palabras con stagger 0.07s
-    .to(titleRef.current?.querySelectorAll('span') || [], {
+    tl.to(titleRef.current?.querySelectorAll('span') || [], {
       opacity: 1,
       y: 0,
       duration: 0.6,
@@ -144,10 +137,7 @@ export default function ProblemSection() {
         }}
       >
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
-          {/* Eyebrow */}
-          <div ref={eyebrowRef} className="nx-eyebrow nx-reveal" style={{ marginBottom: '1rem', opacity: 0 }}>
-            El diagnóstico
-          </div>
+          {/* Eyebrow removed */}
 
           {/* CAMBIO 2: Nuevo título — diagnóstico, no acusatorio */}
           <h2
@@ -155,7 +145,7 @@ export default function ProblemSection() {
             className="nx-h2"
             style={{ maxWidth: '700px', marginBottom: '5rem' }}
           >
-            Hay vacíos que el sistema educativo colombiano lleva décadas sin cerrar.
+            Hay vacíos que el sistema educativo colombiano tiene pendiente cubrir — y que afectan a quienes más merecen protección.
           </h2>
 
           {/* 3-column problem grid */}
@@ -207,7 +197,7 @@ export default function ProblemSection() {
               color: 'var(--nx-text)',
               fontStyle: 'italic',
             }}>
-              NEXO no es una aplicación más. Es la infraestructura que cierra estos tres vacíos
+              NEXO no es una carga más. Es la infraestructura que cierra estos tres vacíos
               simultáneamente, en tiempo real, sin depender de la conexión a internet
               de las instituciones.
             </p>

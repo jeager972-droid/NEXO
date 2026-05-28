@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ContactModal from '../components/ContactModal'
+import LegalModal from '../components/LegalModal'
 import { useStickyScroll } from '../components/useStickyScroll'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
@@ -19,6 +20,7 @@ export default function FinalCTASection() {
   const contactRef  = useRef()
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [legalModal, setLegalModal] = useState(null)
 
   // Aplicar arquitectura sticky scroll
   useStickyScroll(wrapperRef, innerRef, { isLast: true })
@@ -103,6 +105,7 @@ export default function FinalCTASection() {
     <>
       {/* CAMBIO 5: Modal */}
       {modalOpen && <ContactModal onClose={() => setModalOpen(false)} />}
+      {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
 
       <div ref={wrapperRef} className="section-wrapper" id="contacto">
         <section
@@ -148,7 +151,7 @@ export default function FinalCTASection() {
               style={{ maxWidth: '520px', margin: '0 auto 3rem', opacity: 0 }}
             >
               La implementación de NEXO es más rápida de lo que se imagina.
-              Una conversación es suficiente para saber si la institución está lista.
+              Una conversación es suficiente para saber si la institución está lista para empezar el proceso.
             </p>
 
             {/* Botones */}
@@ -172,16 +175,6 @@ export default function FinalCTASection() {
               >
                 Quiero que NEXO llegue a mi institución
               </button>
-              <a
-                href="https://nexo-bay-mu.vercel.app/app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                id="final-cta-proposal"
-                className="nx-btn-ghost"
-                style={{ fontSize: '0.95rem', padding: '1rem 2rem', opacity: 0 }}
-              >
-                Descargar propuesta técnica
-              </a>
             </div>
 
             {/* Micro-copy */}
@@ -205,7 +198,7 @@ export default function FinalCTASection() {
               }}
             >
               <a
-                href="mailto:contacto@nexo.edu.co"
+                href="mailto:jhonedisonalvarez21@gmail.com"
                 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.875rem', color: 'var(--nx-muted)', transition: 'color 0.25s' }}
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--nx-text)'}
                 onMouseLeave={e => e.currentTarget.style.color = 'var(--nx-muted)'}
@@ -214,13 +207,13 @@ export default function FinalCTASection() {
                   <rect x="1" y="3" width="14" height="10" rx="1.5"/>
                   <polyline points="1,3 8,9 15,3"/>
                 </svg>
-                contacto@nexo.edu.co
+                jhonedisonalvarez21@gmail.com
               </a>
 
               <div style={{ width: '1px', height: '16px', background: 'var(--nx-border)' }} aria-hidden />
 
               <a
-                href="https://wa.me/573100000000"
+                href="https://wa.me/573148622367"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.875rem', color: 'var(--nx-muted)', transition: 'color 0.25s' }}
@@ -230,8 +223,49 @@ export default function FinalCTASection() {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M14 10.67c0 .23-.05.45-.16.66a2.74 2.74 0 01-.42.6c-.27.3-.56.45-.88.46-.23 0-.47-.05-.73-.16L8 9.7 3.2 12.23a1.8 1.8 0 01-.73.16 1.4 1.4 0 01-.88-.46 2.74 2.74 0 01-.42-.6A1.6 1.6 0 011 10.67V3.4c0-.62.22-1.15.67-1.6A2.17 2.17 0 013.27 1.1h9.46c.62 0 1.15.23 1.6.7.45.45.67.98.67 1.6v7.27z"/>
                 </svg>
-                +57 310 000 0000 (WhatsApp)
+                +57 314 862 2367 (WhatsApp)
               </a>
+            </div>
+
+            {/* Legal links */}
+            <div style={{
+              marginTop: '2.5rem',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              flexWrap: 'wrap',
+              fontSize: '0.75rem',
+              color: 'var(--nx-muted)',
+            }}>
+              <button
+                type="button"
+                onClick={() => setLegalModal('privacy')}
+                style={{ background: 'none', border: 'none', color: 'var(--nx-muted)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.25rem 0.4rem', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--nx-text)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--nx-muted)'}
+              >
+                Política de privacidad
+              </button>
+              <span style={{ color: 'var(--nx-border)' }}>|</span>
+              <button
+                type="button"
+                onClick={() => setLegalModal('treatment')}
+                style={{ background: 'none', border: 'none', color: 'var(--nx-muted)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.25rem 0.4rem', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--nx-text)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--nx-muted)'}
+              >
+                Tratamiento de datos
+              </button>
+              <span style={{ color: 'var(--nx-border)' }}>|</span>
+              <button
+                type="button"
+                onClick={() => setLegalModal('terms')}
+                style={{ background: 'none', border: 'none', color: 'var(--nx-muted)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.25rem 0.4rem', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--nx-text)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--nx-muted)'}
+              >
+                Términos de uso
+              </button>
             </div>
           </div>
         </section>

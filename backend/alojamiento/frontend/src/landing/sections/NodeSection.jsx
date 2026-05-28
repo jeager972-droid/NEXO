@@ -32,14 +32,14 @@ const SPECS = [
   },
   {
     id: 'encrypt',
-    label: 'Grado militar',
-    meaning: 'Los datos biométricos nunca salen del nodo en formato legible.',
+    label: 'Encriptado de extremo a extremo',
+    meaning: 'Los datos biométricos viajan y se almacenan con encriptación completa en cada capa del sistema.',
     hotspotPos: { top: '30%', right: '18%' },
   },
   {
     id: 'warranty',
-    label: 'Garantía 5 años',
-    meaning: 'Si falla, lo reemplazamos. Sin procesos. Sin costos ocultos.',
+    label: 'Cobertura total o parcial ante daños',
+    meaning: '',
     hotspotPos: { top: '62%', right: '14%' },
   },
 ]
@@ -309,7 +309,7 @@ export default function NodeSection() {
               ))}
 
               <p className="nx-micro" style={{ marginTop: '1.5rem', paddingLeft: '0.75rem' }}>
-                El 70% de los costos de daño por causas naturales o ambientales son cubiertos por NEXO durante la vigencia del contrato.
+                El 70% de los costos de daño por causas naturales o ambientales son cubiertos por NEXO durante los primeros 5 años.
               </p>
             </div>
           </div>

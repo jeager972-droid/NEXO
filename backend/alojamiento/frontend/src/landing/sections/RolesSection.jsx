@@ -22,10 +22,9 @@ const ROLES = [
       </svg>
     ),
     headline: 'La firma institucional queda protegida.',
-    body: 'Los rectores acceden a la auditoría completa de su institución. Cada acción de cada rol queda registrada — incluyendo quién borró un registro y a qué hora. La trazabilidad no depende de la memoria de nadie.',
+    body: 'Los rectores tienen acceso centralizado a la información de su institución — lo que ocurre, cuándo ocurre y qué acciones se tomaron. Todo disponible para accionar con respaldo real.',
     features: [
       'Auditoría completa con marca de tiempo por acción',
-      'Registro de quién eliminó o modificó datos',
       'Informes descargables listos para entes de control',
     ],
   },
@@ -47,7 +46,7 @@ const ROLES = [
     features: [
       'Panel de patrones y anomalías en tiempo real',
       'Alertas automáticas configurables por umbral',
-      'Historial completo por estudiante exportable',
+      'Historial completo por estudiante a disposición del coordinador',
     ],
   },
   {
@@ -61,30 +60,12 @@ const ROLES = [
         <path d="M2 12l10 5 10-5"/>
       </svg>
     ),
-    headline: 'La carga administrativa de los docentes se reduce a cero.',
+    headline: 'La carga administrativa de los docentes se reduce a gran escala, permitiendo orientar ese tiempo al desarrollo pedagógico.',
     body: 'El registro de asistencia ocurre automáticamente. Los docentes pueden citar acudientes con un botón, reportar daños o incidentes desde su teléfono, y dedicar el tiempo de clase exclusivamente a enseñar.',
     features: [
       'Asistencia automática — sin intervención manual',
       'Citar acudientes desde el móvil en un toque',
       'Reportes de incidentes y daños desde la app',
-    ],
-  },
-  {
-    id: 'secretaria',
-    label: 'Secretaría de Educación',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 3h18a1 1 0 011 1v14a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1z"/>
-        <polyline points="17 3 17 10 14 8 11 10 11 3"/>
-      </svg>
-    ),
-    headline: 'Trazabilidad a escala municipal o departamental.',
-    body: 'Las secretarías de educación implementan custodia estudiantil en todas las instituciones de su jurisdicción. Acceden a reportes consolidados por sede, y justifican la inversión pública con datos reales descargables para rendición de cuentas.',
-    features: [
-      'Reportes consolidados por institución y sede',
-      'Panel de supervisión multi-institución',
-      'Exportación de datos para rendición de cuentas',
     ],
   },
 ]

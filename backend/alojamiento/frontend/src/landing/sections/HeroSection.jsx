@@ -135,19 +135,19 @@ export default function HeroSection() {
               >
                 {/* Línea 1 */}
                 <span ref={line1Ref} style={{ display: 'block', opacity: 0, shortcut: 'none', willChange: 'transform, opacity' }}>
-                  Cada minuto que un estudiante
+                  Hoy por hoy, hay una brecha de control sobre la custodia y presencia de un estudiante,
                 </span>
                 {/* Línea 2 — stagger 0.15s */}
                 <span ref={line2Ref} style={{ display: 'block', opacity: 0, shortcut: 'none', willChange: 'transform, opacity' }}>
-                  desaparece, la institución responde.
+                  poniéndolos en riesgo a ellos y a quienes participan en su proceso educativo.
                 </span>
               </h1>
 
               {/* Subtítulo */}
               <p ref={subtitleRef} className="nx-body" style={{ maxWidth: '500px', marginBottom: '2.5rem', opacity: 0 }}>
-                NEXO cierra ese vacío. Control de presencia, trazabilidad completa y comunicación
-                institucional automatizada — en una infraestructura que opera sin internet,
-                sin excusas y sin puntos de falla.
+                NEXO cierra ese vacío. Control de presencia, trazabilidad completa, comunicación
+                institucional y procesos automatizados con análisis inteligente en tiempo real.
+                En una infraestructura que opera con conexión autónoma y batería de respaldo ante cortes de luz.
               </p>
 
               {/* Mobile-only: 3D node inline between subtitle and CTA */}
@@ -191,7 +191,7 @@ export default function HeroSection() {
 
               {/* Micro-copy */}
               <p ref={microRef} className="nx-micro" style={{ opacity: 0 }}>
-                Sin compromisos · Presentación adaptada al contexto de la institución.
+                NEXO desea amparar la necesidad de corresponsabilidad familia-escuela, alerta temprana y trazabilidad de eventos en el sistema educativo colombiano.
               </p>
             </div>
 

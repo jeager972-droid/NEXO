@@ -13,7 +13,7 @@ const STEPS = [
   {
     num: '01',
     title: 'El estudiante llega',
-    body: 'Coloca su huella en el nodo al entrar al salón. El registro ocurre en menos de un segundo. El profesor ya está enseñando.',
+    body: 'Coloca su huella en el nodo al entrar al salón. El registro ocurre al instante.',
   },
   {
     num: '02',
@@ -23,7 +23,7 @@ const STEPS = [
   {
     num: '03',
     title: 'La institución tiene visibilidad completa',
-    body: 'Coordinadores y rectores acceden en tiempo real a un panel donde cada movimiento dentro de la institución queda registrado, auditado y descargable.',
+    body: 'Coordinadores y rectores tienen a su disposición un panel en tiempo real con la información de la institución. Los profesores tienen al alcance de un botón su operación diaria: comunicación, registros, citaciones y más.',
   },
   {
     num: '04',

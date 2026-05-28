@@ -305,12 +305,6 @@ export default function DownloadSection() {
             ))}
           </div>
 
-          {/* Micro-copy */}
-          <p className="nx-micro nx-reveal nx-reveal-delay-4"
-            style={{ textAlign: 'center', marginTop: '2.5rem' }}>
-            Descarga gratuita para instituciones vinculadas ·
-            El acceso completo se activa cuando la institución implementa NEXO.
-          </p>
         </div>
       </section>
 

@@ -146,18 +146,6 @@ export default function SecuritySection() {
 
               <Shield />
 
-              <p
-                style={{
-                  marginTop: '2rem',
-                  fontSize: '0.875rem',
-                  fontStyle: 'italic',
-                  color: 'var(--nx-muted)',
-                  lineHeight: 1.6,
-                  maxWidth: '380px',
-                }}
-              >
-                La confianza de una institución pública no se gana con palabras. Se demuestra con arquitectura.
-              </p>
             </div>
 
             {/* Right — trust points grid */}
