@@ -307,8 +307,8 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
       startDrag(e.touches[0].clientX, e.touches[0].clientY)
     }
     const onTouchMove = (e) => {
+      e.preventDefault() // block page scroll during drag — MUST be before isDragging check
       if (!isDragging) return
-      e.preventDefault() // block page scroll during drag
       moveDrag(e.touches[0].clientX, e.touches[0].clientY)
     }
     const onTouchEnd = () => endDrag()
@@ -316,18 +316,18 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     el.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
-    el.addEventListener('touchstart', onTouchStart, { passive: false }) // non-passive so preventDefault works
-    el.addEventListener('touchmove', onTouchMove, { passive: false }) // non-passive so preventDefault works
-    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onTouchEnd, { passive: true })
 
     return () => {
       clearTimeout(resumeTimer)
       el.removeEventListener('mousedown', onMouseDown)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
-      el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove', onTouchMove) // non-passive cleanup
-      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchstart', onTouchStart, { passive: false })
+      window.removeEventListener('touchmove', onTouchMove, { passive: false })
+      window.removeEventListener('touchend', onTouchEnd, { passive: true })
     }
   }, [onDrag, onDragStart, onDragEnd])
 
