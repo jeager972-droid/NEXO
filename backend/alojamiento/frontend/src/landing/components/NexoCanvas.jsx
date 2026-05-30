@@ -301,19 +301,14 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     const onMouseMove = (e) => moveDrag(e.clientX, e.clientY)
     const onMouseUp = () => endDrag()
 
-    // Touch — discriminate between vertical scroll and horizontal rotation
-    const onTouchStart = (e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)
+    // Touch — capture all gestures for rotation in all directions
+    const onTouchStart = (e) => {
+      e.preventDefault() // block page scroll when touch starts inside canvas
+      startDrag(e.touches[0].clientX, e.touches[0].clientY)
+    }
     const onTouchMove = (e) => {
       if (!isDragging) return
-      const dx = e.touches[0].clientX - prev.x
-      const dy = e.touches[0].clientY - prev.y
-      // If movement is mostly vertical → release to page scroll
-      if (Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(dx) < 8) {
-        endDrag()
-        return
-      }
-      // Horizontal or diagonal → rotate the model
-      e.preventDefault() // only called when rotating, not scrolling
+      e.preventDefault() // block page scroll during drag
       moveDrag(e.touches[0].clientX, e.touches[0].clientY)
     }
     const onTouchEnd = () => endDrag()
@@ -321,7 +316,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     el.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: false }) // non-passive so preventDefault works
     el.addEventListener('touchmove', onTouchMove, { passive: false }) // non-passive so preventDefault works
     el.addEventListener('touchend', onTouchEnd, { passive: true })
 
@@ -346,7 +341,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
         inset: 0,
         zIndex: 10,
         cursor: 'grab',
-        touchAction: isMobileDevice ? 'pan-y' : 'none', // Mobile: allow vertical scroll, JS handles horizontal rotation
+        touchAction: 'none', // Block all browser gestures inside canvas
       }}
     />
   )
