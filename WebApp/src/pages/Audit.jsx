@@ -75,7 +75,7 @@ const Audit = () => {
       id: 'historicos',
       title: 'Históricos',
       icon: History,
-      subdivisions: ['Histórico estudiante', 'Histórico docente', 'Histórico asistencia', 'Histórico disciplina', 'Histórico permisos', 'Histórico mensajes', 'Buscar histórico', 'Descargar individual', 'Descargar consolidado'],
+      subdivisions: ['Histórico docente', 'Histórico asistencia', 'Histórico disciplina', 'Histórico permisos', 'Histórico mensajes', 'Buscar histórico', 'Descargar individual', 'Descargar consolidado'],
       exports: ['Excel', 'PDF']
     },
     {

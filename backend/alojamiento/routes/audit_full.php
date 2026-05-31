@@ -24,6 +24,29 @@ function auditError($msg, $code = 500) {
     auditJson(['status' => 'error', 'message' => $msg], $code);
 }
 
+function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
+    $conds = [];
+    $params = [];
+    $from = $_GET['from'] ?? null;
+    $to   = $_GET['to']   ?? null;
+    if ($from && $to) {
+        $conds[] = "({$tableAlias}.{$dateCol} AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?";
+        $params[] = $from;
+        $params[] = $to;
+    }
+    $groupId = $_GET['group_id'] ?? null;
+    $studentId = $_GET['student_id'] ?? null;
+    if ($groupId) {
+        $conds[] = "{$tableAlias}.{$studentCol} IN (SELECT student_id FROM student_group_assignments WHERE group_id = ? AND active = TRUE)";
+        $params[] = $groupId;
+    }
+    if ($studentId) {
+        $conds[] = "{$tableAlias}.{$studentCol} = ?";
+        $params[] = $studentId;
+    }
+    return ['conds' => $conds, 'params' => $params];
+}
+
 // ============================================================================
 // 1. ASISTENCIA
 // ============================================================================
@@ -31,16 +54,20 @@ function auditError($msg, $code = 500) {
 // Reporte general
 if ($cleanPath === '/audit/attendance/general' && $method === 'GET') {
     try {
+        $f = auditFilters('be', 'event_timestamp');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
+
         $stmt = $conn->prepare("
             SELECT
                 COUNT(*) FILTER (WHERE event_type LIKE 'INGRESO_%') AS total_entries,
                 COUNT(*) FILTER (WHERE event_type LIKE 'INGRESO_TARDE%') AS late_count,
                 COUNT(*) FILTER (WHERE event_type LIKE 'INASISTENCIA%') AS absence_count
-            FROM biometric_events
-            WHERE school_id = ?
-              AND (event_timestamp AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+            FROM biometric_events be
+            WHERE be.school_id = ?
+              {$where}
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $stmt2 = $conn->prepare("
@@ -48,11 +75,11 @@ if ($cleanPath === '/audit/attendance/general' && $method === 'GET') {
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
             WHERE be.school_id = ?
-              AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+              {$where}
             ORDER BY be.event_timestamp DESC
             LIMIT 100
         ");
-        $stmt2->execute([$schoolId]);
+        $stmt2->execute($params);
 
         auditJson(['status' => 'ok', 'stats' => $stats, 'data' => $stmt2->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
@@ -61,16 +88,20 @@ if ($cleanPath === '/audit/attendance/general' && $method === 'GET') {
 // Inasistencias
 if ($cleanPath === '/audit/attendance/absences' && $method === 'GET') {
     try {
+        $f = auditFilters('ai', 'detected_at');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT ai.incident_id, ai.incident_type, ai.detected_at, ai.resolved,
                    s.first_name, s.last_name, s.document_number
             FROM attendance_incidents ai
             LEFT JOIN students s ON ai.student_id = s.student_id
             WHERE ai.school_id = ? AND ai.incident_type = 'INASISTENCIA'
+              {$where}
             ORDER BY ai.detected_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -78,16 +109,20 @@ if ($cleanPath === '/audit/attendance/absences' && $method === 'GET') {
 // Llegadas tarde
 if ($cleanPath === '/audit/attendance/lates' && $method === 'GET') {
     try {
+        $f = auditFilters('be', 'event_timestamp');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT be.event_id, be.event_type, be.event_timestamp,
                    s.first_name, s.last_name, s.document_number
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
             WHERE be.school_id = ? AND be.event_type LIKE 'INGRESO_TARDE%'
+              {$where}
             ORDER BY be.event_timestamp DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -95,16 +130,20 @@ if ($cleanPath === '/audit/attendance/lates' && $method === 'GET') {
 // Evasión interna
 if ($cleanPath === '/audit/attendance/evasion' && $method === 'GET') {
     try {
+        $f = auditFilters('ai', 'detected_at');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT ai.incident_id, ai.incident_type, ai.detected_at, ai.resolved,
                    s.first_name, s.last_name, s.document_number
             FROM attendance_incidents ai
             LEFT JOIN students s ON ai.student_id = s.student_id
             WHERE ai.school_id = ? AND ai.incident_type = 'EVASION_INTERNA'
+              {$where}
             ORDER BY ai.detected_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -165,16 +204,20 @@ if ($cleanPath === '/audit/attendance/by-student' && $method === 'GET') {
 // Incidentes
 if ($cleanPath === '/audit/discipline/incidents' && $method === 'GET') {
     try {
+        $f = auditFilters('si', 'detected_at', 'related_student_id');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved,
                    s.first_name, s.last_name, s.document_number
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
             WHERE si.school_id = ?
+              {$where}
             ORDER BY si.detected_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -182,16 +225,20 @@ if ($cleanPath === '/audit/discipline/incidents' && $method === 'GET') {
 // Vulneraciones
 if ($cleanPath === '/audit/discipline/violations' && $method === 'GET') {
     try {
+        $f = auditFilters('si', 'detected_at', 'related_student_id');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved,
                    s.first_name, s.last_name
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
             WHERE si.school_id = ? AND si.severity_level IN ('HIGH','CRITICAL')
+              {$where}
             ORDER BY si.detected_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -199,6 +246,9 @@ if ($cleanPath === '/audit/discipline/violations' && $method === 'GET') {
 // Intentos salón incorrecto
 if ($cleanPath === '/audit/discipline/wrong-classroom' && $method === 'GET') {
     try {
+        $f = auditFilters('be', 'event_timestamp');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT be.event_id, be.event_type, be.event_result, be.event_timestamp, be.confidence_score,
                    s.first_name, s.last_name, c.classroom_name
@@ -206,10 +256,11 @@ if ($cleanPath === '/audit/discipline/wrong-classroom' && $method === 'GET') {
             LEFT JOIN students s ON be.student_id = s.student_id
             LEFT JOIN classrooms c ON be.classroom_id = c.classroom_id
             WHERE be.school_id = ? AND be.event_result = 'WRONG_CLASSROOM'
+              {$where}
             ORDER BY be.event_timestamp DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -244,16 +295,20 @@ if ($cleanPath === '/audit/discipline/biometric-spam' && $method === 'GET') {
 // Reporte disciplinario
 if ($cleanPath === '/audit/discipline/reports' && $method === 'GET') {
     try {
+        $f = auditFilters('si', 'detected_at', 'related_student_id');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved,
                    s.first_name, s.last_name, s.document_number
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
             WHERE si.school_id = ?
+              {$where}
             ORDER BY si.detected_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -295,6 +350,9 @@ if ($cleanPath === '/audit/discipline/student-history' && $method === 'GET') {
 // Salidas clase
 if ($cleanPath === '/audit/permissions/class-exits' && $method === 'GET') {
     try {
+        $f = auditFilters('cea', 'exit_time');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT cea.authorization_id, cea.exit_time, cea.return_time, cea.authorization_reason,
                    s.first_name, s.last_name, u.first_name AS authorized_by_first, u.last_name AS authorized_by_last
@@ -302,10 +360,11 @@ if ($cleanPath === '/audit/permissions/class-exits' && $method === 'GET') {
             LEFT JOIN students s ON cea.student_id = s.student_id
             LEFT JOIN users u ON cea.authorized_by_user_id = u.user_id
             WHERE cea.school_id = ?
+              {$where}
             ORDER BY cea.exit_time DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -313,6 +372,9 @@ if ($cleanPath === '/audit/permissions/class-exits' && $method === 'GET') {
 // Salidas colegio
 if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
     try {
+        $f = auditFilters('sea', 'exit_time');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT sea.authorization_id, sea.exit_time, sea.expected_return_time, sea.actual_return_time,
                    sea.status, sea.authorization_reason,
@@ -321,10 +383,11 @@ if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
             LEFT JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN users u ON sea.authorized_by_user_id = u.user_id
             WHERE sea.school_id = ?
+              {$where}
             ORDER BY sea.exit_time DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -332,6 +395,9 @@ if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
 // Salidas pedagógicas
 if ($cleanPath === '/audit/permissions/pedagogical' && $method === 'GET') {
     try {
+        $f = auditFilters('pta', 'departure_time');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT pta.authorization_id, pta.destination, pta.departure_time, pta.return_time, pta.purpose,
                    s.first_name, s.last_name, u.first_name AS authorized_by_first, u.last_name AS authorized_by_last
@@ -339,10 +405,11 @@ if ($cleanPath === '/audit/permissions/pedagogical' && $method === 'GET') {
             LEFT JOIN students s ON pta.student_id = s.student_id
             LEFT JOIN users u ON pta.authorized_by_user_id = u.user_id
             WHERE pta.school_id = ?
+              {$where}
             ORDER BY pta.departure_time DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -350,6 +417,9 @@ if ($cleanPath === '/audit/permissions/pedagogical' && $method === 'GET') {
 // Retornos pendientes
 if ($cleanPath === '/audit/permissions/pending-returns' && $method === 'GET') {
     try {
+        $f = auditFilters('sea', 'exit_time');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT sea.authorization_id, sea.exit_time, sea.expected_return_time, sea.status,
                    s.first_name, s.last_name, u.first_name AS authorized_by_first, u.last_name AS authorized_by_last
@@ -357,10 +427,11 @@ if ($cleanPath === '/audit/permissions/pending-returns' && $method === 'GET') {
             LEFT JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN users u ON sea.authorized_by_user_id = u.user_id
             WHERE sea.school_id = ? AND sea.actual_return_time IS NULL AND sea.status IN ('APPROVED','PENDING')
+              {$where}
             ORDER BY sea.exit_time DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }

@@ -1,14 +1,14 @@
 import client from './client';
 
-const get = async (path) => {
-  const response = await client.get(path);
+const get = async (path, params = {}) => {
+  const response = await client.get(path, { params });
   return response.data ?? {};
 };
 
 export const auditApi = {
   // Legacy
-  getGlobalLogs: () => get('/audit/global'),
-  getIntegrity: () => get('/audit/integrity'),
+  getGlobalLogs: (params) => get('/audit/global', params),
+  getIntegrity: (params) => get('/audit/integrity', params),
 
   // Auxiliares
   getGroups: () => get('/audit/groups'),
@@ -16,74 +16,71 @@ export const auditApi = {
   getStaff: () => get('/audit/staff'),
 
   // 1. Asistencia
-  getAttendanceGeneral: () => get('/audit/attendance/general'),
-  getAttendanceAbsences: () => get('/audit/attendance/absences'),
-  getAttendanceLates: () => get('/audit/attendance/lates'),
-  getAttendanceEvasion: () => get('/audit/attendance/evasion'),
-  getAttendanceByGroup: () => get('/audit/attendance/by-group'),
-  getAttendanceByStudent: (q) => get(`/audit/attendance/by-student?q=${encodeURIComponent(q || '')}`),
+  getAttendanceGeneral: (params) => get('/audit/attendance/general', params),
+  getAttendanceAbsences: (params) => get('/audit/attendance/absences', params),
+  getAttendanceLates: (params) => get('/audit/attendance/lates', params),
+  getAttendanceEvasion: (params) => get('/audit/attendance/evasion', params),
 
   // 2. Disciplina
-  getDisciplineIncidents: () => get('/audit/discipline/incidents'),
-  getDisciplineViolations: () => get('/audit/discipline/violations'),
-  getDisciplineWrongClassroom: () => get('/audit/discipline/wrong-classroom'),
-  getDisciplineBiometricSpam: () => get('/audit/discipline/biometric-spam'),
-  getDisciplineReports: () => get('/audit/discipline/reports'),
-  getDisciplineStudentHistory: (studentId) => get(`/audit/discipline/student-history?student_id=${studentId}`),
+  getDisciplineIncidents: (params) => get('/audit/discipline/incidents', params),
+  getDisciplineViolations: (params) => get('/audit/discipline/violations', params),
+  getDisciplineWrongClassroom: (params) => get('/audit/discipline/wrong-classroom', params),
+  getDisciplineBiometricSpam: (params) => get('/audit/discipline/biometric-spam', params),
+  getDisciplineReports: (params) => get('/audit/discipline/reports', params),
 
   // 3. Permisos y Salidas
-  getPermissionsClassExits: () => get('/audit/permissions/class-exits'),
-  getPermissionsSchoolExits: () => get('/audit/permissions/school-exits'),
-  getPermissionsPedagogical: () => get('/audit/permissions/pedagogical'),
-  getPermissionsPendingReturns: () => get('/audit/permissions/pending-returns'),
-  getPermissionsHistory: (from, to) => get(`/audit/permissions/history?from=${from}&to=${to}`),
+  getPermissionsClassExits: (params) => get('/audit/permissions/class-exits', params),
+  getPermissionsSchoolExits: (params) => get('/audit/permissions/school-exits', params),
+  getPermissionsPedagogical: (params) => get('/audit/permissions/pedagogical', params),
+  getPermissionsPendingReturns: (params) => get('/audit/permissions/pending-returns', params),
+  getPermissionsHistory: (params) => get('/audit/permissions/history', params),
 
   // 4. Mensajería
-  getMessagingWhatsAppSent: () => get('/audit/messaging/whatsapp-sent'),
-  getMessagingGuardianReplies: () => get('/audit/messaging/guardian-replies'),
-  getMessagingFailed: () => get('/audit/messaging/failed'),
-  getMessagingCitations: () => get('/audit/messaging/citations'),
-  getMessagingInternal: () => get('/audit/messaging/internal'),
-  getMessagingConversations: () => get('/audit/messaging/conversations'),
+  getMessagingWhatsAppSent: (params) => get('/audit/messaging/whatsapp-sent', params),
+  getMessagingGuardianReplies: (params) => get('/audit/messaging/guardian-replies', params),
+  getMessagingFailed: (params) => get('/audit/messaging/failed', params),
+  getMessagingCitations: (params) => get('/audit/messaging/citations', params),
+  getMessagingInternal: (params) => get('/audit/messaging/internal', params),
+  getMessagingConversations: (params) => get('/audit/messaging/conversations', params),
 
   // 5. Actividad Docente
-  getTeacherActivity: () => get('/audit/teacher/activity'),
-  getTeacherClasses: () => get('/audit/teacher/classes'),
-  getTeacherPermissions: () => get('/audit/teacher/permissions'),
-  getTeacherIncidents: () => get('/audit/teacher/incidents'),
-  getTeacherSystemActivity: () => get('/audit/teacher/system-activity'),
+  getTeacherActivity: (params) => get('/audit/teacher/activity', params),
+  getTeacherClasses: (params) => get('/audit/teacher/classes', params),
+  getTeacherPermissions: (params) => get('/audit/teacher/permissions', params),
+  getTeacherIncidents: (params) => get('/audit/teacher/incidents', params),
+  getTeacherSystemActivity: (params) => get('/audit/teacher/system-activity', params),
 
   // 6. Seguridad
-  getSecurityGlobal: () => get('/audit/security/global'),
-  getSecurityAccesses: () => get('/audit/security/accesses'),
-  getSecuritySessions: () => get('/audit/security/sessions'),
-  getSecurityCommands: () => get('/audit/security/commands'),
-  getSecurityAdminActivity: () => get('/audit/security/admin-activity'),
-  getSecurityFailedAttempts: () => get('/audit/security/failed-attempts'),
+  getSecurityGlobal: (params) => get('/audit/security/global', params),
+  getSecurityAccesses: (params) => get('/audit/security/accesses', params),
+  getSecuritySessions: (params) => get('/audit/security/sessions', params),
+  getSecurityCommands: (params) => get('/audit/security/commands', params),
+  getSecurityAdminActivity: (params) => get('/audit/security/admin-activity', params),
+  getSecurityFailedAttempts: (params) => get('/audit/security/failed-attempts', params),
 
   // 7. Alertas SOS
-  getSosAlerts: () => get('/audit/sos/alerts'),
-  getSosResolved: () => get('/audit/sos/resolved'),
-  getSosResolutionTime: () => get('/audit/sos/resolution-time'),
-  getSosHistory: () => get('/audit/sos/history'),
+  getSosAlerts: (params) => get('/audit/sos/alerts', params),
+  getSosResolved: (params) => get('/audit/sos/resolved', params),
+  getSosResolutionTime: (params) => get('/audit/sos/resolution-time', params),
+  getSosHistory: (params) => get('/audit/sos/history', params),
 
   // 8. Históricos
-  getHistoricalStudent: (studentId) => get(`/audit/historical/student?student_id=${studentId}`),
-  getHistoricalTeacher: (userId) => get(`/audit/historical/teacher?user_id=${userId || ''}`),
-  getHistoricalAttendance: (from, to) => get(`/audit/historical/attendance?from=${from}&to=${to}`),
-  getHistoricalDiscipline: (from, to) => get(`/audit/historical/discipline?from=${from}&to=${to}`),
-  getHistoricalPermissions: (from, to) => get(`/audit/historical/permissions?from=${from}&to=${to}`),
-  getHistoricalMessaging: (from, to) => get(`/audit/historical/messaging?from=${from}&to=${to}`),
-  getHistoricalSearch: (q) => get(`/audit/historical/search?q=${encodeURIComponent(q)}`),
-  getHistoricalDownload: (type, id) => get(`/audit/historical/download?type=${type}&id=${id}`),
-  getHistoricalDownloadConsolidated: (from, to) => get(`/audit/historical/download-consolidated?from=${from}&to=${to}`),
+  getHistoricalStudent: (params) => get('/audit/historical/student', params),
+  getHistoricalTeacher: (params) => get('/audit/historical/teacher', params),
+  getHistoricalAttendance: (params) => get('/audit/historical/attendance', params),
+  getHistoricalDiscipline: (params) => get('/audit/historical/discipline', params),
+  getHistoricalPermissions: (params) => get('/audit/historical/permissions', params),
+  getHistoricalMessaging: (params) => get('/audit/historical/messaging', params),
+  getHistoricalSearch: (params) => get('/audit/historical/search', params),
+  getHistoricalDownload: (params) => get('/audit/historical/download', params),
+  getHistoricalDownloadConsolidated: (params) => get('/audit/historical/download-consolidated', params),
 
   // 9. Consolidados
-  getConsolidatedAttendance: (from, to) => get(`/audit/consolidated/attendance?from=${from}&to=${to}`),
-  getConsolidatedDiscipline: (from, to) => get(`/audit/consolidated/discipline?from=${from}&to=${to}`),
-  getConsolidatedPermissions: (from, to) => get(`/audit/consolidated/permissions?from=${from}&to=${to}`),
-  getConsolidatedMessaging: (from, to) => get(`/audit/consolidated/messaging?from=${from}&to=${to}`),
-  getConsolidatedTeacher: (from, to) => get(`/audit/consolidated/teacher?from=${from}&to=${to}`),
-  getConsolidatedSecurity: (from, to) => get(`/audit/consolidated/security?from=${from}&to=${to}`),
-  getConsolidatedInstitutional: (from, to) => get(`/audit/consolidated/institutional?from=${from}&to=${to}`),
+  getConsolidatedAttendance: (params) => get('/audit/consolidated/attendance', params),
+  getConsolidatedDiscipline: (params) => get('/audit/consolidated/discipline', params),
+  getConsolidatedPermissions: (params) => get('/audit/consolidated/permissions', params),
+  getConsolidatedMessaging: (params) => get('/audit/consolidated/messaging', params),
+  getConsolidatedTeacher: (params) => get('/audit/consolidated/teacher', params),
+  getConsolidatedSecurity: (params) => get('/audit/consolidated/security', params),
+  getConsolidatedInstitutional: (params) => get('/audit/consolidated/institutional', params),
 };

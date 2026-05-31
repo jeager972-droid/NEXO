@@ -95,12 +95,12 @@ export default function HowItWorksSection() {
             start: 'top 80%',
             toggleActions: 'play none none none',
             onEnter: () => {
-              const node = el.querySelector('.nx-timeline__node')
-              if (node) {
-                gsap.to(node, {
+              const disc = el.querySelector('.nx-timeline__node-disc')
+              if (disc) {
+                gsap.to(disc, {
                   borderColor: 'var(--nx-green)',
                   color: 'var(--nx-green)',
-                  backgroundColor: 'rgba(45, 110, 48, 0.08)',
+                  backgroundColor: '#e8f5e9',
                   boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
                   duration: 0.4,
                 })
@@ -161,10 +161,10 @@ export default function HowItWorksSection() {
               duration: 0.6,
               ease: 'power3.out',
             })
-            gsap.to(stepsRef.current[i].querySelector('.nx-timeline__node'), {
+            gsap.to(stepsRef.current[i].querySelector('.nx-timeline__node-disc'), {
               borderColor: 'var(--nx-green)',
               color: 'var(--nx-green)',
-              backgroundColor: 'rgba(45, 110, 48, 0.08)',
+              backgroundColor: '#e8f5e9',
               boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
               duration: 0.4,
             })
@@ -240,6 +240,7 @@ export default function HowItWorksSection() {
                 right: 'calc(1.25rem + 20px)',
                 height: '2px',
                 background: 'var(--nx-border)',
+                zIndex: 0,
               }}
               aria-hidden="true"
             />
@@ -255,6 +256,7 @@ export default function HowItWorksSection() {
                 width: 'calc(100% - 2.5rem - 40px)',
                 height: '2px',
                 pointerEvents: 'none',
+                zIndex: 0,
               }}
               aria-hidden="true"
             >
@@ -288,7 +290,9 @@ export default function HowItWorksSection() {
                 data-step={i}
                 style={{ position: 'relative', zIndex: 2 }}
               >
-                <div className="nx-timeline__node">{num}</div>
+                <div className="nx-timeline__node">
+                  <div className="nx-timeline__node-disc">{num}</div>
+                </div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <div className="nx-timeline__title">{title}</div>
                   <p className="nx-timeline__body">{body}</p>
