@@ -1,4 +1,10 @@
-# === Git, IDE, CI ===
+# ============================================================
+# .repomixignore — Proyecto NEXO
+# Objetivo: Incluir solo código fuente y archivos necesarios
+# para auditar el funcionamiento del sistema.
+# ============================================================
+
+# === Git, IDE, CI metadata ===
 .git/
 .git-backup-old/
 .vscode/
@@ -8,50 +14,75 @@
 # === Dependencias ===
 **/node_modules/**
 **/vendor/**
+**/.pio/
+**/.pioenvs/
+**/.piolibdeps/
 
-# === Build artifacts ===
+# === Build artifacts (todos los compilados) ===
 **/dist/**
 **/build/**
 CMakeCache.txt
 CMakeFiles/
 Makefile
+cmake_install.cmake
+compile_commands.json
 
-# === Bundles Vite compilados (no son código fuente) ===
+# === Bundles JS/CSS compilados por Vite ===
 backend/alojamiento/assets/index-*.js
 backend/alojamiento/assets/index-*.css
+backend/alojamiento/assets/gsap-*.js
+backend/alojamiento/assets/three-*.js
 backend/alojamiento/assets/three-vendor-*.js
-backend/alojamiento/assets/gsap-vendor-*.js
+backend/alojamiento/assets/react-vendor-*.js
 
-# === Texturas, modelos 3D y assets binarios ===
+# === Assets binarios pesados ===
 **/*.glb
 **/*.gltf
+**/*.hdr
+**/*.exr
 backend/alojamiento/assets/environments/
 backend/alojamiento/assets/texturas-arena/
 backend/alojamiento/assets/textures/
 backend/alojamiento/assets/logo/
-backend/alojamiento/assets-3d/
+backend/alojamiento/assets/models/
 backend/alojamiento/assets/downloads/
+backend/alojamiento/assets-3d/
 WebApp/public/assets/
 WebApp/public/downloads/
+backend/alojamiento/public/assets/
+backend/alojamiento/frontend/public/assets/
+backend/alojamiento/frontend/public/assets-3d/
 
-# === Binarios compilados ===
+# === Archivos de compresión estática (.br / .gz) ===
+# Son generados automáticamente; el source ya está presente sin compresión
+**/*.br
+**/*.gz
+
+# === Binarios compilados / librerías nativas ===
 *.o
 *.a
 *.so*
+*.dylib
+*.dll
 *.map
 *.bin
 *.elf
 backend/lib/
-sqlite3.c
-sqlite3.h
 
-# === PHP: instaladores y binarios de Composer ===
+# === PHP: binarios y locks de Composer ===
 backend/alojamiento/composer.phar
 backend/alojamiento/composer-setup.php
+backend/alojamiento/composer.lock
 
-# === Secretos y claves ===
+# === JavaScript: package-lock (no es código fuente; es lockfile) ===
+WebApp/package-lock.json
+backend/alojamiento/frontend/package-lock.json
+
+# === Secretos y entornos ===
 *.pem
 *.key
+*.crt
+*.secret
 .env
 .env.*
 .env*.local
@@ -60,14 +91,22 @@ backend/alojamiento/composer-setup.php
 logs/
 *.log
 backend/alojamiento/frontend/dev_server_log.txt
+backend/alojamiento/frontend/build.log
+__pycache__/
+*.pyc
+*.pyo
 
-# === Archivos comprimidos ===
+# === Archivos comprimidos / artefactos de release ===
 *.zip
+landing-downloads.zip
+backend/alojamiento/frontend/nexo-frontend.zip
 
-# === Scripts de debug y scratch ===
+# === Scratch, debug y dev-only ===
 backend/alojamiento/frontend/scratch/
+backend/alojamiento/frontend/dist/
 backend/alojamiento/_dev/
 backend/alojamiento/debug_db.php
+backend/alojamiento/frontend/node_modules/
 
 # === Archivos sueltos sin valor ===
 Dockerfile.bak
@@ -75,7 +114,7 @@ Logica
 Nuevo documento de texto.txt
 skills-lock.json
 
-# === Ruido de repomix ===
+# === Salidas previas de repomix ===
 repomix-output.xml
 repomix-output.txt
 repomix-output.md

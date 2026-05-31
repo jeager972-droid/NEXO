@@ -235,11 +235,12 @@ export default function HowItWorksSection() {
               className="nx-timeline__rail"
               style={{
                 position: 'absolute',
-                top: '3.5rem',
+                top: '1.25rem',
                 left: 'calc(1.25rem + 20px)',
                 right: 'calc(1.25rem + 20px)',
                 height: '2px',
                 background: 'var(--nx-border)',
+                zIndex: 0,
               }}
               aria-hidden="true"
             />
@@ -249,13 +250,13 @@ export default function HowItWorksSection() {
               className="nx-timeline__svg"
               style={{
                 position: 'absolute',
-                top: '3.5rem',
+                top: '1.25rem',
                 left: 'calc(1.25rem + 20px)',
                 right: 'calc(1.25rem + 20px)',
                 width: 'calc(100% - 2.5rem - 40px)',
                 height: '2px',
                 pointerEvents: 'none',
-                zIndex: 1,
+                zIndex: 0,
               }}
               aria-hidden="true"
             >
