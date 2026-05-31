@@ -333,9 +333,8 @@ export default function HeroSection() {
                 flex-direction: column !important;
               }
               /* Logo image sits between subtitle and CTA */
-              #hero .nx-hero-canvas {
-                order: 1 !important;
-                height: 260px !important;
+              #hero .nx-hero-canvas--inline {
+                height: 300px !important;
                 margin-bottom: 0.75rem !important;
               }
               /* Glow: full-width behind canvas on mobile */
