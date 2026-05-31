@@ -156,7 +156,7 @@ export default function NodeSection() {
 
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
-      setCanvasScale(1.0)  // Slightly smaller on mobile to leave room for hotspots
+      setCanvasScale(1.0)
       return
     }
 
@@ -167,12 +167,12 @@ export default function NodeSection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: wrapper,
-        start: 'top 75%', // Bug 4: content trigger at 75%
+        start: 'top 75%',
         toggleActions: 'play none none none',
       }
     })
 
-    // PASO 4: Modelo empieza con scale:1.12 y llega a 1.0 en 1.4s con power2.out
+    // Modelo empieza con scale:1.12 y llega a 1.0
     const scaleObj = { val: 1.12 }
     tl.to(scaleObj, {
       val: 1.0,
@@ -183,14 +183,14 @@ export default function NodeSection() {
       }
     })
 
-    // PASO 4: Los hotspots aparecen con stagger 0.18s después de que el nodo termine su entrada
+    // Hotspots aparecen con stagger
     tl.to(hotspots, {
       opacity: 1,
       scale: 1,
       duration: 0.5,
       stagger: 0.18,
       ease: 'back.out(1.7)',
-    }, '-=0.1') // Empieza justo al final de la escala
+    }, '-=0.1')
 
     return () => tl.kill()
   }, [])
@@ -215,27 +215,32 @@ export default function NodeSection() {
           {/* Header */}
           <div className="nx-eyebrow nx-reveal">El hardware</div>
           <h3 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '680px', marginBottom: '1rem' }}>
-            Construido para durar en las condiciones reales de una institución educativa colombiana.
+            El centro de la operación de NEXO
           </h3>
-          <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '520px', marginBottom: '4rem' }}>
-            No diseñado en un laboratorio ideal. Diseñado para cortes de luz, para humedad,
-            para el uso diario de cientos de estudiantes, y para seguir funcionando.
+          <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '720px', marginBottom: '1rem' }}>
+            NEXO implementa en cada aula de clase el llamado "NODO DE NEXO" diseñado para aguantar durante años las condiciones reales de una institución educativa, el cual mediante su conectividad y batería autónoma, interconecta, automatiza y facilita la operación educativa de toda una institución.
           </p>
 
-          {/* Grid: 3D canvas left, spec list right */}
+          {/* Layout: 3D node centered, panel below on PC / beside on mobile handled via CSS */}
           <div
             className="nx-node-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '4rem',
+              display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
+              gap: isMobile ? '1.5rem' : '2.5rem',
             }}
           >
-            {/* ── LEFT: 3D model with hotspot overlay ── */}
+            {/* ── CENTER: 3D model with hotspot overlay ── */}
             <div
               className="nx-node-canvas-wrap nx-reveal nx-reveal-delay-3"
-              style={{ position: 'relative', height: '520px' }}
+              style={{
+                position: 'relative',
+                height: isMobile ? '360px' : '580px',
+                width: '100%',
+                maxWidth: isMobile ? '100%' : '860px',
+                margin: '0 auto',
+              }}
             >
               {/* Live 3D canvas */}
               <div style={{ width: '100%', height: '100%', borderRadius: isMobile ? '0' : '1.25rem', overflow: isMobile ? 'visible' : 'hidden' }}>
@@ -279,8 +284,25 @@ export default function NodeSection() {
               </div>
             </div>
 
-            {/* ── RIGHT: Dynamic spec panel (PC: beside canvas, Mobile: below) ── */}
-            <SpecPanel active={active} specs={SPECS} onClose={() => setActive(null)} />
+            {/* Hint: subtle message about green buttons */}
+            <p
+              className="nx-node-hint"
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--nx-muted)',
+                textAlign: 'center',
+                letterSpacing: '0.02em',
+                marginTop: isMobile ? '0' : '-0.5rem',
+                opacity: 0.7,
+              }}
+            >
+              Toca los botones verdes para ver características del nodo
+            </p>
+
+            {/* ── BELOW: Dynamic spec panel (full width on PC) ── */}
+            <div style={{ width: '100%' }}>
+              <SpecPanel active={active} specs={SPECS} onClose={() => setActive(null)} />
+            </div>
           </div>
         </div>
       </section>
@@ -292,15 +314,9 @@ export default function NodeSection() {
         }
 
         @media (max-width: 768px) {
-          #el-nodo .nx-node-grid {
-            grid-template-columns: 1fr !important;
-            gap: 1.5rem !important;
-          }
           #el-nodo .nx-node-canvas-wrap {
-            height: 360px !important;
             border-radius: 1rem !important;
             overflow: visible !important;
-            margin-bottom: 0 !important;
           }
           #el-nodo .nx-hotspot {
             display: block !important;

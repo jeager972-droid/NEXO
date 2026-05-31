@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import NexoCanvas from '../components/NexoCanvas'
 import ContactModal from '../components/ContactModal'
 import { useStickyScroll } from '../components/useStickyScroll'
 // NOTE: gsap.registerPlugin called once globally in LandingPage.jsx
@@ -150,22 +149,32 @@ export default function HeroSection() {
                 En una infraestructura que opera con conexión autónoma y batería de respaldo ante cortes de luz.
               </p>
 
-              {/* Mobile-only: 3D node inline between subtitle and CTA */}
+              {/* Mobile-only: logo inline between subtitle and CTA */}
               {isMobile && (
                 <div
                   ref={canvasRef}
                   className="nx-hero-canvas nx-hero-canvas--inline"
-                  aria-label="Modelo 3D del nodo NEXO"
+                  aria-label="Logo NEXO"
                   style={{
-                    height:       '300px',
-                    borderRadius: '1rem',
-                    overflow:     'hidden',
+                    height:       '260px',
                     position:     'relative',
                     marginBottom: '1rem',
                     width:        '100%',
+                    display:      'flex',
+                    alignItems:   'center',
+                    justifyContent:'center',
                   }}
                 >
-                  <NexoCanvas type="solo" scale={1.15} coldLight />
+                  <img
+                    src="/assets/logo/logo_nexo.png"
+                    alt="NEXO"
+                    style={{
+                      maxHeight: '100%',
+                      maxWidth:  '100%',
+                      objectFit: 'contain',
+                      filter: 'drop-shadow(0 20px 40px rgba(45,110,48,0.15))',
+                    }}
+                  />
                 </div>
               )}
 
@@ -195,38 +204,32 @@ export default function HeroSection() {
               </p>
             </div>
 
-            {/* ── RIGHT: 3D Node (desktop only — mobile renders inline above) ── */}
+            {/* ── RIGHT: NEXO Logo (desktop only) ── */}
             {!isMobile && (
               <div
                 ref={canvasRef}
                 className="nx-hero-canvas"
-                aria-label="Modelo 3D del nodo NEXO"
+                aria-label="Logo NEXO"
                 style={{
                   height:       '440px',
-                  borderRadius: '1.5rem',
-                  overflow:     'hidden',
                   position:     'relative',
                   opacity:       0,
                   willChange:   'transform, opacity',
+                  display:      'flex',
+                  alignItems:   'center',
+                  justifyContent:'center',
                 }}
               >
-                <NexoCanvas type="solo" scale={1.1} coldLight />
-
-                {/* Label de hardware */}
-                <div aria-hidden="true" style={{
-                  position:      'absolute',
-                  bottom:        '1.25rem',
-                  left:          '50%',
-                  transform:     'translateX(-50%)',
-                  fontSize:      '0.65rem',
-                  fontWeight:     600,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color:         'var(--nx-muted-2)',
-                  whiteSpace:    'nowrap',
-                }}>
-                  NODO FISICO DE NEXO
-                </div>
+                <img
+                  src="/assets/logo/logo_nexo.png"
+                  alt="NEXO"
+                  style={{
+                    maxHeight: '100%',
+                    maxWidth:  '100%',
+                    objectFit: 'contain',
+                    filter: 'drop-shadow(0 20px 40px rgba(45,110,48,0.15))',
+                  }}
+                />
               </div>
             )}
           </div>
@@ -278,12 +281,10 @@ export default function HeroSection() {
                 display: flex !important;
                 flex-direction: column !important;
               }
-              /* Canvas sits between subtitle and CTA */
+              /* Logo image sits between subtitle and CTA */
               #hero .nx-hero-canvas {
                 order: 1 !important;
-                height: 300px !important;
-                border-radius: 1rem !important;
-                overflow: hidden !important;
+                height: 260px !important;
                 margin-bottom: 0.75rem !important;
               }
               /* Glow: full-width behind canvas on mobile */

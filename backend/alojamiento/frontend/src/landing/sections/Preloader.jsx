@@ -55,19 +55,14 @@ export default function Preloader() {
         gap: '1.5rem',
       }}
     >
-      {/* NEXO isotipo */}
-      <svg
+      {/* NEXO logo */}
+      <img
+        src="/assets/logo/logo_nexo.png"
+        alt="NEXO"
         width="52"
         height="52"
-        viewBox="0 0 64 64"
-        fill="none"
-        style={{ animation: 'nxPulse 1.8s ease-in-out infinite' }}
-        aria-label="NEXO"
-      >
-        <rect x="2" y="2" width="60" height="60" rx="12" stroke="#2d6e30" strokeWidth="2" />
-        <path d="M14 50L32 14L50 50" stroke="#2d6e30" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M20 38H44" stroke="#2d6e30" strokeWidth="2" strokeLinecap="round" />
-      </svg>
+        style={{ animation: 'nxPulse 1.8s ease-in-out infinite', objectFit: 'contain' }}
+      />
 
       {/* Progress bar */}
       <div style={{ width: '96px', height: '1px', background: 'rgba(200, 230, 200, 0.6)', borderRadius: '1px', overflow: 'hidden' }}>
