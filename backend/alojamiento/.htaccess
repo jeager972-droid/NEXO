@@ -45,6 +45,9 @@ ServerSignature Off
     RewriteCond %{REQUEST_FILENAME} !api\.php$
     RewriteRule .* - [F,L]
 
+    # Permitir fotos de perfil subidas por usuarios
+    RewriteRule ^uploads/avatars/ - [L]
+
     # Prevenir hotlinking de recursos estáticos
     RewriteCond %{HTTP_REFERER} !^$ [NC]
     RewriteCond %{HTTP_REFERER} !^https?://(www\.)?(.+\.)?nexo\. [NC]
