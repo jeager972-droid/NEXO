@@ -17,10 +17,13 @@ const CookieManager = ({ onSave, onAcceptAll, onClose, initialValues }) => {
     document.body.style.width = '100%'
 
     return () => {
+      const saved = document.documentElement.style.scrollBehavior
+      document.documentElement.style.scrollBehavior = 'auto'
       document.body.style.position = ''
       document.body.style.top = ''
       document.body.style.width = ''
       window.scrollTo(0, scrollY)
+      document.documentElement.style.scrollBehavior = saved
     }
   }, [])
 

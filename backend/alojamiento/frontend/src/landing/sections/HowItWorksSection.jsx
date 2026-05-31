@@ -101,7 +101,7 @@ export default function HowItWorksSection() {
                   borderColor: 'var(--nx-green)',
                   color: 'var(--nx-green)',
                   backgroundColor: 'rgba(45, 110, 48, 0.08)',
-                  boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
+                  boxShadow: '0 0 0 8px #f7fcf7, 0 0 20px rgba(45, 110, 48, 0.3)',
                   duration: 0.4,
                 })
               }
@@ -165,7 +165,7 @@ export default function HowItWorksSection() {
               borderColor: 'var(--nx-green)',
               color: 'var(--nx-green)',
               backgroundColor: 'rgba(45, 110, 48, 0.08)',
-              boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
+              boxShadow: '0 0 0 8px #f7fcf7, 0 0 20px rgba(45, 110, 48, 0.3)',
               duration: 0.4,
             })
           }
