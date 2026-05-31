@@ -301,22 +301,43 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     const onMouseMove = (e) => moveDrag(e.clientX, e.clientY)
     const onMouseUp = () => endDrag()
 
-    // Touch — capture all gestures for rotation in all directions
+    // Touch — intention-based gesture detection
+    let touchStartX = 0
+    let touchStartY = 0
+    let isTouchingCanvas = false
+
     const onTouchStart = (e) => {
-      e.preventDefault() // block page scroll when touch starts inside canvas
+      touchStartX = e.touches[0].clientX
+      touchStartY = e.touches[0].clientY
+      isTouchingCanvas = true
       startDrag(e.touches[0].clientX, e.touches[0].clientY)
     }
+
     const onTouchMove = (e) => {
-      e.preventDefault() // block page scroll during drag — MUST be before isDragging check
+      if (!isTouchingCanvas) return
+
+      const deltaX = Math.abs(e.touches[0].clientX - touchStartX)
+      const deltaY = Math.abs(e.touches[0].clientY - touchStartY)
+
+      // Solo bloquear scroll si el gesto es predominantemente horizontal
+      // O si el delta total es significativo (el usuario claramente está rotando)
+      if (deltaX > deltaY || deltaX > 10) {
+        e.preventDefault() // bloquea scroll solo cuando rota horizontalmente
+      }
+      
       if (!isDragging) return
       moveDrag(e.touches[0].clientX, e.touches[0].clientY)
     }
-    const onTouchEnd = () => endDrag()
+
+    const onTouchEnd = () => {
+      isTouchingCanvas = false
+      endDrag()
+    }
 
     el.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
-    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
     window.addEventListener('touchmove', onTouchMove, { passive: false })
     window.addEventListener('touchend', onTouchEnd, { passive: true })
 
@@ -325,7 +346,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
       el.removeEventListener('mousedown', onMouseDown)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
-      el.removeEventListener('touchstart', onTouchStart, { passive: false })
+      el.removeEventListener('touchstart', onTouchStart, { passive: true })
       window.removeEventListener('touchmove', onTouchMove, { passive: false })
       window.removeEventListener('touchend', onTouchEnd, { passive: true })
     }
@@ -341,7 +362,6 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
         inset: 0,
         zIndex: 10,
         cursor: 'grab',
-        touchAction: 'none', // Block all browser gestures inside canvas
       }}
     />
   )
