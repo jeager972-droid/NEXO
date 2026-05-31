@@ -55,17 +55,62 @@ export default function HowItWorksSection() {
     const isMobile = window.innerWidth <= 768
     if (isMobile) {
       gsap.set([eyebrowRef.current, titleRef.current, subtitleRef.current, microRef.current], { opacity: 1, y: 0 })
-      gsap.set(stepsRef.current, { opacity: 1, scale: 1 })
-      stepsRef.current.forEach(el => {
-        if (!el) return
-        const node = el.querySelector('.nx-timeline__node')
-        if (node) {
-          node.style.borderColor  = 'var(--nx-green)'
-          node.style.color        = 'var(--nx-green)'
-          node.style.backgroundColor = 'rgba(45, 110, 48, 0.08)'
+      gsap.set(stepsRef.current, { opacity: 0, y: 20 })
+
+      const mobileFill = document.querySelector('.nx-timeline__mobile-fill')
+      const mobileTrack = document.querySelector('.nx-timeline__mobile-track')
+
+      const ctxMobile = gsap.context(() => {
+        // Animate vertical fill based on scroll within the section
+        if (mobileFill && wrapper) {
+          gsap.fromTo(mobileFill, { scaleY: 0 }, {
+            scaleY: 1,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: wrapper,
+              start: 'top 60%',
+              end: 'bottom 80%',
+              scrub: 0.5,
+            }
+          })
         }
+
+        // Reveal each step on scroll
+        stepsRef.current.forEach((el, i) => {
+          if (!el) return
+          gsap.to(el, {
+            opacity: 1,
+            y: 0,
+            duration: 0.5,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: el,
+              start: 'top 85%',
+              toggleActions: 'play none none none',
+            }
+          })
+          // Activate node color when visible
+          ScrollTrigger.create({
+            trigger: el,
+            start: 'top 80%',
+            toggleActions: 'play none none none',
+            onEnter: () => {
+              const node = el.querySelector('.nx-timeline__node')
+              if (node) {
+                gsap.to(node, {
+                  borderColor: 'var(--nx-green)',
+                  color: 'var(--nx-green)',
+                  backgroundColor: 'rgba(45, 110, 48, 0.08)',
+                  boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
+                  duration: 0.4,
+                })
+              }
+            }
+          })
+        })
       })
-      return
+
+      return () => ctxMobile.revert()
     }
 
     // Ocultar pasos inicialmente
@@ -89,7 +134,7 @@ export default function HowItWorksSection() {
         }
       )
 
-      // Bug 4: Línea SVG con scrub:1
+      // Bug 4: Línea SVG con scrub rápido
       gsap.to(line, {
         strokeDashoffset: 0,
         ease: 'none',
@@ -97,7 +142,7 @@ export default function HowItWorksSection() {
           trigger: wrapper,
           start: 'top top',
           end: 'bottom bottom',
-          scrub: 1,   // Bug 4: line-draw scrub = 1
+          scrub: 0.3,
         }
       })
 
@@ -152,7 +197,7 @@ export default function HowItWorksSection() {
       ref={wrapperRef}
       className="section-wrapper section-wrapper--tall"
       id="como-funciona"
-      style={{ height: '380vh' }}
+      style={{ height: '280vh' }}
     >
       <section
         ref={innerRef}
@@ -187,9 +232,10 @@ export default function HowItWorksSection() {
           <div className="nx-timeline" style={{ position: 'relative' }}>
             {/* Background line (rail) */}
             <div
+              className="nx-timeline__rail"
               style={{
                 position: 'absolute',
-                top: '1.25rem',
+                top: '3.5rem',
                 left: 'calc(1.25rem + 20px)',
                 right: 'calc(1.25rem + 20px)',
                 height: '2px',
@@ -200,9 +246,10 @@ export default function HowItWorksSection() {
 
             {/* SVG de la línea conectora con drawSVG (vía strokeDashoffset/dasharray) */}
             <svg
+              className="nx-timeline__svg"
               style={{
                 position: 'absolute',
-                top: '1.25rem',
+                top: '3.5rem',
                 left: 'calc(1.25rem + 20px)',
                 right: 'calc(1.25rem + 20px)',
                 width: 'calc(100% - 2.5rem - 40px)',
@@ -228,12 +275,18 @@ export default function HowItWorksSection() {
               />
             </svg>
 
+            {/* Mobile vertical track */}
+            <div className="nx-timeline__mobile-track" aria-hidden="true">
+              <div className="nx-timeline__mobile-fill" />
+            </div>
+
             {/* Steps */}
             {STEPS.map(({ num, title, body }, i) => (
               <div
                 key={num}
                 ref={el => stepsRef.current[i] = el}
                 className="nx-timeline__step"
+                data-step={i}
                 style={{ position: 'relative', zIndex: 2 }}
               >
                 <div className="nx-timeline__node">{num}</div>

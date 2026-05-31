@@ -454,7 +454,7 @@ a { color: inherit; text-decoration: none; }
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 0 1.25rem;
+  padding: 2rem 1.25rem 0;
   position: relative;
   z-index: 1;
 }
@@ -473,6 +473,10 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 1.5rem;
   transition: border-color 0.4s, color 0.4s, background 0.4s, box-shadow 0.4s;
 }
+
+/* Mobile vertical progress track */
+.nx-timeline__mobile-track,
+.nx-timeline__mobile-fill { display: none; }
 .nx-timeline__step.active .nx-timeline__node {
   border-color: #2d6e30;
   color: #2d6e30;
@@ -663,18 +667,50 @@ body.custom-cursor-active * {
   .nx-security-grid { grid-template-columns: 1fr !important; }
 
   /* Timeline vertical */
-  .nx-timeline { flex-direction: column; }
+  .nx-timeline {
+    flex-direction: column;
+    padding-left: 2rem;
+    position: relative;
+  }
   .nx-timeline__line,
-  .nx-timeline svg[style] { display: none !important; }
+  .nx-timeline__rail,
+  .nx-timeline__svg { display: none !important; }
+
+  /* Vertical track on the left, away from nodes */
+  .nx-timeline__mobile-track {
+    display: block;
+    position: absolute;
+    left: 0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--nx-border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .nx-timeline__mobile-fill {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #1a4a1f, rgba(26, 74, 31, 0.6));
+    border-radius: 3px;
+    transform-origin: top center;
+    transform: scaleY(0);
+    box-shadow: 0 0 12px rgba(45, 110, 48, 0.4);
+  }
+
   .nx-timeline__step {
     flex-direction: row;
     align-items:    flex-start;
     text-align:     left;
     gap:            1rem;
-    padding:        0 0 2rem 0;
+    padding:        0 0 2.5rem 0;
     width:          100%;
-    opacity:        1 !important;
-    transform:      none !important;
+    opacity:        0;
+    transform:      translateY(20px);
   }
   .nx-timeline__node { flex-shrink: 0; margin-bottom: 0; }
 
