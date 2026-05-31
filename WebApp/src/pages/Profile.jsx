@@ -1,43 +1,283 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';
-import { Camera, Loader2, CheckCircle2, AlertTriangle, User } from 'lucide-react';
+import {
+  Camera, Loader2, CheckCircle2, AlertTriangle,
+  Lock, Save, Send, Eye, EyeOff
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const Profile = () => {
-  const { user, login } = useAuth();
-  const [uploading, setUploading] = useState(false);
+/* ─── Section wrapper ─── */
+const SectionCard = ({ title, subtitle, children }) => (
+  <div className="bg-white dark:bg-slate-900 p-5 space-y-4" style={{ border: '1.5px solid #E2E8F0' }}>
+    <div>
+      <p className="text-xs font-black uppercase tracking-tight text-slate-800 dark:text-white">{title}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">{subtitle}</p>
+    </div>
+    {children}
+  </div>
+);
+
+/* ─── Text input ─── */
+const TextField = ({ label, value, onChange, type = 'text', placeholder, disabled, rightElement }) => (
+  <div>
+    <label style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>{label}</label>
+    <div className="relative">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        placeholder={placeholder}
+        className="w-full px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-white bg-slate-50 dark:bg-slate-800 outline-none disabled:opacity-50"
+        style={{ border: '1.5px solid #E2E8F0', fontSize: '13px' }}
+      />
+      {rightElement && <div className="absolute right-2 top-1/2 -translate-y-1/2">{rightElement}</div>}
+    </div>
+  </div>
+);
+
+/* ─── Toast ─── */
+const InlineToast = ({ toast }) => {
+  if (!toast) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      className={`px-4 py-2.5 text-xs font-semibold flex items-center gap-2 ${
+        toast.type === 'success'
+          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          : toast.type === 'info'
+          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+          : 'bg-red-50 text-red-700 border border-red-200'
+      }`}
+    >
+      {toast.type === 'success' ? <CheckCircle2 size={14} /> : toast.type === 'info' ? <Send size={14} /> : <AlertTriangle size={14} />}
+      {toast.message}
+    </motion.div>
+  );
+};
+
+/* ─── OTP Verification Block ─── */
+const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
+  const [code, setCode] = useState('');
+  const [step, setStep] = useState('idle'); // idle | sent | verifying | verified
   const [toast, setToast] = useState(null);
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const sendCode = async () => {
+    if (!target || countdown > 0) return;
+    setStep('sent');
+    setToast({ type: 'info', message: 'Enviando código por WhatsApp…' });
+    try {
+      const res = await usersApi.sendVerificationCode(purpose, target);
+      if (res.status === 'ok') {
+        setToast({ type: 'success', message: `Código enviado a tu WhatsApp. Válido 10 min.` });
+        setCountdown(60);
+      } else {
+        setToast({ type: 'error', message: res.message || 'Error enviando código' });
+        setStep('idle');
+      }
+    } catch (err) {
+      setToast({ type: 'error', message: 'Error de red al enviar código' });
+      setStep('idle');
+    }
+  };
+
+  const verifyCode = async () => {
+    if (code.length !== 6) return;
+    setStep('verifying');
+    try {
+      const res = await usersApi.verifyCode(purpose, code);
+      if (res.status === 'ok') {
+        setStep('verified');
+        setToast({ type: 'success', message: 'Código verificado correctamente' });
+        onVerified?.();
+      } else {
+        setToast({ type: 'error', message: res.message || 'Código incorrecto' });
+        setStep('sent');
+      }
+    } catch (err) {
+      setToast({ type: 'error', message: 'Error verificando código' });
+      setStep('sent');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {step === 'idle' && (
+        <button
+          onClick={sendCode}
+          disabled={disabled || !target || countdown > 0}
+          className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#003366] hover:text-[#002855] disabled:opacity-40 transition-colors"
+        >
+          <Send size={12} />
+          {countdown > 0 ? `Reenviar en ${countdown}s` : 'Verificar vía WhatsApp'}
+        </button>
+      )}
+
+      {(step === 'sent' || step === 'verifying') && (
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            maxLength={6}
+            value={code}
+            onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+            placeholder="000000"
+            className="w-24 px-2 py-1.5 text-sm font-bold text-center tracking-widest bg-slate-50 dark:bg-slate-800 outline-none"
+            style={{ border: '1.5px solid #E2E8F0' }}
+          />
+          <button
+            onClick={verifyCode}
+            disabled={code.length !== 6 || step === 'verifying'}
+            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#003366] text-white hover:bg-[#002855] disabled:opacity-50 transition-colors"
+          >
+            {step === 'verifying' ? <Loader2 size={12} className="animate-spin" /> : 'Confirmar'}
+          </button>
+          <button
+            onClick={sendCode}
+            disabled={countdown > 0}
+            className="text-[10px] font-bold text-slate-400 hover:text-slate-600 disabled:opacity-40"
+          >
+            {countdown > 0 ? `${countdown}s` : 'Reenviar'}
+          </button>
+        </div>
+      )}
+
+      {step === 'verified' && (
+        <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+          <CheckCircle2 size={12} /> Verificado
+        </div>
+      )}
+
+      <InlineToast toast={toast} />
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const Profile = () => {
+  const { user } = useAuth();
   const fileRef = useRef(null);
 
-  const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
-  const roleDisplay = user?.role ?? '';
+  /* ─── Local state ─── */
+  const [profile, setProfile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
+  const [uploading, setUploading] = useState(false);
+  const [photoToast, setPhotoToast] = useState(null);
+
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [backupEmail, setBackupEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+
+  const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
+  const [actionToast, setActionToast] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  /* ─── Load extended profile ─── */
+  useEffect(() => {
+    usersApi.getExtendedProfile().then(res => {
+      if (res.status === 'ok' && res.data) {
+        setProfile(res.data);
+        setEmail(res.data.email || '');
+        setPhone(res.data.phone || '');
+        setBackupEmail(res.data.backup_email || '');
+      }
+      setLoadingProfile(false);
+    }).catch(() => setLoadingProfile(false));
+  }, []);
+
+  /* ─── Photo upload ─── */
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setToast(null);
+    setPhotoToast(null);
     try {
       const res = await usersApi.uploadPhoto(file);
       if (res.status === 'ok') {
-        // Update local user context with new photo
-        const updatedUser = { ...user, profile_photo_url: res.photo_url };
-        // We can't directly update auth context, but the next /auth/me will reflect it
-        setToast({ type: 'success', message: 'Foto de perfil actualizada' });
+        setPhotoToast({ type: 'success', message: 'Foto de perfil actualizada' });
+        setProfile(p => p ? { ...p, profile_photo_url: res.photo_url } : p);
       } else {
-        setToast({ type: 'error', message: res.message || 'Error al subir foto' });
+        setPhotoToast({ type: 'error', message: res.message || 'Error al subir foto' });
       }
     } catch (err) {
-      setToast({ type: 'error', message: 'Error de red al subir foto' });
+      setPhotoToast({ type: 'error', message: 'Error de red al subir foto' });
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
+  /* ─── Update contact field ─── */
+  const updateField = async (purpose, value) => {
+    setActionLoading(true);
+    setActionToast(null);
+    try {
+      const res = await usersApi.updateProfile(purpose, value);
+      if (res.status === 'ok') {
+        setActionToast({ type: 'success', message: 'Dato actualizado correctamente' });
+        setProfile(p => p ? { ...p, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup_email']: value } : p);
+      } else {
+        setActionToast({ type: 'error', message: res.message || 'Error al actualizar' });
+      }
+    } catch (err) {
+      setActionToast({ type: 'error', message: 'Error de red' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /* ─── Change password ─── */
+  const changePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      setActionToast({ type: 'error', message: 'Mínimo 8 caracteres para la nueva contraseña' });
+      return;
+    }
+    setActionLoading(true);
+    setActionToast(null);
+    try {
+      const res = await usersApi.changePassword(currentPassword, newPassword);
+      if (res.status === 'ok') {
+        setActionToast({ type: 'success', message: 'Contraseña actualizada' });
+        setCurrentPassword('');
+        setNewPassword('');
+      } else {
+        setActionToast({ type: 'error', message: res.message || 'Error al cambiar contraseña' });
+      }
+    } catch (err) {
+      setActionToast({ type: 'error', message: 'Error de red o contraseña incorrecta' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
+
+  if (loadingProfile) {
+    return (
+      <div className="space-y-5">
+        <div className="h-6 w-32 bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        <div className="h-40 bg-slate-100 dark:bg-slate-800 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 max-w-3xl">
       {/* Header */}
       <div>
         <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Perfil</p>
@@ -46,16 +286,16 @@ const Profile = () => {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-6 space-y-6" style={{ border: '1.5px solid #E2E8F0' }}>
-        {/* Avatar */}
+      {/* ─── Sección 1: Información Personal ─── */}
+      <SectionCard title="Información Personal" subtitle="Datos básicos de tu cuenta">
         <div className="flex items-center gap-5">
           <div
-            className="relative flex items-center justify-center w-20 h-20 text-2xl font-black text-white overflow-hidden cursor-pointer group"
+            className="relative flex items-center justify-center w-20 h-20 text-2xl font-black text-white overflow-hidden cursor-pointer group shrink-0"
             style={{ backgroundColor: '#003366' }}
             onClick={() => fileRef.current?.click()}
           >
-            {user?.profile_photo_url ? (
-              <img src={user.profile_photo_url} alt="" className="w-full h-full object-cover" />
+            {profile?.profile_photo_url ? (
+              <img src={profile.profile_photo_url} alt="" className="w-full h-full object-cover" />
             ) : (
               initial
             )}
@@ -63,10 +303,10 @@ const Profile = () => {
               <Camera size={20} className="text-white" />
             </div>
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{user?.nombre}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{roleDisplay}</p>
-            <p className="text-[10px] text-slate-400 mt-1">{user?.email}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{user?.role}</p>
+            <p className="text-[10px] text-slate-400 mt-1 truncate">{user?.school_name}</p>
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
@@ -75,44 +315,162 @@ const Profile = () => {
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
               Cambiar foto
             </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleFileChange}
-            />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
           </div>
         </div>
 
-        {/* Info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <InfoRow label="Documento" value={profile?.document_number || '—'} />
           <InfoRow label="Institución" value={user?.school_name || '—'} />
-          <InfoRow label="Correo" value={user?.email || '—'} />
-          <InfoRow label="Rol" value={roleDisplay} />
-          <InfoRow label="Jornada" value={user?.work_shift ? capitalize(user.work_shift) : '—'} />
+          <InfoRow label="Rol" value={user?.role || '—'} />
+          <InfoRow label="Jornada" value={profile?.work_shift ? capitalize(profile.work_shift) : '—'} />
         </div>
 
-        {/* Toast */}
-        <AnimatePresence>
-          {toast && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className={`px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 ${
-                toast.type === 'success'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-red-50 text-red-700 border border-red-200'
-              }`}
-            >
-              {toast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-              {toast.message}
-            </motion.div>
+        <InlineToast toast={photoToast} />
+      </SectionCard>
+
+      {/* ─── Sección 2: Seguridad ─── */}
+      <SectionCard title="Seguridad" subtitle="Contraseña de acceso">
+        <form onSubmit={changePassword} className="space-y-4">
+          <TextField
+            label="Contraseña actual"
+            type={showCurrent ? 'text' : 'password'}
+            value={currentPassword}
+            onChange={e => setCurrentPassword(e.target.value)}
+            placeholder="••••••••"
+            rightElement={
+              <button type="button" onClick={() => setShowCurrent(v => !v)} className="text-slate-400 hover:text-slate-600">
+                {showCurrent ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            }
+          />
+          <TextField
+            label="Nueva contraseña (mín. 8 caracteres)"
+            type={showNew ? 'text' : 'password'}
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            placeholder="••••••••"
+            rightElement={
+              <button type="button" onClick={() => setShowNew(v => !v)} className="text-slate-400 hover:text-slate-600">
+                {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            }
+          />
+          <button
+            type="submit"
+            disabled={actionLoading || !currentPassword || newPassword.length < 8}
+            className="flex items-center gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider bg-[#003366] hover:bg-[#002855] text-white transition-colors disabled:opacity-50"
+          >
+            {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
+            Actualizar contraseña
+          </button>
+        </form>
+        <InlineToast toast={actionToast} />
+      </SectionCard>
+
+      {/* ─── Sección 3: Contacto ─── */}
+      <SectionCard title="Contacto" subtitle="Correo, teléfono y verificación por WhatsApp">
+        {/* Email */}
+        <div className="space-y-3">
+          <TextField
+            label="Correo electrónico"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="usuario@institucion.edu.co"
+          />
+          <div className="flex items-center justify-between">
+            <OtpBlock
+              purpose="email_change"
+              target={email}
+              label="correo"
+              disabled={!email || email === profile?.email}
+              onVerified={() => setVerified(v => ({ ...v, email: true }))}
+            />
+            {verified.email && (
+              <button
+                onClick={() => updateField('email_change', email)}
+                disabled={actionLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+              >
+                <Save size={12} /> Guardar correo
+              </button>
+            )}
+          </div>
+          {profile?.email_verified && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+              <CheckCircle2 size={12} /> Correo verificado
+            </span>
           )}
-        </AnimatePresence>
-      </div>
+        </div>
+
+        <div style={{ height: '1px', backgroundColor: '#F1F5F9' }} />
+
+        {/* Phone */}
+        <div className="space-y-3">
+          <TextField
+            label="Teléfono (WhatsApp)"
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="+57 300 000 0000"
+          />
+          <div className="flex items-center justify-between">
+            <OtpBlock
+              purpose="phone_change"
+              target={phone}
+              label="teléfono"
+              disabled={!phone || phone === profile?.phone}
+              onVerified={() => setVerified(v => ({ ...v, phone: true }))}
+            />
+            {verified.phone && (
+              <button
+                onClick={() => updateField('phone_change', phone)}
+                disabled={actionLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+              >
+                <Save size={12} /> Guardar teléfono
+              </button>
+            )}
+          </div>
+          {profile?.phone_verified && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+              <CheckCircle2 size={12} /> Teléfono verificado
+            </span>
+          )}
+        </div>
+
+        <div style={{ height: '1px', backgroundColor: '#F1F5F9' }} />
+
+        {/* Backup email */}
+        <div className="space-y-3">
+          <TextField
+            label="Correo de respaldo"
+            type="email"
+            value={backupEmail}
+            onChange={e => setBackupEmail(e.target.value)}
+            placeholder="personal@gmail.com"
+          />
+          <div className="flex items-center justify-between">
+            <OtpBlock
+              purpose="backup_email"
+              target={backupEmail}
+              label="correo de respaldo"
+              disabled={!backupEmail || backupEmail === profile?.backup_email}
+              onVerified={() => setVerified(v => ({ ...v, backup: true }))}
+            />
+            {verified.backup && (
+              <button
+                onClick={() => updateField('backup_email', backupEmail)}
+                disabled={actionLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+              >
+                <Save size={12} /> Guardar respaldo
+              </button>
+            )}
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 };

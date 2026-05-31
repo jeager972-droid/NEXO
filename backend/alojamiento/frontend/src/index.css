@@ -51,7 +51,8 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 0;
+  scroll-padding-top: 4rem;
+  scroll-snap-type: y proximity;
 }
 
 body {
@@ -577,6 +578,7 @@ a { color: inherit; text-decoration: none; }
   height: 100vh;
   position: relative;
   width: 100%;
+  scroll-snap-align: start;
 }
 .section-wrapper--tall {
   height: 180vh;
@@ -626,6 +628,11 @@ body.custom-cursor-active * {
 }
 
 @media (max-width: 768px) {
+
+  html {
+    scroll-snap-type: y proximity;
+    scroll-padding-top: 3.5rem;
+  }
 
   /* Tokens móvil */
   :root {

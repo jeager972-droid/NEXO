@@ -102,8 +102,21 @@ function logTwilioMessageSafe($conn, $schoolId, $typeCode, $direction, $phone, $
  */
 if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $input['action'] === 'EXECUTE_COMMAND')) {
     $action = filter_var($input['command'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
-    if ($cleanPath === '/operations/sos') $action = 'sos';
-    if ($cleanPath === '/operations/inasistencia') $action = 'inasistencia';
+    $pathMap = [
+        '/operations/sos' => 'sos',
+        '/operations/inasistencia' => 'inasistencia',
+        '/operations/citacion' => 'citacion',
+        '/operations/salida' => 'autorizar_salida',
+        '/operations/permiso' => 'permiso',
+        '/operations/solicitud' => 'solicitud',
+        '/operations/daño' => 'daño',
+        '/operations/pedagogica' => 'pedagogica',
+        '/operations/horario' => 'horario',
+        '/operations/incidente' => 'incidente',
+    ];
+    if (isset($pathMap[$cleanPath])) {
+        $action = $pathMap[$cleanPath];
+    }
 
     $authUser = requireAuth();
     $userId = $authUser['id'];
@@ -246,17 +259,27 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
                 }
 
-                if ($action === 'citacion') {
-                    $targetRole = strtoupper((string)($params['targetRole'] ?? ''));
-                    $msg = "NEXO: solicitud interna [$action] desde $role. Detalle: $reason";
+                // Solicitud interna: notify target user via Twilio if they have a phone
+                if ($action === 'solicitud' && !empty($params['recipient_id'])) {
+                    $recStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ? AND school_id = ?");
+                    $recStmt->execute([$params['recipient_id'], $schoolId]);
+                    $recRow = $recStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($recRow && !empty($recRow['phone'])) {
+                        $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$authUser['nombre']}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
+                        enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
+                    }
+                }
+
+                // Daño / Incidente: notify coordinación
+                if (($action === 'daño' || $action === 'incidente') && !$studentId) {
+                    $targetRole = 'COORDINADOR';
+                    $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *" . strtoupper($action) . "*\nReportado por: {$role}\nDetalle: {$reason}";
                     $notifyStmt = $conn->prepare("
                         SELECT phone FROM users
                         WHERE school_id = ?
-                          AND role_id IN (
-                              SELECT role_id FROM roles WHERE UPPER(role_name) = ?
-                          )
+                          AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?)
                     ");
-                    $notifyStmt->execute([$schoolId, $targetRole !== '' ? $targetRole : 'COORDINADOR']);
+                    $notifyStmt->execute([$schoolId, $targetRole]);
                     while ($notifyRow = $notifyStmt->fetch(PDO::FETCH_ASSOC)) {
                         if (!empty($notifyRow['phone'])) {
                             enqueueTwilioJob($notifyRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');

@@ -2,10 +2,43 @@ import { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from './Sidebar';
-import { Menu, Bell, LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { Menu, Bell, LogOut, Settings, ChevronDown, Search, X, Command } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { getRoleDisplay } from '../config/roles';
+import { getRoleDisplay, SIDEBAR_ITEMS } from '../config/roles';
+
+const GlobalSearchResults = ({ query, userRole, onSelect }) => {
+  if (!query.trim()) {
+    return (
+      <div className="px-3 py-4 text-xs text-slate-400 text-center">
+        Escribe el nombre de un módulo (ej: <span className="font-semibold text-slate-500">Operación</span>, <span className="font-semibold text-slate-500">Auditoría</span>)
+      </div>
+    );
+  }
+  const q = query.trim().toLowerCase();
+  const results = SIDEBAR_ITEMS.filter(item =>
+    item.roles.includes(userRole) &&
+    (item.title.toLowerCase().includes(q) || item.path.replace('/', '').includes(q))
+  );
+  if (results.length === 0) {
+    return <div className="px-3 py-4 text-xs text-slate-400 text-center">Sin resultados</div>;
+  }
+  return (
+    <div className="max-h-60 overflow-auto">
+      {results.map(item => (
+        <button
+          key={item.path}
+          onClick={() => onSelect(item.path)}
+          className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+        >
+          <item.icon size={16} strokeWidth={2} className="text-slate-400 shrink-0" />
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{item.title}</span>
+          <span className="ml-auto text-[10px] text-slate-400 font-mono">{item.path}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
 
 const PAGE_VARIANTS = {
   initial:    { opacity: 0, y: 6 },
@@ -24,11 +57,14 @@ const Divider = () => (
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen]     = useState(false);
+  const [searchOpen, setSearchOpen]       = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
   const { user, logout }                  = useAuth();
   const { darkMode }                      = useTheme();
   const navigate                          = useNavigate();
   const location                          = useLocation();
   const profileRef                        = useRef(null);
+  const searchRef                         = useRef(null);
 
   const toggleSidebar = () => setIsSidebarOpen(v => !v);
   const roleDisplay   = getRoleDisplay(user?.role);
@@ -37,9 +73,22 @@ const Layout = () => {
   useEffect(() => {
     function handleClickOutside(e) {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+      if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(v => !v);
+      }
+      if (e.key === 'Escape') setSearchOpen(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
   }, []);
 
   const headerBg     = darkMode ? 'rgba(2,6,23,0.90)'      : 'rgba(250,250,249,0.90)';
@@ -91,6 +140,56 @@ const Layout = () => {
                 {roleDisplay}
               </p>
             </div>
+          </div>
+
+          {/* Center — global search */}
+          <div className="hidden md:flex flex-1 justify-center px-4 max-w-md" ref={searchRef}>
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              style={{ border: '1.5px solid #E2E8F0' }}
+            >
+              <Search size={13} strokeWidth={2} />
+              <span className="flex-1 text-left">Buscar módulo…</span>
+              <span className="hidden lg:inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-300">
+                <Command size={10} strokeWidth={2} />K
+              </span>
+            </button>
+
+            <AnimatePresence>
+              {searchOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-full max-w-md bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden"
+                  style={{ border: '1.5px solid #E2E8F0' }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+                    <Search size={14} className="text-slate-400" />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Escribe nombre del módulo o función…"
+                      className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
+                    />
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <GlobalSearchResults
+                    query={searchQuery}
+                    userRole={user?.role}
+                    onSelect={(path) => { setSearchOpen(false); setSearchQuery(''); navigate(path); }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Right — live status + bell + user */}

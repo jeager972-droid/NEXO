@@ -38,10 +38,17 @@ const Operation = () => {
   }, []);
 
   const commands = [
-    { 
-      id: 'citar', 
-      title: 'Citar acudiente', 
-      icon: Calendar, 
+    {
+      id: 'inasistencia',
+      title: 'Reportar inasistencia',
+      icon: AlertTriangle,
+      roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE],
+      fields: ['group', 'student']
+    },
+    {
+      id: 'citar',
+      title: 'Citar acudiente',
+      icon: Calendar,
       roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
       fields: ['group', 'student', 'date', 'message']
     },
@@ -259,6 +266,8 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
   });
   const [targetUsers, setTargetUsers]   = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [groupSearch, setGroupSearch]   = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
 
   const roles = Object.values(ROLES);
   const incidentTargets = [
@@ -311,7 +320,16 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
   };
 
   const set = (field) => (e) => setFormData(prev => ({ ...prev, [field]: e.target.value }));
-  const filteredStudents = (students || []).filter(s => (s.group || '') === formData.group);
+  const filteredByGroup = (students || []).filter(s => (s.group || '') === formData.group);
+  const filteredStudents = studentSearch.trim()
+    ? filteredByGroup.filter(s => (s.name || '').toLowerCase().includes(studentSearch.trim().toLowerCase()))
+    : filteredByGroup;
+  const filteredGroups = groupSearch.trim()
+    ? (groups || []).filter(g => {
+        const n = (g?.name || g?.group_name || '').toLowerCase();
+        return n.includes(groupSearch.trim().toLowerCase());
+      })
+    : (groups || []);
   const isSOS = command.isUrgent;
   const accentColor = isSOS ? '#7F1D1D' : '#003366';
   const submitBg    = isSOS ? '#7F1D1D' : '#003366';
@@ -398,29 +416,63 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               {command.fields.includes('group') && (
-                <FormField label="Grupo">
-                  <select required value={formData.group}
-                    onChange={e => setFormData(p => ({ ...p, group: e.target.value, student: '' }))}
-                    className="dark:bg-slate-800 dark:text-white appearance-none"
-                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
-                    <option value="">— Elegir grupo —</option>
-                    {(groups || []).map(g => {
-                      const n = g?.name || g?.group_name || '';
-                      return <option key={g?.id || n} value={n}>{n}</option>;
-                    })}
-                  </select>
-                </FormField>
+                <>
+                  <FormField label="Buscar grupo">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={groupSearch}
+                        onChange={e => setGroupSearch(e.target.value)}
+                        placeholder="Escribe nombre del grupo…"
+                        className="dark:bg-slate-800 dark:text-white w-full"
+                        style={{ ...INPUT_BASE, paddingLeft: '32px' }}
+                      />
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    </div>
+                  </FormField>
+                  <FormField label="Grupo">
+                    <select required value={formData.group}
+                      onChange={e => {
+                        setFormData(p => ({ ...p, group: e.target.value, student: '' }));
+                        setStudentSearch('');
+                      }}
+                      className="dark:bg-slate-800 dark:text-white appearance-none"
+                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
+                      <option value="">— Elegir grupo —</option>
+                      {filteredGroups.map(g => {
+                        const n = g?.name || g?.group_name || '';
+                        return <option key={g?.id || n} value={n}>{n}</option>;
+                      })}
+                    </select>
+                  </FormField>
+                </>
               )}
 
               {command.fields.includes('student') && formData.group && (
-                <FormField label="Estudiante">
-                  <select required value={formData.student} onChange={set('student')}
-                    className="dark:bg-slate-800 dark:text-white appearance-none"
-                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
-                    <option value="">— Seleccionar estudiante —</option>
-                    {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </FormField>
+                <>
+                  <FormField label="Buscar estudiante">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={studentSearch}
+                        onChange={e => setStudentSearch(e.target.value)}
+                        placeholder="Escribe nombre del estudiante…"
+                        className="dark:bg-slate-800 dark:text-white w-full"
+                        style={{ ...INPUT_BASE, paddingLeft: '32px' }}
+                      />
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">{filteredStudents.length} estudiante(s) en este grupo</p>
+                  </FormField>
+                  <FormField label="Estudiante">
+                    <select required value={formData.student} onChange={set('student')}
+                      className="dark:bg-slate-800 dark:text-white appearance-none"
+                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
+                      <option value="">— Seleccionar estudiante —</option>
+                      {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </FormField>
+                </>
               )}
 
               {command.fields.includes('targetRole') && (
