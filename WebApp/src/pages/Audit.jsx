@@ -283,157 +283,332 @@ const Audit = () => {
   );
 };
 
-/* ── Sub-module Drawer (generic data loader) ── */
-const SUB_API_MAP = {
-  'Reporte general': auditApi.getAttendanceGeneral,
-  'Inasistencias': auditApi.getAttendanceAbsences,
-  'Llegadas tarde': auditApi.getAttendanceLates,
-  'Evasión interna': auditApi.getAttendanceEvasion,
-  'Por grupo': auditApi.getAttendanceByGroup,
-  'Por estudiante': auditApi.getAttendanceByStudent,
-  'Incidentes': auditApi.getDisciplineIncidents,
-  'Vulneraciones': auditApi.getDisciplineViolations,
-  'Intentos salón incorrecto': auditApi.getDisciplineWrongClassroom,
-  'Spam biométrico': auditApi.getDisciplineBiometricSpam,
-  'Reporte disciplinario': auditApi.getDisciplineReports,
-  'Historial estudiante': auditApi.getDisciplineStudentHistory,
-  'Salidas clase': auditApi.getPermissionsClassExits,
-  'Salidas colegio': auditApi.getPermissionsSchoolExits,
-  'Salidas pedagógicas': auditApi.getPermissionsPedagogical,
-  'Retornos pendientes': auditApi.getPermissionsPendingReturns,
-  'Historial permisos': auditApi.getPermissionsHistory,
-  'WhatsApp enviados': auditApi.getMessagingWhatsAppSent,
-  'Respuestas acudientes': auditApi.getMessagingGuardianReplies,
-  'Mensajes fallidos': auditApi.getMessagingFailed,
-  'Citaciones': auditApi.getMessagingCitations,
-  'Mensajería interna': auditApi.getMessagingInternal,
-  'Historial conversaciones': auditApi.getMessagingConversations,
-  'Actividad profesores': auditApi.getTeacherActivity,
-  'Clases registradas': auditApi.getTeacherClasses,
-  'Permisos emitidos': auditApi.getTeacherPermissions,
-  'Incidencias asociadas': auditApi.getTeacherIncidents,
-  'Actividad sistema docente': auditApi.getTeacherSystemActivity,
-  'Auditoría global': auditApi.getSecurityGlobal,
-  'Accesos': auditApi.getSecurityAccesses,
-  'Sesiones': auditApi.getSecuritySessions,
-  'Comandos ejecutados': auditApi.getSecurityCommands,
-  'Actividad administrativa': auditApi.getSecurityAdminActivity,
-  'Intentos fallidos': auditApi.getSecurityFailedAttempts,
-  'Alertas emitidas': auditApi.getSosAlerts,
-  'Alertas resueltas': auditApi.getSosResolved,
-  'Tiempo resolución': auditApi.getSosResolutionTime,
-  'Historial SOS': auditApi.getSosHistory,
-  'Histórico estudiante': auditApi.getHistoricalStudent,
-  'Histórico docente': auditApi.getHistoricalTeacher,
-  'Histórico asistencia': auditApi.getHistoricalAttendance,
-  'Histórico disciplina': auditApi.getHistoricalDiscipline,
-  'Histórico permisos': auditApi.getHistoricalPermissions,
-  'Histórico mensajes': auditApi.getHistoricalMessaging,
-  'Buscar histórico': auditApi.getHistoricalSearch,
-  'Descargar individual': auditApi.getHistoricalDownload,
-  'Descargar consolidado': auditApi.getHistoricalDownloadConsolidated,
-  'Consolidado asistencia': auditApi.getConsolidatedAttendance,
-  'Consolidado disciplina': auditApi.getConsolidatedDiscipline,
-  'Consolidado permisos': auditApi.getConsolidatedPermissions,
-  'Consolidado mensajería': auditApi.getConsolidatedMessaging,
-  'Consolidado docente': auditApi.getConsolidatedTeacher,
-  'Consolidado seguridad': auditApi.getConsolidatedSecurity,
-  'Consolidado institucional': auditApi.getConsolidatedInstitutional,
+/* ── Drawer Configuration ── */
+const DRAWER_CONFIG = {
+  'Reporte general': { api: auditApi.getAttendanceGeneral, needsDates: true },
+  'Inasistencias': { api: auditApi.getAttendanceAbsences, needsDates: true, needsGroup: true, needsStudent: true },
+  'Llegadas tarde': { api: auditApi.getAttendanceLates, needsDates: true, needsGroup: true, needsStudent: true },
+  'Evasión interna': { api: auditApi.getAttendanceEvasion, needsDates: true, needsGroup: true, needsStudent: true },
+  'Incidentes': { api: auditApi.getDisciplineIncidents, needsDates: true, needsGroup: true, needsStudent: true },
+  'Vulneraciones': { api: auditApi.getDisciplineViolations, needsDates: true, needsGroup: true, needsStudent: true },
+  'Intentos salón incorrecto': { api: auditApi.getDisciplineWrongClassroom, needsDates: true, needsGroup: true, needsStudent: true },
+  'Spam biométrico': { api: auditApi.getDisciplineBiometricSpam, needsDates: true },
+  'Reporte disciplinario': { api: auditApi.getDisciplineReports, needsDates: true, needsGroup: true, needsStudent: true },
+  'Salidas clase': { api: auditApi.getPermissionsClassExits, needsDates: true, needsGroup: true, needsStudent: true },
+  'Salidas colegio': { api: auditApi.getPermissionsSchoolExits, needsDates: true, needsGroup: true, needsStudent: true },
+  'Salidas pedagógicas': { api: auditApi.getPermissionsPedagogical, needsDates: true, needsGroup: true, needsStudent: true },
+  'Retornos pendientes': { api: auditApi.getPermissionsPendingReturns, needsDates: true, needsGroup: true, needsStudent: true },
+  'Historial permisos': { api: auditApi.getPermissionsHistory, needsDates: true },
+  'WhatsApp enviados': { api: auditApi.getMessagingWhatsAppSent, needsDates: true },
+  'Respuestas acudientes': { api: auditApi.getMessagingGuardianReplies, needsDates: true },
+  'Mensajes fallidos': { api: auditApi.getMessagingFailed, needsDates: true },
+  'Citaciones': { api: auditApi.getMessagingCitations, needsDates: true },
+  'Mensajería interna': { api: auditApi.getMessagingInternal, needsDates: true },
+  'Historial conversaciones': { api: auditApi.getMessagingConversations, needsDates: true },
+  'Actividad profesores': { api: auditApi.getTeacherActivity, needsDates: true, needsStaff: true },
+  'Clases registradas': { api: auditApi.getTeacherClasses, needsDates: true, needsStaff: true },
+  'Permisos emitidos': { api: auditApi.getTeacherPermissions, needsDates: true, needsStaff: true },
+  'Incidencias asociadas': { api: auditApi.getTeacherIncidents, needsDates: true, needsStaff: true },
+  'Actividad sistema docente': { api: auditApi.getTeacherSystemActivity, needsDates: true, needsStaff: true },
+  'Auditoría global': { api: auditApi.getSecurityGlobal, needsDates: true },
+  'Accesos': { api: auditApi.getSecurityAccesses, needsDates: true },
+  'Sesiones': { api: auditApi.getSecuritySessions, needsDates: true },
+  'Comandos ejecutados': { api: auditApi.getSecurityCommands, needsDates: true },
+  'Actividad administrativa': { api: auditApi.getSecurityAdminActivity, needsDates: true },
+  'Intentos fallidos': { api: auditApi.getSecurityFailedAttempts, needsDates: true },
+  'Alertas emitidas': { api: auditApi.getSosAlerts, needsDates: true },
+  'Alertas resueltas': { api: auditApi.getSosResolved, needsDates: true },
+  'Tiempo resolución': { api: auditApi.getSosResolutionTime, needsDates: true },
+  'Historial SOS': { api: auditApi.getSosHistory, needsDates: true },
+  'Histórico docente': { api: auditApi.getHistoricalTeacher, needsDates: true, needsStaff: true },
+  'Histórico asistencia': { api: auditApi.getHistoricalAttendance, needsDates: true },
+  'Histórico disciplina': { api: auditApi.getHistoricalDiscipline, needsDates: true },
+  'Histórico permisos': { api: auditApi.getHistoricalPermissions, needsDates: true },
+  'Histórico mensajes': { api: auditApi.getHistoricalMessaging, needsDates: true },
+  'Buscar histórico': { api: auditApi.getHistoricalSearch, needsDates: false },
+  'Descargar individual': { api: auditApi.getHistoricalDownload, needsDates: false },
+  'Descargar consolidado': { api: auditApi.getHistoricalDownloadConsolidated, needsDates: true },
+  'Consolidado asistencia': { api: auditApi.getConsolidatedAttendance, needsDates: true },
+  'Consolidado disciplina': { api: auditApi.getConsolidatedDiscipline, needsDates: true },
+  'Consolidado permisos': { api: auditApi.getConsolidatedPermissions, needsDates: true },
+  'Consolidado mensajería': { api: auditApi.getConsolidatedMessaging, needsDates: true },
+  'Consolidado docente': { api: auditApi.getConsolidatedTeacher, needsDates: true },
+  'Consolidado seguridad': { api: auditApi.getConsolidatedSecurity, needsDates: true },
+  'Consolidado institucional': { api: auditApi.getConsolidatedInstitutional, needsDates: true },
 };
 
-function AuditDrawer({ activeSub }) {
+const EXCLUDE_COLS = ['school_id','sync_hash','event_signature','metadata_json','command_payload','previous_data','new_data','biometric_hash'];
+
+function AuditDrawer({ activeSub, onClose }) {
+  const [filters, setFilters] = useState({ from: '', to: '', groupId: '', studentId: '', staffId: '', q: '' });
+  const [groups, setGroups] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+
+  const config = DRAWER_CONFIG[activeSub];
 
   useEffect(() => {
     if (!activeSub) return;
-    const fn = SUB_API_MAP[activeSub];
-    if (!fn) { setData(null); setError('Submódulo no mapeado'); return; }
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        // algunos endpoints necesitan parámetros; para simplificar, pasamos string vacío / fechas por defecto
-        let res;
-        if (activeSub === 'Por estudiante') res = await fn('');
-        else if (activeSub === 'Historial estudiante') res = await fn('');
-        else if (activeSub === 'Histórico docente') res = await fn('');
-        else if (activeSub === 'Buscar histórico') res = await fn('');
-        else if (activeSub === 'Descargar individual') res = await fn('student', '');
-        else if (activeSub.includes('Histórico') || activeSub.includes('Consolidado') || activeSub === 'Historial permisos') {
-          const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-          const to = new Date().toISOString().slice(0, 10);
-          res = await fn(from, to);
-        } else {
-          res = await fn();
-        }
-        setData(res);
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    setData(null);
+    setError(null);
+    const today = new Date().toISOString().slice(0, 10);
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    setFilters({ from: monthAgo, to: today, groupId: '', studentId: '', staffId: '', q: '' });
+    setGroups([]);
+    setStudents([]);
+    setStaff([]);
+
+    if (config?.needsGroup || config?.needsStudent) {
+      setMetaLoading(true);
+      auditApi.getGroups()
+        .then(r => setGroups(r.data || []))
+        .catch(() => {})
+        .finally(() => setMetaLoading(false));
+    }
+    if (config?.needsStaff) {
+      setMetaLoading(true);
+      auditApi.getStaff()
+        .then(r => setStaff(r.data || []))
+        .catch(() => {})
+        .finally(() => setMetaLoading(false));
+    }
   }, [activeSub]);
+
+  useEffect(() => {
+    if (!filters.groupId) { setStudents([]); return; }
+    auditApi.getGroupStudents(filters.groupId)
+      .then(r => setStudents(r.data || []))
+      .catch(() => setStudents([]));
+  }, [filters.groupId]);
+
+  const handleSearch = async () => {
+    if (!config) { setError('Submódulo no configurado'); return; }
+    try {
+      setLoading(true);
+      setError(null);
+      const params = {};
+      if (config.needsDates) {
+        if (filters.from) params.from = filters.from;
+        if (filters.to) params.to = filters.to;
+      }
+      if ((config.needsGroup || config.needsStudent) && filters.groupId) params.group_id = filters.groupId;
+      if (config.needsStudent && filters.studentId) params.student_id = filters.studentId;
+      if (config.needsStaff && filters.staffId) params.user_id = filters.staffId;
+      if (activeSub === 'Buscar histórico' && filters.q) params.q = filters.q;
+      if (activeSub === 'Descargar individual') {
+        params.type = 'student';
+        params.id = filters.studentId || filters.staffId || '';
+      }
+      const res = await config.api(params);
+      setData(res);
+    } catch (e) {
+      setError(e.message || 'Error consultando datos');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const rows = data?.data ?? data?.summary ?? (Array.isArray(data) ? data : []);
   const stats = data?.stats ?? null;
 
+  const visibleKeys = rows.length > 0
+    ? Object.keys(rows[0]).filter(k => !EXCLUDE_COLS.includes(k))
+    : [];
+
   return (
-    <div className="flex-1 flex flex-col p-0 overflow-hidden">
-      {loading && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E', animation: 'spin 1s linear infinite' }} />
-          <p className="text-xs text-slate-400">Cargando datos…</p>
+    <div className="flex-1 flex flex-col p-0 overflow-hidden bg-white dark:bg-slate-900">
+      {/* Filter Panel */}
+      <div className="shrink-0 p-5 border-b border-slate-100 dark:border-slate-800 space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Filter size={14} strokeWidth={2} className="text-slate-400" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Filtros de consulta</span>
         </div>
-      )}
-      {error && !loading && (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
-          <AlertTriangle size={24} strokeWidth={1.5} style={{ color: '#DC2626' }} />
-          <p className="text-xs text-red-400">{error}</p>
-        </div>
-      )}
-      {!loading && !error && rows.length === 0 && !stats && (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
-          <div className="flex items-center justify-center w-14 h-14" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>
-            <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
-          </div>
-          <div className="text-center space-y-1">
-            <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos</p>
-            <p style={{ fontSize: '11px', color: '#CBD5E1', maxWidth: '280px', lineHeight: 1.5 }}>
-              No se encontraron registros para este submódulo en el periodo consultado.
-            </p>
-          </div>
-        </div>
-      )}
-      <div className="flex-1 overflow-auto p-6">
-        {stats && (
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {Object.entries(stats).map(([k, v]) => (
-              <div key={k} className="p-2 rounded" style={{ backgroundColor: '#070D1B', border: '1px solid #1E293B' }}>
-                <p className="text-[9px] uppercase tracking-wider" style={{ color: '#64748B' }}>{k}</p>
-                <p className="text-sm font-bold" style={{ color: '#00A67E' }}>{v}</p>
+
+        {config?.needsDates && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Desde</label>
+              <div className="relative">
+                <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="date" value={filters.from}
+                  onChange={e => setFilters(p => ({ ...p, from: e.target.value }))}
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+                />
               </div>
-            ))}
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Hasta</label>
+              <div className="relative">
+                <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="date" value={filters.to}
+                  onChange={e => setFilters(p => ({ ...p, to: e.target.value }))}
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+                />
+              </div>
+            </div>
           </div>
         )}
-        <div className="space-y-2">
-          {rows.map((row, idx) => (
-            <div key={idx} className="p-3 rounded" style={{ backgroundColor: '#070D1B', border: '1px solid #1E293B' }}>
-              {Object.entries(row).map(([k, v]) => (
-                <div key={k} className="flex justify-between text-[11px]" style={{ color: '#CBD5E1' }}>
-                  <span className="capitalize" style={{ color: '#64748B' }}>{k.replace(/_/g, ' ')}</span>
-                  <span className="truncate max-w-[200px] text-right">{v === null ? '—' : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v).slice(0, 60)}</span>
-                </div>
+
+        {(config?.needsGroup || config?.needsStudent) && (
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Grupo académico</label>
+            <select
+              value={filters.groupId}
+              onChange={e => setFilters(p => ({ ...p, groupId: e.target.value, studentId: '' }))}
+              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+            >
+              <option value="">{metaLoading ? 'Cargando grupos…' : 'Todos los grupos'}</option>
+              {groups.map(g => (
+                <option key={g.group_id} value={g.group_id}>{g.group_name} {g.grade_level ? `(${g.grade_level})` : ''}</option>
               ))}
+            </select>
+          </div>
+        )}
+
+        {config?.needsStudent && filters.groupId && (
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Estudiante</label>
+            <select
+              value={filters.studentId}
+              onChange={e => setFilters(p => ({ ...p, studentId: e.target.value }))}
+              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+            >
+              <option value="">Todos los estudiantes del grupo</option>
+              {students.map(s => (
+                <option key={s.student_id} value={s.student_id}>{s.last_name}, {s.first_name} — {s.document_number}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {config?.needsStaff && (
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Personal</label>
+            <select
+              value={filters.staffId}
+              onChange={e => setFilters(p => ({ ...p, staffId: e.target.value }))}
+              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+            >
+              <option value="">{metaLoading ? 'Cargando personal…' : 'Todo el personal'}</option>
+              {staff.map(u => (
+                <option key={u.user_id} value={u.user_id}>{u.last_name}, {u.first_name} — {u.role_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#003366] hover:bg-[#002855] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+          Consultar
+        </button>
+      </div>
+
+      {/* Results */}
+      <div className="flex-1 overflow-auto">
+        {loading && (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
+            <p className="text-xs text-slate-400 font-medium">Consultando registros…</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center h-64 gap-3 px-6">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+              <AlertTriangle size={20} className="text-red-500" />
             </div>
-          ))}
-        </div>
+            <p className="text-xs text-red-500 font-medium text-center">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && rows.length === 0 && !stats && (
+          <div className="flex flex-col items-center justify-center h-64 gap-4 px-6">
+            <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+              <Activity size={24} strokeWidth={1.5} className="text-slate-300" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Sin registros</p>
+              <p className="text-xs text-slate-400 max-w-[260px] leading-relaxed">
+                Ajusta los filtros y presiona <strong>Consultar</strong> para obtener resultados.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && (rows.length > 0 || stats) && (
+          <div className="p-5 space-y-5">
+            {stats && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {Object.entries(stats).map(([k, v]) => (
+                  <div key={k} className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 dark:bg-slate-800/50 dark:border-slate-700">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">{k.replace(/_/g, ' ')}</p>
+                    <p className="text-lg font-black text-[#003366] dark:text-slate-100">{v ?? 0}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {rows.length > 0 && (
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                        {visibleKeys.map(k => (
+                          <th key={k} className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                            {k.replace(/_/g, ' ')}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, i) => (
+                        <tr key={i} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                          {visibleKeys.map(k => (
+                            <td key={k} className="px-4 py-2.5 text-[11px] text-slate-700 dark:text-slate-300 whitespace-nowrap max-w-[200px] truncate">
+                              {formatCell(k, row[k])}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[10px] text-slate-400 font-medium">{rows.length} registro{rows.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function formatCell(key, value) {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  const sk = String(key).toLowerCase();
+  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('created') || sk.includes('detected') || sk.includes('emitted') || sk.includes('resolved') || sk.includes('sent') || sk.includes('executed')) {
+    const d = new Date(value);
+    if (!isNaN(d)) return d.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+  }
+  if (sk.includes('date') || sk.includes('birth')) {
+    const d = new Date(value);
+    if (!isNaN(d)) return d.toLocaleDateString('es-CO');
+  }
+  const s = String(value);
+  if (s.length > 100) return s.slice(0, 100) + '…';
+  return s;
 }
 
 export default Audit;
