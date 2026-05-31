@@ -22,7 +22,7 @@ const PROBLEMS = [
       </svg>
     ),
     title: 'El registro manual de asistencia',
-    body: 'En la mayoría de las instituciones educativas colombianas, el registro de asistencia consume tiempo de clase que los docentes no pueden recuperar. Ese tiempo existe, se acumula día tras día, y es irrecuperable. No es tiempo administrativo: es tiempo de cátedra que los estudiantes no reciben.',
+    body: 'En la mayoría de las instituciones educativas colombianas, el registro de asistencia consume tiempo de clase que los docentes no pueden recuperar. Tiempo el cual se acumula día tras día, y es irrecuperable. No es tiempo administrativo; es tiempo de cátedra que los estudiantes no reciben.',
   },
   {
     id: 'salida',
@@ -34,7 +34,7 @@ const PROBLEMS = [
       </svg>
     ),
     title: 'Los estudiantes que nadie ve salir',
-    body: 'Entre el cambio de una clase y la siguiente, entre una salida al baño y el regreso, hay intervalos donde las instituciones pierden trazabilidad sobre sus estudiantes. Cuando ocurre un incidente en ese margen invisible, la responsabilidad institucional queda expuesta sin capacidad de acción.',
+    body: 'Entre el cambio de una clase y la siguiente, entre una salida al baño y el regreso, hay intervalos de tiempo donde las instituciones pierden trazabilidad sobre sus estudiantes. Cuando ocurre un incidente en ese margen, la responsabilidad institucional queda expuesta sin capacidad de acción.',
   },
   {
     id: 'padre',
@@ -47,7 +47,7 @@ const PROBLEMS = [
       </svg>
     ),
     title: 'Las familias fuera del circuito',
-    body: 'Las inasistencias registradas en papel o en sistemas desconectados llegan a los acudientes con retrasos de días — o no llegan. Las familias no forman parte del circuito de información en tiempo real, lo que genera brechas de comunicación que ninguna institución puede permitirse cuando está en cuestión el cuidado y la custodia de un menor.',
+    body: 'Las inasistencias registradas en papel o en sistemas desconectados llegan a los acudientes con retrasos de días, o simplemente no llegan. Las familias quedan por fuera del circuito de información en tiempo real, lo que genera vacíos de comunicación que complican la corresponsabilidad entre el hogar y la escuela.',
   },
 ]
 
@@ -145,7 +145,7 @@ export default function ProblemSection() {
             className="nx-h2"
             style={{ maxWidth: '700px', marginBottom: '5rem' }}
           >
-            Hay vacíos que el sistema educativo colombiano tiene pendiente cubrir — y que afectan a quienes más merecen protección.
+            Hay vacíos que el sistema educativo colombiano tiene pendiente cubrir, los cuales afectan a quienes más merecen protección.
           </h3>
 
           {/* 3-column problem grid */}

@@ -14,20 +14,20 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 const SPECS = [
   {
     id: 'steel',
-    label: 'Acero inoxidable',
-    meaning: 'Resiste el uso intensivo diario de cientos de estudiantes sin degradarse.',
+    label: 'Con materiales pensados para la durabilidad',
+    meaning: 'Carcasa en acero inoxidable con certificación IP66. Resiste golpes, polvo y salpicaduras. Su capa protectora anti-rayones mantiene la apariencia intacta tras años de uso diario por cientos de estudiantes.',
     hotspotPos: { top: '20%', left: '28%' },
   },
   {
     id: 'battery',
-    label: 'Batería 12 horas',
-    meaning: 'Opera durante cortes de luz sin interrupciones. Sin excusas.',
+    label: 'Con autonomía de batería',
+    meaning: 'Hasta 12 horas de operación continua ante cortes de energía. El flujo de registro y alertas no se detiene, incluso en las peores condiciones.',
     hotspotPos: { top: '45%', left: '14%' },
   },
   {
     id: 'sim',
-    label: 'Conectividad M2M',
-    meaning: 'Tiene su propia SIM Card. No depende del WiFi de la institución.',
+    label: 'Conectividad propia',
+    meaning: 'Protocolo de comunicación M2M con SIM Card independiente. No requiere la red de la institución para operar ni transmitir datos.',
     hotspotPos: { top: '68%', left: '26%' },
   },
   {
@@ -219,7 +219,7 @@ export default function NodeSection() {
           </h3>
           <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '520px', marginBottom: '4rem' }}>
             No diseñado en un laboratorio ideal. Diseñado para cortes de luz, para humedad,
-            para el uso diario de cientos de estudiantes — y para seguir funcionando.
+            para el uso diario de cientos de estudiantes, y para seguir funcionando.
           </p>
 
           {/* Grid: 3D canvas left, spec list right */}

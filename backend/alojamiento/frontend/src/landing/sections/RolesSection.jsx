@@ -22,7 +22,7 @@ const ROLES = [
       </svg>
     ),
     headline: 'La firma institucional queda protegida.',
-    body: 'Los rectores tienen acceso centralizado a la información de su institución — lo que ocurre, cuándo ocurre y qué acciones se tomaron. Todo disponible para accionar con respaldo real.',
+    body: 'Los rectores tienen acceso centralizado a la información de su institución: lo que ocurre, cuándo ocurre y qué acciones se tomaron. Todo disponible para accionar con respaldo real.',
     features: [
       'Auditoría completa con marca de tiempo por acción',
       'Informes descargables listos para entes de control',
@@ -42,7 +42,7 @@ const ROLES = [
       </svg>
     ),
     headline: 'Los problemas se detectan antes de escalar.',
-    body: 'Los coordinadores ven evasiones entre clases, salidas frecuentes y llegadas tarde recurrentes — todo en un panel en tiempo real, con alertas automáticas configurables por umbral antes de que cualquier situación se convierta en incidente.',
+    body: 'Los coordinadores ven evasiones entre clases, salidas frecuentes y llegadas tarde recurrentes, todo en un panel en tiempo real, con alertas automáticas configurables por umbral antes de que cualquier situación se convierta en incidente.',
     features: [
       'Panel de patrones y anomalías en tiempo real',
       'Alertas automáticas configurables por umbral',
@@ -63,7 +63,7 @@ const ROLES = [
     headline: 'La carga administrativa de los docentes se reduce a gran escala, permitiendo orientar ese tiempo al desarrollo pedagógico.',
     body: 'El registro de asistencia ocurre automáticamente. Los docentes pueden citar acudientes con un botón, reportar daños o incidentes desde su teléfono, y dedicar el tiempo de clase exclusivamente a enseñar.',
     features: [
-      'Asistencia automática — sin intervención manual',
+      'Asistencia automática, sin intervención manual',
       'Citar acudientes desde el móvil en un toque',
       'Reportes de incidentes y daños desde la app',
     ],
@@ -170,7 +170,7 @@ export default function RolesSection() {
             NEXO opera diferente para cada rol.
           </h3>
           <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '500px', marginBottom: '3.5rem' }}>
-            Pero todos ven lo mismo: control total.
+            Pero para todos representa lo mismo: facilitación, control y automatización.
           </p>
 
           {/* Tabs */}

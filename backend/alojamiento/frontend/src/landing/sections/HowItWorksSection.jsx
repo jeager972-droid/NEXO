@@ -28,7 +28,7 @@ const STEPS = [
   {
     num: '04',
     title: 'Los patrones emergen solos',
-    body: 'Salidas frecuentes al baño, llegadas tarde recurrentes, evasiones entre clases — NEXO cruza la información y genera alertas antes de que el problema escale.',
+    body: 'Salidas frecuentes al baño, llegadas tarde recurrentes y evasiones entre clases. NEXO cruza la información y genera alertas antes de que el problema escale.',
   },
 ]
 

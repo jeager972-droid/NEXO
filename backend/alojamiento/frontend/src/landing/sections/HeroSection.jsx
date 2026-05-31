@@ -125,7 +125,7 @@ export default function HeroSection() {
             <div className="nx-hero-copy">
               {/* Eyebrow */}
               <div ref={eyebrowRef} className="nx-eyebrow" style={{ opacity: 0 }}>
-                Sistema de Custodia Educativa en Tiempo Real — Colombia
+                Sistema de Custodia Educativa en Tiempo Real, Colombia
               </div>
 
               {/* H1 — dos líneas semánticas para el stagger */}
@@ -225,7 +225,7 @@ export default function HeroSection() {
                   color:         'var(--nx-muted-2)',
                   whiteSpace:    'nowrap',
                 }}>
-                  Nodo NEXO — Hardware biométrico
+                  NODO FISICO DE NEXO
                 </div>
               </div>
             )}

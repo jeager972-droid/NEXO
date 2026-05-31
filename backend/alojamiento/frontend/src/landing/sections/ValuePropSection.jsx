@@ -9,7 +9,7 @@ import { useStickyScroll } from '../components/useStickyScroll'
 
 const ROWS = [
   {
-    before: 'Lista de asistencia manual — tiempo de cátedra que no vuelve',
+    before: 'Lista de asistencia manual. Tiempo de cátedra que no vuelve',
     after:  'Registro automático al instante por estudiante',
   },
   {
@@ -136,7 +136,7 @@ export default function ValuePropSection() {
           </h3>
           <p ref={subtitleRef} className="nx-body" style={{ maxWidth: '580px', marginBottom: '3.5rem', opacity: 0 }}>
             Las instituciones que operan con NEXO no esperan que algo ocurra para actuar.
-            Saben qué ocurre, cuándo ocurre y quién es responsable — antes de que escale.
+            Saben qué ocurre, cuándo ocurre y quién es responsable, antes de que escale.
           </p>
 
           {/* Before / After table */}
