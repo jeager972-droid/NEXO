@@ -965,3 +965,127 @@ if ($cleanPath === '/audit/historical/download-consolidated' && $method === 'GET
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
 
+
+// ============================================================================
+// 9. REPORTES CONSOLIDADOS
+// ============================================================================
+
+if ($cleanPath === '/audit/consolidated/attendance' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                COUNT(*) FILTER (WHERE event_type LIKE 'INGRESO_%') AS entries,
+                COUNT(*) FILTER (WHERE event_type LIKE 'INGRESO_TARDE%') AS lates,
+                COUNT(*) FILTER (WHERE event_type LIKE 'INASISTENCIA%') AS absences,
+                COUNT(DISTINCT student_id) AS unique_students
+            FROM biometric_events
+            WHERE school_id = ? AND (event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+        ");
+        $stmt->execute([$schoolId, $from, $to]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/consolidated/discipline' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                COUNT(*) AS total_incidents,
+                COUNT(*) FILTER (WHERE severity_level = 'CRITICAL') AS critical,
+                COUNT(*) FILTER (WHERE severity_level = 'HIGH') AS high,
+                COUNT(*) FILTER (WHERE severity_level = 'MEDIUM') AS medium,
+                COUNT(*) FILTER (WHERE severity_level = 'LOW') AS low,
+                COUNT(*) FILTER (WHERE resolved = TRUE) AS resolved
+            FROM security_incidents
+            WHERE school_id = ? AND (detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+        ");
+        $stmt->execute([$schoolId, $from, $to]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/consolidated/permissions' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                (SELECT COUNT(*) FROM class_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?) AS class_exits,
+                (SELECT COUNT(*) FROM school_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?) AS school_exits,
+                (SELECT COUNT(*) FROM pedagogical_trip_authorizations WHERE school_id = ? AND departure_time BETWEEN ? AND ?) AS trips
+        ");
+        $stmt->execute([$schoolId, $from, $to, $schoolId, $from, $to, $schoolId, $from, $to]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/consolidated/messaging' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                COUNT(*) FILTER (WHERE direction = 'OUTBOUND') AS sent,
+                COUNT(*) FILTER (WHERE direction = 'INBOUND') AS replies,
+                COUNT(*) FILTER (WHERE delivery_status NOT IN ('delivered','read','sent')) AS failed,
+                COUNT(*) FILTER (WHERE type_code = 'CITACION') AS citations
+            FROM twilio_messages
+            WHERE school_id = ? AND (sent_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+        ");
+        $stmt->execute([$schoolId, $from, $to]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/consolidated/teacher' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                (SELECT COUNT(*) FROM user_commands WHERE school_id = ? AND executed_at BETWEEN ? AND ? AND executed_by_user_id IN (SELECT user_id FROM users WHERE role_id IN (SELECT role_id FROM roles WHERE role_name = 'TEACHER'))) AS commands,
+                (SELECT COUNT(*) FROM schedules WHERE teacher_user_id IN (SELECT user_id FROM users WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE role_name = 'TEACHER'))) AS total_classes
+        ");
+        $stmt->execute([$schoolId, $from, $to, $schoolId]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/consolidated/security' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                (SELECT COUNT(*) FROM global_audit_logs WHERE school_id = ? AND created_at BETWEEN ? AND ?) AS audit_logs,
+                (SELECT COUNT(*) FROM user_sessions WHERE user_id IN (SELECT user_id FROM users WHERE school_id = ?)) AS sessions,
+                (SELECT COUNT(*) FROM user_commands WHERE school_id = ? AND executed_at BETWEEN ? AND ?) AS commands,
+                (SELECT COUNT(*) FROM global_audit_logs WHERE school_id = ? AND action_type LIKE 'FAILED%' AND created_at BETWEEN ? AND ?) AS failed_attempts
+        ");
+        $stmt->execute([$schoolId, $from, $to, $schoolId, $schoolId, $from, $to, $schoolId, $from, $to]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/consolidated/institutional' && $method === 'GET') {
+    try {
+        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+        $to   = $_GET['to']   ?? date('Y-m-d');
+        $stmt = $conn->prepare("
+            SELECT
+                (SELECT COUNT(*) FROM students WHERE school_id = ? AND active = TRUE) AS active_students,
+                (SELECT COUNT(*) FROM users WHERE school_id = ? AND active = TRUE) AS active_users,
+                (SELECT COUNT(*) FROM academic_groups WHERE school_id = ?) AS groups,
+                (SELECT COUNT(*) FROM biometric_events WHERE school_id = ? AND (event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?) AS total_events,
+                (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND (emitted_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?) AS sos_count,
+                (SELECT COUNT(*) FROM security_incidents WHERE school_id = ? AND (detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?) AS incidents_count
+        ");
+        $stmt->execute([$schoolId, $schoolId, $schoolId, $schoolId, $from, $to, $schoolId, $from, $to, $schoolId, $from, $to]);
+        auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
