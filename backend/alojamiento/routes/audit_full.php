@@ -268,19 +268,21 @@ if ($cleanPath === '/audit/discipline/wrong-classroom' && $method === 'GET') {
 // Spam biométrico
 if ($cleanPath === '/audit/discipline/biometric-spam' && $method === 'GET') {
     try {
+        $f = auditFilters('be', 'event_timestamp');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
-            SELECT student_id, COUNT(*) AS attempt_count, MIN(event_timestamp) AS first_attempt, MAX(event_timestamp) AS last_attempt
-            FROM biometric_events
-            WHERE school_id = ?
-              AND event_timestamp >= NOW() - INTERVAL '1 hour'
-            GROUP BY student_id
+            SELECT be.student_id, COUNT(*) AS attempt_count, MIN(be.event_timestamp) AS first_attempt, MAX(be.event_timestamp) AS last_attempt
+            FROM biometric_events be
+            WHERE be.school_id = ?
+              {$where}
+            GROUP BY be.student_id
             HAVING COUNT(*) > 5
             ORDER BY attempt_count DESC
             LIMIT 50
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        // Enriquecer con nombres
         foreach ($rows as &$row) {
             $st = $conn->prepare("SELECT first_name, last_name FROM students WHERE student_id = ?");
             $st->execute([$row['student_id']]);
@@ -630,16 +632,20 @@ if ($cleanPath === '/audit/teacher/classes' && $method === 'GET') {
 
 if ($cleanPath === '/audit/teacher/permissions' && $method === 'GET') {
     try {
+        $f = auditFilters('uc', 'executed_at', 'executed_by_user_id');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT uc.command_id, uc.command_type, uc.executed_at, uc.command_payload,
                    u.first_name, u.last_name
             FROM user_commands uc
             LEFT JOIN users u ON uc.executed_by_user_id = u.user_id
             WHERE uc.school_id = ? AND uc.command_type LIKE 'PERMISO%'
+              {$where}
             ORDER BY uc.executed_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -797,6 +803,9 @@ if ($cleanPath === '/audit/security/failed-attempts' && $method === 'GET') {
 
 if ($cleanPath === '/audit/sos/alerts' && $method === 'GET') {
     try {
+        $f = auditFilters('sa', 'emitted_at', 'student_id');
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT sa.alert_id, sa.alert_type, sa.alert_description, sa.emitted_at, sa.resolved, sa.resolved_at,
                    u.first_name AS emitter_first, u.last_name AS emitter_last,
@@ -805,10 +814,11 @@ if ($cleanPath === '/audit/sos/alerts' && $method === 'GET') {
             LEFT JOIN users u ON sa.emitted_by_user_id = u.user_id
             LEFT JOIN classrooms c ON sa.classroom_id = c.classroom_id
             WHERE sa.school_id = ?
+              {$where}
             ORDER BY sa.emitted_at DESC
             LIMIT 100
         ");
-        $stmt->execute([$schoolId]);
+        $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }

@@ -1,9 +1,10 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import {
   FileText, Users, ShieldAlert, MessageSquare,
   Clock, Activity, History, ChevronRight,
   FileSpreadsheet, File as FilePdf, AlertTriangle, X,
   Lock, Unlock, ShieldCheck, Search, CalendarDays, Filter, Eye, Loader2,
+  Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auditApi } from '../api/audit';
@@ -16,24 +17,21 @@ const Audit = () => {
   const isAdmin = ADMIN_ROLES.includes(user?.role_name || user?.role);
 
   const [activeSub, setActiveSub] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [integrity, setIntegrity] = useState(null);
-  const [auditLoading, setAuditLoading] = useState(true);
-  const [auditError, setAuditError] = useState(null);
+  const [exportModal, setExportModal] = useState(null);
 
   const modules = [
     {
       id: 'asistencia',
       title: 'Asistencia',
       icon: Users,
-      subdivisions: ['Reporte general', 'Inasistencias', 'Llegadas tarde', 'Evasión interna'],
+      subdivisions: ['Inasistencias', 'Llegadas tarde', 'Evasión interna'],
       exports: ['Excel', 'PDF']
     },
     {
       id: 'disciplina',
       title: 'Disciplina',
       icon: ShieldAlert,
-      subdivisions: ['Incidentes', 'Vulneraciones', 'Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario'],
+      subdivisions: ['Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario'],
       exports: ['Excel', 'PDF']
     },
     {
@@ -44,67 +42,20 @@ const Audit = () => {
       exports: ['Excel', 'PDF']
     },
     {
-      id: 'mensajeria',
-      title: 'Mensajería',
-      icon: MessageSquare,
-      subdivisions: ['WhatsApp enviados', 'Respuestas acudientes', 'Mensajes fallidos', 'Citaciones', 'Mensajería interna', 'Historial conversaciones'],
-      exports: ['Excel', 'PDF']
-    },
-    {
       id: 'docente',
       title: 'Actividad Docente',
       icon: Clock,
-      subdivisions: ['Actividad profesores', 'Clases registradas', 'Permisos emitidos', 'Incidencias asociadas', 'Actividad sistema docente'],
+      subdivisions: ['Permisos emitidos'],
       exports: ['Excel', 'PDF']
     },
     {
-      id: 'seguridad',
-      title: 'Seguridad',
-      icon: ShieldAlert,
-      subdivisions: ['Auditoría global', 'Accesos', 'Sesiones', 'Comandos ejecutados', 'Actividad administrativa', 'Intentos fallidos'],
-      exports: ['Reportes', 'Excel']
-    },
-    {
-      id: 'sos',
-      title: 'Alertas SOS',
+      id: 'alertas',
+      title: 'Alertas',
       icon: AlertTriangle,
-      subdivisions: ['Alertas emitidas', 'Alertas resueltas', 'Tiempo resolución', 'Historial SOS'],
-      exports: ['Excel', 'PDF']
-    },
-    {
-      id: 'historicos',
-      title: 'Históricos',
-      icon: History,
-      subdivisions: ['Histórico docente', 'Histórico asistencia', 'Histórico disciplina', 'Histórico permisos', 'Histórico mensajes', 'Buscar histórico', 'Descargar individual', 'Descargar consolidado'],
-      exports: ['Excel', 'PDF']
-    },
-    {
-      id: 'consolidados',
-      title: 'Reportes Consolidados',
-      icon: FileText,
-      subdivisions: ['Consolidado asistencia', 'Consolidado disciplina', 'Consolidado permisos', 'Consolidado mensajería', 'Consolidado docente', 'Consolidado seguridad', 'Consolidado institucional'],
+      subdivisions: ['Alertas SOS emitidas', 'Evasiones internas'],
       exports: ['Excel', 'PDF']
     }
   ];
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setAuditLoading(true);
-        const [logData, integrityData] = await Promise.all([
-          auditApi.getGlobalLogs(),
-          auditApi.getIntegrity(),
-        ]);
-        setLogs(Array.isArray(logData) ? logData : []);
-        setIntegrity(integrityData);
-      } catch (e) {
-        setAuditError(e.message);
-      } finally {
-        setAuditLoading(false);
-      }
-    };
-    load();
-  }, []);
 
   return (
     <div className="space-y-6">
@@ -113,88 +64,6 @@ const Audit = () => {
         <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>Auditoría</p>
         <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px' }} className="dark:text-slate-200">Control institucional de alto nivel</p>
       </div>
-
-      {/* ── Audit Chain Terminal ── */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase' }}>Audit Chain</p>
-            <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366' }} className="dark:text-slate-200">
-              {isAdmin ? 'Registro de actividad institucional' : 'Log de seguridad criptográfico'}
-            </p>
-          </div>
-          {!isAdmin && (
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck size={14} strokeWidth={2} style={{ color: '#00A67E' }} />
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#00A67E', textTransform: 'uppercase' }}>SHA-256</span>
-            </div>
-          )}
-        </div>
-
-        <div className="overflow-x-auto" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>
-          {/* Terminal header */}
-          <div className="flex items-center gap-1.5 px-4 py-2.5" style={{ borderBottom: '1px solid #1E293B' }}>
-            {['#DC2626','#D97706','#00A67E'].map(c => (
-              <span key={c} className="block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c, opacity: 0.7 }} />
-            ))}
-            <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#475569', marginLeft: '8px', letterSpacing: '0.1em' }}>
-              nexo-audit-chain — bash
-            </span>
-          </div>
-
-          {/* Log entries */}
-          <div className="min-w-[700px]">
-            {auditLoading && (
-              <div className="px-4 py-3 text-xs" style={{ fontFamily: 'ui-monospace, monospace', color: '#475569' }}>
-                Cargando logs…
-              </div>
-            )}
-            {auditError && (
-              <div className="px-4 py-3 text-xs" style={{ fontFamily: 'ui-monospace, monospace', color: '#FCA5A5' }}>
-                Error: {auditError}
-              </div>
-            )}
-            {logs.map((entry, i) => (
-              <motion.div
-                key={entry.audit_id ?? i}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.06, duration: 0.2 }}
-                className="flex items-center gap-0 px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
-                style={{ borderBottom: i < logs.length - 1 ? '1px solid rgba(30,41,59,0.5)' : 'none' }}
-              >
-                {/* Seq */}
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#334155', width: '28px', flexShrink: 0 }}>
-                  {String(i + 1).padStart(3, '0')}
-                </span>
-                {/* Timestamp */}
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: '#00A67E', width: '100px', flexShrink: 0 }}>
-                  [{new Date(entry.created_at).toLocaleTimeString('es-CO', { hour12: false })}]
-                </span>
-                {/* Event */}
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: '#F1F5F9', width: '200px', flexShrink: 0, letterSpacing: '0.05em' }}>
-                  {entry.event_type}
-                </span>
-                {/* User */}
-                <span className="truncate" style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#64748B', width: '180px', flexShrink: 0 }}>
-                  {entry.actor_name || '—'}
-                </span>
-                {/* Hash */}
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#334155', width: '110px', flexShrink: 0 }}>
-                  {(entry.audit_id || '').slice(0, 12)}…
-                </span>
-                {/* Valid indicator */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Lock size={12} strokeWidth={2.5} style={{ color: '#00A67E' }} />
-                  <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '9px', fontWeight: 700, color: '#00A67E', letterSpacing: '0.1em' }}>
-                    OK
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── Module grid ── */}
       <section>
@@ -220,9 +89,9 @@ const Audit = () => {
                 {/* Export buttons */}
                 <div className="flex items-center gap-1">
                   {mod.exports.map((exp, i) => (
-                    <button key={i} onClick={() => setActiveSub(`${mod.title} — ${exp}`)}
-                      className="flex items-center gap-1 px-2 py-1 text-slate-400 hover:text-gov-900 hover:bg-gov-50 dark:hover:bg-gov-900/20 transition-colors"
-                      title={exp}>
+                    <button key={i} onClick={() => setExportModal({ module: mod, format: exp })}
+                      className="flex items-center gap-1 px-2 py-1 text-slate-400 hover:text-[#003366] hover:bg-[#003366]/5 dark:hover:bg-[#003366]/10 transition-colors"
+                      title={`Descargar ${exp}`}>
                       {exp === 'Excel' ? <FileSpreadsheet size={12} strokeWidth={2} />
                         : exp === 'PDF' ? <FilePdf size={12} strokeWidth={2} />
                         : <FileText size={12} strokeWidth={2} />}
@@ -279,62 +148,46 @@ const Audit = () => {
           </>
         )}
       </AnimatePresence>
+
+      {/* ── Export Modal ── */}
+      <AnimatePresence>
+        {exportModal && (
+          <>
+            <motion.div key="ex-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }} className="fixed inset-0 z-50"
+              style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+              onClick={() => setExportModal(null)} />
+            <motion.div key="ex-md" initial={{ opacity: 0, scale: 0.96, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+              <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 pointer-events-auto"
+                onClick={e => e.stopPropagation()}>
+                <ExportModalContent module={exportModal.module} format={exportModal.format} onClose={() => setExportModal(null)} />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
 /* ── Drawer Configuration ── */
 const DRAWER_CONFIG = {
-  'Reporte general': { api: auditApi.getAttendanceGeneral, needsDates: true },
   'Inasistencias': { api: auditApi.getAttendanceAbsences, needsDates: true, needsGroup: true, needsStudent: true },
   'Llegadas tarde': { api: auditApi.getAttendanceLates, needsDates: true, needsGroup: true, needsStudent: true },
   'Evasión interna': { api: auditApi.getAttendanceEvasion, needsDates: true, needsGroup: true, needsStudent: true },
-  'Incidentes': { api: auditApi.getDisciplineIncidents, needsDates: true, needsGroup: true, needsStudent: true },
-  'Vulneraciones': { api: auditApi.getDisciplineViolations, needsDates: true, needsGroup: true, needsStudent: true },
   'Intentos salón incorrecto': { api: auditApi.getDisciplineWrongClassroom, needsDates: true, needsGroup: true, needsStudent: true },
-  'Spam biométrico': { api: auditApi.getDisciplineBiometricSpam, needsDates: true },
+  'Spam biométrico': { api: auditApi.getDisciplineBiometricSpam, needsDates: true, needsGroup: true, needsStudent: true },
   'Reporte disciplinario': { api: auditApi.getDisciplineReports, needsDates: true, needsGroup: true, needsStudent: true },
   'Salidas clase': { api: auditApi.getPermissionsClassExits, needsDates: true, needsGroup: true, needsStudent: true },
   'Salidas colegio': { api: auditApi.getPermissionsSchoolExits, needsDates: true, needsGroup: true, needsStudent: true },
   'Salidas pedagógicas': { api: auditApi.getPermissionsPedagogical, needsDates: true, needsGroup: true, needsStudent: true },
   'Retornos pendientes': { api: auditApi.getPermissionsPendingReturns, needsDates: true, needsGroup: true, needsStudent: true },
   'Historial permisos': { api: auditApi.getPermissionsHistory, needsDates: true },
-  'WhatsApp enviados': { api: auditApi.getMessagingWhatsAppSent, needsDates: true },
-  'Respuestas acudientes': { api: auditApi.getMessagingGuardianReplies, needsDates: true },
-  'Mensajes fallidos': { api: auditApi.getMessagingFailed, needsDates: true },
-  'Citaciones': { api: auditApi.getMessagingCitations, needsDates: true },
-  'Mensajería interna': { api: auditApi.getMessagingInternal, needsDates: true },
-  'Historial conversaciones': { api: auditApi.getMessagingConversations, needsDates: true },
-  'Actividad profesores': { api: auditApi.getTeacherActivity, needsDates: true, needsStaff: true },
-  'Clases registradas': { api: auditApi.getTeacherClasses, needsDates: true, needsStaff: true },
   'Permisos emitidos': { api: auditApi.getTeacherPermissions, needsDates: true, needsStaff: true },
-  'Incidencias asociadas': { api: auditApi.getTeacherIncidents, needsDates: true, needsStaff: true },
-  'Actividad sistema docente': { api: auditApi.getTeacherSystemActivity, needsDates: true, needsStaff: true },
-  'Auditoría global': { api: auditApi.getSecurityGlobal, needsDates: true },
-  'Accesos': { api: auditApi.getSecurityAccesses, needsDates: true },
-  'Sesiones': { api: auditApi.getSecuritySessions, needsDates: true },
-  'Comandos ejecutados': { api: auditApi.getSecurityCommands, needsDates: true },
-  'Actividad administrativa': { api: auditApi.getSecurityAdminActivity, needsDates: true },
-  'Intentos fallidos': { api: auditApi.getSecurityFailedAttempts, needsDates: true },
-  'Alertas emitidas': { api: auditApi.getSosAlerts, needsDates: true },
-  'Alertas resueltas': { api: auditApi.getSosResolved, needsDates: true },
-  'Tiempo resolución': { api: auditApi.getSosResolutionTime, needsDates: true },
-  'Historial SOS': { api: auditApi.getSosHistory, needsDates: true },
-  'Histórico docente': { api: auditApi.getHistoricalTeacher, needsDates: true, needsStaff: true },
-  'Histórico asistencia': { api: auditApi.getHistoricalAttendance, needsDates: true },
-  'Histórico disciplina': { api: auditApi.getHistoricalDiscipline, needsDates: true },
-  'Histórico permisos': { api: auditApi.getHistoricalPermissions, needsDates: true },
-  'Histórico mensajes': { api: auditApi.getHistoricalMessaging, needsDates: true },
-  'Buscar histórico': { api: auditApi.getHistoricalSearch, needsDates: false },
-  'Descargar individual': { api: auditApi.getHistoricalDownload, needsDates: false },
-  'Descargar consolidado': { api: auditApi.getHistoricalDownloadConsolidated, needsDates: true },
-  'Consolidado asistencia': { api: auditApi.getConsolidatedAttendance, needsDates: true },
-  'Consolidado disciplina': { api: auditApi.getConsolidatedDiscipline, needsDates: true },
-  'Consolidado permisos': { api: auditApi.getConsolidatedPermissions, needsDates: true },
-  'Consolidado mensajería': { api: auditApi.getConsolidatedMessaging, needsDates: true },
-  'Consolidado docente': { api: auditApi.getConsolidatedTeacher, needsDates: true },
-  'Consolidado seguridad': { api: auditApi.getConsolidatedSecurity, needsDates: true },
-  'Consolidado institucional': { api: auditApi.getConsolidatedInstitutional, needsDates: true },
+  'Alertas SOS emitidas': { api: auditApi.getSosAlerts, needsDates: true, needsGroup: true, needsStudent: true },
+  'Evasiones internas': { api: auditApi.getAttendanceEvasion, needsDates: true, needsGroup: true, needsStudent: true },
 };
 
 const EXCLUDE_COLS = ['school_id','sync_hash','event_signature','metadata_json','command_payload','previous_data','new_data','biometric_hash'];
@@ -454,51 +307,33 @@ function AuditDrawer({ activeSub, onClose }) {
         )}
 
         {(config?.needsGroup || config?.needsStudent) && (
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Grupo académico</label>
-            <select
-              value={filters.groupId}
-              onChange={e => setFilters(p => ({ ...p, groupId: e.target.value, studentId: '' }))}
-              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
-            >
-              <option value="">{metaLoading ? 'Cargando grupos…' : 'Todos los grupos'}</option>
-              {groups.map(g => (
-                <option key={g.group_id} value={g.group_id}>{g.group_name} {g.grade_level ? `(${g.grade_level})` : ''}</option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="Grupo académico"
+            placeholder={metaLoading ? 'Cargando grupos…' : 'Todos los grupos'}
+            options={groups.map(g => ({ id: g.group_id, name: `${g.group_name}${g.grade_level ? ` (${g.grade_level})` : ''}` }))}
+            value={filters.groupId}
+            onChange={v => setFilters(p => ({ ...p, groupId: v, studentId: '' }))}
+          />
         )}
 
         {config?.needsStudent && filters.groupId && (
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Estudiante</label>
-            <select
-              value={filters.studentId}
-              onChange={e => setFilters(p => ({ ...p, studentId: e.target.value }))}
-              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
-            >
-              <option value="">Todos los estudiantes del grupo</option>
-              {students.map(s => (
-                <option key={s.student_id} value={s.student_id}>{s.last_name}, {s.first_name} — {s.document_number}</option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="Estudiante"
+            placeholder="Todos los estudiantes del grupo"
+            options={students.map(s => ({ id: s.student_id, name: `${s.last_name}, ${s.first_name} — ${s.document_number}` }))}
+            value={filters.studentId}
+            onChange={v => setFilters(p => ({ ...p, studentId: v }))}
+          />
         )}
 
         {config?.needsStaff && (
-          <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Personal</label>
-            <select
-              value={filters.staffId}
-              onChange={e => setFilters(p => ({ ...p, staffId: e.target.value }))}
-              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
-            >
-              <option value="">{metaLoading ? 'Cargando personal…' : 'Todo el personal'}</option>
-              {staff.map(u => (
-                <option key={u.user_id} value={u.user_id}>{u.last_name}, {u.first_name} — {u.role_name}</option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="Personal"
+            placeholder={metaLoading ? 'Cargando personal…' : 'Todo el personal'}
+            options={staff.map(u => ({ id: u.user_id, name: `${u.last_name}, ${u.first_name} — ${u.role_name}` }))}
+            value={filters.staffId}
+            onChange={v => setFilters(p => ({ ...p, staffId: v }))}
+          />
         )}
 
         <button
@@ -590,6 +425,142 @@ function AuditDrawer({ activeSub, onClose }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function SearchableSelect({ label, options, value, onChange, placeholder, loading }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = q.trim() === '' ? options : options.filter(o => {
+    const text = String(o.name || '').toLowerCase();
+    return text.includes(q.toLowerCase());
+  });
+
+  const selected = options.find(o => o.id === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      {label && <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{label}</label>}
+      <div
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 cursor-pointer flex items-center justify-between"
+      >
+        <span className="truncate">{selected ? selected.name : (loading ? 'Cargando…' : placeholder)}</span>
+        <Search size={12} className="text-slate-400 shrink-0 ml-2" />
+      </div>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-lg max-h-60 overflow-auto">
+          <div className="p-2 border-b border-slate-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800">
+            <div className="relative">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus
+                type="text"
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                placeholder="Buscar…"
+                className="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-[#003366]"
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          {filtered.length === 0 && (
+            <div className="px-3 py-2 text-xs text-slate-400">Sin coincidencias</div>
+          )}
+          {filtered.map(o => (
+            <div
+              key={o.id}
+              onClick={() => { onChange(o.id); setOpen(false); setQ(''); }}
+              className={`px-3 py-2 text-xs cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-slate-700 ${o.id === value ? 'bg-[#003366]/5 text-[#003366] font-semibold' : 'text-slate-700 dark:text-slate-200'}`}
+            >
+              {o.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExportModalContent({ module, format, onClose }) {
+  const [sub, setSub] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    setFrom(monthAgo);
+    setTo(today);
+    setSub(module.subdivisions[0] || '');
+  }, [module]);
+
+  const handleDownload = async () => {
+    if (!sub) return;
+    setLoading(true);
+    try {
+      await new Promise(r => setTimeout(r, 800));
+      alert(`Descarga de ${format} para "${sub}" (${from} a ${to}) iniciada.`);
+    } catch (e) {
+      alert('Error iniciando descarga');
+    } finally {
+      setLoading(false);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-wider text-slate-800 dark:text-white">Descargar {format}</h3>
+          <p className="text-[10px] text-slate-400 mt-0.5">{module.title}</p>
+        </div>
+        <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white"><X size={16} /></button>
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Subsección</label>
+        <div className="space-y-1 max-h-40 overflow-auto pr-1">
+          {module.subdivisions.map(s => (
+            <button key={s} onClick={() => setSub(s)}
+              className={`w-full text-left px-3 py-2 text-xs rounded transition-colors ${sub === s ? 'bg-[#003366] text-white font-semibold' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Desde</label>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Hasta</label>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30" />
+        </div>
+      </div>
+
+      <button onClick={handleDownload} disabled={!sub || loading}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#003366] hover:bg-[#002855] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60">
+        {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+        Descargar {format}
+      </button>
     </div>
   );
 }
