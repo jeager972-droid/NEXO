@@ -232,7 +232,7 @@ const CookieManager = ({ onSave, onAcceptAll, onClose, initialValues }) => {
 
       <div className="cookie-manager-modal">
         <div className="cookie-manager-header">
-          <h2>Preferencias de cookies</h2>
+          <h3>Preferencias de cookies</h3>
           <button 
             onClick={onClose} 
             className="cookie-manager-close"

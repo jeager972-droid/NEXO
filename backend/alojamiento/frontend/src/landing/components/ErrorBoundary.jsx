@@ -24,7 +24,7 @@ export default class ErrorBoundary extends React.Component {
           display: 'flex', flexDirection: 'column',
           gap: '1rem', overflow: 'auto'
         }}>
-          <h2 style={{ color: '#ff5252', margin: 0 }}>⚠️ NEXO Error Boundary</h2>
+          <h3 style={{ color: '#ff5252', margin: 0 }}>⚠️ NEXO Error Boundary</h3>
           <p style={{ color: '#fff', fontSize: '1rem' }}>El sitio experimentó un error al renderizar:</p>
           <pre style={{
             background: '#111614', padding: '1rem',

@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, MeshDistortMaterial } from '@react-three/drei'
-import * as THREE from 'three'
+import { Box3, Vector3, MathUtils } from 'three'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 // BUG 1 FIX — rotación automática continua en eje Y usando Three.js clock (no GSAP)
@@ -46,9 +46,9 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
     if (!clonedScene || !outerRef.current || !innerRef.current || hasNormalized.current) return
     hasNormalized.current = true
 
-    const box = new THREE.Box3().setFromObject(clonedScene)
-    const size = new THREE.Vector3()
-    const center = new THREE.Vector3()
+    const box = new Box3().setFromObject(clonedScene)
+    const size = new Vector3()
+    const center = new Vector3()
     box.getSize(size)
     box.getCenter(center)
 
@@ -98,7 +98,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
     if (shieldRef.current?.material) {
       const time = _state.clock.getElapsedTime()
       const mat = shieldRef.current.material
-      mat.distort = THREE.MathUtils.lerp(mat.distort, 0.05, 0.08)
+      mat.distort = MathUtils.lerp(mat.distort, 0.05, 0.08)
       shieldRef.current.position.y = 0.1 + Math.sin(time * 0.3) * 0.004
       shieldRef.current.rotation.y -= delta * 0.04
       needsUpdate = true

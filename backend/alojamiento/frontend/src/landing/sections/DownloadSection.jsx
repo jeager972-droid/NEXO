@@ -281,9 +281,9 @@ export default function DownloadSection() {
             <div className="nx-eyebrow nx-reveal" style={{ justifyContent: 'center', display: 'flex' }}>
               La aplicación
             </div>
-            <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ marginBottom: '1rem' }}>
+            <h3 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ marginBottom: '1rem' }}>
               Tu panel de control institucional.
-            </h2>
+            </h3>
             <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
               Disponible para Android, iOS, Windows, Mac y Linux.
               La misma información, en tiempo real, donde estés.

@@ -214,9 +214,9 @@ export default function NodeSection() {
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
           {/* Header */}
           <div className="nx-eyebrow nx-reveal">El hardware</div>
-          <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '680px', marginBottom: '1rem' }}>
+          <h3 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '680px', marginBottom: '1rem' }}>
             Construido para durar en las condiciones reales de una institución educativa colombiana.
-          </h2>
+          </h3>
           <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '520px', marginBottom: '4rem' }}>
             No diseñado en un laboratorio ideal. Diseñado para cortes de luz, para humedad,
             para el uso diario de cientos de estudiantes — y para seguir funcionando.

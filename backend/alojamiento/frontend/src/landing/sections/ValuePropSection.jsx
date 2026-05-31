@@ -131,9 +131,9 @@ export default function ValuePropSection() {
           <div ref={eyebrowRef} className="nx-eyebrow" style={{ marginBottom: '1rem', opacity: 0 }}>
             Transformación
           </div>
-          <h2 ref={titleRef} className="nx-h2" style={{ maxWidth: '720px', marginBottom: '1rem', opacity: 0 }}>
+          <h3 ref={titleRef} className="nx-h2" style={{ maxWidth: '720px', marginBottom: '1rem', opacity: 0 }}>
             De la operación reactiva<br />a la custodia proactiva.
-          </h2>
+          </h3>
           <p ref={subtitleRef} className="nx-body" style={{ maxWidth: '580px', marginBottom: '3.5rem', opacity: 0 }}>
             Las instituciones que operan con NEXO no esperan que algo ocurra para actuar.
             Saben qué ocurre, cuándo ocurre y quién es responsable — antes de que escale.

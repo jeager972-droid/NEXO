@@ -168,13 +168,13 @@ export default function HowItWorksSection() {
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
           {/* Header */}
           <div ref={eyebrowRef} className="nx-eyebrow" style={{ opacity: 0 }}>El sistema</div>
-          <h2
+          <h3
             ref={titleRef}
             className="nx-h2"
             style={{ maxWidth: '700px', marginBottom: '1rem', opacity: 0 }}
           >
             Así opera NEXO.
-          </h2>
+          </h3>
           <p
             ref={subtitleRef}
             className="nx-body"

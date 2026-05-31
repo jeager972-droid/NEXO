@@ -193,9 +193,9 @@ export default function ContactModal({ onClose }) {
           <>
             <div style={{ marginBottom: '2rem' }}>
               <div className="nx-eyebrow" style={{ marginBottom: '0.75rem' }}>Contacto</div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--nx-white)', lineHeight: 1.2 }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--nx-white)', lineHeight: 1.2 }}>
                 Quiero que NEXO llegue a mi institución
-              </h2>
+              </h3>
             </div>
 
             <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>

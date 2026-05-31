@@ -140,13 +140,13 @@ export default function ProblemSection() {
           {/* Eyebrow removed */}
 
           {/* CAMBIO 2: Nuevo título — diagnóstico, no acusatorio */}
-          <h2
+          <h3
             ref={titleRef}
             className="nx-h2"
             style={{ maxWidth: '700px', marginBottom: '5rem' }}
           >
             Hay vacíos que el sistema educativo colombiano tiene pendiente cubrir — y que afectan a quienes más merecen protección.
-          </h2>
+          </h3>
 
           {/* 3-column problem grid */}
           <div

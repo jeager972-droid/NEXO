@@ -137,9 +137,9 @@ export default function SecuritySection() {
             {/* Left — shield + title */}
             <div className="nx-reveal">
               <div className="nx-eyebrow" style={{ marginBottom: '1rem' }}>Seguridad</div>
-              <h2 className="nx-h2" style={{ marginBottom: '1.25rem' }}>
+              <h3 className="nx-h2" style={{ marginBottom: '1.25rem' }}>
                 Los datos de tus estudiantes no son un activo de nadie más.
-              </h2>
+              </h3>
               <p className="nx-body" style={{ marginBottom: '2.5rem' }}>
                 NEXO fue diseñado desde cero con protección de datos como principio de arquitectura, no como característica adicional.
               </p>

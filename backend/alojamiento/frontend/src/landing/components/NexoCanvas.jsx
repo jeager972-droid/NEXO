@@ -1,7 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import { Suspense, useRef, useMemo, useState, useEffect, useCallback } from 'react'
-import * as THREE from 'three'
+import { SRGBColorSpace, CanvasTexture, BufferGeometry, Vector3 } from 'three'
 import NexoModel from '../core/NexoModel'
 
 // Helper function to create canvas-based textures for the user/group avatars dynamically
@@ -67,8 +67,8 @@ function createAvatarTexture(avatarType) {
     drawUser(128, 116, 0.8)
   }
 
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
   texture.needsUpdate = true
   return texture
 }
@@ -92,8 +92,8 @@ function createDotTexture() {
   ctx.arc(32, 32, 30, 0, Math.PI * 2)
   ctx.fill()
   
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
   texture.needsUpdate = true
   return texture
 }
@@ -199,12 +199,12 @@ function InstitutionalNetwork({ onHoverChange }) {
         )
         // Draw connection if close enough
         if (dist < 3.8) {
-          points.push(new THREE.Vector3(...p1))
-          points.push(new THREE.Vector3(...p2))
+          points.push(new Vector3(...p1))
+          points.push(new Vector3(...p2))
         }
       }
     }
-    return new THREE.BufferGeometry().setFromPoints(points)
+    return new BufferGeometry().setFromPoints(points)
   }, [])
 
   useFrame((state) => {

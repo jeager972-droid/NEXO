@@ -166,9 +166,9 @@ export default function RolesSection() {
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
           {/* Header */}
           <div className="nx-eyebrow nx-reveal">Por rol</div>
-          <h2 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '700px', marginBottom: '1rem' }}>
+          <h3 className="nx-h2 nx-reveal nx-reveal-delay-1" style={{ maxWidth: '700px', marginBottom: '1rem' }}>
             NEXO opera diferente para cada rol.
-          </h2>
+          </h3>
           <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '500px', marginBottom: '3.5rem' }}>
             Pero todos ven lo mismo: control total.
           </p>

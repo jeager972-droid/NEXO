@@ -1,5 +1,5 @@
 // LandingPage — orchestrates all 10 modules of the NEXO world-class landing
-import { useEffect } from 'react'
+import React, { useEffect, Suspense, lazy } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Navbar            from './components/Navbar'
@@ -19,6 +19,9 @@ import { useCookieConsent } from './hooks/useCookieConsent'
 import CookieBanner from './components/CookieBanner'
 import CookieManager from './components/CookieManager'
 import CookieFloatingButton from './components/CookieFloatingButton'
+
+// Lazy load heavy components
+const NexoCanvas = lazy(() => import('./components/NexoCanvas'))
 
 gsap.registerPlugin(ScrollTrigger) // SINGLE registration point for the entire app
 

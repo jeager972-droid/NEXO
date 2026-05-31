@@ -125,7 +125,7 @@ export default function FinalCTASection() {
             </div>
 
             {/* Título — materialización carácter a carácter */}
-            <h2
+            <h3
               ref={titleRef}
               style={{
                 fontSize:      'clamp(1.6rem, 3.2vw, 2.4rem)',
@@ -141,7 +141,7 @@ export default function FinalCTASection() {
               aria-label="El próximo semestre puede empezar diferente."
             >
               El próximo semestre puede empezar<br />diferente.
-            </h2>
+            </h3>
 
             {/* Subtítulo */}
             <p

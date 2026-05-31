@@ -129,7 +129,7 @@ export default function HeroSection() {
               </div>
 
               {/* H1 — dos líneas semánticas para el stagger */}
-              <h1
+              <h2
                 className="nx-h1"
                 style={{ marginBottom: '1.75rem', overflow: 'visible' }}
               >
@@ -141,7 +141,7 @@ export default function HeroSection() {
                 <span ref={line2Ref} style={{ display: 'block', opacity: 0, shortcut: 'none', willChange: 'transform, opacity' }}>
                   ya no puede ser un punto ciego.
                 </span>
-              </h1>
+              </h2>
 
               {/* Subtítulo */}
               <p ref={subtitleRef} className="nx-body" style={{ maxWidth: '500px', marginBottom: '2.5rem', opacity: 0 }}>
