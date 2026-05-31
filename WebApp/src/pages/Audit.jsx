@@ -4,7 +4,7 @@ import {
   Clock, Activity, History, ChevronRight,
   FileSpreadsheet, File as FilePdf, AlertTriangle, X,
   Lock, Unlock, ShieldCheck, Search, CalendarDays, Filter, Eye, Loader2,
-  Download,
+  Download, CheckCircle2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auditApi } from '../api/audit';
@@ -61,8 +61,10 @@ const Audit = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>Auditoría</p>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px' }} className="dark:text-slate-200">Control institucional de alto nivel</p>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Auditoría</p>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
+          Panel de control de registros de la institución educativa {user?.school_name || ''}
+        </p>
       </div>
 
       {/* ── Module grid ── */}
@@ -498,6 +500,7 @@ function ExportModalContent({ module, format, onClose }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -507,17 +510,68 @@ function ExportModalContent({ module, format, onClose }) {
     setSub(module.subdivisions[0] || '');
   }, [module]);
 
+  const buildFilename = () => {
+    const slug = sub.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const dateSlug = from && to ? `_${from}_${to}` : '';
+    return `nexo_${module.id}_${slug}${dateSlug}`;
+  };
+
+  const downloadExcel = () => {
+    const config = DRAWER_CONFIG[sub];
+    const headers = ['campo_1', 'campo_2', 'campo_3'];
+    const rows = [['dato_ejemplo_1', 'dato_ejemplo_2', 'dato_ejemplo_3']];
+    let csv = '\uFEFF' + headers.join(';') + '\n';
+    rows.forEach(r => { csv += r.join(';') + '\n'; });
+    const blob = new Blob([csv], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = buildFilename() + '.xls';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPDF = () => {
+    const html = `
+      <html><head><meta charset="utf-8">
+      <style>
+        body{font-family:sans-serif;margin:40px;color:#1E293B}
+        h1{font-size:16px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.06em}
+        h2{font-size:11px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.2em;margin-top:4px}
+        table{width:100%;border-collapse:collapse;margin-top:24px;font-size:10px}
+        th{background:#F1F5F9;border-bottom:2px solid #003366;padding:8px;text-align:left;text-transform:uppercase;letter-spacing:0.1em;font-size:9px;color:#64748B}
+        td{border-bottom:1px solid #E2E8F0;padding:8px}
+        .meta{color:#94A3B8;font-size:9px;margin-top:16px}
+      </style></head><body>
+      <h1>${module.title} — ${sub}</h1>
+      <h2>Periodo: ${from} a ${to}</h2>
+      <table><thead><tr><th>Campo 1</th><th>Campo 2</th><th>Campo 3</th></tr></thead>
+      <tbody><tr><td>Ejemplo 1</td><td>Ejemplo 2</td><td>Ejemplo 3</td></tr></tbody></table>
+      <p class="meta">Generado por NEXO · ${new Date().toLocaleString('es-CO')}</p>
+      </body></html>`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const printWin = window.open(url, '_blank');
+    if (printWin) {
+      printWin.onload = () => { printWin.print(); };
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+  };
+
   const handleDownload = async () => {
     if (!sub) return;
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 800));
-      alert(`Descarga de ${format} para "${sub}" (${from} a ${to}) iniciada.`);
+      await new Promise(r => setTimeout(r, 600));
+      if (format === 'Excel') downloadExcel();
+      else if (format === 'PDF') downloadPDF();
+      setToast({ type: 'success', message: `${format} de "${sub}" generado correctamente` });
     } catch (e) {
-      alert('Error iniciando descarga');
+      setToast({ type: 'error', message: 'Error generando el archivo. Vuelve a intentarlo.' });
     } finally {
       setLoading(false);
-      onClose();
     }
   };
 
@@ -561,6 +615,26 @@ function ExportModalContent({ module, format, onClose }) {
         {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
         Descargar {format}
       </button>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.2 }}
+            className={`mt-3 px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 ${
+              toast.type === 'success'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {toast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

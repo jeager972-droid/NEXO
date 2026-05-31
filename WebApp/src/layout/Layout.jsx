@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from './Sidebar';
-import { Menu, Bell } from 'lucide-react';
+import { Menu, Bell, LogOut, User, Settings, ChevronDown } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { getRoleDisplay } from '../config/roles';
@@ -23,14 +23,24 @@ const Divider = () => (
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { user }              = useAuth();
-  const { darkMode }          = useTheme();
-  const navigate              = useNavigate();
-  const location              = useLocation();
+  const [profileOpen, setProfileOpen]     = useState(false);
+  const { user, logout }                  = useAuth();
+  const { darkMode }                      = useTheme();
+  const navigate                          = useNavigate();
+  const location                          = useLocation();
+  const profileRef                        = useRef(null);
 
   const toggleSidebar = () => setIsSidebarOpen(v => !v);
   const roleDisplay   = getRoleDisplay(user?.role);
   const initial       = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const headerBg     = darkMode ? 'rgba(2,6,23,0.90)'      : 'rgba(250,250,249,0.90)';
   const headerBorder = darkMode ? 'rgba(30,41,59,0.8)'     : 'rgba(226,232,240,0.85)';
@@ -70,15 +80,15 @@ const Layout = () => {
             <div className="min-w-0">
               <p
                 className="font-black uppercase truncate leading-none"
-                style={{ fontSize: '13px', letterSpacing: '-0.01em', color: darkMode ? '#F1F5F9' : '#003366' }}
+                style={{ fontSize: '11px', letterSpacing: '0.02em', color: darkMode ? '#F1F5F9' : '#003366' }}
               >
                 {user?.school_name ?? 'Sistema NEXO'}
               </p>
               <p
-                className="mt-0.5 leading-none select-none truncate"
-                style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.22em', color: '#94A3B8', textTransform: 'uppercase' }}
+                className="mt-1 leading-none select-none truncate"
+                style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.22em', color: '#00A67E', textTransform: 'uppercase' }}
               >
-                Infraestructura Biométrica Nacional
+                {roleDisplay}
               </p>
             </div>
           </div>
@@ -114,27 +124,66 @@ const Layout = () => {
             <Divider />
 
             {/* User identity */}
-            <div className="flex items-center gap-2.5">
-              <div className="hidden sm:block text-right">
-                <p
-                  className="font-bold leading-none truncate max-w-[120px]"
-                  style={{ fontSize: '12px', color: darkMode ? '#F1F5F9' : '#1E293B' }}
-                >
-                  {user?.nombre}
-                </p>
-                <p
-                  className="mt-0.5 leading-none select-none"
-                  style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#00A67E', textTransform: 'uppercase' }}
-                >
-                  {roleDisplay}
-                </p>
-              </div>
-              <div
-                className="flex items-center justify-center w-8 h-8 shrink-0 text-xs font-black text-white"
-                style={{ backgroundColor: '#003366' }}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setProfileOpen(v => !v)}
+                className="flex items-center gap-2.5 focus:outline-none"
               >
-                {initial}
-              </div>
+                <div className="hidden sm:block text-right">
+                  <p
+                    className="font-bold leading-none truncate max-w-[120px]"
+                    style={{ fontSize: '12px', color: darkMode ? '#F1F5F9' : '#1E293B' }}
+                  >
+                    {user?.nombre}
+                  </p>
+                  <p
+                    className="mt-0.5 leading-none select-none"
+                    style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#94A3B8', textTransform: 'uppercase' }}
+                  >
+                    {roleDisplay}
+                  </p>
+                </div>
+                <div
+                  className="flex items-center justify-center w-8 h-8 shrink-0 text-xs font-black text-white overflow-hidden"
+                  style={{ backgroundColor: '#003366' }}
+                >
+                  {user?.profile_photo_url ? (
+                    <img src={user.profile_photo_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    initial
+                  )}
+                </div>
+                <ChevronDown size={12} className="text-slate-400 hidden sm:block" />
+              </button>
+
+              {/* Profile dropdown */}
+              <AnimatePresence>
+                {profileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden z-50"
+                  >
+                    <button
+                      onClick={() => { setProfileOpen(false); navigate('/perfil'); }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Settings size={14} strokeWidth={2} />
+                      Editar perfil
+                    </button>
+                    <div className="border-t border-slate-100 dark:border-slate-800" />
+                    <button
+                      onClick={() => { setProfileOpen(false); logout(); }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      <LogOut size={14} strokeWidth={2} />
+                      Cerrar sesión
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
@@ -162,7 +211,7 @@ const Layout = () => {
           style={{ borderTop: `1.5px solid ${footerBorder}`, backgroundColor: footerBg }}
         >
           <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase', userSelect: 'none' }}>
-            NEXO · v2.0 SRE · Infraestructura Crítica Nacional
+            NEXO · Sistema de custodia estudiantil en tiempo real
           </p>
           <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase', userSelect: 'none' }}>
             © {new Date().getFullYear()} · Uso Restringido

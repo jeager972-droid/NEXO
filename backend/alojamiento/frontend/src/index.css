@@ -579,7 +579,7 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
 }
 .section-wrapper--tall {
-  height: 150vh;
+  height: 180vh;
 }
 .section-inner {
   position: sticky;

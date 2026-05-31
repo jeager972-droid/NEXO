@@ -1,15 +1,13 @@
 import { useRef, useState, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useStickyScroll } from '../components/useStickyScroll'
 import NexoCanvas from '../components/NexoCanvas'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 06 — THE NODE
-// Left: large interactive 3D model with hotspot overlay
-// Right: spec list synced to hotspot clicks
-// CAMBIO 6: Sticky scroll, zoom del modelo (1.12 -> 1.0) y hotspots stagger (0.18s)
+// Center: large interactive 3D model with hotspot overlay
+// Below: spec list synced to hotspot clicks
 
 const SPECS = [
   {
@@ -17,24 +15,28 @@ const SPECS = [
     label: 'Con materiales pensados para la durabilidad',
     meaning: 'Carcasa en acero inoxidable con certificación IP66. Resiste golpes, polvo y salpicaduras. Su capa protectora anti-rayones mantiene la apariencia intacta tras años de uso diario por cientos de estudiantes.',
     hotspotPos: { top: '20%', left: '28%' },
+    hotspotPosMobile: { top: '10%', left: '12%' },
   },
   {
     id: 'battery',
     label: 'Con autonomía de batería',
     meaning: 'Hasta 12 horas de operación continua ante cortes de energía. El flujo de registro y alertas no se detiene, incluso en las peores condiciones.',
     hotspotPos: { top: '45%', left: '14%' },
+    hotspotPosMobile: { top: '40%', left: '4%' },
   },
   {
     id: 'sim',
     label: 'Conectividad propia',
     meaning: 'Protocolo de comunicación M2M con SIM Card independiente. No requiere la red de la institución para operar ni transmitir datos.',
     hotspotPos: { top: '68%', left: '26%' },
+    hotspotPosMobile: { top: '75%', left: '10%' },
   },
   {
     id: 'encrypt',
     label: 'Encriptado de extremo a extremo',
     meaning: 'Los datos biométricos viajan y se almacenan con encriptación completa en cada capa del sistema.',
     hotspotPos: { top: '30%', right: '18%' },
+    hotspotPosMobile: { top: '15%', right: '6%' },
   },
 ]
 
@@ -44,10 +46,14 @@ function Hotspot({ spec, isActive, onClick, isMobile }) {
     onClick(spec.id)
   }
 
+  const pos = isMobile && spec.hotspotPosMobile ? spec.hotspotPosMobile : spec.hotspotPos
+  const mobileGreen = '#6eb872'
+  const dotSize = isMobile ? '14px' : '12px'
+
   return (
     <div
       className="nx-hotspot"
-      style={{ position: 'absolute', ...spec.hotspotPos, zIndex: 10 }}
+      style={{ position: 'absolute', ...pos, zIndex: 10 }}
       onPointerUp={handlePointerUp}
       onKeyDown={e => e.key === 'Enter' && onClick(spec.id)}
       role="button"
@@ -55,12 +61,18 @@ function Hotspot({ spec, isActive, onClick, isMobile }) {
       aria-label={`Ver detalle: ${spec.label}`}
       aria-pressed={isActive}
     >
-      <div className="nx-hotspot__ring" />
+      <div
+        className="nx-hotspot__ring"
+        style={{
+          background: isMobile ? mobileGreen : undefined,
+        }}
+      />
       <div
         className="nx-hotspot__dot"
         style={{
-          width: isMobile ? '18px' : '12px',
-          height: isMobile ? '18px' : '12px',
+          width: dotSize,
+          height: dotSize,
+          background: isMobile ? mobileGreen : undefined,
           transform: isActive ? 'scale(1.5)' : 'scale(1)',
           boxShadow: isActive ? '0 0 0 5px rgba(45, 110, 48, 0.25)' : 'none',
           transition: 'transform 0.2s var(--nx-ease), box-shadow 0.2s',
@@ -146,9 +158,6 @@ export default function NodeSection() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Aplicar arquitectura sticky scroll
-  useStickyScroll(wrapperRef, innerRef)
-
   useEffect(() => {
     const wrapper = wrapperRef.current
     const inner = innerRef.current
@@ -198,17 +207,22 @@ export default function NodeSection() {
   const toggle = (id) => setActive(prev => prev === id ? null : id)
 
   return (
-    <div ref={wrapperRef} className="section-wrapper section-wrapper--tall" id="el-nodo">
+    <div ref={wrapperRef} className="section-wrapper" id="el-nodo" style={{ height: 'auto', minHeight: '150vh' }}>
       <section
         ref={innerRef}
         className="section-inner"
         style={{
           background: 'linear-gradient(180deg, var(--nx-surface) 0%, var(--nx-deep) 100%)',
-          overflow:   isMobile ? 'visible' : 'hidden',
+          overflow:   'visible',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
+          paddingTop: '5rem',
+          paddingBottom: '5rem',
           display: 'flex',
           alignItems: 'center',
+          height: 'auto',
+          minHeight: '100vh',
+          position: 'relative',
         }}
       >
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
@@ -317,16 +331,12 @@ export default function NodeSection() {
           #el-nodo .nx-node-canvas-wrap {
             border-radius: 1rem !important;
             overflow: visible !important;
+            width: 75% !important;
+            margin: 0 auto !important;
           }
           #el-nodo .nx-hotspot {
             display: block !important;
-            width: 28px !important;
-            height: 28px !important;
             touch-action: manipulation;
-          }
-          #el-nodo .nx-hotspot__ring {
-            width: 18px !important;
-            height: 18px !important;
           }
           #el-nodo .nx-cursor-hint-desktop { display: none !important; }
           #el-nodo .nx-node-panel {

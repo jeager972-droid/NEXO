@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ContactModal from '../components/ContactModal'
+import { Link } from 'react-router-dom'
 import { useStickyScroll } from '../components/useStickyScroll'
 // NOTE: gsap.registerPlugin called once globally in LandingPage.jsx
 
@@ -178,6 +179,31 @@ export default function HeroSection() {
                 </div>
               )}
 
+              {/* Mobile link below logo */}
+              {isMobile && (
+                <Link
+                  to="/dashboard"
+                  className="nx-hero-dashboard-link"
+                  style={{
+                    fontSize: '0.8rem',
+                    color: 'var(--nx-green)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    marginBottom: '1.25rem',
+                    alignSelf: 'flex-start',
+                  }}
+                >
+                  ¿Quién construyó NEXO?
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </Link>
+              )}
+
               {/* CTAs */}
               <div ref={ctaRef} style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
                 {/* CAMBIO 5: Nuevo CTA — abre modal */}
@@ -211,7 +237,7 @@ export default function HeroSection() {
                 className="nx-hero-canvas"
                 aria-label="Logo NEXO"
                 style={{
-                  height:       '440px',
+                  height:       '560px',
                   position:     'relative',
                   opacity:       0,
                   willChange:   'transform, opacity',
@@ -230,6 +256,31 @@ export default function HeroSection() {
                     filter: 'drop-shadow(0 20px 40px rgba(45,110,48,0.15))',
                   }}
                 />
+                {/* Desktop link below logo */}
+                <Link
+                  to="/dashboard"
+                  className="nx-hero-dashboard-link"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-2.5rem',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontSize: '0.8rem',
+                    color: 'var(--nx-green)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    transition: 'opacity 0.2s',
+                  }}
+                >
+                  ¿Quién construyó NEXO?
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </Link>
               </div>
             )}
           </div>

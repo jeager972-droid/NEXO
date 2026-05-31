@@ -358,6 +358,7 @@ if (!function_exists('requireAuth')) {
 
             $stmt = $conn->prepare("
                 SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
+                       u.profile_photo_url, u.work_shift,
                        r.role_name, s.school_id, s.school_name
                 FROM users u
                 INNER JOIN roles r ON u.role_id = r.role_id
@@ -390,6 +391,8 @@ if (!function_exists('requireAuth')) {
                 'role' => $normalizedRole,
                 'school_id' => $user['school_id'],
                 'school_name' => $user['school_name'],
+                'profile_photo_url' => $user['profile_photo_url'] ?? null,
+                'work_shift' => $user['work_shift'] ?? null,
                 'claims' => $claims
             ];
         } catch (Exception $e) {
