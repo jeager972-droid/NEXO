@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
+import { useStickyScroll } from '../components/useStickyScroll'
 import NexoCanvas from '../components/NexoCanvas'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -150,6 +151,9 @@ export default function NodeSection() {
   const [canvasScale, setCanvasScale] = useState(1.12)
   const [isMobile, setIsMobile] = useState(false)
   useReveal(innerRef)
+
+  // Scroll-triggered entrance / exit animations (preserves auto-height, no sticky)
+  useStickyScroll(wrapperRef, innerRef)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768)
