@@ -264,47 +264,7 @@ const Audit = () => {
                   <X size={18} strokeWidth={2} />
                 </button>
               </div>
-              <div className="flex-1 flex flex-col p-0 overflow-hidden">
-                {activeSub === 'Auditoría global' ? (
-                  <div className="flex-1 overflow-auto p-6">
-                    {auditLoading && <p className="text-xs text-slate-400">Cargando logs…</p>}
-                    {auditError && <p className="text-xs text-red-400">Error: {auditError}</p>}
-                    {!auditLoading && logs.length === 0 && (
-                      <div className="flex flex-col items-center justify-center h-full gap-4">
-                        <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
-                        <p className="text-xs text-slate-400">No hay registros de auditoría.</p>
-                      </div>
-                    )}
-                    <div className="space-y-2">
-                      {logs.map((entry) => (
-                        <div key={entry.audit_id} className="p-3 rounded" style={{ backgroundColor: '#070D1B', border: '1px solid #1E293B' }}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#00A67E' }}>{entry.event_type}</span>
-                            <span className="text-[10px]" style={{ color: '#64748B' }}>{new Date(entry.created_at).toLocaleString('es-CO')}</span>
-                          </div>
-                          <p className="text-[11px] mb-1" style={{ color: '#CBD5E1' }}>{entry.description}</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px]" style={{ color: '#64748B' }}>{entry.actor_name || '—'}</span>
-                            <span className="text-[10px]" style={{ color: '#334155' }}>• {entry.ip_address}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
-                    <div className="flex items-center justify-center w-14 h-14" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>
-                      <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
-                    </div>
-                    <div className="text-center space-y-1">
-                      <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
-                      <p style={{ fontSize: '11px', color: '#CBD5E1', maxWidth: '280px', lineHeight: 1.5 }}>
-                        Este submódulo aún no tiene un endpoint dedicado. Consulta <strong>Auditoría global</strong> para ver todos los registros.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <AuditDrawer activeSub={activeSub} onClose={() => setActiveSub(null)} />
             </motion.div>
           </>
         )}
@@ -312,5 +272,158 @@ const Audit = () => {
     </div>
   );
 };
+
+/* ── Sub-module Drawer (generic data loader) ── */
+const SUB_API_MAP = {
+  'Reporte general': auditApi.getAttendanceGeneral,
+  'Inasistencias': auditApi.getAttendanceAbsences,
+  'Llegadas tarde': auditApi.getAttendanceLates,
+  'Evasión interna': auditApi.getAttendanceEvasion,
+  'Por grupo': auditApi.getAttendanceByGroup,
+  'Por estudiante': auditApi.getAttendanceByStudent,
+  'Incidentes': auditApi.getDisciplineIncidents,
+  'Vulneraciones': auditApi.getDisciplineViolations,
+  'Intentos salón incorrecto': auditApi.getDisciplineWrongClassroom,
+  'Spam biométrico': auditApi.getDisciplineBiometricSpam,
+  'Reporte disciplinario': auditApi.getDisciplineReports,
+  'Historial estudiante': auditApi.getDisciplineStudentHistory,
+  'Salidas clase': auditApi.getPermissionsClassExits,
+  'Salidas colegio': auditApi.getPermissionsSchoolExits,
+  'Salidas pedagógicas': auditApi.getPermissionsPedagogical,
+  'Retornos pendientes': auditApi.getPermissionsPendingReturns,
+  'Historial permisos': auditApi.getPermissionsHistory,
+  'WhatsApp enviados': auditApi.getMessagingWhatsAppSent,
+  'Respuestas acudientes': auditApi.getMessagingGuardianReplies,
+  'Mensajes fallidos': auditApi.getMessagingFailed,
+  'Citaciones': auditApi.getMessagingCitations,
+  'Mensajería interna': auditApi.getMessagingInternal,
+  'Historial conversaciones': auditApi.getMessagingConversations,
+  'Actividad profesores': auditApi.getTeacherActivity,
+  'Clases registradas': auditApi.getTeacherClasses,
+  'Permisos emitidos': auditApi.getTeacherPermissions,
+  'Incidencias asociadas': auditApi.getTeacherIncidents,
+  'Actividad sistema docente': auditApi.getTeacherSystemActivity,
+  'Auditoría global': auditApi.getSecurityGlobal,
+  'Accesos': auditApi.getSecurityAccesses,
+  'Sesiones': auditApi.getSecuritySessions,
+  'Comandos ejecutados': auditApi.getSecurityCommands,
+  'Actividad administrativa': auditApi.getSecurityAdminActivity,
+  'Intentos fallidos': auditApi.getSecurityFailedAttempts,
+  'Alertas emitidas': auditApi.getSosAlerts,
+  'Alertas resueltas': auditApi.getSosResolved,
+  'Tiempo resolución': auditApi.getSosResolutionTime,
+  'Historial SOS': auditApi.getSosHistory,
+  'Histórico estudiante': auditApi.getHistoricalStudent,
+  'Histórico docente': auditApi.getHistoricalTeacher,
+  'Histórico asistencia': auditApi.getHistoricalAttendance,
+  'Histórico disciplina': auditApi.getHistoricalDiscipline,
+  'Histórico permisos': auditApi.getHistoricalPermissions,
+  'Histórico mensajes': auditApi.getHistoricalMessaging,
+  'Buscar histórico': auditApi.getHistoricalSearch,
+  'Descargar individual': auditApi.getHistoricalDownload,
+  'Descargar consolidado': auditApi.getHistoricalDownloadConsolidated,
+  'Consolidado asistencia': auditApi.getConsolidatedAttendance,
+  'Consolidado disciplina': auditApi.getConsolidatedDiscipline,
+  'Consolidado permisos': auditApi.getConsolidatedPermissions,
+  'Consolidado mensajería': auditApi.getConsolidatedMessaging,
+  'Consolidado docente': auditApi.getConsolidatedTeacher,
+  'Consolidado seguridad': auditApi.getConsolidatedSecurity,
+  'Consolidado institucional': auditApi.getConsolidatedInstitutional,
+};
+
+function AuditDrawer({ activeSub }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!activeSub) return;
+    const fn = SUB_API_MAP[activeSub];
+    if (!fn) { setData(null); setError('Submódulo no mapeado'); return; }
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // algunos endpoints necesitan parámetros; para simplificar, pasamos string vacío / fechas por defecto
+        let res;
+        if (activeSub === 'Por estudiante') res = await fn('');
+        else if (activeSub === 'Historial estudiante') res = await fn('');
+        else if (activeSub === 'Histórico docente') res = await fn('');
+        else if (activeSub === 'Buscar histórico') res = await fn('');
+        else if (activeSub === 'Descargar individual') res = await fn('student', '');
+        else if (activeSub.includes('Histórico') || activeSub.includes('Consolidado') || activeSub === 'Historial permisos') {
+          const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+          const to = new Date().toISOString().slice(0, 10);
+          res = await fn(from, to);
+        } else {
+          res = await fn();
+        }
+        setData(res);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [activeSub]);
+
+  const rows = data?.data ?? data?.summary ?? (Array.isArray(data) ? data : []);
+  const stats = data?.stats ?? null;
+
+  return (
+    <div className="flex-1 flex flex-col p-0 overflow-hidden">
+      {loading && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E', animation: 'spin 1s linear infinite' }} />
+          <p className="text-xs text-slate-400">Cargando datos…</p>
+        </div>
+      )}
+      {error && !loading && (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
+          <AlertTriangle size={24} strokeWidth={1.5} style={{ color: '#DC2626' }} />
+          <p className="text-xs text-red-400">{error}</p>
+        </div>
+      )}
+      {!loading && !error && rows.length === 0 && !stats && (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
+          <div className="flex items-center justify-center w-14 h-14" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>
+            <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
+          </div>
+          <div className="text-center space-y-1">
+            <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos</p>
+            <p style={{ fontSize: '11px', color: '#CBD5E1', maxWidth: '280px', lineHeight: 1.5 }}>
+              No se encontraron registros para este submódulo en el periodo consultado.
+            </p>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 overflow-auto p-6">
+        {stats && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {Object.entries(stats).map(([k, v]) => (
+              <div key={k} className="p-2 rounded" style={{ backgroundColor: '#070D1B', border: '1px solid #1E293B' }}>
+                <p className="text-[9px] uppercase tracking-wider" style={{ color: '#64748B' }}>{k}</p>
+                <p className="text-sm font-bold" style={{ color: '#00A67E' }}>{v}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="space-y-2">
+          {rows.map((row, idx) => (
+            <div key={idx} className="p-3 rounded" style={{ backgroundColor: '#070D1B', border: '1px solid #1E293B' }}>
+              {Object.entries(row).map(([k, v]) => (
+                <div key={k} className="flex justify-between text-[11px]" style={{ color: '#CBD5E1' }}>
+                  <span className="capitalize" style={{ color: '#64748B' }}>{k.replace(/_/g, ' ')}</span>
+                  <span className="truncate max-w-[200px] text-right">{v === null ? '—' : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v).slice(0, 60)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default Audit;
