@@ -24,6 +24,7 @@ const InstallPage = lazy(() => import('./pages/InstallPage'))
 const Profile = lazy(() => import('./pages/Profile'))
 
 function App() {
+  // NEXO v2.0 — deploy forced
   const { user } = useAuth()
   const navigate = useNavigate()
 
