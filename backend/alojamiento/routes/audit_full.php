@@ -1089,3 +1089,50 @@ if ($cleanPath === '/audit/consolidated/institutional' && $method === 'GET') {
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
 
+
+// ============================================================================
+// A. METADATA AUXILIAR (grupos, estudiantes, personal)
+// ============================================================================
+
+if ($cleanPath === '/audit/groups' && $method === 'GET') {
+    try {
+        $stmt = $conn->prepare("
+            SELECT group_id, group_name, grade_level, academic_year
+            FROM academic_groups
+            WHERE school_id = ?
+            ORDER BY grade_level, group_name
+        ");
+        $stmt->execute([$schoolId]);
+        auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if (preg_match('#^/audit/groups/([^/]+)/students$#', $cleanPath, $m) && $method === 'GET') {
+    try {
+        $groupId = $m[1];
+        $stmt = $conn->prepare("
+            SELECT s.student_id, s.first_name, s.last_name, s.document_number
+            FROM students s
+            INNER JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            WHERE s.school_id = ? AND sga.group_id = ? AND s.active = TRUE
+            ORDER BY s.last_name, s.first_name
+        ");
+        $stmt->execute([$schoolId, $groupId]);
+        auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}
+
+if ($cleanPath === '/audit/staff' && $method === 'GET') {
+    try {
+        $stmt = $conn->prepare("
+            SELECT u.user_id, u.first_name, u.last_name, u.email, r.role_name
+            FROM users u
+            LEFT JOIN roles r ON u.role_id = r.role_id
+            WHERE u.school_id = ? AND u.active = TRUE
+              AND r.role_name NOT IN ('STUDENT','ESTUDIANTE')
+            ORDER BY u.last_name, u.first_name
+        ");
+        $stmt->execute([$schoolId]);
+        auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) { auditError($e->getMessage()); }
+}

@@ -1,14 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import {
   FileText, Users, ShieldAlert, MessageSquare,
   Clock, Activity, History, ChevronRight,
   FileSpreadsheet, File as FilePdf, AlertTriangle, X,
-  Lock, Unlock, ShieldCheck,
+  Lock, Unlock, ShieldCheck, Search, CalendarDays, Filter, Eye, Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auditApi } from '../api/audit';
+import { AuthContext } from '../context/AuthContext';
+
+const ADMIN_ROLES = ['RECTOR', 'COORDINADOR', 'SUPER_RECTOR'];
 
 const Audit = () => {
+  const { user } = useContext(AuthContext);
+  const isAdmin = ADMIN_ROLES.includes(user?.role_name || user?.role);
+
   const [activeSub, setActiveSub] = useState(null);
   const [logs, setLogs] = useState([]);
   const [integrity, setIntegrity] = useState(null);
@@ -20,14 +26,14 @@ const Audit = () => {
       id: 'asistencia',
       title: 'Asistencia',
       icon: Users,
-      subdivisions: ['Reporte general', 'Inasistencias', 'Llegadas tarde', 'Evasión interna', 'Por grupo', 'Por estudiante'],
+      subdivisions: ['Reporte general', 'Inasistencias', 'Llegadas tarde', 'Evasión interna'],
       exports: ['Excel', 'PDF']
     },
     {
       id: 'disciplina',
       title: 'Disciplina',
       icon: ShieldAlert,
-      subdivisions: ['Incidentes', 'Vulneraciones', 'Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario', 'Historial estudiante'],
+      subdivisions: ['Incidentes', 'Vulneraciones', 'Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario'],
       exports: ['Excel', 'PDF']
     },
     {
@@ -113,12 +119,16 @@ const Audit = () => {
         <div className="flex items-center justify-between mb-3">
           <div>
             <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase' }}>Audit Chain</p>
-            <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366' }} className="dark:text-slate-200">Log de seguridad criptográfico</p>
+            <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366' }} className="dark:text-slate-200">
+              {isAdmin ? 'Registro de actividad institucional' : 'Log de seguridad criptográfico'}
+            </p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <ShieldCheck size={14} strokeWidth={2} style={{ color: '#00A67E' }} />
-            <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#00A67E', textTransform: 'uppercase' }}>SHA-256</span>
-          </div>
+          {!isAdmin && (
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck size={14} strokeWidth={2} style={{ color: '#00A67E' }} />
+              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#00A67E', textTransform: 'uppercase' }}>SHA-256</span>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>

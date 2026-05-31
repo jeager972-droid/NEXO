@@ -10,6 +10,11 @@ export const auditApi = {
   getGlobalLogs: () => get('/audit/global'),
   getIntegrity: () => get('/audit/integrity'),
 
+  // Auxiliares
+  getGroups: () => get('/audit/groups'),
+  getGroupStudents: (groupId) => get(`/audit/groups/${groupId}/students`),
+  getStaff: () => get('/audit/staff'),
+
   // 1. Asistencia
   getAttendanceGeneral: () => get('/audit/attendance/general'),
   getAttendanceAbsences: () => get('/audit/attendance/absences'),

@@ -240,7 +240,6 @@ export default function HowItWorksSection() {
                 right: 'calc(1.25rem + 20px)',
                 height: '2px',
                 background: 'var(--nx-border)',
-                zIndex: -1,
               }}
               aria-hidden="true"
             />
@@ -256,7 +255,6 @@ export default function HowItWorksSection() {
                 width: 'calc(100% - 2.5rem - 40px)',
                 height: '2px',
                 pointerEvents: 'none',
-                zIndex: -1,
               }}
               aria-hidden="true"
             >
