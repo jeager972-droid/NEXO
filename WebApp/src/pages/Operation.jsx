@@ -4,10 +4,12 @@ import {
   AlertOctagon, ShieldCheck, ShieldAlert,
   MapPin, Clock, Bus, Calendar,
   Wrench, Send, X, UserCheck, ChevronRight,
+  CheckCircle2, Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
+import { usersApi } from '../api/users';
 import { ROLES } from '../config/roles';
 
 const Operation = () => {
@@ -247,13 +249,16 @@ const FormField = ({ label, children }) => (
 // ── Command Drawer ────────────────────────────────────────────────────────────
 
 const CommandDrawer = ({ command, onClose, groups, students }) => {
+  const { user } = useAuth();
   const [step, setStep]               = useState(command.warning ? 'warning' : 'form');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
   const [formData, setFormData]         = useState({
     group: '', student: '', date: '', time: '', timeStart: '', timeEnd: '',
-    location: '', message: '', reason: '', targetRole: '', description: '', targets: [],
+    location: '', message: '', reason: '', targetRole: '', targetUser: '', description: '', targets: [],
   });
+  const [targetUsers, setTargetUsers]   = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const roles = Object.values(ROLES);
   const incidentTargets = [
@@ -262,22 +267,39 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
     { id: 'padre',        label: 'Padre de Familia' },
   ];
 
+  const fetchTargetUsers = async (role) => {
+    if (!role) { setTargetUsers([]); return; }
+    setLoadingUsers(true);
+    try {
+      const res = await usersApi.getByRole(role, true);
+      setTargetUsers(res.data || []);
+    } catch (e) {
+      setTargetUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setSubmitStatus({ type: '', message: '' });
     try {
+      const payload = { ...formData };
+      if (command.id === 'solicitud' && formData.targetUser) {
+        payload.recipient_id = formData.targetUser;
+      }
       switch (command.id) {
-        case 'sos':         await operationsApi.sos(formData);                                         break;
-        case 'inasistencia':await operationsApi.inasistencia(formData);                                break;
-        case 'citar':       await operationsApi.citacion(formData);                                    break;
-        case 'autorizar':   await operationsApi.salida(formData);                                      break;
-        case 'permiso':     await operationsApi.permiso(formData);                                     break;
-        case 'solicitud':   await operationsApi.execute('solicitud',  formData, '/operations/solicitud');  break;
-        case 'daño':        await operationsApi.execute('daño',       formData, '/operations/daño');       break;
-        case 'pedagogica':  await operationsApi.execute('pedagogica', formData, '/operations/pedagogica'); break;
-        case 'horario':     await operationsApi.execute('horario',    formData, '/operations/horario');    break;
-        case 'incidente':   await operationsApi.execute('incidente',  formData, '/operations/incidente');  break;
+        case 'sos':         await operationsApi.sos(payload);                                         break;
+        case 'inasistencia':await operationsApi.inasistencia(payload);                                break;
+        case 'citar':       await operationsApi.citacion(payload);                                    break;
+        case 'autorizar':   await operationsApi.salida(payload);                                      break;
+        case 'permiso':     await operationsApi.permiso(payload);                                     break;
+        case 'solicitud':   await operationsApi.execute('solicitud',  payload, '/operations/solicitud');  break;
+        case 'daño':        await operationsApi.execute('daño',       payload, '/operations/daño');       break;
+        case 'pedagogica':  await operationsApi.execute('pedagogica', payload, '/operations/pedagogica'); break;
+        case 'horario':     await operationsApi.execute('horario',    payload, '/operations/horario');    break;
+        case 'incidente':   await operationsApi.execute('incidente',  payload, '/operations/incidente');  break;
         default: throw new Error('Comando no soportado');
       }
       onClose();
@@ -402,14 +424,63 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
               )}
 
               {command.fields.includes('targetRole') && (
-                <FormField label="Enviar a">
-                  <select required value={formData.targetRole} onChange={set('targetRole')}
-                    className="dark:bg-slate-800 dark:text-white appearance-none"
-                    style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
-                    <option value="">— Seleccionar rol —</option>
-                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </FormField>
+                <>
+                  <FormField label="Rol destinatario">
+                    <select required value={formData.targetRole}
+                      onChange={e => {
+                        const role = e.target.value;
+                        setFormData(p => ({ ...p, targetRole: role, targetUser: '' }));
+                        fetchTargetUsers(role);
+                      }}
+                      className="dark:bg-slate-800 dark:text-white appearance-none"
+                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
+                      <option value="">— Seleccionar rol —</option>
+                      {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </FormField>
+
+                  {formData.targetRole && targetUsers.length > 0 && (
+                    <FormField label={`Personal de ${formData.targetRole} (${targetUsers.length})`}>
+                      <div className="space-y-1 max-h-48 overflow-auto">
+                        {targetUsers.map(u => (
+                          <button key={u.user_id} type="button"
+                            onClick={() => setFormData(p => ({ ...p, targetUser: u.user_id }))}
+                            className={`w-full flex items-center gap-3 px-3 py-2 text-left text-xs transition-colors ${
+                              formData.targetUser === u.user_id
+                                ? 'bg-[#003366] text-white'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+                            }`}
+                            style={{ border: '1.5px solid #E2E8F0' }}>
+                            <div className="shrink-0 w-7 h-7 flex items-center justify-center text-[10px] font-black text-white overflow-hidden" style={{ backgroundColor: formData.targetUser === u.user_id ? 'rgba(255,255,255,0.2)' : '#003366' }}>
+                              {u.profile_photo_url ? (
+                                <img src={u.profile_photo_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                `${u.first_name?.charAt(0) ?? ''}${u.last_name?.charAt(0) ?? ''}`
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate">{u.last_name}, {u.first_name}</p>
+                              <p className="text-[10px] opacity-70 truncate">{u.email}</p>
+                            </div>
+                            {formData.targetUser === u.user_id && (
+                              <CheckCircle2 size={14} className="shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </FormField>
+                  )}
+                  {formData.targetRole && !loadingUsers && targetUsers.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800" style={{ border: '1.5px solid #E2E8F0' }}>
+                      No hay personal de {formData.targetRole} en tu misma jornada.
+                    </div>
+                  )}
+                  {loadingUsers && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400">
+                      <Loader2 size={12} className="animate-spin" /> Cargando personal…
+                    </div>
+                  )}
+                </>
               )}
 
               {command.fields.includes('location') && (

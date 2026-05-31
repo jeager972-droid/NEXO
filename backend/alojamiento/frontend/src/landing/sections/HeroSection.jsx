@@ -157,7 +157,7 @@ export default function HeroSection() {
                   className="nx-hero-canvas nx-hero-canvas--inline"
                   aria-label="Logo NEXO"
                   style={{
-                    height:       '260px',
+                    height:       '300px',
                     position:     'relative',
                     marginBottom: '1rem',
                     width:        '100%',
@@ -173,7 +173,7 @@ export default function HeroSection() {
                       maxHeight: '100%',
                       maxWidth:  '100%',
                       objectFit: 'contain',
-                      filter: 'drop-shadow(0 20px 40px rgba(45,110,48,0.15))',
+                      filter: 'drop-shadow(0 24px 48px rgba(45,110,48,0.22))',
                     }}
                   />
                 </div>
@@ -237,7 +237,7 @@ export default function HeroSection() {
                 className="nx-hero-canvas"
                 aria-label="Logo NEXO"
                 style={{
-                  height:       '560px',
+                  height:       '640px',
                   position:     'relative',
                   opacity:       0,
                   willChange:   'transform, opacity',

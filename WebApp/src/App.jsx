@@ -21,6 +21,7 @@ const Unauthorized = lazy(() => import('./pages/Unauthorized'))
 const Audit = lazy(() => import('./pages/Audit'))
 const Downloads  = lazy(() => import('./pages/Downloads'))
 const InstallPage = lazy(() => import('./pages/InstallPage'))
+const Profile = lazy(() => import('./pages/Profile'))
 
 function App() {
   const { user } = useAuth()
@@ -103,6 +104,7 @@ function App() {
                 <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
                 <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
                 <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
+                <Route path="/perfil" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
 
                 <Route
                   path="/consulta"
