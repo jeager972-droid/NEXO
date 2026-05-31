@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FileText, Users, ShieldAlert, MessageSquare,
   Clock, Activity, History, ChevronRight,
@@ -6,9 +6,14 @@ import {
   Lock, Unlock, ShieldCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { auditApi } from '../api/audit';
 
 const Audit = () => {
   const [activeSub, setActiveSub] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [integrity, setIntegrity] = useState(null);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditError, setAuditError] = useState(null);
 
   const modules = [
     {
@@ -76,15 +81,24 @@ const Audit = () => {
     }
   ];
 
-  const CHAIN = [
-    { id: 1, ts: '08:41:22.101', event: 'SESION_INICIADA',    user: 'rector@nexo.edu',       hash: 'a3f2e1b4c7d8', valid: true  },
-    { id: 2, ts: '08:41:23.891', event: 'CONSULTA_REGISTRO',  user: 'rector@nexo.edu',       hash: '9b7c3d4f2a1e', valid: true  },
-    { id: 3, ts: '08:52:11.344', event: 'COMANDO_SOS',        user: 'portero01@nexo.edu',    hash: 'e5d8a2c1f9b3', valid: true  },
-    { id: 4, ts: '09:03:55.780', event: 'REGISTRO_ESTUDIANTE',user: 'secre01@nexo.edu',      hash: '2f4b7e9c1d6a', valid: true  },
-    { id: 5, ts: '09:17:33.211', event: 'ACCESO_FALLIDO',     user: 'unknown@external.com',  hash: '7c1d9b3e5f4a', valid: false },
-    { id: 6, ts: '09:22:44.509', event: 'PERMISO_EMITIDO',    user: 'coord01@nexo.edu',      hash: '1b8f4a6c3e2d', valid: true  },
-    { id: 7, ts: '09:31:08.115', event: 'EXPORTACION_PDF',    user: 'rector@nexo.edu',       hash: '5e9a2c7b1f3d', valid: true  },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setAuditLoading(true);
+        const [logData, integrityData] = await Promise.all([
+          auditApi.getGlobalLogs(),
+          auditApi.getIntegrity(),
+        ]);
+        setLogs(Array.isArray(logData) ? logData : []);
+        setIntegrity(integrityData);
+      } catch (e) {
+        setAuditError(e.message);
+      } finally {
+        setAuditLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -120,44 +134,50 @@ const Audit = () => {
 
           {/* Log entries */}
           <div className="min-w-[700px]">
-            {CHAIN.map((entry, i) => (
+            {auditLoading && (
+              <div className="px-4 py-3 text-xs" style={{ fontFamily: 'ui-monospace, monospace', color: '#475569' }}>
+                Cargando logs…
+              </div>
+            )}
+            {auditError && (
+              <div className="px-4 py-3 text-xs" style={{ fontFamily: 'ui-monospace, monospace', color: '#FCA5A5' }}>
+                Error: {auditError}
+              </div>
+            )}
+            {logs.map((entry, i) => (
               <motion.div
-                key={entry.id}
+                key={entry.audit_id ?? i}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.06, duration: 0.2 }}
                 className="flex items-center gap-0 px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
-                style={{ borderBottom: i < CHAIN.length - 1 ? '1px solid rgba(30,41,59,0.5)' : 'none' }}
+                style={{ borderBottom: i < logs.length - 1 ? '1px solid rgba(30,41,59,0.5)' : 'none' }}
               >
                 {/* Seq */}
                 <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#334155', width: '28px', flexShrink: 0 }}>
-                  {String(entry.id).padStart(3, '0')}
+                  {String(i + 1).padStart(3, '0')}
                 </span>
                 {/* Timestamp */}
                 <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: '#00A67E', width: '100px', flexShrink: 0 }}>
-                  [{entry.ts}]
+                  [{new Date(entry.created_at).toLocaleTimeString('es-CO', { hour12: false })}]
                 </span>
                 {/* Event */}
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: entry.valid ? '#F1F5F9' : '#FCA5A5', width: '200px', flexShrink: 0, letterSpacing: '0.05em' }}>
-                  {entry.event}
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', color: '#F1F5F9', width: '200px', flexShrink: 0, letterSpacing: '0.05em' }}>
+                  {entry.event_type}
                 </span>
                 {/* User */}
                 <span className="truncate" style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#64748B', width: '180px', flexShrink: 0 }}>
-                  {entry.user}
+                  {entry.actor_name || '—'}
                 </span>
                 {/* Hash */}
                 <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#334155', width: '110px', flexShrink: 0 }}>
-                  {entry.hash}…
+                  {(entry.audit_id || '').slice(0, 12)}…
                 </span>
                 {/* Valid indicator */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {entry.valid
-                    ? <Lock size={12} strokeWidth={2.5} style={{ color: '#00A67E' }} />
-                    : <Unlock size={12} strokeWidth={2.5} style={{ color: '#DC2626' }} />
-                  }
-                  <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '9px', fontWeight: 700,
-                    color: entry.valid ? '#00A67E' : '#DC2626', letterSpacing: '0.1em' }}>
-                    {entry.valid ? 'OK' : 'INVÁLIDO'}
+                  <Lock size={12} strokeWidth={2.5} style={{ color: '#00A67E' }} />
+                  <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '9px', fontWeight: 700, color: '#00A67E', letterSpacing: '0.1em' }}>
+                    OK
                   </span>
                 </div>
               </motion.div>
@@ -244,16 +264,46 @@ const Audit = () => {
                   <X size={18} strokeWidth={2} />
                 </button>
               </div>
-              <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
-                <div className="flex items-center justify-center w-14 h-14" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>
-                  <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
-                </div>
-                <div className="text-center space-y-1">
-                  <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
-                  <p style={{ fontSize: '11px', color: '#CBD5E1', maxWidth: '280px', lineHeight: 1.5 }}>
-                    Este módulo estará disponible cuando exista integración con el endpoint operativo.
-                  </p>
-                </div>
+              <div className="flex-1 flex flex-col p-0 overflow-hidden">
+                {activeSub === 'Auditoría global' ? (
+                  <div className="flex-1 overflow-auto p-6">
+                    {auditLoading && <p className="text-xs text-slate-400">Cargando logs…</p>}
+                    {auditError && <p className="text-xs text-red-400">Error: {auditError}</p>}
+                    {!auditLoading && logs.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-full gap-4">
+                        <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
+                        <p className="text-xs text-slate-400">No hay registros de auditoría.</p>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      {logs.map((entry) => (
+                        <div key={entry.audit_id} className="p-3 rounded" style={{ backgroundColor: '#070D1B', border: '1px solid #1E293B' }}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#00A67E' }}>{entry.event_type}</span>
+                            <span className="text-[10px]" style={{ color: '#64748B' }}>{new Date(entry.created_at).toLocaleString('es-CO')}</span>
+                          </div>
+                          <p className="text-[11px] mb-1" style={{ color: '#CBD5E1' }}>{entry.description}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px]" style={{ color: '#64748B' }}>{entry.actor_name || '—'}</span>
+                            <span className="text-[10px]" style={{ color: '#334155' }}>• {entry.ip_address}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5">
+                    <div className="flex items-center justify-center w-14 h-14" style={{ backgroundColor: '#070D1B', border: '1.5px solid #1E293B' }}>
+                      <Activity size={24} strokeWidth={1.5} style={{ color: '#00A67E' }} />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
+                      <p style={{ fontSize: '11px', color: '#CBD5E1', maxWidth: '280px', lineHeight: 1.5 }}>
+                        Este submódulo aún no tiene un endpoint dedicado. Consulta <strong>Auditoría global</strong> para ver todos los registros.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           </>
