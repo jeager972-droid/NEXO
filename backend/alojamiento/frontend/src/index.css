@@ -473,7 +473,6 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 1.5rem;
   position: relative;
   z-index: 3;
-  box-shadow: 0 0 0 8px var(--nx-deep);
   transition: border-color 0.4s, color 0.4s, background 0.4s, box-shadow 0.4s;
 }
 
@@ -484,7 +483,7 @@ a { color: inherit; text-decoration: none; }
   border-color: #2d6e30;
   color: #2d6e30;
   background: rgba(45, 110, 48, 0.08);
-  box-shadow: 0 0 0 8px var(--nx-deep), 0 0 20px rgba(45, 110, 48, 0.2);
+  box-shadow: 0 0 20px rgba(45, 110, 48, 0.2);
 }
 .nx-timeline__title {
   font-size: 0.9rem;

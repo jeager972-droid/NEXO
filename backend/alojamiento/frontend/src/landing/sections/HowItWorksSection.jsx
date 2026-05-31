@@ -101,7 +101,7 @@ export default function HowItWorksSection() {
                   borderColor: 'var(--nx-green)',
                   color: 'var(--nx-green)',
                   backgroundColor: 'rgba(45, 110, 48, 0.08)',
-                  boxShadow: '0 0 0 8px #f7fcf7, 0 0 20px rgba(45, 110, 48, 0.3)',
+                  boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
                   duration: 0.4,
                 })
               }
@@ -165,7 +165,7 @@ export default function HowItWorksSection() {
               borderColor: 'var(--nx-green)',
               color: 'var(--nx-green)',
               backgroundColor: 'rgba(45, 110, 48, 0.08)',
-              boxShadow: '0 0 0 8px #f7fcf7, 0 0 20px rgba(45, 110, 48, 0.3)',
+              boxShadow: '0 0 20px rgba(45, 110, 48, 0.3)',
               duration: 0.4,
             })
           }
@@ -240,7 +240,7 @@ export default function HowItWorksSection() {
                 right: 'calc(1.25rem + 20px)',
                 height: '2px',
                 background: 'var(--nx-border)',
-                zIndex: 0,
+                zIndex: -1,
               }}
               aria-hidden="true"
             />
@@ -256,7 +256,7 @@ export default function HowItWorksSection() {
                 width: 'calc(100% - 2.5rem - 40px)',
                 height: '2px',
                 pointerEvents: 'none',
-                zIndex: 0,
+                zIndex: -1,
               }}
               aria-hidden="true"
             >
