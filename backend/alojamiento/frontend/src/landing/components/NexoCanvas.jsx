@@ -305,24 +305,32 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
     let touchStartX = 0
     let touchStartY = 0
     let isTouchingCanvas = false
+    let intentDetermined = false
 
     const onTouchStart = (e) => {
       touchStartX = e.touches[0].clientX
       touchStartY = e.touches[0].clientY
       isTouchingCanvas = true
+      intentDetermined = false
       startDrag(e.touches[0].clientX, e.touches[0].clientY)
     }
 
     const onTouchMove = (e) => {
       if (!isTouchingCanvas) return
 
-      const deltaX = Math.abs(e.touches[0].clientX - touchStartX)
-      const deltaY = Math.abs(e.touches[0].clientY - touchStartY)
+      if (!intentDetermined) {
+        const deltaX = Math.abs(e.touches[0].clientX - touchStartX)
+        const deltaY = Math.abs(e.touches[0].clientY - touchStartY)
 
-      // Solo bloquear scroll si el gesto es predominantemente horizontal
-      // O si el delta total es significativo (el usuario claramente está rotando)
-      if (deltaX > deltaY || deltaX > 10) {
-        e.preventDefault() // bloquea scroll solo cuando rota horizontalmente
+        // Determinar la intención una vez que el movimiento supera un umbral de 8px
+        if (deltaX > 8 || deltaY > 8) {
+          intentDetermined = true
+        }
+      }
+
+      // Una vez determinada la intención y estando en el canvas, bloquear el scroll
+      if (intentDetermined) {
+        e.preventDefault()
       }
       
       if (!isDragging) return
@@ -331,6 +339,7 @@ function DragOverlay({ onDrag, onDragStart, onDragEnd }) {
 
     const onTouchEnd = () => {
       isTouchingCanvas = false
+      intentDetermined = false
       endDrag()
     }
 
