@@ -16,7 +16,8 @@ pid /run/nginx.pid;
 error_log /dev/stderr warn;
 
 events {
-    worker_connections 1024;
+    use epoll;
+    worker_connections 10240;
 }
 
 http {
@@ -28,6 +29,8 @@ http {
     }
     default_type application/octet-stream;
     sendfile on;
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
     keepalive_timeout 65;
     server_tokens off;
     access_log /dev/stdout;
@@ -40,9 +43,10 @@ http {
         root /var/www/html;
         index index.html index.php;
 
-        add_header X-Frame-Options "DENY" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
         # Bloquear archivos sensibles
@@ -81,12 +85,25 @@ listen = /run/php/php-fpm.sock
 listen.owner = www-data
 listen.group = www-data
 listen.mode = 0660
+clear_env = no
 pm = dynamic
-pm.max_children = 5
+pm.max_children = 100
 pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 FPMCONF
+
+echo "[nexo] Configurando OPcache..."
+mkdir -p /usr/local/etc/php/conf.d
+cat > /usr/local/etc/php/conf.d/opcache.ini <<OPCACHE
+opcache.enable=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+opcache.revalidate_freq=0
+opcache.validate_timestamps=0
+opcache.fast_shutdown=1
+OPCACHE
 
 echo "[nexo] VERIFICANDO ARCHIVOS EN /var/www/html:"
 ls -lah /var/www/html/ | head -20
