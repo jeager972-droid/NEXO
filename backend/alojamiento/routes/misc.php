@@ -114,6 +114,12 @@ if ($cleanPath === '/notifications') {
                        WHEN 'PEDAGOGICA' THEN 'Salida pedagógica'
                        WHEN 'HORARIO' THEN 'Cambio de horario'
                        WHEN 'INCIDENTE' THEN 'Reporte de incidente'
+                       WHEN 'UNAUTHORIZED_ABSENCE' THEN 'Inasistencia no autorizada'
+                       WHEN 'LATE_ARRIVAL' THEN 'Llegada tarde'
+                       WHEN 'EARLY_EXIT' THEN 'Salida anticipada'
+                       WHEN 'EVASION_INTERNA' THEN 'Evasión interna'
+                       WHEN 'BIOMETRIC_FAILURE' THEN 'Fallo biométrico'
+                       WHEN 'SPAM_BIOMETRIC' THEN 'Spam biométrico'
                        ELSE incident_type
                    END AS desc,
                    TO_CHAR(detected_at, 'HH24:MI') AS time,

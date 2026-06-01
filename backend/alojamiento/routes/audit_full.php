@@ -72,7 +72,7 @@ if ($cleanPath === '/audit/attendance/general' && $method === 'GET') {
 
         $stmt2 = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 be.event_type AS tipo_evento,
                 be.event_timestamp AS fecha_hora
@@ -99,7 +99,7 @@ if ($cleanPath === '/audit/attendance/absences' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 s.document_number AS documento,
                 ai.detected_at AS detectado,
@@ -126,7 +126,7 @@ if ($cleanPath === '/audit/attendance/lates' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 s.document_number AS documento,
                 be.event_timestamp AS fecha_hora
@@ -152,7 +152,7 @@ if ($cleanPath === '/audit/attendance/evasion' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 s.document_number AS documento,
                 ai.detected_at AS detectado,
@@ -198,11 +198,12 @@ if ($cleanPath === '/audit/attendance/by-student' && $method === 'GET') {
     try {
         $q = $_GET['q'] ?? '';
         $sql = "
-            SELECT s.student_id, s.first_name, s.last_name, s.document_number,
-                   COUNT(*) AS total_events,
-                   COUNT(*) FILTER (WHERE be.event_type LIKE 'INGRESO_%') AS entries,
-                   COUNT(*) FILTER (WHERE be.event_type LIKE 'INGRESO_TARDE%') AS lates,
-                   COUNT(*) FILTER (WHERE be.event_type LIKE 'INASISTENCIA%') AS absences
+            SELECT s.last_name || ', ' || s.first_name AS estudiante,
+                   s.document_number AS documento,
+                   COUNT(*) AS total_eventos,
+                   COUNT(*) FILTER (WHERE be.event_type LIKE 'INGRESO_%') AS ingresos,
+                   COUNT(*) FILTER (WHERE be.event_type LIKE 'INGRESO_TARDE%') AS tardanzas,
+                   COUNT(*) FILTER (WHERE be.event_type LIKE 'INASISTENCIA%') AS inasistencias
             FROM students s
             LEFT JOIN biometric_events be ON s.student_id = be.student_id
             WHERE s.school_id = ? AND s.active = TRUE
@@ -213,7 +214,7 @@ if ($cleanPath === '/audit/attendance/by-student' && $method === 'GET') {
             $like = "%{$q}%";
             $params[] = $like; $params[] = $like; $params[] = $like;
         }
-        $sql .= " GROUP BY s.student_id, s.first_name, s.last_name, s.document_number ORDER BY s.last_name, s.first_name LIMIT 200";
+        $sql .= " GROUP BY s.student_id, s.last_name, s.first_name, s.document_number ORDER BY s.last_name, s.first_name LIMIT 200";
         $stmt = $conn->prepare($sql);
         $stmt->execute($params);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
@@ -231,10 +232,17 @@ if ($cleanPath === '/audit/discipline/incidents' && $method === 'GET') {
         $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
-            SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved,
-                   s.first_name, s.last_name, s.document_number
+            SELECT
+                s.last_name || ', ' || s.first_name AS estudiante,
+                COALESCE(ag.group_name, 'Sin grupo') AS grupo,
+                s.document_number AS documento,
+                si.description AS descripcion,
+                si.detected_at AS detectado,
+                si.resolved AS resuelto
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
+            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE si.school_id = ?
               {$where}
             ORDER BY si.detected_at DESC
@@ -252,10 +260,16 @@ if ($cleanPath === '/audit/discipline/violations' && $method === 'GET') {
         $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
-            SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved,
-                   s.first_name, s.last_name
+            SELECT
+                s.last_name || ', ' || s.first_name AS estudiante,
+                COALESCE(ag.group_name, 'Sin grupo') AS grupo,
+                si.description AS descripcion,
+                si.detected_at AS detectado,
+                si.resolved AS resuelto
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
+            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE si.school_id = ? AND si.severity_level IN ('HIGH','CRITICAL')
               {$where}
             ORDER BY si.detected_at DESC
@@ -274,7 +288,7 @@ if ($cleanPath === '/audit/discipline/wrong-classroom' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 c.classroom_name AS salon,
                 be.event_timestamp AS fecha_hora
@@ -301,7 +315,7 @@ if ($cleanPath === '/audit/discipline/biometric-spam' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 MAX(be.event_timestamp) AS ultimo_intento,
                 COUNT(*) AS cantidad_intentos
@@ -329,9 +343,8 @@ if ($cleanPath === '/audit/discipline/reports' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
-                si.severity_level AS severidad,
                 si.description AS descripcion,
                 si.detected_at AS detectado,
                 si.resolved AS resuelto
@@ -356,7 +369,13 @@ if ($cleanPath === '/audit/discipline/student-history' && $method === 'GET') {
         if (!$studentId) auditError('student_id requerido', 400);
 
         $stmt = $conn->prepare("
-            SELECT calculated_at, late_count, absence_count, total_events, risk_score, risk_level
+            SELECT
+                calculated_at AS fecha_calculo,
+                late_count AS tardanzas,
+                absence_count AS inasistencias,
+                total_events AS total_eventos,
+                risk_score AS riesgo,
+                risk_level AS nivel_riesgo
             FROM student_behavior_metrics
             WHERE school_id = ? AND student_id = ?
             ORDER BY calculated_at DESC
@@ -366,7 +385,10 @@ if ($cleanPath === '/audit/discipline/student-history' && $method === 'GET') {
         $metrics = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $stmt2 = $conn->prepare("
-            SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved
+            SELECT
+                si.description AS descripcion,
+                si.detected_at AS detectado,
+                si.resolved AS resuelto
             FROM security_incidents si
             WHERE si.school_id = ? AND si.related_student_id = ?
             ORDER BY si.detected_at DESC
@@ -391,12 +413,12 @@ if ($cleanPath === '/audit/permissions/class-exits' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 cea.exit_time AS hora_salida,
                 cea.return_time AS hora_retorno,
                 cea.authorization_reason AS motivo,
-                u.first_name || ' ' || u.last_name AS autorizado_por
+                u.last_name || ', ' || u.first_name AS autorizado_por
             FROM class_exit_authorizations cea
             LEFT JOIN students s ON cea.student_id = s.student_id
             LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
@@ -420,14 +442,14 @@ if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 sea.exit_time AS hora_salida,
                 sea.expected_return_time AS retorno_estimado,
                 sea.actual_return_time AS retorno_real,
                 sea.status AS estado,
                 sea.authorization_reason AS motivo,
-                u.first_name || ' ' || u.last_name AS autorizado_por
+                u.last_name || ', ' || u.first_name AS autorizado_por
             FROM school_exit_authorizations sea
             LEFT JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
@@ -451,13 +473,13 @@ if ($cleanPath === '/audit/permissions/pedagogical' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 pta.destination AS destino,
                 pta.departure_time AS hora_salida,
                 pta.return_time AS hora_retorno,
                 pta.purpose AS proposito,
-                u.first_name || ' ' || u.last_name AS autorizado_por
+                u.last_name || ', ' || u.first_name AS autorizado_por
             FROM pedagogical_trip_authorizations pta
             LEFT JOIN students s ON pta.student_id = s.student_id
             LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
@@ -481,12 +503,12 @@ if ($cleanPath === '/audit/permissions/pending-returns' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
                 sea.exit_time AS hora_salida,
                 sea.expected_return_time AS retorno_estimado,
                 sea.status AS estado,
-                u.first_name || ' ' || u.last_name AS autorizado_por
+                u.last_name || ', ' || u.first_name AS autorizado_por
             FROM school_exit_authorizations sea
             LEFT JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
@@ -509,7 +531,7 @@ if ($cleanPath === '/audit/permissions/history' && $method === 'GET') {
         $to   = $_GET['to']   ?? date('Y-m-d');
         $stmt = $conn->prepare("
             (SELECT 'Salida de clase' AS tipo,
-                    s.first_name || ' ' || s.last_name AS estudiante,
+                    s.last_name || ', ' || s.first_name AS estudiante,
                     exit_time AS hora_evento,
                     authorization_reason AS motivo
              FROM class_exit_authorizations
@@ -517,7 +539,7 @@ if ($cleanPath === '/audit/permissions/history' && $method === 'GET') {
              WHERE school_id = ? AND exit_time BETWEEN ? AND ?)
             UNION ALL
             (SELECT 'Salida del colegio' AS tipo,
-                    s.first_name || ' ' || s.last_name AS estudiante,
+                    s.last_name || ', ' || s.first_name AS estudiante,
                     exit_time AS hora_evento,
                     authorization_reason AS motivo
              FROM school_exit_authorizations
@@ -525,7 +547,7 @@ if ($cleanPath === '/audit/permissions/history' && $method === 'GET') {
              WHERE school_id = ? AND exit_time BETWEEN ? AND ?)
             UNION ALL
             (SELECT 'Salida pedagogica' AS tipo,
-                    s.first_name || ' ' || s.last_name AS estudiante,
+                    s.last_name || ', ' || s.first_name AS estudiante,
                     departure_time AS hora_evento,
                     purpose AS motivo
              FROM pedagogical_trip_authorizations
@@ -707,7 +729,7 @@ if ($cleanPath === '/audit/teacher/permissions' && $method === 'GET') {
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                u.first_name || ' ' || u.last_name AS docente,
+                u.last_name || ', ' || u.first_name AS docente,
                 uc.command_type AS tipo_permiso,
                 uc.executed_at AS ejecutado,
                 uc.command_payload AS detalles
@@ -727,10 +749,9 @@ if ($cleanPath === '/audit/teacher/incidents' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
             SELECT
-                s.first_name || ' ' || s.last_name AS estudiante,
+                s.last_name || ', ' || s.first_name AS estudiante,
                 COALESCE(ag.group_name, 'Sin grupo') AS grupo,
-                u.first_name || ' ' || u.last_name AS docente,
-                si.severity_level AS severidad,
+                u.last_name || ', ' || u.first_name AS docente,
                 si.description AS descripcion,
                 si.detected_at AS detectado,
                 si.resolved AS resuelto
@@ -780,8 +801,12 @@ if ($cleanPath === '/audit/teacher/system-activity' && $method === 'GET') {
 if ($cleanPath === '/audit/security/global' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT gal.log_id, gal.action_type, gal.action_details, gal.created_at, gal.ip_address,
-                   u.first_name, u.last_name
+            SELECT
+                gal.action_type AS accion,
+                gal.action_details AS detalles,
+                gal.created_at AS creado,
+                gal.ip_address AS ip,
+                u.last_name || ', ' || u.first_name AS usuario
             FROM global_audit_logs gal
             LEFT JOIN users u ON gal.performed_by_user_id = u.user_id
             WHERE gal.school_id = ?
@@ -796,8 +821,14 @@ if ($cleanPath === '/audit/security/global' && $method === 'GET') {
 if ($cleanPath === '/audit/security/accesses' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT us.session_id, us.ip_address, us.user_agent, us.created_at, us.revoked, us.revoked_at,
-                   u.first_name, u.last_name, u.email
+            SELECT
+                us.ip_address AS ip,
+                us.user_agent AS navegador,
+                us.created_at AS creado,
+                us.revoked AS revocado,
+                us.revoked_at AS revocacion,
+                u.last_name || ', ' || u.first_name AS usuario,
+                u.email AS correo
             FROM user_sessions us
             LEFT JOIN users u ON us.user_id = u.user_id
             WHERE u.school_id = ?
@@ -812,8 +843,13 @@ if ($cleanPath === '/audit/security/accesses' && $method === 'GET') {
 if ($cleanPath === '/audit/security/sessions' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT us.session_id, us.ip_address, us.user_agent, us.created_at, us.expires_at, us.revoked,
-                   u.first_name, u.last_name
+            SELECT
+                us.ip_address AS ip,
+                us.user_agent AS navegador,
+                us.created_at AS creado,
+                us.expires_at AS expiracion,
+                us.revoked AS revocado,
+                u.last_name || ', ' || u.first_name AS usuario
             FROM user_sessions us
             LEFT JOIN users u ON us.user_id = u.user_id
             WHERE u.school_id = ?
@@ -828,8 +864,11 @@ if ($cleanPath === '/audit/security/sessions' && $method === 'GET') {
 if ($cleanPath === '/audit/security/commands' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT uc.command_id, uc.command_type, uc.executed_at, uc.command_payload,
-                   u.first_name, u.last_name
+            SELECT
+                uc.command_type AS tipo_comando,
+                uc.executed_at AS ejecutado,
+                uc.command_payload AS detalles,
+                u.last_name || ', ' || u.first_name AS usuario
             FROM user_commands uc
             LEFT JOIN users u ON uc.executed_by_user_id = u.user_id
             WHERE uc.school_id = ?
@@ -844,8 +883,12 @@ if ($cleanPath === '/audit/security/commands' && $method === 'GET') {
 if ($cleanPath === '/audit/security/admin-activity' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT gal.log_id, gal.action_type, gal.action_details, gal.created_at, gal.ip_address,
-                   u.first_name, u.last_name
+            SELECT
+                gal.action_type AS accion,
+                gal.action_details AS detalles,
+                gal.created_at AS creado,
+                gal.ip_address AS ip,
+                u.last_name || ', ' || u.first_name AS usuario
             FROM global_audit_logs gal
             LEFT JOIN users u ON gal.performed_by_user_id = u.user_id
             WHERE gal.school_id = ? AND gal.performed_by_user_id IN (
@@ -864,8 +907,12 @@ if ($cleanPath === '/audit/security/admin-activity' && $method === 'GET') {
 if ($cleanPath === '/audit/security/failed-attempts' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT gal.log_id, gal.action_type, gal.action_details, gal.created_at, gal.ip_address,
-                   u.first_name, u.last_name
+            SELECT
+                gal.action_type AS accion,
+                gal.action_details AS detalles,
+                gal.created_at AS creado,
+                gal.ip_address AS ip,
+                u.last_name || ', ' || u.first_name AS usuario
             FROM global_audit_logs gal
             LEFT JOIN users u ON gal.performed_by_user_id = u.user_id
             WHERE gal.school_id = ? AND gal.action_type LIKE 'FAILED%'
@@ -893,7 +940,7 @@ if ($cleanPath === '/audit/sos/alerts' && $method === 'GET') {
                 sa.emitted_at AS emitido,
                 sa.resolved AS resuelto,
                 sa.resolved_at AS resolucion,
-                u.first_name || ' ' || u.last_name AS emitido_por,
+                u.last_name || ', ' || u.first_name AS emitido_por,
                 c.classroom_name AS salon
             FROM sos_alerts sa
             LEFT JOIN users u ON sa.emitted_by_user_id = u.user_id
@@ -1295,7 +1342,7 @@ if (preg_match('#^/audit/groups/([^/]+)/students$#', $cleanPath, $m) && $method 
 if ($cleanPath === '/audit/staff' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT u.user_id AS id, u.first_name || ' ' || u.last_name AS nombre, u.email AS correo, r.role_name AS rol
+            SELECT u.user_id AS id, u.last_name || ', ' || u.first_name AS nombre, u.email AS correo, r.role_name AS rol
             FROM users u
             LEFT JOIN roles r ON u.role_id = r.role_id
             WHERE u.school_id = ? AND u.active = TRUE

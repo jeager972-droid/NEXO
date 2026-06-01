@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   FileText, Users, ShieldAlert, MessageSquare,
   Clock, Activity, History, ChevronRight,
@@ -12,12 +13,29 @@ import { AuthContext } from '../context/AuthContext';
 
 const ADMIN_ROLES = ['RECTOR', 'COORDINADOR', 'SUPER_RECTOR'];
 
+const ALL_SUBS = [
+  'Inasistencias', 'Llegadas tarde', 'Evasión interna',
+  'Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario',
+  'Salidas clase', 'Salidas colegio', 'Salidas pedagógicas',
+  'Retornos pendientes', 'Historial permisos', 'Permisos emitidos',
+  'Alertas SOS emitidas', 'Evasiones internas'
+];
+
 const Audit = () => {
   const { user } = useContext(AuthContext);
   const isAdmin = ADMIN_ROLES.includes(user?.role_name || user?.role);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [activeSub, setActiveSub] = useState(null);
   const [exportModal, setExportModal] = useState(null);
+
+  useEffect(() => {
+    const sub = searchParams.get('sub');
+    if (sub && ALL_SUBS.includes(sub)) {
+      setActiveSub(sub);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const modules = [
     {
@@ -305,6 +323,23 @@ const COLUMN_LABELS = {
   'cantidad_intentos': 'Cantidad de intentos',
   'ultimo_intento': 'Último intento',
   'periodo': 'Período',
+  'accion': 'Acción',
+  'detalles': 'Detalles',
+  'creado': 'Creado',
+  'ip': 'IP',
+  'usuario': 'Usuario',
+  'navegador': 'Navegador',
+  'revocado': 'Revocado',
+  'revocacion': 'Revocación',
+  'expiracion': 'Expiración',
+  'tipo_comando': 'Tipo de comando',
+  'riesgo': 'Riesgo',
+  'nivel_riesgo': 'Nivel de riesgo',
+  'fecha_calculo': 'Fecha de cálculo',
+  'tardanzas': 'Tardanzas',
+  'inasistencias': 'Inasistencias',
+  'total_eventos': 'Total de eventos',
+  'ingresos': 'Ingresos',
 };
 
 /* ── Human-readable enum values ── */
@@ -856,18 +891,41 @@ function ExportModalContent({ module, format, onClose }) {
   );
 }
 
+const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function fmtShortDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const day = d.getDate();
+  const month = MONTHS_ES[d.getMonth()];
+  const year = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day} ${month} ${year}, ${hh}:${mm}`;
+}
+
+function fmtShortDateOnly(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const day = d.getDate();
+  const month = MONTHS_ES[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
 function formatCell(key, value) {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
   const sk = String(key).toLowerCase();
-  // Fechas
-  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('created') || sk.includes('detected') || sk.includes('emitted') || sk.includes('resolved') || sk.includes('sent') || sk.includes('executed')) {
+  // Fechas con hora
+  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('created') || sk.includes('detected') || sk.includes('emitted') || sk.includes('resolved') || sk.includes('sent') || sk.includes('executed') || sk.includes('hora')) {
     const d = new Date(value);
-    if (!isNaN(d)) return d.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+    if (!isNaN(d)) return fmtShortDate(value);
   }
+  // Solo fecha
   if (sk.includes('date') || sk.includes('birth')) {
     const d = new Date(value);
-    if (!isNaN(d)) return d.toLocaleDateString('es-CO');
+    if (!isNaN(d)) return fmtShortDateOnly(value);
   }
   // Humanizar enums y valores conocidos
   const human = humanizeValue(value);

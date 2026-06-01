@@ -76,7 +76,7 @@ const GlobalSearchResults = ({ query, userRole, onSelect }) => {
       {results.map((item, i) => (
         <button
           key={`${item.path}-${item.title}-${i}`}
-          onClick={() => onSelect(item.path)}
+          onClick={() => onSelect(item)}
           className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           <item.icon size={16} strokeWidth={2} className="text-slate-400 shrink-0" />
@@ -233,7 +233,17 @@ const Layout = () => {
                   <GlobalSearchResults
                     query={searchQuery}
                     userRole={user?.role}
-                    onSelect={(path) => { setSearchOpen(false); setSearchQuery(''); navigate(path); }}
+                    onSelect={(item) => {
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                      if (item.path === '/auditoria' && AUDIT_SUBDIVISIONS.some(s => s.title === item.title)) {
+                        navigate(`/auditoria?sub=${encodeURIComponent(item.title)}`);
+                      } else if (item.path === '/operacion' && OPERATION_COMMANDS.some(c => c.title === item.title)) {
+                        navigate(`/operacion?cmd=${encodeURIComponent(item.title)}`);
+                      } else {
+                        navigate(item.path);
+                      }
+                    }}
                   />
                 </motion.div>
               )}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
   AlertOctagon, ShieldCheck, ShieldAlert, AlertTriangle,
@@ -14,6 +15,7 @@ import { ROLES } from '../config/roles';
 
 const Operation = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeCommand, setActiveCommand] = useState(null);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
@@ -117,6 +119,15 @@ const Operation = () => {
   ];
 
   const filteredCommands = commands.filter(cmd => cmd.roles.includes(user?.role));
+
+  useEffect(() => {
+    const cmdTitle = searchParams.get('cmd');
+    if (cmdTitle) {
+      const found = filteredCommands.find(c => c.title === cmdTitle);
+      if (found) setActiveCommand(found);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, filteredCommands]);
 
   if (loading) {
     return (
