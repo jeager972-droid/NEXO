@@ -104,7 +104,18 @@ if ($cleanPath === '/notifications') {
             SELECT incident_id AS id,
                    'INFO' AS type,
                    'Incidente de asistencia' AS title,
-                   ('Tipo: ' || incident_type) AS desc,
+                   CASE incident_type
+                       WHEN 'INASISTENCIA' THEN 'Inasistencia'
+                       WHEN 'CITACION' THEN 'Citación a acudiente'
+                       WHEN 'AUTORIZAR_SALIDA' THEN 'Autorización de salida'
+                       WHEN 'PERMISO' THEN 'Permiso'
+                       WHEN 'SOLICITUD' THEN 'Solicitud interna'
+                       WHEN 'DAÑO' THEN 'Reporte de daño'
+                       WHEN 'PEDAGOGICA' THEN 'Salida pedagógica'
+                       WHEN 'HORARIO' THEN 'Cambio de horario'
+                       WHEN 'INCIDENTE' THEN 'Reporte de incidente'
+                       ELSE incident_type
+                   END AS desc,
                    TO_CHAR(detected_at, 'HH24:MI') AS time,
                    detected_at AS occurred_at
             FROM attendance_incidents

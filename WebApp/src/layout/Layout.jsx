@@ -5,18 +5,55 @@ import Sidebar from './Sidebar';
 import { Menu, Bell, LogOut, Settings, ChevronDown, Search, X, Command } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { getRoleDisplay, SIDEBAR_ITEMS } from '../config/roles';
+import { getRoleDisplay, SIDEBAR_ITEMS, ROLES } from '../config/roles';
+import {
+  AlertTriangle, Calendar, ShieldCheck, AlertOctagon, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert,
+  Users, Activity, FileText, UserPlus, LayoutDashboard
+} from 'lucide-react';
+
+/* ── Searchable items: sidebar + operation commands + audit subdivisions ── */
+const OPERATION_COMMANDS = [
+  { title: 'Reportar inasistencia', path: '/operacion', icon: AlertTriangle, roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE] },
+  { title: 'Citar acudiente', path: '/operacion', icon: Calendar, roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
+  { title: 'Autorizar salida', path: '/operacion', icon: ShieldCheck, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
+  { title: 'SOS', path: '/operacion', icon: AlertOctagon, roles: Object.values(ROLES) },
+  { title: 'Reportar daño', path: '/operacion', icon: Wrench, roles: [ROLES.AUXILIAR, ROLES.PORTERO] },
+  { title: 'Mandar solicitud', path: '/operacion', icon: Send, roles: Object.values(ROLES) },
+  { title: 'Salida pedagógica', path: '/operacion', icon: Bus, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
+  { title: 'Cambio de horario', path: '/operacion', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
+  { title: 'Generar permiso', path: '/operacion', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR] },
+  { title: 'Reportar incidente', path: '/operacion', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
+];
+
+const AUDIT_SUBDIVISIONS = [
+  { title: 'Inasistencias', path: '/auditoria', icon: Users, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Llegadas tarde', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Evasión interna', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Intentos salón incorrecto', path: '/auditoria', icon: Search, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Spam biométrico', path: '/auditoria', icon: Activity, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Reporte disciplinario', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Salidas clase', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Salidas colegio', path: '/auditoria', icon: ShieldCheck, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Salidas pedagógicas', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Retornos pendientes', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Historial permisos', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Permisos emitidos', path: '/auditoria', icon: UserCheck, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Alertas SOS emitidas', path: '/auditoria', icon: AlertOctagon, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Evasiones internas', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+];
+
+const SEARCH_CATALOG = [...SIDEBAR_ITEMS, ...OPERATION_COMMANDS, ...AUDIT_SUBDIVISIONS];
 
 const GlobalSearchResults = ({ query, userRole, onSelect }) => {
   if (!query.trim()) {
     return (
       <div className="px-3 py-4 text-xs text-slate-400 text-center">
-        Escribe el nombre de un módulo (ej: <span className="font-semibold text-slate-500">Operación</span>, <span className="font-semibold text-slate-500">Auditoría</span>)
+        Escribe el nombre de un módulo, comando o sección (ej: <span className="font-semibold text-slate-500">Asistencia</span>, <span className="font-semibold text-slate-500">Citar acudiente</span>)
       </div>
     );
   }
   const q = query.trim().toLowerCase();
-  const results = SIDEBAR_ITEMS.filter(item =>
+  const results = SEARCH_CATALOG.filter(item =>
     item.roles.includes(userRole) &&
     (item.title.toLowerCase().includes(q) || item.path.replace('/', '').includes(q))
   );
@@ -25,9 +62,9 @@ const GlobalSearchResults = ({ query, userRole, onSelect }) => {
   }
   return (
     <div className="max-h-60 overflow-auto">
-      {results.map(item => (
+      {results.map((item, i) => (
         <button
-          key={item.path}
+          key={`${item.path}-${item.title}-${i}`}
           onClick={() => onSelect(item.path)}
           className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >

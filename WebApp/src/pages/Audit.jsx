@@ -192,7 +192,138 @@ const DRAWER_CONFIG = {
   'Evasiones internas': { api: auditApi.getAttendanceEvasion, needsDates: true, needsGroup: true, needsStudent: true },
 };
 
-const EXCLUDE_COLS = ['school_id','sync_hash','event_signature','metadata_json','command_payload','previous_data','new_data','biometric_hash'];
+const EXCLUDE_COLS = ['school_id','sync_hash','event_signature','metadata_json','command_payload','previous_data','new_data','biometric_hash','guardian_id','relationship_id','assignment_id','schedule_id','classroom_id','device_id','event_id','log_id','audit_id','report_export_id','command_id','twilio_message_id','incident_id','alert_id','staff_record_id'];
+
+/* ── Human-readable column names ── */
+const COLUMN_LABELS = {
+  'id': 'ID',
+  'student_id': 'ID Estudiante',
+  'first_name': 'Nombre',
+  'last_name': 'Apellido',
+  'name': 'Nombre',
+  'document_number': 'Documento',
+  'group_name': 'Grupo',
+  'grade_level': 'Grado',
+  'classroom_name': 'Salón',
+  'device_name': 'Dispositivo',
+  'event_type': 'Tipo de evento',
+  'event_result': 'Resultado',
+  'event_timestamp': 'Fecha y hora',
+  'confidence_score': 'Confianza',
+  'incident_type': 'Tipo de incidente',
+  'detected_at': 'Detectado',
+  'emitted_at': 'Emitido',
+  'resolved': 'Resuelto',
+  'resolved_at': 'Resolución',
+  'alert_type': 'Tipo de alerta',
+  'alert_description': 'Descripción',
+  'exit_time': 'Hora de salida',
+  'return_time': 'Hora de retorno',
+  'departure_time': 'Hora de partida',
+  'arrival_time': 'Hora de llegada',
+  'reason': 'Motivo',
+  'description': 'Descripción',
+  'message': 'Mensaje',
+  'created_at': 'Creado',
+  'updated_at': 'Actualizado',
+  'active': 'Activo',
+  'executed_at': 'Ejecutado',
+  'command_type': 'Tipo de comando',
+  'action_type': 'Acción',
+  'action_details': 'Detalles',
+  'ip_address': 'IP',
+  'sender_user_id': 'Remitente',
+  'emitter_first': 'Nombre emisor',
+  'emitter_last': 'Apellido emisor',
+  'resolver_first': 'Nombre resolutor',
+  'resolver_last': 'Apellido resolutor',
+  'minutes_to_resolve': 'Minutos para resolver',
+  'phone_number': 'Teléfono',
+  'message_content': 'Contenido',
+  'delivery_status': 'Estado de entrega',
+  'sent_at': 'Enviado',
+  'direction': 'Dirección',
+  'type_code': 'Código',
+  'day_of_week': 'Día',
+  'block_number': 'Bloque',
+  'start_time': 'Inicio',
+  'end_time': 'Fin',
+  'subject_name': 'Asignatura',
+  'teacher_name': 'Docente',
+  'role_name': 'Rol',
+  'email': 'Correo',
+  'work_shift': 'Jornada',
+  'position_name': 'Cargo',
+  'hired_at': 'Contratación',
+  'employee_code': 'Código',
+  'birth_date': 'Fecha de nacimiento',
+  'guardian_name': 'Acudiente',
+  'whatsapp_phone': 'WhatsApp',
+  'primary_guardian': 'Principal',
+  'relationship_type': 'Parentesco',
+  'emergency_contact': 'Contacto de emergencia',
+  'count': 'Cantidad',
+  'total': 'Total',
+  'date': 'Fecha',
+  'time': 'Hora',
+  'status': 'Estado',
+  'source': 'Origen',
+};
+
+/* ── Human-readable enum values ── */
+const VALUE_LABELS = {
+  'INASISTENCIA': 'Inasistencia',
+  'CITACION': 'Citación a acudiente',
+  'AUTORIZAR_SALIDA': 'Autorización de salida',
+  'PERMISO': 'Permiso',
+  'SOLICITUD': 'Solicitud interna',
+  'DAÑO': 'Reporte de daño',
+  'PEDAGOGICA': 'Salida pedagógica',
+  'HORARIO': 'Cambio de horario',
+  'INCIDENTE': 'Reporte de incidente',
+  'SOS_WEBAPP': 'Alerta SOS',
+  'SOS_DEVICE': 'Alerta SOS (dispositivo)',
+  'CHECK_IN': 'Entrada',
+  'CHECK_OUT': 'Salida',
+  'MATCH': 'Coincidencia',
+  'NO_MATCH': 'Sin coincidencia',
+  'SUCCESS': 'Exitoso',
+  'FAILED': 'Fallido',
+  'PENDING': 'Pendiente',
+  'DELIVERED': 'Entregado',
+  'UNDELIVERED': 'No entregado',
+  'READ': 'Leído',
+  'SENT': 'Enviado',
+  'RECEIVED': 'Recibido',
+  'INBOUND': 'Entrante',
+  'OUTBOUND': 'Saliente',
+  'NOTIFY_ROLE': 'Notificación',
+  'TRUE': 'Sí',
+  'FALSE': 'No',
+  'MANANA': 'Mañana',
+  'TARDE': 'Tarde',
+  'COMPLETA': 'Completa',
+  'RECTOR': 'Rector',
+  'COORDINADOR': 'Coordinador',
+  'DOCENTE': 'Docente',
+  'SECRETARIA': 'Secretaria',
+  'PORTERO': 'Portero',
+  'AUXILIAR': 'Auxiliar',
+  'PSICORIENTADOR': 'Psicorientador',
+  'SUPER_RECTOR': 'Super Rector',
+};
+
+function humanizeColumn(key) {
+  return COLUMN_LABELS[key] || key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+}
+
+function humanizeValue(value) {
+  if (value === null || value === undefined) return '—';
+  const s = String(value).trim();
+  if (VALUE_LABELS[s]) return VALUE_LABELS[s];
+  if (VALUE_LABELS[s.toUpperCase()]) return VALUE_LABELS[s.toUpperCase()];
+  return s;
+}
 
 function AuditDrawer({ activeSub, onClose }) {
   const [filters, setFilters] = useState({ from: '', to: '', groupId: '', studentId: '', staffId: '', q: '' });
@@ -386,7 +517,7 @@ function AuditDrawer({ activeSub, onClose }) {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Object.entries(stats).map(([k, v]) => (
                   <div key={k} className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 dark:bg-slate-800/50 dark:border-slate-700">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">{k.replace(/_/g, ' ')}</p>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">{humanizeColumn(k)}</p>
                     <p className="text-lg font-black text-[#003366] dark:text-slate-100">{v ?? 0}</p>
                   </div>
                 ))}
@@ -401,7 +532,7 @@ function AuditDrawer({ activeSub, onClose }) {
                       <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                         {visibleKeys.map(k => (
                           <th key={k} className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                            {k.replace(/_/g, ' ')}
+                            {humanizeColumn(k)}
                           </th>
                         ))}
                       </tr>
@@ -516,24 +647,57 @@ function ExportModalContent({ module, format, onClose }) {
     return `nexo_${module.id}_${slug}${dateSlug}`;
   };
 
-  const downloadExcel = () => {
+  const fetchExportData = async () => {
     const config = DRAWER_CONFIG[sub];
-    const headers = ['campo_1', 'campo_2', 'campo_3'];
-    const rows = [['dato_ejemplo_1', 'dato_ejemplo_2', 'dato_ejemplo_3']];
+    if (!config) throw new Error('Submódulo no configurado');
+    const params = {};
+    if (config.needsDates) {
+      if (from) params.from = from;
+      if (to) params.to = to;
+    }
+    const res = await config.api(params);
+    const rows = res?.data ?? res?.summary ?? (Array.isArray(res) ? res : []);
+    return rows;
+  };
+
+  const downloadExcel = (rows) => {
+    if (!rows.length) {
+      setToast({ type: 'error', message: 'No hay datos para exportar en este período' });
+      return;
+    }
+    const keys = Object.keys(rows[0]).filter(k => !EXCLUDE_COLS.includes(k));
+    const headers = keys.map(humanizeColumn);
     let csv = '\uFEFF' + headers.join(';') + '\n';
-    rows.forEach(r => { csv += r.join(';') + '\n'; });
-    const blob = new Blob([csv], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    rows.forEach(row => {
+      const line = keys.map(k => {
+        const v = formatCell(k, row[k]);
+        const cell = String(v).replace(/"/g, '""');
+        return `"${cell}"`;
+      });
+      csv += line.join(';') + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = buildFilename() + '.xls';
+    a.download = buildFilename() + '.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = (rows) => {
+    if (!rows.length) {
+      setToast({ type: 'error', message: 'No hay datos para exportar en este período' });
+      return;
+    }
+    const keys = Object.keys(rows[0]).filter(k => !EXCLUDE_COLS.includes(k));
+    const headers = keys.map(humanizeColumn);
+    let tbody = '';
+    rows.forEach(row => {
+      tbody += '<tr>' + keys.map(k => `<td>${String(formatCell(k, row[k])).replace(/</g, '&lt;')}</td>`).join('') + '</tr>';
+    });
     const html = `
       <html><head><meta charset="utf-8">
       <style>
@@ -547,8 +711,8 @@ function ExportModalContent({ module, format, onClose }) {
       </style></head><body>
       <h1>${module.title} — ${sub}</h1>
       <h2>Periodo: ${from} a ${to}</h2>
-      <table><thead><tr><th>Campo 1</th><th>Campo 2</th><th>Campo 3</th></tr></thead>
-      <tbody><tr><td>Ejemplo 1</td><td>Ejemplo 2</td><td>Ejemplo 3</td></tr></tbody></table>
+      <table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${tbody}</tbody></table>
       <p class="meta">Generado por NEXO · ${new Date().toLocaleString('es-CO')}</p>
       </body></html>`;
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -564,12 +728,12 @@ function ExportModalContent({ module, format, onClose }) {
     if (!sub) return;
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 600));
-      if (format === 'Excel') downloadExcel();
-      else if (format === 'PDF') downloadPDF();
+      const rows = await fetchExportData();
+      if (format === 'Excel') downloadExcel(rows);
+      else if (format === 'PDF') downloadPDF(rows);
       setToast({ type: 'success', message: `${format} de "${sub}" generado correctamente` });
     } catch (e) {
-      setToast({ type: 'error', message: 'Error generando el archivo. Vuelve a intentarlo.' });
+      setToast({ type: 'error', message: e.message || 'Error generando el archivo. Vuelve a intentarlo.' });
     } finally {
       setLoading(false);
     }
@@ -643,6 +807,7 @@ function formatCell(key, value) {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
   const sk = String(key).toLowerCase();
+  // Fechas
   if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('created') || sk.includes('detected') || sk.includes('emitted') || sk.includes('resolved') || sk.includes('sent') || sk.includes('executed')) {
     const d = new Date(value);
     if (!isNaN(d)) return d.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
@@ -651,6 +816,9 @@ function formatCell(key, value) {
     const d = new Date(value);
     if (!isNaN(d)) return d.toLocaleDateString('es-CO');
   }
+  // Humanizar enums y valores conocidos
+  const human = humanizeValue(value);
+  if (human !== String(value)) return human;
   const s = String(value);
   if (s.length > 100) return s.slice(0, 100) + '…';
   return s;

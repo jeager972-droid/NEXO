@@ -159,7 +159,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 break;
 
             case 'inasistencia':
-                $studentId = $params['student_id'] ?? null;
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, g.whatsapp_phone 
@@ -257,6 +257,44 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         VALUES (uuid_generate_v4(), ?, ?, ?, NOW())
                     ");
                     $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
+
+                    // Notificar acudiente para autorizar_salida y permiso
+                    if (in_array($action, ['autorizar_salida', 'permiso'])) {
+                        $guardStmt = $conn->prepare("
+                            SELECT s.first_name, s.last_name, g.whatsapp_phone
+                            FROM students s
+                            JOIN guardian_student_relationships gsr ON s.student_id = gsr.student_id AND gsr.primary_guardian = TRUE
+                            JOIN guardians g ON gsr.guardian_id = g.guardian_id
+                            WHERE s.student_id = ? AND s.school_id = ?
+                        ");
+                        $guardStmt->execute([$studentId, $schoolId]);
+                        $guardData = $guardStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($guardData && !empty($guardData['whatsapp_phone'])) {
+                            $actLabel = $action === 'autorizar_salida' ? 'AUTORIZACIÓN DE SALIDA' : 'PERMISO';
+                            $msg = "📢 *NEXO*\n\nSu hijo(a) *" . $guardData['first_name'] . ' ' . $guardData['last_name'] . "* tiene registrada una *" . $actLabel . "* en el sistema.\n\nDetalle: {$reason}\n\nComuníquese con la institución si tiene dudas.";
+                            enqueueTwilioJob($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, strtoupper($action));
+                        }
+                    }
+                }
+
+                // Notificación grupal para salida pedagógica o cambio de horario
+                if (in_array($action, ['pedagogica', 'horario']) && !empty($params['group'])) {
+                    $groupName = filter_var($params['group'], FILTER_SANITIZE_SPECIAL_CHARS);
+                    $groupStmt = $conn->prepare("
+                        SELECT DISTINCT g.whatsapp_phone
+                        FROM guardians g
+                        JOIN guardian_student_relationships gsr ON g.guardian_id = gsr.guardian_id AND gsr.primary_guardian = TRUE
+                        JOIN student_group_assignments sga ON gsr.student_id = sga.student_id AND sga.active = TRUE
+                        JOIN academic_groups ag ON sga.group_id = ag.group_id AND ag.group_name = ? AND ag.school_id = ?
+                    ");
+                    $groupStmt->execute([$groupName, $schoolId]);
+                    $actLabel = $action === 'horario' ? 'CAMBIO DE HORARIO' : 'SALIDA PEDAGÓGICA';
+                    $msg = "📢 *NEXO*\n\nSe ha registrado una *" . $actLabel . "* para el grupo *" . $groupName . "*.\n\nDetalle: {$reason}\n\nPor favor revise la plataforma para más información.";
+                    while ($gRow = $groupStmt->fetch(PDO::FETCH_ASSOC)) {
+                        if (!empty($gRow['whatsapp_phone'])) {
+                            enqueueTwilioJob($gRow['whatsapp_phone'], $msg, $schoolId, null, null, $userId, strtoupper($action));
+                        }
+                    }
                 }
 
                 // Solicitud interna: notify target user via Twilio if they have a phone
@@ -270,19 +308,79 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                // Daño / Incidente: notify coordinación
-                if (($action === 'daño' || $action === 'incidente') && !$studentId) {
+                // Incidente: respetar targets seleccionados
+                if ($action === 'incidente') {
+                    $targets = $params['targets'] ?? [];
+                    if ($studentId && in_array('padre', $targets)) {
+                        $guardStmt = $conn->prepare("
+                            SELECT s.first_name, s.last_name, g.whatsapp_phone
+                            FROM students s
+                            JOIN guardian_student_relationships gsr ON s.student_id = gsr.student_id AND gsr.primary_guardian = TRUE
+                            JOIN guardians g ON gsr.guardian_id = g.guardian_id
+                            WHERE s.student_id = ? AND s.school_id = ?
+                        ");
+                        $guardStmt->execute([$studentId, $schoolId]);
+                        $guardData = $guardStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($guardData && !empty($guardData['whatsapp_phone'])) {
+                            $msg = "⚠️ *NEXO — Incidente*\n\nEstudiante: *" . $guardData['first_name'] . ' ' . $guardData['last_name'] . "*\nDetalle: {$reason}\n\nComuníquese con la institución.";
+                            enqueueTwilioJob($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, 'INCIDENTE');
+                        }
+                    }
+                    if (in_array('rector', $targets)) {
+                        $rStmt = $conn->prepare("
+                            SELECT phone FROM users
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR')
+                        ");
+                        $rStmt->execute([$schoolId]);
+                        while ($rRow = $rStmt->fetch(PDO::FETCH_ASSOC)) {
+                            if (!empty($rRow['phone'])) {
+                                $msg = "⚠️ *NEXO — Reporte de incidente*\n\nReportado por: {$role}\nDetalle: {$reason}";
+                                enqueueTwilioJob($rRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                            }
+                        }
+                    }
+                    if (in_array('coordinacion', $targets)) {
+                        $cStmt = $conn->prepare("
+                            SELECT phone FROM users
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR')
+                        ");
+                        $cStmt->execute([$schoolId]);
+                        while ($cRow = $cStmt->fetch(PDO::FETCH_ASSOC)) {
+                            if (!empty($cRow['phone'])) {
+                                $msg = "⚠️ *NEXO — Reporte de incidente*\n\nReportado por: {$role}\nDetalle: {$reason}";
+                                enqueueTwilioJob($cRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                            }
+                        }
+                    }
+                    // Fallback: sin targets ni estudiante → notificar coordinación
+                    if (empty($targets) && !$studentId) {
+                        $targetRole = 'COORDINADOR';
+                        $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *INCIDENTE*\nReportado por: {$role}\nDetalle: {$reason}";
+                        $fStmt = $conn->prepare("
+                            SELECT phone FROM users
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?)
+                        ");
+                        $fStmt->execute([$schoolId, $targetRole]);
+                        while ($fRow = $fStmt->fetch(PDO::FETCH_ASSOC)) {
+                            if (!empty($fRow['phone'])) {
+                                enqueueTwilioJob($fRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                            }
+                        }
+                    }
+                }
+
+                // Daño sin estudiante: notificar coordinación
+                if ($action === 'daño' && !$studentId) {
                     $targetRole = 'COORDINADOR';
-                    $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *" . strtoupper($action) . "*\nReportado por: {$role}\nDetalle: {$reason}";
-                    $notifyStmt = $conn->prepare("
+                    $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *DAÑO*\nReportado por: {$role}\nDetalle: {$reason}";
+                    $dStmt = $conn->prepare("
                         SELECT phone FROM users
-                        WHERE school_id = ?
-                          AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?)
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?)
                     ");
-                    $notifyStmt->execute([$schoolId, $targetRole]);
-                    while ($notifyRow = $notifyStmt->fetch(PDO::FETCH_ASSOC)) {
-                        if (!empty($notifyRow['phone'])) {
-                            enqueueTwilioJob($notifyRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                    $dStmt->execute([$schoolId, $targetRole]);
+                    while ($dRow = $dStmt->fetch(PDO::FETCH_ASSOC)) {
+                        if (!empty($dRow['phone'])) {
+                            enqueueTwilioJob($dRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
                         }
                     }
                 }

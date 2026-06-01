@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import {
-  AlertOctagon, ShieldCheck, ShieldAlert,
+  AlertOctagon, ShieldCheck, ShieldAlert, AlertTriangle,
   MapPin, Clock, Bus, Calendar,
   Wrench, Send, X, UserCheck, ChevronRight,
   CheckCircle2, Loader2,
@@ -103,12 +103,12 @@ const Operation = () => {
       roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR],
       fields: ['group', 'student', 'reason', 'timeRange']
     },
-    { 
-      id: 'incidente', 
-      title: 'Reportar incidente', 
-      icon: ShieldAlert, 
+    {
+      id: 'incidente',
+      title: 'Reportar incidente',
+      icon: ShieldAlert,
       roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-      fields: ['student', 'message', 'targets']
+      fields: ['group', 'student', 'message', 'targets']
     }
   ];
 

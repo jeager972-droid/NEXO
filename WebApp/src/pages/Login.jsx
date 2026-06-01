@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, ArrowRight, Shield, Activity } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
 
@@ -63,37 +63,6 @@ const Login = () => {
       className="min-h-screen flex flex-col items-center justify-center px-4 py-14 font-sans"
       style={{ backgroundColor: '#F8FAFC' }}
     >
-      {/* Classification strip — top */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.05 }}
-        className="mb-8 flex items-center gap-2 select-none"
-      >
-        <span
-          className="inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.25em] rounded-sm"
-          style={{
-            border: '1.5px solid #003366',
-            color:  '#003366',
-            backgroundColor: 'transparent',
-          }}
-        >
-          <Shield size={10} strokeWidth={2.5} />
-          Sistema Restringido
-        </span>
-        <span
-          className="inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.25em] rounded-sm"
-          style={{
-            border: '1.5px solid #00A67E',
-            color:  '#00A67E',
-            backgroundColor: 'transparent',
-          }}
-        >
-          <Activity size={10} strokeWidth={2.5} />
-          Biometría Activa
-        </span>
-      </motion.div>
-
       {/* Main card */}
       <motion.div
         variants={CARD}
@@ -112,45 +81,22 @@ const Login = () => {
           className="px-10 pt-10 pb-8"
           style={{ borderBottom: '1.5px solid #F1F5F9' }}
         >
-          <div className="flex items-start justify-between mb-8">
+          <div className="mb-8">
             <LogoNexo className="h-10" />
-            <span
-              className="text-[9px] font-bold uppercase tracking-[0.22em] mt-1 select-none"
-              style={{ color: '#94A3B8' }}
-            >
-              v2.0 — SRE
-            </span>
           </div>
 
           <h1
             className="text-2xl font-black uppercase tracking-tight"
             style={{ color: '#003366', letterSpacing: '-0.01em' }}
           >
-            Portal de Acceso
+            Iniciar sesión
           </h1>
           <p
             className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]"
             style={{ color: '#94A3B8' }}
           >
-            Panel de Monitoreo Biométrico
+            Portal institucional NEXO
           </p>
-
-          {/* Security tier indicator */}
-          <div className="mt-5 flex items-center gap-2">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-1 flex-1 rounded-full"
-                style={{ backgroundColor: i <= 3 ? '#003366' : '#E2E8F0' }}
-              />
-            ))}
-            <span
-              className="text-[9px] font-bold uppercase tracking-[0.2em] ml-1 select-none"
-              style={{ color: '#003366' }}
-            >
-              Nivel 3
-            </span>
-          </div>
         </div>
 
         {/* Form */}
@@ -196,7 +142,7 @@ const Login = () => {
                 color: '#0F172A',
                 boxShadow: 'inset 0 1px 3px 0 rgba(0,51,102,0.04)',
               }}
-              placeholder="usuario@institución.edu"
+              placeholder="director@miinstitucion.edu.co"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onFocus={(e) => {
@@ -261,7 +207,7 @@ const Login = () => {
                 </span>
               ) : (
                 <>
-                  <span>Autenticar Acceso</span>
+                  <span>Ingresar</span>
                   <ArrowRight size={16} strokeWidth={2.5} />
                 </>
               )}
@@ -271,31 +217,18 @@ const Login = () => {
 
         {/* Footer */}
         <div
-          className="px-10 py-5 flex items-center justify-between"
+          className="px-10 py-5 flex items-center justify-center"
           style={{ borderTop: '1.5px solid #F1F5F9', backgroundColor: '#F8FAFC' }}
         >
-          <div className="flex items-center gap-2">
-            <span
-              className="block h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: '#00A67E' }}
-            />
-            <span
-              className="text-[9px] font-bold uppercase tracking-[0.22em] select-none"
-              style={{ color: '#00A67E' }}
-            >
-              Sistema Operativo
-            </span>
-          </div>
           <p
             className="text-[9px] font-bold uppercase tracking-[0.18em] select-none"
             style={{ color: '#CBD5E1' }}
           >
-            NEXO · Acceso Restringido
+            NEXO · Sistema de custodia estudiantil
           </p>
         </div>
       </motion.div>
 
-      {/* Bottom classification */}
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -303,7 +236,7 @@ const Login = () => {
         className="mt-8 text-[9px] font-bold uppercase tracking-[0.25em] select-none"
         style={{ color: '#CBD5E1' }}
       >
-        Uso exclusivo de personal autorizado — Monitoreo activo
+        © {new Date().getFullYear()} NEXO
       </motion.p>
     </div>
   );
