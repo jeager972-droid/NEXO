@@ -26,23 +26,31 @@ const OPERATION_COMMANDS = [
 ];
 
 const AUDIT_SUBDIVISIONS = [
-  { title: 'Inasistencias', path: '/auditoria', icon: Users, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Llegadas tarde', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Evasión interna', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Intentos salón incorrecto', path: '/auditoria', icon: Search, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Spam biométrico', path: '/auditoria', icon: Activity, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Reporte disciplinario', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Salidas clase', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Salidas colegio', path: '/auditoria', icon: ShieldCheck, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Salidas pedagógicas', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Retornos pendientes', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Historial permisos', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Permisos emitidos', path: '/auditoria', icon: UserCheck, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Alertas SOS emitidas', path: '/auditoria', icon: AlertOctagon, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
-  { title: 'Evasiones internas', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR] },
+  { title: 'Inasistencias', path: '/auditoria', icon: Users, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['asistencia','inasistencia','falta'] },
+  { title: 'Llegadas tarde', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['asistencia','tarde','retardo'] },
+  { title: 'Evasión interna', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['asistencia','evasion','fuga'] },
+  { title: 'Intentos salón incorrecto', path: '/auditoria', icon: Search, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['disciplina','salon','aula'] },
+  { title: 'Spam biométrico', path: '/auditoria', icon: Activity, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['disciplina','spam','biometrico','intentos'] },
+  { title: 'Reporte disciplinario', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['disciplina','reporte','conducta'] },
+  { title: 'Salidas clase', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['permisos','salida','clase'] },
+  { title: 'Salidas colegio', path: '/auditoria', icon: ShieldCheck, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['permisos','salida','colegio'] },
+  { title: 'Salidas pedagógicas', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['permisos','salida','pedagogica','excursion'] },
+  { title: 'Retornos pendientes', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['permisos','retorno','pendiente'] },
+  { title: 'Historial permisos', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['permisos','historial'] },
+  { title: 'Permisos emitidos', path: '/auditoria', icon: UserCheck, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['docente','permisos','emitidos'] },
+  { title: 'Alertas SOS emitidas', path: '/auditoria', icon: AlertOctagon, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['sos','alerta','emergencia'] },
+  { title: 'Evasiones internas', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['asistencia','evasion'] },
 ];
 
-const SEARCH_CATALOG = [...SIDEBAR_ITEMS, ...OPERATION_COMMANDS, ...AUDIT_SUBDIVISIONS];
+const PARENT_MODULES = [
+  { title: 'Asistencia', path: '/auditoria', icon: Users, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['asistencia','inasistencia','llegadas','evasion'] },
+  { title: 'Disciplina', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['disciplina','incidente','salon','biometrico','reporte'] },
+  { title: 'Permisos y Salidas', path: '/auditoria', icon: Bus, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['permisos','salidas','retornos','historial'] },
+  { title: 'Actividad Docente', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['docente','permisos','clases'] },
+  { title: 'Alertas', path: '/auditoria', icon: AlertOctagon, roles: [ROLES.RECTOR, ROLES.SUPER_RECTOR], keywords: ['alertas','sos','emergencia'] },
+];
+
+const SEARCH_CATALOG = [...SIDEBAR_ITEMS, ...OPERATION_COMMANDS, ...AUDIT_SUBDIVISIONS, ...PARENT_MODULES];
 
 const GlobalSearchResults = ({ query, userRole, onSelect }) => {
   if (!query.trim()) {
@@ -53,10 +61,13 @@ const GlobalSearchResults = ({ query, userRole, onSelect }) => {
     );
   }
   const q = query.trim().toLowerCase();
-  const results = SEARCH_CATALOG.filter(item =>
-    item.roles.includes(userRole) &&
-    (item.title.toLowerCase().includes(q) || item.path.replace('/', '').includes(q))
-  );
+  const results = SEARCH_CATALOG.filter(item => {
+    if (!item.roles.includes(userRole)) return false;
+    const text = item.title.toLowerCase();
+    const path = item.path.replace('/', '').toLowerCase();
+    const kw = (item.keywords || []).join(' ').toLowerCase();
+    return text.includes(q) || path.includes(q) || kw.includes(q);
+  });
   if (results.length === 0) {
     return <div className="px-3 py-4 text-xs text-slate-400 text-center">Sin resultados</div>;
   }

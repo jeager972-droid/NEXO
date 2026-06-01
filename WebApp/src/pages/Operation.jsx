@@ -18,18 +18,22 @@ const Operation = () => {
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setFetchError('');
       try {
         const [groupsData, studentsData] = await Promise.all([
           studentsApi.getGroups(),
           studentsApi.getAll()
         ]);
-        setGroups(groupsData || []);
-        setStudents(studentsData?.students || []);
+        setGroups(Array.isArray(groupsData) ? groupsData : []);
+        setStudents(Array.isArray(studentsData?.students) ? studentsData.students : []);
       } catch (error) {
         console.error('Error fetching operations data', error);
+        setFetchError(error?.response?.data?.message || 'No se pudieron cargar los datos de grupos y estudiantes. Verifica tu conexión.');
       } finally {
         setLoading(false);
       }
@@ -125,6 +129,34 @@ const Operation = () => {
           {[1,2,3,4,5,6].map(i => (
             <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
+            Operación Institucional
+          </p>
+          <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px', letterSpacing: '-0.01em' }} className="dark:text-slate-200">
+            Comandos de control y acción
+          </p>
+        </div>
+        <div className="p-5 bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={18} strokeWidth={2} />
+            Error cargando datos
+          </div>
+          <p className="text-xs font-medium opacity-80">{fetchError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-3 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 text-xs font-bold uppercase tracking-wider transition-colors"
+          >
+            Reintentar
+          </button>
         </div>
       </div>
     );
