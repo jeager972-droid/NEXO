@@ -42,10 +42,10 @@ const ROLES = [
       </svg>
     ),
     headline: 'Los problemas se detectan antes de escalar.',
-    body: 'Los coordinadores ven evasiones entre clases, salidas frecuentes y llegadas tarde recurrentes, todo en un panel en tiempo real, con alertas automáticas configurables por umbral antes de que cualquier situación se convierta en incidente.',
+    body: 'Los coordinadores ven evasiones entre clases, salidas frecuentes y llegadas tarde recurrentes, todo en un panel en tiempo real, con alertas automáticas por umbral antes de que cualquier situación se convierta en incidente.',
     features: [
       'Panel de patrones y anomalías en tiempo real',
-      'Alertas automáticas configurables por umbral',
+      'Alertas automáticas por umbral',
       'Historial completo por estudiante a disposición del coordinador',
     ],
   },
@@ -66,6 +66,66 @@ const ROLES = [
       'Asistencia automática, sin intervención manual',
       'Citar acudientes desde el móvil en un toque',
       'Reportes de incidentes y daños desde la app',
+    ],
+  },
+  {
+    id: 'psicoorientador',
+    label: 'Psicoorientador',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="4"/>
+        <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+    headline: 'El acompañamiento estudiantil, respaldado institucionalmente.',
+    body: 'Coordinación o rectoría activa el proceso de acompañamiento con el psicoorientador. Durante su vigencia, este accede únicamente a los registros que el coordinador habilite según el caso. El sistema registra la aprobación del proceso, los datos autorizados para consulta y la fecha de cierre.',
+    features: [
+      'Proceso activado por coordinación o rectoría',
+      'Acceso acotado a los registros que el coordinador autorice',
+      'Registro de aprobación, datos habilitados y fecha de cierre',
+    ],
+  },
+  {
+    id: 'secretaria',
+    label: 'Secretaría',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+    ),
+    headline: 'El centro de gestión documental y administrativa.',
+    body: 'Todos los roles envían solicitudes a la secretaría directamente desde la app. Ella gestiona un panel unificado en orden de llegada, confirma, rechaza o responde con documentos e información. Desde ese mismo panel registra nuevos estudiantes con su huella biométrica y administra retiros del sistema.',
+    features: [
+      'Panel de solicitudes organizadas en orden de llegada',
+      'Respuesta con documentos, confirmaciones o información',
+      'Registro biométrico y administrativo de estudiantes',
+    ],
+  },
+  {
+    id: 'auxiliares',
+    label: 'Auxiliares y personal de apoyo',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 21v-2a4 4 0 0 0-4-4H6"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M17 21l2-2-2-2"/>
+        <path d="M21 17l-2-2-2 2"/>
+      </svg>
+    ),
+    headline: 'Operación facilitada para cada rol de soporte.',
+    body: 'Porteros, auxiliares y personal de apoyo operan con un panel propio desde la app. Gestionan solicitudes, reportan eventos y se comunican con los roles pertinentes en tiempo real, sin depender de canales informales ni de memoria.',
+    features: [
+      'Panel de solicitudes entrantes y salientes',
+      'Reporte de eventos a roles pertinentes en tiempo real',
+      'Comunicación institucional centralizada desde la app',
     ],
   },
 ]

@@ -14,7 +14,7 @@ const SPECS = [
   {
     id: 'steel',
     label: 'Con materiales pensados para la durabilidad',
-    meaning: 'Carcasa en acero inoxidable con certificación IP66. Resiste golpes, polvo y salpicaduras. Su capa protectora anti-rayones mantiene la apariencia intacta tras años de uso diario por cientos de estudiantes.',
+    meaning: 'Carcasa en acero inoxidable con certificación IP66. Resiste golpes, polvo y salpicaduras. Paneles acrílicos protegen la pantalla y el sensor. NEXO incluye cinco repuestos anuales por nodo sin costo adicional. No hay tornillería externa visible; la fijación a la pared se realiza completamente desde el interior, con cerradura de llave única.',
     hotspotPos: { top: '20%', left: '28%' },
     hotspotPosMobile: { top: '10%', left: '12%' },
   },
@@ -35,7 +35,7 @@ const SPECS = [
   {
     id: 'encrypt',
     label: 'Encriptado de extremo a extremo',
-    meaning: 'Los datos biométricos viajan y se almacenan con encriptación completa en cada capa del sistema.',
+    meaning: 'Todos los datos que gestiona este nodo viajan y se almacenan con encriptación completa en cada capa del sistema.',
     hotspotPos: { top: '30%', right: '18%' },
     hotspotPosMobile: { top: '15%', right: '6%' },
   },
@@ -236,7 +236,19 @@ export default function NodeSection() {
             El centro de la operación de NEXO
           </h3>
           <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '720px', marginBottom: '1rem' }}>
-            NEXO implementa en cada aula de clase el llamado "NODO DE NEXO" diseñado para aguantar durante años las condiciones reales de una institución educativa, el cual mediante su conectividad y batería autónoma, interconecta, automatiza y facilita la operación educativa de toda una institución.
+            NEXO implementa en cada aula de clase un nodo diseñado para aguantar durante años las condiciones reales de una institución educativa, el cual mediante su conectividad y batería autónoma, interconecta, automatiza y facilita la operación educativa de toda una institución.
+          </p>
+          <p
+            className="nx-reveal nx-reveal-delay-3"
+            style={{
+              fontSize: '0.7rem',
+              color: 'var(--nx-muted-2)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: '1.5rem',
+            }}
+          >
+            Rota con el cursor · Toca los puntos
           </p>
 
           {/* Layout: 3D node centered, panel below on PC / beside on mobile handled via CSS */}
@@ -281,41 +293,7 @@ export default function NodeSection() {
                 />
               ))}
 
-              {/* Cursor hint — desktop only */}
-              <div
-                aria-hidden="true"
-                className="nx-cursor-hint-desktop"
-                style={{
-                  position: 'absolute',
-                  bottom: '1rem',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  fontSize: '0.65rem',
-                  color: 'var(--nx-muted-2)',
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
-                }}
-              >
-                Rota con el cursor · Toca los puntos
-              </div>
             </div>
-
-            {/* Hint: subtle message about green buttons */}
-            <p
-              className="nx-node-hint"
-              style={{
-                fontSize: '0.75rem',
-                color: 'var(--nx-muted)',
-                textAlign: 'center',
-                letterSpacing: '0.02em',
-                marginTop: isMobile ? '0' : '-0.5rem',
-                opacity: 0.7,
-              }}
-            >
-              Toca los botones verdes para ver características del nodo
-            </p>
 
             {/* ── BELOW: Dynamic spec panel (full width on PC) ── */}
             <div style={{ width: '100%' }}>

@@ -69,8 +69,8 @@ export default function LandingPage() {
         <ValuePropSection />    {/* 05 — Propuesta de valor */}
         <NodeSection />         {/* 06 — El nodo */}
         <RolesSection />        {/* 07 — Roles */}
-        <DownloadSection />     {/* 08 — Descarga */}
         <SecuritySection />     {/* 09 — Seguridad */}
+        <DownloadSection />     {/* 08 — Descarga */}
         <FinalCTASection />     {/* 10 — CTA Final */}
       </main>
 

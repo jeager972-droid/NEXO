@@ -57,21 +57,7 @@ export function useStickyScroll(
         gsap.set(inner, { yPercent: 0, opacity: 1, scale: 1 })
       }
 
-      if (!isLast) {
-        gsap.fromTo(inner,
-          { yPercent: 0, opacity: 1, scale: 1 },
-          {
-            yPercent: -6, opacity: 0, scale: 0.98,
-            ease: 'none',
-            scrollTrigger: {
-              trigger: wrapper,
-              start: 'bottom 30%',
-              end:   'bottom top',
-              scrub: 0.8,
-            }
-          }
-        )
-      }
+      // Exit animation removed — scroll now flows freely between sections
     })
 
     return () => ctx.revert()

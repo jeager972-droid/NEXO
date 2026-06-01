@@ -9,7 +9,7 @@ import { useStickyScroll } from '../components/useStickyScroll'
 
 const ROWS = [
   {
-    before: 'Lista de asistencia manual. Tiempo de cátedra que no vuelve',
+    before: 'Lista de asistencia manual',
     after:  'Registro automático al instante por estudiante',
   },
   {
@@ -17,16 +17,12 @@ const ROWS = [
     after:  'Notificación vía WhatsApp en tiempo real, el mismo momento',
   },
   {
-    before: 'Los coordinadores no saben quién salió ni cuántas veces',
+    before: 'Los coordinadores reciben información cuando ya ocurrió algo o es tarde',
     after:  'Panel de alertas con patrones detectados automáticamente',
   },
   {
     before: 'Los registros existen en papel, vulnerables y dispersos',
     after:  'Registro automatizado digital disponible para su descarga en Word o Excel',
-  },
-  {
-    before: 'Si se va la luz o el internet, el sistema colapsa',
-    after:  'Operación autónoma: batería 12h + conectividad M2M propia',
   },
 ]
 

@@ -23,7 +23,7 @@ const STEPS = [
   {
     num: '03',
     title: 'La institución tiene visibilidad completa',
-    body: 'Coordinadores y rectores tienen a su disposición un panel en tiempo real con la información de la institución. Los profesores tienen al alcance de un botón su operación diaria: comunicación, registros, citaciones y más.',
+    body: 'Coordinadores y rectores tienen a su disposición un panel en tiempo real con la información de la institución. Los profesores tienen al alcance de un botón su operación diaria: comunicación, registros, citaciones y más, amortiguando y automatizando la carga operativa de secretaría, portería, auxiliares y psicoorientador.',
   },
   {
     num: '04',
@@ -313,7 +313,7 @@ export default function HowItWorksSection() {
               opacity: 0,
             }}
           >
-            Todo esto ocurre sin internet · Con batería de respaldo de 12 horas · Con conectividad M2M independiente
+            Todo esto ocurre sin internet · Con batería de respaldo de 12 horas · Diseñado para la operación diaria escolar
           </p>
         </div>
       </section>
