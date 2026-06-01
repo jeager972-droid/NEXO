@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useCinematicScroll } from '../components/useCinematicScroll'
+import { useStickyScroll } from '../components/useStickyScroll'
 import AnimatedDownloadButton from '../components/DownloadButton'
 import gsap from 'gsap'
 
@@ -260,7 +260,7 @@ export default function DownloadSection() {
   useReveal(innerRef)
 
   // Aplicar arquitectura sticky scroll
-  useCinematicScroll(wrapperRef, innerRef)
+  useStickyScroll(wrapperRef, innerRef)
 
   return (
     <div ref={wrapperRef} className="section-wrapper" id="descarga">

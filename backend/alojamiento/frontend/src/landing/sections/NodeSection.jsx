@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useCinematicScroll } from '../components/useCinematicScroll'
+import { useStickyScroll } from '../components/useStickyScroll'
 import NexoCanvas from '../components/NexoCanvas'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -152,8 +152,8 @@ export default function NodeSection() {
   const [isMobile, setIsMobile] = useState(false)
   useReveal(innerRef)
 
-  // Cinematic scroll transition with GSAP pin
-  useCinematicScroll(wrapperRef, innerRef)
+  // Scroll-triggered entrance / exit animations (preserves auto-height, no sticky)
+  useStickyScroll(wrapperRef, innerRef)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768)
@@ -211,14 +211,22 @@ export default function NodeSection() {
   const toggle = (id) => setActive(prev => prev === id ? null : id)
 
   return (
-    <div ref={wrapperRef} className="section-wrapper" id="el-nodo">
+    <div ref={wrapperRef} className="section-wrapper" id="el-nodo" style={{ height: 'auto', minHeight: '150vh' }}>
       <section
         ref={innerRef}
         className="section-inner"
         style={{
           background: 'linear-gradient(180deg, var(--nx-surface) 0%, var(--nx-deep) 100%)',
+          overflow:   'visible',
           paddingLeft: 'var(--nx-section-px)',
           paddingRight: 'var(--nx-section-px)',
+          paddingTop: '5rem',
+          paddingBottom: '5rem',
+          display: 'flex',
+          alignItems: 'center',
+          height: 'auto',
+          minHeight: '100vh',
+          position: 'relative',
         }}
       >
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
@@ -246,7 +254,7 @@ export default function NodeSection() {
               className="nx-node-canvas-wrap nx-reveal nx-reveal-delay-3"
               style={{
                 position: 'relative',
-                height: isMobile ? '360px' : '460px',
+                height: isMobile ? '360px' : '580px',
                 width: '100%',
                 maxWidth: isMobile ? '100%' : '860px',
                 margin: '0 auto',

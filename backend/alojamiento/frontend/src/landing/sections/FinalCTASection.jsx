@@ -3,7 +3,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ContactModal from '../components/ContactModal'
 import LegalModal from '../components/LegalModal'
-import { useCinematicScroll } from '../components/useCinematicScroll'
+import { useStickyScroll } from '../components/useStickyScroll'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 10 — FINAL CTA
@@ -23,7 +23,7 @@ export default function FinalCTASection() {
   const [legalModal, setLegalModal] = useState(null)
 
   // Aplicar arquitectura sticky scroll
-  useCinematicScroll(wrapperRef, innerRef, { isLast: true })
+  useStickyScroll(wrapperRef, innerRef, { isLast: true })
 
   useEffect(() => {
     const wrapper = wrapperRef.current

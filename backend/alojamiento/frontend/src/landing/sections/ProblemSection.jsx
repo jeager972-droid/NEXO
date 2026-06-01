@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useCinematicScroll } from '../components/useCinematicScroll'
+import { useStickyScroll } from '../components/useStickyScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // gsap.registerPlugin called once globally in LandingPage.jsx
@@ -61,7 +61,7 @@ export default function ProblemSection() {
   useReveal(innerRef)
 
   // Aplicar arquitectura sticky scroll
-  useCinematicScroll(wrapperRef, innerRef)
+  useStickyScroll(wrapperRef, innerRef)
 
   useEffect(() => {
     const wrapper = wrapperRef.current
