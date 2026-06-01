@@ -3,7 +3,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ContactModal from '../components/ContactModal'
 import { Link } from 'react-router-dom'
-import { useStickyScroll } from '../components/useStickyScroll'
+import { useCinematicScroll } from '../components/useCinematicScroll'
 // NOTE: gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 01 — HERO
@@ -32,7 +32,7 @@ export default function HeroSection() {
   }, [])
 
   // Aplicar arquitectura sticky scroll (isFirst: true = no entrance anim, has exit anim)
-  useStickyScroll(wrapperRef, innerRef, { isFirst: true })
+  useCinematicScroll(wrapperRef, innerRef, { isFirst: true })
 
   useEffect(() => {
     const isMobile = window.innerWidth <= 768

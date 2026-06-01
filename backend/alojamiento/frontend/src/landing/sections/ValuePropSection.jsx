@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { useStickyScroll } from '../components/useStickyScroll'
+import { useCinematicScroll } from '../components/useCinematicScroll'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 05 — PROPUESTA DE VALOR
@@ -40,7 +40,7 @@ export default function ValuePropSection() {
   const afterRef    = useRef()
 
   // Aplicar arquitectura sticky scroll
-  useStickyScroll(wrapperRef, innerRef)
+  useCinematicScroll(wrapperRef, innerRef)
 
   useEffect(() => {
     const wrapper = wrapperRef.current

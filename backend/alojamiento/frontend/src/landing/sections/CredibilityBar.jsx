@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useStickyScroll } from '../components/useStickyScroll'
+import { useCinematicScroll } from '../components/useCinematicScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // gsap.registerPlugin called once globally in LandingPage.jsx
@@ -49,7 +49,7 @@ export default function CredibilityBar() {
   useReveal(innerRef)
 
   // Aplicar arquitectura sticky scroll
-  useStickyScroll(wrapperRef, innerRef)
+  useCinematicScroll(wrapperRef, innerRef)
 
   useEffect(() => {
     const trigger = ScrollTrigger.create({

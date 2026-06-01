@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useStickyScroll } from '../components/useStickyScroll'
+import { useCinematicScroll } from '../components/useCinematicScroll'
 
 // MODULE 09 — SECURITY & TRUST
 // Psychological trigger: fear elimination + regulatory authority (Colombian MEN / SIC)
@@ -109,7 +109,7 @@ export default function SecuritySection() {
   useReveal(innerRef)
 
   // Aplicar arquitectura sticky scroll
-  useStickyScroll(wrapperRef, innerRef)
+  useCinematicScroll(wrapperRef, innerRef)
 
   return (
     <div ref={wrapperRef} className="section-wrapper" id="seguridad">

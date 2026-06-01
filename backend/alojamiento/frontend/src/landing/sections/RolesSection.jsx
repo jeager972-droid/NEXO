@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useReveal } from '../components/useReveal'
-import { useStickyScroll } from '../components/useStickyScroll'
+import { useCinematicScroll } from '../components/useCinematicScroll'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // gsap.registerPlugin called once globally in LandingPage.jsx
@@ -82,7 +82,7 @@ export default function RolesSection() {
   useReveal(innerRef)
 
   // Aplicar arquitectura sticky scroll
-  useStickyScroll(wrapperRef, innerRef)
+  useCinematicScroll(wrapperRef, innerRef)
 
   // PASO 4: Tabs stagger horizontal de 0.08s desde opacity:0
   useEffect(() => {
