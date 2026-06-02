@@ -9,7 +9,13 @@ const wrapCommand = (command, params) => ({
 export const operationsApi = {
   execute: async (command, data, path = `/operations/${command}`) => {
     const response = await client.post(path, wrapCommand(command, data));
-    return response.data;
+    const payload = response.data;
+    if (payload?.status !== 'ok') {
+      const err = new Error(payload?.message || 'Error en la operación institucional');
+      err.response = { data: payload, status: response.status };
+      throw err;
+    }
+    return payload;
   },
   sos: async (data) => {
     return operationsApi.execute('sos', data, '/operations/sos');

@@ -7,7 +7,8 @@ const getSchoolId = () => {
 
 const normalizeStudent = (student) => ({
   ...student,
-  name: `${student.first_name || ''} ${student.last_name || ''}`.trim(),
+  id: student.id ?? student.student_id ?? null,
+  name: `${student.last_name || ''}, ${student.first_name || ''}`.trim(),
   group: student.group_name || student.group || 'Sin grupo',
   fingerprintId: student.fingerprint_id || null,
 });
@@ -26,6 +27,21 @@ export const studentsApi = {
       lastId: payload?.meta?.last_id ?? last_id,
       hasMore: payload?.meta?.has_more ?? false,
     };
+  },
+  getAllPaginated: async (search = '') => {
+    const all = [];
+    let lastId = 0;
+    let hasMore = true;
+    let iterations = 0;
+    while (hasMore && iterations < 50) {
+      const batch = await studentsApi.getAll({ last_id: lastId, limit: 100, search });
+      if (batch.students.length === 0) break;
+      all.push(...batch.students);
+      lastId = batch.lastId;
+      hasMore = batch.hasMore;
+      iterations++;
+    }
+    return all;
   },
   getGroups: async () => {
     const schoolId = getSchoolId();

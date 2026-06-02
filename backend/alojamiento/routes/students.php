@@ -90,7 +90,7 @@ if ($cleanPath === '/students') {
         $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $nextLastId = count($students) > 0 ? $students[count($students) - 1]['student_id'] : $lastId;
+        $nextLastId = count($students) > 0 ? $students[count($students) - 1]['id'] : $lastId;
 
         echo json_encode([
             'status' => 'ok',

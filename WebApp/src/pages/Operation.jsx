@@ -27,12 +27,12 @@ const Operation = () => {
       setLoading(true);
       setFetchError('');
       try {
-        const [groupsData, studentsData] = await Promise.all([
+        const [groupsData, allStudents] = await Promise.all([
           studentsApi.getGroups(),
-          studentsApi.getAll()
+          studentsApi.getAllPaginated()
         ]);
         setGroups(Array.isArray(groupsData) ? groupsData : []);
-        setStudents(Array.isArray(studentsData?.students) ? studentsData.students : []);
+        setStudents(Array.isArray(allStudents) ? allStudents : []);
       } catch (error) {
         console.error('Error fetching operations data', error);
         setFetchError(error?.response?.data?.message || 'No se pudieron cargar los datos de grupos y estudiantes. Verifica tu conexión.');
@@ -118,7 +118,8 @@ const Operation = () => {
     }
   ];
 
-  const filteredCommands = commands.filter(cmd => cmd.roles.includes(user?.role));
+  const userRole = user?.role_name || user?.role;
+  const filteredCommands = commands.filter(cmd => userRole && cmd.roles.includes(userRole));
 
   useEffect(() => {
     const cmdTitle = searchParams.get('cmd');
@@ -128,6 +129,22 @@ const Operation = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams, filteredCommands]);
+
+  if (!user) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <div className="h-2 w-20 bg-slate-200 dark:bg-slate-800 rounded-sm animate-pulse mb-2" />
+          <div className="h-4 w-48 bg-slate-200 dark:bg-slate-800 rounded-sm animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -185,11 +202,17 @@ const Operation = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredCommands.map((cmd, i) => (
-          <ActionCard key={cmd.id} cmd={cmd} index={i} onClick={() => setActiveCommand(cmd)} />
-        ))}
-      </div>
+      {filteredCommands.length === 0 ? (
+        <div className="p-6 bg-slate-50 border border-slate-200 text-slate-500 text-sm font-semibold text-center">
+          No tienes comandos disponibles para tu rol actual ({userRole || 'desconocido'}).
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCommands.map((cmd, i) => (
+            <ActionCard key={cmd.id} cmd={cmd} index={i} onClick={() => setActiveCommand(cmd)} />
+          ))}
+        </div>
+      )}
 
       <AnimatePresence>
         {activeCommand && (
@@ -487,6 +510,11 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                         return <option key={g?.id || n} value={n}>{n}</option>;
                       })}
                     </select>
+                    {filteredGroups.length === 0 && (
+                      <p className="text-[10px] text-amber-600 mt-1.5 font-semibold">
+                        No hay grupos disponibles. Verifica que existan grupos académicos registrados.
+                      </p>
+                    )}
                   </FormField>
                 </>
               )}
@@ -514,6 +542,11 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                       <option value="">— Seleccionar estudiante —</option>
                       {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                    {filteredStudents.length === 0 && (
+                      <p className="text-[10px] text-amber-600 mt-1.5 font-semibold">
+                        No hay estudiantes visibles en este grupo. Si crees que debería haberlos, verifica la asignación de grupos en la base de datos.
+                      </p>
+                    )}
                   </FormField>
                 </>
               )}
