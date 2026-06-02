@@ -53,7 +53,7 @@ if ($cleanPath === '/students') {
         $params = [$schoolId];
         $whereClauses = ['s.school_id = ?'];
 
-        if ($lastId !== '') {
+        if ($lastId !== '' && $lastId !== '0') {
             $whereClauses[] = 's.student_id > ?';
             $params[] = $lastId;
         }

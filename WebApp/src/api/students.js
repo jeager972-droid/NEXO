@@ -14,9 +14,10 @@ const normalizeStudent = (student) => ({
 });
 
 export const studentsApi = {
-  getAll: async ({ last_id = 0, limit = 50, search = '' } = {}) => {
+  getAll: async ({ last_id = '', limit = 50, search = '' } = {}) => {
     const schoolId = getSchoolId();
-    const params = { last_id, limit };
+    const params = { limit };
+    if (last_id !== '' && last_id !== '0' && last_id !== 0) params.last_id = last_id;
     if (schoolId) params.school_id = schoolId;
     if (search && search.trim()) params.search = search.trim();
     const response = await client.get('/students', { params });
@@ -30,7 +31,7 @@ export const studentsApi = {
   },
   getAllPaginated: async (search = '') => {
     const all = [];
-    let lastId = 0;
+    let lastId = '';
     let hasMore = true;
     let iterations = 0;
     while (hasMore && iterations < 50) {
