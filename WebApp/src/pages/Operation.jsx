@@ -22,24 +22,34 @@ const Operation = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
 
+  const fetchData = async () => {
+    setLoading(true);
+    setFetchError('');
+    let groupsOk = false;
+    let studentsOk = false;
+    try {
+      const groupsData = await studentsApi.getGroups();
+      setGroups(Array.isArray(groupsData) ? groupsData : []);
+      groupsOk = true;
+    } catch (error) {
+      console.error('Error fetching groups', error);
+      const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener grupos';
+      setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
+    }
+    try {
+      const allStudents = await studentsApi.getAllPaginated();
+      setStudents(Array.isArray(allStudents) ? allStudents : []);
+      studentsOk = true;
+    } catch (error) {
+      console.error('Error fetching students', error);
+      const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener estudiantes';
+      setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
+    }
+    setLoading(false);
+    return { groupsOk, studentsOk };
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setFetchError('');
-      try {
-        const [groupsData, allStudents] = await Promise.all([
-          studentsApi.getGroups(),
-          studentsApi.getAllPaginated()
-        ]);
-        setGroups(Array.isArray(groupsData) ? groupsData : []);
-        setStudents(Array.isArray(allStudents) ? allStudents : []);
-      } catch (error) {
-        console.error('Error fetching operations data', error);
-        setFetchError(error?.response?.data?.message || 'No se pudieron cargar los datos de grupos y estudiantes. Verifica tu conexión.');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -162,33 +172,6 @@ const Operation = () => {
     );
   }
 
-  if (fetchError) {
-    return (
-      <div className="space-y-5">
-        <div>
-          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
-            Operación Institucional
-          </p>
-          <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px', letterSpacing: '-0.01em' }} className="dark:text-slate-200">
-            Comandos de control y acción
-          </p>
-        </div>
-        <div className="p-5 bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={18} strokeWidth={2} />
-            Error cargando datos
-          </div>
-          <p className="text-xs font-medium opacity-80">{fetchError}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-3 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 text-xs font-bold uppercase tracking-wider transition-colors"
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
@@ -201,6 +184,24 @@ const Operation = () => {
           Comandos de control y acción
         </p>
       </div>
+
+      {fetchError && (
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} strokeWidth={2} className="shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-bold mb-0.5">Advertencia de carga de datos</p>
+              <p className="opacity-80 font-medium">{fetchError}</p>
+            </div>
+            <button
+              onClick={fetchData}
+              className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0"
+            >
+              Reintentar
+            </button>
+          </div>
+        </div>
+      )}
 
       {filteredCommands.length === 0 ? (
         <div className="p-6 bg-slate-50 border border-slate-200 text-slate-500 text-sm font-semibold text-center">

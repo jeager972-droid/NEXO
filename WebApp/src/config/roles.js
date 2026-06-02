@@ -65,7 +65,7 @@ export const SIDEBAR_ITEMS = [
 ];
 
 export const ROLE_DISPLAY = {
-  [ROLES.SUPER_RECTOR]:  'Super Rector',
+  [ROLES.SUPER_RECTOR]:  'Admin',
   [ROLES.RECTOR]:        'Rector',
   [ROLES.COORDINADOR]:   'Coordinador',
   [ROLES.DOCENTE]:       'Docente',

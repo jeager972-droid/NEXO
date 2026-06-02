@@ -102,9 +102,15 @@ if ($cleanPath === '/students') {
             ]
         ]);
     } catch (Exception $e) {
-        securityLog('STUDENTS_ERROR', $e->getMessage());
+        $details = $e->getMessage() . ' | File: ' . $e->getFile() . ':' . $e->getLine();
+        securityLog('STUDENTS_ERROR', $details);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estudiantes']);
+        $isDev = (getenv('APP_ENV') ?: 'production') === 'development';
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Error al obtener estudiantes',
+            'detail' => $isDev ? $details : 'Revisa los logs del servidor para más información'
+        ]);
     }
     exit;
 }

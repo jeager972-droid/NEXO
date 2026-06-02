@@ -9,7 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx git unzip net-tools curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN install-php-extensions pdo_pgsql mysqli redis sockets zip
+RUN install-php-extensions pdo_pgsql mysqli redis sockets zip pcntl
 
 WORKDIR /var/www/html
 COPY composer.json composer.lock* ./

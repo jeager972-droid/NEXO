@@ -122,5 +122,9 @@ for i in $(seq 1 30); do
 done
 [ -S /run/php/php-fpm.sock ] && echo "[nexo] Socket listo." || echo "[nexo] WARN: socket no encontrado, continuando igual"
 
+echo "[nexo] Arrancando workers en segundo plano..."
+php /var/www/html/worker_twilio.php > /dev/null 2>&1 &
+php /var/www/html/worker_audit.php > /dev/null 2>&1 &
+
 echo "[nexo] Arrancando nginx en puerto ${PORT}..."
 exec nginx -g "daemon off;"

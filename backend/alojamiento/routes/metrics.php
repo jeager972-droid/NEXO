@@ -5,45 +5,60 @@ global $cleanPath;
 
 if ($cleanPath === '/metrics') {
     $metrics = [];
+    global $conn;
 
-    // Métricas HTTP
+    // Métricas HTTP — sin middleware real, emitimos 0 para no simular
     $metrics[] = '# HELP http_requests_total Total HTTP requests';
     $metrics[] = '# TYPE http_requests_total counter';
-    $metrics[] = 'http_requests_total ' . (int)($_SERVER['REQUEST_COUNT'] ?? rand(1000, 9999));
+    $metrics[] = 'http_requests_total 0';
 
-    // Latencia (placeholder — en producción se mide con middleware)
     $metrics[] = '# HELP http_request_duration_seconds HTTP request latency';
     $metrics[] = '# TYPE http_request_duration_seconds histogram';
-    $metrics[] = 'http_request_duration_seconds_bucket{le="0.1"} ' . rand(100, 500);
-    $metrics[] = 'http_request_duration_seconds_bucket{le="0.5"} ' . rand(500, 1500);
-    $metrics[] = 'http_request_duration_seconds_bucket{le="1.0"} ' . rand(1500, 3000);
-    $metrics[] = 'http_request_duration_seconds_bucket{le="+Inf"} ' . rand(3000, 5000);
-    $metrics[] = 'http_request_duration_seconds_sum ' . rand(1000, 5000);
-    $metrics[] = 'http_request_duration_seconds_count ' . rand(3000, 5000);
+    $metrics[] = 'http_request_duration_seconds_bucket{le="0.1"} 0';
+    $metrics[] = 'http_request_duration_seconds_bucket{le="0.5"} 0';
+    $metrics[] = 'http_request_duration_seconds_bucket{le="1.0"} 0';
+    $metrics[] = 'http_request_duration_seconds_bucket{le="+Inf"} 0';
+    $metrics[] = 'http_request_duration_seconds_sum 0';
+    $metrics[] = 'http_request_duration_seconds_count 0';
 
-    // Errores 5xx
     $metrics[] = '# HELP http_errors_5xx_total Total HTTP 5xx errors';
     $metrics[] = '# TYPE http_errors_5xx_total counter';
-    $metrics[] = 'http_errors_5xx_total ' . rand(0, 50);
+    $metrics[] = 'http_errors_5xx_total 0';
 
-    // Autenticación
+    // Autenticación real
     $metrics[] = '# HELP auth_logins_total Total login attempts';
     $metrics[] = '# TYPE auth_logins_total counter';
-    $metrics[] = 'auth_logins_total ' . rand(100, 2000);
+    try {
+        $loginCount = $conn->query("SELECT COUNT(*) FROM rate_limits WHERE rl_key LIKE 'login:%'")->fetchColumn();
+        $metrics[] = 'auth_logins_total ' . (int)$loginCount;
+    } catch (Exception $e) {
+        $metrics[] = 'auth_logins_total 0';
+    }
 
-    // Biométricos (eventos edge recibidos)
+    // Biométricos
     $metrics[] = '# HELP biometric_events_ingested_total Total biometric events ingested';
     $metrics[] = '# TYPE biometric_events_ingested_total counter';
-    $metrics[] = 'biometric_events_ingested_total ' . rand(5000, 500000);
+    try {
+        $bioCount = $conn->query("SELECT COUNT(*) FROM biometric_events")->fetchColumn();
+        $metrics[] = 'biometric_events_ingested_total ' . (int)$bioCount;
+    } catch (Exception $e) {
+        $metrics[] = 'biometric_events_ingested_total 0';
+    }
 
-    // Twilio
+    // Twilio real
     $metrics[] = '# HELP twilio_messages_sent_total Total Twilio messages sent';
     $metrics[] = '# TYPE twilio_messages_sent_total counter';
-    $metrics[] = 'twilio_messages_sent_total ' . rand(100, 10000);
-
     $metrics[] = '# HELP twilio_messages_failed_total Total Twilio messages failed';
     $metrics[] = '# TYPE twilio_messages_failed_total counter';
-    $metrics[] = 'twilio_messages_failed_total ' . rand(0, 100);
+    try {
+        $sent = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status='SENT'")->fetchColumn();
+        $failed = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status='FAILED_PERMANENT'")->fetchColumn();
+        $metrics[] = 'twilio_messages_sent_total ' . (int)$sent;
+        $metrics[] = 'twilio_messages_failed_total ' . (int)$failed;
+    } catch (Exception $e) {
+        $metrics[] = 'twilio_messages_sent_total 0';
+        $metrics[] = 'twilio_messages_failed_total 0';
+    }
 
     // Redis colas
     try {

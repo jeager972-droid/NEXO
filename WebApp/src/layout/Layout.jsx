@@ -127,9 +127,12 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const canSearch = user?.role !== ROLES.SUPER_RECTOR && user?.role !== ROLES.RECTOR;
+
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        if (!canSearch) return;
         e.preventDefault();
         setSearchOpen(v => !v);
       }
@@ -137,7 +140,7 @@ const Layout = () => {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [canSearch]);
 
   const headerBg     = darkMode ? 'rgba(2,6,23,0.90)'      : 'rgba(250,250,249,0.90)';
   const headerBorder = darkMode ? 'rgba(30,41,59,0.8)'     : 'rgba(226,232,240,0.85)';
@@ -190,65 +193,67 @@ const Layout = () => {
             </div>
           </div>
 
-          {/* Center — global search */}
-          <div className="hidden md:flex flex-1 justify-center px-4 max-w-md" ref={searchRef}>
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              style={{ border: '1.5px solid #E2E8F0' }}
-            >
-              <Search size={13} strokeWidth={2} />
-              <span className="flex-1 text-left">Buscar módulo…</span>
-              <span className="hidden lg:inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-300">
-                <Command size={10} strokeWidth={2} />K
-              </span>
-            </button>
+          {/* Center — global search (oculto para SUPER_RECTOR y RECTOR) */}
+          {canSearch && (
+            <div className="hidden md:flex flex-1 justify-center px-4 max-w-md" ref={searchRef}>
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                style={{ border: '1.5px solid #E2E8F0' }}
+              >
+                <Search size={13} strokeWidth={2} />
+                <span className="flex-1 text-left">Buscar módulo…</span>
+                <span className="hidden lg:inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-300">
+                  <Command size={10} strokeWidth={2} />K
+                </span>
+              </button>
 
-            <AnimatePresence>
-              {searchOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-full max-w-md bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden"
-                  style={{ border: '1.5px solid #E2E8F0' }}
-                >
-                  <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
-                    <Search size={14} className="text-slate-400" />
-                    <input
-                      autoFocus
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Escribe nombre del módulo o función…"
-                      className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
+              <AnimatePresence>
+                {searchOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-full max-w-md bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden"
+                    style={{ border: '1.5px solid #E2E8F0' }}
+                  >
+                    <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+                      <Search size={14} className="text-slate-400" />
+                      <input
+                        autoFocus
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Escribe nombre del módulo o función…"
+                        className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
+                      />
+                      {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <GlobalSearchResults
+                      query={searchQuery}
+                      userRole={user?.role}
+                      onSelect={(item) => {
+                        setSearchOpen(false);
+                        setSearchQuery('');
+                        if (item.path === '/auditoria' && AUDIT_SUBDIVISIONS.some(s => s.title === item.title)) {
+                          navigate(`/auditoria?sub=${encodeURIComponent(item.title)}`);
+                        } else if (item.path === '/operacion' && OPERATION_COMMANDS.some(c => c.title === item.title)) {
+                          navigate(`/operacion?cmd=${encodeURIComponent(item.title)}`);
+                        } else {
+                          navigate(item.path);
+                        }
+                      }}
                     />
-                    {searchQuery && (
-                      <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <GlobalSearchResults
-                    query={searchQuery}
-                    userRole={user?.role}
-                    onSelect={(item) => {
-                      setSearchOpen(false);
-                      setSearchQuery('');
-                      if (item.path === '/auditoria' && AUDIT_SUBDIVISIONS.some(s => s.title === item.title)) {
-                        navigate(`/auditoria?sub=${encodeURIComponent(item.title)}`);
-                      } else if (item.path === '/operacion' && OPERATION_COMMANDS.some(c => c.title === item.title)) {
-                        navigate(`/operacion?cmd=${encodeURIComponent(item.title)}`);
-                      } else {
-                        navigate(item.path);
-                      }
-                    }}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* Right — live status + bell + user */}
           <div className="flex items-center gap-3 shrink-0">

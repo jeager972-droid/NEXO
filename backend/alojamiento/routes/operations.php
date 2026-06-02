@@ -24,7 +24,45 @@ function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     }
 }
 
+function sendTwilioDirect($to, $body) {
+    $sid   = getenv('TWILIO_ACCOUNT_SID');
+    $token = getenv('TWILIO_AUTH_TOKEN');
+    $from  = getenv('TWILIO_FROM_NUMBER');
+    if (!$sid || !$token || !$from) {
+        return ['ok' => false, 'error' => 'Missing Twilio credentials'];
+    }
+    $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
+    if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
+    $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
+
+    $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
+    $payload = http_build_query([
+        'From' => "whatsapp:$from",
+        'To'   => "whatsapp:$toNorm",
+        'Body' => $body
+    ]);
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_USERPWD, "$sid:$token");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err      = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $httpCode >= 400) {
+        return ['ok' => false, 'error' => ($err ?: "HTTP $httpCode"), 'sid' => null];
+    }
+    $json = json_decode($response, true);
+    return ['ok' => true, 'error' => null, 'sid' => $json['sid'] ?? null];
+}
+
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
+    $enqueued = false;
     try {
         $redis = new Redis();
         $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
@@ -44,8 +82,19 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
             'created_at' => time()
         ], JSON_UNESCAPED_UNICODE);
         $redis->rPush('queue:twilio', $payload);
+        $enqueued = true;
     } catch (Exception $e) {
         securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
+    }
+
+    // Fallback: si Redis no está disponible, enviar directamente
+    if (!$enqueued) {
+        $result = sendTwilioDirect($to, $body);
+        if ($result['ok']) {
+            securityLog('TWILIO_DIRECT_SENT', "SID: {$result['sid']} To: $to");
+        } else {
+            securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
+        }
     }
 }
 
