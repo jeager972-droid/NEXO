@@ -3,7 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import LogoNexo from '../components/LogoNexo';
 
 const STAGGER = {
   container: {
@@ -78,25 +77,22 @@ const Login = () => {
       >
         {/* Header */}
         <div
-          className="px-10 pt-10 pb-8"
+          className="px-10 pt-10 pb-8 text-center"
           style={{ borderBottom: '1.5px solid #F1F5F9' }}
         >
-          <div className="mb-8">
-            <LogoNexo className="h-10" />
-          </div>
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.35em] mb-4"
+            style={{ color: '#003366' }}
+          >
+            NEXO
+          </p>
 
           <h1
-            className="text-2xl font-black uppercase tracking-tight"
-            style={{ color: '#003366', letterSpacing: '-0.01em' }}
+            className="text-xl font-black uppercase"
+            style={{ color: '#1E293B', letterSpacing: '0.06em' }}
           >
             Iniciar sesión
           </h1>
-          <p
-            className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]"
-            style={{ color: '#94A3B8' }}
-          >
-            Portal institucional NEXO
-          </p>
         </div>
 
         {/* Form */}
@@ -142,7 +138,7 @@ const Login = () => {
                 color: '#0F172A',
                 boxShadow: 'inset 0 1px 3px 0 rgba(0,51,102,0.04)',
               }}
-              placeholder="director@miinstitucion.edu.co"
+              placeholder="usuario@institucion.edu.co"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onFocus={(e) => {
