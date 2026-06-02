@@ -175,7 +175,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
     $rolePermissions = [
         'sos' => ['RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
-        'inasistencia' => ['RECTOR', 'COORDINADOR', 'DOCENTE'],
         'citacion' => ['COORDINADOR', 'DOCENTE', 'PSICORIENTADOR'],
         'autorizar_salida' => ['COORDINADOR', 'RECTOR'],
         'permiso' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'PSICORIENTADOR'],
@@ -197,43 +196,31 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
             case 'sos':
                 $location = filter_var($params['location'] ?? 'Ubicación no definida', FILTER_SANITIZE_SPECIAL_CHARS);
                 $message = filter_var($params['message'] ?? 'Alerta SOS', FILTER_SANITIZE_SPECIAL_CHARS);
-                
+
                 $sosStmt = $conn->prepare("
                     INSERT INTO sos_alerts (alert_id, school_id, emitted_by_user_id, alert_type, alert_description, emitted_at)
                     VALUES (uuid_generate_v4(), ?, ?, 'SOS_WEBAPP', ?, NOW())
                 ");
                 $sosStmt->execute([$schoolId, $userId, $message]);
-                logUserCommand($conn, $schoolId, $userId, $action, $params);
-                echo json_encode(['status' => 'ok', 'message' => 'Alerta SOS registrada correctamente']);
-                break;
 
-            case 'inasistencia':
-                $studentId = $params['student'] ?? $params['student_id'] ?? null;
-                
-                $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, g.whatsapp_phone 
-                    FROM students s
-                    JOIN guardian_student_relationships gsr ON s.student_id = gsr.student_id
-                    JOIN guardians g ON gsr.guardian_id = g.guardian_id
-                    WHERE s.student_id = ? AND s.school_id = ? AND gsr.primary_guardian = TRUE
-                ");
-                $stmt->execute([$studentId, $schoolId]);
-                $data = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($data) {
-                    $incStmt = $conn->prepare("
-                        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
-                        VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA', NOW())
+                // Notificar Coordinación y Rectoría por WhatsApp
+                $sosMsg = "🚨 *NEXO — ALERTA SOS*\n\nUbicación: {$location}\nMensaje: {$message}\nReportado por: {$authUser['nombre']} ({$role})\n\nVerifique la plataforma inmediatamente.";
+                $notifyRoles = ['RECTOR', 'COORDINADOR'];
+                foreach ($notifyRoles as $nr) {
+                    $nStmt = $conn->prepare("
+                        SELECT phone FROM users
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?) AND active = TRUE
                     ");
-                    $incStmt->execute([$schoolId, $studentId]);
-                    
-                    $msg = "🔔 *NEXO INFORMA*\nEl estudiante *" . $data['first_name'] . " " . $data['last_name'] . "* no se ha reportado hoy.";
-                    enqueueTwilioJob($data['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, 'INASISTENCIA');
-                    logUserCommand($conn, $schoolId, $userId, $action, $params);
-                    echo json_encode(['status' => 'ok', 'message' => 'Inasistencia reportada y acudiente notificado']);
-                } else {
-                    echo json_encode(['status' => 'error', 'message' => 'Estudiante o acudiente no encontrado']);
+                    $nStmt->execute([$schoolId, $nr]);
+                    while ($nRow = $nStmt->fetch(PDO::FETCH_ASSOC)) {
+                        if (!empty($nRow['phone'])) {
+                            enqueueTwilioJob($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
+                        }
+                    }
                 }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode(['status' => 'ok', 'message' => 'Alerta SOS registrada y notificada a directivos']);
                 break;
 
             case 'citacion':
@@ -346,14 +333,25 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                // Solicitud interna: notify target user via Twilio if they have a phone
+                // Solicitud interna: guardar mensaje interno + WhatsApp si tiene teléfono
                 if ($action === 'solicitud' && !empty($params['recipient_id'])) {
                     $recStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ? AND school_id = ?");
                     $recStmt->execute([$params['recipient_id'], $schoolId]);
                     $recRow = $recStmt->fetch(PDO::FETCH_ASSOC);
-                    if ($recRow && !empty($recRow['phone'])) {
-                        $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$authUser['nombre']}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
-                        enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
+                    if ($recRow) {
+                        try {
+                            $msgStmt = $conn->prepare("
+                                INSERT INTO internal_messages (message_id, school_id, sender_user_id, receiver_user_id, subject, message_content, sent_at)
+                                VALUES (uuid_generate_v4(), ?, ?, ?, 'Solicitud interna', ?, NOW())
+                            ");
+                            $msgStmt->execute([$schoolId, $userId, $params['recipient_id'], $reason]);
+                        } catch (Exception $e) {
+                            securityLog('SOLICITUD_MSG_ERROR', $e->getMessage());
+                        }
+                        if (!empty($recRow['phone'])) {
+                            $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$authUser['nombre']}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
+                            enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
+                        }
                     }
                 }
 

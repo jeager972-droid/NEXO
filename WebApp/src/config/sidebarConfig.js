@@ -30,7 +30,7 @@ export const SIDEBAR_ITEMS = [
     title: 'Consulta',
     path: '/consulta',
     icon: Search,
-    roles: ['Rector', 'Coordinador', 'Secretaria', 'Docente', 'Portero', 'Auxiliar', 'Administrador']
+    roles: ['Coordinador', 'Secretaria', 'Docente', 'Portero', 'Auxiliar']
   },
   {
     title: 'Auditoría',

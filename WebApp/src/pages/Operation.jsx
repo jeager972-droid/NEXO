@@ -55,13 +55,6 @@ const Operation = () => {
 
   const commands = [
     {
-      id: 'inasistencia',
-      title: 'Reportar inasistencia',
-      icon: AlertTriangle,
-      roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE],
-      fields: ['group', 'student']
-    },
-    {
       id: 'citar',
       title: 'Citar acudiente',
       icon: Calendar,
@@ -75,13 +68,12 @@ const Operation = () => {
       roles: [ROLES.COORDINADOR, ROLES.RECTOR],
       fields: ['group', 'student', 'reason']
     },
-    { 
-      id: 'sos', 
-      title: 'SOS', 
-      icon: AlertOctagon, 
+    {
+      id: 'sos',
+      title: 'SOS',
+      icon: AlertOctagon,
       roles: Object.values(ROLES),
-      fields: ['location', 'message'],
-      isUrgent: true
+      fields: ['location', 'message']
     },
     { 
       id: 'daño', 
@@ -367,7 +359,6 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
       }
       switch (command.id) {
         case 'sos':         await operationsApi.sos(payload);                                         break;
-        case 'inasistencia':await operationsApi.inasistencia(payload);                                break;
         case 'citar':       await operationsApi.citacion(payload);                                    break;
         case 'autorizar':   await operationsApi.salida(payload);                                      break;
         case 'permiso':     await operationsApi.permiso(payload);                                     break;

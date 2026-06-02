@@ -20,9 +20,6 @@ export const operationsApi = {
   sos: async (data) => {
     return operationsApi.execute('sos', data, '/operations/sos');
   },
-  inasistencia: async (data) => {
-    return operationsApi.execute('inasistencia', data, '/operations/inasistencia');
-  },
   citacion: async (data) => {
     return operationsApi.execute('citacion', data, '/operations/citacion');
   },

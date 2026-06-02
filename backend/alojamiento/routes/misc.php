@@ -84,6 +84,9 @@ if ($cleanPath === '/notifications') {
 
     try {
         $notifications = [];
+        $userRole = strtoupper($authUser['role'] ?? '');
+        $isRector = in_array($userRole, ['RECTOR', 'SUPER_RECTOR']);
+        $isDocente = $userRole === 'DOCENTE';
 
         $sosStmt = $conn->prepare("
             SELECT alert_id AS id,
@@ -100,6 +103,17 @@ if ($cleanPath === '/notifications') {
         $sosStmt->execute([$authUser['school_id']]);
         $notifications = array_merge($notifications, $sosStmt->fetchAll(PDO::FETCH_ASSOC));
 
+        // Filtrar tipos que no deben ver rectores/admins
+        $excludeTypes = [];
+        if ($isRector) {
+            $excludeTypes = ['LATE_ARRIVAL', 'INGRESO_TARDE', 'EARLY_EXIT', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE'];
+        }
+        $excludeClause = '';
+        if (!empty($excludeTypes)) {
+            $placeholders = implode(',', array_fill(0, count($excludeTypes), '?'));
+            $excludeClause = " AND incident_type NOT IN ($placeholders)";
+        }
+
         $incStmt = $conn->prepare("
             SELECT incident_id AS id,
                    'INFO' AS type,
@@ -115,13 +129,18 @@ if ($cleanPath === '/notifications') {
                        WHEN 'HORARIO' THEN 'Cambio de horario'
                        WHEN 'INCIDENTE' THEN 'Reporte de incidente'
                        WHEN 'UNAUTHORIZED_ABSENCE' THEN 'Inasistencia no autorizada'
+                       WHEN 'UNAUTHORIZED:ABSENCE' THEN 'Inasistencia no autorizada'
                        WHEN 'LATE_ARRIVAL' THEN 'Llegada tarde'
+                       WHEN 'LATE:ARRIVAL' THEN 'Llegada tarde'
                        WHEN 'EARLY_EXIT' THEN 'Salida anticipada'
+                       WHEN 'EARLY:DEPARTURE' THEN 'Salida anticipada'
+                       WHEN 'EARLY_DEPARTURE' THEN 'Salida anticipada'
                        WHEN 'EVASION_INTERNA' THEN 'Evasión interna'
                        WHEN 'BIOMETRIC_FAILURE' THEN 'Fallo biométrico'
                        WHEN 'SPAM_BIOMETRIC' THEN 'Spam biométrico'
                        ELSE incident_type
                    END AS desc,
+                   incident_type AS raw_type,
                    TO_CHAR(detected_at, 'HH24:MI') AS time,
                    detected_at AS occurred_at
             FROM attendance_incidents
@@ -131,11 +150,43 @@ if ($cleanPath === '/notifications') {
                 OR metadata_json->>'target_user_id' IS NULL
                 OR metadata_json->>'target_user_id' = ?
               )
+              $excludeClause
             ORDER BY detected_at DESC
             LIMIT 15
         ");
-        $incStmt->execute([$authUser['school_id'], (string)$authUser['id']]);
-        $notifications = array_merge($notifications, $incStmt->fetchAll(PDO::FETCH_ASSOC));
+        $params = [$authUser['school_id'], (string)$authUser['id']];
+        if (!empty($excludeTypes)) {
+            $params = array_merge($params, $excludeTypes);
+        }
+        $incStmt->execute($params);
+        $incRows = $incStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Para docentes, reemplazar mensaje de llegadas tarde por algo más suave
+        foreach ($incRows as &$row) {
+            $raw = strtoupper($row['raw_type'] ?? '');
+            if ($isDocente && (in_array($raw, ['LATE_ARRIVAL', 'LATE:ARRIVAL', 'INGRESO_TARDE']))) {
+                $row['desc'] = 'Se guardó en el sistema el evento';
+            }
+            unset($row['raw_type']);
+        }
+
+        $notifications = array_merge($notifications, $incRows);
+
+        // Mensajes internos (solicitudes)
+        $msgStmt = $conn->prepare("
+            SELECT message_id AS id,
+                   'INFO' AS type,
+                   subject AS title,
+                   message_content AS desc,
+                   TO_CHAR(sent_at, 'HH24:MI') AS time,
+                   sent_at AS occurred_at
+            FROM internal_messages
+            WHERE receiver_user_id = ?
+            ORDER BY sent_at DESC
+            LIMIT 10
+        ");
+        $msgStmt->execute([(string)$authUser['id']]);
+        $notifications = array_merge($notifications, $msgStmt->fetchAll(PDO::FETCH_ASSOC));
 
         usort($notifications, function ($a, $b) {
             return strcmp((string)($b['occurred_at'] ?? ''), (string)($a['occurred_at'] ?? ''));
