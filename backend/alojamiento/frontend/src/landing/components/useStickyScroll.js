@@ -37,27 +37,25 @@ export function useStickyScroll(
       return
     }
 
-    // DESKTOP — sticky scroll cinematográfico
+    // DESKTOP — simple fade-in, no transforms that clip or distort
     const ctx = gsap.context(() => {
       if (!isFirst) {
         gsap.fromTo(inner,
-          { yPercent: 6, opacity: 0, scale: 0.98 },
+          { opacity: 0, y: 20 },
           {
-            yPercent: 0, opacity: 1, scale: 1,
-            ease: 'none',
+            opacity: 1, y: 0,
+            duration: 0.6,
+            ease: 'power2.out',
             scrollTrigger: {
               trigger: wrapper,
-              start: 'top 90%',
-              end:   'top 20%',
-              scrub: 0.8,
+              start: 'top 85%',
+              toggleActions: 'play none none none',
             }
           }
         )
       } else {
-        gsap.set(inner, { yPercent: 0, opacity: 1, scale: 1 })
+        gsap.set(inner, { opacity: 1, y: 0 })
       }
-
-      // Exit animation removed — scroll now flows freely between sections
     })
 
     return () => ctx.revert()
