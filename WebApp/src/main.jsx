@@ -8,6 +8,18 @@ import './index.css'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 
+// FIX: Limpia service workers viejos/bloqueados para evitar pantalla en blanco por cache PWA stale
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => {
+      // Si el SW no puede responder con un fetch válido, desregistrarlo
+      r.update().catch(() => {
+        r.unregister().then(() => console.log('[NEXO] Stale SW unregistered'));
+      });
+    });
+  });
+}
+
 registerSW({ immediate: true })
 
 ReactDOM.createRoot(document.getElementById('root')).render(

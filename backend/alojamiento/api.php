@@ -8,10 +8,15 @@
    ============================================================ */
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $allowedOrigins = array_filter(array_map('trim', explode(',', 
-    getenv('CORS_ALLOW_ORIGINS') ?: 'https://nexo-bay-mu.vercel.app'
+    getenv('CORS_ALLOW_ORIGINS') ?: ''
 )));
 
-$finalOrigin = in_array($origin, $allowedOrigins) ? $origin : $allowedOrigins[0];
+if (empty($allowedOrigins)) {
+    // Development / preview fallback: accept request origin
+    $finalOrigin = $origin ?: '*';
+} else {
+    $finalOrigin = in_array($origin, $allowedOrigins) ? $origin : $allowedOrigins[0];
+}
 
 header('Access-Control-Allow-Origin: ' . $finalOrigin);
 header('Access-Control-Allow-Credentials: true');
@@ -28,7 +33,8 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
-header("Content-Security-Policy: default-src 'self'; connect-src 'self' http://localhost:5173; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none';");
+// FIX: no CSP en API responses; el frontend controla su propia CSP via meta tag
+header("Content-Security-Policy: default-src *; connect-src *; img-src * data:; style-src * 'unsafe-inline'; font-src * data:; frame-ancestors 'none';");
 
 require_once __DIR__ . '/boot_check.php';
 require_once __DIR__ . '/db.php';

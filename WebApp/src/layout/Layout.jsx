@@ -7,13 +7,12 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { getRoleDisplay, SIDEBAR_ITEMS, ROLES } from '../config/roles';
 import {
-  AlertTriangle, Calendar, ShieldCheck, AlertOctagon, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert,
+  Calendar, ShieldCheck, AlertOctagon, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert,
   Users, Activity, FileText, UserPlus, LayoutDashboard
 } from 'lucide-react';
 
 /* ── Searchable items: sidebar + operation commands + audit subdivisions ── */
 const OPERATION_COMMANDS = [
-  { title: 'Reportar inasistencia', path: '/operacion', icon: AlertTriangle, roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE] },
   { title: 'Citar acudiente', path: '/operacion', icon: Calendar, roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
   { title: 'Autorizar salida', path: '/operacion', icon: ShieldCheck, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
   { title: 'SOS', path: '/operacion', icon: AlertOctagon, roles: Object.values(ROLES) },
