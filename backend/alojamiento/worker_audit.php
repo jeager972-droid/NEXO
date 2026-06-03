@@ -58,7 +58,12 @@ pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
 
 $conn = $pdo;
 $conn->exec("SET app.current_role = 'SUPER_RECTOR'");
-$redis = connectRedis();
+try {
+    $redis = connectRedis();
+} catch (Exception $e) {
+    logWorker('FATAL', "Failed to connect to Redis on startup: " . $e->getMessage());
+    exit(1);
+}
 $batchSize = 100;
 $batch = [];
 $queue = 'queue:audit_logs';

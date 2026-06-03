@@ -36,10 +36,13 @@ function normalizePhone($value) {
 function sendTwilioWhatsAppOtp($to, $code, $purpose) {
     $sid   = getenv('TWILIO_ACCOUNT_SID');
     $token = getenv('TWILIO_AUTH_TOKEN');
-    $from  = getenv('TWILIO_WHATSAPP_FROM');
+    $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     if (!$sid || !$token || !$from) {
         return ['ok' => false, 'error' => 'Twilio credentials missing'];
     }
+
+    $toNorm = normalizePhone($to);
+    $fromNorm = normalizePhone($from);
 
     $labels = [
         'email_change'    => 'cambio de correo electrónico',
@@ -53,8 +56,8 @@ function sendTwilioWhatsAppOtp($to, $code, $purpose) {
 
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
     $payload = http_build_query([
-        'From' => "whatsapp:$from",
-        'To'   => "whatsapp:" . normalizePhone($to),
+        'From' => "whatsapp:$fromNorm",
+        'To'   => "whatsapp:$toNorm",
         'Body' => $body
     ]);
 

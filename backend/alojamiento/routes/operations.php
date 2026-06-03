@@ -27,7 +27,7 @@ function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
 function sendTwilioDirect($to, $body) {
     $sid   = getenv('TWILIO_ACCOUNT_SID');
     $token = getenv('TWILIO_AUTH_TOKEN');
-    $from  = getenv('TWILIO_FROM_NUMBER');
+    $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     if (!$sid || !$token || !$from) {
         return ['ok' => false, 'error' => 'Missing Twilio credentials'];
     }
@@ -35,9 +35,13 @@ function sendTwilioDirect($to, $body) {
     if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
     $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
 
+    $fromNorm = preg_replace('/^whatsapp:/i', '', trim((string)$from));
+    if ($fromNorm !== '' && $fromNorm[0] !== '+') $fromNorm = '+' . $fromNorm;
+    $fromNorm = preg_replace('/[^0-9\+]/', '', $fromNorm);
+
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
     $payload = http_build_query([
-        'From' => "whatsapp:$from",
+        'From' => "whatsapp:$fromNorm",
         'To'   => "whatsapp:$toNorm",
         'Body' => $body
     ]);
@@ -70,6 +74,12 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
         if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
         $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
+        
+        if (empty($toNorm) || $toNorm === '+') {
+            securityLog('TWILIO_ENQUEUE_SKIPPED', "Invalid destination phone: $to");
+            return;
+        }
+
         $payload = json_encode([
             'to' => $toNorm,
             'body' => $body,
@@ -245,7 +255,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     FROM students s
                     JOIN guardian_student_relationships gsr ON gsr.student_id = s.student_id AND gsr.primary_guardian = TRUE
                     JOIN guardians g ON g.guardian_id = gsr.guardian_id
-                    JOIN users u ON u.user_id = g.user_id
+                    LEFT JOIN users u ON u.user_id = g.user_id
                     WHERE s.school_id = ? AND s.student_id = ?
                     LIMIT 1
                 ");

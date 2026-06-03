@@ -43,14 +43,14 @@ function normalizeWhatsAppPhone($value) {
 function sendTwilioWhatsAppDirect($to, $body) {
     $sid   = getenv('TWILIO_ACCOUNT_SID');
     $token = getenv('TWILIO_AUTH_TOKEN');
-    $from  = getenv('TWILIO_FROM_NUMBER');
+    $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     if (!$sid || !$token || !$from) {
         return ['ok' => false, 'error' => 'Missing Twilio credentials', 'sid' => null];
     }
 
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
     $payload = http_build_query([
-        'From' => "whatsapp:$from",
+        'From' => "whatsapp:" . normalizeWhatsAppPhone($from),
         'To'   => "whatsapp:" . normalizeWhatsAppPhone($to),
         'Body' => $body
     ]);
@@ -140,12 +140,19 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
    ============================================================ */
 $conn = $pdo;
 $conn->exec("SET app.current_role = 'SUPER_RECTOR'");
-$redis = connectRedis();
+
+try {
+    $redis = connectRedis();
+} catch (Exception $e) {
+    securityLog('TWILIO_WORKER_FATAL', "Failed to connect to Redis on startup: " . $e->getMessage());
+    exit(1);
+}
+
 $mainQueue   = 'queue:twilio';
 $delayQueue  = 'queue:twilio:delayed';
 
 // FIX: Leaky Bucket rate limiter config
-$rateLimit = (int)(getenv('TWILIO_RATE_LIMIT') ?: 10); // mensajes por segundo
+$rateLimit = max(1, (int)(getenv('TWILIO_RATE_LIMIT') ?: 10)); // mensajes por segundo
 $sendDelay = 1.0 / $rateLimit;
 $lastSend = microtime(true) - $sendDelay;
 
