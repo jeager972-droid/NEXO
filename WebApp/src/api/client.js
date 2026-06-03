@@ -18,7 +18,6 @@ const SLOW_TIMEOUT = 45000;
 const client = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest', // FIX: CSRF protection header
   },
   timeout: DEFAULT_TIMEOUT,

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { behaviorApi } from '../api/behavior';
+import { consultationsApi } from '../api/consultations';
 import {
   Search, Users, ShieldAlert, MessageSquare,
   Activity, ChevronRight, Database, BookOpen,
-  History, UserCheck, X,
+  History, UserCheck, X, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
@@ -13,16 +15,33 @@ const Consultation = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState(null);
   const [riskStudents, setRiskStudents] = useState([]);
+  const [dynamicData, setDynamicData] = useState([]);
+  const [dynamicColumns, setDynamicColumns] = useState({});
+  const [loadingData, setLoadingData] = useState(false);
 
   useEffect(() => {
-    // Mock data para Análisis de Riesgo (simula respuesta del endpoint /behavior/risk)
-    setRiskStudents([
-      { student_id: 1, first_name: 'Juan', last_name: 'Pérez', group_name: '5A', risk_score: 85, risk_level: 'CRITICAL', late_count: 3, absence_count: 2 },
-      { student_id: 2, first_name: 'María', last_name: 'García', group_name: '4B', risk_score: 72, risk_level: 'HIGH', late_count: 5, absence_count: 1 },
-      { student_id: 3, first_name: 'Carlos', last_name: 'López', group_name: '6A', risk_score: 91, risk_level: 'CRITICAL', late_count: 2, absence_count: 4 },
-      { student_id: 4, first_name: 'Ana', last_name: 'Martínez', group_name: '3B', risk_score: 65, risk_level: 'HIGH', late_count: 6, absence_count: 0 },
-    ]);
-  }, []);
+    if (!activeItem) return;
+    
+    setLoadingData(true);
+    if (activeItem === 'Análisis de Riesgo') {
+      behaviorApi.getRiskAnalysis()
+        .then(res => {
+          if (res.status === 'ok') setRiskStudents(res.data || []);
+        })
+        .catch(err => console.error("Error fetching risk analysis", err))
+        .finally(() => setLoadingData(false));
+    } else {
+      consultationsApi.queryModule(activeItem)
+        .then(res => {
+          if (res.status === 'ok') {
+            setDynamicData(res.data || []);
+            setDynamicColumns(res.columns || {});
+          }
+        })
+        .catch(err => console.error("Error fetching module data", err))
+        .finally(() => setLoadingData(false));
+    }
+  }, [activeItem]);
 
   // Definición de módulos por rol
   const rbacModules = {
@@ -189,6 +208,9 @@ const Consultation = () => {
           <ConsultationDrawer
             item={activeItem}
             riskStudents={riskStudents}
+            dynamicData={dynamicData}
+            dynamicColumns={dynamicColumns}
+            loadingData={loadingData}
             onClose={() => setActiveItem(null)}
           />
         )}
@@ -212,83 +234,121 @@ const RiskBadge = ({ level }) => {
   );
 };
 
-const ConsultationDrawer = ({ item, riskStudents, onClose }) => (
-  <>
-    <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }} className="fixed inset-0 z-40"
-      style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
-      onClick={onClose} />
-    <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-      className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-      style={{ maxWidth: '520px', borderLeft: '1.5px solid #E2E8F0' }}
-    >
-      {/* Header */}
-      <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'rgba(0,51,102,0.08)' }}>
-            <Search size={16} strokeWidth={2} style={{ color: '#003366' }} />
-          </div>
-          <div>
-            <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>{item}</p>
-            <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>Consulta de Datos Institucionales</p>
-          </div>
-        </div>
-        <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
-          <X size={18} strokeWidth={2} />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
-          <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
-            <table className="w-full min-w-[440px]">
-              <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
-                  {['Estudiante', 'Grupo', 'Score', 'Nivel'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left"
-                      style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-slate-900">
-                {riskStudents.map((s, i) => (
-                  <tr key={s.student_id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                    style={{ borderBottom: i < riskStudents.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
-                             style={{ backgroundColor: '#003366' }}>
-                          {s.first_name.charAt(0)}
-                        </div>
-                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.first_name} {s.last_name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4"><span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{s.group_name}</span></td>
-                    <td className="px-4 py-4">
-                      <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', fontWeight: 700, color: s.risk_score >= 85 ? '#DC2626' : '#D97706' }}>
-                        {s.risk_score}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4"><RiskBadge level={s.risk_level} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
-            <Database size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
-            <div className="text-center space-y-1">
-              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
-              <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">Este submódulo estará disponible cuando exista integración con el endpoint.</p>
+const ConsultationDrawer = ({ item, riskStudents, dynamicData, dynamicColumns, loadingData, onClose }) => {
+  const keys = Object.keys(dynamicColumns);
+  
+  return (
+    <>
+      <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }} className="fixed inset-0 z-40"
+        style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+        onClick={onClose} />
+      <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+        className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
+        style={{ maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
+      >
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'rgba(0,51,102,0.08)' }}>
+              <Search size={16} strokeWidth={2} style={{ color: '#003366' }} />
+            </div>
+            <div>
+              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>{item}</p>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>Consulta de Datos Institucionales</p>
             </div>
           </div>
-        )}
-      </div>
-    </motion.div>
-  </>
-);
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
+            <X size={18} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {loadingData ? (
+            <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+              <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
+              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                Cargando datos...
+              </p>
+            </div>
+          ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
+            <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
+              <table className="w-full min-w-[440px]">
+                <thead>
+                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                    {['Estudiante', 'Grupo', 'Score', 'Nivel'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left"
+                        style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-slate-900">
+                  {riskStudents.map((s, i) => (
+                    <tr key={s.student_id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                      style={{ borderBottom: i < riskStudents.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
+                               style={{ backgroundColor: '#003366' }}>
+                            {s.first_name.charAt(0)}
+                          </div>
+                          <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.first_name} {s.last_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4"><span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{s.group_name}</span></td>
+                      <td className="px-4 py-4">
+                        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', fontWeight: 700, color: s.risk_score >= 85 ? '#DC2626' : '#D97706' }}>
+                          {s.risk_score}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4"><RiskBadge level={s.risk_level} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
+            <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
+              <table className="w-full min-w-[500px]">
+                <thead>
+                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                    {keys.map(k => (
+                      <th key={k} className="px-4 py-3 text-left"
+                        style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                        {dynamicColumns[k]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-slate-900">
+                  {dynamicData.map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                      style={{ borderBottom: i < dynamicData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      {keys.map(k => (
+                        <td key={k} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                          {row[k]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+              <Database size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
+              <div className="text-center space-y-1">
+                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
+                <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">No se encontraron registros para este módulo en este momento.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </>
+  );
+};
 
 export default Consultation;

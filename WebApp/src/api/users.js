@@ -16,9 +16,7 @@ export const usersApi = {
   uploadPhoto: async (file) => {
     const formData = new FormData();
     formData.append('photo', file);
-    const response = await client.post('/users/upload-photo', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    const response = await client.post('/users/upload-photo', formData);
     return response.data ?? {};
   },
 

@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import {
   AlertOctagon, ShieldCheck, ShieldAlert, AlertTriangle,
   MapPin, Clock, Bus, Calendar,
-  Wrench, Send, X, UserCheck, ChevronRight,
+  Wrench, Send, X, UserCheck, ChevronRight, ChevronDown,
   CheckCircle2, Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -312,6 +312,79 @@ const FormField = ({ label, children }) => (
   </div>
 );
 
+// ── Unified Combobox Component ──────────────────────────────────────────────────
+const Combobox = ({ label, value, onChange, options, placeholder, emptyText, required }) => {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Filter options based on query
+  const filtered = query.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  const selectedOption = options.find(o => o.value === value);
+  const displayValue = isOpen ? query : (selectedOption ? selectedOption.label : '');
+
+  return (
+    <div className="relative">
+      <label style={FIELD_LABEL_STYLE}>{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          value={displayValue}
+          required={required && !value}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (!isOpen) setIsOpen(true);
+            if (value && e.target.value !== selectedOption?.label) {
+              onChange(''); // clear selection if they start typing
+            }
+          }}
+          onFocus={() => { setIsOpen(true); setQuery(''); }}
+          onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+          placeholder={placeholder}
+          className="w-full dark:bg-slate-800 dark:text-white"
+          style={{ ...INPUT_BASE, paddingRight: '32px' }}
+        />
+        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 shadow-lg max-h-48 overflow-y-auto"
+            style={{ border: '1.5px solid #E2E8F0' }}
+          >
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-xs text-slate-500 font-medium">
+                {emptyText || 'No hay resultados.'}
+              </div>
+            ) : (
+              filtered.map(opt => (
+                <div
+                  key={opt.value}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevent blur
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[#003366] hover:text-white cursor-pointer transition-colors"
+                >
+                  {opt.label}
+                </div>
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 // ── Command Drawer ────────────────────────────────────────────────────────────
 
 const CommandDrawer = ({ command, onClose, groups, students }) => {
@@ -474,73 +547,27 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               {command.fields.includes('group') && (
-                <>
-                  <FormField label="Buscar grupo">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={groupSearch}
-                        onChange={e => setGroupSearch(e.target.value)}
-                        placeholder="Escribe nombre del grupo…"
-                        className="dark:bg-slate-800 dark:text-white w-full"
-                        style={{ ...INPUT_BASE, paddingLeft: '32px' }}
-                      />
-                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    </div>
-                  </FormField>
-                  <FormField label="Grupo">
-                    <select required value={formData.group}
-                      onChange={e => {
-                        setFormData(p => ({ ...p, group: e.target.value, student: '' }));
-                        setStudentSearch('');
-                      }}
-                      className="dark:bg-slate-800 dark:text-white appearance-none"
-                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
-                      <option value="">— Elegir grupo —</option>
-                      {filteredGroups.map(g => {
-                        const n = g?.name || g?.group_name || '';
-                        return <option key={g?.id || n} value={n}>{n}</option>;
-                      })}
-                    </select>
-                    {filteredGroups.length === 0 && (
-                      <p className="text-[10px] text-amber-600 mt-1.5 font-semibold">
-                        No hay grupos disponibles. Verifica que existan grupos académicos registrados.
-                      </p>
-                    )}
-                  </FormField>
-                </>
+                <Combobox
+                  label="Grupo"
+                  placeholder="Buscar y seleccionar grupo…"
+                  value={formData.group}
+                  required
+                  onChange={(val) => setFormData(p => ({ ...p, group: val, student: '' }))}
+                  options={(groups || []).map(g => ({ value: g?.name || g?.group_name || '', label: g?.name || g?.group_name || '' }))}
+                  emptyText="No hay grupos disponibles."
+                />
               )}
 
               {command.fields.includes('student') && formData.group && (
-                <>
-                  <FormField label="Buscar estudiante">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={studentSearch}
-                        onChange={e => setStudentSearch(e.target.value)}
-                        placeholder="Escribe nombre del estudiante…"
-                        className="dark:bg-slate-800 dark:text-white w-full"
-                        style={{ ...INPUT_BASE, paddingLeft: '32px' }}
-                      />
-                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1">{filteredStudents.length} estudiante(s) en este grupo</p>
-                  </FormField>
-                  <FormField label="Estudiante">
-                    <select required value={formData.student} onChange={set('student')}
-                      className="dark:bg-slate-800 dark:text-white appearance-none"
-                      style={INPUT_BASE} onFocus={focusBorder} onBlur={blurBorder}>
-                      <option value="">— Seleccionar estudiante —</option>
-                      {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    {filteredStudents.length === 0 && (
-                      <p className="text-[10px] text-amber-600 mt-1.5 font-semibold">
-                        No hay estudiantes visibles en este grupo. Si crees que debería haberlos, verifica la asignación de grupos en la base de datos.
-                      </p>
-                    )}
-                  </FormField>
-                </>
+                <Combobox
+                  label="Estudiante"
+                  placeholder="Buscar y seleccionar estudiante…"
+                  value={formData.student}
+                  required
+                  onChange={(val) => setFormData(p => ({ ...p, student: val }))}
+                  options={filteredByGroup.map(s => ({ value: s.id, label: s.name }))}
+                  emptyText="No hay estudiantes en este grupo."
+                />
               )}
 
               {command.fields.includes('targetRole') && (

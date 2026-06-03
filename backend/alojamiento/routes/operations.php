@@ -174,15 +174,15 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     $params = $input['params'] ?? [];
 
     $rolePermissions = [
-        'sos' => ['RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
+        'sos' => ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
         'citacion' => ['COORDINADOR', 'DOCENTE', 'PSICORIENTADOR'],
-        'autorizar_salida' => ['COORDINADOR', 'RECTOR'],
-        'permiso' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'PSICORIENTADOR'],
+        'autorizar_salida' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
+        'permiso' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'PSICORIENTADOR'],
         'incidente' => ['DOCENTE', 'PSICORIENTADOR'],
-        'solicitud' => ['RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
+        'solicitud' => ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
         'daño' => ['AUXILIAR', 'PORTERO'],
-        'pedagogica' => ['COORDINADOR', 'RECTOR'],
-        'horario' => ['COORDINADOR', 'RECTOR']
+        'pedagogica' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
+        'horario' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR']
     ];
 
     if (!isset($rolePermissions[$action]) || !in_array($role, $rolePermissions[$action])) {
@@ -205,7 +205,16 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 // Notificar Coordinación y Rectoría por WhatsApp
                 $sosMsg = "🚨 *NEXO — ALERTA SOS*\n\nUbicación: {$location}\nMensaje: {$message}\nReportado por: {$authUser['nombre']} ({$role})\n\nVerifique la plataforma inmediatamente.";
-                $notifyRoles = ['RECTOR', 'COORDINADOR'];
+                
+                $notifyRoles = [];
+                if ($role === 'RECTOR' || $role === 'SUPER_RECTOR') {
+                    $notifyRoles = ['COORDINADOR'];
+                } else if ($role === 'COORDINADOR') {
+                    $notifyRoles = ['RECTOR', 'SUPER_RECTOR'];
+                } else {
+                    $notifyRoles = ['RECTOR', 'SUPER_RECTOR', 'COORDINADOR'];
+                }
+
                 foreach ($notifyRoles as $nr) {
                     $nStmt = $conn->prepare("
                         SELECT phone FROM users

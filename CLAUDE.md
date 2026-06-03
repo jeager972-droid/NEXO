@@ -1,64 +1,276 @@
-# NEXO — Hoja de Ruta de Diseño Industrial V3
+# NEXO — Contexto General del Proyecto (Briefing para IA)
 
-## Hardware Real (fuente de verdad)
-- `assets/nodo-front.jpg` — Frente: caja landscape brushed steel (W:H ~1.3:1, depth ~0.27H)
-  - Scanner huella: bezel negro recessed, left ~40%, verde interno
-  - LED verde Ø12mm + botón metálico Ø8mm, upper-right pair
-  - OLED horizontal (70×22mm equiv.), off-center right, mid-height → texto verde "I.E La Paz"
-  - Speaker grille (dot matrix), lower-right
-  - Cerradura cilíndrica, lower-left
-  - Antena cilíndrica gris Ø8mm, top-center
-- `assets/nodo-back.jpg` — Reverso: placa plana brushed steel, 4 tornillos esquina
-- `assets/nodo-side.jpg` — Lateral: profundidad ~30% de ancho, seam de dos piezas visible
-- `assets/nodo-desert.jpg` — Desierto: 3 LEDs verdes alineados, arena cubriendo superficie
-- `assets/nodo-impact.jpg` — Impacto: pared bloques hormigón gris, piedras en trayectoria
-- `assets/nodo-rain.jpg` — Lluvia: nodo expuesto a agua
+> **NEXO** es una startup colombiana de EdTech + IoT que busca resolver la gestión institucional educativa (asistencia biométrica, comunicación familia-escuela, operaciones diarias, auditoría) en colegios de Colombia, con objetivo de escalar a todo el país. El sistema debe ser 100% seguro, robusto y escalable.
 
-## Three.js Geometría del Nodo (coordenadas normalizadas)
+---
+
+## 1. Arquitectura del Sistema
+
+### Stack Tecnológico
+| Capa | Tecnología | Ubicación |
+|---|---|---|
+| **Frontend WebApp** | React 18 + Vite + TailwindCSS + PWA (VitePWA) | `WebApp/` |
+| **Backend API** | PHP 8.2 + PDO + PostgreSQL + Redis | `backend/alojamiento/` |
+| **Infraestructura** | Docker + Nginx + PHP-FPM | Railway (backend), Vercel (frontend) |
+| **Mensajería** | Twilio WhatsApp API (con queue en Redis) | `backend/alojamiento/worker_twilio.php` |
+| **Workers** | PHP CLI workers (biométrico, Twilio, auditoría) | `backend/alojamiento/worker_*.php` |
+| **Edge** | C++ CMake para ESP32 / Raspberry Pi | `backend/edge/` |
+| **Base de datos** | PostgreSQL ( Railway ) + Redis (Railway) | `backend/alojamiento/sql/` |
+
+### Arquitectura de Despliegue
+- **Frontend**: Vercel (`vercel.json` en `WebApp/`), dominio custom / preview
+- **Backend**: Railway (`railway.json` → `backend/alojamiento/Dockerfile`), expone `/health`, `/v1/*`
+- **Variable crítica de entorno**: `VITE_API_BASE_URL` apunta al backend Railway
+- **CORS**: Controlado dinámicamente por `api.php` (acepta `CORS_ALLOW_ORIGINS` o fallback al origin de la petición)
+
+---
+
+## 2. Estructura de Directorios Clave
+
 ```
-Cuerpo: BoxGeometry(2.6, 2.0, 0.7)  → color 0xb2b2a8, metalness 0.85, roughness 0.35
-Scanner bezel: BoxGeometry(0.80, 1.05, 0.10) @ (-0.62, 0.10, 0.35) → 0x0a0a0a
-Scanner pad:   PlaneGeometry(0.55, 0.75) @ (-0.62, 0.12, 0.41) → green emissive
-LED verde:     SphereGeometry(0.065) @ (0.38, 0.72, 0.36) → 0x00ff44 emissive
-Botón:         CylinderGeometry(0.055) @ (0.62, 0.72, 0.37) → 0x888880
-OLED:          PlaneGeometry(0.72, 0.22) @ (0.58, 0.16, 0.36) → CanvasTexture
-Speaker:       PlaneGeometry(0.34, 0.28) @ (0.72, -0.48, 0.36) → dot-canvas
-Cerradura:     CylinderGeometry(0.10) @ (-0.92, -0.68, 0.37) → 0x777770
-Antena base:   CylinderGeometry(0.055,0.07,0.18) @ (-0.30, 1.05, 0.05)
-Antena rod:    CylinderGeometry(0.030,0.030,0.55) @ (-0.30, 1.42, 0.05)
-Tornillos (4): CylinderGeometry(0.04) @ ±1.10, ±0.82, 0.37 → 0x999990
+NEXO/
+├── WebApp/                          # Frontend React (PWA)
+│   ├── src/
+│   │   ├── api/                     # Axios clients: client.js, auth.js, students.js, operations.js, users.js, notifications.js
+│   │   ├── components/              # Componentes reutilizables (ErrorBoundary, PwaInstallPrompt)
+│   │   ├── context/                 # AuthContext.jsx, ThemeContext.jsx
+│   │   ├── config/                  # roles.js (ROLES, SIDEBAR_ITEMS, ROLE_DISPLAY), sidebarConfig.js
+│   │   ├── hooks/                   # useAuth.js
+│   │   ├── layout/                  # Layout.jsx (sidebar + header + búsqueda global), Sidebar.jsx
+│   │   ├── pages/                   # Dashboard, Operation, Notifications, Audit, Consultation, Login, etc.
+│   │   ├── routes/                  # ProtectedRoute.jsx
+│   │   ├── App.jsx                  # Router con basename="/app"
+│   │   └── main.jsx                 # Entry point, registerSW
+│   ├── vite.config.js               # Base "/app/", PWA config
+│   ├── vercel.json                  # Rewrites "/app/*" → index.html, redirect "/" → "/app/"
+│   └── index.html                   # CSP meta tag, manifest
+│
+├── backend/alojamiento/             # Backend PHP
+│   ├── api.php                      # Entry point API. CORS, routing, auth, operaciones
+│   ├── db.php                       # Conexión PDO a PostgreSQL
+│   ├── boot_check.php               # Validaciones de entorno al boot
+│   ├── nginx-default.conf           # Config nginx + CORS preflight
+│   ├── Dockerfile                   # PHP-FPM + nginx
+│   ├── docker-entrypoint.sh         # Inicialización del contenedor
+│   ├── routes/                      # Endpoints modulares
+│   │   ├── operations.php           # Comandos institucionales (SOS, citación, salida, etc.)
+│   │   ├── students.php             # Listado de estudiantes + paginación
+│   │   ├── groups.php               # Grupos académicos
+│   │   ├── users.php                # Usuarios by-role, OTP Twilio
+│   │   ├── auth.php                 # Login/logout JWT cookie HttpOnly
+│   │   ├── misc.php                 # Notificaciones (merge SOS + attendance_incidents + internal_messages)
+│   │   └── ...
+│   ├── worker_twilio.php            # Worker de envío de WhatsApp via Twilio
+│   ├── worker_biometric.php         # Worker de procesamiento biométrico
+│   ├── worker_audit.php             # Worker de logs de auditoría asíncronos
+│   └── sql/                         # Migraciones y seed data
+│
+├── Gestion de Proyecto/             # Documentación de arquitectura, requisitos
+├── logo/                            # Brand assets
+└── .github/workflows/               # CI/CD
 ```
 
-## Secciones Cinemáticas V3
-1. **Hero** — Fondo degradado Apple (blanco→gris→verde institucional), nodo flotante center-right, mouse drag rotation (OrbitControls), logo marca
-2. **Seguridad** — Zoom cósmico, esfera Tierra en fondo, panel flotante CanvasTexture cifrado E2E
-3. **Lluvia** — Descenso atmosférico, plano océano con vertex shader (ondas), partículas de lluvia
-4. **Desierto** — Teletransportación instantánea, partículas arena horizontal ocre, OLED → "IoT"
-5. **Resistencia/Salón** — Pared hormigón procedural (CanvasTexture), rock lanzado en parábola, loop 7s
+---
 
-## Módulos JavaScript
-- `buildNode()` → grupo Three.js del hardware exacto
-- `buildEarth()` → esfera Earth para sección seguridad  
-- `buildOcean()` → ShaderMaterial con vertex shader de ondas
-- `buildParticles()` → rain, sand, burst
-- `initHero()` → OrbitControls, gradient BG, auto-rotate suave
-- `initSecurity()` → ScrollTrigger zoom-out, Earth visible, panel UI
-- `initStorm()` → ScrollTrigger descenso, océano activo
-- `initDesert()` → ScrollTrigger arena, OLED update
-- `initImpact()` → ScrollTrigger classroom wall, rock loop timer
-- `initApp()` → teléfono 3-pantallas citación funcional
-- `setupScrollTriggers()` → registra todos los triggers y limpia on-destroy
-- `tick()` → rAF loop, ShaderMaterial uTime, partículas
+## 3. Archivos y Funciones Críticas
 
-## Dependencias CDN (order matters)
-1. Three.js r128: `cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js`
-2. OrbitControls r128: `cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js`
-3. GSAP 3.12.5: `cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js`
-4. ScrollTrigger: `cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js`
-5. Tailwind CDN: `cdn.tailwindcss.com`
+### Frontend
+| Archivo | Propósito |
+|---|---|
+| `WebApp/src/main.jsx` | Monta React con `BrowserRouter basename="/app"`, registra PWA SW, limpia SW stale |
+| `WebApp/src/App.jsx` | Rutas, lazy loading, ErrorBoundary, deep-link Tauri, protección por rol |
+| `WebApp/src/api/client.js` | Axios con baseURL, interceptores (401 → logout, telemetría), CSRF header |
+| `WebApp/src/api/operations.js` | `execute()`, `sos()`, `citacion()`, `salida()`, `permiso()` |
+| `WebApp/src/context/AuthContext.jsx` | Estado de auth via `authApi.getMe()` (cookie HttpOnly), NO confía en localStorage |
+| `WebApp/src/layout/Layout.jsx` | Header, sidebar toggle, búsqueda global (excluye RECTOR/SUPER_RECTOR), catálogo de búsqueda |
+| `WebApp/src/pages/Operation.jsx` | Panel de comandos institucionales. Fetch de grupos/estudiantes. Formularios dinámicos por comando. |
+| `WebApp/src/pages/Notifications.jsx` | Lista de notificaciones (SOS + incidentes + mensajes internos) |
+| `WebApp/src/pages/Audit.jsx` | Auditoría con filtros, export, humanización de enums (`VALUE_LABELS`) |
+| `WebApp/src/config/roles.js` | `ROLES`, `SIDEBAR_ITEMS`, `ROLE_DISPLAY` (SUPER_RECTOR → "Admin") |
 
-## Reglas de rendimiento
-- `renderer.setPixelRatio(Math.min(devicePixelRatio, 2))` siempre
-- Geometrías compartidas con `BufferGeometry`
-- Limpiar ScrollTrigger.getAll().forEach(t=>t.kill()) en HMR
-- No crear objetos nuevos dentro del render loop (tick)
+### Backend
+| Archivo | Propósito |
+|---|---|
+| `backend/alojamiento/api.php` | Entry point. CORS dinámico. Routing por `$cleanPath`. `securityLog()` async via Redis. |
+| `backend/alojamiento/db.php` | PDO PostgreSQL, manejo de SSL, modo `PDO::FETCH_ASSOC` |
+| `backend/alojamiento/routes/operations.php` | `$rolePermissions[]`, `logUserCommand()`, `enqueueTwilioJob()`. Casos: sos, citacion, salida, permiso, solicitud, daño, pedagogica, horario, incidente. |
+| `backend/alojamiento/routes/misc.php` | `/notifications`: mergea `sos_alerts` + `attendance_incidents` + `internal_messages`. Filtra por rol (rector no ve llegadas tarde). Humaniza `incident_type`. |
+| `backend/alojamiento/routes/students.php` | Cursor-based pagination con `last_id` (UUID). JOIN con `student_group_assignments` y `academic_groups`. |
+| `backend/alojamiento/routes/users.php` | `/users/by-role` con filtro `same_shift=true`. `sendTwilioWhatsAppOtp()`. |
+| `backend/alojamiento/worker_twilio.php` | Consume cola Redis `queue:twilio`, envía WhatsApp, maneja retries y deduplicación. |
+| `backend/alojamiento/worker_biometric.php` | Consume cola Redis `queue:biometric`, inserta/actualiza estudiantes, guardianes, incidentes. |
+
+---
+
+## 4. Roles del Sistema (`ROLES`)
+
+```js
+SUPER_RECTOR  → display "Admin"
+RECTOR
+COORDINADOR
+DOCENTE
+SECRETARIA
+PORTERO
+AUXILIAR
+PSICORIENTADOR
+```
+
+- **Búsqueda global**: Oculta para `SUPER_RECTOR` y `RECTOR` (`canSearch = false`)
+- **Consulta**: Visible para todos excepto `SUPER_RECTOR` y `RECTOR`
+- **Auditoría / Informes**: Solo `SUPER_RECTOR` y `RECTOR`
+- **Enrolamiento**: Solo `SECRETARIA`
+
+---
+
+## 5. Comandos del Panel de Operación
+
+| Comando | Roles permitidos | Campos | Notas |
+|---|---|---|---|
+| `citar` | Coordinador, Docente, Psicorientador | group, student, date, message | — |
+| `autorizar` | Coordinador, Rector | group, student, reason | — |
+| `sos` | Todos | location, message | Notifica WhatsApp solo a `RECTOR` y `COORDINADOR`. Sin estilo rojo especial. |
+| `daño` | Auxiliar, Portero | description | — |
+| `solicitud` | Todos | targetRole, targetUser, message | Filtra usuarios por misma jornada (`same_shift=true`). Inserta en `internal_messages`. |
+| `pedagogica` | Coordinador, Rector | group, date, time, location, message | — |
+| `horario` | Coordinador, Rector | group, date, time, message | — |
+| `incidente` | Docente, Psicorientador | group, student, message, targets | Puede notificar a padre y/o coordinador. |
+
+> **Eliminado**: `inasistencia` (ya no existe ni en frontend ni backend).
+
+---
+
+## 6. Lógica de Notificaciones (`misc.php`)
+
+- **SOS alerts**: Todos los usuarios autenticados las ven.
+- **Attendance incidents**: 
+  - Rectores/Admin (`RECTOR`, `SUPER_RECTOR`) **NO** ven `LATE_ARRIVAL`, `EARLY_EXIT`, `UNAUTHORIZED_ABSENCE`.
+  - Docentes ven llegadas tarde pero el mensaje se suaviza a `"Se guardó en el sistema el evento"`.
+  - Solo se muestran incidentes donde `metadata_json->>'target_user_id'` es NULL o coincide con el usuario logueado.
+- **Internal messages** (solicitudes): Se muestran al `receiver_user_id`.
+
+---
+
+## 7. Base de Datos — Tablas Clave
+
+| Tabla | Propósito |
+|---|---|
+| `users` | Usuarios del sistema. `role_id`, `school_id`, `phone`, `shift` |
+| `students` | Estudiantes. `student_id` (UUID), `first_name`, `last_name` |
+| `guardians` | Acudientes. `whatsapp_phone`, `whatsapp_phone_normalized` |
+| `guardian_student_relationships` | Relación N:N estudiante-acudiente |
+| `academic_groups` | Grupos académicos por colegio |
+| `student_group_assignments` | Relación estudiante-grupo |
+| `sos_alerts` | Alertas SOS emitidas desde la app |
+| `attendance_incidents` | Incidentes biométricos y operacionales. `incident_type`, `metadata_json` |
+| `internal_messages` | Mensajes entre usuarios (solicitudes internas) |
+| `command_logs` | Log de comandos ejecutados por usuarios |
+| `twilio_messages` | Log de mensajes WhatsApp enviados |
+| `audit_logs` | Logs de auditoría asíncronos (alimentado por `worker_audit.php`) |
+
+---
+
+## 8. Resumen de Cambios Hechos (Checkpoint)
+
+### Operaciones
+- ✅ Eliminado comando `inasistencia` de frontend (`Operation.jsx`, `operations.js`) y backend (`operations.php`)
+- ✅ SOS: notificaciones WhatsApp solo a `RECTOR` y `COORDINADOR` (no a todos). `SUPER_RECTOR` y `RECTOR` notifican a `COORDINADOR`, y viceversa.
+- ✅ SOS: sin estilo `isUrgent` (mismos colores que otros comandos)
+- ✅ `solicitud`: filtra usuarios por `same_shift=true`, inserta en `internal_messages` además de WhatsApp
+- ✅ `solicitud`: selección de `targetRole` → `targetUser` en frontend
+
+### Perfil y Usuarios
+- ✅ Arreglada subida de fotos de perfil (Profile.jsx): Se eliminó el `Content-Type` hardcodeado en `usersApi.uploadPhoto` y el interceptor de Axios para permitir que `FormData` genere el boundary de `multipart/form-data` correctamente.
+
+### Consultas (Diagnóstico Profundo)
+- ✅ **Análisis de Riesgo:** Se conectó el frontend (`Consultation.jsx`) con el endpoint real de la base de datos `/behavior/risk` a través del nuevo cliente `behaviorApi`.
+- ⚠️ **Diagnóstico de Etapa MVP:** Toda la sección "Consulta" (para profesores, coordinadores, etc.) sigue en etapa MVP a nivel de frontend. Exceptuando "Análisis de Riesgo", los más de 30 submódulos (como "Historial Asistencia", "Llegadas Tarde", "Estadísticas") son *placeholders* visuales y muestran el mensaje de "Sin datos / endpoint no integrado". Para tener funcionamiento real, es necesario desarrollar los endpoints respectivos en el backend de PostgreSQL.
+
+### Notificaciones
+- ✅ Rectores/Admin no reciben notificaciones de llegadas tarde ni salidas anticipadas
+- ✅ Docentes reciben mensaje suave `"Se guardó en el sistema el evento"` para llegadas tarde
+- ✅ Humanización de eventos: `EARLY:DEPARTURE` → "Salida anticipada", `LATE:ARRIVAL` → "Llegada tarde", etc.
+- ✅ Agregadas `internal_messages` al feed de notificaciones
+
+### UI / Sidebar
+- ✅ `SUPER_RECTOR` renombrado a "Admin" en `ROLE_DISPLAY`
+- ✅ Búsqueda global oculta para `SUPER_RECTOR` y `RECTOR`
+- ✅ Sección "Consulta" eliminada del sidebar para Admin y Rector
+
+### Seguridad / Deploy
+- ✅ CORS dinámico en `api.php` (fallback al origin de la petición si `CORS_ALLOW_ORIGINS` vacío)
+- ✅ nginx CORS preflight usa `$http_origin` en vez de URL hardcodeada
+- ✅ CSP de API relajada; el frontend maneja su CSP via meta tag
+- ✅ Service Worker stale cleanup en `main.jsx`
+- ✅ `vercel.json`: redirect `/` → `/app/`
+- ✅ `vite.config.js`: `navigateFallback: '/app/index.html'`
+
+### Backend
+- ✅ `operations.php`: `internal_messages` insert para `solicitud`
+- ✅ `misc.php`: filtrado de incidentes por rol, humanización de tipos, query de `internal_messages`
+
+---
+
+## 9. Modus Operandi (Cómo Trabajamos)
+
+1. **Siempre confirmar el problema antes de codear**. Leer logs, reproducir el error, identificar archivo exacto.
+2. **Mínimo cambio posible**. Preferir un edit de 1 línea sobre una refactorización masiva.
+3. **Frontend y backend se tratan por igual**. Si un bug es de datos, arreglar la API. Si es de UI, arreglar el componente.
+4. **Nunca confiar en simulaciones/mocks**. Todo debe funcionar contra la BD real y Twilio real.
+5. **Build antes de push**. Siempre ejecutar `npm run build` en `WebApp/` para asegurar que no hay errores de compilación.
+6. **Commit descriptivo en español**. Formato: `fix(area): descripción` o `feat(area): descripción`.
+7. **Documentar cambios en este archivo** (`CLAUDE.md`) si afectan arquitectura o comportamiento crítico.
+
+---
+
+## 10. Prohibiciones Estrictas
+
+| # | Prohibición | Razón |
+|---|---|---|
+| 1 | **NO tocar archivos fuera del repo NEXO** | Este es un proyecto aislado; nada del sistema operativo, home, ni otros repos |
+| 2 | **NO hardcodear URLs de staging/producción** | Todo pasa por variables de entorno (`import.meta.env.VITE_API_BASE_URL`, `getenv()`) |
+| 3 | **NO dejar credenciales, tokens ni API keys en el código** | Todo va en variables de entorno de Railway/Vercel |
+| 4 | **NO crear archivos de documentación innecesarios** | Solo actualizar este `CLAUDE.md`. No READMEs duplicados, no `progress.txt` |
+| 5 | **NO eliminar ni debilitar tests existentes** | Si hay tests, mantenerlos. Si no hay, no crear nuevos a menos que se pida explícitamente |
+| 6 | **NO asumir que el usuario quiere una refactorización** | Arreglar el bug exacto reportado; no reescribir módulos enteros |
+| 7 | **NO usar mocks/simulaciones en producción** | Todo endpoint, notificación, y operación debe conectar con la BD real y Twilio real |
+| 8 | **NO modificar dos archivos en paralelo sin confirmar** | Un archivo a la vez, confirmar, luego el siguiente |
+| 9 | **NO tocar el hardware IoT/edge sin permiso explícito** | `backend/edge/` y `Gestion de Proyecto/` son documentación/hardware; no tocar |
+| 10 | **NO omitir CORS ni seguridad para "hacerlo rápido"** | La seguridad es no negociable; cualquier workaround de CORS/auth debe ser temporal y documentado |
+
+---
+
+## 11. Comandos Útiles Rápidos
+
+```bash
+# Build frontend
+cd WebApp && npm run build
+
+# Commit + push
+git add -A
+git commit -m "fix(area): descripción"
+git push origin main
+
+# PSQL — actualizar teléfono acudientes
+UPDATE guardians SET whatsapp_phone = '+573243607948';
+
+# Ver logs de errores del backend (en Railway)
+# Railway Dashboard → Logs → filtrar por "ERROR" o el event_type
+
+# Limpiar Service Worker en navegador del usuario
+# DevTools → Application → Service Workers → Unregister → Ctrl+Shift+R
+```
+
+---
+
+## 12. Contacto / Contexto de Negocio
+
+- **Sector**: Educación primaria/secundaria en Colombia
+- **Modelo**: B2B (colegios), SaaS institucional + hardware IoT (nodos biométricos)
+- **Diferenciador**: Soberanía tecnológica, audit chain inmutable, corresponsabilidad familiar en tiempo real, certificación IP66
+- **Escalabilidad**: Diseñado para soportar múltiples colegios (`school_id` en todas las tablas), multi-tenant por diseño
+- **Prioridad**: Funcionalidad sobre diseño experimental. La app debe funcionar en colegios reales antes que cualquier efecto visual.
+
+---
+
+*Última actualización: 2026-06-03*
+*Mantener este archivo actualizado tras cada cambio arquitectónico significativo.*
