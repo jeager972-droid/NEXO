@@ -311,7 +311,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 }
 
                 $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
-                $citMsg = "Citación para {$studentName}.\n1 = Confirmo asistencia a la citación.\n2 = Solicito reagendar la citación.";
+                $citTime = !empty($params['time']) ? filter_var($params['time'], FILTER_SANITIZE_SPECIAL_CHARS) : '';
+                $citReason = !empty($params['reason']) ? filter_var($params['reason'], FILTER_SANITIZE_SPECIAL_CHARS) : '';
+
+                $citMsg = "Citación para {$studentName}.";
+                if ($citTime) $citMsg .= "\nHora: {$citTime}";
+                if ($citReason) $citMsg .= "\nMotivo: {$citReason}";
+                $citMsg .= "\n\n1 = Confirmo asistencia a la citación.\n2 = Solicito reagendar la citación.";
                 $deliveryResults = [];
                 $deliveryResults[] = enqueueTwilioJob($target['whatsapp_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
                 if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {

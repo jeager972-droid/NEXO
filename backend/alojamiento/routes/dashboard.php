@@ -82,15 +82,29 @@ if ($cleanPath === '/dashboard/stats') {
         $tasksStmt->execute([$schoolId]);
         $pendingTasks = $tasksStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 5. Estudiantes por grupo
-        $groupsStmt = $conn->prepare("
+        // 5. Estudiantes por grupo (FIX: docentes solo ven grupos asignados via schedules)
+        $userRole = strtoupper($authUser['role'] ?? '');
+        $teacherFilter = '';
+        if ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR') {
+            $teacherFilter = " AND ag.group_id IN (
+                SELECT sch.group_id FROM schedules sch
+                WHERE sch.teacher_user_id = ?
+            )";
+        }
+
+        $groupsSql = "
             SELECT ag.group_name, s.first_name || ' ' || s.last_name as name
             FROM students s
-            JOIN student_group_assignments sga ON s.student_id = sga.student_id
+            JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
             JOIN academic_groups ag ON sga.group_id = ag.group_id
-            WHERE s.school_id = ? AND sga.active = TRUE
-        ");
-        $groupsStmt->execute([$schoolId]);
+            WHERE s.school_id = ? {$teacherFilter}
+        ";
+        $groupsStmt = $conn->prepare($groupsSql);
+        if ($teacherFilter) {
+            $groupsStmt->execute([$schoolId, $authUser['id']]);
+        } else {
+            $groupsStmt->execute([$schoolId]);
+        }
         $allStudents = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
         
         $studentsByGroup = [];
@@ -116,6 +130,139 @@ if ($cleanPath === '/dashboard/stats') {
         securityLog('DASHBOARD_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al obtener estadísticas']);
+    }
+    exit;
+}
+
+// ============================================================================
+// GET /dashboard/teacher-group-detail
+// Params: group_name, category=(present|absent|alert|permiso), from_date, to_date
+// ============================================================================
+if ($cleanPath === '/dashboard/teacher-group-detail') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userId = $authUser['id'];
+    $userRole = strtoupper($authUser['role'] ?? '');
+
+    $groupName = $_GET['group_name'] ?? '';
+    $category = $_GET['category'] ?? '';
+    $fromDate = $_GET['from_date'] ?? gmdate('Y-m-d');
+    $toDate = $_GET['to_date'] ?? gmdate('Y-m-d');
+
+    if (!$groupName || !in_array($category, ['present', 'absent', 'alert', 'permiso'])) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'group_name y category requeridos']);
+        exit;
+    }
+
+    try {
+        // Verificar que el docente tenga este grupo asignado (via schedules)
+        $validGroup = true;
+        if ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR') {
+            $checkStmt = $conn->prepare("
+                SELECT 1 FROM schedules sch
+                JOIN academic_groups ag ON ag.group_id = sch.group_id
+                WHERE sch.teacher_user_id = ? AND ag.group_name = ?
+                LIMIT 1
+            ");
+            $checkStmt->execute([$userId, $groupName]);
+            $validGroup = (bool)$checkStmt->fetchColumn();
+        }
+
+        if (!$validGroup) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']);
+            exit;
+        }
+
+        $data = [];
+
+        switch ($category) {
+            case 'present':
+                $stmt = $conn->prepare("
+                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
+                           ag.group_name, MAX(be.event_timestamp) as last_entry
+                    FROM students s
+                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    LEFT JOIN biometric_events be ON be.student_id = s.student_id
+                        AND be.event_type LIKE 'INGRESO_%'
+                        AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date
+                            BETWEEN ? AND ?
+                    WHERE s.school_id = ? AND ag.group_name = ?
+                    GROUP BY s.student_id, s.first_name, s.last_name, s.document_number, ag.group_name
+                    HAVING MAX(be.event_timestamp) IS NOT NULL
+                    ORDER BY last_entry DESC
+                ");
+                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                break;
+
+            case 'absent':
+                $stmt = $conn->prepare("
+                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
+                           ag.group_name, ai.detected_at as absent_since
+                    FROM students s
+                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    JOIN attendance_incidents ai ON ai.student_id = s.student_id
+                        AND ai.incident_type = 'INASISTENCIA'
+                        AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
+                            BETWEEN ? AND ?
+                    WHERE s.school_id = ? AND ag.group_name = ?
+                    ORDER BY absent_since DESC
+                ");
+                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                break;
+
+            case 'alert':
+                $stmt = $conn->prepare("
+                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
+                           ag.group_name, ai.incident_type as alert_type, ai.detected_at as alert_at
+                    FROM students s
+                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    JOIN attendance_incidents ai ON ai.student_id = s.student_id
+                        AND ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA',
+                                                  'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE',
+                                                  'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE',
+                                                  'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC')
+                        AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
+                            BETWEEN ? AND ?
+                    WHERE s.school_id = ? AND ag.group_name = ?
+                    ORDER BY alert_at DESC
+                ");
+                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                break;
+
+            case 'permiso':
+                $stmt = $conn->prepare("
+                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
+                           ag.group_name, ai.incident_type as permiso_type,
+                           ai.detected_at as permiso_at,
+                           ai.metadata_json->>'reason' as reason
+                    FROM students s
+                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    JOIN attendance_incidents ai ON ai.student_id = s.student_id
+                        AND ai.incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
+                        AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
+                            BETWEEN ? AND ?
+                    WHERE s.school_id = ? AND ag.group_name = ?
+                    ORDER BY permiso_at DESC
+                ");
+                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                break;
+        }
+
+        echo json_encode(['status' => 'ok', 'data' => $data]);
+    } catch (Exception $e) {
+        securityLog('TEACHER_GROUP_DETAIL_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles del grupo']);
     }
     exit;
 }

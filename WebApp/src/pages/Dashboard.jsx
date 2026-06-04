@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus,
   ChevronRight, LogOut, Bell, FileText, Search,
+  X, Loader2, CalendarDays
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { ROLES } from '../config/roles';
 
@@ -259,13 +260,48 @@ const SecretaryDashboard = ({ tasks, loading }) => (
 
 // ── Docente / Psicorientador ──────────────────────────────────────────────────
 
+const CATEGORY_LABELS = {
+  present:  { label: 'Presentes',    accent: '#003366', icon: Users },
+  absent:   { label: 'Inasistentes', accent: '#0D4080', icon: UserMinus },
+  alert:    { label: 'Alertas',      accent: '#DC2626', icon: AlertTriangle },
+  permiso:  { label: 'Permisos',     accent: '#00A67E', icon: Activity },
+};
+
 const TeacherDashboard = ({ stats, loading }) => {
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [detailData, setDetailData] = useState([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const groupNames = Object.keys(stats?.studentsByGroup || {});
+
+  const openDetail = async (category) => {
+    if (!selectedGroup) return;
+    setActiveCategory(category);
+    setDetailLoading(true);
+    try {
+      const res = await dashboardApi.getTeacherGroupDetail(selectedGroup, category, fromDate, toDate);
+      if (res?.status === 'ok') setDetailData(res.data || []);
+      else setDetailData([]);
+    } catch (e) {
+      console.error(e);
+      setDetailData([]);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const groupStats = [
-    { label: 'Presentes',    value: stats?.groupStats?.present || 0, accent: '#003366' },
-    { label: 'Inasistentes', value: stats?.groupStats?.absent  || 0, accent: '#0D4080' },
-    { label: 'Alertas',      value: stats?.groupStats?.alerts  || 0, accent: '#DC2626' },
-    { label: 'Fuera',        value: stats?.groupStats?.outside || 0, accent: '#00A67E' },
+    { key: 'present',  label: 'Presentes',    value: stats?.groupStats?.present || 0, accent: '#003366' },
+    { key: 'absent',   label: 'Inasistentes', value: stats?.groupStats?.absent  || 0, accent: '#0D4080' },
+    { key: 'alert',    label: 'Alertas',      value: stats?.groupStats?.alerts  || 0, accent: '#DC2626' },
+    { key: 'permiso',  label: 'Permisos',     value: stats?.groupStats?.outside || 0, accent: '#00A67E' },
   ];
 
   return (
@@ -278,38 +314,197 @@ const TeacherDashboard = ({ stats, loading }) => {
         </div>
       ) : (
         <>
-          <div style={{ border: '1.5px solid #E2E8F0' }} className="p-5 bg-white dark:bg-slate-900">
-            <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Seleccionar Grupo
-            </p>
-            <select
-              value={selectedGroup}
-              onChange={e => setSelectedGroup(e.target.value)}
-              className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
-              style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
-            >
-              <option value="">— Elegir grupo —</option>
-              {Object.keys(stats?.studentsByGroup || {}).map(g => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
+          {/* Group selector + Date range */}
+          <div style={{ border: '1.5px solid #E2E8F0' }} className="p-5 bg-white dark:bg-slate-900 space-y-4">
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '8px' }}>
+                Seleccionar Grupo
+              </p>
+              <select
+                value={selectedGroup}
+                onChange={e => setSelectedGroup(e.target.value)}
+                className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
+                style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
+              >
+                <option value="">— Elegir grupo —</option>
+                {groupNames.map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>Desde</p>
+                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                  className="w-full p-2.5 text-sm font-medium outline-none dark:bg-slate-800 dark:text-white"
+                  style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }} />
+              </div>
+              <div>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>Hasta</p>
+                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                  className="w-full p-2.5 text-sm font-medium outline-none dark:bg-slate-800 dark:text-white"
+                  style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }} />
+              </div>
+            </div>
           </div>
 
+          {/* 4 Stat cards — clickable */}
           <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid #E2E8F0' }}>
             {groupStats.map((s, i) => (
-              <div key={i}
-                   className="bg-white dark:bg-slate-900 text-center py-5 px-4"
-                   style={{ borderRight: i < 3 ? '1.5px solid #E2E8F0' : 'none' }}>
+              <button
+                key={s.key}
+                onClick={() => openDetail(s.key)}
+                disabled={!selectedGroup}
+                className="bg-white dark:bg-slate-900 text-center py-5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+                style={{ borderRight: i < 3 ? '1.5px solid #E2E8F0' : 'none' }}
+              >
                 <p style={{ fontSize: '40px', fontWeight: 900, color: s.accent, lineHeight: 1 }}>{s.value}</p>
                 <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase', marginTop: '6px' }}>
                   {s.label}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         </>
       )}
+
+      {/* ── Detail Drawer ── */}
+      {activeCategory && (
+        <TeacherDetailDrawer
+          category={activeCategory}
+          groupName={selectedGroup}
+          data={detailData}
+          loading={detailLoading}
+          onClose={() => setActiveCategory(null)}
+        />
+      )}
     </div>
+  );
+};
+
+/* ── Teacher Detail Drawer ── */
+const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) => {
+  const config = CATEGORY_LABELS[category];
+  const Icon = config?.icon || Users;
+
+  // Columnas dinámicas según categoría
+  const getColumns = () => {
+    const base = [
+      { key: 'first_name', label: 'Nombre' },
+      { key: 'last_name', label: 'Apellido' },
+      { key: 'document_number', label: 'Documento' },
+      { key: 'group_name', label: 'Grupo' },
+    ];
+    switch (category) {
+      case 'present':
+        return [...base, { key: 'last_entry', label: 'Último ingreso' }];
+      case 'absent':
+        return [...base, { key: 'absent_since', label: 'Desde' }];
+      case 'alert':
+        return [...base, { key: 'alert_type', label: 'Tipo alerta' }, { key: 'alert_at', label: 'Fecha' }];
+      case 'permiso':
+        return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
+      default:
+        return base;
+    }
+  };
+
+  const columns = getColumns();
+
+  return (
+    <>
+      <motion.div key="t-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }} className="fixed inset-0 z-40"
+        style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+        onClick={onClose} />
+      <motion.div key="t-dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+        className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
+        style={{ maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
+      >
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'rgba(0,51,102,0.08)' }}>
+              <Icon size={16} strokeWidth={2} style={{ color: config?.accent || '#003366' }} />
+            </div>
+            <div>
+              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>
+                {config?.label} — {groupName}
+              </p>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                Detalle por estudiante
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
+            <X size={18} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+              <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
+              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                Cargando datos...
+              </p>
+            </div>
+          ) : data.length > 0 ? (
+            <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
+              <table className="w-full min-w-[440px]">
+                <thead>
+                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                    {columns.map(col => (
+                      <th key={col.key} className="px-4 py-3 text-left"
+                        style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-slate-900">
+                  {data.map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                      style={{ borderBottom: i < data.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      {columns.map(col => (
+                        <td key={col.key} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                          {col.key === 'first_name' ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
+                                   style={{ backgroundColor: '#003366' }}>
+                                {row.first_name?.charAt(0)}
+                              </div>
+                              <span>{row.first_name}</span>
+                            </div>
+                          ) : (
+                            row[col.key] ?? '—'
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+              <CalendarDays size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
+              <div className="text-center space-y-1">
+                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                  Sin registros
+                </p>
+                <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">
+                  No se encontraron estudiantes en esta categoría para el período seleccionado.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </>
   );
 };
 

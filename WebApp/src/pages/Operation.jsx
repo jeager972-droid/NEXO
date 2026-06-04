@@ -59,7 +59,7 @@ const Operation = () => {
       title: 'Citar acudiente',
       icon: Calendar,
       roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-      fields: ['group', 'student', 'date', 'message']
+      fields: ['group', 'student', 'date', 'time', 'message']
     },
     { 
       id: 'autorizar', 

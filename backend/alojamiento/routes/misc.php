@@ -85,107 +85,68 @@ if ($cleanPath === '/notifications') {
     try {
         $notifications = [];
         $userRole = strtoupper($authUser['role'] ?? '');
-        $isRector = in_array($userRole, ['RECTOR', 'SUPER_RECTOR']);
-        $isDocente = $userRole === 'DOCENTE';
+        $userId = (string)$authUser['id'];
+        $schoolId = $authUser['school_id'];
 
-        $sosStmt = $conn->prepare("
-            SELECT alert_id AS id,
-                   'SOS' AS type,
-                   'Alerta SOS' AS title,
-                   alert_description AS desc,
-                   TO_CHAR(emitted_at, 'HH24:MI') AS time,
-                   emitted_at AS occurred_at
-            FROM sos_alerts
-            WHERE school_id = ?
-            ORDER BY emitted_at DESC
-            LIMIT 15
-        ");
-        $sosStmt->execute([$authUser['school_id']]);
-        $notifications = array_merge($notifications, $sosStmt->fetchAll(PDO::FETCH_ASSOC));
-
-        // Filtrar tipos que no deben ver rectores/admins
-        $excludeTypes = [];
-        if ($isRector) {
-            $excludeTypes = ['LATE_ARRIVAL', 'INGRESO_TARDE', 'EARLY_EXIT', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE'];
-        }
-        $excludeClause = '';
-        if (!empty($excludeTypes)) {
-            $placeholders = implode(',', array_fill(0, count($excludeTypes), '?'));
-            $excludeClause = " AND incident_type NOT IN ($placeholders)";
+        // ── SOS: solo RECTORIA ↔ COORDINACION (mutuamente), nadie mas lo ve ──
+        if (in_array($userRole, ['RECTOR', 'SUPER_RECTOR', 'COORDINADOR'])) {
+            $sosEmitterRole = ($userRole === 'COORDINADOR') ? 'RECTOR' : 'COORDINADOR';
+            $sosStmt = $conn->prepare("
+                SELECT sa.alert_id AS id,
+                       'SOS' AS type,
+                       'Alerta SOS' AS title,
+                       sa.alert_description AS desc,
+                       TO_CHAR(sa.emitted_at, 'HH24:MI') AS time,
+                       sa.emitted_at AS occurred_at
+                FROM sos_alerts sa
+                JOIN users u ON u.user_id = sa.emitted_by_user_id
+                JOIN roles r ON r.role_id = u.role_id
+                WHERE sa.school_id = ?
+                  AND UPPER(r.role_name) = ?
+                ORDER BY sa.emitted_at DESC
+                LIMIT 10
+            ");
+            $sosStmt->execute([$schoolId, $sosEmitterRole]);
+            $notifications = array_merge($notifications, $sosStmt->fetchAll(PDO::FETCH_ASSOC));
         }
 
-        $incStmt = $conn->prepare("
-            SELECT incident_id AS id,
-                   'INFO' AS type,
-                   'Incidente de asistencia' AS title,
-                   CASE incident_type
-                       WHEN 'INASISTENCIA' THEN 'Inasistencia'
-                       WHEN 'CITACION' THEN 'Citación a acudiente'
-                       WHEN 'AUTORIZAR_SALIDA' THEN 'Autorización de salida'
-                       WHEN 'PERMISO' THEN 'Permiso'
-                       WHEN 'SOLICITUD' THEN 'Solicitud interna'
-                       WHEN 'DAÑO' THEN 'Reporte de daño'
-                       WHEN 'PEDAGOGICA' THEN 'Salida pedagógica'
-                       WHEN 'HORARIO' THEN 'Cambio de horario'
-                       WHEN 'INCIDENTE' THEN 'Reporte de incidente'
-                       WHEN 'UNAUTHORIZED_ABSENCE' THEN 'Inasistencia no autorizada'
-                       WHEN 'UNAUTHORIZED:ABSENCE' THEN 'Inasistencia no autorizada'
-                       WHEN 'LATE_ARRIVAL' THEN 'Llegada tarde'
-                       WHEN 'LATE:ARRIVAL' THEN 'Llegada tarde'
-                       WHEN 'EARLY_EXIT' THEN 'Salida anticipada'
-                       WHEN 'EARLY:DEPARTURE' THEN 'Salida anticipada'
-                       WHEN 'EARLY_DEPARTURE' THEN 'Salida anticipada'
-                       WHEN 'EVASION_INTERNA' THEN 'Evasión interna'
-                       WHEN 'BIOMETRIC_FAILURE' THEN 'Fallo biométrico'
-                       WHEN 'SPAM_BIOMETRIC' THEN 'Spam biométrico'
-                       ELSE incident_type
-                   END AS desc,
-                   incident_type AS raw_type,
-                   TO_CHAR(detected_at, 'HH24:MI') AS time,
-                   detected_at AS occurred_at
-            FROM attendance_incidents
-            WHERE school_id = ?
-              AND (
-                metadata_json IS NULL
-                OR metadata_json->>'target_user_id' IS NULL
-                OR metadata_json->>'target_user_id' = ?
-              )
-              $excludeClause
-            ORDER BY detected_at DESC
-            LIMIT 15
-        ");
-        $params = [$authUser['school_id'], (string)$authUser['id']];
-        if (!empty($excludeTypes)) {
-            $params = array_merge($params, $excludeTypes);
-        }
-        $incStmt->execute($params);
-        $incRows = $incStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Para docentes, reemplazar mensaje de llegadas tarde por algo más suave
-        foreach ($incRows as &$row) {
-            $raw = strtoupper($row['raw_type'] ?? '');
-            if ($isDocente && (in_array($raw, ['LATE_ARRIVAL', 'LATE:ARRIVAL', 'INGRESO_TARDE']))) {
-                $row['desc'] = 'Se guardó en el sistema el evento';
-            }
-            unset($row['raw_type']);
+        // ── Permisos: solo COORDINADOR los recibe (via attendance_incidents incident_type=PERMISO) ──
+        if ($userRole === 'COORDINADOR') {
+            $permStmt = $conn->prepare("
+                SELECT incident_id AS id,
+                       'INFO' AS type,
+                       'Permiso institucional' AS title,
+                       CASE incident_type
+                           WHEN 'PERMISO' THEN 'Nuevo permiso registrado'
+                           WHEN 'AUTORIZAR_SALIDA' THEN 'Autorización de salida'
+                           ELSE incident_type
+                       END AS desc,
+                       TO_CHAR(detected_at, 'HH24:MI') AS time,
+                       detected_at AS occurred_at
+                FROM attendance_incidents
+                WHERE school_id = ? AND incident_type IN ('PERMISO','AUTORIZAR_SALIDA')
+                ORDER BY detected_at DESC
+                LIMIT 8
+            ");
+            $permStmt->execute([$schoolId]);
+            $notifications = array_merge($notifications, $permStmt->fetchAll(PDO::FETCH_ASSOC));
         }
 
-        $notifications = array_merge($notifications, $incRows);
-
-        // Mensajes internos (solicitudes)
+        // ── Solicitudes internas (de otros roles, no propias) ──
         $msgStmt = $conn->prepare("
-            SELECT message_id AS id,
+            SELECT im.message_id AS id,
                    'INFO' AS type,
-                   subject AS title,
-                   message_content AS desc,
-                   TO_CHAR(sent_at, 'HH24:MI') AS time,
-                   sent_at AS occurred_at
-            FROM internal_messages
-            WHERE receiver_user_id = ?
-            ORDER BY sent_at DESC
+                   im.subject AS title,
+                   im.message_content AS desc,
+                   TO_CHAR(im.sent_at, 'HH24:MI') AS time,
+                   im.sent_at AS occurred_at
+            FROM internal_messages im
+            WHERE im.receiver_user_id = ?
+              AND im.sender_user_id != ?
+            ORDER BY im.sent_at DESC
             LIMIT 10
         ");
-        $msgStmt->execute([(string)$authUser['id']]);
+        $msgStmt->execute([$userId, $userId]);
         $notifications = array_merge($notifications, $msgStmt->fetchAll(PDO::FETCH_ASSOC));
 
         usort($notifications, function ($a, $b) {

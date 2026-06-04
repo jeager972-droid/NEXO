@@ -179,8 +179,10 @@ const Profile = () => {
   const [backupEmail, setBackupEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
   const [actionToast, setActionToast] = useState(null);
@@ -247,6 +249,10 @@ const Profile = () => {
       setActionToast({ type: 'error', message: 'Mínimo 8 caracteres para la nueva contraseña' });
       return;
     }
+    if (newPassword !== confirmPassword) {
+      setActionToast({ type: 'error', message: 'Las contraseñas nuevas no coinciden' });
+      return;
+    }
     setActionLoading(true);
     setActionToast(null);
     try {
@@ -255,6 +261,7 @@ const Profile = () => {
         setActionToast({ type: 'success', message: 'Contraseña actualizada' });
         setCurrentPassword('');
         setNewPassword('');
+        setConfirmPassword('');
       } else {
         setActionToast({ type: 'error', message: res.message || 'Error al cambiar contraseña' });
       }
@@ -356,9 +363,21 @@ const Profile = () => {
               </button>
             }
           />
+          <TextField
+            label="Confirmar nueva contraseña"
+            type={showConfirm ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            rightElement={
+              <button type="button" onClick={() => setShowConfirm(v => !v)} className="text-slate-400 hover:text-slate-600">
+                {showConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            }
+          />
           <button
             type="submit"
-            disabled={actionLoading || !currentPassword || newPassword.length < 8}
+            disabled={actionLoading || !currentPassword || newPassword.length < 8 || !confirmPassword}
             className="flex items-center gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider bg-[#003366] hover:bg-[#002855] text-white transition-colors disabled:opacity-50"
           >
             {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}

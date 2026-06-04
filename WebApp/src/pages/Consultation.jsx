@@ -46,20 +46,10 @@ const Consultation = () => {
   // Definición de módulos por rol
   const rbacModules = {
     [ROLES.DOCENTE]: [
-      { 
-        title: 'Mis Clases', 
-        icon: BookOpen, 
-        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso'] 
-      },
-      { 
-        title: 'Historial Estudiantil', 
-        icon: History, 
-        items: ['Historial Asistencia', 'Historial Tardanzas', 'Mis Permisos', 'Incidentes Disciplinarios'] 
-      },
-      { 
-        title: 'Mensajería', 
-        icon: MessageSquare, 
-        items: ['Mensajes Enviados', 'Respuestas Acudientes', 'Citaciones', 'Mensajes Internos'] 
+      {
+        title: 'Mis Clases',
+        icon: BookOpen,
+        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
       }
     ],
     [ROLES.PSICORIENTADOR]: [
@@ -71,17 +61,7 @@ const Consultation = () => {
       {
         title: 'Mis Clases',
         icon: BookOpen,
-        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso']
-      },
-      {
-        title: 'Historial Estudiantil',
-        icon: History,
-        items: ['Historial Asistencia', 'Historial Tardanzas', 'Mis Permisos', 'Incidentes Disciplinarios']
-      },
-      {
-        title: 'Mensajería',
-        icon: MessageSquare,
-        items: ['Mensajes Enviados', 'Respuestas Acudientes', 'Citaciones', 'Mensajes Internos']
+        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
       }
     ],
     [ROLES.COORDINADOR]: [
