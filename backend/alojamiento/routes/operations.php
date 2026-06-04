@@ -330,11 +330,15 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     if ($allMissingPhone) {
                         securityLog('CITACION_NO_PHONE', "Student:$studentId Guardian:{$target['guardian_id']} has no whatsapp_phone");
                         http_response_code(422);
-                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.']);
+                        $resp = json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.']);
+                        securityLog('CITACION_RESPONSE', "HTTP 422 | $resp");
+                        echo $resp;
                     } else {
                         securityLog('CITACION_DELIVERY_FAILED', "Student:$studentId Results:" . json_encode($deliveryResults));
                         http_response_code(500);
-                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.']);
+                        $resp = json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.']);
+                        securityLog('CITACION_RESPONSE', "HTTP 500 | $resp");
+                        echo $resp;
                     }
                     break;
                 }
@@ -356,7 +360,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 }
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
-                echo json_encode(['status' => 'ok', 'message' => 'Citación encolada para envío al acudiente', 'delivery' => $deliveryResults]);
+                $resp = json_encode(['status' => 'ok', 'message' => 'Citación enviada al acudiente', 'delivery' => $deliveryResults]);
+                securityLog('CITACION_RESPONSE', "HTTP 200 | $resp");
+                echo $resp;
                 break;
 
             case 'permiso':

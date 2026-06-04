@@ -12,7 +12,7 @@
 | **Frontend WebApp** | React 18 + Vite + TailwindCSS + PWA (VitePWA) | `WebApp/` |
 | **Backend API** | PHP 8.2 + PDO + PostgreSQL + Redis | `backend/alojamiento/` |
 | **Infraestructura** | Docker + Nginx + PHP-FPM | Railway (backend), Vercel (frontend) |
-| **Mensajería** | Twilio WhatsApp API (con queue en Redis) | `backend/alojamiento/worker_twilio.php` |
+| **Mensajería** | Twilio WhatsApp API. Envío **directo** para mensajes individuales (citación, SOS, etc.). Cola Redis solo para envíos masivos (salida pedagógica, cambio de horario). | `backend/alojamiento/routes/operations.php` + `worker_twilio.php` |
 | **Workers** | PHP CLI workers (biométrico, Twilio, auditoría) | `backend/alojamiento/worker_*.php` |
 | **Edge** | C++ CMake para ESP32 / Raspberry Pi | `backend/edge/` |
 | **Base de datos** | PostgreSQL ( Railway ) + Redis (Railway) | `backend/alojamiento/sql/` |
@@ -96,7 +96,7 @@ NEXO/
 |---|---|
 | `backend/alojamiento/api.php` | Entry point. CORS dinámico. Routing por `$cleanPath`. `securityLog()` async via Redis. |
 | `backend/alojamiento/db.php` | PDO PostgreSQL, manejo de SSL, modo `PDO::FETCH_ASSOC` |
-| `backend/alojamiento/routes/operations.php` | `$rolePermissions[]`, `logUserCommand()`, `enqueueTwilioJob()`. Casos: sos, citacion, salida, permiso, solicitud, daño, pedagogica, horario, incidente. **FIX:** `citacion` usa `LEFT JOIN users` para incluir acudientes sin cuenta de usuario. Validación de teléfono vacío antes de encolar. |
+| `backend/alojamiento/routes/operations.php` | `$rolePermissions[]`, `logUserCommand()`, **`sendTwilioNow()`** (envío directo a Twilio, sin Redis), **`enqueueTwilioJob()`** (solo envíos masivos). Casos: sos, citacion, salida, permiso, solicitud, daño, pedagogica, horario, incidente. **FIX:** `citacion` usa `LEFT JOIN users` para incluir acudientes sin cuenta de usuario. **Citación valida resultado del envío** (422 si falta teléfono, 500 si Twilio rechaza). `sendTwilioDirect()` loguea response body completo de Twilio en errores. |
 | `backend/alojamiento/routes/consultations.php` | **Motor unificado de consultas dinámicas**. Recibe `module` por POST y traduce a SQL nativo con JOINs cruzando `students`, `biometric_events`, `attendance_incidents`, `internal_messages`, etc. |
 | `backend/alojamiento/routes/misc.php` | `/notifications`: mergea `sos_alerts` + `attendance_incidents` + `internal_messages`. Filtra por rol (rector no ve llegadas tarde). Humaniza `incident_type`. |
 | `backend/alojamiento/routes/students.php` | Cursor-based pagination con `last_id` (UUID). JOIN con `student_group_assignments` y `academic_groups`. |
@@ -219,6 +219,15 @@ PSICORIENTADOR
 - ✅ **Try-catch en conexión Redis:** Tanto `worker_twilio.php` como `worker_audit.php` ahora envuelven `connectRedis()` en `try-catch`. Si falla al inicio, loguean el error y hacen `exit(1)` (el lazo del entrypoint los reinicia).
 - ✅ **Rate limiter seguro:** Se agregó `max(1, ...)` al leer `TWILIO_RATE_LIMIT` para evitar división por cero.
 
+### Twilio / Mensajería WhatsApp (Fixes Definitivos — 2026-06-04)
+- ✅ **Envío DIRECTO a Twilio para mensajes individuales:** Nueva función `sendTwilioNow()` en `operations.php`. Todos los comandos de 1 destinatario (citación, SOS, permiso, autorizar salida, incidente, solicitud, daño) ahora llaman a Twilio **síncronamente** en el request HTTP. **Bypass total de Redis/Worker** para evitar pérdida silenciosa de mensajes.
+- ✅ **Cola Redis solo para envíos masivos:** `enqueueTwilioJob()` sigue existiendo pero solo lo usan `pedagogica` y `horario` (notifican a todos los padres de un grupo). El worker `worker_twilio.php` procesa solo estos.
+- ✅ **`enqueueTwilioJob()` retorna estado:** Ahora devuelve array con `ok`, `reason`, `error`, `phone_norm` en vez de `void`, permitiendo validación upstream.
+- ✅ **`enqueueTwilioJob()` usa REDIS_DB consistente:** Se agregó `$redis->select((int)(getenv('REDIS_DB') ?: 0))` para que API y worker usen la misma base de datos Redis.
+- ✅ **`sendTwilioDirect()` loguea response body:** Cuando Twilio devuelve error (HTTP ≥ 400), ahora se loguea el response body completo de Twilio en `stderr`, revelando el motivo exacto del rechazo.
+- ✅ **Citación valida envío real:** El caso `citacion` ahora captura el resultado de `sendTwilioNow()`. Si falla → responde **500** con mensaje descriptivo. Si el acudiente no tiene teléfono → responde **422**. Solo responde **200** si Twilio confirmó el envío.
+- ✅ **Logging de credenciales detallado:** `sendTwilioDirect()`, `sendTwilioWhatsAppDirect()` y `sendTwilioWhatsAppOtp()` ahora loguean **qué variable específica** falta (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`), haciendo visible en Railway Dashboard si una variable de entorno no está seteada.
+
 ### Operaciones / UX
 - ✅ **Combobox unificado en `Operation.jsx`:** Se reemplazaron las 4 barras separadas (buscar grupo, select grupo, buscar estudiante, select estudiante) por un componente nativo `Combobox` que combina búsqueda en tiempo real + selección en un solo input. Filtra localmente, soporta `required`, y mantiene la validación anti-spam del formulario.
 
@@ -291,5 +300,5 @@ UPDATE guardians SET whatsapp_phone = '+573243607948';
 
 ---
 
-*Última actualización: 2026-06-04*
+*Última actualización: 2026-06-04 (fixes Twilio: envío directo, logging mejorado, validación citación)*
 *Mantener este archivo actualizado tras cada cambio arquitectónico significativo.*

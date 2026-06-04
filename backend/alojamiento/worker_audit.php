@@ -57,7 +57,11 @@ $iterations = 0;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
 
 $conn = $pdo;
-$conn->exec("SET app.current_role = 'SUPER_RECTOR'");
+try {
+    $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)");
+} catch (PDOException $e) {
+    logWorker('ROLE_SET_SKIP', $e->getMessage());
+}
 try {
     $redis = connectRedis();
 } catch (Exception $e) {

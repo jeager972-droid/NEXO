@@ -145,7 +145,11 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
    Main Loop
    ============================================================ */
 $conn = $pdo;
-$conn->exec("SET app.current_role = 'SUPER_RECTOR'");
+try {
+    $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)");
+} catch (PDOException $e) {
+    securityLog('WORKER_ROLE_SET_SKIP', $e->getMessage());
+}
 
 try {
     $redis = connectRedis();
