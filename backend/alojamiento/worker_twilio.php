@@ -45,7 +45,13 @@ function sendTwilioWhatsAppDirect($to, $body) {
     $token = getenv('TWILIO_AUTH_TOKEN');
     $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     if (!$sid || !$token || !$from) {
-        return ['ok' => false, 'error' => 'Missing Twilio credentials', 'sid' => null];
+        $missing = [];
+        if (!$sid)   $missing[] = 'TWILIO_ACCOUNT_SID';
+        if (!$token) $missing[] = 'TWILIO_AUTH_TOKEN';
+        if (!$from)  $missing[] = 'TWILIO_WHATSAPP_FROM (or TWILIO_FROM_NUMBER)';
+        $err = 'Missing Twilio credentials: ' . implode(', ', $missing);
+        securityLog('TWILIO_CREDENTIALS_MISSING', $err);
+        return ['ok' => false, 'error' => $err, 'sid' => null];
     }
 
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";

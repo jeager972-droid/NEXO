@@ -29,7 +29,13 @@ function sendTwilioDirect($to, $body) {
     $token = getenv('TWILIO_AUTH_TOKEN');
     $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     if (!$sid || !$token || !$from) {
-        return ['ok' => false, 'error' => 'Missing Twilio credentials'];
+        $missing = [];
+        if (!$sid)   $missing[] = 'TWILIO_ACCOUNT_SID';
+        if (!$token) $missing[] = 'TWILIO_AUTH_TOKEN';
+        if (!$from)  $missing[] = 'TWILIO_WHATSAPP_FROM (or TWILIO_FROM_NUMBER)';
+        $err = 'Missing Twilio credentials: ' . implode(', ', $missing);
+        securityLog('TWILIO_DIRECT_CREDENTIALS_MISSING', $err);
+        return ['ok' => false, 'error' => $err];
     }
     $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
     if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
@@ -67,18 +73,20 @@ function sendTwilioDirect($to, $body) {
 
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
     $enqueued = false;
+    $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
+    if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
+    $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
+
+    if (empty($toNorm) || $toNorm === '+') {
+        securityLog('TWILIO_ENQUEUE_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
+        return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
+    }
+
     try {
         $redis = new Redis();
         $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-        $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
-        if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
-        $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
-        
-        if (empty($toNorm) || $toNorm === '+') {
-            securityLog('TWILIO_ENQUEUE_SKIPPED', "Invalid destination phone: $to");
-            return;
-        }
+        $redis->select((int)(getenv('REDIS_DB') ?: 0));
 
         $payload = json_encode([
             'to' => $toNorm,
@@ -93,6 +101,7 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         ], JSON_UNESCAPED_UNICODE);
         $redis->rPush('queue:twilio', $payload);
         $enqueued = true;
+        return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm];
     } catch (Exception $e) {
         securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
     }
@@ -102,8 +111,10 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         $result = sendTwilioDirect($to, $body);
         if ($result['ok']) {
             securityLog('TWILIO_DIRECT_SENT', "SID: {$result['sid']} To: $to");
+            return ['ok' => true, 'reason' => 'direct', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
         } else {
             securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
+            return ['ok' => false, 'reason' => 'direct_failed', 'error' => $result['error'], 'phone_norm' => $toNorm];
         }
     }
 }
@@ -269,9 +280,31 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
                 $citMsg = "Citación para {$studentName}.\n1 = Confirmo asistencia a la citación.\n2 = Solicito reagendar la citación.";
-                enqueueTwilioJob($target['whatsapp_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
+                $deliveryResults = [];
+                $deliveryResults[] = enqueueTwilioJob($target['whatsapp_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
                 if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
-                    enqueueTwilioJob($target['guardian_user_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
+                    $deliveryResults[] = enqueueTwilioJob($target['guardian_user_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
+                }
+
+                // Validar que al menos un mensaje fue encolado/enviado
+                $anyOk = false;
+                $allMissingPhone = true;
+                foreach ($deliveryResults as $dr) {
+                    if ($dr['ok']) $anyOk = true;
+                    if (($dr['reason'] ?? '') !== 'missing_or_invalid_phone') $allMissingPhone = false;
+                }
+
+                if (!$anyOk) {
+                    if ($allMissingPhone) {
+                        securityLog('CITACION_NO_PHONE', "Student:$studentId Guardian:{$target['guardian_id']} has no whatsapp_phone");
+                        http_response_code(422);
+                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.']);
+                    } else {
+                        securityLog('CITACION_DELIVERY_FAILED', "Student:$studentId Results:" . json_encode($deliveryResults));
+                        http_response_code(500);
+                        echo json_encode(['status' => 'error', 'message' => 'No se pudo encolar el mensaje. Verifique la conexión a Redis o las credenciales de Twilio.']);
+                    }
+                    break;
                 }
 
                 // FIX: Persistir estado de conversación en Redis para que el webhook inbound
@@ -280,6 +313,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $redisConv = new Redis();
                     $redisConv->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
                     if ($pass = getenv('REDIS_PASSWORD')) $redisConv->auth($pass);
+                    $redisConv->select((int)(getenv('REDIS_DB') ?: 0));
                     $convPayload = json_encode(['student_id' => (string)$studentId, 'guardian_id' => (string)$target['guardian_id'], 'school_id' => (string)$schoolId, 'ts' => time()], JSON_UNESCAPED_UNICODE);
                     $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['whatsapp_phone']), 172800, $convPayload);
                     if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
@@ -290,7 +324,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 }
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
-                echo json_encode(['status' => 'ok', 'message' => 'Citación encolada para envío al acudiente']);
+                echo json_encode(['status' => 'ok', 'message' => 'Citación encolada para envío al acudiente', 'delivery' => $deliveryResults]);
                 break;
 
             case 'permiso':

@@ -83,7 +83,10 @@ NEXO/
 | `WebApp/src/api/operations.js` | `execute()`, `sos()`, `citacion()`, `salida()`, `permiso()` |
 | `WebApp/src/context/AuthContext.jsx` | Estado de auth via `authApi.getMe()` (cookie HttpOnly), NO confía en localStorage |
 | `WebApp/src/layout/Layout.jsx` | Header, sidebar toggle, búsqueda global (excluye RECTOR/SUPER_RECTOR), catálogo de búsqueda |
-| `WebApp/src/pages/Operation.jsx` | Panel de comandos institucionales. Fetch de grupos/estudiantes. Formularios dinámicos por comando. |
+| `WebApp/src/pages/Operation.jsx` | Panel de comandos institucionales. Fetch de grupos/estudiantes. Formularios dinámicos por comando. **Refactorizado con `Combobox` unificado** (autocomplete + select) reemplazando barras duplicadas de búsqueda y select. |
+| `WebApp/src/pages/Consultation.jsx` | **Consultas dinámicas institucionales**. Conectado a `/consultations/query` vía `consultationsApi`. Renderiza tablas con columnas dinámicas desde PostgreSQL. Incluye Análisis de Riesgo (`/behavior/risk`). |
+| `WebApp/src/api/consultations.js` | Cliente Axios para el motor de consultas dinámicas (`/consultations/query`). |
+| `WebApp/src/api/behavior.js` | Cliente Axios para análisis de riesgo (`/behavior/risk`). |
 | `WebApp/src/pages/Notifications.jsx` | Lista de notificaciones (SOS + incidentes + mensajes internos) |
 | `WebApp/src/pages/Audit.jsx` | Auditoría con filtros, export, humanización de enums (`VALUE_LABELS`) |
 | `WebApp/src/config/roles.js` | `ROLES`, `SIDEBAR_ITEMS`, `ROLE_DISPLAY` (SUPER_RECTOR → "Admin") |
@@ -93,11 +96,12 @@ NEXO/
 |---|---|
 | `backend/alojamiento/api.php` | Entry point. CORS dinámico. Routing por `$cleanPath`. `securityLog()` async via Redis. |
 | `backend/alojamiento/db.php` | PDO PostgreSQL, manejo de SSL, modo `PDO::FETCH_ASSOC` |
-| `backend/alojamiento/routes/operations.php` | `$rolePermissions[]`, `logUserCommand()`, `enqueueTwilioJob()`. Casos: sos, citacion, salida, permiso, solicitud, daño, pedagogica, horario, incidente. |
+| `backend/alojamiento/routes/operations.php` | `$rolePermissions[]`, `logUserCommand()`, `enqueueTwilioJob()`. Casos: sos, citacion, salida, permiso, solicitud, daño, pedagogica, horario, incidente. **FIX:** `citacion` usa `LEFT JOIN users` para incluir acudientes sin cuenta de usuario. Validación de teléfono vacío antes de encolar. |
+| `backend/alojamiento/routes/consultations.php` | **Motor unificado de consultas dinámicas**. Recibe `module` por POST y traduce a SQL nativo con JOINs cruzando `students`, `biometric_events`, `attendance_incidents`, `internal_messages`, etc. |
 | `backend/alojamiento/routes/misc.php` | `/notifications`: mergea `sos_alerts` + `attendance_incidents` + `internal_messages`. Filtra por rol (rector no ve llegadas tarde). Humaniza `incident_type`. |
 | `backend/alojamiento/routes/students.php` | Cursor-based pagination con `last_id` (UUID). JOIN con `student_group_assignments` y `academic_groups`. |
-| `backend/alojamiento/routes/users.php` | `/users/by-role` con filtro `same_shift=true`. `sendTwilioWhatsAppOtp()`. |
-| `backend/alojamiento/worker_twilio.php` | Consume cola Redis `queue:twilio`, envía WhatsApp, maneja retries y deduplicación. |
+| `backend/alojamiento/routes/users.php` | `/users/by-role` con filtro `same_shift=true`. `sendTwilioWhatsAppOtp()`. **FIX:** Normalización rigurosa de `From` y `To`, fallback entre `TWILIO_WHATSAPP_FROM` y `TWILIO_FROM_NUMBER`. |
+| `backend/alojamiento/worker_twilio.php` | Consume cola Redis `queue:twilio`, envía WhatsApp, maneja retries, deduplicación, rate limiting (Leaky Bucket). **FIX:** Normalización de números `From`/`To`, logs a `stderr`, try-catch en conexión Redis. |
 | `backend/alojamiento/worker_biometric.php` | Consume cola Redis `queue:biometric`, inserta/actualiza estudiantes, guardianes, incidentes. |
 
 ---
@@ -181,9 +185,10 @@ PSICORIENTADOR
 ### Perfil y Usuarios
 - ✅ Arreglada subida de fotos de perfil (Profile.jsx): Se eliminó el `Content-Type` hardcodeado en `usersApi.uploadPhoto` y el interceptor de Axios para permitir que `FormData` genere el boundary de `multipart/form-data` correctamente.
 
-### Consultas (Diagnóstico Profundo)
-- ✅ **Análisis de Riesgo:** Se conectó el frontend (`Consultation.jsx`) con el endpoint real de la base de datos `/behavior/risk` a través del nuevo cliente `behaviorApi`.
-- ⚠️ **Diagnóstico de Etapa MVP:** Toda la sección "Consulta" (para profesores, coordinadores, etc.) sigue en etapa MVP a nivel de frontend. Exceptuando "Análisis de Riesgo", los más de 30 submódulos (como "Historial Asistencia", "Llegadas Tarde", "Estadísticas") son *placeholders* visuales y muestran el mensaje de "Sin datos / endpoint no integrado". Para tener funcionamiento real, es necesario desarrollar los endpoints respectivos en el backend de PostgreSQL.
+### Consultas (Motor Dinámico Unificado)
+- ✅ **Backend:** Creado `backend/alojamiento/routes/consultations.php`. Motor unificado que recibe `module` por POST y traduce dinámicamente a queries SQL reales (JOINs entre `students`, `biometric_events`, `attendance_incidents`, `internal_messages`, `twilio_messages`, `users`, `academic_groups`). Soporta 20+ módulos.
+- ✅ **Frontend:** `Consultation.jsx` conectado a `/consultations/query` vía `consultationsApi.js`. Renderiza tablas dinámicas con columnas definidas por el backend. Ya no hay placeholders estáticos.
+- ✅ **Análisis de Riesgo:** Conectado a `/behavior/risk` vía `behaviorApi.js`. Renderiza tabla real con score, nivel y badge visual.
 
 ### Notificaciones
 - ✅ Rectores/Admin no reciben notificaciones de llegadas tarde ni salidas anticipadas
@@ -204,7 +209,21 @@ PSICORIENTADOR
 - ✅ `vercel.json`: redirect `/` → `/app/`
 - ✅ `vite.config.js`: `navigateFallback: '/app/index.html'`
 
+### Twilio / Mensajería WhatsApp (Fixes Críticos)
+- ✅ **Normalización de teléfonos:** Todos los endpoints (`users.php`, `operations.php`, `worker_twilio.php`) ahora normalizan rigurosamente tanto el número destinatario (`$to`) como el remitente (`$From`) mediante `normalizePhone()` / `normalizeWhatsAppPhone()`. Se remueve prefijo `whatsapp:` duplicado, se inyecta `+` forzosamente, y se sanitiza todo carácter no numérico.
+- ✅ **Fallback de variables de entorno:** Si `TWILIO_WHATSAPP_FROM` no está definida, se usa `TWILIO_FROM_NUMBER`. Esto evita el envío con `From` vacío que rechaza Twilio.
+- ✅ **Citación (`citacion`):** Cambiado `INNER JOIN users` a `LEFT JOIN users` en la query del acudiente principal. Ahora se notifica a acudientes que NO tienen una cuenta de usuario activa en la plataforma (muchos casos reales).
+- ✅ **Validación anti-vacío:** `enqueueTwilioJob()` ahora valida que el teléfono destino no esté vacío ni sea solo `+`. Si es inválido, loguea `TWILIO_ENQUEUE_SKIPPED` y retorna sin encolar.
+- ✅ **Workers indestructibles:** `docker-entrypoint.sh` ahora lanza los workers dentro de un lazo infinito: `(while true; do php worker_twilio.php; sleep 2; done)`. Si el worker falla (ej. Redis no disponible 1ms al inicio), se reinicia automáticamente.
+- ✅ **Logs a stdout:** Redirigidos los logs de `worker_twilio.php` y `worker_audit.php` a `/dev/stdout` en lugar de `/dev/null`. Railway ahora captura errores del worker en tiempo real.
+- ✅ **Try-catch en conexión Redis:** Tanto `worker_twilio.php` como `worker_audit.php` ahora envuelven `connectRedis()` en `try-catch`. Si falla al inicio, loguean el error y hacen `exit(1)` (el lazo del entrypoint los reinicia).
+- ✅ **Rate limiter seguro:** Se agregó `max(1, ...)` al leer `TWILIO_RATE_LIMIT` para evitar división por cero.
+
+### Operaciones / UX
+- ✅ **Combobox unificado en `Operation.jsx`:** Se reemplazaron las 4 barras separadas (buscar grupo, select grupo, buscar estudiante, select estudiante) por un componente nativo `Combobox` que combina búsqueda en tiempo real + selección en un solo input. Filtra localmente, soporta `required`, y mantiene la validación anti-spam del formulario.
+
 ### Backend
+- ✅ `consultations.php`: Endpoint unificado `/consultations/query` servido desde `api.php`.
 - ✅ `operations.php`: `internal_messages` insert para `solicitud`
 - ✅ `misc.php`: filtrado de incidentes por rol, humanización de tipos, query de `internal_messages`
 
@@ -272,5 +291,5 @@ UPDATE guardians SET whatsapp_phone = '+573243607948';
 
 ---
 
-*Última actualización: 2026-06-03*
+*Última actualización: 2026-06-04*
 *Mantener este archivo actualizado tras cada cambio arquitectónico significativo.*
