@@ -387,6 +387,14 @@ const TeacherDashboard = ({ stats, loading }) => {
 const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) => {
   const config = CATEGORY_LABELS[category];
   const Icon = config?.icon || Users;
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredData = searchQuery.trim()
+    ? data.filter(row =>
+        (row.first_name + ' ' + row.last_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (row.document_number || '').toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : data;
 
   // Columnas dinámicas según categoría
   const getColumns = () => {
@@ -445,6 +453,19 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) =>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
+          {/* Search bar */}
+          <div className="mb-4 relative">
+            <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o documento…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"
+              style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '13px', fontWeight: 500, color: '#0F172A' }}
+            />
+          </div>
+
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
               <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
@@ -452,7 +473,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) =>
                 Cargando datos...
               </p>
             </div>
-          ) : data.length > 0 ? (
+          ) : filteredData.length > 0 ? (
             <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
               <table className="w-full min-w-[440px]">
                 <thead>
@@ -466,9 +487,9 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) =>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-slate-900">
-                  {data.map((row, i) => (
+                  {filteredData.map((row, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                      style={{ borderBottom: i < data.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      style={{ borderBottom: i < filteredData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                       {columns.map(col => (
                         <td key={col.key} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
                           {col.key === 'first_name' ? (
@@ -494,10 +515,12 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) =>
               <CalendarDays size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
               <div className="text-center space-y-1">
                 <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>
-                  Sin registros
+                  {searchQuery ? 'Sin coincidencias' : 'Sin registros'}
                 </p>
                 <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">
-                  No se encontraron estudiantes en esta categoría para el período seleccionado.
+                  {searchQuery
+                    ? 'Ningún estudiante coincide con tu búsqueda.'
+                    : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'}
                 </p>
               </div>
             </div>
