@@ -267,26 +267,44 @@ const CATEGORY_LABELS = {
   permiso:  { label: 'Permisos',     accent: '#00A67E', icon: Activity },
 };
 
-const TeacherDashboard = ({ stats, loading }) => {
+const TeacherDashboard = ({ stats, loading: parentLoading }) => {
+  const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
-  });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [groupStats, setGroupStats] = useState(null);
+  const [groupLoading, setGroupLoading] = useState(false);
 
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const todayStr = new Date().toISOString().split('T')[0];
   const groupNames = Object.keys(stats?.studentsByGroup || {});
+
+  // Fetch per-group stats when group changes
+  useEffect(() => {
+    if (!selectedGroup) {
+      setGroupStats(null);
+      return;
+    }
+    const id = user?.school_id || user?.inst_id || user?.institucion_id;
+    if (!id) return;
+    setGroupLoading(true);
+    dashboardApi.getStats(id, selectedGroup)
+      .then(res => {
+        if (res?.status === 'ok') {
+          setGroupStats(res.groupStats || EMPTY_STATS.groupStats);
+        }
+      })
+      .catch(err => console.error('Error fetching group stats', err))
+      .finally(() => setGroupLoading(false));
+  }, [selectedGroup]);
 
   const openDetail = async (category) => {
     if (!selectedGroup) return;
     setActiveCategory(category);
     setDetailLoading(true);
     try {
-      const res = await dashboardApi.getTeacherGroupDetail(selectedGroup, category, fromDate, toDate);
+      const res = await dashboardApi.getTeacherGroupDetail(selectedGroup, category, todayStr, todayStr);
       if (res?.status === 'ok') setDetailData(res.data || []);
       else setDetailData([]);
     } catch (e) {
@@ -297,88 +315,108 @@ const TeacherDashboard = ({ stats, loading }) => {
     }
   };
 
-  const groupStats = [
-    { key: 'present',  label: 'Presentes',    value: stats?.groupStats?.present || 0, accent: '#003366' },
-    { key: 'absent',   label: 'Inasistentes', value: stats?.groupStats?.absent  || 0, accent: '#0D4080' },
-    { key: 'alert',    label: 'Alertas',      value: stats?.groupStats?.alerts  || 0, accent: '#DC2626' },
-    { key: 'permiso',  label: 'Permisos',     value: stats?.groupStats?.outside || 0, accent: '#00A67E' },
+  const cards = [
+    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, accent: '#003366' },
+    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, accent: '#0D4080' },
+    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, accent: '#DC2626' },
+    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, accent: '#00A67E' },
   ];
+
+  const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
 
   return (
     <div className="space-y-5">
-      <SectionLabel title="Panel Docente" sub="Control de asistencia por grupo" />
+      <SectionLabel title="Panel Docente" sub="Control de asistencia por grupo — Hoy" />
 
-      {loading ? (
+      {parentLoading ? (
         <div style={{ border: '1.5px solid #E2E8F0' }} className="p-6 space-y-3 bg-white dark:bg-slate-900">
           {[1, 2].map(i => <Pulse key={i} className="h-10 w-full" />)}
         </div>
       ) : (
         <>
-          {/* Group selector + Date range */}
-          <div style={{ border: '1.5px solid #E2E8F0' }} className="p-5 bg-white dark:bg-slate-900 space-y-4">
-            <div>
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '8px' }}>
-                Seleccionar Grupo
-              </p>
-              <select
-                value={selectedGroup}
-                onChange={e => setSelectedGroup(e.target.value)}
-                className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
-                style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
-              >
-                <option value="">— Elegir grupo —</option>
-                {groupNames.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>Desde</p>
-                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                  className="w-full p-2.5 text-sm font-medium outline-none dark:bg-slate-800 dark:text-white"
-                  style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }} />
-              </div>
-              <div>
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>Hasta</p>
-                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                  className="w-full p-2.5 text-sm font-medium outline-none dark:bg-slate-800 dark:text-white"
-                  style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }} />
-              </div>
-            </div>
+          {/* Group selector */}
+          <div style={{ border: '1.5px solid #E2E8F0' }} className="p-5 bg-white dark:bg-slate-900">
+            <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Seleccionar Grupo
+            </p>
+            <select
+              value={selectedGroup}
+              onChange={e => setSelectedGroup(e.target.value)}
+              className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
+              style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
+            >
+              <option value="">— Elegir grupo —</option>
+              {groupNames.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
           </div>
+
+          {/* Warning: no group selected */}
+          {!selectedGroup && (
+            <div className="flex items-center gap-3 p-5 bg-white dark:bg-slate-900" style={{ border: '1.5px solid #E2E8F0' }}>
+              <CalendarDays size={20} strokeWidth={1.5} className="text-slate-300 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">Seleccione un grupo para ver el control de asistencia del día</p>
+                <p style={{ fontSize: '11px', color: '#94A3B8' }}>Los datos provienen del nodo de control en tiempo real</p>
+              </div>
+            </div>
+          )}
+
+          {/* Warning: group selected but no activity today */}
+          {selectedGroup && !groupLoading && groupStats && !hasActivity && (
+            <div className="flex items-center gap-3 p-5 bg-white dark:bg-slate-900" style={{ border: '1.5px solid #E2E8F0' }}>
+              <AlertTriangle size={20} strokeWidth={1.5} className="text-amber-400 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  El grupo <span className="text-[#003366]">{selectedGroup}</span> no tiene registros de ingreso hoy
+                </p>
+                <p style={{ fontSize: '11px', color: '#94A3B8' }}>Verifique que el nodo de control esté operativo o que los estudiantes hayan ingresado</p>
+              </div>
+            </div>
+          )}
 
           {/* 4 Stat cards — clickable */}
-          <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid #E2E8F0' }}>
-            {groupStats.map((s, i) => (
-              <button
-                key={s.key}
-                onClick={() => openDetail(s.key)}
-                disabled={!selectedGroup}
-                className="bg-white dark:bg-slate-900 text-center py-5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
-                style={{ borderRight: i < 3 ? '1.5px solid #E2E8F0' : 'none' }}
-              >
-                <p style={{ fontSize: '40px', fontWeight: 900, color: s.accent, lineHeight: 1 }}>{s.value}</p>
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase', marginTop: '6px' }}>
-                  {s.label}
-                </p>
-              </button>
-            ))}
-          </div>
+          {selectedGroup && (
+            <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid #E2E8F0' }}>
+              {groupLoading ? (
+                [1,2,3,4].map(i => (
+                  <div key={i} className="bg-white dark:bg-slate-900 text-center py-5 px-4" style={{ borderRight: i < 4 ? '1.5px solid #E2E8F0' : 'none' }}>
+                    <Pulse className="h-10 w-16 mx-auto" />
+                  </div>
+                ))
+              ) : (
+                cards.map((s, i) => (
+                  <button
+                    key={s.key}
+                    onClick={() => openDetail(s.key)}
+                    className="bg-white dark:bg-slate-900 text-center py-5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    style={{ borderRight: i < 3 ? '1.5px solid #E2E8F0' : 'none' }}
+                  >
+                    <p style={{ fontSize: '40px', fontWeight: 900, color: s.accent, lineHeight: 1 }}>{s.value}</p>
+                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase', marginTop: '6px' }}>
+                      {s.label}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </>
       )}
 
       {/* ── Detail Drawer ── */}
-      {activeCategory && (
-        <TeacherDetailDrawer
-          category={activeCategory}
-          groupName={selectedGroup}
-          data={detailData}
-          loading={detailLoading}
-          onClose={() => setActiveCategory(null)}
-        />
-      )}
+      <AnimatePresence>
+        {activeCategory && (
+          <TeacherDetailDrawer
+            category={activeCategory}
+            groupName={selectedGroup}
+            data={detailData}
+            loading={detailLoading}
+            onClose={() => setActiveCategory(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -1,9 +1,9 @@
 import client from './client';
 
 export const dashboardApi = {
-  getStats: async (schoolId) => {
+  getStats: async (schoolId, groupName = '') => {
     const response = await client.get('/dashboard/stats', {
-      params: { school_id: schoolId }
+      params: { school_id: schoolId, group_name: groupName }
     });
     return response.data;
   },

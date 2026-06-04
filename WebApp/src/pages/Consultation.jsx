@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
+import { studentsApi } from '../api/students';
 import {
   Search, Users, ShieldAlert, MessageSquare,
   Activity, ChevronRight, Database, BookOpen,
-  History, UserCheck, X, Loader2
+  History, UserCheck, X, Loader2, CalendarDays
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
+
+const TEACHER_MODULES = ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
 const Consultation = () => {
   const { user } = useAuth();
@@ -19,16 +22,64 @@ const Consultation = () => {
   const [dynamicColumns, setDynamicColumns] = useState({});
   const [loadingData, setLoadingData] = useState(false);
 
+  // Query params for teacher modules
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [hasQueried, setHasQueried] = useState(false);
+
+  // Load groups on mount
+  useEffect(() => {
+    studentsApi.getGroups()
+      .then(data => setGroups(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Error loading groups', err));
+  }, []);
+
+  const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
+
+  const executeQuery = async () => {
+    if (!activeItem) return;
+    setLoadingData(true);
+    setHasQueried(true);
+    try {
+      const res = await consultationsApi.queryModule(activeItem, selectedGroup, fromDate, toDate);
+      if (res.status === 'ok') {
+        setDynamicData(res.data || []);
+        setDynamicColumns(res.columns || {});
+      }
+    } catch (err) {
+      console.error('Error fetching module data', err);
+      setDynamicData([]);
+      setDynamicColumns({});
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   useEffect(() => {
     if (!activeItem) return;
-    
+
+    // Teacher modules: require manual query via form
+    if (isTeacherModule) {
+      setHasQueried(false);
+      setDynamicData([]);
+      setDynamicColumns({});
+      setLoadingData(false);
+      return;
+    }
+
+    // Non-teacher modules: auto-fetch
     setLoadingData(true);
     if (activeItem === 'Análisis de Riesgo') {
       behaviorApi.getRiskAnalysis()
         .then(res => {
           if (res.status === 'ok') setRiskStudents(res.data || []);
         })
-        .catch(err => console.error("Error fetching risk analysis", err))
+        .catch(err => console.error('Error fetching risk analysis', err))
         .finally(() => setLoadingData(false));
     } else {
       consultationsApi.queryModule(activeItem)
@@ -38,7 +89,7 @@ const Consultation = () => {
             setDynamicColumns(res.columns || {});
           }
         })
-        .catch(err => console.error("Error fetching module data", err))
+        .catch(err => console.error('Error fetching module data', err))
         .finally(() => setLoadingData(false));
     }
   }, [activeItem]);
@@ -191,6 +242,16 @@ const Consultation = () => {
             dynamicData={dynamicData}
             dynamicColumns={dynamicColumns}
             loadingData={loadingData}
+            isTeacherModule={isTeacherModule}
+            hasQueried={hasQueried}
+            groups={groups}
+            selectedGroup={selectedGroup}
+            setSelectedGroup={setSelectedGroup}
+            fromDate={fromDate}
+            setFromDate={setFromDate}
+            toDate={toDate}
+            setToDate={setToDate}
+            onQuery={executeQuery}
             onClose={() => setActiveItem(null)}
           />
         )}
@@ -214,9 +275,14 @@ const RiskBadge = ({ level }) => {
   );
 };
 
-const ConsultationDrawer = ({ item, riskStudents, dynamicData, dynamicColumns, loadingData, onClose }) => {
+const ConsultationDrawer = ({
+  item, riskStudents, dynamicData, dynamicColumns, loadingData,
+  isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
+  fromDate, setFromDate, toDate, setToDate, onQuery, onClose
+}) => {
   const keys = Object.keys(dynamicColumns);
-  
+  const showQueryForm = isTeacherModule && !hasQueried;
+
   return (
     <>
       <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -236,7 +302,9 @@ const ConsultationDrawer = ({ item, riskStudents, dynamicData, dynamicColumns, l
             </div>
             <div>
               <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>{item}</p>
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>Consulta de Datos Institucionales</p>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                {isTeacherModule ? 'Seleccione grupo y lapso para consultar' : 'Consulta de Datos Institucionales'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
@@ -246,7 +314,60 @@ const ConsultationDrawer = ({ item, riskStudents, dynamicData, dynamicColumns, l
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {loadingData ? (
+          {showQueryForm ? (
+            /* ── Query Form for teacher modules ── */
+            <div className="space-y-5">
+              <div className="space-y-1">
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                  Grupo
+                </p>
+                <select
+                  value={selectedGroup}
+                  onChange={e => setSelectedGroup(e.target.value)}
+                  className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
+                  style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
+                >
+                  <option value="">— Seleccionar grupo —</option>
+                  {groups.map(g => (
+                    <option key={g.group_id || g.id || g.group_name || g.name} value={g.group_name || g.name || g}>
+                      {g.group_name || g.name || g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>Desde</p>
+                  <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                    className="w-full p-2.5 text-sm font-medium outline-none dark:bg-slate-800 dark:text-white"
+                    style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '6px' }}>Hasta</p>
+                  <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                    className="w-full p-2.5 text-sm font-medium outline-none dark:bg-slate-800 dark:text-white"
+                    style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }} />
+                </div>
+              </div>
+
+              <button
+                onClick={onQuery}
+                disabled={!selectedGroup || loadingData}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[10px] font-bold uppercase tracking-wider bg-[#003366] hover:bg-[#002855] text-white transition-colors disabled:opacity-50"
+              >
+                {loadingData ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                Consultar
+              </button>
+
+              <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50" style={{ border: '1px solid #E2E8F0' }}>
+                <CalendarDays size={16} strokeWidth={1.5} className="text-slate-300 shrink-0" />
+                <p style={{ fontSize: '11px', color: '#94A3B8' }}>
+                  Seleccione el grupo y el rango de fechas para consultar los registros correspondientes.
+                </p>
+              </div>
+            </div>
+          ) : loadingData ? (
             <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
               <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
               <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase' }}>
@@ -321,7 +442,7 @@ const ConsultationDrawer = ({ item, riskStudents, dynamicData, dynamicColumns, l
               <Database size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
               <div className="text-center space-y-1">
                 <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
-                <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">No se encontraron registros para este módulo en este momento.</p>
+                <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">No se encontraron registros para este módulo en el período seleccionado.</p>
               </div>
             </div>
           )}
