@@ -65,10 +65,42 @@ function sendTwilioDirect($to, $body) {
     curl_close($ch);
 
     if ($response === false || $httpCode >= 400) {
-        return ['ok' => false, 'error' => ($err ?: "HTTP $httpCode"), 'sid' => null];
+        $errorDetail = $err ?: "HTTP $httpCode";
+        if ($response) {
+            $errorDetail .= " | Response: " . substr($response, 0, 500);
+        }
+        securityLog('TWILIO_DIRECT_ERROR', "To:$toNorm HTTP:$httpCode Error:$errorDetail");
+        return ['ok' => false, 'error' => $errorDetail, 'sid' => null];
     }
     $json = json_decode($response, true);
+    $sidStr = isset($json['sid']) ? $json['sid'] : 'N/A';
+    securityLog('TWILIO_DIRECT_OK', "SID:{$sidStr} To:$toNorm");
     return ['ok' => true, 'error' => null, 'sid' => $json['sid'] ?? null];
+}
+
+function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
+    $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
+    if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
+    $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
+
+    if (empty($toNorm) || $toNorm === '+') {
+        securityLog('TWILIO_SEND_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
+        return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
+    }
+
+    $result = sendTwilioDirect($to, $body);
+
+    if ($result['ok']) {
+        logTwilioMessageSafe($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
+            ['action' => 'api_direct_sent', 'source' => 'sendTwilioNow'],
+            $studentId, $guardianId, $senderUserId, $result['sid'], 'SENT');
+        return ['ok' => true, 'reason' => 'sent', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
+    }
+
+    logTwilioMessageSafe($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
+        ['action' => 'api_direct_failed', 'error' => $result['error'], 'source' => 'sendTwilioNow'],
+        $studentId, $guardianId, $senderUserId, null, 'FAILED');
+    return ['ok' => false, 'reason' => 'twilio_api_error', 'error' => $result['error'], 'phone_norm' => $toNorm];
 }
 
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
@@ -244,7 +276,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $nStmt->execute([$schoolId, $nr]);
                     while ($nRow = $nStmt->fetch(PDO::FETCH_ASSOC)) {
                         if (!empty($nRow['phone'])) {
-                            enqueueTwilioJob($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
+                            sendTwilioNow($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
                         }
                     }
                 }
@@ -281,12 +313,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
                 $citMsg = "Citación para {$studentName}.\n1 = Confirmo asistencia a la citación.\n2 = Solicito reagendar la citación.";
                 $deliveryResults = [];
-                $deliveryResults[] = enqueueTwilioJob($target['whatsapp_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
+                $deliveryResults[] = sendTwilioNow($target['whatsapp_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
                 if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
-                    $deliveryResults[] = enqueueTwilioJob($target['guardian_user_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
+                    $deliveryResults[] = sendTwilioNow($target['guardian_user_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
                 }
 
-                // Validar que al menos un mensaje fue encolado/enviado
+                // Validar que al menos un mensaje fue enviado
                 $anyOk = false;
                 $allMissingPhone = true;
                 foreach ($deliveryResults as $dr) {
@@ -302,7 +334,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     } else {
                         securityLog('CITACION_DELIVERY_FAILED', "Student:$studentId Results:" . json_encode($deliveryResults));
                         http_response_code(500);
-                        echo json_encode(['status' => 'error', 'message' => 'No se pudo encolar el mensaje. Verifique la conexión a Redis o las credenciales de Twilio.']);
+                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.']);
                     }
                     break;
                 }
@@ -361,7 +393,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         if ($guardData && !empty($guardData['whatsapp_phone'])) {
                             $actLabel = $action === 'autorizar_salida' ? 'AUTORIZACIÓN DE SALIDA' : 'PERMISO';
                             $msg = "📢 *NEXO*\n\nSu hijo(a) *" . $guardData['first_name'] . ' ' . $guardData['last_name'] . "* tiene registrada una *" . $actLabel . "* en el sistema.\n\nDetalle: {$reason}\n\nComuníquese con la institución si tiene dudas.";
-                            enqueueTwilioJob($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, strtoupper($action));
+                            sendTwilioNow($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, strtoupper($action));
                         }
                     }
                 }
@@ -403,7 +435,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                         if (!empty($recRow['phone'])) {
                             $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$authUser['nombre']}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
-                            enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
+                            sendTwilioNow($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
                         }
                     }
                 }
@@ -423,7 +455,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         $guardData = $guardStmt->fetch(PDO::FETCH_ASSOC);
                         if ($guardData && !empty($guardData['whatsapp_phone'])) {
                             $msg = "⚠️ *NEXO — Incidente*\n\nEstudiante: *" . $guardData['first_name'] . ' ' . $guardData['last_name'] . "*\nDetalle: {$reason}\n\nComuníquese con la institución.";
-                            enqueueTwilioJob($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, 'INCIDENTE');
+                            sendTwilioNow($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, 'INCIDENTE');
                         }
                     }
                     if (in_array('rector', $targets)) {
@@ -435,7 +467,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         while ($rRow = $rStmt->fetch(PDO::FETCH_ASSOC)) {
                             if (!empty($rRow['phone'])) {
                                 $msg = "⚠️ *NEXO — Reporte de incidente*\n\nReportado por: {$role}\nDetalle: {$reason}";
-                                enqueueTwilioJob($rRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                                sendTwilioNow($rRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
                             }
                         }
                     }
@@ -448,7 +480,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         while ($cRow = $cStmt->fetch(PDO::FETCH_ASSOC)) {
                             if (!empty($cRow['phone'])) {
                                 $msg = "⚠️ *NEXO — Reporte de incidente*\n\nReportado por: {$role}\nDetalle: {$reason}";
-                                enqueueTwilioJob($cRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                                sendTwilioNow($cRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
                             }
                         }
                     }
@@ -463,7 +495,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         $fStmt->execute([$schoolId, $targetRole]);
                         while ($fRow = $fStmt->fetch(PDO::FETCH_ASSOC)) {
                             if (!empty($fRow['phone'])) {
-                                enqueueTwilioJob($fRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                                sendTwilioNow($fRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
                             }
                         }
                     }
@@ -480,7 +512,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $dStmt->execute([$schoolId, $targetRole]);
                     while ($dRow = $dStmt->fetch(PDO::FETCH_ASSOC)) {
                         if (!empty($dRow['phone'])) {
-                            enqueueTwilioJob($dRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                            sendTwilioNow($dRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
                         }
                     }
                 }
