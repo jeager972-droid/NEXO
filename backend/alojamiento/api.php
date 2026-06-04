@@ -3,6 +3,12 @@
  * NEXO GLOBAL API v7.5 - SECURE AUDIT & EDGE READY
  */
 
+// FIX: En producción, los notices/warnings de PHP NO deben ir a stdout (contaminan JSON)
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+ini_set('log_errors', '1');
+ini_set('error_log', 'php://stderr');
+
 /* ============================================================
    CORS HARDENING — ejecutado SIEMPRE antes de cualquier lógica
    ============================================================ */
