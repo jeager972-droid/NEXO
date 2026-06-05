@@ -347,7 +347,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
         if ($trimBody === '1') {
             $replyMsg = "Gracias por confirmar asistencia a la citación.";
-            $sendAck = sendTwilioWhatsAppDetailed($from, $replyMsg);
+            $sendAck = sendTwilioDirect($from, $replyMsg);
             $logAck = $conn->prepare("
                 INSERT INTO twilio_messages (
                     twilio_message_id, school_id, guardian_id, type_code, direction, phone_number,
@@ -414,7 +414,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             securityLog('CITACION_CONFIRMADA', "Guardian:$guardianId School:$schoolId Student:" . ($resolvedStudentId ?? 'fallback'));
         } elseif ($trimBody === '2') {
             $replyMsg = "Solicitud de reagendamiento recibida. El profesor se comunicará con usted.";
-            $sendAck = sendTwilioWhatsAppDetailed($from, $replyMsg);
+            $sendAck = sendTwilioDirect($from, $replyMsg);
             $logAck = $conn->prepare("
                 INSERT INTO twilio_messages (
                     twilio_message_id, school_id, guardian_id, type_code, direction, phone_number,
@@ -446,7 +446,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
             if ($teacher && !empty($teacher['phone'])) {
                 $notifyMsg = "Reagendamiento solicitado por acudiente ({$from}) para citación. Respuesta: 2.";
-                $send = sendTwilioWhatsAppDetailed($teacher['phone'], $notifyMsg);
+                $send = sendTwilioDirect($teacher['phone'], $notifyMsg);
 
                 $logOut = $conn->prepare("
                     INSERT INTO twilio_messages (
