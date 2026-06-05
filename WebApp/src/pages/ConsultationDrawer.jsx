@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Search, Activity, X, Loader2, CalendarDays, Filter, Eye
+  Search, Activity, X, Loader2, CalendarDays, Filter, Eye, AlertTriangle
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -77,7 +77,7 @@ const RiskBadge = ({ level }) => {
 const TeacherQueryPanel = ({
   item, groups, selectedGroup, setSelectedGroup,
   fromDate, setFromDate, toDate, setToDate, onQuery, loadingData, hasQueried,
-  dynamicData
+  dynamicData, error
 }) => {
   const rows = dynamicData;
   const visibleKeys = rows.length > 0
@@ -143,7 +143,19 @@ const TeacherQueryPanel = ({
 
       {/* Results */}
       <div className="flex-1 overflow-auto">
-        {!hasQueried && !loadingData && (
+        {error && !loadingData && (
+          <div className="flex flex-col items-center justify-center h-64 gap-4 px-6">
+            <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center border border-red-100">
+              <AlertTriangle size={24} strokeWidth={1.5} className="text-red-400" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-xs font-bold uppercase tracking-widest text-red-400">Error de consulta</p>
+              <p className="text-xs text-red-400 max-w-[260px] leading-relaxed">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {!error && !hasQueried && !loadingData && (
           <div className="flex flex-col items-center justify-center h-64 gap-4 px-6">
             <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
               <Activity size={24} strokeWidth={1.5} className="text-slate-300" />
@@ -157,14 +169,14 @@ const TeacherQueryPanel = ({
           </div>
         )}
 
-        {loadingData && (
+        {!error && loadingData && (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
             <p className="text-xs text-slate-400 font-medium">Consultando registros…</p>
           </div>
         )}
 
-        {!loadingData && hasQueried && rows.length === 0 && (
+        {!error && !loadingData && hasQueried && rows.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 gap-4 px-6">
             <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
               <Activity size={24} strokeWidth={1.5} className="text-slate-300" />
@@ -178,7 +190,7 @@ const TeacherQueryPanel = ({
           </div>
         )}
 
-        {!loadingData && hasQueried && rows.length > 0 && (
+        {!error && !loadingData && hasQueried && rows.length > 0 && (
           <div className="p-5 space-y-5">
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
@@ -221,7 +233,7 @@ const TeacherQueryPanel = ({
 export const ConsultationDrawer = ({
   item, riskStudents, dynamicData, dynamicColumns, loadingData,
   isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
-  fromDate, setFromDate, toDate, setToDate, onQuery, onClose
+  fromDate, setFromDate, toDate, setToDate, onQuery, onClose, error
 }) => {
   const keys = Object.keys(dynamicColumns);
 
@@ -260,7 +272,7 @@ export const ConsultationDrawer = ({
             item={item} groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
             fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
             onQuery={onQuery} loadingData={loadingData} hasQueried={hasQueried}
-            dynamicData={dynamicData}
+            dynamicData={dynamicData} error={error}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6">

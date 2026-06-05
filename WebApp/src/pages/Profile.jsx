@@ -216,7 +216,12 @@ const Profile = () => {
         setPhotoToast({ type: 'error', message: res.message || 'Error al subir foto' });
       }
     } catch (err) {
-      setPhotoToast({ type: 'error', message: 'Error de red al subir foto' });
+      const backendMsg = err?.response?.data?.message;
+      const status = err?.response?.status;
+      let msg = backendMsg || 'Error de red al subir foto';
+      if (status === 413) msg = 'La imagen es demasiado grande. Máximo permitido: 10MB';
+      else if (status === 400 && !backendMsg) msg = 'Formato o tamaño de imagen no válido';
+      setPhotoToast({ type: 'error', message: msg });
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';

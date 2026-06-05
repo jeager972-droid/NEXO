@@ -21,6 +21,7 @@ if ($cleanPath === '/consultations/query') {
     }
 
     // Helper: validar que el docente/psicorientador tenga asignado el grupo
+    // FIX: si no tiene schedules, fallback a validar que el grupo pertenezca a la institución
     $teacherGroupFilter = '';
     $isTeacher = in_array($userRoleUpper, ['DOCENTE', 'PSICORIENTADOR']);
     if ($isTeacher && $groupName) {
@@ -31,9 +32,19 @@ if ($cleanPath === '/consultations/query') {
             LIMIT 1
         ");
         $checkStmt->execute([$userId, $groupName]);
-        if (!$checkStmt->fetchColumn()) {
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']));
+        $hasSchedule = (bool)$checkStmt->fetchColumn();
+        if (!$hasSchedule) {
+            // Fallback: verificar que el grupo exista en la institución
+            $fallbackStmt = $conn->prepare("
+                SELECT 1 FROM academic_groups
+                WHERE school_id = ? AND group_name = ?
+                LIMIT 1
+            ");
+            $fallbackStmt->execute([$schoolId, $groupName]);
+            if (!$fallbackStmt->fetchColumn()) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']));
+            }
         }
     }
 

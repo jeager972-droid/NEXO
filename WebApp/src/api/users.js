@@ -16,7 +16,7 @@ export const usersApi = {
   uploadPhoto: async (file) => {
     const formData = new FormData();
     formData.append('photo', file);
-    const response = await client.post('/users/upload-photo', formData);
+    const response = await client.post('/users/upload-photo', formData, { timeout: 30000 });
     return response.data ?? {};
   },
 

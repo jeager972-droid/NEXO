@@ -40,6 +40,7 @@ const Consultation = () => {
   });
   const [toDate, setToDate] = useState(() => localDateStr());
   const [hasQueried, setHasQueried] = useState(false);
+  const [queryError, setQueryError] = useState(null);
 
   // Load groups on mount (solo grupos asignados al docente)
   useEffect(() => {
@@ -55,14 +56,20 @@ const Consultation = () => {
     if (!activeItem) return;
     setLoadingData(true);
     setHasQueried(true);
+    setQueryError(null);
     try {
       const res = await consultationsApi.queryModule(activeItem, selectedGroup, fromDate, toDate);
       if (res.status === 'ok') {
         setDynamicData(res.data || []);
         setDynamicColumns(res.columns || {});
+      } else {
+        setQueryError(res.message || 'Error al consultar datos');
+        setDynamicData([]);
+        setDynamicColumns({});
       }
     } catch (err) {
       console.error('Error fetching module data', err);
+      setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
       setDynamicData([]);
       setDynamicColumns({});
     } finally {
@@ -76,6 +83,7 @@ const Consultation = () => {
     // Teacher modules: require manual query via form
     if (isTeacherModule) {
       setHasQueried(false);
+      setQueryError(null);
       setDynamicData([]);
       setDynamicColumns({});
       setLoadingData(false);
@@ -263,6 +271,7 @@ const Consultation = () => {
             setToDate={setToDate}
             onQuery={executeQuery}
             onClose={() => setActiveItem(null)}
+            error={queryError}
           />
         )}
       </AnimatePresence>
