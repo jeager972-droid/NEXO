@@ -25,19 +25,28 @@ const Consultation = () => {
   // Query params for teacher modules
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
+  // Helper: fecha local YYYY-MM-DD (evita desfase UTC de toISOString)
+  const localDateStr = (date = new Date()) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [toDate, setToDate] = useState(() => localDateStr());
   const [hasQueried, setHasQueried] = useState(false);
 
-  // Load groups on mount
+  // Load groups on mount (solo grupos asignados al docente)
   useEffect(() => {
-    studentsApi.getGroups()
+    const isTeacherRole = user?.role === 'DOCENTE' || user?.role === 'PSICORIENTADOR';
+    studentsApi.getGroups(isTeacherRole)
       .then(data => setGroups(Array.isArray(data) ? data : []))
       .catch(err => console.error('Error loading groups', err));
-  }, []);
+  }, [user?.role]);
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 

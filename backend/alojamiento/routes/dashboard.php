@@ -74,7 +74,7 @@ if ($cleanPath === '/dashboard/stats') {
             SELECT COUNT(*) FROM attendance_incidents ai
             WHERE school_id = ?
               AND (detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
-              AND incident_type = 'INASISTENCIA'
+              AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
               " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . "
         ";
         $absentStmt = $conn->prepare($absentSql);
@@ -135,6 +135,30 @@ if ($cleanPath === '/dashboard/stats') {
             $studentsByGroup[$row['group_name']][] = ['name' => $row['name']];
         }
 
+        // 5b. Grupos asignados al docente (para el dropdown, independiente de estudiantes)
+        $teacherGroups = [];
+        if ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR') {
+            $tgStmt = $conn->prepare("
+                SELECT DISTINCT ag.group_name
+                FROM schedules sch
+                JOIN academic_groups ag ON ag.group_id = sch.group_id
+                WHERE sch.teacher_user_id = ?
+                ORDER BY ag.group_name
+            ");
+            $tgStmt->execute([$authUser['id']]);
+            $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            // Para otros roles, devolver todos los grupos de la institución
+            $tgStmt = $conn->prepare("
+                SELECT DISTINCT group_name
+                FROM academic_groups
+                WHERE school_id = ?
+                ORDER BY group_name
+            ");
+            $tgStmt->execute([$schoolId]);
+            $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
+        }
+
         // 4b. Conteo de permisos hoy (para completar las 4 cards del docente)
         $permSql = "
             SELECT COUNT(*) FROM attendance_incidents ai
@@ -155,6 +179,7 @@ if ($cleanPath === '/dashboard/stats') {
             'permCount' => (int)$permCount,
             'pendingTasks' => $pendingTasks,
             'studentsByGroup' => $studentsByGroup,
+            'teacherGroups' => $teacherGroups,
             'groupStats' => [
                 'present' => (int)$presentCount,
                 'absent' => (int)$absentCount,
@@ -242,7 +267,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                     JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
                     JOIN academic_groups ag ON ag.group_id = sga.group_id
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
-                        AND ai.incident_type = 'INASISTENCIA'
+                        AND ai.incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
                         AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
                             BETWEEN ? AND ?
                     WHERE s.school_id = ? AND ag.group_name = ?

@@ -44,11 +44,12 @@ export const studentsApi = {
     }
     return all;
   },
-  getGroups: async () => {
+  getGroups: async (teacherOnly = false) => {
     const schoolId = getSchoolId();
-    const response = await client.get('/groups', {
-      params: schoolId ? { school_id: schoolId } : undefined
-    });
+    const params = {};
+    if (schoolId) params.school_id = schoolId;
+    if (teacherOnly) params.teacher_only = '1';
+    const response = await client.get('/groups', { params: Object.keys(params).length ? params : undefined });
     const rows = response.data?.data ?? response.data ?? [];
     return Array.isArray(rows) ? rows : [];
   },

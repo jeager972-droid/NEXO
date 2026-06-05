@@ -11,9 +11,9 @@ import { dashboardApi } from '../api/dashboard';
 import { ROLES } from '../config/roles';
 
 const EMPTY_STATS = {
-  presentCount: 0, absentCount: 0, alertsCount: 0,
-  pendingTasks: [], studentsByGroup: {},
-  groupStats: { present: 0, absent: 0, alerts: 0, outside: 0 },
+  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
+  pendingTasks: [], studentsByGroup: {}, teacherGroups: [],
+  groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, outside: 0 },
 };
 
 // ── Skeleton primitives ───────────────────────────────────────────────────────
@@ -267,6 +267,14 @@ const CATEGORY_LABELS = {
   permiso:  { label: 'Permisos',     accent: '#00A67E', icon: Activity },
 };
 
+// Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
+const localDateStr = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -277,8 +285,11 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const groupNames = Object.keys(stats?.studentsByGroup || {});
+  const todayStr = localDateStr();
+  // Usar teacherGroups si viene del backend, si no fallback a studentsByGroup
+  const groupNames = (stats?.teacherGroups?.length > 0)
+    ? stats.teacherGroups
+    : Object.keys(stats?.studentsByGroup || {});
 
   // Fetch per-group stats when group changes
   useEffect(() => {
@@ -350,6 +361,11 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
+            {groupNames.length === 0 && (
+              <p className="mt-2 text-xs text-amber-600 font-semibold">
+                No se encontraron grupos asignados. Verifique su asignación en horarios.
+              </p>
+            )}
           </div>
 
           {/* Warning: no group selected */}
@@ -376,7 +392,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             </div>
           )}
 
-          {/* 4 Stat cards — clickable */}
+          {/* 4 Stat cards — always clickable even with 0 values */}
           {selectedGroup && (
             <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid #E2E8F0' }}>
               {groupLoading ? (
@@ -413,6 +429,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             groupName={selectedGroup}
             data={detailData}
             loading={detailLoading}
+            emptyWarning={selectedGroup && !hasActivity}
             onClose={() => setActiveCategory(null)}
           />
         )}
@@ -422,7 +439,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 };
 
 /* ── Teacher Detail Drawer ── */
-const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) => {
+const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning, onClose }) => {
   const config = CATEGORY_LABELS[category];
   const Icon = config?.icon || Users;
   const [searchQuery, setSearchQuery] = useState('');
@@ -553,12 +570,14 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, onClose }) =>
               <CalendarDays size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
               <div className="text-center space-y-1">
                 <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>
-                  {searchQuery ? 'Sin coincidencias' : 'Sin registros'}
+                  {searchQuery ? 'Sin coincidencias' : 'Sin registros hoy'}
                 </p>
                 <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">
                   {searchQuery
                     ? 'Ningún estudiante coincide con tu búsqueda.'
-                    : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'}
+                    : emptyWarning
+                      ? 'Este grupo no tiene registros de ingreso para el día de hoy. Verifique que el nodo de control esté operativo.'
+                      : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'}
                 </p>
               </div>
             </div>

@@ -80,10 +80,11 @@ if ($cleanPath === '/consultations/query') {
             case 'Historial Tardanzas':
                 $gFilter = $groupName ? " AND be.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
                 $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type
+                    SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type, be.event_result
                     FROM biometric_events be
                     JOIN students s ON be.student_id = s.student_id
-                    WHERE be.school_id = ? AND be.event_type LIKE 'INGRESO_TARDE%'
+                    WHERE be.school_id = ?
+                      AND (be.event_type LIKE 'INGRESO_TARDE%' OR be.event_type LIKE 'LATE%' OR be.event_result = 'LATE')
                       AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
                       {$gFilter}
                     ORDER BY be.event_timestamp DESC
@@ -93,7 +94,7 @@ if ($cleanPath === '/consultations/query') {
                 if ($groupName) $params[] = $groupName;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Tipo'];
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Tipo', 'event_result' => 'Resultado'];
                 break;
 
             case 'Inasistencias':
@@ -103,7 +104,7 @@ if ($cleanPath === '/consultations/query') {
                     SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
-                    WHERE ai.school_id = ? AND ai.incident_type = 'UNAUTHORIZED_ABSENCE'
+                    WHERE ai.school_id = ? AND ai.incident_type IN ('UNAUTHORIZED_ABSENCE', 'INASISTENCIA')
                       AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
                       {$gFilter}
                     ORDER BY ai.detected_at DESC
