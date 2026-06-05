@@ -67,73 +67,31 @@ if ($cleanPath === '/notifications') {
             exit;
         }
 
-        securityLog('INTERNAL_NOTIFICATION', "Role:{$authUser['role']} User:{$authUser['id']} Type:$type");
-        echo json_encode([
-            'status' => 'ok',
-            'data' => [
-                'id' => uniqid('notif_', true),
-                'title' => $title,
-                'desc' => $desc,
-                'type' => $type,
-                'sender' => $authUser['nombre'],
-                'time' => gmdate('H:i')
-            ]
-        ]);
+        try {
+            $notifStmt = $conn->prepare("
+                INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+                RETURNING notification_id AS id, type, title, message AS desc,
+                          TO_CHAR(created_at, 'HH24:MI') AS time, created_at AS occurred_at
+            ");
+            $notifStmt->execute([$authUser['school_id'], $authUser['id'], $title, $desc, $type]);
+            $row = $notifStmt->fetch(PDO::FETCH_ASSOC);
+            unset($row['occurred_at']);
+            securityLog('INTERNAL_NOTIFICATION', "Role:{$authUser['role']} User:{$authUser['id']} Type:$type");
+            echo json_encode(['status' => 'ok', 'data' => $row]);
+        } catch (Throwable $e) {
+            securityLog('NOTIFICATIONS_INSERT_ERROR', $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Error al crear notificación']);
+        }
         exit;
     }
 
     try {
-        $notifications = [];
-        $userRole = strtoupper($authUser['role'] ?? '');
         $userId = (string)$authUser['id'];
-        $schoolId = $authUser['school_id'];
 
-        // ── SOS: solo RECTORIA ↔ COORDINACION (mutuamente), nadie mas lo ve ──
-        if (in_array($userRole, ['RECTOR', 'SUPER_RECTOR', 'COORDINADOR'])) {
-            $sosEmitterRole = ($userRole === 'COORDINADOR') ? 'RECTOR' : 'COORDINADOR';
-            $sosStmt = $conn->prepare("
-                SELECT sa.alert_id AS id,
-                       'SOS' AS type,
-                       'Alerta SOS' AS title,
-                       sa.alert_description AS desc,
-                       TO_CHAR(sa.emitted_at, 'HH24:MI') AS time,
-                       sa.emitted_at AS occurred_at
-                FROM sos_alerts sa
-                JOIN users u ON u.user_id = sa.emitted_by_user_id
-                JOIN roles r ON r.role_id = u.role_id
-                WHERE sa.school_id = ?
-                  AND UPPER(r.role_name) = ?
-                ORDER BY sa.emitted_at DESC
-                LIMIT 10
-            ");
-            $sosStmt->execute([$schoolId, $sosEmitterRole]);
-            $notifications = array_merge($notifications, $sosStmt->fetchAll(PDO::FETCH_ASSOC));
-        }
-
-        // ── Permisos: solo COORDINADOR los recibe (via attendance_incidents incident_type=PERMISO) ──
-        if ($userRole === 'COORDINADOR') {
-            $permStmt = $conn->prepare("
-                SELECT incident_id AS id,
-                       'INFO' AS type,
-                       'Permiso institucional' AS title,
-                       CASE incident_type
-                           WHEN 'PERMISO' THEN 'Nuevo permiso registrado'
-                           WHEN 'AUTORIZAR_SALIDA' THEN 'Autorización de salida'
-                           ELSE incident_type
-                       END AS desc,
-                       TO_CHAR(detected_at, 'HH24:MI') AS time,
-                       detected_at AS occurred_at
-                FROM attendance_incidents
-                WHERE school_id = ? AND incident_type IN ('PERMISO','AUTORIZAR_SALIDA')
-                ORDER BY detected_at DESC
-                LIMIT 8
-            ");
-            $permStmt->execute([$schoolId]);
-            $notifications = array_merge($notifications, $permStmt->fetchAll(PDO::FETCH_ASSOC));
-        }
-
-        // ── Notificaciones del sistema (tabla notifications) ──
-        $sysStmt = $conn->prepare("
+        // ── Solo notificaciones reales de la tabla notifications ──
+        $stmt = $conn->prepare("
             SELECT n.notification_id AS id,
                    n.type,
                    n.title,
@@ -143,38 +101,16 @@ if ($cleanPath === '/notifications') {
             FROM notifications n
             WHERE n.user_id = ?
             ORDER BY n.created_at DESC
-            LIMIT 15
+            LIMIT 20
         ");
-        $sysStmt->execute([$userId]);
-        $notifications = array_merge($notifications, $sysStmt->fetchAll(PDO::FETCH_ASSOC));
+        $stmt->execute([$userId]);
+        $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // ── Solicitudes internas (de otros roles, no propias) ──
-        $msgStmt = $conn->prepare("
-            SELECT im.message_id AS id,
-                   'INFO' AS type,
-                   im.subject AS title,
-                   im.message_content AS desc,
-                   TO_CHAR(im.sent_at, 'HH24:MI') AS time,
-                   im.sent_at AS occurred_at
-            FROM internal_messages im
-            WHERE im.receiver_user_id = ?
-              AND im.sender_user_id != ?
-            ORDER BY im.sent_at DESC
-            LIMIT 10
-        ");
-        $msgStmt->execute([$userId, $userId]);
-        $notifications = array_merge($notifications, $msgStmt->fetchAll(PDO::FETCH_ASSOC));
-
-        usort($notifications, function ($a, $b) {
-            return strcmp((string)($b['occurred_at'] ?? ''), (string)($a['occurred_at'] ?? ''));
-        });
-
-        $notifications = array_slice($notifications, 0, 20);
         foreach ($notifications as &$notification) {
             unset($notification['occurred_at']);
         }
         echo json_encode(['status' => 'ok', 'data' => $notifications]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         securityLog('NOTIFICATIONS_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al obtener notificaciones']);

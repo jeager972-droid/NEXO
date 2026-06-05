@@ -34,6 +34,11 @@ function normalizePhone($value) {
 }
 
 function sendTwilioWhatsAppOtp($to, $code, $purpose) {
+    if (!function_exists('sendTwilioDirect')) {
+        error_log('[OTP] sendTwilioDirect no está definida. Verifica que operations.php se incluya antes que users.php.');
+        return ['ok' => false, 'error' => 'sendTwilioDirect no disponible. Contacta soporte.'];
+    }
+
     $labels = [
         'email_change'    => 'cambio de correo electrónico',
         'phone_change'    => 'cambio de número telefónico',
@@ -46,8 +51,10 @@ function sendTwilioWhatsAppOtp($to, $code, $purpose) {
 
     $body = "🔐 *NEXO — Código de verificación*\n\nTu código para *{$label}* es:\n\n*{$code}*\n\nVálido por 10 minutos. No lo compartas.";
 
-    // Usa sendTwilioDirect centralizado que incluye StatusCallback y fallback por template
-    return sendTwilioDirect($to, $body);
+    error_log('[OTP] Enviando código a ' . $to . ' purpose=' . $purpose);
+    $result = sendTwilioDirect($to, $body);
+    error_log('[OTP] Resultado Twilio: ' . json_encode($result));
+    return $result;
 }
 
 // ============================================================================
@@ -89,7 +96,7 @@ if ($cleanPath === '/users/by-role' && $method === 'GET') {
         $stmt = $conn->prepare($sql);
         $stmt->execute($params);
         usersJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -112,7 +119,7 @@ if ($cleanPath === '/users/me/extended' && $method === 'GET') {
             usersJson(['status' => 'error', 'message' => 'Usuario no encontrado'], 404);
         }
         usersJson(['status' => 'ok', 'data' => $user]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -148,7 +155,7 @@ if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
         $stmt->execute([$base64, $userId]);
 
         usersJson(['status' => 'ok', 'photo_url' => $base64]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -193,7 +200,7 @@ if ($cleanPath === '/users/send-verification' && $method === 'POST') {
         }
 
         usersJson(['status' => 'ok', 'message' => 'Código enviado por WhatsApp', 'expires_in_minutes' => 10]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -246,7 +253,7 @@ if ($cleanPath === '/users/verify-code' && $method === 'POST') {
         $upd->execute([$row['code_id']]);
 
         usersJson(['status' => 'ok', 'message' => 'Código verificado', 'target_value' => $row['target_value']]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -308,7 +315,7 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
         $mark->execute([$row['code_id']]);
 
         usersJson(['status' => 'ok', 'message' => 'Perfil actualizado correctamente']);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -373,7 +380,7 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
         $upd->execute([$newHash, $userId]);
 
         usersJson(['status' => 'ok', 'message' => 'Contraseña actualizada correctamente']);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
@@ -387,7 +394,7 @@ if ($cleanPath === '/users/me/photo' && $method === 'GET') {
         $stmt->execute([$userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         usersJson(['status' => 'ok', 'photo_url' => $row['profile_photo_url'] ?? null]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }

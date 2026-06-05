@@ -303,9 +303,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 ");
                 $sosStmt->execute([$schoolId, $userId, $message]);
 
-                // Notificar Coordinación y Rectoría por WhatsApp
+                // Notificar Coordinación y Rectoría por WhatsApp y notificaciones internas
                 $sosMsg = "🚨 *NEXO — ALERTA SOS*\n\nUbicación: {$location}\nMensaje: {$message}\nReportado por: {$authUser['nombre']} ({$role})\n\nVerifique la plataforma inmediatamente.";
-                
+
                 $notifyRoles = [];
                 if ($role === 'RECTOR' || $role === 'SUPER_RECTOR') {
                     $notifyRoles = ['COORDINADOR'];
@@ -317,7 +317,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 foreach ($notifyRoles as $nr) {
                     $nStmt = $conn->prepare("
-                        SELECT phone FROM users
+                        SELECT user_id, phone FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?) AND active = TRUE
                     ");
                     $nStmt->execute([$schoolId, $nr]);
@@ -325,6 +325,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         if (!empty($nRow['phone'])) {
                             enqueueTwilioJob($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
                         }
+                        // Insertar notificación interna real
+                        $notifStmt = $conn->prepare("
+                            INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
+                            VALUES (?, ?, 'Alerta SOS', ?, 'SOS', NOW())
+                        ");
+                        $notifStmt->execute([$schoolId, $nRow['user_id'], "Alerta SOS: {$message} — Ubicación: {$location}"]);
                     }
                 }
 
@@ -437,6 +443,23 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         VALUES (uuid_generate_v4(), ?, ?, ?, NOW())
                     ");
                     $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
+
+                    // Notificar COORDINADOR vía notificaciones internas para permisos
+                    if (in_array($action, ['permiso', 'autorizar_salida'])) {
+                        $coordStmt = $conn->prepare("
+                            SELECT user_id FROM users
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
+                        ");
+                        $coordStmt->execute([$schoolId]);
+                        while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
+                            $label = $action === 'autorizar_salida' ? 'Autorización de salida' : 'Permiso institucional';
+                            $notifStmt = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
+                                VALUES (?, ?, ?, ?, 'INFO', NOW())
+                            ");
+                            $notifStmt->execute([$schoolId, $cRow['user_id'], $label, "Nuevo {$label} registrado en el sistema."]);
+                        }
+                    }
 
                     // Notificar acudiente para autorizar_salida y permiso
                     if (in_array($action, ['autorizar_salida', 'permiso'])) {
