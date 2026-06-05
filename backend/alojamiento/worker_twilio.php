@@ -43,36 +43,39 @@ function normalizeWhatsAppPhone($value) {
 function getTwilioStatusCallbackUrl() {
     $base = getenv('TWILIO_WEBHOOK_URL_BASE') ?: getenv('APP_URL') ?: '';
     if ($base === '') return null;
-    // El api.php limpia /v1/ del path; Twilio recibe la URL completa.
-    // Railway pasa todo a api.php vía nginx try_files, así que /v1/ funciona.
     return rtrim($base, '/') . '/v1/webhooks/twilio/status';
 }
 
-function sendTwilioWhatsAppDirect($to, $body) {
-    $sid   = getenv('TWILIO_ACCOUNT_SID');
-    $token = getenv('TWILIO_AUTH_TOKEN');
-    $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
-    if (!$sid || !$token || !$from) {
-        $missing = [];
-        if (!$sid)   $missing[] = 'TWILIO_ACCOUNT_SID';
-        if (!$token) $missing[] = 'TWILIO_AUTH_TOKEN';
-        if (!$from)  $missing[] = 'TWILIO_WHATSAPP_FROM (or TWILIO_FROM_NUMBER)';
-        $err = 'Missing Twilio credentials: ' . implode(', ', $missing);
-        securityLog('TWILIO_CREDENTIALS_MISSING', $err);
-        return ['ok' => false, 'error' => $err, 'sid' => null];
-    }
-
-    $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
+function buildTwilioPayload($to, $body, $templateSid = null, $templateVars = null) {
+    $from = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     $payload = [
         'From' => "whatsapp:" . normalizeWhatsAppPhone($from),
         'To'   => "whatsapp:" . normalizeWhatsAppPhone($to),
-        'Body' => $body
     ];
+
+    if ($templateSid) {
+        $payload['ContentSid'] = $templateSid;
+        if ($templateVars) {
+            $payload['ContentVariables'] = json_encode($templateVars, JSON_UNESCAPED_UNICODE);
+        }
+    } else {
+        $payload['Body'] = $body;
+    }
+
     $statusCallback = getTwilioStatusCallbackUrl();
     if ($statusCallback) {
         $payload['StatusCallback'] = $statusCallback;
     }
+    return $payload;
+}
 
+function sendTwilioWhatsAppRequest($payload) {
+    $sid   = getenv('TWILIO_ACCOUNT_SID');
+    $token = getenv('TWILIO_AUTH_TOKEN');
+    if (!$sid || !$token) {
+        return ['ok' => false, 'error' => 'Missing Twilio credentials', 'sid' => null];
+    }
+    $url = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
@@ -85,12 +88,56 @@ function sendTwilioWhatsAppDirect($to, $body) {
     $err      = curl_error($ch);
     curl_close($ch);
 
-    if ($response === false || $httpCode >= 400) {
+    if ($response === false) {
         return ['ok' => false, 'error' => ($err ?: "HTTP $httpCode"), 'sid' => null];
     }
 
     $json = json_decode($response, true);
+    // Detectar error 63016 (outside messaging window) u otros errores de Twilio
+    if ($httpCode >= 400 || isset($json['code']) || isset($json['error_code'])) {
+        $errorCode = $json['code'] ?? $json['error_code'] ?? $httpCode;
+        $errorMsg  = $json['message'] ?? $json['error_message'] ?? ($err ?: "HTTP $httpCode");
+        return ['ok' => false, 'error' => "[$errorCode] $errorMsg", 'sid' => null, 'twilio_code' => $errorCode];
+    }
+
     return ['ok' => true, 'error' => null, 'sid' => $json['sid'] ?? null];
+}
+
+/**
+ * Envía mensaje de WhatsApp. Intenta texto libre primero; si falla por 63016
+ * (fuera de ventana de 24h), reintenta con template si está configurado.
+ */
+function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
+    // 1) Intentar mensaje de sesión (texto libre)
+    $payload = buildTwilioPayload($to, $body);
+    $send = sendTwilioWhatsAppRequest($payload);
+
+    if ($send['ok']) return $send;
+
+    $twilioCode = $send['twilio_code'] ?? '';
+
+    // 2) Si es 63016 (outside window) o 63015 (sandbox), reintentar con template
+    if (in_array($twilioCode, [63016, 63015])) {
+        $templateSid = getenv('TWILIO_WHATSAPP_TEMPLATE_SID');
+        if ($templateSid) {
+            // Template con una sola variable {{1}} que recibe el body completo
+            $templatePayload = buildTwilioPayload($to, $body, $templateSid, ['1' => $body]);
+            $templateSend = sendTwilioWhatsAppRequest($templatePayload);
+            if ($templateSend['ok']) {
+                securityLog('TWILIO_TEMPLATE_FALLBACK_OK', "SID: {$templateSend['sid']} To: $to");
+                return $templateSend;
+            }
+            return ['ok' => false, 'error' => 'Template fallback también falló: ' . $templateSend['error'], 'sid' => null];
+        }
+        return ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID en Railway.", 'sid' => null];
+    }
+
+    return $send;
+}
+
+// Backwards compat
+function sendTwilioWhatsAppDirect($to, $body) {
+    return sendTwilioWhatsAppSmart($to, $body);
 }
 
 function connectRedis() {

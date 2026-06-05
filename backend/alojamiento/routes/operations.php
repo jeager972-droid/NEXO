@@ -51,6 +51,7 @@ function sendTwilioDirect($to, $body) {
     if ($fromNorm !== '' && $fromNorm[0] !== '+') $fromNorm = '+' . $fromNorm;
     $fromNorm = preg_replace('/[^0-9\+]/', '', $fromNorm);
 
+    // 1) Intentar mensaje de sesión
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
     $payload = [
         'From' => "whatsapp:$fromNorm",
@@ -73,6 +74,42 @@ function sendTwilioDirect($to, $body) {
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err      = curl_error($ch);
     curl_close($ch);
+
+    // 2) Detectar 63016/63015 y reintentar con template
+    if ($response !== false && $httpCode >= 400) {
+        $json = json_decode($response, true);
+        $twilioCode = $json['code'] ?? $json['error_code'] ?? $httpCode;
+        if (in_array($twilioCode, [63016, 63015])) {
+            $templateSid = getenv('TWILIO_WHATSAPP_TEMPLATE_SID');
+            if ($templateSid) {
+                $templatePayload = [
+                    'From' => "whatsapp:$fromNorm",
+                    'To'   => "whatsapp:$toNorm",
+                    'ContentSid' => $templateSid,
+                    'ContentVariables' => json_encode(['1' => $body], JSON_UNESCAPED_UNICODE)
+                ];
+                if ($statusCallback) {
+                    $templatePayload['StatusCallback'] = $statusCallback;
+                }
+                $ch2 = curl_init($url);
+                curl_setopt($ch2, CURLOPT_POST, true);
+                curl_setopt($ch2, CURLOPT_POSTFIELDS, http_build_query($templatePayload));
+                curl_setopt($ch2, CURLOPT_USERPWD, "$sid:$token");
+                curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch2, CURLOPT_TIMEOUT, 15);
+                curl_setopt($ch2, CURLOPT_SSL_VERIFYPEER, true);
+                $response2 = curl_exec($ch2);
+                $httpCode2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+                curl_close($ch2);
+                if ($response2 !== false && $httpCode2 < 400) {
+                    $json2 = json_decode($response2, true);
+                    return ['ok' => true, 'error' => null, 'sid' => $json2['sid'] ?? null];
+                }
+                return ['ok' => false, 'error' => "[$twilioCode] Template fallback falló", 'sid' => null];
+            }
+            return ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID.", 'sid' => null];
+        }
+    }
 
     if ($response === false || $httpCode >= 400) {
         $errorDetail = $err ?: "HTTP $httpCode";
