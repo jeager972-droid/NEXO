@@ -24,6 +24,12 @@ function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     }
 }
 
+function getTwilioStatusCallbackUrl() {
+    $base = getenv('TWILIO_WEBHOOK_URL_BASE') ?: getenv('APP_URL') ?: '';
+    if ($base === '') return null;
+    return rtrim($base, '/') . '/v1/webhooks/twilio/status';
+}
+
 function sendTwilioDirect($to, $body) {
     $sid   = getenv('TWILIO_ACCOUNT_SID');
     $token = getenv('TWILIO_AUTH_TOKEN');
@@ -46,15 +52,19 @@ function sendTwilioDirect($to, $body) {
     $fromNorm = preg_replace('/[^0-9\+]/', '', $fromNorm);
 
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
-    $payload = http_build_query([
+    $payload = [
         'From' => "whatsapp:$fromNorm",
         'To'   => "whatsapp:$toNorm",
         'Body' => $body
-    ]);
+    ];
+    $statusCallback = getTwilioStatusCallbackUrl();
+    if ($statusCallback) {
+        $payload['StatusCallback'] = $statusCallback;
+    }
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
     curl_setopt($ch, CURLOPT_USERPWD, "$sid:$token");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);

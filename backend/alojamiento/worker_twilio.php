@@ -40,6 +40,14 @@ function normalizeWhatsAppPhone($value) {
     return preg_replace('/[^0-9\+]/', '', $value);
 }
 
+function getTwilioStatusCallbackUrl() {
+    $base = getenv('TWILIO_WEBHOOK_URL_BASE') ?: getenv('APP_URL') ?: '';
+    if ($base === '') return null;
+    // El api.php limpia /v1/ del path; Twilio recibe la URL completa.
+    // Railway pasa todo a api.php vía nginx try_files, así que /v1/ funciona.
+    return rtrim($base, '/') . '/v1/webhooks/twilio/status';
+}
+
 function sendTwilioWhatsAppDirect($to, $body) {
     $sid   = getenv('TWILIO_ACCOUNT_SID');
     $token = getenv('TWILIO_AUTH_TOKEN');
@@ -55,15 +63,19 @@ function sendTwilioWhatsAppDirect($to, $body) {
     }
 
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
-    $payload = http_build_query([
+    $payload = [
         'From' => "whatsapp:" . normalizeWhatsAppPhone($from),
         'To'   => "whatsapp:" . normalizeWhatsAppPhone($to),
         'Body' => $body
-    ]);
+    ];
+    $statusCallback = getTwilioStatusCallbackUrl();
+    if ($statusCallback) {
+        $payload['StatusCallback'] = $statusCallback;
+    }
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
     curl_setopt($ch, CURLOPT_USERPWD, "$sid:$token");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
