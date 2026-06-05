@@ -5,7 +5,7 @@ import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
 import {
   Search, Users, ShieldAlert, MessageSquare,
-  Activity, ChevronRight, BookOpen,
+  Activity, ChevronRight, BookOpen, Database,
   History, UserCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

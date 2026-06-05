@@ -202,13 +202,48 @@ const Profile = () => {
   }, []);
 
   /* ─── Photo upload ─── */
+  // FIX: comprimir/redimensionar en navegador antes de enviar (evita límite Railway)
+  const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+            } else {
+              reject(new Error('No se pudo comprimir la imagen'));
+            }
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+        img.src = event.target.result;
+      };
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     setPhotoToast(null);
     try {
-      const res = await usersApi.uploadPhoto(file);
+      const compressed = await compressImage(file);
+      const res = await usersApi.uploadPhoto(compressed);
       if (res.status === 'ok') {
         setPhotoToast({ type: 'success', message: 'Foto de perfil actualizada' });
         setProfile(p => p ? { ...p, profile_photo_url: res.photo_url } : p);
@@ -218,7 +253,7 @@ const Profile = () => {
     } catch (err) {
       const backendMsg = err?.response?.data?.message;
       const status = err?.response?.status;
-      let msg = backendMsg || 'Error de red al subir foto';
+      let msg = backendMsg || err.message || 'Error de red al subir foto';
       if (status === 413) msg = 'La imagen es demasiado grande. Máximo permitido: 10MB';
       else if (status === 400 && !backendMsg) msg = 'Formato o tamaño de imagen no válido';
       setPhotoToast({ type: 'error', message: msg });
