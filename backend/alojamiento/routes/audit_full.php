@@ -1314,7 +1314,7 @@ if ($cleanPath === '/audit/consolidated/institutional' && $method === 'GET') {
 if ($cleanPath === '/audit/groups' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT group_id AS id, group_name AS nombre, grade_level AS grado, academic_year AS periodo
+            SELECT group_id, group_name, grade_level, academic_year
             FROM academic_groups
             WHERE school_id = ?
             ORDER BY grade_level, group_name
@@ -1328,7 +1328,7 @@ if (preg_match('#^/audit/groups/([^/]+)/students$#', $cleanPath, $m) && $method 
     try {
         $groupId = $m[1];
         $stmt = $conn->prepare("
-            SELECT s.student_id AS id, s.first_name || ' ' || s.last_name AS nombre, s.document_number AS documento
+            SELECT s.student_id, s.first_name, s.last_name, s.document_number
             FROM students s
             INNER JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
             WHERE s.school_id = ? AND sga.group_id = ? AND s.active = TRUE
@@ -1342,7 +1342,7 @@ if (preg_match('#^/audit/groups/([^/]+)/students$#', $cleanPath, $m) && $method 
 if ($cleanPath === '/audit/staff' && $method === 'GET') {
     try {
         $stmt = $conn->prepare("
-            SELECT u.user_id AS id, u.last_name || ', ' || u.first_name AS nombre, u.email AS correo, r.role_name AS rol
+            SELECT u.user_id, u.first_name, u.last_name, u.email, r.role_name
             FROM users u
             LEFT JOIN roles r ON u.role_id = r.role_id
             WHERE u.school_id = ? AND u.active = TRUE
