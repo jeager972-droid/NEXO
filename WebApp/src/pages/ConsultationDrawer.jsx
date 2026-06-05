@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Search, Activity, X, Loader2, CalendarDays, Filter, Eye, AlertTriangle
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { studentsApi } from '../api/students';
 
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -72,17 +73,108 @@ const RiskBadge = ({ level }) => {
   );
 };
 
+/* ── SearchableSelect (patrón AuditDrawer del rector) ─────────────────── */
+
+function SearchableSelect({ label, options, value, onChange, placeholder, loading }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = q.trim() === '' ? options : options.filter(o => {
+    const text = String(o.name || '').toLowerCase();
+    return text.includes(q.toLowerCase());
+  });
+
+  const selected = options.find(o => o.id === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      {label && <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{label}</label>}
+      <div
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 cursor-pointer flex items-center justify-between"
+      >
+        <span className="truncate">{selected ? selected.name : (loading ? 'Cargando…' : placeholder)}</span>
+        <Search size={12} className="text-slate-400 shrink-0 ml-2" />
+      </div>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-lg max-h-60 overflow-auto">
+          <div className="p-2 border-b border-slate-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800">
+            <div className="relative">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus
+                type="text"
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                placeholder="Buscar…"
+                className="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-[#003366]"
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          {filtered.length === 0 && (
+            <div className="px-3 py-2 text-xs text-slate-400">Sin coincidencias</div>
+          )}
+          {filtered.map(o => (
+            <div
+              key={o.id}
+              onClick={() => { onChange(o.id); setOpen(false); setQ(''); }}
+              className={`px-3 py-2 text-xs cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-slate-700 ${o.id === value ? 'bg-[#003366]/5 text-[#003366] font-semibold' : 'text-slate-700 dark:text-slate-200'}`}
+            >
+              {o.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Teacher Query Panel (patrón AuditDrawer del rector) ──────────────────────
 
 const TeacherQueryPanel = ({
   item, groups, selectedGroup, setSelectedGroup,
+  selectedStudent, setSelectedStudent,
   fromDate, setFromDate, toDate, setToDate, onQuery, loadingData, hasQueried,
   dynamicData, error
 }) => {
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const rows = dynamicData;
   const visibleKeys = rows.length > 0
     ? Object.keys(rows[0]).filter(k => !EXCLUDE_COLS.includes(k))
     : [];
+
+  // Cargar estudiantes del grupo seleccionado
+  useEffect(() => {
+    if (!selectedGroup) { setStudents([]); setSelectedStudent(''); return; }
+    setStudentsLoading(true);
+    studentsApi.getAll({ limit: 100, group_name: selectedGroup })
+      .then(res => {
+        setStudents(res.students || []);
+      })
+      .catch(() => setStudents([]))
+      .finally(() => setStudentsLoading(false));
+  }, [selectedGroup]);
+
+  const groupOptions = groups.map(g => ({
+    id: g.name || g.group_name,
+    name: `${g.name || g.group_name}${g.grade_level ? ` (${g.grade_level})` : ''}`
+  }));
+
+  const studentOptions = students.map(s => ({
+    id: String(s.id || s.student_id),
+    name: `${s.last_name || ''}, ${s.first_name || ''} — ${s.document_number || ''}`.trim()
+  }));
 
   return (
     <div className="flex-1 flex flex-col p-0 overflow-hidden bg-white dark:bg-slate-900">
@@ -93,24 +185,22 @@ const TeacherQueryPanel = ({
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Filtros de consulta</span>
         </div>
 
-        <div className="space-y-1">
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Grupo académico</label>
-          <select
-            value={selectedGroup}
-            onChange={e => setSelectedGroup(e.target.value)}
-            className="w-full p-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
-          >
-            <option value="">— Seleccionar grupo —</option>
-            {groups.map(g => (
-              <option key={g.id || g.group_id || g.name} value={g.name || g.group_name}>
-                {g.name || g.group_name}{g.grade_level ? ` (${g.grade_level})` : ''}
-              </option>
-            ))}
-          </select>
-          {groups.length === 0 && (
-            <p className="text-[10px] text-amber-600">No se encontraron grupos asignados.</p>
-          )}
-        </div>
+        <SearchableSelect
+          label="Grupo académico"
+          placeholder={groups.length === 0 ? 'No hay grupos asignados' : 'Seleccionar grupo…'}
+          options={groupOptions}
+          value={selectedGroup}
+          onChange={v => { setSelectedGroup(v); setSelectedStudent(''); }}
+        />
+
+        <SearchableSelect
+          label="Estudiante"
+          placeholder={!selectedGroup ? 'Primero seleccione un grupo' : (studentsLoading ? 'Cargando estudiantes…' : 'Todos los estudiantes del grupo')}
+          options={studentOptions}
+          value={selectedStudent}
+          onChange={v => setSelectedStudent(v)}
+          loading={studentsLoading}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -233,6 +323,7 @@ const TeacherQueryPanel = ({
 export const ConsultationDrawer = ({
   item, riskStudents, dynamicData, dynamicColumns, loadingData,
   isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
+  selectedStudent, setSelectedStudent,
   fromDate, setFromDate, toDate, setToDate, onQuery, onClose, error
 }) => {
   const keys = Object.keys(dynamicColumns);
@@ -270,6 +361,7 @@ export const ConsultationDrawer = ({
         {isTeacherModule ? (
           <TeacherQueryPanel
             item={item} groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
+            selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
             fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
             onQuery={onQuery} loadingData={loadingData} hasQueried={hasQueried}
             dynamicData={dynamicData} error={error}

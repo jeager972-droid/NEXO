@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 
-const TEACHER_MODULES = ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
+const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
 const Consultation = () => {
   const { user } = useAuth();
@@ -41,6 +41,7 @@ const Consultation = () => {
   const [toDate, setToDate] = useState(() => localDateStr());
   const [hasQueried, setHasQueried] = useState(false);
   const [queryError, setQueryError] = useState(null);
+  const [selectedStudent, setSelectedStudent] = useState('');
 
   // Load groups on mount (solo grupos asignados al docente)
   useEffect(() => {
@@ -58,7 +59,7 @@ const Consultation = () => {
     setHasQueried(true);
     setQueryError(null);
     try {
-      const res = await consultationsApi.queryModule(activeItem, selectedGroup, fromDate, toDate);
+      const res = await consultationsApi.queryModule(activeItem, selectedGroup, fromDate, toDate, selectedStudent);
       if (res.status === 'ok') {
         setDynamicData(res.data || []);
         setDynamicColumns(res.columns || {});
@@ -86,6 +87,7 @@ const Consultation = () => {
       setQueryError(null);
       setDynamicData([]);
       setDynamicColumns({});
+      setSelectedStudent('');
       setLoadingData(false);
       return;
     }
@@ -118,7 +120,7 @@ const Consultation = () => {
       {
         title: 'Mis Clases',
         icon: BookOpen,
-        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
+        items: ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
       }
     ],
     [ROLES.PSICORIENTADOR]: [
@@ -130,7 +132,7 @@ const Consultation = () => {
       {
         title: 'Mis Clases',
         icon: BookOpen,
-        items: ['Estudiantes del Grupo', 'Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
+        items: ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
       }
     ],
     [ROLES.COORDINADOR]: [
@@ -265,6 +267,8 @@ const Consultation = () => {
             groups={groups}
             selectedGroup={selectedGroup}
             setSelectedGroup={setSelectedGroup}
+            selectedStudent={selectedStudent}
+            setSelectedStudent={setSelectedStudent}
             fromDate={fromDate}
             setFromDate={setFromDate}
             toDate={toDate}

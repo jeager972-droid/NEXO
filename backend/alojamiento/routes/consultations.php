@@ -11,6 +11,7 @@ if ($cleanPath === '/consultations/query') {
 
     $module = filter_var($input['module'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $groupName = filter_var($input['group_name'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
+    $studentId = filter_var($input['student_id'] ?? '', FILTER_VALIDATE_INT);
     $fromDate = filter_var($input['from_date'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $toDate = filter_var($input['to_date'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $userRoleUpper = strtoupper($role ?? '');
@@ -90,6 +91,7 @@ if ($cleanPath === '/consultations/query') {
             case 'Llegadas Tarde':
             case 'Historial Tardanzas':
                 $gFilter = $groupName ? " AND be.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
+                $sFilter = $studentId ? " AND be.student_id = ?" : "";
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type, be.event_result
                     FROM biometric_events be
@@ -98,11 +100,13 @@ if ($cleanPath === '/consultations/query') {
                       AND (be.event_type LIKE 'INGRESO_TARDE%' OR be.event_type LIKE 'LATE%' OR be.event_result = 'LATE')
                       AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
                       {$gFilter}
+                      {$sFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 50
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
+                if ($studentId) $params[] = $studentId;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Tipo', 'event_result' => 'Resultado'];
@@ -111,6 +115,7 @@ if ($cleanPath === '/consultations/query') {
             case 'Inasistencias':
             case 'Estudiantes Ausentes':
                 $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
+                $sFilter = $studentId ? " AND ai.student_id = ?" : "";
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type
                     FROM attendance_incidents ai
@@ -118,11 +123,13 @@ if ($cleanPath === '/consultations/query') {
                     WHERE ai.school_id = ? AND ai.incident_type IN ('UNAUTHORIZED_ABSENCE', 'INASISTENCIA')
                       AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
                       {$gFilter}
+                      {$sFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
+                if ($studentId) $params[] = $studentId;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Incidente'];
@@ -133,6 +140,7 @@ if ($cleanPath === '/consultations/query') {
             case 'Mis Permisos':
             case 'Permisos Activos':
                 $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
+                $sFilter = $studentId ? " AND ai.student_id = ?" : "";
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type
                     FROM attendance_incidents ai
@@ -140,11 +148,13 @@ if ($cleanPath === '/consultations/query') {
                     WHERE ai.school_id = ? AND ai.incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                       AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
                       {$gFilter}
+                      {$sFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
+                if ($studentId) $params[] = $studentId;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo Permiso'];

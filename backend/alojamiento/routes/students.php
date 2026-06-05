@@ -53,6 +53,12 @@ if ($cleanPath === '/students') {
         $params = [$schoolId];
         $whereClauses = ['s.school_id = ?'];
 
+        $groupName = trim($_GET['group_name'] ?? '');
+        if ($groupName !== '') {
+            $whereClauses[] = "s.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)";
+            $params[] = $groupName;
+        }
+
         if ($lastId !== '' && $lastId !== '0') {
             $whereClauses[] = 's.student_id > ?';
             $params[] = $lastId;
