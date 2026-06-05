@@ -34,50 +34,20 @@ function normalizePhone($value) {
 }
 
 function sendTwilioWhatsAppOtp($to, $code, $purpose) {
-    $sid   = getenv('TWILIO_ACCOUNT_SID');
-    $token = getenv('TWILIO_AUTH_TOKEN');
-    $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
-    if (!$sid || !$token || !$from) {
-        return ['ok' => false, 'error' => 'Twilio credentials missing'];
-    }
-
-    $toNorm = normalizePhone($to);
-    $fromNorm = normalizePhone($from);
-
     $labels = [
         'email_change'    => 'cambio de correo electrónico',
         'phone_change'    => 'cambio de número telefónico',
         'password_reset'  => 'cambio de contraseña',
+        'password_change' => 'cambio de contraseña',
         'backup_email'    => 'correo de respaldo',
+        'login_2fa'       => 'inicio de sesión',
     ];
     $label = $labels[$purpose] ?? 'verificación de seguridad';
 
     $body = "🔐 *NEXO — Código de verificación*\n\nTu código para *{$label}* es:\n\n*{$code}*\n\nVálido por 10 minutos. No lo compartas.";
 
-    $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
-    $payload = http_build_query([
-        'From' => "whatsapp:$fromNorm",
-        'To'   => "whatsapp:$toNorm",
-        'Body' => $body
-    ]);
-
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    curl_setopt($ch, CURLOPT_USERPWD, "$sid:$token");
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err      = curl_error($ch);
-    curl_close($ch);
-
-    if ($response === false || $httpCode >= 400) {
-        return ['ok' => false, 'error' => ($err ?: "HTTP $httpCode")];
-    }
-    $json = json_decode($response, true);
-    return ['ok' => true, 'error' => null, 'sid' => $json['sid'] ?? null];
+    // Usa sendTwilioDirect centralizado que incluye StatusCallback y fallback por template
+    return sendTwilioDirect($to, $body);
 }
 
 // ============================================================================
@@ -193,7 +163,7 @@ if ($cleanPath === '/users/send-verification' && $method === 'POST') {
         $purpose = trim((string)($input['purpose'] ?? ''));
         $target  = trim((string)($input['target'] ?? ''));
 
-        $validPurposes = ['email_change', 'phone_change', 'password_reset', 'backup_email'];
+        $validPurposes = ['email_change', 'phone_change', 'password_reset', 'password_change', 'backup_email', 'login_2fa'];
         if (!in_array($purpose, $validPurposes, true) || $target === '') {
             usersJson(['status' => 'error', 'message' => 'purpose y target requeridos'], 400);
         }
@@ -322,6 +292,17 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
         $upd = $conn->prepare("UPDATE users SET {$dbField} = ?, {$verifiedField} = TRUE, updated_at = NOW() WHERE user_id = ?");
         $upd->execute([$value, $userId]);
 
+        // Si cambió teléfono, sincronizar también en guardians.whatsapp_phone
+        if ($purpose === 'phone_change') {
+            $normPhone = normalizePhone($value);
+            $guardSync = $conn->prepare("
+                UPDATE guardians
+                SET whatsapp_phone = ?, whatsapp_phone_normalized = regexp_replace(?, '[^0-9+]', '', 'g')
+                WHERE user_id = ?
+            ");
+            $guardSync->execute([$value, $normPhone, $userId]);
+        }
+
         // Mark code as used
         $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
         $mark->execute([$row['code_id']]);
@@ -340,17 +321,51 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
     try {
         $current = $input['current_password'] ?? '';
         $new     = $input['new_password'] ?? '';
+        $code    = trim((string)($input['code'] ?? ''));
 
         if ($current === '' || $new === '' || strlen($new) < 8) {
             usersJson(['status' => 'error', 'message' => 'Contraseña actual requerida. Nueva contraseña: mínimo 8 caracteres.'], 400);
         }
 
-        $stmt = $conn->prepare("SELECT password_hash FROM users WHERE user_id = ?");
+        // Verificar que el usuario existe y obtener su teléfono
+        $stmt = $conn->prepare("SELECT password_hash, phone, phone_verified FROM users WHERE user_id = ?");
         $stmt->execute([$userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$row || !password_verify($current, $row['password_hash'])) {
             usersJson(['status' => 'error', 'message' => 'Contraseña actual incorrecta'], 401);
+        }
+
+        // Si tiene teléfono registrado, requerir OTP de verificación
+        $userPhone = normalizePhone($row['phone'] ?? '');
+        if ($userPhone !== '') {
+            if ($code === '' || strlen($code) !== 6) {
+                usersJson(['status' => 'error', 'message' => 'Se requiere código de verificación enviado a tu WhatsApp'], 403);
+            }
+
+            $codeStmt = $conn->prepare("
+                SELECT code_id, used, expires_at
+                FROM verification_codes
+                WHERE user_id = ? AND purpose = 'password_change' AND code = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+            ");
+            $codeStmt->execute([$userId, $code]);
+            $codeRow = $codeStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$codeRow) {
+                usersJson(['status' => 'error', 'message' => 'Código incorrecto'], 400);
+            }
+            if ($codeRow['used']) {
+                usersJson(['status' => 'error', 'message' => 'Código ya utilizado'], 400);
+            }
+            if (strtotime($codeRow['expires_at']) < time()) {
+                usersJson(['status' => 'error', 'message' => 'Código expirado'], 400);
+            }
+
+            // Marcar código como usado
+            $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
+            $mark->execute([$codeRow['code_id']]);
         }
 
         $newHash = password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]);

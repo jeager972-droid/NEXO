@@ -119,10 +119,10 @@ $cleanPath = '/' . $cleanPath;
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];
 
-// Incluir todas las rutas
+// Incluir todas las rutas (operations primero para que sendTwilioDirect esté disponible en auth.php)
+require_once __DIR__ . '/routes/operations.php';
 require_once __DIR__ . '/routes/auth.php';
 require_once __DIR__ . '/routes/dashboard.php';
-require_once __DIR__ . '/routes/operations.php';
 require_once __DIR__ . '/routes/students.php';
 require_once __DIR__ . '/routes/groups.php';
 require_once __DIR__ . '/routes/misc.php';

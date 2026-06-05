@@ -122,7 +122,7 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
 
         $stmt = $conn->prepare("
             SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, u.active,
-                   u.profile_photo_url, u.work_shift,
+                   u.profile_photo_url, u.work_shift, u.phone, u.phone_verified,
                    r.role_name, s.school_id, s.school_name
             FROM users u
             INNER JOIN roles r ON u.role_id = r.role_id
@@ -158,6 +158,38 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
 
             $normalizedRole = normalizeRole($user['role_name']);
             $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
+
+            // Si tiene teléfono verificado, enviar alerta de seguridad por WhatsApp
+            $userPhone = isset($user['phone']) ? preg_replace('/[^0-9+]/', '', $user['phone']) : '';
+            if ($userPhone !== '' && !empty($user['phone_verified'])) {
+                $alertMsg = "🔐 *NEXO — Alerta de seguridad*\n\nSe detectó un inicio de sesión en tu cuenta.\nSi no fuiste tú, contacta al administrador inmediatamente.";
+                sendTwilioDirect($userPhone, $alertMsg);
+            }
+
+            // 2FA opcional: si LOGIN_2FA_ENABLED=true y usuario tiene teléfono verificado
+            $twoFaEnabled = getenv('LOGIN_2FA_ENABLED') === 'true';
+            if ($twoFaEnabled && $userPhone !== '' && !empty($user['phone_verified'])) {
+                $code = str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+                $expiresAt = date('Y-m-d H:i:s', strtotime('+5 minutes'));
+
+                $ins = $conn->prepare("
+                    INSERT INTO verification_codes (user_id, purpose, target_value, code, expires_at)
+                    VALUES (?, 'login_2fa', ?, ?, ?)
+                ");
+                $ins->execute([$user['user_id'], $user['email'], $code, $expiresAt]);
+
+                $otpResult = sendTwilioDirect($userPhone, "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.");
+                if ($otpResult['ok']) {
+                    http_response_code(202);
+                    echo json_encode([
+                        'status' => '2fa_required',
+                        'message' => 'Se envió un código de verificación a tu WhatsApp. Ingrésalo para continuar.',
+                        'requires_2fa' => true
+                    ]);
+                    exit;
+                }
+            }
+
             $token = issueJwtToken([
                 'sub' => (string)$user['user_id'],
                 'email' => $user['email'],
@@ -205,6 +237,107 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
         securityLog('AUTH_CRITICAL_ERROR', $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
         http_response_code(500);
         exit(json_encode(['status' => 'error', 'message' => 'Error de autenticación', 'debug' => getenv('APP_ENV') === 'development' ? $e->getMessage() : null]));
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /auth/verify-2fa
+// Body: { email: string, code: string }
+// Completa el login después de 2FA enviado por WhatsApp
+// ============================================================================
+if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
+    try {
+        $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
+        $code  = trim((string)($input['code'] ?? ''));
+
+        if (empty($email) || empty($code) || strlen($code) !== 6) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Email y código (6 dígitos) requeridos']));
+        }
+
+        $userStmt = $conn->prepare("
+            SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
+                   u.profile_photo_url, u.work_shift,
+                   r.role_name, s.school_id, s.school_name
+            FROM users u
+            INNER JOIN roles r ON u.role_id = r.role_id
+            INNER JOIN schools s ON u.school_id = s.school_id
+            WHERE u.email = ?
+            LIMIT 1
+        ");
+        $userStmt->execute([$email]);
+        $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !$user['active']) {
+            http_response_code(401);
+            exit(json_encode(['status' => 'error', 'message' => 'Cuenta inactiva']));
+        }
+
+        $codeStmt = $conn->prepare("
+            SELECT code_id, used, expires_at
+            FROM verification_codes
+            WHERE user_id = ? AND purpose = 'login_2fa' AND code = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        ");
+        $codeStmt->execute([$user['user_id'], $code]);
+        $codeRow = $codeStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$codeRow) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Código incorrecto']));
+        }
+        if ($codeRow['used']) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Código ya utilizado']));
+        }
+        if (strtotime($codeRow['expires_at']) < time()) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Código expirado']));
+        }
+
+        // Marcar código como usado
+        $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
+        $mark->execute([$codeRow['code_id']]);
+
+        $normalizedRole = normalizeRole($user['role_name']);
+        $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
+        $token = issueJwtToken([
+            'sub' => (string)$user['user_id'],
+            'email' => $user['email'],
+            'role' => $normalizedRole,
+            'school_id' => $user['school_id'],
+            'exp' => time() + $tokenTtlSeconds
+        ]);
+
+        $cookieOpts = [
+            'expires' => time() + $tokenTtlSeconds,
+            'path' => '/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'None'
+        ];
+        setcookie('token', $token, $cookieOpts);
+
+        securityLog('LOGIN_2FA_SUCCESS', "User authenticated via 2FA: " . $user['user_id']);
+        echo json_encode([
+            'status' => 'ok',
+            'user' => [
+                'id' => $user['user_id'],
+                'nombre' => $user['first_name'] . ' ' . $user['last_name'],
+                'email' => $user['email'],
+                'role' => $normalizedRole,
+                'school_id' => $user['school_id'],
+                'school_name' => $user['school_name'],
+                'profile_photo_url' => $user['profile_photo_url'] ?? null,
+                'work_shift' => $user['work_shift'] ?? null
+            ]
+        ]);
+    } catch (Throwable $e) {
+        error_log('[2FA EXCEPTION] ' . $e->getMessage());
+        http_response_code(500);
+        exit(json_encode(['status' => 'error', 'message' => 'Error de verificación']));
     }
     exit;
 }
