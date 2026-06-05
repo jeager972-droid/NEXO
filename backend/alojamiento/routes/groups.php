@@ -17,6 +17,7 @@ if ($cleanPath === '/groups') {
         $isTeacher = in_array($userRole, ['DOCENTE', 'PSICORIENTADOR']);
 
         if ($teacherOnly && $isTeacher) {
+            // FIX: intentar grupos via schedules; si no hay, fallback a todos los grupos de la institución
             $stmt = $conn->prepare("
                 SELECT ag.group_id as id, ag.group_name as name, ag.grade_level
                 FROM schedules sch
@@ -26,6 +27,17 @@ if ($cleanPath === '/groups') {
                 ORDER BY ag.grade_level, ag.group_name
             ");
             $stmt->execute([$authUser['id']]);
+            $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (empty($groups)) {
+                $stmt = $conn->prepare("
+                    SELECT group_id as id, group_name as name, grade_level
+                    FROM academic_groups
+                    WHERE school_id = ?
+                    ORDER BY grade_level, group_name
+                ");
+                $stmt->execute([$schoolId]);
+                $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
         } else {
             $stmt = $conn->prepare("
                 SELECT group_id as id, group_name as name, grade_level
@@ -34,8 +46,8 @@ if ($cleanPath === '/groups') {
                 ORDER BY grade_level, group_name
             ");
             $stmt->execute([$schoolId]);
+            $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
-        $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         echo json_encode(['status' => 'ok', 'data' => $groups]);
     } catch (Exception $e) {
