@@ -92,21 +92,39 @@ if ($cleanPath === '/notifications') {
         $userId = (string)$authUser['id'];
 
         // ── Solo notificaciones reales de la tabla notifications ──
-        $stmt = $conn->prepare("
-            SELECT n.notification_id AS id,
-                   n.type,
-                   n.title,
-                   n.message AS desc,
-                   n.metadata_json,
-                   TO_CHAR(n.created_at, 'HH24:MI') AS time,
-                   n.created_at AS occurred_at
-            FROM notifications n
-            WHERE n.user_id = ?
-            ORDER BY n.created_at DESC
-            LIMIT 20
-        ");
-        $stmt->execute([$userId]);
-        $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $conn->prepare("
+                SELECT n.notification_id AS id,
+                       n.type,
+                       n.title,
+                       n.message AS desc,
+                       n.metadata_json,
+                       TO_CHAR(n.created_at, 'HH24:MI') AS time,
+                       n.created_at AS occurred_at
+                FROM notifications n
+                WHERE n.user_id = ?
+                ORDER BY n.created_at DESC
+                LIMIT 20
+            ");
+            $stmt->execute([$userId]);
+            $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $colErr) {
+            // Fallback si metadata_json no existe todavía
+            $stmt = $conn->prepare("
+                SELECT n.notification_id AS id,
+                       n.type,
+                       n.title,
+                       n.message AS desc,
+                       TO_CHAR(n.created_at, 'HH24:MI') AS time,
+                       n.created_at AS occurred_at
+                FROM notifications n
+                WHERE n.user_id = ?
+                ORDER BY n.created_at DESC
+                LIMIT 20
+            ");
+            $stmt->execute([$userId]);
+            $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
 
         foreach ($notifications as &$notification) {
             unset($notification['occurred_at']);
@@ -249,6 +267,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         // ── Redis: leer conversación y estado de reagendamiento ──
         $resolvedStudentId = null;
         $reagendarState = null;
+        $redisConv = null;
         try {
             $redisConv = new Redis();
             $redisConv->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
@@ -268,7 +287,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 }
                 // Para respuesta 1 consumimos; para 2 la reemplazamos por reagendar
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             securityLog('TWILIO_CONV_REDIS_FALLBACK', $e->getMessage());
         }
 
@@ -319,29 +338,35 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
             // Notificar al profesor con motivo incluido
             if ($teacherRef && !empty($teacherRef['sender_user_id'])) {
-                $meta = json_encode([
-                    'student_name' => $studentName ?: 'Estudiante',
-                    'action' => 'reagendar_motivo',
-                    'guardian_phone' => $from,
-                    'motivo' => $motivo,
-                ], JSON_UNESCAPED_UNICODE);
-                $notifStmt = $conn->prepare("
-                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                    VALUES (?, ?, 'Reagendamiento — motivo recibido', ?, 'INFO', ?::jsonb, NOW())
-                ");
-                $notifStmt->execute([
-                    $schoolId,
-                    $teacherRef['sender_user_id'],
-                    "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" envió el motivo de reagendamiento. Ver detalles.",
-                    $meta
-                ]);
+                try {
+                    $meta = json_encode([
+                        'student_name' => $studentName ?: 'Estudiante',
+                        'action' => 'reagendar_motivo',
+                        'guardian_phone' => $from,
+                        'motivo' => $motivo,
+                    ], JSON_UNESCAPED_UNICODE);
+                    $notifStmt = $conn->prepare("
+                        INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                        VALUES (?, ?, 'Reagendamiento — motivo recibido', ?, 'INFO', ?::jsonb, NOW())
+                    ");
+                    $notifStmt->execute([
+                        $schoolId,
+                        $teacherRef['sender_user_id'],
+                        "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" envió el motivo de reagendamiento. Ver detalles.",
+                        $meta
+                    ]);
+                } catch (Throwable $e) {
+                    securityLog('CITACION_NOTIF_ERROR', $e->getMessage());
+                }
             }
 
             // Limpiar estado
             try {
-                $redisConv->del('reagendar:' . $normalizedFrom);
-                $redisConv->del('conversation:' . $normalizedFrom);
-            } catch (Exception $e) {
+                if ($redisConv) {
+                    $redisConv->del('reagendar:' . $normalizedFrom);
+                    $redisConv->del('conversation:' . $normalizedFrom);
+                }
+            } catch (Throwable $e) {
                 securityLog('REAGENDAR_REDIS_DEL_ERROR', $e->getMessage());
             }
 
@@ -352,7 +377,12 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
         if ($trimBody === '1') {
             // Limpiar conversación
-            try { $redisConv->del('conversation:' . $normalizedFrom); $redisConv->del('reagendar:' . $normalizedFrom); } catch (Exception $e) {}
+            try {
+                if ($redisConv) {
+                    $redisConv->del('conversation:' . $normalizedFrom);
+                    $redisConv->del('reagendar:' . $normalizedFrom);
+                }
+            } catch (Throwable $e) {}
 
             $replyMsg = "Gracias por confirmar asistencia a la citación.";
             $sendAck = sendTwilioDirect($from, $replyMsg);
@@ -411,41 +441,47 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
             // Notificación interna al profesor con nombre del estudiante
             if ($teacherRef && !empty($teacherRef['sender_user_id'])) {
-                $meta = json_encode([
-                    'student_name' => $studentName ?: 'Estudiante',
-                    'action' => 'citacion_confirmada',
-                    'guardian_phone' => $from,
-                ], JSON_UNESCAPED_UNICODE);
-                $notifStmt = $conn->prepare("
-                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                    VALUES (?, ?, 'Citación confirmada', ?, 'SUCCESS', ?::jsonb, NOW())
-                ");
-                $notifStmt->execute([
-                    $schoolId,
-                    $teacherRef['sender_user_id'],
-                    "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" confirmó asistencia a la citación.",
-                    $meta
-                ]);
+                try {
+                    $meta = json_encode([
+                        'student_name' => $studentName ?: 'Estudiante',
+                        'action' => 'citacion_confirmada',
+                        'guardian_phone' => $from,
+                    ], JSON_UNESCAPED_UNICODE);
+                    $notifStmt = $conn->prepare("
+                        INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                        VALUES (?, ?, 'Citación confirmada', ?, 'SUCCESS', ?::jsonb, NOW())
+                    ");
+                    $notifStmt->execute([
+                        $schoolId,
+                        $teacherRef['sender_user_id'],
+                        "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" confirmó asistencia a la citación.",
+                        $meta
+                    ]);
+                } catch (Throwable $e) {
+                    securityLog('CITACION_NOTIF_ERROR', $e->getMessage());
+                }
             }
 
             securityLog('CITACION_CONFIRMADA', "Guardian:$guardianId School:$schoolId Student:" . ($resolvedStudentId ?? 'fallback'));
         } elseif ($trimBody === '2') {
             // Guardar estado de reagendamiento en Redis (no consumir todavía)
             try {
-                $redisConv->del('conversation:' . $normalizedFrom);
-                $redisConv->setex('reagendar:' . $normalizedFrom, 172800, json_encode([
-                    'guardian_id' => $guardianId,
-                    'school_id' => $schoolId,
-                    'student_id' => $resolvedStudentId,
-                    'student_name' => $studentName,
-                    'teacher_user_id' => $teacherRef['sender_user_id'] ?? null,
-                    'ts' => time()
-                ], JSON_UNESCAPED_UNICODE));
-            } catch (Exception $e) {
+                if ($redisConv) {
+                    $redisConv->del('conversation:' . $normalizedFrom);
+                    $redisConv->setex('reagendar:' . $normalizedFrom, 172800, json_encode([
+                        'guardian_id' => $guardianId,
+                        'school_id' => $schoolId,
+                        'student_id' => $resolvedStudentId,
+                        'student_name' => $studentName,
+                        'teacher_user_id' => $teacherRef['sender_user_id'] ?? null,
+                        'ts' => time()
+                    ], JSON_UNESCAPED_UNICODE));
+                }
+            } catch (Throwable $e) {
                 securityLog('REAGENDAR_REDIS_SET_ERROR', $e->getMessage());
             }
 
-            $replyMsg = "Solicitud de reagendamiento recibida. Pronto se le enviará una nueva fecha.\n\nPor favor, escriba brevemente qué fecha y hora le quedan más fáciles, o el motivo del reagendamiento:";
+            $replyMsg = "Solicitud de reagendamiento recibida. Pronto se le enviará una nueva fecha. Por favor, escriba brevemente qué fecha y hora le quedan más fáciles, o el motivo del reagendamiento:";
             $sendAck = sendTwilioDirect($from, $replyMsg);
             $logAck = $conn->prepare("
                 INSERT INTO twilio_messages (
@@ -467,21 +503,25 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
             // Notificación interna al profesor: reagendamiento solicitado (sin motivo todavía)
             if ($teacherRef && !empty($teacherRef['sender_user_id'])) {
-                $meta = json_encode([
-                    'student_name' => $studentName ?: 'Estudiante',
-                    'action' => 'reagendar_solicitado',
-                    'guardian_phone' => $from,
-                ], JSON_UNESCAPED_UNICODE);
-                $notifStmt = $conn->prepare("
-                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                    VALUES (?, ?, 'Reagendamiento solicitado', ?, 'INFO', ?::jsonb, NOW())
-                ");
-                $notifStmt->execute([
-                    $schoolId,
-                    $teacherRef['sender_user_id'],
-                    "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" solicitó reagendar la citación. Esperando motivo.",
-                    $meta
-                ]);
+                try {
+                    $meta = json_encode([
+                        'student_name' => $studentName ?: 'Estudiante',
+                        'action' => 'reagendar_solicitado',
+                        'guardian_phone' => $from,
+                    ], JSON_UNESCAPED_UNICODE);
+                    $notifStmt = $conn->prepare("
+                        INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                        VALUES (?, ?, 'Reagendamiento solicitado', ?, 'INFO', ?::jsonb, NOW())
+                    ");
+                    $notifStmt->execute([
+                        $schoolId,
+                        $teacherRef['sender_user_id'],
+                        "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" solicitó reagendar la citación. Esperando motivo.",
+                        $meta
+                    ]);
+                } catch (Throwable $e) {
+                    securityLog('CITACION_NOTIF_ERROR', $e->getMessage());
+                }
             }
 
             $panelStmt = $conn->prepare("

@@ -338,18 +338,22 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             enqueueTwilioJob($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
                         }
                         // Insertar notificación interna real con metadata
-                        $sosMeta = json_encode([
-                            'location' => $location,
-                            'message' => $message,
-                            'reporter_name' => $reporterName,
-                            'reporter_role' => $role,
-                            'action' => 'sos',
-                        ], JSON_UNESCAPED_UNICODE);
-                        $notifStmt = $conn->prepare("
-                            INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                            VALUES (?, ?, 'Alerta SOS', ?, 'SOS', ?::jsonb, NOW())
-                        ");
-                        $notifStmt->execute([$schoolId, $nRow['user_id'], "{$reporterName} envió una alerta SOS. Ver detalles.", $sosMeta]);
+                        try {
+                            $sosMeta = json_encode([
+                                'location' => $location,
+                                'message' => $message,
+                                'reporter_name' => $reporterName,
+                                'reporter_role' => $role,
+                                'action' => 'sos',
+                            ], JSON_UNESCAPED_UNICODE);
+                            $notifStmt = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, 'Alerta SOS', ?, 'SOS', ?::jsonb, NOW())
+                            ");
+                            $notifStmt->execute([$schoolId, $nRow['user_id'], "{$reporterName} envió una alerta SOS. Ver detalles.", $sosMeta]);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] SOS notification insert error: " . $e->getMessage());
+                        }
                     }
                 }
 
@@ -497,12 +501,16 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         ");
                         $coordStmt->execute([$schoolId]);
                         while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
-                            $label = $action === 'autorizar_salida' ? 'Autorización de salida' : 'Permiso institucional';
-                            $notifStmt = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
-                            ");
-                            $notifStmt->execute([$schoolId, $cRow['user_id'], $label, "Nuevo {$label} registrado. Ver detalles.", $meta]);
+                            try {
+                                $label = $action === 'autorizar_salida' ? 'Autorización de salida' : 'Permiso institucional';
+                                $notifStmt = $conn->prepare("
+                                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                    VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
+                                ");
+                                $notifStmt->execute([$schoolId, $cRow['user_id'], $label, "Nuevo {$label} registrado. Ver detalles.", $meta]);
+                            } catch (Throwable $e) {
+                                error_log("[OPERATIONS] Permiso notification insert error: " . $e->getMessage());
+                            }
                         }
                     }
 
@@ -551,17 +559,21 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
 
                         // Notificación interna con metadata
-                        $solMeta = json_encode([
-                            'sender_name' => $senderName,
-                            'sender_role' => $role,
-                            'reason' => $reason,
-                            'action' => 'solicitud',
-                        ], JSON_UNESCAPED_UNICODE);
-                        $solNotif = $conn->prepare("
-                            INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                            VALUES (?, ?, 'Solicitud interna', ?, 'INFO', ?::jsonb, NOW())
-                        ");
-                        $solNotif->execute([$schoolId, $params['recipient_id'], "{$senderName} te envió una solicitud. Ver detalles.", $solMeta]);
+                        try {
+                            $solMeta = json_encode([
+                                'sender_name' => $senderName,
+                                'sender_role' => $role,
+                                'reason' => $reason,
+                                'action' => 'solicitud',
+                            ], JSON_UNESCAPED_UNICODE);
+                            $solNotif = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, 'Solicitud interna', ?, 'INFO', ?::jsonb, NOW())
+                            ");
+                            $solNotif->execute([$schoolId, $params['recipient_id'], "{$senderName} te envió una solicitud. Ver detalles.", $solMeta]);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] Solicitud notification insert error: " . $e->getMessage());
+                        }
                     }
                 }
 
@@ -646,11 +658,15 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         ");
                         $incStmt2->execute([$schoolId, $incRole]);
                         while ($incRow = $incStmt2->fetch(PDO::FETCH_ASSOC)) {
-                            $incNotif = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, ?, ?, 'SOS', ?::jsonb, NOW())
-                            ");
-                            $incNotif->execute([$schoolId, $incRow['user_id'], 'Reporte de incidente', "Nuevo incidente reportado. Ver detalles.", $incMeta]);
+                            try {
+                                $incNotif = $conn->prepare("
+                                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                    VALUES (?, ?, ?, ?, 'SOS', ?::jsonb, NOW())
+                                ");
+                                $incNotif->execute([$schoolId, $incRow['user_id'], 'Reporte de incidente', "Nuevo incidente reportado. Ver detalles.", $incMeta]);
+                            } catch (Throwable $e) {
+                                error_log("[OPERATIONS] Incidente notification insert error: " . $e->getMessage());
+                            }
                         }
                     }
                 }
