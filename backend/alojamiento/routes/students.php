@@ -75,7 +75,7 @@ if ($cleanPath === '/students') {
         $whereSql = implode(' AND ', $whereClauses);
 
         // FIX: Cursor pagination (keyset) — O(1) rendimiento en cualquier página
-        // FIX: GROUP BY evita duplicados cuando un estudiante tiene múltiples asignaciones activas
+        $params[] = $limit;
         $stmt = $conn->prepare("
             SELECT
                 s.student_id as id,
@@ -83,16 +83,15 @@ if ($cleanPath === '/students') {
                 s.last_name,
                 s.document_number,
                 s.active,
-                COALESCE(MAX(ag.group_name), 'Sin grupo') as group_name
+                COALESCE(ag.group_name, 'Sin grupo') as group_name
             FROM students s
             LEFT JOIN student_group_assignments sga
               ON s.student_id = sga.student_id AND sga.active = TRUE
             LEFT JOIN academic_groups ag
               ON sga.group_id = ag.group_id
             WHERE {$whereSql}
-            GROUP BY s.student_id, s.first_name, s.last_name, s.document_number, s.active
             ORDER BY s.student_id
-            LIMIT {$limit}
+            LIMIT ?
         ");
         $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
