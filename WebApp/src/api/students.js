@@ -25,13 +25,22 @@ export const studentsApi = {
     const response = await client.get('/students', { params });
     const payload = response.data;
     const rows = payload?.data ?? [];
+    const normalized = Array.isArray(rows) ? rows.map(normalizeStudent) : [];
+    // Defensa: deduplicar por id por si el backend envía duplicados
+    const seen = new Set();
+    const deduped = normalized.filter(s => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
     return {
-      students: Array.isArray(rows) ? rows.map(normalizeStudent) : [],
+      students: deduped,
       lastId: payload?.meta?.last_id ?? last_id,
       hasMore: payload?.meta?.has_more ?? false,
     };
   },
   getAllPaginated: async (search = '') => {
+    const seen = new Set();
     const all = [];
     let lastId = '';
     let hasMore = true;
@@ -39,7 +48,12 @@ export const studentsApi = {
     while (hasMore && iterations < 50) {
       const batch = await studentsApi.getAll({ last_id: lastId, limit: 100, search });
       if (batch.students.length === 0) break;
-      all.push(...batch.students);
+      for (const s of batch.students) {
+        if (!seen.has(s.id)) {
+          seen.add(s.id);
+          all.push(s);
+        }
+      }
       lastId = batch.lastId;
       hasMore = batch.hasMore;
       iterations++;

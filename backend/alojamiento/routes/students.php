@@ -75,9 +75,10 @@ if ($cleanPath === '/students') {
         $whereSql = implode(' AND ', $whereClauses);
 
         // FIX: Cursor pagination (keyset) — O(1) rendimiento en cualquier página
+        // FIX: DISTINCT ON evita duplicados cuando un estudiante tiene múltiples asignaciones activas
         $params[] = $limit;
         $stmt = $conn->prepare("
-            SELECT
+            SELECT DISTINCT ON (s.student_id)
                 s.student_id as id,
                 s.first_name,
                 s.last_name,
@@ -90,7 +91,7 @@ if ($cleanPath === '/students') {
             LEFT JOIN academic_groups ag
               ON sga.group_id = ag.group_id
             WHERE {$whereSql}
-            ORDER BY s.student_id
+            ORDER BY s.student_id, ag.group_name
             LIMIT ?
         ");
         $stmt->execute($params);
