@@ -167,6 +167,8 @@ if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
 // ============================================================================
 if ($cleanPath === '/users/send-verification' && $method === 'POST') {
     try {
+        $rawInput = file_get_contents('php://input');
+        error_log("[OTP-RAW-BODY] " . $rawInput);
         $purpose = trim((string)($input['purpose'] ?? ''));
         $target  = trim((string)($input['target'] ?? ''));
         error_log("[OTP-START] user={$userId} purpose={$purpose} target={$target}");
