@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';
 import {
   Camera, Loader2, CheckCircle2, AlertTriangle,
-  Lock, Save, Send, Eye, EyeOff
+  Lock, Save, Send, Eye, EyeOff, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -163,6 +163,30 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
   );
 };
 
+/* ─── Colombian phone helpers ─── */
+function formatColPhone(raw) {
+  const digits = (raw || '').replace(/\D/g, '');
+  // Remove leading 57 if present
+  const body = digits.startsWith('57') && digits.length >= 12 ? digits.slice(2) : digits;
+  if (body.length !== 10) return raw || '';
+  return `+57 ${body.slice(0, 3)} ${body.slice(3, 6)} ${body.slice(6)}`;
+}
+function stripToDigits(v) {
+  return v.replace(/\D/g, '');
+}
+function handlePhoneInput(v, prev = '') {
+  const digits = stripToDigits(v);
+  if (digits === '') return '';
+  // Colombian mobile numbers: 10 digits starting with 3
+  if (digits.length <= 10) {
+    if (digits[0] !== '3' && digits.length > 1) return prev; // reject non-mobile
+    return digits;
+  }
+  // If already has 57 prefix
+  if (digits.startsWith('57') && digits.length <= 12) return digits;
+  return prev;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const Profile = () => {
   const { user } = useAuth();
@@ -275,6 +299,36 @@ const Profile = () => {
         setProfile(p => p ? { ...p, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup_email']: value } : p);
       } else {
         setActionToast({ type: 'error', message: res.message || 'Error al actualizar' });
+      }
+    } catch (err) {
+      setActionToast({ type: 'error', message: 'Error de red' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /* ─── Delete contact field ─── */
+  const deleteField = async (field) => {
+    if (!confirm('¿Eliminar este dato de contacto? Esta acción no se puede deshacer.')) return;
+    setActionLoading(true);
+    setActionToast(null);
+    try {
+      const res = await usersApi.deleteField(field);
+      if (res.status === 'ok') {
+        setActionToast({ type: 'success', message: res.message || 'Eliminado correctamente' });
+        setProfile(p => {
+          if (!p) return p;
+          const next = { ...p };
+          if (field === 'phone') { next.phone = ''; next.phone_verified = false; }
+          if (field === 'email') { next.email = ''; next.email_verified = false; }
+          if (field === 'backup_email') next.backup_email = '';
+          return next;
+        });
+        if (field === 'phone') setPhone('');
+        if (field === 'email') setEmail('');
+        if (field === 'backup_email') setBackupEmail('');
+      } else {
+        setActionToast({ type: 'error', message: res.message || 'Error al eliminar' });
       }
     } catch (err) {
       setActionToast({ type: 'error', message: 'Error de red' });
@@ -447,15 +501,27 @@ const Profile = () => {
               disabled={!email || email === profile?.email}
               onVerified={() => setVerified(v => ({ ...v, email: true }))}
             />
-            {verified.email && (
-              <button
-                onClick={() => updateField('email_change', email)}
-                disabled={actionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-              >
-                <Save size={12} /> Guardar correo
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {verified.email && (
+                <button
+                  onClick={() => updateField('email_change', email)}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+                >
+                  <Save size={12} /> Guardar
+                </button>
+              )}
+              {profile?.email && (
+                <button
+                  onClick={() => deleteField('email')}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
+                  title="Eliminar correo"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           </div>
           {profile?.email_verified && (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
@@ -472,9 +538,14 @@ const Profile = () => {
             label="Teléfono (WhatsApp)"
             type="tel"
             value={phone}
-            onChange={e => setPhone(e.target.value)}
-            placeholder="+57 300 000 0000"
+            onChange={e => setPhone(handlePhoneInput(e.target.value, phone))}
+            placeholder="300 123 4567"
           />
+          {phone && (
+            <p className="text-[10px] font-semibold text-slate-500">
+              Se enviará a: {formatColPhone(phone)}
+            </p>
+          )}
           <div className="flex items-center justify-between">
             <OtpBlock
               purpose="phone_change"
@@ -483,15 +554,27 @@ const Profile = () => {
               disabled={!phone || phone === profile?.phone}
               onVerified={() => setVerified(v => ({ ...v, phone: true }))}
             />
-            {verified.phone && (
-              <button
-                onClick={() => updateField('phone_change', phone)}
-                disabled={actionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-              >
-                <Save size={12} /> Guardar teléfono
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {verified.phone && (
+                <button
+                  onClick={() => updateField('phone_change', phone)}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+                >
+                  <Save size={12} /> Guardar
+                </button>
+              )}
+              {profile?.phone && (
+                <button
+                  onClick={() => deleteField('phone')}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
+                  title="Eliminar teléfono"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           </div>
           {profile?.phone_verified && (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
@@ -519,15 +602,27 @@ const Profile = () => {
               disabled={!backupEmail || backupEmail === profile?.backup_email}
               onVerified={() => setVerified(v => ({ ...v, backup: true }))}
             />
-            {verified.backup && (
-              <button
-                onClick={() => updateField('backup_email', backupEmail)}
-                disabled={actionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-              >
-                <Save size={12} /> Guardar respaldo
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {verified.backup && (
+                <button
+                  onClick={() => updateField('backup_email', backupEmail)}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+                >
+                  <Save size={12} /> Guardar
+                </button>
+              )}
+              {profile?.backup_email && (
+                <button
+                  onClick={() => deleteField('backup_email')}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
+                  title="Eliminar correo de respaldo"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </SectionCard>

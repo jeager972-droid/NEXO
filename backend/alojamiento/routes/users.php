@@ -28,9 +28,20 @@ function generateOtpCode() {
 function normalizePhone($value) {
     $value = trim((string)$value);
     $value = preg_replace('/^whatsapp:/i', '', $value);
-    if ($value === '') return '';
-    if ($value[0] !== '+') $value = '+' . $value;
-    return preg_replace('/[^0-9\+]/', '', $value);
+    $digits = preg_replace('/[^0-9]/', '', $value);
+    if ($digits === '') return '';
+
+    // Already has country code (e.g. 573001234567 = 12 digits)
+    if (strlen($digits) >= 11) {
+        return '+' . $digits;
+    }
+
+    // Colombian mobile number: 10 digits starting with 3
+    if (strlen($digits) === 10 && $digits[0] === '3') {
+        return '+57' . $digits;
+    }
+
+    return '+' . $digits;
 }
 
 function sendTwilioWhatsAppOtp($to, $code, $purpose) {
@@ -179,17 +190,25 @@ if ($cleanPath === '/users/send-verification' && $method === 'POST') {
             usersJson(['status' => 'error', 'message' => 'purpose y target requeridos'], 400);
         }
 
-        // Fetch user's phone for delivery
-        $phoneStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ?");
-        $phoneStmt->execute([$userId]);
-        $uRow = $phoneStmt->fetch(PDO::FETCH_ASSOC);
-        $rawPhone = $uRow['phone'] ?? '';
-        $userPhone = normalizePhone($rawPhone);
-        error_log("[OTP-PHONE] raw={$rawPhone} normalized={$userPhone}");
-
-        if ($userPhone === '') {
-            error_log("[OTP-NO-PHONE] user={$userId}");
-            usersJson(['status' => 'error', 'message' => 'No tienes número telefónico registrado para verificación'], 400);
+        // Determine destination phone
+        if ($purpose === 'phone_change') {
+            // Phone verification: send OTP to the NEW number being verified
+            $userPhone = normalizePhone($target);
+            error_log("[OTP-PHONE-NEW] target={$target} normalized={$userPhone}");
+            if ($userPhone === '') {
+                usersJson(['status' => 'error', 'message' => 'Número de teléfono inválido. Ingresa un número de 10 dígitos.'], 400);
+            }
+        } else {
+            // Email, backup_email, password, 2fa: need existing phone from profile
+            $phoneStmt = $conn->prepare("SELECT phone FROM users WHERE user_id = ?");
+            $phoneStmt->execute([$userId]);
+            $uRow = $phoneStmt->fetch(PDO::FETCH_ASSOC);
+            $rawPhone = $uRow['phone'] ?? '';
+            $userPhone = normalizePhone($rawPhone);
+            error_log("[OTP-PHONE-DB] raw={$rawPhone} normalized={$userPhone}");
+            if ($userPhone === '') {
+                usersJson(['status' => 'error', 'message' => 'Primero registra y verifica tu número de WhatsApp para recibir códigos OTP.'], 400);
+            }
         }
 
         $code = generateOtpCode();
@@ -329,6 +348,36 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
         $mark->execute([$row['code_id']]);
 
         usersJson(['status' => 'ok', 'message' => 'Perfil actualizado correctamente']);
+    } catch (Throwable $e) {
+        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+}
+
+// ============================================================================
+// POST /users/delete-field
+// Clears email, phone, or backup_email from profile
+// Body: { field: 'email'|'phone'|'backup_email' }
+// ============================================================================
+if ($cleanPath === '/users/delete-field' && $method === 'POST') {
+    try {
+        $field = trim((string)($input['field'] ?? ''));
+        $validFields = [
+            'email' => ['column' => 'email', 'verified' => 'email_verified'],
+            'phone' => ['column' => 'phone', 'verified' => 'phone_verified'],
+            'backup_email' => ['column' => 'backup_email', 'verified' => null],
+        ];
+        if (!isset($validFields[$field])) {
+            usersJson(['status' => 'error', 'message' => 'field no válido'], 400);
+        }
+
+        $col = $validFields[$field]['column'];
+        $verifiedCol = $validFields[$field]['verified'];
+        $setVerified = $verifiedCol ? ", {$verifiedCol} = FALSE" : '';
+
+        $stmt = $conn->prepare("UPDATE users SET {$col} = NULL{$setVerified}, updated_at = NOW() WHERE user_id = ?");
+        $stmt->execute([$userId]);
+
+        usersJson(['status' => 'ok', 'message' => ucfirst(str_replace('_', ' ', $field)) . ' eliminado correctamente']);
     } catch (Throwable $e) {
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
