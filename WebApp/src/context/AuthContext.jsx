@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth';
+import { userStore } from '../store/userStore';
 
 export const AuthContext = createContext();
 
@@ -13,8 +14,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authApi.getMe();
       setUser(data.user);
+      userStore.set(data.user);
     } catch (error) {
-      localStorage.removeItem('user');
+      userStore.clear();
       setUser(null);
       const publicPaths = ['/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
@@ -37,13 +39,12 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const data = await authApi.login(email, password);
-      
+
       if (!data.user) {
         throw new Error('La API no retornó el objeto de usuario esperado');
       }
 
-      localStorage.setItem('user', JSON.stringify(data.user));
-      
+      userStore.set(data.user);
       setUser(data.user);
       return data.user;
     } catch (error) {
@@ -59,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error during logout', error);
     } finally {
-      localStorage.removeItem('user');
+      userStore.clear();
       setUser(null);
       navigate('/login');
     }

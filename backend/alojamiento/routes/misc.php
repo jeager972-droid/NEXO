@@ -333,7 +333,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         // ── Caso A: Acudiente envió motivo de reagendamiento ──
         if ($reagendarState && $trimBody !== '1' && $trimBody !== '2') {
             $motivo = $body;
-            $replyMsg = "Gracias. Hemos registrado su mensaje y se lo haremos llegar al profesor.";
+            $replyMsg = "Gracias. Hemos registrado su mensaje y se lo haremos llegar al profesor y pronto le informaremos la nueva fecha.";
             $sendAck = sendTwilioDirect($from, $replyMsg);
 
             // Notificar al profesor con motivo incluido
@@ -352,7 +352,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     $notifStmt->execute([
                         $schoolId,
                         $teacherRef['sender_user_id'],
-                        "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" envió el motivo de reagendamiento. Ver detalles.",
+                        "El acudiente de: " . ($studentName ?: 'Estudiante') . " envió el motivo de reagendamiento. Ver detalles.",
                         $meta
                     ]);
                 } catch (Throwable $e) {
@@ -454,7 +454,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     $notifStmt->execute([
                         $schoolId,
                         $teacherRef['sender_user_id'],
-                        "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" confirmó asistencia a la citación.",
+                        "El acudiente de: " . ($studentName ?: 'Estudiante') . " confirmó asistencia a la citación.",
                         $meta
                     ]);
                 } catch (Throwable $e) {
@@ -481,7 +481,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 securityLog('REAGENDAR_REDIS_SET_ERROR', $e->getMessage());
             }
 
-            $replyMsg = "Solicitud de reagendamiento recibida. Pronto se le enviará una nueva fecha. Por favor, escriba brevemente qué fecha y hora le quedan más fáciles, o el motivo del reagendamiento:";
+            $replyMsg = "Por favor, escriba brevemente qué fecha y hora le quedan más fáciles, o el motivo del reagendamiento:";
             $sendAck = sendTwilioDirect($from, $replyMsg);
             $logAck = $conn->prepare("
                 INSERT INTO twilio_messages (
@@ -501,28 +501,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 json_encode(['source' => 'twilio-webhook-reply2-ack', 'error' => $sendAck['error'] ?? null], JSON_UNESCAPED_UNICODE)
             ]);
 
-            // Notificación interna al profesor: reagendamiento solicitado (sin motivo todavía)
-            if ($teacherRef && !empty($teacherRef['sender_user_id'])) {
-                try {
-                    $meta = json_encode([
-                        'student_name' => $studentName ?: 'Estudiante',
-                        'action' => 'reagendar_solicitado',
-                        'guardian_phone' => $from,
-                    ], JSON_UNESCAPED_UNICODE);
-                    $notifStmt = $conn->prepare("
-                        INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                        VALUES (?, ?, 'Reagendamiento solicitado', ?, 'INFO', ?::jsonb, NOW())
-                    ");
-                    $notifStmt->execute([
-                        $schoolId,
-                        $teacherRef['sender_user_id'],
-                        "El acudiente de \"" . ($studentName ?: 'Estudiante') . "\" solicitó reagendar la citación. Esperando motivo.",
-                        $meta
-                    ]);
-                } catch (Throwable $e) {
-                    securityLog('CITACION_NOTIF_ERROR', $e->getMessage());
-                }
-            }
+            // Notificación de reagendamiento diferida: solo cuando llegue el motivo
 
             $panelStmt = $conn->prepare("
                 INSERT INTO attendance_incidents (

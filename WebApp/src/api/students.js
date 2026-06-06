@@ -1,8 +1,9 @@
 import client from './client';
+import { userStore } from '../store/userStore';
 
 const getSchoolId = () => {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  return user.school_id || user.inst_id || user.institucion_id || null;
+  const user = userStore.get();
+  return user?.school_id || user?.inst_id || user?.institucion_id || null;
 };
 
 const normalizeStudent = (student) => ({

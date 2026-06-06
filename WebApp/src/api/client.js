@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { userStore } from '../store/userStore';
 
 // Base URL: VITE_API_BASE_URL debe apuntar al backend (sin /v1 trailing).
 // El backend normaliza rutas via cleanPath, así que usamos la raíz.
@@ -64,7 +65,7 @@ client.interceptors.response.use(
   (error) => {
     emitLatency(error.config, error.response?.status ?? 0);
     if (error.response?.status === 401) {
-      localStorage.removeItem('user');
+      userStore.clear();
       // FIX: No redirigir si estamos en rutas públicas
       const publicRoutes = ['/app/login', '/app/instalar/', '/app/descargas'];
       const currentPath = window.location.pathname;
