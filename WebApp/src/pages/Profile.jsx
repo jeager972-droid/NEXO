@@ -86,7 +86,8 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
         setStep('idle');
       }
     } catch (err) {
-      setToast({ type: 'error', message: 'Error de red al enviar código' });
+      const backendMsg = err?.response?.data?.message;
+      setToast({ type: 'error', message: backendMsg || 'Error de red al enviar código' });
       setStep('idle');
     }
   };

@@ -41,6 +41,7 @@ function sendTwilioDirect($to, $body) {
         if (!$from)  $missing[] = 'TWILIO_WHATSAPP_FROM (or TWILIO_FROM_NUMBER)';
         $err = 'Missing Twilio credentials: ' . implode(', ', $missing);
         securityLog('TWILIO_DIRECT_CREDENTIALS_MISSING', $err);
+        error_log("[TWILIO] CREDENTIALS MISSING: " . implode(', ', $missing));
         return ['ok' => false, 'error' => $err];
     }
     $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
@@ -50,6 +51,8 @@ function sendTwilioDirect($to, $body) {
     $fromNorm = preg_replace('/^whatsapp:/i', '', trim((string)$from));
     if ($fromNorm !== '' && $fromNorm[0] !== '+') $fromNorm = '+' . $fromNorm;
     $fromNorm = preg_replace('/[^0-9\+]/', '', $fromNorm);
+
+    error_log("[TWILIO] sendTwilioDirect from={$fromNorm} to={$toNorm} sid_prefix=" . substr($sid, 0, 6));
 
     // 1) Intentar mensaje de sesión
     $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
@@ -63,6 +66,7 @@ function sendTwilioDirect($to, $body) {
         $payload['StatusCallback'] = $statusCallback;
     }
 
+    error_log("[TWILIO] curl init url={$url} to={$toNorm}");
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
@@ -75,12 +79,16 @@ function sendTwilioDirect($to, $body) {
     $err      = curl_error($ch);
     curl_close($ch);
 
+    error_log("[TWILIO] curl result httpCode={$httpCode} curl_err=" . ($err ?: 'none') . " response_len=" . ($response === false ? 'false' : strlen($response)));
+
     // 2) Detectar 63016/63015 y reintentar con template
     if ($response !== false && $httpCode >= 400) {
         $json = json_decode($response, true);
         $twilioCode = $json['code'] ?? $json['error_code'] ?? $httpCode;
+        error_log("[TWILIO] Twilio error code={$twilioCode} msg=" . ($json['message'] ?? 'n/a'));
         if (in_array($twilioCode, [63016, 63015])) {
             $templateSid = getenv('TWILIO_WHATSAPP_TEMPLATE_SID');
+            error_log("[TWILIO] Template fallback templateSid=" . ($templateSid ?: 'NOT_SET'));
             if ($templateSid) {
                 $templatePayload = [
                     'From' => "whatsapp:$fromNorm",
@@ -101,6 +109,7 @@ function sendTwilioDirect($to, $body) {
                 $response2 = curl_exec($ch2);
                 $httpCode2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
                 curl_close($ch2);
+                error_log("[TWILIO] Template fallback httpCode={$httpCode2}");
                 if ($response2 !== false && $httpCode2 < 400) {
                     $json2 = json_decode($response2, true);
                     return ['ok' => true, 'error' => null, 'sid' => $json2['sid'] ?? null];
@@ -117,11 +126,13 @@ function sendTwilioDirect($to, $body) {
             $errorDetail .= " | Response: " . substr($response, 0, 500);
         }
         securityLog('TWILIO_DIRECT_ERROR', "To:$toNorm HTTP:$httpCode Error:$errorDetail");
+        error_log("[TWILIO] FAILED: {$errorDetail}");
         return ['ok' => false, 'error' => $errorDetail, 'sid' => null];
     }
     $json = json_decode($response, true);
     $sidStr = isset($json['sid']) ? $json['sid'] : 'N/A';
     securityLog('TWILIO_DIRECT_OK', "SID:{$sidStr} To:$toNorm");
+    error_log("[TWILIO] SUCCESS sid={$sidStr}");
     return ['ok' => true, 'error' => null, 'sid' => $json['sid'] ?? null];
 }
 

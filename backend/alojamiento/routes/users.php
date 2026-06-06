@@ -169,9 +169,11 @@ if ($cleanPath === '/users/send-verification' && $method === 'POST') {
     try {
         $purpose = trim((string)($input['purpose'] ?? ''));
         $target  = trim((string)($input['target'] ?? ''));
+        error_log("[OTP-START] user={$userId} purpose={$purpose} target={$target}");
 
         $validPurposes = ['email_change', 'phone_change', 'password_reset', 'password_change', 'backup_email', 'login_2fa'];
         if (!in_array($purpose, $validPurposes, true) || $target === '') {
+            error_log("[OTP-VALIDATION-FAIL] purpose={$purpose} target empty=" . ($target === '' ? 'yes' : 'no'));
             usersJson(['status' => 'error', 'message' => 'purpose y target requeridos'], 400);
         }
 
@@ -179,28 +181,38 @@ if ($cleanPath === '/users/send-verification' && $method === 'POST') {
         $phoneStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ?");
         $phoneStmt->execute([$userId]);
         $uRow = $phoneStmt->fetch(PDO::FETCH_ASSOC);
-        $userPhone = normalizePhone($uRow['phone'] ?? '');
+        $rawPhone = $uRow['phone'] ?? '';
+        $userPhone = normalizePhone($rawPhone);
+        error_log("[OTP-PHONE] raw={$rawPhone} normalized={$userPhone}");
 
         if ($userPhone === '') {
+            error_log("[OTP-NO-PHONE] user={$userId}");
             usersJson(['status' => 'error', 'message' => 'No tienes número telefónico registrado para verificación'], 400);
         }
 
         $code = generateOtpCode();
         $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+        error_log("[OTP-GENERATED] code={$code} expires={$expiresAt}");
 
         $ins = $conn->prepare("
             INSERT INTO verification_codes (user_id, purpose, target_value, code, expires_at)
             VALUES (?, ?, ?, ?, ?)
         ");
         $ins->execute([$userId, $purpose, $target, $code, $expiresAt]);
+        error_log("[OTP-DB-INSERT] ok user={$userId}");
 
+        error_log("[OTP-SEND] calling sendTwilioWhatsAppOtp to={$userPhone}");
         $twilioResult = sendTwilioWhatsAppOtp($userPhone, $code, $purpose);
+        error_log("[OTP-SEND-RESULT] ok=" . ($twilioResult['ok'] ? 'true' : 'false') . " error=" . ($twilioResult['error'] ?? 'none'));
+
         if (!$twilioResult['ok']) {
             usersJson(['status' => 'error', 'message' => 'No se pudo enviar el código por WhatsApp: ' . $twilioResult['error']], 502);
         }
 
+        error_log("[OTP-SUCCESS] user={$userId}");
         usersJson(['status' => 'ok', 'message' => 'Código enviado por WhatsApp', 'expires_in_minutes' => 10]);
     } catch (Throwable $e) {
+        error_log("[OTP-EXCEPTION] " . $e->getMessage() . " @ " . $e->getFile() . ":" . $e->getLine());
         usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 }
