@@ -76,7 +76,6 @@ if ($cleanPath === '/students') {
 
         // FIX: Cursor pagination (keyset) — O(1) rendimiento en cualquier página
         // FIX: GROUP BY evita duplicados cuando un estudiante tiene múltiples asignaciones activas
-        $params[] = $limit;
         $stmt = $conn->prepare("
             SELECT
                 s.student_id as id,
@@ -93,7 +92,7 @@ if ($cleanPath === '/students') {
             WHERE {$whereSql}
             GROUP BY s.student_id, s.first_name, s.last_name, s.document_number, s.active
             ORDER BY s.student_id
-            LIMIT ?
+            LIMIT {$limit}
         ");
         $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
