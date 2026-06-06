@@ -101,6 +101,12 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
         setStep('verified');
         setToast({ type: 'success', message: 'Código verificado correctamente' });
         onVerified?.();
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+          setStep('idle');
+          setCode('');
+          setToast(null);
+        }, 3000);
       } else {
         setToast({ type: 'error', message: res.message || 'Código incorrecto' });
         setStep('sent');
@@ -211,7 +217,9 @@ const Profile = () => {
 
   const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
   const [actionToast, setActionToast] = useState(null);
+  const [contactToast, setContactToast] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   /* ─── Load extended profile ─── */
   useEffect(() => {
@@ -291,31 +299,33 @@ const Profile = () => {
   /* ─── Update contact field ─── */
   const updateField = async (purpose, value) => {
     setActionLoading(true);
-    setActionToast(null);
+    setContactToast(null);
     try {
       const res = await usersApi.updateProfile(purpose, value);
       if (res.status === 'ok') {
-        setActionToast({ type: 'success', message: 'Dato actualizado correctamente' });
+        setContactToast({ type: 'success', message: 'Dato actualizado correctamente' });
         setProfile(p => p ? { ...p, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup_email']: value } : p);
       } else {
-        setActionToast({ type: 'error', message: res.message || 'Error al actualizar' });
+        setContactToast({ type: 'error', message: res.message || 'Error al actualizar' });
       }
     } catch (err) {
-      setActionToast({ type: 'error', message: 'Error de red' });
+      setContactToast({ type: 'error', message: 'Error de red' });
     } finally {
       setActionLoading(false);
     }
   };
 
   /* ─── Delete contact field ─── */
+  const confirmDelete = (field) => setDeleteConfirm(field);
+  const cancelDelete = () => setDeleteConfirm(null);
+
   const deleteField = async (field) => {
-    if (!confirm('¿Eliminar este dato de contacto? Esta acción no se puede deshacer.')) return;
     setActionLoading(true);
-    setActionToast(null);
+    setContactToast(null);
     try {
       const res = await usersApi.deleteField(field);
       if (res.status === 'ok') {
-        setActionToast({ type: 'success', message: res.message || 'Eliminado correctamente' });
+        setContactToast({ type: 'success', message: res.message || 'Eliminado correctamente' });
         setProfile(p => {
           if (!p) return p;
           const next = { ...p };
@@ -328,12 +338,13 @@ const Profile = () => {
         if (field === 'email') setEmail('');
         if (field === 'backup_email') setBackupEmail('');
       } else {
-        setActionToast({ type: 'error', message: res.message || 'Error al eliminar' });
+        setContactToast({ type: 'error', message: res.message || 'Error al eliminar' });
       }
     } catch (err) {
-      setActionToast({ type: 'error', message: 'Error de red' });
+      setContactToast({ type: 'error', message: 'Error de red' });
     } finally {
       setActionLoading(false);
+      setDeleteConfirm(null);
     }
   };
 
@@ -422,7 +433,6 @@ const Profile = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <InfoRow label="Documento" value={profile?.document_number || '—'} />
           <InfoRow label="Institución" value={user?.school_name || '—'} />
           <InfoRow label="Rol" value={user?.role || '—'} />
           <InfoRow label="Jornada" value={profile?.work_shift ? capitalize(profile.work_shift) : '—'} />
@@ -493,93 +503,83 @@ const Profile = () => {
             onChange={e => setEmail(e.target.value)}
             placeholder="usuario@institucion.edu.co"
           />
-          <div className="flex items-center justify-between">
-            <OtpBlock
-              purpose="email_change"
-              target={email}
-              label="correo"
-              disabled={!email || email === profile?.email}
-              onVerified={() => setVerified(v => ({ ...v, email: true }))}
-            />
-            <div className="flex items-center gap-2">
-              {verified.email && (
-                <button
-                  onClick={() => updateField('email_change', email)}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-                >
-                  <Save size={12} /> Guardar
-                </button>
-              )}
-              {profile?.email && (
-                <button
-                  onClick={() => deleteField('email')}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
-                  title="Eliminar correo"
-                >
-                  <Trash2 size={12} />
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => updateField('email_change', email)}
+              disabled={actionLoading || !email || email === profile?.email}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+            >
+              <Save size={12} /> Guardar
+            </button>
+            {profile?.email && (
+              <button
+                onClick={() => confirmDelete('email')}
+                disabled={actionLoading}
+                className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
+                title="Eliminar correo"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
-          {profile?.email_verified && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-              <CheckCircle2 size={12} /> Correo verificado
-            </span>
-          )}
         </div>
 
         <div style={{ height: '1px', backgroundColor: '#F1F5F9' }} />
 
         {/* Phone */}
         <div className="space-y-3">
-          <TextField
-            label="Teléfono (WhatsApp)"
-            type="tel"
-            value={phone}
-            onChange={e => setPhone(handlePhoneInput(e.target.value, phone))}
-            placeholder="300 123 4567"
-          />
-          {phone && (
-            <p className="text-[10px] font-semibold text-slate-500">
-              Se enviará a: {formatColPhone(phone)}
-            </p>
-          )}
-          <div className="flex items-center justify-between">
-            <OtpBlock
-              purpose="phone_change"
-              target={phone}
-              label="teléfono"
-              disabled={!phone || phone === profile?.phone}
-              onVerified={() => setVerified(v => ({ ...v, phone: true }))}
-            />
-            <div className="flex items-center gap-2">
-              {verified.phone && (
-                <button
-                  onClick={() => updateField('phone_change', phone)}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-                >
-                  <Save size={12} /> Guardar
-                </button>
-              )}
-              {profile?.phone && (
-                <button
-                  onClick={() => deleteField('phone')}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
-                  title="Eliminar teléfono"
-                >
-                  <Trash2 size={12} />
-                </button>
-              )}
+          {profile?.phone && profile?.phone_verified ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-800 dark:text-white">{formatColPhone(profile.phone)}</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+                  <CheckCircle2 size={12} /> Verificado
+                </span>
+              </div>
+              <button
+                onClick={() => confirmDelete('phone')}
+                disabled={actionLoading}
+                className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
+                title="Eliminar teléfono"
+              >
+                <Trash2 size={12} />
+              </button>
             </div>
-          </div>
-          {profile?.phone_verified && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-              <CheckCircle2 size={12} /> Teléfono verificado
-            </span>
+          ) : (
+            <>
+              <TextField
+                label="Teléfono (WhatsApp)"
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(handlePhoneInput(e.target.value, phone))}
+                placeholder="300 123 4567"
+              />
+              {phone && (
+                <p className="text-[10px] font-semibold text-slate-500">
+                  Se enviará a: {formatColPhone(phone)}
+                </p>
+              )}
+              <div className="flex items-center justify-between">
+                <OtpBlock
+                  purpose="phone_change"
+                  target={phone}
+                  label="teléfono"
+                  disabled={!phone || phone === profile?.phone}
+                  onVerified={() => setVerified(v => ({ ...v, phone: true }))}
+                />
+                <div className="flex items-center gap-2">
+                  {verified.phone && (
+                    <button
+                      onClick={() => updateField('phone_change', phone)}
+                      disabled={actionLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+                    >
+                      <Save size={12} /> Guardar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -614,7 +614,7 @@ const Profile = () => {
               )}
               {profile?.backup_email && (
                 <button
-                  onClick={() => deleteField('backup_email')}
+                  onClick={() => confirmDelete('backup_email')}
                   disabled={actionLoading}
                   className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
                   title="Eliminar correo de respaldo"
@@ -625,7 +625,41 @@ const Profile = () => {
             </div>
           </div>
         </div>
+        <InlineToast toast={contactToast} />
       </SectionCard>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(2,6,23,0.45)', backdropFilter: 'blur(2px)' }}>
+          <div className="bg-white dark:bg-slate-900 p-6 w-full max-w-sm" style={{ border: '1.5px solid #E2E8F0' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 flex items-center justify-center bg-red-50" style={{ border: '1px solid #FECACA' }}>
+                <AlertTriangle size={16} className="text-red-500" />
+              </div>
+              <p className="text-xs font-black uppercase tracking-tight text-slate-800 dark:text-white">Confirmar eliminación</p>
+            </div>
+            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+              ¿Eliminar {deleteConfirm === 'phone' ? 'el número de teléfono' : deleteConfirm === 'email' ? 'el correo electrónico' : 'el correo de respaldo'}? Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 transition-colors"
+                style={{ border: '1.5px solid #E2E8F0' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => deleteField(deleteConfirm)}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {actionLoading ? <Loader2 size={12} className="animate-spin mx-auto" /> : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

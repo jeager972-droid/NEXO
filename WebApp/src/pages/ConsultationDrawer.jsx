@@ -173,7 +173,7 @@ const TeacherQueryPanel = ({
 
   const studentOptions = students.map(s => ({
     id: String(s.id || s.student_id),
-    name: `${s.last_name || ''}, ${s.first_name || ''} — ${s.document_number || ''}`.trim()
+    name: `${s.last_name || ''}, ${s.first_name || ''}`.trim()
   }));
 
   return (

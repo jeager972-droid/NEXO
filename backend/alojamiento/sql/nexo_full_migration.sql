@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS subjects (subject_id UUID PRIMARY KEY DEFAULT uuid_ge
 CREATE TABLE IF NOT EXISTS schedules (schedule_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), group_id UUID NOT NULL REFERENCES academic_groups(group_id), classroom_id UUID NOT NULL REFERENCES classrooms(classroom_id), teacher_user_id UUID NOT NULL REFERENCES users(user_id), subject_id UUID NOT NULL REFERENCES subjects(subject_id), day_of_week INTEGER NOT NULL, block_number INTEGER NOT NULL, start_time TIME NOT NULL, end_time TIME NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS edge_devices (device_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), classroom_id UUID REFERENCES classrooms(classroom_id), device_name VARCHAR(120) NOT NULL, public_key TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, last_sync_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS biometric_events (event_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID, device_id UUID NOT NULL, classroom_id UUID, schedule_id UUID, event_type VARCHAR(120) NOT NULL, event_result VARCHAR(120) NOT NULL, confidence_score NUMERIC(5,2), sync_hash TEXT, event_signature TEXT, event_timestamp TIMESTAMPTZ NOT NULL, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(event_id, event_timestamp)) PARTITION BY RANGE(event_timestamp);
-CREATE TABLE IF NOT EXISTS notifications (notification_id UUID DEFAULT uuid_generate_v4() PRIMARY KEY, school_id UUID NOT NULL, user_id UUID NOT NULL, title VARCHAR(200) NOT NULL, message TEXT NOT NULL, type VARCHAR(50) NOT NULL DEFAULT 'INFO', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS notifications (notification_id UUID DEFAULT uuid_generate_v4() PRIMARY KEY, school_id UUID NOT NULL, user_id UUID NOT NULL, title VARCHAR(200) NOT NULL, message TEXT NOT NULL, type VARCHAR(50) NOT NULL DEFAULT 'INFO', metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS attendance_incidents (incident_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID NOT NULL, related_event_id UUID, incident_type VARCHAR(120) NOT NULL, detected_at TIMESTAMPTZ NOT NULL, resolved BOOLEAN NOT NULL DEFAULT FALSE, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(incident_id, detected_at)) PARTITION BY RANGE(detected_at);
 CREATE TABLE IF NOT EXISTS internal_messages (message_id UUID NOT NULL, school_id UUID NOT NULL, sender_user_id UUID NOT NULL, receiver_user_id UUID NOT NULL, subject VARCHAR(255), message_content TEXT NOT NULL, sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), read_at TIMESTAMPTZ, metadata_json JSONB, PRIMARY KEY(message_id, sent_at)) PARTITION BY RANGE(sent_at);
@@ -54,7 +54,29 @@ CREATE INDEX IF NOT EXISTS idx_rate_limits_window_start ON rate_limits(window_st
 CREATE TABLE IF NOT EXISTS jwt_blocklist (jti TEXT PRIMARY KEY, revoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), expires_at TIMESTAMPTZ NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_jwt_blocklist_expires_at ON jwt_blocklist(expires_at);
 
+CREATE TABLE IF NOT EXISTS verification_codes (
+    code_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    purpose VARCHAR(50) NOT NULL,
+    target_value TEXT NOT NULL,
+    code VARCHAR(10) NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    verified_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_user_purpose ON verification_codes(user_id, purpose, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_active ON verification_codes(code, expires_at) WHERE used = FALSE AND expires_at > NOW();
+
 -- ADDITIONAL COLUMNS
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS work_shift VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS backup_email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
 ALTER TABLE guardians ADD COLUMN IF NOT EXISTS whatsapp_phone_normalized TEXT;
 UPDATE guardians SET whatsapp_phone_normalized = regexp_replace(COALESCE(whatsapp_phone,''),'[^0-9+]','','g') WHERE whatsapp_phone_normalized IS NULL OR whatsapp_phone_normalized <> regexp_replace(COALESCE(whatsapp_phone,''),'[^0-9+]','','g');
 ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255), ADD COLUMN IF NOT EXISTS last_ping TIMESTAMPTZ;

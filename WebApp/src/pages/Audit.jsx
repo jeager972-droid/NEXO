@@ -548,7 +548,7 @@ function AuditDrawer({ activeSub, onClose }) {
           <SearchableSelect
             label="Estudiante"
             placeholder="Todos los estudiantes del grupo"
-            options={students.map(s => ({ id: s.student_id, name: `${s.last_name}, ${s.first_name} — ${s.document_number}` }))}
+            options={students.map(s => ({ id: s.student_id, name: `${s.last_name}, ${s.first_name}` }))}
             value={filters.studentId}
             onChange={v => setFilters(p => ({ ...p, studentId: v }))}
           />

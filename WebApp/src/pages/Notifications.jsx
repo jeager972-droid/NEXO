@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, Info, User, AlertTriangle, Loader2 } from 'lucide-react';
+import { Bell, CheckCircle2, Info, User, AlertTriangle, Loader2, Eye, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
+
+function parseMeta(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch { return null; }
+}
 
 const Notifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [detailNotif, setDetailNotif] = useState(null);
 
   const isStaff = user?.role === 'PORTERO' || user?.role === 'AUXILIAR';
 
@@ -38,7 +45,7 @@ const Notifications = () => {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Sincronizando datos institucionales…</p>
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Cargando…</p>
       </div>
     );
   }
@@ -92,6 +99,16 @@ const Notifications = () => {
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                         {notif.desc}
                       </p>
+                      {parseMeta(notif.metadata_json) && (
+                        <button
+                          onClick={() => setDetailNotif(notif)}
+                          className={`mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                            notif.type === 'SOS' ? 'text-red-600 hover:text-red-700' : 'text-[#003366] hover:text-[#002855]'
+                          }`}
+                        >
+                          <Eye size={12} /> Ver detalles
+                        </button>
+                      )}
                       {notif.sender && (
                         <div className="mt-2 flex items-center gap-2">
                           <div className="w-5 h-5 flex items-center justify-center bg-slate-100 dark:bg-slate-800" style={{ border: '1px solid #E2E8F0' }}>
@@ -118,6 +135,67 @@ const Notifications = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Detail Drawer */}
+      <AnimatePresence>
+        {detailNotif && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40"
+              style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+              onClick={() => setDetailNotif(null)}
+            />
+            <motion.div
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed right-0 inset-y-0 z-50 bg-white dark:bg-slate-900 w-full overflow-y-auto"
+              style={{ maxWidth: '420px', borderLeft: '1.5px solid #E2E8F0' }}
+            >
+              <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+                <div>
+                  <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>
+                    {detailNotif.title}
+                  </p>
+                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                    Detalles de la notificación
+                  </p>
+                </div>
+                <button onClick={() => setDetailNotif(null)} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
+                  <X size={18} strokeWidth={2} />
+                </button>
+              </div>
+              <div className="p-6 space-y-5">
+                {(() => {
+                  const meta = parseMeta(detailNotif.metadata_json);
+                  if (!meta) return <p className="text-xs text-slate-400">Sin detalles disponibles.</p>;
+                  const fields = [
+                    meta.student_name && { label: 'Estudiante', value: meta.student_name },
+                    meta.group_name && { label: 'Grupo', value: meta.group_name },
+                    meta.teacher_name && { label: 'Generado por', value: meta.teacher_name },
+                    meta.reporter_name && { label: 'Reportado por', value: meta.reporter_name },
+                    meta.sender_name && { label: 'Remitente', value: meta.sender_name },
+                    meta.reporter_role && !meta.teacher_name && !meta.sender_name && { label: 'Rol', value: meta.reporter_role },
+                    meta.location && { label: 'Ubicación', value: meta.location },
+                    meta.message && meta.action === 'sos' && { label: 'Mensaje', value: meta.message },
+                    meta.reason && { label: meta.action === 'solicitud' ? 'Mensaje' : 'Motivo / Detalle', value: meta.reason },
+                    meta.motivo && { label: 'Motivo del reagendamiento', value: meta.motivo },
+                    meta.time_start && { label: 'Desde', value: meta.time_start },
+                    meta.time_end && { label: 'Hasta', value: meta.time_end },
+                  ].filter(Boolean);
+                  return fields.map((f, i) => (
+                    <div key={i}>
+                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }} className="mb-1">{f.label}</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{f.value}</p>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

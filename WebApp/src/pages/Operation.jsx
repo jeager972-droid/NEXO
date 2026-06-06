@@ -116,7 +116,7 @@ const Operation = () => {
       title: 'Reportar incidente',
       icon: ShieldAlert,
       roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-      fields: ['group', 'student', 'message', 'targets']
+      fields: ['location', 'message', 'targets']
     }
   ];
 
@@ -704,7 +704,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
               )}
 
               {(command.fields.includes('reason') || command.fields.includes('message') || command.fields.includes('description')) && (
-                <FormField label="Mensaje / Motivo">
+                <FormField label="Detalles">
                   <textarea
                     value={formData.reason || formData.message || formData.description}
                     onChange={e => setFormData(p => ({ ...p, reason: e.target.value, message: e.target.value, description: e.target.value }))}

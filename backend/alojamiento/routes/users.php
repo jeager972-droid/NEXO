@@ -50,17 +50,7 @@ function sendTwilioWhatsAppOtp($to, $code, $purpose) {
         return ['ok' => false, 'error' => 'sendTwilioDirect no disponible. Contacta soporte.'];
     }
 
-    $labels = [
-        'email_change'    => 'cambio de correo electrónico',
-        'phone_change'    => 'cambio de número telefónico',
-        'password_reset'  => 'cambio de contraseña',
-        'password_change' => 'cambio de contraseña',
-        'backup_email'    => 'correo de respaldo',
-        'login_2fa'       => 'inicio de sesión',
-    ];
-    $label = $labels[$purpose] ?? 'verificación de seguridad';
-
-    $body = "🔐 *NEXO — Código de verificación*\n\nTu código para *{$label}* es:\n\n*{$code}*\n\nVálido por 10 minutos. No lo compartas.";
+    $body = "🔐 *NEXO — Código de verificación*\n\nTu código es: *{$code}*\n\nVálido por 10 minutos. No lo compartas.";
 
     error_log('[OTP] Enviando código a ' . $to . ' purpose=' . $purpose);
     $result = sendTwilioDirect($to, $body);
@@ -306,21 +296,6 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
             usersJson(['status' => 'error', 'message' => 'purpose y value requeridos'], 400);
         }
 
-        // Must have a verified code within last 10 minutes
-        $stmt = $conn->prepare("
-            SELECT code_id, target_value
-            FROM verification_codes
-            WHERE user_id = ? AND purpose = ? AND target_value = ? AND verified_at IS NOT NULL AND used = FALSE
-            ORDER BY verified_at DESC
-            LIMIT 1
-        ");
-        $stmt->execute([$userId, $purpose, $value]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$row) {
-            usersJson(['status' => 'error', 'message' => 'Verificación requerida. Solicita y confirma un código primero.'], 403);
-        }
-
         $fieldMap = [
             'email_change' => 'email',
             'phone_change' => 'phone',
@@ -328,6 +303,27 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
         ];
         $dbField = $fieldMap[$purpose];
         $verifiedField = ($purpose === 'email_change' || $purpose === 'backup_email') ? 'email_verified' : 'phone_verified';
+
+        // phone_change and backup_email require OTP verification
+        if ($purpose !== 'email_change') {
+            $stmt = $conn->prepare("
+                SELECT code_id, target_value
+                FROM verification_codes
+                WHERE user_id = ? AND purpose = ? AND target_value = ? AND verified_at IS NOT NULL AND used = FALSE
+                ORDER BY verified_at DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$userId, $purpose, $value]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$row) {
+                usersJson(['status' => 'error', 'message' => 'Verificación requerida. Solicita y confirma un código primero.'], 403);
+            }
+
+            // Mark code as used
+            $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
+            $mark->execute([$row['code_id']]);
+        }
 
         $upd = $conn->prepare("UPDATE users SET {$dbField} = ?, {$verifiedField} = TRUE, updated_at = NOW() WHERE user_id = ?");
         $upd->execute([$value, $userId]);
@@ -342,10 +338,6 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
             ");
             $guardSync->execute([$value, $normPhone, $userId]);
         }
-
-        // Mark code as used
-        $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
-        $mark->execute([$row['code_id']]);
 
         usersJson(['status' => 'ok', 'message' => 'Perfil actualizado correctamente']);
     } catch (Throwable $e) {

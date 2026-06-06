@@ -315,7 +315,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $sosStmt->execute([$schoolId, $userId, $message]);
 
                 // Notificar Coordinación y Rectoría por WhatsApp y notificaciones internas
-                $sosMsg = "🚨 *NEXO — ALERTA SOS*\n\nUbicación: {$location}\nMensaje: {$message}\nReportado por: {$authUser['nombre']} ({$role})\n\nVerifique la plataforma inmediatamente.";
+                $reporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                $sosMsg = "🚨 *NEXO — ALERTA SOS*\n\nUbicación: {$location}\nMensaje: {$message}\nReportado por: {$reporterName} ({$role})\n\nVerifique la plataforma inmediatamente.";
 
                 $notifyRoles = [];
                 if ($role === 'RECTOR' || $role === 'SUPER_RECTOR') {
@@ -336,12 +337,19 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         if (!empty($nRow['phone'])) {
                             enqueueTwilioJob($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
                         }
-                        // Insertar notificación interna real
+                        // Insertar notificación interna real con metadata
+                        $sosMeta = json_encode([
+                            'location' => $location,
+                            'message' => $message,
+                            'reporter_name' => $reporterName,
+                            'reporter_role' => $role,
+                            'action' => 'sos',
+                        ], JSON_UNESCAPED_UNICODE);
                         $notifStmt = $conn->prepare("
-                            INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
-                            VALUES (?, ?, 'Alerta SOS', ?, 'SOS', NOW())
+                            INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                            VALUES (?, ?, 'Alerta SOS', ?, 'SOS', ?::jsonb, NOW())
                         ");
-                        $notifStmt->execute([$schoolId, $nRow['user_id'], "Alerta SOS: {$message} — Ubicación: {$location}"]);
+                        $notifStmt->execute([$schoolId, $nRow['user_id'], "{$reporterName} envió una alerta SOS. Ver detalles.", $sosMeta]);
                     }
                 }
 
@@ -457,6 +465,32 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                     // Notificar COORDINADOR vía notificaciones internas para permisos
                     if (in_array($action, ['permiso', 'autorizar_salida'])) {
+                        // Fetch student + group details for metadata
+                        $stuMetaStmt = $conn->prepare("
+                            SELECT s.first_name, s.last_name, ag.group_name
+                            FROM students s
+                            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                            WHERE s.student_id = ?
+                            LIMIT 1
+                        ");
+                        $stuMetaStmt->execute([$studentId]);
+                        $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
+                        $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
+                        $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
+                        $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
+
+                        $meta = json_encode([
+                            'student_id' => $studentId,
+                            'student_name' => trim($studentName),
+                            'group_name' => $groupName,
+                            'teacher_name' => trim($teacherName) ?: $role,
+                            'reason' => $reason,
+                            'time_start' => $params['timeStart'] ?? null,
+                            'time_end' => $params['timeEnd'] ?? null,
+                            'action' => $action,
+                        ], JSON_UNESCAPED_UNICODE);
+
                         $coordStmt = $conn->prepare("
                             SELECT user_id FROM users
                             WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
@@ -465,30 +499,14 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
                             $label = $action === 'autorizar_salida' ? 'Autorización de salida' : 'Permiso institucional';
                             $notifStmt = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
-                                VALUES (?, ?, ?, ?, 'INFO', NOW())
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
                             ");
-                            $notifStmt->execute([$schoolId, $cRow['user_id'], $label, "Nuevo {$label} registrado en el sistema."]);
+                            $notifStmt->execute([$schoolId, $cRow['user_id'], $label, "Nuevo {$label} registrado. Ver detalles.", $meta]);
                         }
                     }
 
-                    // Notificar acudiente para autorizar_salida y permiso
-                    if (in_array($action, ['autorizar_salida', 'permiso'])) {
-                        $guardStmt = $conn->prepare("
-                            SELECT s.first_name, s.last_name, g.whatsapp_phone
-                            FROM students s
-                            JOIN guardian_student_relationships gsr ON s.student_id = gsr.student_id AND gsr.primary_guardian = TRUE
-                            JOIN guardians g ON gsr.guardian_id = g.guardian_id
-                            WHERE s.student_id = ? AND s.school_id = ?
-                        ");
-                        $guardStmt->execute([$studentId, $schoolId]);
-                        $guardData = $guardStmt->fetch(PDO::FETCH_ASSOC);
-                        if ($guardData && !empty($guardData['whatsapp_phone'])) {
-                            $actLabel = $action === 'autorizar_salida' ? 'AUTORIZACIÓN DE SALIDA' : 'PERMISO';
-                            $msg = "📢 *NEXO*\n\nSu hijo(a) *" . $guardData['first_name'] . ' ' . $guardData['last_name'] . "* tiene registrada una *" . $actLabel . "* en el sistema.\n\nDetalle: {$reason}\n\nComuníquese con la institución si tiene dudas.";
-                            enqueueTwilioJob($guardData['whatsapp_phone'], $msg, $schoolId, $studentId, null, $userId, strtoupper($action));
-                        }
-                    }
+                    // NOTE: permiso and autorizar_salida NO LONGER send WhatsApp to guardians (requested by user)
                 }
 
                 // Notificación grupal para salida pedagógica o cambio de horario
@@ -511,11 +529,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                // Solicitud interna: guardar mensaje interno + WhatsApp si tiene teléfono
+                // Solicitud interna: guardar mensaje interno + WhatsApp si tiene teléfono + notificación interna
                 if ($action === 'solicitud' && !empty($params['recipient_id'])) {
                     $recStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ? AND school_id = ?");
                     $recStmt->execute([$params['recipient_id'], $schoolId]);
                     $recRow = $recStmt->fetch(PDO::FETCH_ASSOC);
+                    $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
                     if ($recRow) {
                         try {
                             $msgStmt = $conn->prepare("
@@ -527,9 +546,22 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             securityLog('SOLICITUD_MSG_ERROR', $e->getMessage());
                         }
                         if (!empty($recRow['phone'])) {
-                            $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$authUser['nombre']}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
+                            $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$senderName}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
                             enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
                         }
+
+                        // Notificación interna con metadata
+                        $solMeta = json_encode([
+                            'sender_name' => $senderName,
+                            'sender_role' => $role,
+                            'reason' => $reason,
+                            'action' => 'solicitud',
+                        ], JSON_UNESCAPED_UNICODE);
+                        $solNotif = $conn->prepare("
+                            INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                            VALUES (?, ?, 'Solicitud interna', ?, 'INFO', ?::jsonb, NOW())
+                        ");
+                        $solNotif->execute([$schoolId, $params['recipient_id'], "{$senderName} te envió una solicitud. Ver detalles.", $solMeta]);
                     }
                 }
 
@@ -577,7 +609,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             }
                         }
                     }
-                    // Fallback: sin targets ni estudiante → notificar coordinación
+                    // Fallback: sin targets ni estudiante → notificar coordinación vía WhatsApp
                     if (empty($targets) && !$studentId) {
                         $targetRole = 'COORDINADOR';
                         $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *INCIDENTE*\nReportado por: {$role}\nDetalle: {$reason}";
@@ -590,6 +622,35 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             if (!empty($fRow['phone'])) {
                                 enqueueTwilioJob($fRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
                             }
+                        }
+                    }
+
+                    // Internal notifications (DB) for COORDINADOR and RECTOR
+                    $reporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                    $incMeta = json_encode([
+                        'reporter_name' => $reporterName,
+                        'reporter_role' => $role,
+                        'location' => $params['location'] ?? 'No especificada',
+                        'reason' => $reason,
+                        'targets' => $targets,
+                        'action' => 'incidente',
+                    ], JSON_UNESCAPED_UNICODE);
+
+                    $incNotifRoles = [];
+                    if (in_array('coordinacion', $targets) || empty($targets)) $incNotifRoles[] = 'COORDINADOR';
+                    if (in_array('rector', $targets)) $incNotifRoles[] = 'RECTOR';
+                    foreach (array_unique($incNotifRoles) as $incRole) {
+                        $incStmt2 = $conn->prepare("
+                            SELECT user_id FROM users
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?) AND active = TRUE
+                        ");
+                        $incStmt2->execute([$schoolId, $incRole]);
+                        while ($incRow = $incStmt2->fetch(PDO::FETCH_ASSOC)) {
+                            $incNotif = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, ?, ?, 'SOS', ?::jsonb, NOW())
+                            ");
+                            $incNotif->execute([$schoolId, $incRow['user_id'], 'Reporte de incidente', "Nuevo incidente reportado. Ver detalles.", $incMeta]);
                         }
                     }
                 }
