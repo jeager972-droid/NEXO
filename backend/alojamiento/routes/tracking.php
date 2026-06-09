@@ -22,24 +22,30 @@ if (strpos($cleanPath, '/tracking') === 0) {
 
         try {
             // Auto-create tracking tables if they don't exist
-            $conn->exec("
-                CREATE TABLE IF NOT EXISTS student_tracking (
-                    tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-                    student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
-                    status VARCHAR(50) NOT NULL DEFAULT 'en proceso',
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
+            try {
+                $conn->exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
+                $conn->exec("
+                    CREATE TABLE IF NOT EXISTS student_tracking (
+                        tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+                        student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+                        status VARCHAR(50) NOT NULL DEFAULT 'en proceso',
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
 
-                CREATE TABLE IF NOT EXISTS student_tracking_notes (
-                    note_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                    tracking_id UUID NOT NULL REFERENCES student_tracking(tracking_id) ON DELETE CASCADE,
-                    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-                    note_text TEXT NOT NULL,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
-            ");
+                    CREATE TABLE IF NOT EXISTS student_tracking_notes (
+                        note_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        tracking_id UUID NOT NULL REFERENCES student_tracking(tracking_id) ON DELETE CASCADE,
+                        user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        note_text TEXT NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                ");
+            } catch (Throwable $setupError) {
+                // Ignore setup errors (e.g. lack of permissions for extensions)
+                error_log('Tracking setup error: ' . $setupError->getMessage());
+            }
 
             // Check if already in tracking
             $checkStmt = $conn->prepare("SELECT tracking_id FROM student_tracking WHERE student_id = ? AND school_id = ? AND status = 'en proceso'");
@@ -56,7 +62,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             $trackingId = $stmt->fetchColumn();
 
             echo json_encode(['status' => 'ok', 'message' => 'Seguimiento iniciado', 'tracking_id' => $trackingId]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Error al iniciar seguimiento', 'detail' => $e->getMessage()]);
         }
@@ -85,7 +91,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             }
 
             echo json_encode(['status' => 'ok', 'message' => 'Nota agregada']);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Error al agregar nota', 'detail' => $e->getMessage()]);
         }
@@ -121,7 +127,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             $notes = $notesStmt->fetchAll(PDO::FETCH_ASSOC);
 
             echo json_encode(['status' => 'ok', 'tracking' => $tracking, 'notes' => $notes]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles', 'detail' => $e->getMessage()]);
         }
@@ -143,7 +149,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             ");
             $stmt->execute([$schoolId]);
             echo json_encode(['status' => 'ok', 'trackings' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Error al listar seguimientos', 'detail' => $e->getMessage()]);
         }
