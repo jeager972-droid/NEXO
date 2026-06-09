@@ -23,6 +23,11 @@ if (strpos($cleanPath, '/tracking') === 0) {
         try {
             // Auto-create tracking tables if they don't exist
             try {
+                // If the user's table has INTEGER school_id, we MUST fix it by altering the column type.
+                $conn->exec("ALTER TABLE IF EXISTS student_tracking ALTER COLUMN school_id TYPE UUID USING school_id::text::uuid;");
+            } catch (Throwable $e) {}
+
+            try {
                 $conn->exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
                 $conn->exec("
                     CREATE TABLE IF NOT EXISTS student_tracking (
@@ -64,7 +69,12 @@ if (strpos($cleanPath, '/tracking') === 0) {
             echo json_encode(['status' => 'ok', 'message' => 'Seguimiento iniciado', 'tracking_id' => $trackingId]);
         } catch (Throwable $e) {
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al iniciar seguimiento', 'detail' => $e->getMessage()]);
+            $errDetail = $e->getMessage();
+            $resp = json_encode(['status' => 'error', 'message' => 'Error al iniciar seguimiento', 'detail' => $errDetail]);
+            if ($resp === false) {
+                $resp = json_encode(['status' => 'error', 'message' => 'Error al iniciar seguimiento (Fallo de codificación JSON)', 'detail' => 'Error SQL o interno con caracteres no válidos.']);
+            }
+            echo $resp;
         }
         exit;
     }
