@@ -9,7 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { ROLES } from '../config/roles';
-import { TrackingModal } from './TrackingModal';
+import { trackingApi } from '../api/tracking';
 
 const EMPTY_STATS = {
   presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
