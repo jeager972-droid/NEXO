@@ -336,8 +336,8 @@ export const ConsultationDrawer = ({
         onClick={onClose} />
       <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-        className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
+        className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
+        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
       >
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>

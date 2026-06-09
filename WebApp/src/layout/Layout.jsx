@@ -6,6 +6,7 @@ import { Menu, Bell, LogOut, Settings, ChevronDown, Search, X, Command } from 'l
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { getRoleDisplay, SIDEBAR_ITEMS, ROLES } from '../config/roles';
+import { notificationsApi } from '../api/notifications';
 import {
   Calendar, ShieldCheck, AlertOctagon, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert,
   Users, Activity, FileText, UserPlus, LayoutDashboard
@@ -106,12 +107,27 @@ const Layout = () => {
   const [profileOpen, setProfileOpen]     = useState(false);
   const [searchOpen, setSearchOpen]       = useState(false);
   const [searchQuery, setSearchQuery]     = useState('');
+  const [notifCount, setNotifCount]       = useState(0);
   const { user, logout }                  = useAuth();
   const { darkMode }                      = useTheme();
   const navigate                          = useNavigate();
   const location                          = useLocation();
   const profileRef                        = useRef(null);
   const searchRef                         = useRef(null);
+
+  // Cargar conteo inicial de notificaciones
+  useEffect(() => {
+    notificationsApi.getAll()
+      .then(data => setNotifCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => {});
+  }, []);
+
+  // Escuchar cuando Notifications vacía la lista
+  useEffect(() => {
+    const handler = (e) => setNotifCount(e.detail?.count ?? 0);
+    window.addEventListener('nexo:notif-count', handler);
+    return () => window.removeEventListener('nexo:notif-count', handler);
+  }, []);
 
   const toggleSidebar = () => setIsSidebarOpen(v => !v);
   const roleDisplay   = getRoleDisplay(user?.role);
@@ -276,10 +292,12 @@ const Layout = () => {
               title="Notificaciones"
             >
               <Bell size={18} strokeWidth={2} />
-              <span
-                className="absolute top-1 right-1 block h-2 w-2 rounded-full"
-                style={{ backgroundColor: '#00A67E', boxShadow: '0 0 0 2px ' + (darkMode ? '#020617' : '#FAFAF9') }}
-              />
+              {notifCount > 0 && (
+                <span
+                  className="absolute top-1 right-1 block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: '#00A67E', boxShadow: '0 0 0 2px ' + (darkMode ? '#020617' : '#FAFAF9') }}
+                />
+              )}
             </button>
 
             <Divider />

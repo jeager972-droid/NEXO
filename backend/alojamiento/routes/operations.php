@@ -502,7 +502,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         $coordStmt->execute([$schoolId]);
                         while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
                             try {
-                                $label = $action === 'autorizar_salida' ? 'Autorización de salida' : 'Permiso institucional';
+                                $label = $action === 'autorizar_salida' ? 'Salida autorizada' : 'Permiso';
                                 $notifStmt = $conn->prepare("
                                     INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
                                     VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
@@ -568,7 +568,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             ], JSON_UNESCAPED_UNICODE);
                             $solNotif = $conn->prepare("
                                 INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, 'Solicitud interna', ?, 'INFO', ?::jsonb, NOW())
+                                VALUES (?, ?, 'Solicitud', ?, 'INFO', ?::jsonb, NOW())
                             ");
                             $solNotif->execute([$schoolId, $params['recipient_id'], "{$senderName} te envió una solicitud. Ver detalles.", $solMeta]);
                         } catch (Throwable $e) {
@@ -663,7 +663,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                                     INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
                                     VALUES (?, ?, ?, ?, 'SOS', ?::jsonb, NOW())
                                 ");
-                                $incNotif->execute([$schoolId, $incRow['user_id'], 'Reporte de incidente', "Nuevo incidente reportado. Ver detalles.", $incMeta]);
+                                $incNotif->execute([$schoolId, $incRow['user_id'], 'Incidente', "Nuevo incidente reportado. Ver detalles.", $incMeta]);
                             } catch (Throwable $e) {
                                 error_log("[OPERATIONS] Incidente notification insert error: " . $e->getMessage());
                             }

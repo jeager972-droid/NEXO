@@ -487,8 +487,8 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-        className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ maxWidth: '440px', borderLeft: '1.5px solid #E2E8F0' }}
+        className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
+        style={{ top: '56px', bottom: 0, maxWidth: '440px', borderLeft: '1.5px solid #E2E8F0' }}
       >
         {/* Drawer header */}
         <div

@@ -9,4 +9,8 @@ export const notificationsApi = {
     const response = await client.post('/notifications', data);
     return response.data?.data ?? response.data;
   },
+  clearAll: async () => {
+    const response = await client.post('/notifications/clear');
+    return response.data;
+  },
 };

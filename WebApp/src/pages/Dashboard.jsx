@@ -278,18 +278,27 @@ const localDateStr = (date = new Date()) => {
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [groupStats, setGroupStats] = useState(null);
-  const [groupLoading, setGroupLoading] = useState(false);
+  const [groupStats, setGroupStats]       = useState(null);
+  const [groupLoading, setGroupLoading]   = useState(false);
 
   const [activeCategory, setActiveCategory] = useState(null);
-  const [detailData, setDetailData] = useState([]);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailData, setDetailData]         = useState([]);
+  const [detailLoading, setDetailLoading]   = useState(false);
+
+  // Group search dropdown state
+  const [groupOpen, setGroupOpen]   = useState(false);
+  const [groupQuery, setGroupQuery] = useState('');
 
   const todayStr = localDateStr();
-  // Usar teacherGroups si viene del backend, si no fallback a studentsByGroup
-  const groupNames = (stats?.teacherGroups?.length > 0)
-    ? stats.teacherGroups
-    : Object.keys(stats?.studentsByGroup || {});
+  const groupNames = [...new Set(
+    (stats?.teacherGroups?.length > 0)
+      ? stats.teacherGroups
+      : Object.keys(stats?.studentsByGroup || {})
+  )];
+
+  const filteredGroups = groupQuery.trim()
+    ? groupNames.filter(g => g.toLowerCase().includes(groupQuery.toLowerCase()))
+    : groupNames;
 
   // Fetch per-group stats when group changes
   useEffect(() => {
@@ -345,38 +354,70 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       ) : (
         <>
-          {/* Group selector */}
-          <div style={{ border: '1.5px solid #E2E8F0' }} className="p-5 bg-white dark:bg-slate-900">
-            <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Seleccionar Grupo
-            </p>
-            <select
-              value={selectedGroup}
-              onChange={e => setSelectedGroup(e.target.value)}
-              className="w-full p-3 text-sm font-bold outline-none dark:bg-slate-800 dark:text-white"
-              style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', color: '#0F172A' }}
+          {/* Group selector — searchable dropdown */}
+          <div style={{ border: '1.5px solid #E2E8F0', position: 'relative' }} className="bg-white dark:bg-slate-900">
+            <button
+              onClick={() => setGroupOpen(v => !v)}
+              className="w-full flex items-center justify-between px-5 py-3.5 text-left"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              <option value="">— Elegir grupo —</option>
-              {groupNames.map(g => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-            {groupNames.length === 0 && (
-              <p className="mt-2 text-xs text-amber-600 font-semibold">
-                No se encontraron grupos asignados. Verifique su asignación en horarios.
-              </p>
-            )}
+              <div>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>Grupo seleccionado</p>
+                <p className="text-sm font-black dark:text-white" style={{ color: selectedGroup ? '#003366' : '#CBD5E1', marginTop: '2px' }}>
+                  {selectedGroup || '— Elegir grupo —'}
+                </p>
+              </div>
+              <Search size={15} strokeWidth={2} className="text-slate-300 shrink-0" />
+            </button>
+
+            {/* Dropdown panel */}
+            <AnimatePresence>
+              {groupOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 right-0 z-30 bg-white dark:bg-slate-900 shadow-xl"
+                  style={{ top: '100%', border: '1.5px solid #E2E8F0', borderTop: 'none', maxHeight: '260px', overflowY: 'auto' }}
+                >
+                  {/* Search input */}
+                  <div className="sticky top-0 bg-white dark:bg-slate-900 px-3 py-2" style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <div className="relative">
+                      <Search size={13} strokeWidth={2} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Buscar grupo…"
+                        value={groupQuery}
+                        onChange={e => setGroupQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 text-xs outline-none dark:bg-slate-900 dark:text-white"
+                        style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', fontWeight: 600, color: '#0F172A' }}
+                      />
+                    </div>
+                  </div>
+
+                  {filteredGroups.length === 0 ? (
+                    <p className="px-4 py-3 text-xs text-slate-400 text-center">Sin resultados</p>
+                  ) : (
+                    filteredGroups.map(g => (
+                      <button
+                        key={g}
+                        onClick={() => { setSelectedGroup(g); setGroupOpen(false); setGroupQuery(''); }}
+                        className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        style={{ color: g === selectedGroup ? '#003366' : '#334155', background: g === selectedGroup ? 'rgba(0,51,102,0.04)' : 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid #F8FAFC' }}
+                      >
+                        {g}
+                      </button>
+                    ))
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Warning: no group selected */}
-          {!selectedGroup && (
-            <div className="flex items-center gap-3 p-5 bg-white dark:bg-slate-900" style={{ border: '1.5px solid #E2E8F0' }}>
-              <CalendarDays size={20} strokeWidth={1.5} className="text-slate-300 shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">Seleccione un grupo para ver el control de asistencia del día</p>
-                <p style={{ fontSize: '11px', color: '#94A3B8' }}>Los datos provienen del nodo de control en tiempo real</p>
-              </div>
-            </div>
+          {groupNames.length === 0 && (
+            <p className="text-xs text-amber-600 font-semibold">No se encontraron grupos asignados. Verifique su asignación en horarios.</p>
           )}
 
           {/* Warning: group selected but no activity today */}
@@ -483,8 +524,8 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
         onClick={onClose} />
       <motion.div key="t-dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-        className="fixed right-0 inset-y-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
+        className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
+        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
       >
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>

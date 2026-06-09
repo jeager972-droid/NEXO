@@ -228,6 +228,22 @@ if ($cleanPath === '/notifications') {
     exit;
 }
 
+// DELETE /notifications — vaciar todas las notificaciones del usuario
+if ($cleanPath === '/notifications/clear' && $method === 'POST') {
+    $authUser = requireAuth();
+    try {
+        $stmt = $conn->prepare("DELETE FROM notifications WHERE user_id = ?");
+        $stmt->execute([$authUser['id']]);
+        securityLog('NOTIFICATIONS_CLEARED', "User:{$authUser['id']}");
+        echo json_encode(['status' => 'ok', 'message' => 'Notificaciones eliminadas']);
+    } catch (Throwable $e) {
+        securityLog('NOTIFICATIONS_CLEAR_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al vaciar notificaciones']);
+    }
+    exit;
+}
+
 if ($cleanPath === '/consultation/search') {
     $authUser = requireAuth();
     $term = trim((string)($_GET['q'] ?? ''));
@@ -437,7 +453,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     ], JSON_UNESCAPED_UNICODE);
                     $notifStmt = $conn->prepare("
                         INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                        VALUES (?, ?, 'Reagendamiento — motivo recibido', ?, 'INFO', ?::jsonb, NOW())
+                        VALUES (?, ?, 'Reagendamiento', ?, 'INFO', ?::jsonb, NOW())
                     ");
                     $notifStmt->execute([
                         $schoolId,
