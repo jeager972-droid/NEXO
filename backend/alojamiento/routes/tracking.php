@@ -107,4 +107,26 @@ if (strpos($cleanPath, '/tracking') === 0) {
         }
         exit;
     }
+
+    if ($cleanPath === '/tracking/active' && $method === 'GET') {
+        try {
+            $stmt = $conn->prepare("
+                SELECT st.tracking_id, st.student_id, st.status, st.updated_at,
+                       s.first_name, s.last_name, s.document_number,
+                       ag.group_name
+                FROM student_tracking st
+                JOIN students s ON st.student_id = s.student_id
+                LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+                LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
+                WHERE st.school_id = ? AND st.status = 'en proceso'
+                ORDER BY st.updated_at DESC
+            ");
+            $stmt->execute([$schoolId]);
+            echo json_encode(['status' => 'ok', 'trackings' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Error al listar seguimientos', 'detail' => $e->getMessage()]);
+        }
+        exit;
+    }
 }

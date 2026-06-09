@@ -561,6 +561,9 @@ const ENUM_ES_D = {
   SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)', WRONG_CLASSROOM: 'Salón incorrecto',
   INGRESO_NORMAL: 'Ingreso normal', INGRESO_TARDE: 'Ingreso tarde',
   class: 'Salida de clase', school: 'Salida del colegio', trip: 'Salida pedagógica',
+  RISK_ALERT_HIGH: 'Riesgo Alto', RISK_ALERT_MEDIUM: 'Riesgo Medio', RISK_ALERT_LOW: 'Riesgo Bajo',
+  LATE_ARRIVAL: 'Llegada Tarde', EARLY_EXIT: 'Salida Temprana', EVASION_INTERNA: 'Evasión Interna',
+  SPAM_BIOMETRIC: 'Spam Biométrico', BIOMETRIC_FAILURE: 'Falla Biometría', UNAUTHORIZED_ABSENCE: 'Fuga'
 };
 function humanizeDetailVal(v) {
   if (v === null || v === undefined) return '—';
@@ -583,21 +586,19 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
   const filteredData = searchQuery.trim()
     ? sorted.filter(row =>
-        (`${row.last_name} ${row.first_name}`).toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (row.document_number || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (`${row.last_name} ${row.first_name}`).toLowerCase().includes(searchQuery.toLowerCase())
       )
     : sorted;
 
   const getColumns = () => {
     const base = [
       { key: '_student', label: 'Estudiante' },
-      { key: 'document_number', label: 'Documento' },
       { key: 'group_name', label: 'Grupo' },
     ];
     switch (category) {
       case 'present':  return [...base, { key: 'last_entry',  label: 'Último ingreso' }];
       case 'absent':   return [...base, { key: 'absent_since', label: 'Desde' }];
-      case 'alert':    return [...base, { key: 'alert_type', label: 'Tipo de alerta' }, { key: 'alert_at', label: 'Fecha' }, { key: '_action', label: 'Acción' }];
+      case 'alert':    return [...base, { key: 'alert_type', label: 'Evento' }, { key: 'alert_at', label: 'Fecha' }, { key: '_action', label: 'Acción' }];
       case 'permiso':  return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
       default:         return base;
     }
@@ -607,31 +608,37 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
   const [trackingModalOpen, setTrackingModalOpen] = useState(false);
   const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
+  const [trackedStudents, setTrackedStudents] = useState(new Set());
 
   const openTracking = (studentId, studentName) => {
     setSelectedTrackingTarget({ studentId, studentName });
     setTrackingModalOpen(true);
+    // Mark as tracked visually
+    setTrackedStudents(prev => new Set(prev).add(studentId));
   };
 
   const renderCell = (col, row) => {
     if (col.key === '_student') {
       return (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
-               style={{ backgroundColor: '#003366' }}>
-            {(row.last_name || row.first_name || '?').charAt(0)}
-          </div>
-          <span className="font-bold">{row.last_name} {row.first_name}</span>
-        </div>
+        <span className="font-bold">{row.last_name} {row.first_name}</span>
       );
     }
     if (col.key === '_action') {
+      const isTracked = trackedStudents.has(row.student_id);
       return (
         <button 
           onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
-          className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:bg-[#003366]/10 px-2 py-1 rounded transition-colors"
+          className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors flex items-center justify-end gap-1 w-full ${
+            isTracked 
+              ? "text-[#00A67E] bg-[#00A67E]/10" 
+              : "text-[#003366] hover:bg-[#003366]/10"
+          }`}
         >
-          Ver
+          {isTracked ? (
+            <>✓ En Seguimiento</>
+          ) : (
+            <>Empezar Seguimiento</>
+          )}
         </button>
       );
     }
@@ -665,7 +672,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                 {config?.label} — {groupName}
               </p>
               <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
-                {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''} · Orden alfabético
+                {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -681,7 +688,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar por apellido, nombre o documento…"
+              placeholder="Buscar..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"

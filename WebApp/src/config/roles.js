@@ -45,6 +45,12 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
   },
   {
+    title: 'Seguimiento',
+    path: '/seguimiento',
+    icon: FileText,
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR, ROLES.PSICORIENTADOR]
+  },
+  {
     title: 'Consulta',
     path: '/consulta',
     icon: Search,

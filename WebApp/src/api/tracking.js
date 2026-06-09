@@ -6,6 +6,11 @@ export const trackingApi = {
     return response.data;
   },
 
+  getActive: async () => {
+    const response = await apiClient.get('/tracking/active');
+    return response.data;
+  },
+
   addNote: async (trackingId, noteText, status = null) => {
     const response = await apiClient.post('/tracking/notes', { 
       tracking_id: trackingId, 

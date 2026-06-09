@@ -19,6 +19,7 @@ const Consultation = lazy(() => import('./pages/Consultation'))
 const Enrollment = lazy(() => import('./pages/Enrollment'))
 const Unauthorized = lazy(() => import('./pages/Unauthorized'))
 const Audit = lazy(() => import('./pages/Audit'))
+const Seguimiento = lazy(() => import('./pages/Seguimiento'))
 const Downloads  = lazy(() => import('./pages/Downloads'))
 const InstallPage = lazy(() => import('./pages/InstallPage'))
 const Profile = lazy(() => import('./pages/Profile'))
@@ -112,6 +113,13 @@ function App() {
                   element={<ProtectedRoute allowedRoles={Object.values(ROLES)} />}
                 >
                   <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
+                </Route>
+
+                <Route
+                  path="/seguimiento"
+                  element={<ProtectedRoute allowedRoles={[ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR, ROLES.PSICORIENTADOR]} />}
+                >
+                  <Route index element={<ErrorBoundary><Seguimiento /></ErrorBoundary>} />
                 </Route>
 
                 <Route

@@ -81,16 +81,17 @@ if ($cleanPath === '/dashboard/stats') {
         $absentStmt->execute($groupName ? [$schoolId, $groupName] : [$schoolId]);
         $absentCount = $absentStmt->fetchColumn();
 
-        // 3. Alertas SOS (Bogotá TZ)
+        // 3. Alertas (SOS + Riesgos/Incidentes) (Bogotá TZ)
         $alertsSql = "
-            SELECT COUNT(*) FROM sos_alerts sa
-            WHERE school_id = ?
-              AND (emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
-              AND resolved = FALSE
-              " . ($groupName ? " AND sa.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . "
+            SELECT 
+                (SELECT COUNT(*) FROM sos_alerts sa WHERE sa.school_id = ? AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND sa.resolved = FALSE " . ($groupName ? " AND sa.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
+                +
+                (SELECT COUNT(*) FROM attendance_incidents ai WHERE ai.school_id = ? AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%') " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
+            AS total_alerts
         ";
         $alertsStmt = $conn->prepare($alertsSql);
-        $alertsStmt->execute($groupName ? [$schoolId, $groupName] : [$schoolId]);
+        $alertsParams = $groupName ? [$schoolId, $groupName, $schoolId, $groupName] : [$schoolId, $schoolId];
+        $alertsStmt->execute($alertsParams);
         $alertsCount = $alertsStmt->fetchColumn();
 
         // 4. Tareas pendientes (Reportes) (Bogotá TZ) — no filtrar por grupo
