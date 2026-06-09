@@ -43,6 +43,96 @@ function verifyTwilioSignature() {
     return hash_equals($expected, $provided);
 }
 
+// ── POST /contacto — public lead capture (landing page contact form) ──────────
+if ($cleanPath === '/contacto' && $method === 'POST') {
+    // Rate-limit: máx 5 solicitudes por IP por hora
+    $contactIp = md5(getRealClientIp());
+    try {
+        $rl = new Redis();
+        $rl->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+        if ($pass = getenv('REDIS_PASSWORD')) $rl->auth($pass);
+        $key = "rl:contacto:{$contactIp}";
+        $hits = $rl->incr($key);
+        if ($hits === 1) $rl->expire($key, 3600);
+        if ($hits > 5) {
+            http_response_code(429);
+            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
+            exit;
+        }
+    } catch (Throwable $e) { /* Redis down — allow */ }
+
+    $nombre      = trim((string)($input['nombre'] ?? ''));
+    $cargo       = trim((string)($input['cargo'] ?? ''));
+    $institucion = trim((string)($input['institucion'] ?? ''));
+    $municipio   = trim((string)($input['municipio'] ?? ''));
+    $email       = trim((string)($input['email'] ?? ''));
+    $whatsapp    = trim((string)($input['whatsapp'] ?? ''));
+    $mensaje     = trim((string)($input['mensaje'] ?? ''));
+
+    // Validaciones básicas
+    if ($nombre === '' || $cargo === '' || $institucion === '' || $municipio === '' || $email === '' || $whatsapp === '') {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'Todos los campos obligatorios deben completarse.']);
+        exit;
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        http_response_code(422);
+        echo json_encode(['status' => 'error', 'message' => 'Correo electrónico inválido.']);
+        exit;
+    }
+    $digits = preg_replace('/\D/', '', $whatsapp);
+    if (strlen($digits) < 10) {
+        http_response_code(422);
+        echo json_encode(['status' => 'error', 'message' => 'Número de WhatsApp inválido.']);
+        exit;
+    }
+
+    // Persistir en tabla contact_leads (crearla si no existe)
+    try {
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS contact_leads (
+                lead_id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                nombre       VARCHAR(200)  NOT NULL,
+                cargo        VARCHAR(100)  NOT NULL,
+                institucion  VARCHAR(300)  NOT NULL,
+                municipio    VARCHAR(200)  NOT NULL,
+                email        VARCHAR(254)  NOT NULL,
+                whatsapp     VARCHAR(30)   NOT NULL,
+                mensaje      TEXT,
+                ip_address   VARCHAR(45),
+                created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+            )
+        ");
+
+        $ins = $conn->prepare("
+            INSERT INTO contact_leads (nombre, cargo, institucion, municipio, email, whatsapp, mensaje, ip_address)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $ins->execute([$nombre, $cargo, $institucion, $municipio, $email, $whatsapp, $mensaje ?: null, getRealClientIp()]);
+    } catch (Throwable $e) {
+        securityLog('CONTACT_LEAD_INSERT_ERROR', $e->getMessage());
+        // No bloqueamos — igual notificamos
+    }
+
+    // Notificar al equipo por WhatsApp
+    $ownerPhone = getenv('NEXO_OWNER_WHATSAPP') ?: getenv('TWILIO_ADMIN_PHONE') ?: '';
+    if ($ownerPhone !== '' && function_exists('sendTwilioDirect')) {
+        $cargoLabel = mb_convert_case($cargo, MB_CASE_TITLE, 'UTF-8');
+        $notifMsg = "📥 *NEXO — Nueva solicitud de contacto*\n\n"
+            . "Nombre: *{$nombre}* ({$cargoLabel})\n"
+            . "Institución: {$institucion}\n"
+            . "Municipio: {$municipio}\n"
+            . "Email: {$email}\n"
+            . "WhatsApp: {$whatsapp}"
+            . ($mensaje !== '' ? "\nMensaje: {$mensaje}" : '');
+        sendTwilioDirect($ownerPhone, $notifMsg);
+    }
+
+    securityLog('CONTACT_LEAD_RECEIVED', "Email:{$email} Cargo:{$cargo} Inst:{$institucion}");
+    echo json_encode(['status' => 'ok', 'message' => 'Solicitud recibida. Nos comunicaremos contigo pronto.']);
+    exit;
+}
+
 if ($cleanPath === '/audit/logs') {
     $authUser = requireAuth(['RECTOR']);
     echo json_encode([

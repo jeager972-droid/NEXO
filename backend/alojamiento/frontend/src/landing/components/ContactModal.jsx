@@ -96,13 +96,31 @@ export default function ContactModal({ onClose }) {
 
     setStatus('loading')
 
-    // TODO: BACKEND — Reemplazar este bloque con la llamada al API real.
-    // Ejemplo: await fetch('/api/contacto', { method: 'POST', body: JSON.stringify(form) })
-    console.log('[NEXO] Solicitud de contacto:', JSON.stringify(form, null, 2))
+    try {
+      const API_BASE =
+        import.meta?.env?.VITE_API_BASE_URL ||
+        'https://nexo-production-13c0.up.railway.app/v1'
 
-    // Simula latencia de red
-    await new Promise(r => setTimeout(r, 1200))
-    setStatus('success')
+      const res = await fetch(`${API_BASE}/contacto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+
+      const json = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        const msg = json?.message || `Error ${res.status}. Inténtalo de nuevo.`
+        setErrors({ _server: msg })
+        setStatus('idle')
+        return
+      }
+
+      setStatus('success')
+    } catch (err) {
+      setErrors({ _server: 'No se pudo conectar. Revisa tu conexión e inténtalo de nuevo.' })
+      setStatus('idle')
+    }
   }
 
   const inputStyle = (field) => ({
@@ -315,6 +333,13 @@ export default function ContactModal({ onClose }) {
                   {form.mensaje.length}/300
                 </p>
               </div>
+
+              {/* Error de servidor */}
+              {errors._server && (
+                <p style={{ fontSize: '0.78rem', color: '#ff7070', textAlign: 'center', padding: '0.5rem', background: 'rgba(255,80,80,0.08)', borderRadius: '0.5rem', border: '1px solid rgba(255,80,80,0.2)' }}>
+                  {errors._server}
+                </p>
+              )}
 
               {/* Submit */}
               <button

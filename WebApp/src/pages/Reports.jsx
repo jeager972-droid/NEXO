@@ -27,11 +27,40 @@ const Reports = () => {
   }, []);
 
   const handleDownload = async () => {
+    if (!startDate || !endDate) return;
     setIsDownloading(true);
     setDownloadStatus('');
     try {
-      await reportsApi.exportReport();
-      setDownloadStatus('Informe generado.');
+      const data = await reportsApi.getReport();
+      const reportRows = Array.isArray(data) ? data : [];
+
+      if (reportRows.length === 0) {
+        setDownloadStatus('No hay datos disponibles para exportar.');
+        return;
+      }
+
+      // Generar CSV real con BOM para compatibilidad con Excel
+      const headers = ['Fecha', 'Estudiante', 'Hora', 'Tipo de evento'];
+      const csvRows = [
+        headers.join(','),
+        ...reportRows.map(r => [
+          `"${r.date ?? ''}"`,
+          `"${r.student_id ?? ''}"`,
+          `"${r.time ?? ''}"`,
+          `"${r.event_type ?? ''}"`,
+        ].join(',')),
+      ];
+      const csvContent = '\uFEFF' + csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nexo-asistencia-${startDate}-${endDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setDownloadStatus(`${reportRows.length} registros exportados.`);
     } catch (error) {
       setDownloadStatus('No fue posible generar el informe.');
     } finally {
