@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { ROLES } from '../config/roles';
+import { TrackingModal } from './TrackingModal';
 
 const EMPTY_STATS = {
   presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
@@ -146,11 +147,7 @@ const Dashboard = () => {
 // ── Command Center — Admin / Rector / Coordinador ─────────────────────────────
 
 const AdminDashboard = ({ stats, loading, navigate }) => {
-  const kpis = [
-    { label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: '#003366', delay: 0    },
-    { label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: '#0D4080', delay: 0.06 },
-    { label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12, onClick: () => navigate('/consulta?mod=Alertas') },
-  ];
+
 
   const stream = (stats.pendingTasks || []).slice(0, 8).map((t, i) => ({
     label: t.title || t.description || 'Evento registrado',
@@ -159,11 +156,48 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
     index: i,
   }));
 
-  const shortcuts = [
-    { label: 'Operación', icon: Activity, path: '/operacion' },
-    { label: 'Informes',  icon: FileText, path: '/informes'  },
-    { label: 'Consulta',  icon: Search,   path: '/consulta'  },
-    { label: 'Auditoría', icon: Users,    path: '/auditoria' },
+  const { user } = useAuth();
+  const shortcuts = user?.role === ROLES.COORDINADOR 
+    ? [
+        { label: 'Operación', icon: Activity, path: '/operacion' },
+        { label: 'Consulta',  icon: Search,   path: '/consulta'  },
+      ]
+    : [
+        { label: 'Operación', icon: Activity, path: '/operacion' },
+        { label: 'Consulta',  icon: Search,   path: '/auditoria' },
+      ];
+
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [detailData, setDetailData] = useState([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const localDateStr = (date = new Date()) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const openDetail = async (category) => {
+    setActiveCategory(category);
+    setDetailLoading(true);
+    try {
+      const today = localDateStr();
+      const res = await dashboardApi.getTeacherGroupDetail('', category, today, today);
+      if (res?.status === 'ok') setDetailData(res.data || []);
+      else setDetailData([]);
+    } catch (e) {
+      console.error(e);
+      setDetailData([]);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const kpis = [
+    { key: 'present', label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: '#003366', delay: 0    },
+    { key: 'absent',  label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: '#0D4080', delay: 0.06 },
+    { key: 'alert',   label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12 },
   ];
 
   return (
@@ -176,7 +210,7 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
             ? [1, 2, 3].map(i => <KpiSkeleton key={i} />)
             : kpis.map((k, i) => (
                 <div key={i} style={{ borderRight: i < 2 ? '1.5px solid #E2E8F0' : 'none' }}>
-                  <KpiCard {...k} />
+                  <KpiCard {...k} onClick={() => openDetail(k.key)} />
                 </div>
               ))
           }
@@ -225,6 +259,20 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
           </div>
         </section>
       </div>
+
+      {/* ── Detail Drawer ── */}
+      <AnimatePresence>
+        {activeCategory && (
+          <TeacherDetailDrawer
+            category={activeCategory}
+            groupName="Toda la Institución"
+            data={detailData}
+            loading={detailLoading}
+            emptyWarning={false}
+            onClose={() => setActiveCategory(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -540,7 +588,6 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       )
     : sorted;
 
-  // Columnas dinámicas — "Estudiante" unificado (Apellido Nombre)
   const getColumns = () => {
     const base = [
       { key: '_student', label: 'Estudiante' },
@@ -550,13 +597,21 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
     switch (category) {
       case 'present':  return [...base, { key: 'last_entry',  label: 'Último ingreso' }];
       case 'absent':   return [...base, { key: 'absent_since', label: 'Desde' }];
-      case 'alert':    return [...base, { key: 'alert_type', label: 'Tipo de alerta' }, { key: 'alert_at', label: 'Fecha' }];
+      case 'alert':    return [...base, { key: 'alert_type', label: 'Tipo de alerta' }, { key: 'alert_at', label: 'Fecha' }, { key: '_action', label: 'Acción' }];
       case 'permiso':  return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
       default:         return base;
     }
   };
 
   const columns = getColumns();
+
+  const [trackingModalOpen, setTrackingModalOpen] = useState(false);
+  const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
+
+  const openTracking = (studentId, studentName) => {
+    setSelectedTrackingTarget({ studentId, studentName });
+    setTrackingModalOpen(true);
+  };
 
   const renderCell = (col, row) => {
     if (col.key === '_student') {
@@ -568,6 +623,16 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
           </div>
           <span className="font-bold">{row.last_name} {row.first_name}</span>
         </div>
+      );
+    }
+    if (col.key === '_action') {
+      return (
+        <button 
+          onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
+          className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:bg-[#003366]/10 px-2 py-1 rounded transition-colors"
+        >
+          Ver
+        </button>
       );
     }
     const v = row[col.key];
@@ -637,7 +702,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                 <thead>
                   <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
                     {columns.map(col => (
-                      <th key={col.key} className="px-4 py-3 text-left"
+                      <th key={col.key} className={col.key === '_action' ? "px-4 py-3 text-right" : "px-4 py-3 text-left"}
                         style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
                         {col.label}
                       </th>
@@ -649,7 +714,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                       style={{ borderBottom: i < filteredData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                       {columns.map(col => (
-                        <td key={col.key} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        <td key={col.key} className={col.key === '_action' ? "px-4 py-3 text-right" : "px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap"}>
                           {renderCell(col, row)}
                         </td>
                       ))}
@@ -680,6 +745,17 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
           )}
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {trackingModalOpen && selectedTrackingTarget && (
+          <TrackingModal
+            isOpen={trackingModalOpen}
+            onClose={() => setTrackingModalOpen(false)}
+            studentId={selectedTrackingTarget.studentId}
+            studentName={selectedTrackingTarget.studentName}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 };

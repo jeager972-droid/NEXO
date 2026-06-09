@@ -11,7 +11,7 @@ if ($cleanPath === '/consultations/query') {
 
     $module = filter_var($input['module'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $groupName = filter_var($input['group_name'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
-    $studentId = filter_var($input['student_id'] ?? '', FILTER_VALIDATE_INT);
+    $studentId = filter_var($input['student_id'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $fromDate = filter_var($input['from_date'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $toDate = filter_var($input['to_date'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $userRoleUpper = strtoupper($role ?? '');

@@ -221,16 +221,22 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     $fromDate = $_GET['from_date'] ?? gmdate('Y-m-d');
     $toDate = $_GET['to_date'] ?? gmdate('Y-m-d');
 
-    if (!$groupName || !in_array($category, ['present', 'absent', 'alert', 'permiso'])) {
+    if (!in_array($category, ['present', 'absent', 'alert', 'permiso'])) {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'group_name y category requeridos']);
+        echo json_encode(['status' => 'error', 'message' => 'Category requerida']);
         exit;
     }
 
     try {
         // Verificar que el docente tenga este grupo asignado (via schedules)
         $validGroup = true;
-        if ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR') {
+        $isTeacher = ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR');
+        if ($isTeacher) {
+            if (!$groupName) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'group_name requerido para docentes']);
+                exit;
+            }
             $checkStmt = $conn->prepare("
                 SELECT 1 FROM schedules sch
                 JOIN academic_groups ag ON ag.group_id = sch.group_id
@@ -248,6 +254,10 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
         }
 
         $data = [];
+        $groupJoin = $groupName ? "JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE JOIN academic_groups ag ON ag.group_id = sga.group_id" : "LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id";
+        $groupWhere = $groupName ? "AND ag.group_name = ?" : "";
+        $params = [$fromDate, $toDate, $schoolId];
+        if ($groupName) $params[] = $groupName;
 
         switch ($category) {
             case 'present':
@@ -255,18 +265,17 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                     SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
                            ag.group_name, MAX(be.event_timestamp) as last_entry
                     FROM students s
-                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    {$groupJoin}
                     LEFT JOIN biometric_events be ON be.student_id = s.student_id
                         AND be.event_type LIKE 'INGRESO_%'
                         AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date
                             BETWEEN ? AND ?
-                    WHERE s.school_id = ? AND ag.group_name = ?
+                    WHERE s.school_id = ? {$groupWhere}
                     GROUP BY s.student_id, s.first_name, s.last_name, s.document_number, ag.group_name
                     HAVING MAX(be.event_timestamp) IS NOT NULL
                     ORDER BY last_entry DESC
                 ");
-                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 break;
 
@@ -275,16 +284,15 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                     SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
                            ag.group_name, ai.detected_at as absent_since
                     FROM students s
-                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
                         AND ai.incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
                         AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
                             BETWEEN ? AND ?
-                    WHERE s.school_id = ? AND ag.group_name = ?
+                    WHERE s.school_id = ? {$groupWhere}
                     ORDER BY absent_since DESC
                 ");
-                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 break;
 
@@ -293,19 +301,19 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                     SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
                            ag.group_name, ai.incident_type as alert_type, ai.detected_at as alert_at
                     FROM students s
-                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
-                        AND ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA',
+                        AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA',
                                                   'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE',
                                                   'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE',
-                                                  'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC')
+                                                  'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC', 'SOS')
+                             OR ai.incident_type LIKE 'RISK_ALERT%')
                         AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
                             BETWEEN ? AND ?
-                    WHERE s.school_id = ? AND ag.group_name = ?
+                    WHERE s.school_id = ? {$groupWhere}
                     ORDER BY alert_at DESC
                 ");
-                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 break;
 
@@ -316,16 +324,15 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                            ai.detected_at as permiso_at,
                            ai.metadata_json->>'reason' as reason
                     FROM students s
-                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                    JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
                         AND ai.incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                         AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
                             BETWEEN ? AND ?
-                    WHERE s.school_id = ? AND ag.group_name = ?
+                    WHERE s.school_id = ? {$groupWhere}
                     ORDER BY permiso_at DESC
                 ");
-                $stmt->execute([$fromDate, $toDate, $schoolId, $groupName]);
+                $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 break;
         }
