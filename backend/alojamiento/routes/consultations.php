@@ -183,16 +183,30 @@ if ($cleanPath === '/consultations/query') {
             case 'Vulneraciones':
             case 'Alertas':
                 $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, ai.incident_type, ai.detected_at
+                    SELECT s.first_name, s.last_name, ai.incident_type, ai.detected_at, ai.metadata_json, s.student_id
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
-                    WHERE ai.school_id = ? AND ai.incident_type IN ('INCIDENTE', 'DAÑO', 'SOS')
+                    WHERE ai.school_id = ? AND (ai.incident_type IN ('INCIDENTE', 'DAÑO', 'SOS') OR ai.incident_type LIKE 'RISK_ALERT%')
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
                 $stmt->execute([$schoolId]);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'incident_type' => 'Tipo', 'detected_at' => 'Fecha'];
+                break;
+
+            case 'Seguimiento Estudiantil':
+                $stmt = $conn->prepare("
+                    SELECT s.first_name, s.last_name, s.document_number, st.status, st.updated_at, st.tracking_id, st.student_id
+                    FROM student_tracking st
+                    JOIN students s ON st.student_id = s.student_id
+                    WHERE st.school_id = ?
+                    ORDER BY CASE WHEN st.status = 'en proceso' THEN 1 ELSE 2 END, st.updated_at DESC
+                    LIMIT 100
+                ");
+                $stmt->execute([$schoolId]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'document_number' => 'Documento', 'status' => 'Estado', 'updated_at' => 'Última Act.'];
                 break;
 
             case 'Mensajes Enviados':

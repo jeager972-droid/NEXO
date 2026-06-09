@@ -30,20 +30,24 @@ if ($cleanPath === '/groups') {
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
             if (empty($groups)) {
                 $stmt = $conn->prepare("
-                    SELECT group_id as id, group_name as name, grade_level
-                    FROM academic_groups
-                    WHERE school_id = ?
-                    ORDER BY grade_level, group_name
+                    SELECT ag.group_id as id, ag.group_name as name, ag.grade_level, COUNT(sga.student_id) as student_count
+                    FROM academic_groups ag
+                    LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
+                    WHERE ag.school_id = ?
+                    GROUP BY ag.group_id, ag.group_name, ag.grade_level
+                    ORDER BY COUNT(sga.student_id) DESC, ag.grade_level, ag.group_name
                 ");
                 $stmt->execute([$schoolId]);
                 $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
         } else {
             $stmt = $conn->prepare("
-                SELECT group_id as id, group_name as name, grade_level
-                FROM academic_groups
-                WHERE school_id = ?
-                ORDER BY grade_level, group_name
+                SELECT ag.group_id as id, ag.group_name as name, ag.grade_level, COUNT(sga.student_id) as student_count
+                FROM academic_groups ag
+                LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
+                WHERE ag.school_id = ?
+                GROUP BY ag.group_id, ag.group_name, ag.grade_level
+                ORDER BY COUNT(sga.student_id) DESC, ag.grade_level, ag.group_name
             ");
             $stmt->execute([$schoolId]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);

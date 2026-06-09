@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { studentsApi } from '../api/students';
+import { TrackingModal } from './TrackingModal';
 
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -47,6 +48,20 @@ function formatCellValue(key, value) {
   }
   // Humanizar enums conocidos
   const sv = String(value).trim();
+  if (sv === 'en proceso') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 border border-amber-200">
+        En Proceso
+      </span>
+    );
+  }
+  if (sv === 'resuelto') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200">
+        Resuelto
+      </span>
+    );
+  }
   if (ENUM_LABELS[sv]) return ENUM_LABELS[sv];
   if (ENUM_LABELS[sv.toUpperCase()]) return ENUM_LABELS[sv.toUpperCase()];
   if (sv.length > 100) return sv.slice(0, 100) + '…';
@@ -392,6 +407,13 @@ export const ConsultationDrawer = ({
   fromDate, setFromDate, toDate, setToDate, onQuery, onClose, error
 }) => {
   const keys = Object.keys(dynamicColumns);
+  const [trackingModalOpen, setTrackingModalOpen] = useState(false);
+  const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
+
+  const openTracking = (studentId, studentName, trackingId = null, metadata = null) => {
+    setSelectedTrackingTarget({ studentId, studentName, trackingId, metadata });
+    setTrackingModalOpen(true);
+  };
 
   return (
     <>
@@ -445,7 +467,7 @@ export const ConsultationDrawer = ({
                 <table className="w-full min-w-[440px]">
                   <thead>
                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
-                      {['Estudiante', 'Grupo', 'Score', 'Nivel'].map(h => (
+                      {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map(h => (
                         <th key={h} className="px-4 py-3 text-left"
                           style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>
                       ))}
@@ -478,6 +500,14 @@ export const ConsultationDrawer = ({
                           </span>
                         </td>
                         <td className="px-4 py-4"><RiskBadge level={s.risk_level} /></td>
+                        <td className="px-4 py-4 text-right">
+                          <button 
+                            onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`)}
+                            className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:underline"
+                          >
+                            Empezar Seguimiento
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -494,6 +524,11 @@ export const ConsultationDrawer = ({
                           {dynamicColumns[k]}
                         </th>
                       ))}
+                      {['Seguimiento Estudiantil', 'Alertas'].includes(item) && (
+                        <th className="px-4 py-3 text-right" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                          Acción
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-slate-900">
@@ -505,6 +540,16 @@ export const ConsultationDrawer = ({
                             {formatCellValue(k, row[k])}
                           </td>
                         ))}
+                        {['Seguimiento Estudiantil', 'Alertas'].includes(item) && row.student_id && (
+                          <td className="px-4 py-3 text-right">
+                            <button 
+                              onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json)}
+                              className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:bg-[#003366]/10 px-2 py-1 rounded transition-colors"
+                            >
+                              Ver
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -522,6 +567,22 @@ export const ConsultationDrawer = ({
           </div>
         )}
       </motion.div>
+
+      <AnimatePresence>
+        {trackingModalOpen && selectedTrackingTarget && (
+          <TrackingModal
+            trackingId={selectedTrackingTarget.trackingId}
+            studentId={selectedTrackingTarget.studentId}
+            studentName={selectedTrackingTarget.studentName}
+            metadata={selectedTrackingTarget.metadata}
+            onClose={() => setTrackingModalOpen(false)}
+            onRefresh={() => {
+              if (onQuery) onQuery(); // Refresh if teacher module
+              // If not teacher module, we might want to reload the dynamicData but typically just rely on next open.
+            }}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 };

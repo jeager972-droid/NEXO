@@ -18,7 +18,7 @@ const ALL_SUBS = [
   'Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario',
   'Salidas clase', 'Salidas colegio', 'Salidas pedagógicas',
   'Retornos pendientes', 'Historial permisos', 'Permisos emitidos',
-  'Alertas SOS emitidas', 'Evasiones internas'
+  'Alertas SOS emitidas', 'Evasiones internas', 'Seguimiento Estudiantil'
 ];
 
 const Audit = () => {
@@ -49,7 +49,7 @@ const Audit = () => {
       id: 'disciplina',
       title: 'Disciplina',
       icon: ShieldAlert,
-      subdivisions: ['Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario'],
+      subdivisions: ['Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario', 'Seguimiento Estudiantil'],
       exports: ['Excel', 'PDF']
     },
     {
@@ -79,7 +79,7 @@ const Audit = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Auditoría</p>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Consulta</p>
         <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
           Panel de control de registros de la institución educativa {user?.school_name || ''}
         </p>

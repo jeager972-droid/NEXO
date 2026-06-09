@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
@@ -22,6 +23,7 @@ const Consultation = () => {
   const [dynamicData, setDynamicData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState({});
   const [loadingData, setLoadingData] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Query params for teacher modules
   const [groups, setGroups] = useState([]);
@@ -43,13 +45,18 @@ const Consultation = () => {
   const [queryError, setQueryError] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState('');
 
-  // Load groups on mount (solo grupos asignados al docente)
   useEffect(() => {
     const isTeacherRole = user?.role === 'DOCENTE' || user?.role === 'PSICORIENTADOR';
     studentsApi.getGroups(isTeacherRole)
       .then(data => setGroups(Array.isArray(data) ? data : []))
       .catch(err => console.error('Error loading groups', err));
-  }, [user?.role]);
+      
+    const mod = searchParams.get('mod');
+    if (mod) {
+      setActiveItem(mod);
+      setSearchParams({}, { replace: true });
+    }
+  }, [user?.role, searchParams, setSearchParams]);
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 
@@ -139,7 +146,7 @@ const Consultation = () => {
       { 
         title: 'Incidentes', 
         icon: ShieldAlert, 
-        items: ['Spam Biométrico', 'Vulneraciones', 'Alertas', 'Métricas de Seguridad'] 
+        items: ['Spam Biométrico', 'Vulneraciones', 'Alertas', 'Seguimiento Estudiantil'] 
       },
       { 
         title: 'Permisos', 

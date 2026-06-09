@@ -58,9 +58,12 @@ const SectionLabel = ({ title, sub }) => (
   </div>
 );
 
-const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0 }) => (
-  <motion.div
-    className="bg-white dark:bg-slate-900 p-6 space-y-3"
+const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0, onClick }) => {
+  const Component = onClick ? motion.button : motion.div;
+  return (
+  <Component
+    onClick={onClick}
+    className="bg-white dark:bg-slate-900 p-6 space-y-3 w-full text-left"
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.28, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -78,8 +81,9 @@ const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0 
     <p style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
       {sub}
     </p>
-  </motion.div>
-);
+  </Component>
+  );
+};
 
 const StreamRow = ({ label, time, type = 'default', index }) => {
   const dot = type === 'alert' ? '#EF4444' : type === 'bio' ? '#00A67E' : '#003366';
@@ -145,7 +149,7 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
   const kpis = [
     { label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: '#003366', delay: 0    },
     { label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: '#0D4080', delay: 0.06 },
-    { label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12 },
+    { label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12, onClick: () => navigate('/consulta?mod=Alertas') },
   ];
 
   const stream = (stats.pendingTasks || []).slice(0, 8).map((t, i) => ({

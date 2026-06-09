@@ -606,7 +606,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold truncate">{u.last_name}, {u.first_name}</p>
+                              <p className="font-semibold truncate">{u.last_name} {u.first_name}</p>
                               <p className="text-[10px] opacity-70 truncate">{u.email}</p>
                             </div>
                             {formData.targetUser === u.user_id && (

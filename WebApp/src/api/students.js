@@ -9,7 +9,7 @@ const getSchoolId = () => {
 const normalizeStudent = (student) => ({
   ...student,
   id: student.id ?? student.student_id ?? null,
-  name: `${student.last_name || ''}, ${student.first_name || ''}`.trim(),
+  name: `${student.last_name || ''} ${student.first_name || ''}`.trim(),
   group: student.group_name || student.group || 'Sin grupo',
   fingerprintId: student.fingerprint_id || null,
 });
@@ -67,6 +67,19 @@ export const studentsApi = {
     if (teacherOnly) params.teacher_only = '1';
     const response = await client.get('/groups', { params: Object.keys(params).length ? params : undefined });
     const rows = response.data?.data ?? response.data ?? [];
-    return Array.isArray(rows) ? rows : [];
+    if (!Array.isArray(rows)) return [];
+
+    // Deduplicate groups like '6A' and '6-A'
+    const deduped = [];
+    const seen = new Set();
+    for (const g of rows) {
+      const norm = (g.name || g.group_name || '').replace(/[\s\-]/g, '').toUpperCase();
+      if (!norm) continue;
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        deduped.push(g);
+      }
+    }
+    return deduped;
   },
 };
