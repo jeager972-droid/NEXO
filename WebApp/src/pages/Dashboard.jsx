@@ -627,6 +627,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
           setLocalData(prev => prev.filter(r => r.student_id !== studentId));
         }, 1500);
       } else {
+        alert("Error al iniciar seguimiento: " + (res.message || "Error del servidor"));
         // Revert on error
         setTrackedStudents(prev => {
           const next = new Set(prev);
@@ -636,6 +637,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       }
     } catch (e) {
       console.error(e);
+      alert("Error de conexión al iniciar el seguimiento.");
       setTrackedStudents(prev => {
         const next = new Set(prev);
         next.delete(studentId);

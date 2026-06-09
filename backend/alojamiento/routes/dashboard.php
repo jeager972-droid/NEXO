@@ -301,7 +301,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                 $stmt = $conn->prepare("
                     SELECT ai.incident_id, ai.incident_type as alert_type, ai.detected_at as alert_at, ai.student_id,
                            s.first_name, s.last_name, s.document_number,
-                           STRING_AGG(ag.group_name, ', ') as group_name
+                           STRING_AGG(DISTINCT ag.group_name, ', ') as group_name
                     FROM students s
                     {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
