@@ -480,47 +480,97 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 };
 
 /* ── Teacher Detail Drawer ── */
+
+const MONTHS_ES_D = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtDetailDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const day = d.getDate();
+  const month = MONTHS_ES_D[d.getMonth()];
+  const year = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return (hh === '00' && mm === '00') ? `${day} ${month} ${year}` : `${day} ${month} ${year}, ${hh}:${mm}`;
+}
+const ENUM_ES_D = {
+  LATE_ARRIVAL: 'Llegada tarde', EARLY_EXIT: 'Salida anticipada', EARLY_DEPARTURE: 'Salida anticipada',
+  UNAUTHORIZED_ABSENCE: 'Inasistencia', EVASION_INTERNA: 'Evasión interna',
+  CHECK_IN: 'Entrada', CHECK_OUT: 'Salida', MATCH: 'Coincidencia', NO_MATCH: 'Sin coincidencia',
+  SUCCESS: 'Exitoso', FAILED: 'Fallido', PENDING: 'Pendiente', APPROVED: 'Aprobado', REJECTED: 'Rechazado',
+  SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)', WRONG_CLASSROOM: 'Salón incorrecto',
+  INGRESO_NORMAL: 'Ingreso normal', INGRESO_TARDE: 'Ingreso tarde',
+  class: 'Salida de clase', school: 'Salida del colegio', trip: 'Salida pedagógica',
+};
+function humanizeDetailVal(v) {
+  if (v === null || v === undefined) return '—';
+  const s = String(v).trim();
+  return ENUM_ES_D[s] || ENUM_ES_D[s.toUpperCase()] || s;
+}
+
 const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning, onClose }) => {
   const config = CATEGORY_LABELS[category];
   const Icon = config?.icon || Users;
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Sort alphabetically by last_name then first_name
+  const sorted = [...data].sort((a, b) => {
+    const la = (a.last_name || '').toLowerCase();
+    const lb = (b.last_name || '').toLowerCase();
+    if (la !== lb) return la.localeCompare(lb, 'es');
+    return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase(), 'es');
+  });
+
   const filteredData = searchQuery.trim()
-    ? data.filter(row =>
-        (row.first_name + ' ' + row.last_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+    ? sorted.filter(row =>
+        (`${row.last_name} ${row.first_name}`).toLowerCase().includes(searchQuery.toLowerCase()) ||
         (row.document_number || '').toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : data;
+    : sorted;
 
-  // Columnas dinámicas según categoría
+  // Columnas dinámicas — "Estudiante" unificado (Apellido Nombre)
   const getColumns = () => {
     const base = [
-      { key: 'first_name', label: 'Nombre' },
-      { key: 'last_name', label: 'Apellido' },
+      { key: '_student', label: 'Estudiante' },
       { key: 'document_number', label: 'Documento' },
       { key: 'group_name', label: 'Grupo' },
     ];
     switch (category) {
-      case 'present':
-        return [...base, { key: 'last_entry', label: 'Último ingreso' }];
-      case 'absent':
-        return [...base, { key: 'absent_since', label: 'Desde' }];
-      case 'alert':
-        return [...base, { key: 'alert_type', label: 'Tipo alerta' }, { key: 'alert_at', label: 'Fecha' }];
-      case 'permiso':
-        return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
-      default:
-        return base;
+      case 'present':  return [...base, { key: 'last_entry',  label: 'Último ingreso' }];
+      case 'absent':   return [...base, { key: 'absent_since', label: 'Desde' }];
+      case 'alert':    return [...base, { key: 'alert_type', label: 'Tipo de alerta' }, { key: 'alert_at', label: 'Fecha' }];
+      case 'permiso':  return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
+      default:         return base;
     }
   };
 
   const columns = getColumns();
 
+  const renderCell = (col, row) => {
+    if (col.key === '_student') {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
+               style={{ backgroundColor: '#003366' }}>
+            {(row.last_name || row.first_name || '?').charAt(0)}
+          </div>
+          <span className="font-bold">{row.last_name} {row.first_name}</span>
+        </div>
+      );
+    }
+    const v = row[col.key];
+    if (v === null || v === undefined) return '—';
+    if (col.key.includes('_at') || col.key.includes('entry') || col.key.includes('since')) {
+      return fmtDetailDate(v);
+    }
+    return humanizeDetailVal(v);
+  };
+
   return (
     <>
       <motion.div key="t-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }} className="fixed inset-0 z-40"
-        style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+        transition={{ duration: 0.2 }} className="fixed z-40"
+        style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
         onClick={onClose} />
       <motion.div key="t-dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
@@ -538,7 +588,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                 {config?.label} — {groupName}
               </p>
               <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
-                Detalle por estudiante
+                {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''} · Orden alfabético
               </p>
             </div>
           </div>
@@ -554,7 +604,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar por nombre o documento…"
+              placeholder="Buscar por apellido, nombre o documento…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"
@@ -587,24 +637,17 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                       style={{ borderBottom: i < filteredData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                       {columns.map(col => (
-                        <td key={col.key} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                          {col.key === 'first_name' ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
-                                   style={{ backgroundColor: '#003366' }}>
-                                {row.first_name?.charAt(0)}
-                              </div>
-                              <span>{row.first_name}</span>
-                            </div>
-                          ) : (
-                            row[col.key] ?? '—'
-                          )}
+                        <td key={col.key} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {renderCell(col, row)}
                         </td>
                       ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200">
+                <p className="text-[10px] text-slate-400 font-medium">{filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}</p>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
@@ -628,6 +671,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
     </>
   );
 };
+
 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 

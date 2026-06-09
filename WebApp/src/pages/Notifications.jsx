@@ -15,6 +15,9 @@ function emitCount(count) {
   window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
 }
 
+// Clave para marcar notificaciones como vistas en la sesión
+const SEEN_KEY = 'nexo:notif-seen';
+
 const Notifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
@@ -30,7 +33,10 @@ const Notifications = () => {
         const data = await notificationsApi.getAll();
         const list = Array.isArray(data) ? data : [];
         setNotifications(list);
-        emitCount(list.length);
+        // Al entrar a la pantalla de notificaciones, marcarlas como vistas:
+        // el punto verde desaparece y se persiste en sessionStorage
+        emitCount(0);
+        sessionStorage.setItem(SEEN_KEY, 'true');
       } catch (error) {
         console.error('Error fetching notifications', error);
       } finally {
@@ -75,36 +81,35 @@ const Notifications = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">
-            {isStaff ? 'Centro de Órdenes' : 'Notificaciones'}
-          </p>
-          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
+      <div>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">
+          {isStaff ? 'Centro de Órdenes' : 'Notificaciones'}
+        </p>
+        <div className="flex items-center gap-4 mt-1">
+          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
             {isStaff ? 'Instrucciones directas de directivos' : 'Alertas y mensajes del sistema institucional'}
           </p>
+          {/* Botón vaciar — inline junto al subtítulo */}
+          {notifications.length > 0 && (
+            <button
+              onClick={handleClear}
+              disabled={clearing}
+              className="flex items-center gap-1 shrink-0 transition-colors"
+              style={{
+                fontSize: '9px', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
+                color: clearing ? '#CBD5E1' : '#94A3B8',
+                cursor: clearing ? 'not-allowed' : 'pointer',
+                background: 'none', border: 'none', padding: '0',
+              }}
+            >
+              {clearing
+                ? <Loader2 size={10} className="animate-spin" />
+                : <Trash2 size={10} strokeWidth={2} />
+              }
+              Vaciar
+            </button>
+          )}
         </div>
-
-        {/* Botón vaciar */}
-        {notifications.length > 0 && (
-          <button
-            onClick={handleClear}
-            disabled={clearing}
-            className="flex items-center gap-1.5 transition-colors"
-            style={{
-              fontSize: '9px', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
-              color: clearing ? '#CBD5E1' : '#EF4444',
-              cursor: clearing ? 'not-allowed' : 'pointer',
-              background: 'none', border: 'none', padding: '4px 0',
-            }}
-          >
-            {clearing
-              ? <Loader2 size={12} className="animate-spin" />
-              : <Trash2 size={12} strokeWidth={2} />
-            }
-            Vaciar lista
-          </button>
-        )}
       </div>
 
       {/* Card */}
@@ -193,8 +198,8 @@ const Notifications = () => {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40"
-              style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+              className="fixed z-40"
+              style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
               onClick={() => setDetailNotif(null)}
             />
             <motion.div

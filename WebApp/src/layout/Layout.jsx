@@ -116,7 +116,13 @@ const Layout = () => {
   const searchRef                         = useRef(null);
 
   // Cargar conteo inicial de notificaciones
+  // Si ya se visitó la página de notificaciones esta sesión, el punto arranca en 0
   useEffect(() => {
+    const alreadySeen = sessionStorage.getItem('nexo:notif-seen') === 'true';
+    if (alreadySeen) {
+      setNotifCount(0);
+      return;
+    }
     notificationsApi.getAll()
       .then(data => setNotifCount(Array.isArray(data) ? data.length : 0))
       .catch(() => {});

@@ -141,8 +141,8 @@ const Audit = () => {
         {activeSub && (
           <>
             <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }} className="fixed inset-0 z-40"
-              style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+              transition={{ duration: 0.2 }} className="fixed z-40"
+              style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
               onClick={() => setActiveSub(null)} />
             <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
@@ -174,8 +174,8 @@ const Audit = () => {
         {exportModal && (
           <>
             <motion.div key="ex-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }} className="fixed inset-0 z-50"
-              style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+              transition={{ duration: 0.2 }} className="fixed z-50"
+              style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
               onClick={() => setExportModal(null)} />
             <motion.div key="ex-md" initial={{ opacity: 0, scale: 0.96, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 20 }}
               transition={{ duration: 0.2 }}
@@ -324,7 +324,6 @@ const COLUMN_LABELS = {
   'ultimo_intento': 'Último intento',
   'periodo': 'Período',
   'accion': 'Acción',
-  'detalles': 'Detalles',
   'creado': 'Creado',
   'ip': 'IP',
   'usuario': 'Usuario',
@@ -548,7 +547,14 @@ function AuditDrawer({ activeSub, onClose }) {
           <SearchableSelect
             label="Estudiante"
             placeholder="Todos los estudiantes del grupo"
-            options={students.map(s => ({ id: s.student_id, name: `${s.last_name}, ${s.first_name}` }))}
+            options={[...students]
+              .sort((a, b) => {
+                const la = (a.last_name || '').toLowerCase();
+                const lb = (b.last_name || '').toLowerCase();
+                if (la !== lb) return la.localeCompare(lb, 'es');
+                return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase(), 'es');
+              })
+              .map(s => ({ id: s.student_id, name: `${s.last_name} ${s.first_name}` }))}
             value={filters.studentId}
             onChange={v => setFilters(p => ({ ...p, studentId: v }))}
           />
@@ -558,7 +564,14 @@ function AuditDrawer({ activeSub, onClose }) {
           <SearchableSelect
             label="Personal"
             placeholder={metaLoading ? 'Cargando personal…' : 'Todo el personal'}
-            options={staff.map(u => ({ id: u.user_id, name: `${u.last_name}, ${u.first_name} — ${u.role_name}` }))}
+            options={[...staff]
+              .sort((a, b) => {
+                const la = (a.last_name || '').toLowerCase();
+                const lb = (b.last_name || '').toLowerCase();
+                if (la !== lb) return la.localeCompare(lb, 'es');
+                return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase(), 'es');
+              })
+              .map(u => ({ id: u.user_id, name: `${u.last_name} ${u.first_name} — ${u.role_name}` }))}
             value={filters.staffId}
             onChange={v => setFilters(p => ({ ...p, staffId: v }))}
           />

@@ -39,9 +39,12 @@ function formatCellValue(key, value) {
     const d = new Date(value);
     if (!isNaN(d)) return fmtShortDateOnly(value);
   }
-  const s = String(value);
-  if (s.length > 100) return s.slice(0, 100) + '…';
-  return s;
+  // Humanizar enums conocidos
+  const sv = String(value).trim();
+  if (ENUM_LABELS[sv]) return ENUM_LABELS[sv];
+  if (ENUM_LABELS[sv.toUpperCase()]) return ENUM_LABELS[sv.toUpperCase()];
+  if (sv.length > 100) return sv.slice(0, 100) + '…';
+  return sv;
 }
 
 const COLUMN_LABELS = {
@@ -58,7 +61,30 @@ function humanizeColumn(key) {
   return COLUMN_LABELS[key] || key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 }
 
-const EXCLUDE_COLS = ['school_id','student_id','guardian_id','incident_id','alert_id','metadata_json','command_payload'];
+const EXCLUDE_COLS = [
+  'school_id','student_id','guardian_id','incident_id','alert_id','metadata_json','command_payload',
+  'sync_hash','event_signature','biometric_hash','device_id','event_id','log_id','audit_id',
+  'assignment_id','schedule_id','classroom_id','report_export_id','command_id','twilio_message_id',
+  'relationship_id','staff_record_id','previous_data','new_data',
+];
+
+// Enums conocidos a español
+const ENUM_LABELS = {
+  LATE_ARRIVAL: 'Llegada tarde', EARLY_EXIT: 'Salida anticipada', EARLY_DEPARTURE: 'Salida anticipada',
+  UNAUTHORIZED_ABSENCE: 'Inasistencia', EVASION_INTERNA: 'Evasión interna',
+  CHECK_IN: 'Entrada', CHECK_OUT: 'Salida', MATCH: 'Coincidencia', NO_MATCH: 'Sin coincidencia',
+  SUCCESS: 'Exitoso', FAILED: 'Fallido', PENDING: 'Pendiente', APPROVED: 'Aprobado', REJECTED: 'Rechazado',
+  SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)', WRONG_CLASSROOM: 'Salón incorrecto',
+  INGRESO_NORMAL: 'Ingreso normal', INGRESO_TARDE: 'Ingreso tarde',
+  class: 'Salida de clase', school: 'Salida del colegio', trip: 'Salida pedagógica',
+  INASISTENCIA: 'Inasistencia', CITACION: 'Citación a acudiente', AUTORIZAR_SALIDA: 'Autorización de salida',
+  PERMISO: 'Permiso', SOLICITUD: 'Solicitud interna', PEDAGOGICA: 'Salida pedagógica',
+  NOTIFY_ROLE: 'Notificación', INBOUND: 'Entrante', OUTBOUND: 'Saliente',
+  DELIVERED: 'Entregado', UNDELIVERED: 'No entregado', READ: 'Leído', SENT: 'Enviado',
+  RECTOR: 'Rector', COORDINADOR: 'Coordinador', DOCENTE: 'Docente', SECRETARIA: 'Secretaria',
+  PORTERO: 'Portero', AUXILIAR: 'Auxiliar', PSICORIENTADOR: 'Psicorientador', SUPER_RECTOR: 'Super Rector',
+  CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo',
+};
 
 const RiskBadge = ({ level }) => {
   const [color, border, bg] = level === 'CRITICAL'
@@ -171,10 +197,17 @@ const TeacherQueryPanel = ({
     name: `${g.name || g.group_name}${g.grade_level ? ` (${g.grade_level})` : ''}`
   }));
 
-  const studentOptions = students.map(s => ({
-    id: String(s.id || s.student_id),
-    name: `${s.last_name || ''}, ${s.first_name || ''}`.trim()
-  }));
+  const studentOptions = [...students]
+    .sort((a, b) => {
+      const la = (a.last_name || '').toLowerCase();
+      const lb = (b.last_name || '').toLowerCase();
+      if (la !== lb) return la.localeCompare(lb, 'es');
+      return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase(), 'es');
+    })
+    .map(s => ({
+      id: String(s.id || s.student_id),
+      name: `${s.last_name || ''} ${s.first_name || ''}`.trim()
+    }));
 
   return (
     <div className="flex-1 flex flex-col p-0 overflow-hidden bg-white dark:bg-slate-900">
@@ -331,8 +364,8 @@ export const ConsultationDrawer = ({
   return (
     <>
       <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }} className="fixed inset-0 z-40"
-        style={{ backgroundColor: 'rgba(2,6,23,0.5)', backdropFilter: 'blur(2px)' }}
+        transition={{ duration: 0.2 }} className="fixed z-40"
+        style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
         onClick={onClose} />
       <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
@@ -387,16 +420,23 @@ export const ConsultationDrawer = ({
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-slate-900">
-                    {riskStudents.map((s, i) => (
+                    {[...riskStudents]
+                      .sort((a, b) => {
+                        const la = (a.last_name || '').toLowerCase();
+                        const lb = (b.last_name || '').toLowerCase();
+                        if (la !== lb) return la.localeCompare(lb, 'es');
+                        return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase(), 'es');
+                      })
+                      .map((s, i, arr) => (
                       <tr key={s.student_id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                        style={{ borderBottom: i < riskStudents.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        style={{ borderBottom: i < arr.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
                                  style={{ backgroundColor: '#003366' }}>
-                              {s.first_name.charAt(0)}
+                              {(s.last_name || s.first_name || '?').charAt(0)}
                             </div>
-                            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.first_name} {s.last_name}</span>
+                            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.last_name} {s.first_name}</span>
                           </div>
                         </td>
                         <td className="px-4 py-4"><span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{s.group_name}</span></td>
@@ -429,8 +469,8 @@ export const ConsultationDrawer = ({
                       <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                         style={{ borderBottom: i < dynamicData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         {keys.map(k => (
-                          <td key={k} className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            {row[k]}
+                          <td key={k} className="px-4 py-3 text-[11px] text-slate-700 dark:text-slate-300 whitespace-nowrap max-w-[200px] truncate">
+                            {formatCellValue(k, row[k])}
                           </td>
                         ))}
                       </tr>
