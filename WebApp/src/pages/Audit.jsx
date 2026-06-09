@@ -142,7 +142,7 @@ const Audit = () => {
           <>
             <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }} className="fixed z-40"
-              style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
+              style={{ top: '52px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
               onClick={() => setActiveSub(null)} />
             <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
@@ -175,7 +175,7 @@ const Audit = () => {
           <>
             <motion.div key="ex-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }} className="fixed z-50"
-              style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
+              style={{ top: '52px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
               onClick={() => setExportModal(null)} />
             <motion.div key="ex-md" initial={{ opacity: 0, scale: 0.96, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 20 }}
               transition={{ duration: 0.2 }}
@@ -399,9 +399,21 @@ const VALUE_LABELS = {
   'UNAUTHORIZED_ABSENCE': 'Inasistencia no autorizada',
   'EVASION_INTERNA': 'Evasión interna',
   'WRONG_CLASSROOM': 'Salón incorrecto',
-  'class': 'Salida de clase',
-  'school': 'Salida del colegio',
-  'trip': 'Salida pedagógica',
+  'CITACION_CONFIRMADA': 'Citación confirmada',
+  'CITACION_REAGENDADA': 'Citación reagendada',
+  'AUTORIZAR': 'Salida autorizada',
+  'PARTIAL_MATCH': 'Coincidencia parcial',
+  'SPOOF_DETECTED': 'Intento de fraude',
+  'LIVENESS_FAIL': 'Prueba de vida fallida',
+  'TIMEOUT': 'Tiempo agotado',
+  'PANIC': 'Pánico',
+  'ALARM': 'Alarma',
+  'SOS_ALERT': 'Alerta SOS',
+  'COMPORTAMIENTO': 'Comportamiento',
+  'ACADEMICO': 'Académico',
+  'SALUD': 'Salud',
+  'DISCIPLINA': 'Disciplina',
+  'OTRO': 'Otro',
   'Salida de clase': 'Salida de clase',
   'Salida del colegio': 'Salida del colegio',
   'Salida pedagogica': 'Salida pedagógica',
@@ -919,9 +931,11 @@ function fmtShortDate(iso) {
   const day = d.getDate();
   const month = MONTHS_ES[d.getMonth()];
   const year = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, '0');
+  let h = d.getHours();
   const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${day} ${month} ${year}, ${hh}:${mm}`;
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return `${day} ${month} ${year}, ${h}:${mm} ${ampm}`;
 }
 
 function fmtShortDateOnly(iso) {

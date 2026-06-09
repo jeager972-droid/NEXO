@@ -634,8 +634,62 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             ]);
 
             securityLog('CITACION_REAGENDAMIENTO_NOTIFICADO', "Guardian:$guardianId School:$schoolId");
-        } else {
-            securityLog('CITACION_RESPUESTA_NO_VALIDA', "Guardian:$guardianId Body:$body");
+        // ── Caso D: Acudiente responde '9' — salida no autorizada ──
+        if ($trimBody === '9') {
+            $salidaCtxRaw = null;
+            try {
+                if ($redisConv) {
+                    $salidaCtxRaw = $redisConv->get('salida_context:' . $normalizedFrom);
+                }
+            } catch (Throwable $e) {}
+
+            if ($salidaCtxRaw) {
+                $salidaCtx = json_decode($salidaCtxRaw, true);
+                $issuerUserId = $salidaCtx['issuer_user_id'] ?? null;
+                $sName = $salidaCtx['student_name'] ?? 'Estudiante';
+                $sId   = $salidaCtx['student_id']   ?? null;
+
+                // Responder al acudiente
+                $ackMsg = "Hemos recibido su reporte. Notificaremos a la institución de inmediato.";
+                sendTwilioDirect($from, $ackMsg);
+
+                // Notificación interna al emisor del permiso (coordinador/rector)
+                if ($issuerUserId) {
+                    try {
+                        $salMeta = json_encode([
+                            'student_name'  => $sName,
+                            'student_id'    => $sId,
+                            'action'        => 'salida_no_autorizada',
+                            'guardian_phone'=> $from,
+                        ], JSON_UNESCAPED_UNICODE);
+                        $salNotif = $conn->prepare("
+                            INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                            VALUES (?, ?, 'Salida no autorizada', ?, 'ALERT', ?::jsonb, NOW())
+                        ");
+                        $salNotif->execute([
+                            $schoolId,
+                            $issuerUserId,
+                            "El acudiente de {$sName} marcó la salida autorizada como un ERROR. Verificar de inmediato.",
+                            $salMeta
+                        ]);
+                    } catch (Throwable $e) {
+                        securityLog('SALIDA_NOAUTH_NOTIF_ERROR', $e->getMessage());
+                    }
+                }
+
+                // Limpiar contexto de Redis
+                try {
+                    if ($redisConv) $redisConv->del('salida_context:' . $normalizedFrom);
+                } catch (Throwable $e) {}
+
+                securityLog('SALIDA_REPORTADA_NO_AUTORIZADA', "Guardian:$guardianId Student:$sId");
+            } else {
+                // No hay contexto de salida — ignorar silenciosamente
+                securityLog('TWILIO_INBOUND_9_NO_CONTEXT', "Guardian:$guardianId From:$from");
+            }
+
+            echo '<Response></Response>';
+            exit;
         }
 
         echo '<Response></Response>';

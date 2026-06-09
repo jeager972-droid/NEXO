@@ -476,7 +476,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
         className="fixed z-40"
-        style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
+        style={{ top: '52px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
         onClick={onClose}
       />
 

@@ -7,15 +7,21 @@ import { studentsApi } from '../api/students';
 
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-function fmtShortDate(iso) {
+function fmt12h(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return iso;
   const day = d.getDate();
   const month = MONTHS_ES[d.getMonth()];
   const year = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${day} ${month} ${year}, ${hh}:${mm}`;
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return `${day} ${month} ${year}, ${h}:${m} ${ampm}`;
+}
+
+function fmtShortDate(iso) {
+  return fmt12h(iso);
 }
 
 function fmtShortDateOnly(iso) {
@@ -68,22 +74,48 @@ const EXCLUDE_COLS = [
   'relationship_id','staff_record_id','previous_data','new_data',
 ];
 
-// Enums conocidos a español
+// Enums conocidos a español — listado exhaustivo de valores reales del backend
 const ENUM_LABELS = {
-  LATE_ARRIVAL: 'Llegada tarde', EARLY_EXIT: 'Salida anticipada', EARLY_DEPARTURE: 'Salida anticipada',
-  UNAUTHORIZED_ABSENCE: 'Inasistencia', EVASION_INTERNA: 'Evasión interna',
-  CHECK_IN: 'Entrada', CHECK_OUT: 'Salida', MATCH: 'Coincidencia', NO_MATCH: 'Sin coincidencia',
-  SUCCESS: 'Exitoso', FAILED: 'Fallido', PENDING: 'Pendiente', APPROVED: 'Aprobado', REJECTED: 'Rechazado',
-  SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)', WRONG_CLASSROOM: 'Salón incorrecto',
+  // Tipos de eventos biométricos
+  CHECK_IN: 'Entrada', CHECK_OUT: 'Salida', LATE_ARRIVAL: 'Llegada tarde',
+  EARLY_EXIT: 'Salida anticipada', EARLY_DEPARTURE: 'Salida anticipada',
   INGRESO_NORMAL: 'Ingreso normal', INGRESO_TARDE: 'Ingreso tarde',
+  WRONG_CLASSROOM: 'Salón incorrecto', EVASION_INTERNA: 'Evasión interna',
+  // Resultados de reconocimiento
+  MATCH: 'Coincidencia', NO_MATCH: 'Sin coincidencia',
+  PARTIAL_MATCH: 'Coincidencia parcial', SPOOF_DETECTED: 'Intento de fraude',
+  LIVENESS_FAIL: 'Prueba de vida fallida', TIMEOUT: 'Tiempo agotado',
+  // Estados generales
+  SUCCESS: 'Exitoso', FAILED: 'Fallido', PENDING: 'Pendiente',
+  APPROVED: 'Aprobado', REJECTED: 'Rechazado', SENT: 'Enviado',
+  DELIVERED: 'Entregado', UNDELIVERED: 'No entregado', READ: 'Leído',
+  // Alertas / SOS
+  SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)',
+  SOS_ALERT: 'Alerta SOS', PANIC: 'Pánico', ALARM: 'Alarma',
+  // Incidentes
+  INASISTENCIA: 'Inasistencia', UNAUTHORIZED_ABSENCE: 'Inasistencia',
+  CITACION: 'Citación a acudiente', CITACION_CONFIRMADA: 'Citación confirmada',
+  CITACION_REAGENDADA: 'Citación reagendada',
+  AUTORIZAR_SALIDA: 'Salida autorizada', AUTORIZAR: 'Salida autorizada',
+  PERMISO: 'Permiso de salida', PEDAGOGICA: 'Salida pedagógica',
+  SOLICITUD: 'Solicitud interna', DAÑO: 'Daño físico',
+  INCIDENTE: 'Incidente', HORARIO: 'Cambio de horario',
+  NOTIFY_ROLE: 'Notificación interna',
+  // Tipos de salida / permiso
   class: 'Salida de clase', school: 'Salida del colegio', trip: 'Salida pedagógica',
-  INASISTENCIA: 'Inasistencia', CITACION: 'Citación a acudiente', AUTORIZAR_SALIDA: 'Autorización de salida',
-  PERMISO: 'Permiso', SOLICITUD: 'Solicitud interna', PEDAGOGICA: 'Salida pedagógica',
-  NOTIFY_ROLE: 'Notificación', INBOUND: 'Entrante', OUTBOUND: 'Saliente',
-  DELIVERED: 'Entregado', UNDELIVERED: 'No entregado', READ: 'Leído', SENT: 'Enviado',
-  RECTOR: 'Rector', COORDINADOR: 'Coordinador', DOCENTE: 'Docente', SECRETARIA: 'Secretaria',
-  PORTERO: 'Portero', AUXILIAR: 'Auxiliar', PSICORIENTADOR: 'Psicorientador', SUPER_RECTOR: 'Super Rector',
+  // Dirección mensajes
+  INBOUND: 'Entrante', OUTBOUND: 'Saliente',
+  // Roles
+  RECTOR: 'Rector', SUPER_RECTOR: 'Super Rector', COORDINADOR: 'Coordinador',
+  DOCENTE: 'Docente', SECRETARIA: 'Secretaria', PORTERO: 'Portero',
+  AUXILIAR: 'Auxiliar', PSICORIENTADOR: 'Psicorientador',
+  // Niveles de riesgo
   CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo',
+  // Boolean-like strings
+  TRUE: 'Sí', FALSE: 'No',
+  // Tipos de cita / motivo
+  COMPORTAMIENTO: 'Comportamiento', ACADEMICO: 'Académico', SALUD: 'Salud',
+  DISCIPLINA: 'Disciplina', OTRO: 'Otro',
 };
 
 const RiskBadge = ({ level }) => {
@@ -365,7 +397,7 @@ export const ConsultationDrawer = ({
     <>
       <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }} className="fixed z-40"
-        style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
+        style={{ top: '52px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
         onClick={onClose} />
       <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}

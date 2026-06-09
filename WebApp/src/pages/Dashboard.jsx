@@ -164,9 +164,9 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
 
   return (
     <div className="space-y-6">
-      {/* ── Real-Time Insights ── */}
+      {/* ── Estadísticas del Día ── */}
       <section>
-        <SectionLabel title="Real-Time Insights" sub="Estado biométrico en tiempo real" />
+        <SectionLabel title="Estadísticas del Día" sub="Datos de la institución en tiempo real" />
         <div className="grid grid-cols-1 md:grid-cols-3" style={{ border: '1.5px solid #E2E8F0' }}>
           {loading
             ? [1, 2, 3].map(i => <KpiSkeleton key={i} />)
@@ -180,9 +180,9 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* ── Live Stream ── */}
+        {/* ── Eventos Recientes ── */}
         <section className="lg:col-span-2">
-          <SectionLabel title="Live Stream" sub="Eventos institucionales recientes" />
+          <SectionLabel title="Eventos Recientes" sub="Últimas novedades institucionales" />
           <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
             {loading
               ? <StreamSkeleton />
@@ -199,7 +199,7 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
           </div>
         </section>
 
-        {/* ── Action Shortcuts ── */}
+        {/* ── Accesos Rápidos ── */}
         <section>
           <SectionLabel title="Accesos Rápidos" sub="Módulos del sistema" />
           <div style={{ border: '1.5px solid #E2E8F0' }}>
@@ -289,12 +289,20 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const [groupOpen, setGroupOpen]   = useState(false);
   const [groupQuery, setGroupQuery] = useState('');
 
+  // Normalizar nombre de grupo: quitar guiones, espacios y convertir a minúsculas para comparar
+  const normalizeGroup = g => String(g || '').replace(/[\s\-]/g, '').toLowerCase();
   const todayStr = localDateStr();
-  const groupNames = [...new Set(
-    (stats?.teacherGroups?.length > 0)
-      ? stats.teacherGroups
-      : Object.keys(stats?.studentsByGroup || {})
-  )];
+  const rawGroups = (stats?.teacherGroups?.length > 0)
+    ? stats.teacherGroups
+    : Object.keys(stats?.studentsByGroup || {});
+  // Deduplicar por nombre normalizado — si hay "6A" y "6-A", preferir el que tiene datos (teacherGroups es API-first)
+  const groupNames = Object.values(
+    rawGroups.reduce((acc, g) => {
+      const key = normalizeGroup(g);
+      if (!acc[key]) acc[key] = g;
+      return acc;
+    }, {})
+  );
 
   const filteredGroups = groupQuery.trim()
     ? groupNames.filter(g => g.toLowerCase().includes(groupQuery.toLowerCase()))
@@ -489,14 +497,14 @@ function fmtDetailDate(iso) {
   const day = d.getDate();
   const month = MONTHS_ES_D[d.getMonth()];
   const year = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2,'0');
+  let h = d.getHours();
   const mm = String(d.getMinutes()).padStart(2,'0');
-  return (hh === '00' && mm === '00') ? `${day} ${month} ${year}` : `${day} ${month} ${year}, ${hh}:${mm}`;
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  if (h === 12 && mm === '00' && ampm === 'am') return `${day} ${month} ${year}`;
+  return `${day} ${month} ${year}, ${h}:${mm} ${ampm}`;
 }
 const ENUM_ES_D = {
-  LATE_ARRIVAL: 'Llegada tarde', EARLY_EXIT: 'Salida anticipada', EARLY_DEPARTURE: 'Salida anticipada',
-  UNAUTHORIZED_ABSENCE: 'Inasistencia', EVASION_INTERNA: 'Evasión interna',
-  CHECK_IN: 'Entrada', CHECK_OUT: 'Salida', MATCH: 'Coincidencia', NO_MATCH: 'Sin coincidencia',
   SUCCESS: 'Exitoso', FAILED: 'Fallido', PENDING: 'Pendiente', APPROVED: 'Aprobado', REJECTED: 'Rechazado',
   SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)', WRONG_CLASSROOM: 'Salón incorrecto',
   INGRESO_NORMAL: 'Ingreso normal', INGRESO_TARDE: 'Ingreso tarde',
@@ -570,7 +578,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
     <>
       <motion.div key="t-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }} className="fixed z-40"
-        style={{ top: '56px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
+        style={{ top: '52px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
         onClick={onClose} />
       <motion.div key="t-dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}

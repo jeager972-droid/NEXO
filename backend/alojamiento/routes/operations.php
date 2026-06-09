@@ -514,11 +514,51 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
 
-                    // NOTE: permiso and autorizar_salida NO LONGER send WhatsApp to guardians (requested by user)
+                    // Autorizar salida: enviar WhatsApp al acudiente avisándole
+                    if ($action === 'autorizar_salida' && !empty($stuMeta)) {
+                        $guardsStmt = $conn->prepare("
+                            SELECT g.guardian_id, g.whatsapp_phone, u.phone AS guardian_user_phone
+                            FROM guardians g
+                            JOIN guardian_student_relationships gsr ON gsr.guardian_id = g.guardian_id AND gsr.student_id = ? AND gsr.primary_guardian = TRUE
+                            LEFT JOIN users u ON u.user_id = g.user_id
+                            WHERE g.school_id = ?
+                            LIMIT 1
+                        ");
+                        $guardsStmt->execute([$studentId, $schoolId]);
+                        $gRow = $guardsStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($gRow && !empty($gRow['whatsapp_phone'])) {
+                            $sName = trim($studentName);
+                            $issuerName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? ''));
+                            $salidaMsg = "\xF0\x9F\x9F\xA2 *NEXO — Salida autorizada*\n\nSe ha permitido la salida de *{$sName}* del colegio.\n\nSi usted no autorizó esto o fue un error, responda *9* a este mensaje y le notificaremos a la institución inmediatamente.";
+                            $sendResult = enqueueTwilioJob($gRow['whatsapp_phone'], $salidaMsg, $schoolId, $studentId, $gRow['guardian_id'], $userId, 'AUTORIZAR_SALIDA');
+
+                            // Guardar contexto en Redis para manejar respuesta '9'
+                            try {
+                                $redisCtx = new Redis();
+                                $redisCtx->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+                                if ($pass = getenv('REDIS_PASSWORD')) $redisCtx->auth($pass);
+                                $redisCtx->select((int)(getenv('REDIS_DB') ?: 0));
+                                $normalizedPhone = preg_replace('/[^0-9+]/', '', $gRow['whatsapp_phone']);
+                                $ctxPayload = json_encode([
+                                    'action' => 'autorizar_salida',
+                                    'student_id' => $studentId,
+                                    'student_name' => $sName,
+                                    'issuer_user_id' => $userId,
+                                    'school_id' => $schoolId,
+                                    'ts' => time(),
+                                ], JSON_UNESCAPED_UNICODE);
+                                $redisCtx->setex('salida_context:' . $normalizedPhone, 86400, $ctxPayload);
+                            } catch (Throwable $e) {
+                                securityLog('SALIDA_REDIS_CTX_ERROR', $e->getMessage());
+                            }
+                        }
+                    }
+
+                    // NOTE: permiso NO envía WhatsApp
                 }
 
-                // Notificación grupal para salida pedagógica o cambio de horario
-                if (in_array($action, ['pedagogica', 'horario']) && !empty($params['group'])) {
+                // Notificación grupal para cambio de horario (NO para pedagógica — sin aviso a acudientes)
+                if ($action === 'horario' && !empty($params['group'])) {
                     $groupName = filter_var($params['group'], FILTER_SANITIZE_SPECIAL_CHARS);
                     $groupStmt = $conn->prepare("
                         SELECT DISTINCT g.whatsapp_phone
@@ -528,11 +568,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         JOIN academic_groups ag ON sga.group_id = ag.group_id AND ag.group_name = ? AND ag.school_id = ?
                     ");
                     $groupStmt->execute([$groupName, $schoolId]);
-                    $actLabel = $action === 'horario' ? 'CAMBIO DE HORARIO' : 'SALIDA PEDAGÓGICA';
-                    $msg = "📢 *NEXO*\n\nSe ha registrado una *" . $actLabel . "* para el grupo *" . $groupName . "*.\n\nDetalle: {$reason}\n\nPor favor revise la plataforma para más información.";
+                    $msg = "\xF0\x9F\x93\xA2 *NEXO*\n\nHubo un *cambio de horario* para el grupo *" . $groupName . "*.\n\nPor favor esté atento a la hora de llegada de su estudiante. Detalle: {$reason}";
                     while ($gRow = $groupStmt->fetch(PDO::FETCH_ASSOC)) {
                         if (!empty($gRow['whatsapp_phone'])) {
-                            enqueueTwilioJob($gRow['whatsapp_phone'], $msg, $schoolId, null, null, $userId, strtoupper($action));
+                            enqueueTwilioJob($gRow['whatsapp_phone'], $msg, $schoolId, null, null, $userId, 'HORARIO');
                         }
                     }
                 }

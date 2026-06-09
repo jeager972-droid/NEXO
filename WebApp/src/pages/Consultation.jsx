@@ -137,24 +137,14 @@ const Consultation = () => {
     ],
     [ROLES.COORDINADOR]: [
       { 
-        title: 'Supervisión Académica', 
-        icon: Users, 
-        items: ['TODOS los grupos', 'TODOS los profesores', 'Asistencia General'] 
-      },
-      { 
         title: 'Incidentes', 
         icon: ShieldAlert, 
-        items: ['Vulneraciones', 'Alertas'] 
+        items: ['Spam Biométrico', 'Vulneraciones', 'Alertas', 'Métricas de Seguridad'] 
       },
       { 
         title: 'Permisos', 
         icon: Activity, 
-        items: ['Permisos Activos', 'Salidas Pedagógicas', 'Autorizaciones Emitidas'] 
-      },
-      { 
-        title: 'Estadísticas', 
-        icon: Activity, 
-        items: ['Métricas Institucionales', 'Grupos Críticos', 'Estudiantes Críticos', 'Reportes Históricos'] 
+        items: ['Permisos Emitidos', 'Salidas del colegio permitidas', 'Salidas Pedagógicas'] 
       }
     ],
     [ROLES.RECTOR]: [
