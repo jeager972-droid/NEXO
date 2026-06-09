@@ -299,8 +299,9 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
             case 'alert':
                 $stmt = $conn->prepare("
-                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
-                           ag.group_name, ai.incident_type as alert_type, ai.detected_at as alert_at
+                    SELECT ai.incident_id, ai.incident_type as alert_type, ai.detected_at as alert_at, ai.student_id,
+                           s.first_name, s.last_name, s.document_number,
+                           STRING_AGG(ag.group_name, ', ') as group_name
                     FROM students s
                     {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
@@ -312,7 +313,8 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                         AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date
                             BETWEEN ? AND ?
                     WHERE s.school_id = ? {$groupWhere}
-                    ORDER BY alert_at DESC
+                    GROUP BY ai.incident_id, ai.incident_type, ai.detected_at, ai.student_id, s.first_name, s.last_name, s.document_number
+                    ORDER BY ai.detected_at DESC
                 ");
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus,
   ChevronRight, LogOut, Bell, FileText, Search,
-  X, Loader2, CalendarDays
+  X, Loader2, CalendarDays, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -575,9 +575,15 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
   const config = CATEGORY_LABELS[category];
   const Icon = config?.icon || Users;
   const [searchQuery, setSearchQuery] = useState('');
+  const [localData, setLocalData] = useState([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setLocalData(data || []);
+  }, [data]);
 
   // Sort alphabetically by last_name then first_name
-  const sorted = [...data].sort((a, b) => {
+  const sorted = [...localData].sort((a, b) => {
     const la = (a.last_name || '').toLowerCase();
     const lb = (b.last_name || '').toLowerCase();
     if (la !== lb) return la.localeCompare(lb, 'es');
@@ -606,15 +612,36 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
   const columns = getColumns();
 
-  const [trackingModalOpen, setTrackingModalOpen] = useState(false);
-  const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
   const [trackedStudents, setTrackedStudents] = useState(new Set());
+  const [successModal, setSuccessModal] = useState(null); // { studentName }
 
-  const openTracking = (studentId, studentName) => {
-    setSelectedTrackingTarget({ studentId, studentName });
-    setTrackingModalOpen(true);
-    // Mark as tracked visually
+  const handleStartTracking = async (studentId, studentName) => {
     setTrackedStudents(prev => new Set(prev).add(studentId));
+    try {
+      const res = await trackingApi.startTracking(studentId);
+      if (res.status === 'ok') {
+        // Show success mini-modal
+        setSuccessModal({ studentName });
+        // After 1.5 seconds, remove from the local list so it disappears
+        setTimeout(() => {
+          setLocalData(prev => prev.filter(r => r.student_id !== studentId));
+        }, 1500);
+      } else {
+        // Revert on error
+        setTrackedStudents(prev => {
+          const next = new Set(prev);
+          next.delete(studentId);
+          return next;
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      setTrackedStudents(prev => {
+        const next = new Set(prev);
+        next.delete(studentId);
+        return next;
+      });
+    }
   };
 
   const renderCell = (col, row) => {
@@ -627,7 +654,8 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       const isTracked = trackedStudents.has(row.student_id);
       return (
         <button 
-          onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
+          onClick={() => handleStartTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
+          disabled={isTracked}
           className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors flex items-center justify-end gap-1 w-full ${
             isTracked 
               ? "text-[#00A67E] bg-[#00A67E]/10" 
@@ -754,13 +782,34 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       </motion.div>
 
       <AnimatePresence>
-        {trackingModalOpen && selectedTrackingTarget && (
-          <TrackingModal
-            isOpen={trackingModalOpen}
-            onClose={() => setTrackingModalOpen(false)}
-            studentId={selectedTrackingTarget.studentId}
-            studentName={selectedTrackingTarget.studentName}
-          />
+        {successModal && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed z-[60] bottom-6 right-6 bg-white dark:bg-slate-800 shadow-2xl rounded-lg border border-slate-200 dark:border-slate-700 p-4 max-w-sm flex flex-col gap-3"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#00A67E]/10 flex items-center justify-center text-[#00A67E] shrink-0 mt-0.5">
+                <CheckCircle2 size={18} strokeWidth={2.5} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">En Seguimiento</p>
+                <p className="text-xs text-slate-500 mt-0.5"><span className="font-bold">{successModal.studentName}</span> ha sido agregado al módulo de seguimiento exitosamente.</p>
+              </div>
+              <button onClick={() => setSuccessModal(null)} className="p-1 text-slate-400 hover:text-slate-700 transition-colors shrink-0">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex justify-end mt-1">
+              <button 
+                onClick={() => navigate('/seguimiento')}
+                className="text-[10px] font-bold uppercase tracking-widest bg-[#003366] text-white px-4 py-2 rounded shadow-sm hover:bg-[#002244] transition-colors"
+              >
+                Ir a Seguimiento
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>
