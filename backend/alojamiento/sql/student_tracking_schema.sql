@@ -2,7 +2,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS student_tracking (
     tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    school_id INTEGER NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
     status VARCHAR(50) NOT NULL DEFAULT 'en proceso',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

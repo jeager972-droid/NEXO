@@ -637,7 +637,8 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       }
     } catch (e) {
       console.error(e);
-      alert("Error de conexión al iniciar el seguimiento.");
+      const backendError = e.response?.data?.detail || e.response?.data?.message || e.message;
+      alert(`Error al iniciar el seguimiento: ${backendError}`);
       setTrackedStudents(prev => {
         const next = new Set(prev);
         next.delete(studentId);
