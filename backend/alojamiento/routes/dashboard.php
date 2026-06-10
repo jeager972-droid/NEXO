@@ -5,7 +5,7 @@ require_once __DIR__ . '/_auth_middleware.php';
 
 if ($cleanPath === '/dashboard/stats') {
     $authUser = requireAuth();
-    $schoolId = $_GET['school_id'] ?? $input['school_id'] ?? $authUser['school_id'];
+    $schoolId = $authUser['school_id'];
     $groupName = $_GET['group_name'] ?? '';
     securityLog('DASHBOARD_STATS_REQUEST', "School ID: " . ($schoolId ?? 'NULL') . " Group: " . ($groupName ?: 'ALL'));
 
@@ -148,17 +148,6 @@ if ($cleanPath === '/dashboard/stats') {
             ");
             $tgStmt->execute([$authUser['id']]);
             $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
-            // FIX: si no tiene schedules asignados, fallback a todos los grupos de la institución
-            if (empty($teacherGroups)) {
-                $tgStmt2 = $conn->prepare("
-                    SELECT DISTINCT group_name
-                    FROM academic_groups
-                    WHERE school_id = ?
-                    ORDER BY group_name
-                ");
-                $tgStmt2->execute([$schoolId]);
-                $teacherGroups = $tgStmt2->fetchAll(PDO::FETCH_COLUMN);
-            }
         } else {
             // Para otros roles, devolver todos los grupos de la institución
             $tgStmt = $conn->prepare("

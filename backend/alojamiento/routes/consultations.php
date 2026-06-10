@@ -35,17 +35,8 @@ if ($cleanPath === '/consultations/query') {
         $checkStmt->execute([$userId, $groupName]);
         $hasSchedule = (bool)$checkStmt->fetchColumn();
         if (!$hasSchedule) {
-            // Fallback: verificar que el grupo exista en la institución
-            $fallbackStmt = $conn->prepare("
-                SELECT 1 FROM academic_groups
-                WHERE school_id = ? AND group_name = ?
-                LIMIT 1
-            ");
-            $fallbackStmt->execute([$schoolId, $groupName]);
-            if (!$fallbackStmt->fetchColumn()) {
-                http_response_code(403);
-                exit(json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']));
-            }
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'No tienes acceso a este grupo.']));
         }
     }
 
@@ -166,15 +157,24 @@ if ($cleanPath === '/consultations/query') {
             case 'Historial Asistencia':
             case 'Asistencia General':
             case 'Asistencia Institucional':
+                $dateFrom = $input['date_from'] ?? null;
+                $dateTo   = $input['date_to']   ?? null;
+
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type
                     FROM biometric_events be
                     JOIN students s ON be.student_id = s.student_id
-                    WHERE be.school_id = ?
+                    WHERE be.school_id = :sid
+                      AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date
+                          BETWEEN :date_from AND :date_to
                     ORDER BY be.event_timestamp DESC
-                    LIMIT 100
+                    LIMIT 500
                 ");
-                $stmt->execute([$schoolId]);
+                $stmt->execute([
+                    ':sid'       => $schoolId,
+                    ':date_from' => $dateFrom,
+                    ':date_to'   => $dateTo,
+                ]);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Evento'];
                 break;
@@ -212,15 +212,39 @@ if ($cleanPath === '/consultations/query') {
             case 'Mensajes Enviados':
             case 'Respuestas Acudientes':
             case 'Citaciones':
-                $stmt = $conn->prepare("
-                    SELECT phone_number, type_code, message_content, sent_at, delivery_status
-                    FROM twilio_messages
-                    WHERE school_id = ? AND sender_user_id = ?
-                      AND (sent_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
-                    ORDER BY sent_at DESC
-                    LIMIT 50
-                ");
-                $stmt->execute([$schoolId, $userId, $fromDate, $toDate]);
+                $adminRoles = ['SECRETARIA', 'COORDINADOR', 'RECTOR',
+                               'SUPER_RECTOR'];
+                $isAdmin = in_array($authUser['role'], $adminRoles);
+
+                if ($isAdmin) {
+                    $stmt = $conn->prepare(
+                        "SELECT
+                             m.message_id,
+                             m.recipient_phone,
+                             m.message_body,
+                             m.status,
+                             m.created_at
+                         FROM twilio_messages m
+                         WHERE m.school_id = :sid
+                         ORDER BY m.created_at DESC
+                         LIMIT 200"
+                    );
+                    $stmt->execute([':sid' => $schoolId]);
+                } else {
+                    $stmt = $conn->prepare(
+                        "SELECT
+                             m.message_id,
+                             m.recipient_phone,
+                             m.message_body,
+                             m.direction,
+                             m.created_at
+                         FROM twilio_messages m
+                         WHERE m.school_id  = :sid
+                           AND m.teacher_id = :tid
+                         ORDER BY m.created_at DESC"
+                    );
+                    $stmt->execute([':sid' => $schoolId, ':tid' => $userId]);
+                }
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['phone_number' => 'Teléfono', 'type_code' => 'Tipo', 'message_content' => 'Mensaje', 'sent_at' => 'Enviado', 'delivery_status' => 'Estado'];
                 break;
@@ -269,26 +293,54 @@ if ($cleanPath === '/consultations/query') {
                 break;
 
             case 'Estudiantes':
-                $stmt = $conn->prepare("
-                    SELECT first_name, last_name, document_number
-                    FROM students
-                    WHERE school_id = ? AND active = TRUE
-                    ORDER BY last_name
-                    LIMIT 100
-                ");
-                $stmt->execute([$schoolId]);
+                $lastId   = $input['last_id'] ?? null;
+                $pageSize = 100;
+
+                if ($lastId) {
+                    $stmt = $conn->prepare("
+                        SELECT first_name, last_name, document_number
+                        FROM students
+                        WHERE school_id = :sid AND active = TRUE
+                          AND student_id > :last_id
+                        ORDER BY student_id ASC
+                        LIMIT :page_size
+                    ");
+                    $stmt->bindValue(':sid',       $schoolId,  PDO::PARAM_STR);
+                    $stmt->bindValue(':last_id',   $lastId,    PDO::PARAM_STR);
+                    $stmt->bindValue(':page_size', $pageSize,  PDO::PARAM_INT);
+                    $stmt->execute();
+                } else {
+                    $stmt = $conn->prepare("
+                        SELECT first_name, last_name, document_number
+                        FROM students
+                        WHERE school_id = :sid AND active = TRUE
+                        ORDER BY student_id ASC
+                        LIMIT :page_size
+                    ");
+                    $stmt->bindValue(':sid',       $schoolId, PDO::PARAM_STR);
+                    $stmt->bindValue(':page_size', $pageSize, PDO::PARAM_INT);
+                    $stmt->execute();
+                }
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'document_number' => 'Documento'];
                 break;
 
             case 'Acudientes':
-                $stmt = $conn->prepare("
-                    SELECT u.first_name, u.last_name, g.whatsapp_phone
-                    FROM guardians g
-                    JOIN users u ON g.user_id = u.user_id
-                    WHERE u.school_id = ?
-                    LIMIT 100
-                ");
+                $stmt = $conn->prepare(
+                    "SELECT
+                         g.guardian_id,
+                         g.full_name,
+                         g.phone,
+                         u.email
+                     FROM guardians g
+                     LEFT JOIN users u ON g.user_id = u.user_id
+                     INNER JOIN guardian_student_relationships gsr
+                         ON gsr.guardian_id = g.guardian_id
+                     INNER JOIN students s
+                         ON s.student_id = gsr.student_id
+                     WHERE s.school_id = ?
+                     ORDER BY g.full_name ASC"
+                );
                 $stmt->execute([$schoolId]);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'whatsapp_phone' => 'WhatsApp'];

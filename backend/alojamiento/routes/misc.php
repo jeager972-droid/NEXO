@@ -189,7 +189,7 @@ if ($cleanPath === '/notifications') {
                        n.title,
                        n.message AS desc,
                        n.metadata_json,
-                       TO_CHAR(n.created_at, 'HH24:MI') AS time,
+                       TO_CHAR(n.created_at AT TIME ZONE 'America/Bogota', 'DD/MM HH24:MI') AS time,
                        n.created_at AS occurred_at
                 FROM notifications n
                 WHERE n.user_id = ?
@@ -205,7 +205,7 @@ if ($cleanPath === '/notifications') {
                        n.type,
                        n.title,
                        n.message AS desc,
-                       TO_CHAR(n.created_at, 'HH24:MI') AS time,
+                       TO_CHAR(n.created_at AT TIME ZONE 'America/Bogota', 'DD/MM HH24:MI') AS time,
                        n.created_at AS occurred_at
                 FROM notifications n
                 WHERE n.user_id = ?
@@ -634,8 +634,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             ]);
 
             securityLog('CITACION_REAGENDAMIENTO_NOTIFICADO', "Guardian:$guardianId School:$schoolId");
-        // ── Caso D: Acudiente responde '9' — salida no autorizada ──
-        if ($trimBody === '9') {
+        } elseif ($trimBody === '9') {
             $salidaCtxRaw = null;
             try {
                 if ($redisConv) {

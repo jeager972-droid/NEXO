@@ -42,13 +42,13 @@ const Reports = () => {
       // Generar CSV real con BOM para compatibilidad con Excel
       const headers = ['Fecha', 'Estudiante', 'Hora', 'Tipo de evento'];
       const csvRows = [
-        headers.join(','),
+        headers.join(';'),
         ...reportRows.map(r => [
           `"${r.date ?? ''}"`,
           `"${r.student_id ?? ''}"`,
           `"${r.time ?? ''}"`,
           `"${r.event_type ?? ''}"`,
-        ].join(',')),
+        ].join(';')),
       ];
       const csvContent = '\uFEFF' + csvRows.join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -127,7 +127,7 @@ const Reports = () => {
             ) : (
               <>
                 <Download size={20} />
-                <span>Descargar Excel</span>
+                <span>Exportar CSV para Excel</span>
               </>
             )}
           </button>

@@ -45,7 +45,15 @@ if (!function_exists('normalizeRole')) {
             'PSICORIENTADORA' => 'PSICORIENTADOR',
             'SUPER_ADMIN' => 'RECTOR'
         ];
-        return $map[$dbRole] ?? 'DOCENTE'; // Fallback seguro al rol funcional
+        if (!isset($map[$dbRole])) {
+            error_log('[SECURITY] Rol no reconocido en normalizeRole: ' . json_encode($dbRole));
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Rol de usuario no reconocido en el sistema.']);
+            exit();
+        }
+
+        return $map[$dbRole];
     }
 }
 
@@ -381,7 +389,7 @@ if (!function_exists('requireAuth')) {
             }
 
             // FIX: Configurar el contexto de PostgreSQL para Row-Level Security (RLS) usando set_config
-            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', ?, false)");
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
             $stmtConfig->execute([(string)$user['school_id'], $normalizedRole]);
 
             return [

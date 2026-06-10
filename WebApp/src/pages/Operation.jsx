@@ -22,35 +22,49 @@ const Operation = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
 
-  const fetchData = async () => {
-    setLoading(true);
-    setFetchError('');
-    let groupsOk = false;
-    let studentsOk = false;
-    try {
-      const groupsData = await studentsApi.getGroups();
-      setGroups(Array.isArray(groupsData) ? groupsData : []);
-      groupsOk = true;
-    } catch (error) {
-      console.error('Error fetching groups', error);
-      const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener grupos';
-      setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
-    }
-    try {
-      const allStudents = await studentsApi.getAllPaginated();
-      setStudents(Array.isArray(allStudents) ? allStudents : []);
-      studentsOk = true;
-    } catch (error) {
-      console.error('Error fetching students', error);
-      const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener estudiantes';
-      setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
-    }
-    setLoading(false);
-    return { groupsOk, studentsOk };
-  };
-
   useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchData = async () => {
+      setLoading(true);
+      setFetchError('');
+      let groupsOk = false;
+      let studentsOk = false;
+      try {
+        const groupsData = await studentsApi.getGroups();
+        if (!controller.signal.aborted) {
+          setGroups(Array.isArray(groupsData) ? groupsData : []);
+          groupsOk = true;
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Error fetching groups', error);
+          const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener grupos';
+          setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
+        }
+      }
+      try {
+        const allStudents = await studentsApi.getAllPaginated();
+        if (!controller.signal.aborted) {
+          setStudents(Array.isArray(allStudents) ? allStudents : []);
+          studentsOk = true;
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Error fetching students', error);
+          const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener estudiantes';
+          setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
+        }
+      }
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+      return { groupsOk, studentsOk };
+    };
+
     fetchData();
+
+    return () => controller.abort();
   }, []);
 
   const commands = [
@@ -73,7 +87,8 @@ const Operation = () => {
       title: 'SOS',
       icon: AlertOctagon,
       roles: Object.values(ROLES),
-      fields: ['location', 'message']
+      fields: ['location', 'message'],
+      isUrgent: true
     },
     { 
       id: 'daño', 
@@ -120,7 +135,7 @@ const Operation = () => {
     }
   ];
 
-  const userRole = user?.role_name || user?.role;
+  const userRole = user?.role;
   const filteredCommands = commands.filter(cmd => userRole && cmd.roles.includes(userRole));
 
   useEffect(() => {
@@ -394,8 +409,12 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
   const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
   const [formData, setFormData]         = useState({
     group: '', student: '', date: '', time: '', timeStart: '', timeEnd: '',
-    location: '', message: '', reason: '', targetRole: '', targetUser: '', description: '', targets: [],
+    location: '', message: '', reason: '', targetRole: '', targetUser: '', description: '', targets: [], details: '',
   });
+
+  useEffect(() => {
+    setFormData(p => ({ ...p, details: '' }));
+  }, [command]);
   const [targetUsers, setTargetUsers]   = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [groupSearch, setGroupSearch]   = useState('');
@@ -427,6 +446,9 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
     setSubmitStatus({ type: '', message: '' });
     try {
       const payload = { ...formData };
+      if (command.fields.includes('reason')) payload.reason = formData.details;
+      if (command.fields.includes('message')) payload.message = formData.details;
+      if (command.fields.includes('description')) payload.description = formData.details;
       if (command.id === 'solicitud' && formData.targetUser) {
         payload.recipient_id = formData.targetUser;
       }
@@ -451,7 +473,8 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
   };
 
   const set = (field) => (e) => setFormData(prev => ({ ...prev, [field]: e.target.value }));
-  const filteredByGroup = (students || []).filter(s => (s.group || '') === formData.group);
+  const normalize = str => str.replace(/[\s\-]/g, '').toUpperCase();
+  const filteredByGroup = (students || []).filter(s => normalize(s.group || '') === normalize(formData.group || ''));
   const filteredStudents = studentSearch.trim()
     ? filteredByGroup.filter(s => (s.name || '').toLowerCase().includes(studentSearch.trim().toLowerCase()))
     : filteredByGroup;
@@ -706,8 +729,8 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
               {(command.fields.includes('reason') || command.fields.includes('message') || command.fields.includes('description')) && (
                 <FormField label="Detalles">
                   <textarea
-                    value={formData.reason || formData.message || formData.description}
-                    onChange={e => setFormData(p => ({ ...p, reason: e.target.value, message: e.target.value, description: e.target.value }))}
+                    value={formData.details || ''}
+                    onChange={e => setFormData(p => ({ ...p, details: e.target.value }))}
                     placeholder="Escribe aquí los detalles…"
                     rows={4}
                     className="resize-none dark:bg-slate-800 dark:text-white"

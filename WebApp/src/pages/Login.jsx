@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { authApi } from '../api/auth';
 
 const STAGGER = {
   container: {
@@ -39,7 +40,9 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
-  const { login }   = useAuth();
+  const [show2FA, setShow2FA]   = useState(false);
+  const [otpCode, setOtpCode]   = useState('');
+  const { login, setUser }      = useAuth();
   const navigate    = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -47,11 +50,34 @@ const Login = () => {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (result?.status === '2fa_required' || result?.requires_2fa) {
+        setShow2FA(true);
+        return;
+      }
       navigate('/');
     } catch (err) {
       console.error('Error detallado de login:', err);
-      setError(typeof err === 'string' ? err : 'Error al conectar con el servidor institucional.');
+      setError(typeof err === 'string' ? err : 'Credenciales inválidas.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const data = await authApi.verify2FA(email, otpCode);
+      if (data.user) {
+        if (setUser) setUser(data.user);
+        navigate('/');
+      } else {
+        setError('Error al verificar el código OTP.');
+      }
+    } catch (err) {
+      setError(typeof err === 'string' ? err : err.response?.data?.message || 'Código OTP inválido.');
     } finally {
       setLoading(false);
     }
@@ -125,7 +151,42 @@ const Login = () => {
             )}
           </AnimatePresence>
 
-          <FieldWrapper label="Correo Electrónico" icon={Mail}>
+          {show2FA ? (
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-slate-600 text-center mb-4">Ingresa el código de 6 dígitos enviado a tu WhatsApp.</p>
+              <input
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="Código OTP"
+                className="block w-full pl-4 pr-4 py-3.5 text-center text-xl tracking-[0.3em] font-black outline-none transition-all duration-250"
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  border: '1.5px solid #E2E8F0',
+                  borderRadius: '4px',
+                  color: '#0F172A',
+                  boxShadow: 'inset 0 1px 3px 0 rgba(0,51,102,0.04)',
+                }}
+              />
+              <motion.button
+                onClick={handleVerifyOTP}
+                disabled={loading || otpCode.length < 6}
+                type="button"
+                className="w-full flex items-center justify-center gap-3 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition-colors duration-250 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: '#003366',
+                  borderRadius: '4px',
+                  border: '1.5px solid transparent',
+                  boxShadow: '0 4px 24px -4px rgba(0,51,102,0.28)',
+                }}
+              >
+                {loading ? 'Verificando...' : 'Verificar'}
+              </motion.button>
+            </div>
+          ) : (
+            <>
+              <FieldWrapper label="Correo Electrónico" icon={Mail}>
             <input
               type="email"
               required
@@ -209,6 +270,7 @@ const Login = () => {
               )}
             </motion.button>
           </motion.div>
+          </>}
         </motion.form>
 
         {/* Footer */}

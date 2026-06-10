@@ -2,6 +2,13 @@
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+function isValidUUID($value) {
+    return (bool) preg_match(
+        '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+        (string) $value
+    );
+}
+
 if (strpos($cleanPath, '/tracking') === 0) {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];
@@ -15,6 +22,12 @@ if (strpos($cleanPath, '/tracking') === 0) {
 
     if ($cleanPath === '/tracking/start' && $method === 'POST') {
         $studentId = $input['student_id'] ?? null;
+        if ($studentId !== null && !isValidUUID($studentId)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID de estudiante con formato inválido.']);
+            exit();
+        }
         if (!$studentId) {
             http_response_code(400);
             exit(json_encode(['status' => 'error', 'message' => 'student_id es requerido']));
@@ -81,6 +94,12 @@ if (strpos($cleanPath, '/tracking') === 0) {
 
     if ($cleanPath === '/tracking/notes' && $method === 'POST') {
         $trackingId = $input['tracking_id'] ?? null;
+        if ($trackingId !== null && !isValidUUID($trackingId)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID de seguimiento con formato inválido.']);
+            exit();
+        }
         $noteText = trim($input['note_text'] ?? '');
         $status = $input['status'] ?? null;
 
@@ -90,6 +109,13 @@ if (strpos($cleanPath, '/tracking') === 0) {
         }
 
         try {
+            $ownerStmt = $conn->prepare("SELECT 1 FROM student_tracking WHERE tracking_id = ? AND school_id = ?");
+            $ownerStmt->execute([$trackingId, $schoolId]);
+            if (!$ownerStmt->fetchColumn()) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'No tienes acceso a este seguimiento.']));
+            }
+
             $stmt = $conn->prepare("INSERT INTO student_tracking_notes (tracking_id, user_id, note_text) VALUES (?, ?, ?)");
             $stmt->execute([$trackingId, $userId, $noteText]);
 
@@ -110,6 +136,12 @@ if (strpos($cleanPath, '/tracking') === 0) {
     
     if ($cleanPath === '/tracking/details' && $method === 'GET') {
         $trackingId = $_GET['tracking_id'] ?? null;
+        if ($trackingId !== null && !isValidUUID($trackingId)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID de seguimiento con formato inválido.']);
+            exit();
+        }
         if (!$trackingId) {
             http_response_code(400);
             exit(json_encode(['status' => 'error', 'message' => 'tracking_id es requerido']));

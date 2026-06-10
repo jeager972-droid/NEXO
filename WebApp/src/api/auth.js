@@ -11,6 +11,10 @@ export const authApi = {
     });
     return response.data;
   },
+  verify2FA: async (email, code) => {
+    const response = await client.post('/auth/verify-2fa', { email, code });
+    return response.data;
+  },
   logout: async () => {
     const response = await client.post('/auth/logout');
     return response.data;

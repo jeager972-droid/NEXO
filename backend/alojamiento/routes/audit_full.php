@@ -24,6 +24,13 @@ function auditError($msg, $code = 500) {
     auditJson(['status' => 'error', 'message' => $msg], $code);
 }
 
+function isValidUUID($value) {
+    return (bool) preg_match(
+        '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+        (string) $value
+    );
+}
+
 function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
     $conds = [];
     $params = [];
@@ -35,7 +42,19 @@ function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
         $params[] = $to;
     }
     $groupId = $_GET['group_id'] ?? null;
+    if ($groupId !== null && !isValidUUID($groupId)) {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'ID de grupo con formato inválido.']);
+        exit();
+    }
     $studentId = $_GET['student_id'] ?? null;
+    if ($studentId !== null && !isValidUUID($studentId)) {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'ID de estudiante con formato inválido.']);
+        exit();
+    }
     if ($groupId) {
         $conds[] = "{$tableAlias}.{$studentCol} IN (SELECT student_id FROM student_group_assignments WHERE group_id = ? AND active = TRUE)";
         $params[] = $groupId;
@@ -367,6 +386,12 @@ if ($cleanPath === '/audit/discipline/student-history' && $method === 'GET') {
     try {
         $studentId = $_GET['student_id'] ?? null;
         if (!$studentId) auditError('student_id requerido', 400);
+        if (!isValidUUID($studentId)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID de estudiante con formato inválido.']);
+            exit();
+        }
 
         $stmt = $conn->prepare("
             SELECT
@@ -1027,6 +1052,12 @@ if ($cleanPath === '/audit/historical/student' && $method === 'GET') {
     try {
         $studentId = $_GET['student_id'] ?? null;
         if (!$studentId) auditError('student_id requerido', 400);
+        if (!isValidUUID($studentId)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID de estudiante con formato inválido.']);
+            exit();
+        }
         $stmt = $conn->prepare("
             SELECT sra.audit_id, sra.action_type, sra.previous_data, sra.new_data, sra.performed_at,
                    u.first_name, u.last_name
@@ -1044,6 +1075,12 @@ if ($cleanPath === '/audit/historical/student' && $method === 'GET') {
 if ($cleanPath === '/audit/historical/teacher' && $method === 'GET') {
     try {
         $userId = $_GET['user_id'] ?? null;
+        if ($userId !== null && !isValidUUID($userId)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID de usuario con formato inválido.']);
+            exit();
+        }
         $sql = "SELECT uc.command_id, uc.command_type, uc.executed_at, uc.command_payload FROM user_commands uc WHERE uc.school_id = ?";
         $params = [$schoolId];
         if ($userId) { $sql .= " AND uc.executed_by_user_id = ?"; $params[] = $userId; }
@@ -1141,6 +1178,12 @@ if ($cleanPath === '/audit/historical/download' && $method === 'GET') {
         $type = $_GET['type'] ?? '';
         $id   = $_GET['id'] ?? '';
         if (!$type || !$id) auditError('type e id requeridos', 400);
+        if (in_array($type, ['student', 'user', 'incident']) && !isValidUUID($id)) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'ID con formato inválido.']);
+            exit();
+        }
         switch ($type) {
             case 'student':
                 $stmt = $conn->prepare("SELECT sra.*, u.first_name, u.last_name FROM student_record_audit sra LEFT JOIN users u ON sra.performed_by_user_id = u.user_id WHERE sra.school_id = ? AND sra.student_id = ? ORDER BY sra.performed_at DESC");

@@ -72,13 +72,32 @@ const STEPS = [
   { n: 3, label: 'Grado y Guardar' },
 ];
 
-const EnrollmentDrawer = ({ onClose }) => {
+const EnrollmentDrawer = ({ onClose, onRefresh }) => {
+  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ nombres: '', apellidos: '', documento: '', grado: '' });
   const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
   const canNext = step === 1 ? !!(form.nombres && form.apellidos)
                 : step === 2 ? !!form.documento
                 : !!form.grado;
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await studentsApi.create({
+        first_name: form.nombres,
+        last_name:  form.apellidos,
+        document:   form.documento,
+        grade:      form.grado,
+      });
+      onRefresh?.();
+      onClose();
+    } catch (err) {
+      console.error('Error al guardar estudiante:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -191,10 +210,10 @@ const EnrollmentDrawer = ({ onClose }) => {
               Siguiente <ChevronRight size={13} strokeWidth={2} />
             </button>
           ) : (
-            <button onClick={onClose} disabled={!canNext}
+            <button onClick={handleSave} disabled={!canNext || loading}
               className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold uppercase text-white disabled:opacity-50 transition-colors"
               style={{ backgroundColor: '#003366', letterSpacing: '0.12em' }}>
-              <Check size={13} strokeWidth={2.5} /> Guardar Registro
+              <Check size={13} strokeWidth={2.5} /> {loading ? 'Guardando...' : 'Guardar Registro'}
             </button>
           )}
         </div>
@@ -361,7 +380,7 @@ const Enrollment = () => {
       )}
 
       <AnimatePresence>
-        {isDrawerOpen && <EnrollmentDrawer onClose={() => setIsDrawerOpen(false)} />}
+        {isDrawerOpen && <EnrollmentDrawer onClose={() => setIsDrawerOpen(false)} onRefresh={() => fetchStudents(true)} />}
       </AnimatePresence>
     </div>
   );

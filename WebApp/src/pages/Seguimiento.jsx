@@ -37,8 +37,8 @@ export default function Seguimiento() {
     fetchTrackings();
   }, []);
 
-  const openTracking = (trackingId, studentName) => {
-    setSelectedTrackingTarget({ trackingId, studentName });
+  const openTracking = (trackingId, studentName, studentId) => {
+    setSelectedTrackingTarget({ trackingId, studentName, studentId });
     setTrackingModalOpen(true);
   };
 
@@ -110,12 +110,12 @@ export default function Seguimiento() {
                       </td>
                       <td className="px-5 py-4">
                         <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                          {new Date(t.updated_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                          {new Date(t.updated_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' })}
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button 
-                          onClick={() => openTracking(t.tracking_id, `${t.last_name} ${t.first_name}`)}
+                          onClick={() => openTracking(t.tracking_id, `${t.last_name} ${t.first_name}`, t.student_id)}
                           className="inline-flex items-center justify-center px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-white bg-[#003366] hover:bg-[#002244] dark:bg-[#00A67E] dark:hover:bg-[#008F6B] transition-colors shadow-sm"
                         >
                           Revisar Proceso
@@ -147,6 +147,7 @@ export default function Seguimiento() {
             onClose={() => setTrackingModalOpen(false)}
             trackingId={selectedTrackingTarget.trackingId}
             studentName={selectedTrackingTarget.studentName}
+            studentId={selectedTrackingTarget.studentId}
             onRefresh={fetchTrackings}
           />
         )}

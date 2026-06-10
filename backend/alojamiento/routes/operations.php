@@ -137,6 +137,7 @@ function sendTwilioDirect($to, $body) {
 }
 
 function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
+    global $conn;
     $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
     if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
     $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);

@@ -195,7 +195,7 @@ function handlePhoneInput(v, prev = '') {
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const fileRef = useRef(null);
 
   /* ─── Local state ─── */
@@ -280,6 +280,7 @@ const Profile = () => {
       if (res.status === 'ok') {
         setPhotoToast({ type: 'success', message: 'Foto de perfil actualizada' });
         setProfile(p => p ? { ...p, profile_photo_url: res.photo_url } : p);
+        setUser(u => u ? { ...u, profile_photo_url: res.photo_url } : u);
       } else {
         setPhotoToast({ type: 'error', message: res.message || 'Error al subir foto' });
       }
@@ -511,16 +512,7 @@ const Profile = () => {
             >
               <Save size={12} /> Guardar
             </button>
-            {profile?.email && (
-              <button
-                onClick={() => confirmDelete('email')}
-                disabled={actionLoading}
-                className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
-                title="Eliminar correo"
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
+
           </div>
         </div>
 

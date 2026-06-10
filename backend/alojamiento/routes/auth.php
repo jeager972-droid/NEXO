@@ -95,7 +95,11 @@ function verifyUserPassword($password, $hash) {
 if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
     $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
     $password = $input['password'] ?? '';
-    error_log('[LOGIN] Input: ' . json_encode($input));
+    $logInput = $input;
+    if (isset($logInput['password'])) {
+        $logInput['password'] = '***';
+    }
+    error_log('[LOGIN] Input: ' . json_encode($logInput));
     error_log('[LOGIN] EMAIL=' . $email);
     error_log('[LOGIN] $conn available: ' . ($conn ? 'YES' : 'NO'));
 
@@ -352,6 +356,16 @@ if ($cleanPath === '/auth/logout') {
             securityLog('AUTH_LOGOUT_TOKEN_IGNORED', $e->getMessage());
         }
     }
+
+    setcookie('token', '', [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Strict',
+    ]);
+
+    http_response_code(200);
+    header('Content-Type: application/json');
     echo json_encode(['status' => 'ok', 'message' => 'Sesión cerrada']);
     exit;
 }

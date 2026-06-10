@@ -40,13 +40,18 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authApi.login(email, password);
 
+      // Interceptar flujo 2FA: devolver señal sin lanzar error
+      if (data.status === '2fa_required' || data.requires_2fa) {
+        return data;
+      }
+
       if (!data.user) {
         throw new Error('La API no retornó el objeto de usuario esperado');
       }
 
       userStore.set(data.user);
       setUser(data.user);
-      return data.user;
+      return data;
     } catch (error) {
       throw error.response?.data?.message || error.message || 'Error al iniciar sesión';
     } finally {
@@ -68,6 +73,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
+    setUser,
     login,
     logout,
     loading,

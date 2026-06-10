@@ -121,7 +121,7 @@ const Notifications = () => {
                 const style = getIcon(notif.type);
                 return (
                   <motion.div
-                    key={notif.id}
+                    key={notif.id ?? notif.notification_id ?? i}
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -8 }}

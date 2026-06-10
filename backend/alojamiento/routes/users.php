@@ -242,16 +242,30 @@ if ($cleanPath === '/users/verify-code' && $method === 'POST') {
         }
 
         $stmt = $conn->prepare("
-            SELECT code_id, target_value, attempts, max_attempts, used, expires_at
+            SELECT code_id, code as db_code, target_value, attempts, max_attempts, used, expires_at
             FROM verification_codes
-            WHERE user_id = ? AND purpose = ? AND code = ?
+            WHERE user_id = ? AND purpose = ?
             ORDER BY created_at DESC
             LIMIT 1
         ");
-        $stmt->execute([$userId, $purpose, $code]);
+        $stmt->execute([$userId, $purpose]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$row) {
+            usersJson(['status' => 'error', 'message' => 'Código no encontrado o incorrecto'], 400);
+        }
+
+        if ((int)$row['attempts'] >= (int)$row['max_attempts']) {
+            usersJson(['status' => 'error', 'message' => 'Demasiados intentos. Solicita un nuevo código.'], 400);
+        }
+
+        if ($code !== $row['db_code']) {
+            $incrStmt = $conn->prepare(
+                "UPDATE verification_codes
+                 SET attempts = attempts + 1
+                 WHERE code_id = :code_id"
+            );
+            $incrStmt->execute([':code_id' => $row['code_id']]);
             usersJson(['status' => 'error', 'message' => 'Código incorrecto'], 400);
         }
 
@@ -261,10 +275,6 @@ if ($cleanPath === '/users/verify-code' && $method === 'POST') {
 
         if (strtotime($row['expires_at']) < time()) {
             usersJson(['status' => 'error', 'message' => 'Código expirado'], 400);
-        }
-
-        if ((int)$row['attempts'] >= (int)$row['max_attempts']) {
-            usersJson(['status' => 'error', 'message' => 'Demasiados intentos'], 400);
         }
 
         // Mark as verified (but not used yet — usage happens in update-profile)
@@ -304,26 +314,24 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
         $dbField = $fieldMap[$purpose];
         $verifiedField = ($purpose === 'email_change' || $purpose === 'backup_email') ? 'email_verified' : 'phone_verified';
 
-        // phone_change and backup_email require OTP verification
-        if ($purpose !== 'email_change') {
-            $stmt = $conn->prepare("
-                SELECT code_id, target_value
-                FROM verification_codes
-                WHERE user_id = ? AND purpose = ? AND target_value = ? AND verified_at IS NOT NULL AND used = FALSE
-                ORDER BY verified_at DESC
-                LIMIT 1
-            ");
-            $stmt->execute([$userId, $purpose, $value]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Todos los cambios requieren OTP verification
+        $stmt = $conn->prepare("
+            SELECT code_id, target_value
+            FROM verification_codes
+            WHERE user_id = ? AND purpose = ? AND target_value = ? AND verified_at IS NOT NULL AND used = FALSE
+            ORDER BY verified_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$userId, $purpose, $value]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!$row) {
-                usersJson(['status' => 'error', 'message' => 'Verificación requerida. Solicita y confirma un código primero.'], 403);
-            }
-
-            // Mark code as used
-            $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
-            $mark->execute([$row['code_id']]);
+        if (!$row) {
+            usersJson(['status' => 'error', 'message' => 'Verificación requerida. Solicita y confirma un código primero.'], 403);
         }
+
+        // Mark code as used
+        $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
+        $mark->execute([$row['code_id']]);
 
         $upd = $conn->prepare("UPDATE users SET {$dbField} = ?, {$verifiedField} = TRUE, updated_at = NOW() WHERE user_id = ?");
         $upd->execute([$value, $userId]);
@@ -354,7 +362,6 @@ if ($cleanPath === '/users/delete-field' && $method === 'POST') {
     try {
         $field = trim((string)($input['field'] ?? ''));
         $validFields = [
-            'email' => ['column' => 'email', 'verified' => 'email_verified'],
             'phone' => ['column' => 'phone', 'verified' => 'phone_verified'],
             'backup_email' => ['column' => 'backup_email', 'verified' => null],
         ];
@@ -398,37 +405,7 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
             usersJson(['status' => 'error', 'message' => 'Contraseña actual incorrecta'], 401);
         }
 
-        // Si tiene teléfono registrado, requerir OTP de verificación
-        $userPhone = normalizePhone($row['phone'] ?? '');
-        if ($userPhone !== '') {
-            if ($code === '' || strlen($code) !== 6) {
-                usersJson(['status' => 'error', 'message' => 'Se requiere código de verificación enviado a tu WhatsApp'], 403);
-            }
-
-            $codeStmt = $conn->prepare("
-                SELECT code_id, used, expires_at
-                FROM verification_codes
-                WHERE user_id = ? AND purpose = 'password_change' AND code = ?
-                ORDER BY created_at DESC
-                LIMIT 1
-            ");
-            $codeStmt->execute([$userId, $code]);
-            $codeRow = $codeStmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$codeRow) {
-                usersJson(['status' => 'error', 'message' => 'Código incorrecto'], 400);
-            }
-            if ($codeRow['used']) {
-                usersJson(['status' => 'error', 'message' => 'Código ya utilizado'], 400);
-            }
-            if (strtotime($codeRow['expires_at']) < time()) {
-                usersJson(['status' => 'error', 'message' => 'Código expirado'], 400);
-            }
-
-            // Marcar código como usado
-            $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
-            $mark->execute([$codeRow['code_id']]);
-        }
+        // (bloque OTP eliminado)
 
         $newHash = password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]);
         $upd = $conn->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE user_id = ?");
