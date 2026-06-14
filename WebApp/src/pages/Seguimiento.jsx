@@ -143,7 +143,6 @@ export default function Seguimiento() {
       <AnimatePresence>
         {trackingModalOpen && selectedTrackingTarget && (
           <TrackingModal
-            isOpen={trackingModalOpen}
             onClose={() => setTrackingModalOpen(false)}
             trackingId={selectedTrackingTarget.trackingId}
             studentName={selectedTrackingTarget.studentName}

@@ -404,7 +404,8 @@ export const ConsultationDrawer = ({
   item, riskStudents, dynamicData, dynamicColumns, loadingData,
   isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
   selectedStudent, setSelectedStudent,
-  fromDate, setFromDate, toDate, setToDate, onQuery, onClose, error
+  fromDate, setFromDate, toDate, setToDate, onQuery, onClose, error,
+  executeQuery
 }) => {
   const keys = Object.keys(dynamicColumns);
   const [trackingModalOpen, setTrackingModalOpen] = useState(false);
@@ -577,8 +578,11 @@ export const ConsultationDrawer = ({
             metadata={selectedTrackingTarget.metadata}
             onClose={() => setTrackingModalOpen(false)}
             onRefresh={() => {
-              if (onQuery) onQuery(); // Refresh if teacher module
-              // If not teacher module, we might want to reload the dynamicData but typically just rely on next open.
+              if (typeof executeQuery === 'function') {
+                executeQuery();
+              } else if (typeof onQuery === 'function') {
+                onQuery();
+              }
             }}
           />
         )}

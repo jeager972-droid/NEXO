@@ -169,7 +169,7 @@ $lastGc = 0;
 while (!$shutdown) {
     try {
         // FIX (SRE-2): Atomic Lua pop + timestamp injection.
-        $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing'], 2, time());
+        $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing', time()], 2);
         if (!$item) { usleep(50000); continue; }
 
         $job = json_decode($item, true);

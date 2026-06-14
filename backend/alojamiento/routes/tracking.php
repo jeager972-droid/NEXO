@@ -36,11 +36,6 @@ if (strpos($cleanPath, '/tracking') === 0) {
         try {
             // Auto-create tracking tables if they don't exist
             try {
-                // If the user's table has INTEGER school_id, we MUST fix it by altering the column type.
-                $conn->exec("ALTER TABLE IF EXISTS student_tracking ALTER COLUMN school_id TYPE UUID USING school_id::text::uuid;");
-            } catch (Throwable $e) {}
-
-            try {
                 $conn->exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
                 $conn->exec("
                     CREATE TABLE IF NOT EXISTS student_tracking (
