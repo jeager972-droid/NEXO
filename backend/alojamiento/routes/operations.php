@@ -288,6 +288,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     $rolePermissions = [
         'sos' => ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
         'citacion' => ['COORDINADOR', 'DOCENTE', 'PSICORIENTADOR'],
+        'inasistencia' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'AUXILIAR', 'PORTERO'],
         'autorizar_salida' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
         'permiso' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'PSICORIENTADOR'],
         'incidente' => ['DOCENTE', 'PSICORIENTADOR'],
@@ -362,6 +363,65 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 echo json_encode(['status' => 'ok', 'message' => 'Alerta SOS registrada y notificada a directivos']);
                 break;
 
+            case 'inasistencia':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                if (!$studentId) {
+                    http_response_code(400);
+                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para inasistencia']);
+                    break;
+                }
+
+                $studentStmt = $conn->prepare("
+                    SELECT s.student_id, s.first_name, s.last_name, g.guardian_id, g.whatsapp_phone, u.phone AS guardian_user_phone
+                    FROM students s
+                    JOIN guardian_student_relationships gsr ON gsr.student_id = s.student_id AND gsr.primary_guardian = TRUE
+                    JOIN guardians g ON g.guardian_id = gsr.guardian_id
+                    LEFT JOIN users u ON u.user_id = g.user_id
+                    WHERE s.school_id = ? AND s.student_id = ?
+                    LIMIT 1
+                ");
+                $studentStmt->execute([$schoolId, $studentId]);
+                $target = $studentStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$target) {
+                    http_response_code(404);
+                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante']);
+                    break;
+                }
+
+                $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
+                $reason = !empty($params['reason']) ? filter_var($params['reason'], FILTER_SANITIZE_SPECIAL_CHARS) : 'Inasistencia reportada';
+
+                $inasistMsg = "📋 *NEXO — Reporte de Inasistencia*\n\nEstudiante: {$studentName}\nMotivo: {$reason}\n\nSi tiene alguna duda o justificación, por favor contáctese con la institución.";
+                $deliveryResults = [];
+                $deliveryResults[] = enqueueTwilioJob($target['whatsapp_phone'], $inasistMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'INASISTENCIA');
+                if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
+                    $deliveryResults[] = enqueueTwilioJob($target['guardian_user_phone'], $inasistMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'INASISTENCIA');
+                }
+
+                $anyOk = false;
+                $allMissingPhone = true;
+                foreach ($deliveryResults as $dr) {
+                    if ($dr['ok']) $anyOk = true;
+                    if (($dr['reason'] ?? '') !== 'missing_or_invalid_phone') $allMissingPhone = false;
+                }
+
+                if (!$anyOk) {
+                    if ($allMissingPhone) {
+                        securityLog('INASISTENCIA_NO_PHONE', "Student:$studentId Guardian:{$target['guardian_id']} has no whatsapp_phone");
+                        http_response_code(422);
+                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.']);
+                    } else {
+                        securityLog('INASISTENCIA_DELIVERY_FAILED', "Student:$studentId Results:" . json_encode($deliveryResults));
+                        http_response_code(500);
+                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.']);
+                    }
+                    break;
+                }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode(['status' => 'ok', 'message' => 'Inasistencia reportada al acudiente', 'delivery' => $deliveryResults]);
+                break;
+
             case 'citacion':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
@@ -389,7 +449,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
                 $citTime = !empty($params['time']) ? filter_var($params['time'], FILTER_SANITIZE_SPECIAL_CHARS) : '';
-                $citReason = !empty($params['reason']) ? filter_var($params['reason'], FILTER_SANITIZE_SPECIAL_CHARS) : '';
+                $citReason = !empty($params['reason']) ? filter_var($params['reason'], FILTER_SANITIZE_SPECIAL_CHARS) : (!empty($params['message']) ? filter_var($params['message'], FILTER_SANITIZE_SPECIAL_CHARS) : '');
 
                 $citMsg = "Citación para {$studentName}.";
                 if ($citTime) $citMsg .= "\nHora: {$citTime}";

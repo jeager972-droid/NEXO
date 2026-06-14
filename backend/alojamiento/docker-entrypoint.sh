@@ -125,6 +125,7 @@ done
 echo "[nexo] Arrancando workers en segundo plano..."
 (while true; do php /var/www/html/worker_twilio.php; sleep 2; done) > /dev/stdout 2>&1 &
 (while true; do php /var/www/html/worker_audit.php; sleep 2; done) > /dev/stdout 2>&1 &
+(while true; do php /var/www/html/worker_biometric.php; sleep 2; done) > /dev/stdout 2>&1 &
 
 echo "[nexo] Arrancando nginx en puerto ${PORT}..."
 exec nginx -g "daemon off;"

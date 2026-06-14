@@ -27,9 +27,9 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
         // permitiendo que sesiones comprometidas vuelvan a ser válidas. En su lugar, limpiar solo
         // entradas antiguas (>90 días) es suficiente para mantener el rendimiento.
         
-        // 2. Desactivar TODOS los edge_devices del sistema
-        $stmt = $conn->prepare("UPDATE edge_devices SET active = FALSE, last_ping = NOW()");
-        $stmt->execute();
+        // 2. Desactivar los edge_devices del colegio del usuario autenticado
+        $stmt = $conn->prepare("UPDATE edge_devices SET active = FALSE, last_ping = NOW() WHERE school_id = ?");
+        $stmt->execute([$authUser['school_id']]);
         $affectedDevices = $stmt->rowCount();
         
         // 3. Registrar el evento de pánico en auditoría

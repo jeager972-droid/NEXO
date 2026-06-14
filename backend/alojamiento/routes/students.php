@@ -38,8 +38,63 @@ require_once __DIR__ . '/_auth_middleware.php';
  * )
  */
 if ($cleanPath === '/students') {
+    if ($method === 'POST') {
+        $authUser = requireAuth(['SECRETARIA', 'RECTOR', 'COORDINADOR']);
+        $schoolId = $authUser['school_id'];
+
+        $firstName  = trim($input['first_name'] ?? '');
+        $lastName   = trim($input['last_name']  ?? '');
+        $document   = trim($input['document']   ?? '');
+        $groupName  = trim($input['grade']      ?? '');
+
+        if (!$firstName || !$lastName || !$document) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Nombre, apellido y documento son obligatorios']));
+        }
+
+        try {
+            $conn->beginTransaction();
+
+            $stmt = $conn->prepare("
+                INSERT INTO students (school_id, first_name, last_name, document_number, active)
+                VALUES (?, ?, ?, ?, TRUE)
+                ON CONFLICT (document_number) DO UPDATE
+                  SET first_name = EXCLUDED.first_name,
+                      last_name  = EXCLUDED.last_name,
+                      active     = TRUE
+                RETURNING student_id
+            ");
+            $stmt->execute([$schoolId, $firstName, $lastName, $document]);
+            $studentId = $stmt->fetchColumn();
+
+            if ($groupName) {
+                $groupStmt = $conn->prepare("SELECT group_id FROM academic_groups WHERE group_name = ? AND school_id = ? LIMIT 1");
+                $groupStmt->execute([$groupName, $schoolId]);
+                $groupId = $groupStmt->fetchColumn();
+                if ($groupId) {
+                    $assignStmt = $conn->prepare("
+                        INSERT INTO student_group_assignments (student_id, group_id, active)
+                        VALUES (?, ?, TRUE)
+                        ON CONFLICT (student_id, group_id) DO UPDATE SET active = TRUE
+                    ");
+                    $assignStmt->execute([$studentId, $groupId]);
+                }
+            }
+
+            $conn->commit();
+            securityLog('STUDENT_CREATED', "ID:$studentId Doc:$document", $authUser['id'], $schoolId);
+            http_response_code(201);
+            echo json_encode(['status' => 'ok', 'student_id' => $studentId]);
+        } catch (Throwable $e) {
+            $conn->rollBack();
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Error al registrar estudiante']);
+        }
+        exit;
+    }
+
     $authUser = requireAuth();
-    $schoolId = $_GET['school_id'] ?? $input['school_id'] ?? $authUser['school_id'];
+    $schoolId = $authUser['school_id'];
     if (!$schoolId) {
         http_response_code(400);
         exit(json_encode(['status' => 'error', 'message' => 'ID de institución requerido']));

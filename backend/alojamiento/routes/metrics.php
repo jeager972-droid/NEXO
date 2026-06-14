@@ -4,6 +4,15 @@
 global $cleanPath;
 
 if ($cleanPath === '/metrics') {
+    // Proteger con clave de acceso para Prometheus/internal
+    $metricsKey = getenv('METRICS_SECRET_KEY') ?: '';
+    $providedKey = $_SERVER['HTTP_X_METRICS_KEY'] ?? ($_GET['key'] ?? '');
+    if ($metricsKey !== '' && !hash_equals($metricsKey, $providedKey)) {
+        http_response_code(401);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('# Unauthorized');
+    }
+
     $metrics = [];
     global $conn;
 

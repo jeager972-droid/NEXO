@@ -87,23 +87,8 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         exit;
     }
 
-    // Persistir en tabla contact_leads (crearla si no existe)
+    // Persistir en tabla contact_leads
     try {
-        $conn->exec("
-            CREATE TABLE IF NOT EXISTS contact_leads (
-                lead_id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                nombre       VARCHAR(200)  NOT NULL,
-                cargo        VARCHAR(100)  NOT NULL,
-                institucion  VARCHAR(300)  NOT NULL,
-                municipio    VARCHAR(200)  NOT NULL,
-                email        VARCHAR(254)  NOT NULL,
-                whatsapp     VARCHAR(30)   NOT NULL,
-                mensaje      TEXT,
-                ip_address   VARCHAR(45),
-                created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-            )
-        ");
-
         $ins = $conn->prepare("
             INSERT INTO contact_leads (nombre, cargo, institucion, municipio, email, whatsapp, mensaje, ip_address)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)

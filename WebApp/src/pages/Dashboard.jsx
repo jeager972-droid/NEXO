@@ -113,9 +113,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     const load = async () => {
-      const id = user?.school_id || user?.inst_id || user?.institucion_id;
-      if (!id) { setLoading(false); return; }
-      try { setStats({ ...EMPTY_STATS, ...(await dashboardApi.getStats(id) || {}) }); }
+      try { setStats({ ...EMPTY_STATS, ...(await dashboardApi.getStats() || {}) }); }
       catch (e) { console.error(e); setStats(EMPTY_STATS); }
       finally { setLoading(false); }
     };
@@ -366,10 +364,8 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
       setGroupStats(null);
       return;
     }
-    const id = user?.school_id || user?.inst_id || user?.institucion_id;
-    if (!id) return;
     setGroupLoading(true);
-    dashboardApi.getStats(id, selectedGroup)
+    dashboardApi.getStats(selectedGroup)
       .then(res => {
         if (res?.status === 'ok') {
           setGroupStats(res.groupStats || EMPTY_STATS.groupStats);
@@ -572,6 +568,7 @@ function humanizeDetailVal(v) {
 }
 
 const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning, onClose }) => {
+  const { user } = useAuth();
   const config = CATEGORY_LABELS[category];
   const Icon = config?.icon || Users;
   const [searchQuery, setSearchQuery] = useState('');
@@ -654,14 +651,18 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       );
     }
     if (col.key === '_action') {
+      // Hide tracking button for DOCENTE role
+      if (user?.role === ROLES.DOCENTE) {
+        return null;
+      }
       const isTracked = trackedStudents.has(row.student_id);
       return (
-        <button 
+        <button
           onClick={() => handleStartTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
           disabled={isTracked}
           className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors flex items-center justify-end gap-1 w-full ${
-            isTracked 
-              ? "text-[#00A67E] bg-[#00A67E]/10" 
+            isTracked
+              ? "text-[#00A67E] bg-[#00A67E]/10"
               : "text-[#003366] hover:bg-[#003366]/10"
           }`}
         >

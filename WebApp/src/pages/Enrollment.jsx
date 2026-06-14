@@ -76,10 +76,15 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ nombres: '', apellidos: '', documento: '', grado: '' });
+  const [groups, setGroups] = useState([]);
   const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
   const canNext = step === 1 ? !!(form.nombres && form.apellidos)
                 : step === 2 ? !!form.documento
                 : !!form.grado;
+
+  useEffect(() => {
+    studentsApi.getGroups().then(setGroups).catch(() => {});
+  }, []);
 
   const handleSave = async () => {
     setLoading(true);
@@ -168,8 +173,10 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                   <select value={form.grado} onChange={set('grado')} style={INPUT_S}
                     className="dark:bg-slate-800 dark:text-white appearance-none" onFocus={onFocus} onBlur={onBlur}>
                     <option value="">— Seleccionar grado —</option>
-                    {['6-A','6-B','7-A','7-B','8-A','8-B','9-A','9-B','10-A','10-B','11-A','11-B'].map(g =>
-                      <option key={g} value={g}>{g}</option>)}
+                    {groups.length > 0
+                      ? groups.map(g => <option key={g.name} value={g.name}>{g.name}</option>)
+                      : <option disabled>Sin grupos — contacta al administrador</option>
+                    }
                   </select>
                 </div>
                 {/* Resumen */}

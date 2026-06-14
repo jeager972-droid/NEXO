@@ -16,10 +16,8 @@ const normalizeStudent = (student) => ({
 
 export const studentsApi = {
   getAll: async ({ last_id = '', limit = 50, search = '', group_name = '' } = {}) => {
-    const schoolId = getSchoolId();
     const params = { limit };
     if (last_id !== '' && last_id !== '0' && last_id !== 0) params.last_id = last_id;
-    if (schoolId) params.school_id = schoolId;
     if (search && search.trim()) params.search = search.trim();
     if (group_name && group_name.trim()) params.group_name = group_name.trim();
     const response = await client.get('/students', { params });
@@ -61,9 +59,7 @@ export const studentsApi = {
     return all;
   },
   getGroups: async (teacherOnly = false) => {
-    const schoolId = getSchoolId();
     const params = {};
-    if (schoolId) params.school_id = schoolId;
     if (teacherOnly) params.teacher_only = '1';
     const response = await client.get('/groups', { params: Object.keys(params).length ? params : undefined });
     const rows = response.data?.data ?? response.data ?? [];
@@ -81,5 +77,9 @@ export const studentsApi = {
       }
     }
     return deduped;
+  },
+  create: async (data) => {
+    const response = await client.post('/students', data);
+    return response.data;
   },
 };

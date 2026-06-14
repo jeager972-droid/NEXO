@@ -15,7 +15,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
     $userId = $authUser['id'];
     $role = strtoupper($authUser['role'] ?? '');
 
-    if (!in_array($role, ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'])) {
+    if (!in_array($role, ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'PSICORIENTADOR'])) {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
     }
@@ -34,32 +34,6 @@ if (strpos($cleanPath, '/tracking') === 0) {
         }
 
         try {
-            // Auto-create tracking tables if they don't exist
-            try {
-                $conn->exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
-                $conn->exec("
-                    CREATE TABLE IF NOT EXISTS student_tracking (
-                        tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                        school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-                        student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
-                        status VARCHAR(50) NOT NULL DEFAULT 'en proceso',
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS student_tracking_notes (
-                        note_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                        tracking_id UUID NOT NULL REFERENCES student_tracking(tracking_id) ON DELETE CASCADE,
-                        user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-                        note_text TEXT NOT NULL,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-                ");
-            } catch (Throwable $setupError) {
-                // Ignore setup errors (e.g. lack of permissions for extensions)
-                error_log('Tracking setup error: ' . $setupError->getMessage());
-            }
-
             // Check if already in tracking
             $checkStmt = $conn->prepare("SELECT tracking_id FROM student_tracking WHERE student_id = ? AND school_id = ? AND status = 'en proceso'");
             $checkStmt->execute([$studentId, $schoolId]);

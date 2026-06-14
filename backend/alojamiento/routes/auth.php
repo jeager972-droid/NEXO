@@ -17,7 +17,7 @@ require_once __DIR__ . '/_auth_middleware.php';
 
 function isLoginThrottled($email) {
     global $conn;
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $ip = getRealClientIp();
     $key = 'login:' . hash('sha256', strtolower(trim($email)) . '|' . $ip);
     $window = 900;
     $maxAttempts = 8;
@@ -260,6 +260,11 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             exit(json_encode(['status' => 'error', 'message' => 'Email y código (6 dígitos) requeridos']));
         }
 
+        if (isLoginThrottled($email)) {
+            http_response_code(429);
+            exit(json_encode(['status' => 'error', 'message' => 'Demasiados intentos. Intente más tarde.']));
+        }
+
         $userStmt = $conn->prepare("
             SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
                    u.profile_photo_url, u.work_shift,
@@ -279,7 +284,7 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         }
 
         $codeStmt = $conn->prepare("
-            SELECT code_id, used, expires_at
+            SELECT code_id, used, expires_at, attempts, max_attempts
             FROM verification_codes
             WHERE user_id = ? AND purpose = 'login_2fa' AND code = ?
             ORDER BY created_at DESC
@@ -289,9 +294,24 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         $codeRow = $codeStmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$codeRow) {
+            // Increment attempts for the most recent code (even if it doesn't match)
+            $incrStmt = $conn->prepare("
+                UPDATE verification_codes
+                SET attempts = attempts + 1
+                WHERE user_id = ? AND purpose = 'login_2fa'
+                ORDER BY created_at DESC
+                LIMIT 1
+            ");
+            $incrStmt->execute([$user['user_id']]);
             http_response_code(400);
             exit(json_encode(['status' => 'error', 'message' => 'Código incorrecto']));
         }
+
+        if ((int)$codeRow['attempts'] >= (int)$codeRow['max_attempts']) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Demasiados intentos. Solicita un nuevo código.']));
+        }
+
         if ($codeRow['used']) {
             http_response_code(400);
             exit(json_encode(['status' => 'error', 'message' => 'Código ya utilizado']));
@@ -360,8 +380,9 @@ if ($cleanPath === '/auth/logout') {
     setcookie('token', '', [
         'expires'  => time() - 3600,
         'path'     => '/',
+        'secure'   => true,
         'httponly' => true,
-        'samesite' => 'Strict',
+        'samesite' => 'None',
     ]);
 
     http_response_code(200);

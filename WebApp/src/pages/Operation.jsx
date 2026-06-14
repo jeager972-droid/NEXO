@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -22,50 +22,48 @@ const Operation = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
 
+  const fetchData = useCallback(async (signal) => {
+    setLoading(true);
+    setFetchError('');
+    let groupsOk = false;
+    let studentsOk = false;
+    try {
+      const groupsData = await studentsApi.getGroups();
+      if (!signal.aborted) {
+        setGroups(Array.isArray(groupsData) ? groupsData : []);
+        groupsOk = true;
+      }
+    } catch (error) {
+      if (!signal.aborted) {
+        console.error('Error fetching groups', error);
+        const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener grupos';
+        setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
+      }
+    }
+    try {
+      const allStudents = await studentsApi.getAllPaginated();
+      if (!signal.aborted) {
+        setStudents(Array.isArray(allStudents) ? allStudents : []);
+        studentsOk = true;
+      }
+    } catch (error) {
+      if (!signal.aborted) {
+        console.error('Error fetching students', error);
+        const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener estudiantes';
+        setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
+      }
+    }
+    if (!signal.aborted) {
+      setLoading(false);
+    }
+    return { groupsOk, studentsOk };
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
-
-    const fetchData = async () => {
-      setLoading(true);
-      setFetchError('');
-      let groupsOk = false;
-      let studentsOk = false;
-      try {
-        const groupsData = await studentsApi.getGroups();
-        if (!controller.signal.aborted) {
-          setGroups(Array.isArray(groupsData) ? groupsData : []);
-          groupsOk = true;
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error('Error fetching groups', error);
-          const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener grupos';
-          setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
-        }
-      }
-      try {
-        const allStudents = await studentsApi.getAllPaginated();
-        if (!controller.signal.aborted) {
-          setStudents(Array.isArray(allStudents) ? allStudents : []);
-          studentsOk = true;
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error('Error fetching students', error);
-          const msg = error?.response?.data?.detail || error?.response?.data?.message || 'Error al obtener estudiantes';
-          setFetchError(prev => prev ? `${prev} | ${msg}` : msg);
-        }
-      }
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
-      return { groupsOk, studentsOk };
-    };
-
-    fetchData();
-
+    fetchData(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [fetchData]);
 
   const commands = [
     {
@@ -131,7 +129,7 @@ const Operation = () => {
       title: 'Reportar incidente',
       icon: ShieldAlert,
       roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-      fields: ['location', 'message', 'targets']
+      fields: ['group', 'student', 'location', 'message', 'targets']
     }
   ];
 
@@ -201,7 +199,10 @@ const Operation = () => {
               <p className="opacity-80 font-medium">{fetchError}</p>
             </div>
             <button
-              onClick={fetchData}
+              onClick={() => {
+                const controller = new AbortController();
+                fetchData(controller.signal);
+              }}
               className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0"
             >
               Reintentar

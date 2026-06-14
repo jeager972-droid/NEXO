@@ -119,9 +119,14 @@ services:
     ports:
       - "1883:1883"
       - "9001:9001"
+    environment:
+      - MQTT_USERNAME=${MQTT_USERNAME:-nexo_mqtt}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - nexo-mosquitto-config:/mosquitto/config
       - nexo-mosquitto-data:/mosquitto/data
+    command: sh -c "mosquitto_passwd -b -c /mosquitto/config/passwords $$MQTT_USERNAME $$MQTT_PASSWORD && mosquitto -c /mosquitto/config/mosquitto.conf"
     networks:
       - nexo-internal
 
@@ -133,3 +138,4 @@ volumes:
   nexo-db-data:
   nexo-redis-data:
   nexo-mosquitto-data:
+  nexo-mosquitto-config:

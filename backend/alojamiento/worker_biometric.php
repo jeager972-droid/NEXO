@@ -22,6 +22,14 @@ function getRedis() {
     return $r;
 }
 
+function sendHeartbeat($redis) {
+    try {
+        $redis->set('worker:biometric:last_heartbeat', time());
+    } catch (Exception $e) {
+        // Silenciar: heartbeat no debe detener el worker
+    }
+}
+
 function processJob(array $job, PDO $conn): bool {
     $action = $job['action'] ?? 'UNKNOWN';
     $data   = $job['data'] ?? [];
@@ -165,9 +173,16 @@ logW('START', 'Biometric async worker started');
 $redis = getRedis();
 $iterations = 0;
 $lastGc = 0;
+$lastHeartbeat = 0;
 
 while (!$shutdown) {
     try {
+        // FIX: Enviar heartbeat cada 30 segundos
+        if (time() - $lastHeartbeat >= 30) {
+            $lastHeartbeat = time();
+            sendHeartbeat($redis);
+        }
+
         // FIX (SRE-2): Atomic Lua pop + timestamp injection.
         $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing', time()], 2);
         if (!$item) { usleep(50000); continue; }

@@ -18,13 +18,17 @@ $allowedOrigins = array_filter(array_map('trim', explode(',',
 )));
 
 if (empty($allowedOrigins)) {
-    // Development / preview fallback: accept request origin
     $finalOrigin = $origin ?: '*';
 } else {
-    $finalOrigin = in_array($origin, $allowedOrigins) ? $origin : $allowedOrigins[0];
+    if ($origin !== '' && in_array($origin, $allowedOrigins)) {
+        $finalOrigin = $origin;
+    } else {
+        $finalOrigin = ''; // No enviar el header para origenes no autorizados
+    }
 }
-
-header('Access-Control-Allow-Origin: ' . $finalOrigin);
+if ($finalOrigin !== '') {
+    header('Access-Control-Allow-Origin: ' . $finalOrigin);
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, Authorization, X-Device-Token');
@@ -44,6 +48,7 @@ header("Content-Security-Policy: default-src *; connect-src *; img-src * data:; 
 
 require_once __DIR__ . '/boot_check.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/routes/_auth_middleware.php';
 
 // FIX: Asignar $conn INMEDIATAMENTE después de db.php para que esté disponible en todas las rutas
 $conn = $pdo;
@@ -60,10 +65,9 @@ function securityLog($event, $details = '', $actorId = null, $schoolId = null, $
 
     // FIX: Encolar en Redis para procesamiento asíncrono por worker_audit.php
     try {
-        $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-        $redis->lPush('queue:audit_logs', json_encode([
+        $redis = getRedisConnection();
+        if ($redis) {
+            $redis->lPush('queue:audit_logs', json_encode([
             'school_id' => $schoolId,
             'actor_id' => $actorId,
             'event_type' => substr($event, 0, 100),
@@ -73,6 +77,7 @@ function securityLog($event, $details = '', $actorId = null, $schoolId = null, $
             'request_id' => $requestId,
             'created_at' => gmdate('Y-m-d H:i:s')
         ], JSON_UNESCAPED_UNICODE));
+        }
     } catch (Throwable $e) {
         file_put_contents('php://stderr', "AUDIT_REDIS_FAIL: " . $e->getMessage() . "\n");
     }
@@ -108,7 +113,6 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
 }
 
 enforceRateLimitRedis();
-securityLog('SYSTEM_BOOT', 'API script initialized');
 
 header('Content-Type: application/json; charset=utf-8');
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
@@ -308,6 +312,16 @@ if ($cleanPath === '/health/workers') {
             'healthy' => $twilioAge <= 300
         ];
         if ($twilioAge > 300) $allHealthy = false;
+
+        // Biometric worker
+        $bioHeartbeat = (int)$redisHealth->get('worker:biometric:last_heartbeat');
+        $bioAge = time() - $bioHeartbeat;
+        $checks['biometric_worker'] = [
+            'last_heartbeat' => $bioHeartbeat,
+            'seconds_ago' => $bioAge,
+            'healthy' => $bioAge <= 300
+        ];
+        if ($bioAge > 300) $allHealthy = false;
 
         http_response_code($allHealthy ? 200 : 503);
         echo json_encode(['status' => $allHealthy ? 'ok' : 'degraded', 'checks' => $checks]);

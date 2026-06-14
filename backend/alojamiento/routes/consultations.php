@@ -157,8 +157,8 @@ if ($cleanPath === '/consultations/query') {
             case 'Historial Asistencia':
             case 'Asistencia General':
             case 'Asistencia Institucional':
-                $dateFrom = $input['date_from'] ?? null;
-                $dateTo   = $input['date_to']   ?? null;
+                $dateFrom = $input['date_from'] ?? $fromDate;
+                $dateTo   = $input['date_to']   ?? $toDate;
 
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type
@@ -220,8 +220,8 @@ if ($cleanPath === '/consultations/query') {
                     $stmt = $conn->prepare(
                         "SELECT
                              m.message_id,
-                             m.recipient_phone,
-                             m.message_body,
+                             m.phone_number,
+                             m.message_content,
                              m.status,
                              m.created_at
                          FROM twilio_messages m
@@ -234,13 +234,13 @@ if ($cleanPath === '/consultations/query') {
                     $stmt = $conn->prepare(
                         "SELECT
                              m.message_id,
-                             m.recipient_phone,
-                             m.message_body,
+                             m.phone_number,
+                             m.message_content,
                              m.direction,
                              m.created_at
                          FROM twilio_messages m
                          WHERE m.school_id  = :sid
-                           AND m.teacher_id = :tid
+                           AND m.sender_user_id = :tid
                          ORDER BY m.created_at DESC"
                     );
                     $stmt->execute([':sid' => $schoolId, ':tid' => $userId]);
