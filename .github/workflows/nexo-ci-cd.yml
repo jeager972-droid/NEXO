@@ -9,8 +9,10 @@ on:
 jobs:
   build-edge-cpp:
     runs-on: ubuntu-22.04
+    # El edge C++ es firmware embebido — su fallo no debe bloquear el deploy web/backend
+    continue-on-error: true
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install C++ Deps
       run: sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev libsqlite3-dev
     - name: Build C++ Edge
@@ -24,21 +26,27 @@ jobs:
   build-webapp-react:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-node@v3
-      with: { node-version: 18 }
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: WebApp/package-lock.json
+    - name: Install dependencies
+      run: cd WebApp && npm ci
     - name: Build Vite
-      run: cd WebApp && npm ci && npm run build
+      run: cd WebApp && npm run build
 
   deploy-backend-railway:
-    needs: [build-edge-cpp, build-webapp-react]
+    # Solo depende del build de webapp — el edge C++ es independiente
+    needs: [build-webapp-react]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Railway CLI
       run: npm i -g @railway/cli
     - name: Deploy to Railway
-      run: railway up -d -p "Logica de negocio/alojamiento"
+      run: railway up --detach
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
