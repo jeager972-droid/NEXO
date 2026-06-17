@@ -192,17 +192,16 @@ if (isset($input['payload'])) {
                 exit(json_encode(['status' => 'error', 'message' => 'Device token required']));
             }
 
-            // Buscar dispositivo por token (itera todos los activos para evitar timing attacks)
-            $stmt = $conn->prepare("SELECT device_id, school_id, active, token_hash FROM edge_devices WHERE active = TRUE");
-            $stmt->execute();
+            // Buscar dispositivo por device_id (O(1) lookup, evita UUID vs int crash)
+            $requestDeviceId = $data['device_id'] ?? null;
+            $stmt = $conn->prepare("SELECT device_id, school_id, active, token_hash FROM edge_devices WHERE device_id = ? AND active = TRUE");
+            $stmt->execute([$requestDeviceId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
             $validDevice = false;
             $realSchoolId = null;
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                if (password_verify($deviceToken, $row['token_hash'])) {
-                    $validDevice = true;
-                    $realSchoolId = $row['school_id'];
-                    break;
-                }
+            if ($row && password_verify($deviceToken, $row['token_hash'])) {
+                $validDevice = true;
+                $realSchoolId = $row['school_id'];
             }
 
             if (!$validDevice) {
@@ -212,26 +211,26 @@ if (isset($input['payload'])) {
             }
 
             // Forzar el school_id real del dispositivo (ignorar el del payload)
-            $instId = (int)$realSchoolId;
-            $conn->exec("SET app.current_school_id = {$instId}");
-            $conn->exec("SET app.current_role = 'EDGE_NODE'");
+            $instId = (string)$realSchoolId;
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
+            $stmtConfig->execute([$instId]);
 
-            // FIX: Ampliar ventana a 24 horas para permitir modo offline-first
+            // FIX: Ampliar ventana a 7 días para permitir modo offline-first (fines de semana)
             $capturedAt = isset($data['captured_at']) ? (int)$data['captured_at'] : 0;
-            if (abs(time() - $capturedAt) > 86400) {  // 86400 segundos = 24 horas
+            if (abs(time() - $capturedAt) > 604800) {  // 604800 segundos = 7 días
                 securityLog('EDGE_REPLAY_ATTACK_OR_SYNC_DELAY', 'Paquete demasiado viejo/futuro', null, null, $requestId);
                 http_response_code(403);
                 exit(json_encode(['status' => 'error', 'message' => 'Timestamp invalid']));
             }
 
-            // FIX: El nonce también debe expirar en 24 horas para tolerar modo offline
+            // FIX: El nonce también debe expirar en 7 días para tolerar modo offline
             $nonce = $data['nonce'] ?? '';
             if (!empty($nonce)) {
                 try {
                     $redis = new Redis();
                     $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
                     if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-                    if (!$redis->set($nonce, '1', ['nx', 'ex' => 86400])) {
+                    if (!$redis->set($nonce, '1', ['nx', 'ex' => 604800])) {
                         securityLog('EDGE_REPLAY_NONCE_DUPLICATE', "Nonce reusado: $nonce", null, null, $requestId);
                         http_response_code(403);
                         exit(json_encode(['status' => 'error', 'message' => 'Nonce already used']));
@@ -252,7 +251,8 @@ if (isset($input['payload'])) {
                 $queuePayload = json_encode([
                     'action' => $action,
                     'data' => $data,
-                    'school_id' => $instId,
+                    'school_id' => (string)$realSchoolId,
+                    'device_id' => (string)$row['device_id'],
                     'request_id' => $requestId,
                     'received_at' => time()
                 ], JSON_UNESCAPED_UNICODE);

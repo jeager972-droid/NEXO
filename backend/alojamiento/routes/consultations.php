@@ -219,29 +219,29 @@ if ($cleanPath === '/consultations/query') {
                 if ($isAdmin) {
                     $stmt = $conn->prepare(
                         "SELECT
-                             m.message_id,
+                             m.twilio_message_id,
                              m.phone_number,
                              m.message_content,
-                             m.status,
-                             m.created_at
+                             m.delivery_status,
+                             m.sent_at
                          FROM twilio_messages m
                          WHERE m.school_id = :sid
-                         ORDER BY m.created_at DESC
+                         ORDER BY m.sent_at DESC
                          LIMIT 200"
                     );
                     $stmt->execute([':sid' => $schoolId]);
                 } else {
                     $stmt = $conn->prepare(
                         "SELECT
-                             m.message_id,
+                             m.twilio_message_id,
                              m.phone_number,
                              m.message_content,
                              m.direction,
-                             m.created_at
+                             m.sent_at
                          FROM twilio_messages m
                          WHERE m.school_id  = :sid
                            AND m.sender_user_id = :tid
-                         ORDER BY m.created_at DESC"
+                         ORDER BY m.sent_at DESC"
                     );
                     $stmt->execute([':sid' => $schoolId, ':tid' => $userId]);
                 }
@@ -329,21 +329,22 @@ if ($cleanPath === '/consultations/query') {
                 $stmt = $conn->prepare(
                     "SELECT
                          g.guardian_id,
-                         g.full_name,
-                         g.phone,
-                         u.email
+                         u.first_name || ' ' || u.last_name AS full_name,
+                         u.phone,
+                         u.email,
+                         g.whatsapp_phone
                      FROM guardians g
-                     LEFT JOIN users u ON g.user_id = u.user_id
+                     JOIN users u ON g.user_id = u.user_id
                      INNER JOIN guardian_student_relationships gsr
                          ON gsr.guardian_id = g.guardian_id
                      INNER JOIN students s
                          ON s.student_id = gsr.student_id
                      WHERE s.school_id = ?
-                     ORDER BY g.full_name ASC"
+                     ORDER BY u.last_name, u.first_name ASC"
                 );
                 $stmt->execute([$schoolId]);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'whatsapp_phone' => 'WhatsApp'];
+                $columns = ['full_name' => 'Nombre', 'phone' => 'Teléfono', 'whatsapp_phone' => 'WhatsApp'];
                 break;
 
             case 'Métricas Institucionales':

@@ -1,5 +1,7 @@
 #include "hardware/dev_stub/DevStubBiometricSensor.h"
 #include "utils/Logger.h"
+#include <thread>
+#include <chrono>
 
 NexoResult<void> DevStubBiometricSensor::initialize() {
     LOG_INFO("[STUB] Biometric sensor initialized (dev-stub)");
@@ -17,10 +19,21 @@ NexoResult<void> DevStubBiometricSensor::enrollUser(uint32_t userId, std::vector
 NexoResult<void> DevStubBiometricSensor::searchUser(const std::vector<uint8_t>& /*templateData*/,
                                                      uint32_t& matchedUserId, float& matchScore) {
     if (!m_ready) return NexoResult<void>::fail(NexoError::NotInitialized, "Sensor not initialized");
-    LOG_DEBUG("[STUB] Search user (simulated match ID=1)");
-    matchedUserId = 1;
-    matchScore = 95.0f;
-    return NexoResult<void>::success();
+
+    // Realistic delay to simulate sensor processing
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Simulate that no fingerprint is present most of the time (1 match out of 5 attempts)
+    static int count = 0;
+    if (++count % 5 == 0) {
+        LOG_DEBUG("[STUB] Search user (simulated match ID=1)");
+        matchedUserId = 1;
+        matchScore = 95.0f;
+        return NexoResult<void>::success();
+    }
+
+    LOG_DEBUG("[STUB] Search user (no match - stub)");
+    return NexoResult<void>::fail(NexoError::NotFound, "No match (stub)");
 }
 
 NexoResult<void> DevStubBiometricSensor::deleteUser(uint32_t userId) {

@@ -11,10 +11,10 @@ if ($cleanPath === '/audit/global' && $method === 'GET') {
     
     try {
         $stmt = $conn->prepare("
-            SELECT audit_id, event_type, description, ip_address, created_at,
+            SELECT log_id, action_type AS event_type, description, ip_address, created_at,
                    u.first_name || ' ' || u.last_name AS actor_name
             FROM global_audit_logs a
-            LEFT JOIN users u ON a.actor_id = u.user_id
+            LEFT JOIN users u ON a.performed_by_user_id = u.user_id
             WHERE a.school_id = ?
             ORDER BY created_at DESC
             LIMIT 100

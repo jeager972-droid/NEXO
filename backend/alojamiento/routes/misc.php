@@ -594,29 +594,39 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
             // Notificación de reagendamiento diferida: solo cuando llegue el motivo
 
-            $panelStmt = $conn->prepare("
-                INSERT INTO attendance_incidents (
-                    incident_id, school_id, student_id, incident_type, detected_at, metadata_json
-                ) VALUES (
-                    uuid_generate_v4(), ?, (
-                        SELECT s.student_id
-                        FROM guardian_student_relationships gsr
-                        JOIN students s ON s.student_id = gsr.student_id
-                        WHERE gsr.guardian_id = ?
-                        ORDER BY gsr.created_at DESC
-                        LIMIT 1
-                    ), 'CITACION_REAGENDADA', NOW(), ?::jsonb
-                )
+            // Extract student_id from subquery to validate before insertion
+            $studentIdStmt = $conn->prepare("
+                SELECT s.student_id
+                FROM guardian_student_relationships gsr
+                JOIN students s ON s.student_id = gsr.student_id
+                WHERE gsr.guardian_id = ?
+                ORDER BY gsr.created_at DESC
+                LIMIT 1
             ");
-            $panelStmt->execute([
-                $schoolId,
-                $guardianId,
-                json_encode([
-                    'response' => '2',
-                    'guardian_phone' => $from,
-                    'target_user_id' => $teacherRef['sender_user_id'] ?? null
-                ], JSON_UNESCAPED_UNICODE)
-            ]);
+            $studentIdStmt->execute([$guardianId]);
+            $resolvedStudentIdForPanel = $studentIdStmt->fetchColumn();
+
+            // Only insert if student_id is valid (not NULL)
+            if ($resolvedStudentIdForPanel) {
+                $panelStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (
+                        incident_id, school_id, student_id, incident_type, detected_at, metadata_json
+                    ) VALUES (
+                        uuid_generate_v4(), ?, ?, 'CITACION_REAGENDADA', NOW(), ?::jsonb
+                    )
+                ");
+                $panelStmt->execute([
+                    $schoolId,
+                    $resolvedStudentIdForPanel,
+                    json_encode([
+                        'response' => '2',
+                        'guardian_phone' => $from,
+                        'target_user_id' => $teacherRef['sender_user_id'] ?? null
+                    ], JSON_UNESCAPED_UNICODE)
+                ]);
+            } else {
+                securityLog('CITACION_REAGENDADA_NO_STUDENT', "Guardian:$guardianId has no active students - skipping attendance_incidents insert");
+            }
 
             securityLog('CITACION_REAGENDAMIENTO_NOTIFICADO', "Guardian:$guardianId School:$schoolId");
         } elseif ($trimBody === '9') {

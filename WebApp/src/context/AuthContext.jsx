@@ -49,6 +49,11 @@ export const AuthProvider = ({ children }) => {
         throw new Error('La API no retornó el objeto de usuario esperado');
       }
 
+      // iOS ITP fallback: guardar token en sessionStorage cuando cookie es bloqueada
+      if (data.token) {
+        sessionStorage.setItem('nexo_token', data.token);
+      }
+
       userStore.set(data.user);
       setUser(data.user);
       return data;
@@ -67,6 +72,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       userStore.clear();
       setUser(null);
+      sessionStorage.removeItem('nexo_token'); // iOS ITP cleanup
       navigate('/login');
     }
   }, [navigate]);

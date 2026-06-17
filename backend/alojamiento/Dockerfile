@@ -6,7 +6,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # nginx — sin apache2, sin MPM, sin conflictos
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nginx git unzip net-tools curl \
+    && apt-get install -y --no-install-recommends nginx git unzip net-tools curl mosquitto mosquitto-clients \
     && rm -rf /var/lib/apt/lists/*
 
 RUN install-php-extensions pdo_pgsql mysqli redis sockets zip pcntl

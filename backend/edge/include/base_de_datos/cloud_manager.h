@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include "base_de_datos/encryption.h"
+#include "hal/IHttpClient.h"
 
 /**
  * CloudManager — Linux-native cloud sync via libcurl.
@@ -28,10 +29,13 @@ public:
     void setInstitutionId(int id) { m_instId = id; }
     int  getInstitutionId() const { return m_instId; }
 
+    void setHttpClient(IHttpClient* client) { m_httpClient = client; }
+
 private:
     CloudManager();
     std::string m_apiUrl;
     int m_instId = -1;
+    IHttpClient* m_httpClient = nullptr; // nullptr = usar libcurl real
 
     std::string buildAuthenticatedRequest(const std::string& jsonData, int instId);
     std::string loadApiUrl();

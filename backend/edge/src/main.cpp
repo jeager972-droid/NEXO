@@ -32,7 +32,6 @@
 #include "hardware/dev_stub/DevStubBiometricSensor.h"
 #include "hardware/dev_stub/DevStubDisplay.h"
 #include "hardware/dev_stub/DevStubNotification.h"
-#include "hardware/dev_stub/DevStubHttpClient.h"
 #include "interoperabilidad/audit_trail.h"
 
 // ============================================================
@@ -175,6 +174,7 @@ private:
             j["parent_tel"] = est.telefono_acudiente;
             j["captured_at"] = record.timestamp; // <-- ¡LA MAGIA OCURRE AQUÍ!
             j["device_token"] = ConfigManager::getInstance().getDeviceToken();
+            j["device_id"] = ConfigManager::getInstance().getDeviceId();
             uint64_t micro = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
             j["nonce"] = std::to_string(micro) + "_" + est.documento + "_" + std::to_string(nonceCounter.fetch_add(1));
@@ -718,8 +718,7 @@ int main() {
     }
     auto display = std::make_unique<DevStubDisplay>();
     auto notification = std::make_unique<DevStubNotification>();
-    auto httpClient = std::make_unique<DevStubHttpClient>();
-    LOG_INFO("HAL initialized (dev-stub mode)");
+    LOG_INFO("HAL initialized (dev-stub mode, real HTTP sync)");
 
     // FIX: Si el reloj es inválido, mostrar error en OLED y bloquear lecturas biométricas
     if (!g_clockValid.load(std::memory_order_acquire)) {
@@ -789,11 +788,31 @@ int main() {
             }
         }
 
-        // FIX: En systemd (sin TTY), no imprimir menú ni hacer busy-loop
-        if (!isatty(STDIN_FILENO)) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            continue;
-        }
+        // FIX: En systemd (sin TTY), auto-ejecutar modo de escaneo biométrico para simulación
+        // DISABLED: Transformado a Panel de Control Interactivo
+        // if (!isatty(STDIN_FILENO)) {
+        //     // Auto-Poblar SQLite con el estudiante para simulación
+        //     auto& db = SqliteManager::getInstance();
+        //     Estudiante est{"100000001", "Jhon Edison", "+573243607948", "Acudiente Prueba", 1, std::vector<uint8_t>(256, 0)};
+        //     db.saveEstudiante(est);
+        //
+        //     // Bloquear lecturas biométricas si el reloj no está sincronizado
+        //     if (!g_clockValid.load(std::memory_order_acquire)) {
+        //         std::this_thread::sleep_for(std::chrono::seconds(15));
+        //         continue;
+        //     }
+        //
+        //     // Simular lectura biométrica periódica para pruebas automatizadas
+        //     std::this_thread::sleep_for(std::chrono::seconds(15));
+        //     std::vector<uint8_t> mockTpl(256, 0);
+        //     uint32_t uid = 1; // ID de prueba
+        //     float score = 95.0f;
+        //     auto res = biometricSensor->searchUser(mockTpl, uid, score);
+        //     if (res) {
+        //         handleBiometricMatch(uid, display.get(), notification.get(), syncWorker);
+        //     }
+        //     continue;
+        // }
 
         showMainMenu();
 
@@ -851,6 +870,17 @@ int main() {
                 syncWorker.nudge();
                 std::cout << "Sync worker notificado.\n";
                 break;
+            case '5': {
+                std::cout << "Simular estudiante al baño (ID: 100000001)..." << std::endl;
+                handleBiometricMatch(1, display.get(), notification.get(), syncWorker);
+                break;
+            }
+            case '6': {
+                std::cout << "Simular evento de inasistencia..." << std::endl;
+                AuditTrail::logEvent("100000001", "INASISTENCIA_MANUAL");
+                syncWorker.nudge();
+                break;
+            }
             case '0':
                 g_shutdownRequested.store(true);
                 break;

@@ -55,13 +55,16 @@ function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
         echo json_encode(['error' => 'ID de estudiante con formato inválido.']);
         exit();
     }
-    if ($groupId) {
-        $conds[] = "{$tableAlias}.{$studentCol} IN (SELECT student_id FROM student_group_assignments WHERE group_id = ? AND active = TRUE)";
-        $params[] = $groupId;
-    }
-    if ($studentId) {
-        $conds[] = "{$tableAlias}.{$studentCol} = ?";
-        $params[] = $studentId;
+    // Skip student/group filters if studentCol is null (for tables without student_id)
+    if ($studentCol !== null) {
+        if ($groupId) {
+            $conds[] = "{$tableAlias}.{$studentCol} IN (SELECT student_id FROM student_group_assignments WHERE group_id = ? AND active = TRUE)";
+            $params[] = $groupId;
+        }
+        if ($studentId) {
+            $conds[] = "{$tableAlias}.{$studentCol} = ?";
+            $params[] = $studentId;
+        }
     }
     return ['conds' => $conds, 'params' => $params];
 }
@@ -955,7 +958,8 @@ if ($cleanPath === '/audit/security/failed-attempts' && $method === 'GET') {
 
 if ($cleanPath === '/audit/sos/alerts' && $method === 'GET') {
     try {
-        $f = auditFilters('sa', 'emitted_at', 'student_id');
+        // SOS alerts don't have student_id, pass null to skip student/group filters
+        $f = auditFilters('sa', 'emitted_at', null);
         $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
         $params = array_merge([$schoolId], $f['params']);
         $stmt = $conn->prepare("

@@ -51,10 +51,37 @@ static bool curlPost(const std::string& url, const std::string& postData,
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
 
     CURLcode res = curl_easy_perform(curl);
+    long httpCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
-    if (res != CURLE_OK) { LOG_ERROR("curl failed: {}", curl_easy_strerror(res)); return false; }
+
+    if (res != CURLE_OK) {
+        LOG_ERROR("curl failed: {}", curl_easy_strerror(res));
+        return false;
+    }
+    // Accept 200 OK and 202 Accepted (backend returns 202 for edge ingest)
+    if (httpCode != 200 && httpCode != 202) {
+        LOG_ERROR("Cloud sync HTTP {}: {}", httpCode, response.substr(0, 200));
+        return false;
+    }
     return true;
+}
+
+static bool httpClientPost(IHttpClient* client, const std::string& url,
+                          const std::string& postData, const std::string& authToken,
+                          std::string& response) {
+    if (!client) return false;
+
+    std::map<std::string, std::string> headers;
+    headers["Content-Type"] = "application/json";
+    headers["User-Agent"] = "NEXO-Edge-RPi4/2.0";
+    headers["Accept"] = "application/json";
+    if (!authToken.empty()) {
+        headers["X-NEXO-TOKEN"] = authToken;
+    }
+
+    return client->postRequest(url, postData, headers, response);
 }
 
 // FIX: Safe JSON serialization using nlohmann
@@ -88,7 +115,15 @@ bool CloudManager::syncRecord(const std::string& jsonData) {
     std::string body = buildAuthenticatedRequest(jsonData, m_instId);
     if (body.empty()) return false;
     std::string response;
-    bool ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), response);
+    bool ok;
+
+    // Use IHttpClient stub if available (dev mode), otherwise use real libcurl
+    if (m_httpClient) {
+        ok = httpClientPost(m_httpClient, m_apiUrl, body, Encryption::getInstance().getToken(), response);
+    } else {
+        ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), response);
+    }
+
     if (ok) LOG_DEBUG("Cloud sync OK"); else LOG_ERROR("Cloud sync failed");
     return ok;
 }

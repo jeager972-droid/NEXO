@@ -509,80 +509,129 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 break;
 
             case 'permiso':
-            case 'autorizar_salida':
-            case 'incidente':
-            case 'solicitud':
-            case 'daño':
-            case 'pedagogica':
-            case 'horario':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 if ($reason === '') {
-                    $reason = strtoupper($action) . ' - generado por sistema NEXO';
+                    $reason = 'PERMISO - generado por sistema NEXO';
                 }
 
                 if ($studentId) {
-                    $incStmt = $conn->prepare("
-                        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
-                        VALUES (uuid_generate_v4(), ?, ?, ?, NOW())
+                    $stmt = $conn->prepare("
+                        INSERT INTO class_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, return_time)
+                        VALUES (?, ?, ?, ?, NOW(), NOW() + INTERVAL '1 hour')
                     ");
-                    $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
+                    $stmt->execute([$schoolId, $studentId, $userId, $reason]);
 
-                    // Notificar COORDINADOR vía notificaciones internas para permisos
-                    if (in_array($action, ['permiso', 'autorizar_salida'])) {
-                        // Fetch student + group details for metadata
-                        $stuMetaStmt = $conn->prepare("
-                            SELECT s.first_name, s.last_name, ag.group_name
-                            FROM students s
-                            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
-                            WHERE s.student_id = ?
-                            LIMIT 1
-                        ");
-                        $stuMetaStmt->execute([$studentId]);
-                        $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
-                        $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
-                        $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
-                        $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
+                    // Notificar COORDINADOR vía notificaciones internas
+                    $stuMetaStmt = $conn->prepare("
+                        SELECT s.first_name, s.last_name, ag.group_name
+                        FROM students s
+                        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                        WHERE s.student_id = ?
+                        LIMIT 1
+                    ");
+                    $stuMetaStmt->execute([$studentId]);
+                    $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
+                    $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
+                    $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
+                    $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
 
-                        $meta = json_encode([
-                            'student_id' => $studentId,
-                            'student_name' => trim($studentName),
-                            'group_name' => $groupName,
-                            'teacher_name' => trim($teacherName) ?: $role,
-                            'reason' => $reason,
-                            'time_start' => $params['timeStart'] ?? null,
-                            'time_end' => $params['timeEnd'] ?? null,
-                            'action' => $action,
-                        ], JSON_UNESCAPED_UNICODE);
+                    $meta = json_encode([
+                        'student_id' => $studentId,
+                        'student_name' => trim($studentName),
+                        'group_name' => $groupName,
+                        'teacher_name' => trim($teacherName) ?: $role,
+                        'reason' => $reason,
+                        'time_start' => $params['timeStart'] ?? null,
+                        'time_end' => $params['timeEnd'] ?? null,
+                        'action' => 'permiso',
+                    ], JSON_UNESCAPED_UNICODE);
 
-                        $coordStmt = $conn->prepare("
-                            SELECT user_id FROM users
-                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
-                        ");
-                        $coordStmt->execute([$schoolId]);
-                        while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
-                            try {
-                                $label = $action === 'autorizar_salida' ? 'Salida autorizada' : 'Permiso';
-                                $notifStmt = $conn->prepare("
-                                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                    VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
-                                ");
-                                $notifStmt->execute([$schoolId, $cRow['user_id'], $label, "Nuevo {$label} registrado. Ver detalles.", $meta]);
-                            } catch (Throwable $e) {
-                                error_log("[OPERATIONS] Permiso notification insert error: " . $e->getMessage());
-                            }
+                    $coordStmt = $conn->prepare("
+                        SELECT user_id FROM users
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
+                    ");
+                    $coordStmt->execute([$schoolId]);
+                    while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
+                        try {
+                            $notifStmt = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
+                            ");
+                            $notifStmt->execute([$schoolId, $cRow['user_id'], 'Permiso', "Nuevo permiso registrado. Ver detalles.", $meta]);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] Permiso notification insert error: " . $e->getMessage());
+                        }
+                    }
+                }
+                break;
+
+            case 'autorizar_salida':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
+                if ($reason === '') {
+                    $reason = 'AUTORIZAR_SALIDA - generado por sistema NEXO';
+                }
+
+                if ($studentId) {
+                    $stmt = $conn->prepare("
+                        INSERT INTO school_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, status)
+                        VALUES (?, ?, ?, ?, NOW(), 'APPROVED')
+                    ");
+                    $stmt->execute([$schoolId, $studentId, $userId, $reason]);
+
+                    // Notificar COORDINADOR vía notificaciones internas
+                    $stuMetaStmt = $conn->prepare("
+                        SELECT s.first_name, s.last_name, ag.group_name
+                        FROM students s
+                        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                        WHERE s.student_id = ?
+                        LIMIT 1
+                    ");
+                    $stuMetaStmt->execute([$studentId]);
+                    $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
+                    $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
+                    $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
+                    $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
+
+                    $meta = json_encode([
+                        'student_id' => $studentId,
+                        'student_name' => trim($studentName),
+                        'group_name' => $groupName,
+                        'teacher_name' => trim($teacherName) ?: $role,
+                        'reason' => $reason,
+                        'time_start' => $params['timeStart'] ?? null,
+                        'time_end' => $params['timeEnd'] ?? null,
+                        'action' => 'autorizar_salida',
+                    ], JSON_UNESCAPED_UNICODE);
+
+                    $coordStmt = $conn->prepare("
+                        SELECT user_id FROM users
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
+                    ");
+                    $coordStmt->execute([$schoolId]);
+                    while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
+                        try {
+                            $notifStmt = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
+                            ");
+                            $notifStmt->execute([$schoolId, $cRow['user_id'], 'Salida autorizada', "Nueva salida autorizada registrada. Ver detalles.", $meta]);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] Autorizar salida notification insert error: " . $e->getMessage());
                         }
                     }
 
-                    // Autorizar salida: enviar WhatsApp al acudiente avisándole
-                    if ($action === 'autorizar_salida' && !empty($stuMeta)) {
+                    // Enviar WhatsApp al acudiente avisándole
+                    if (!empty($stuMeta)) {
                         $guardsStmt = $conn->prepare("
                             SELECT g.guardian_id, g.whatsapp_phone, u.phone AS guardian_user_phone
                             FROM guardians g
                             JOIN guardian_student_relationships gsr ON gsr.guardian_id = g.guardian_id AND gsr.student_id = ? AND gsr.primary_guardian = TRUE
                             LEFT JOIN users u ON u.user_id = g.user_id
-                            WHERE g.school_id = ?
+                            WHERE u.school_id = ?
                             LIMIT 1
                         ");
                         $guardsStmt->execute([$studentId, $schoolId]);
@@ -614,8 +663,39 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             }
                         }
                     }
+                }
+                break;
 
-                    // NOTE: permiso NO envía WhatsApp
+            case 'pedagogica':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                $destination = trim((string)($params['destination'] ?? $params['destino'] ?? ''));
+                $purpose = trim((string)($params['purpose'] ?? $params['proposito'] ?? $params['reason'] ?? ''));
+                
+                if ($studentId && $destination) {
+                    $stmt = $conn->prepare("
+                        INSERT INTO pedagogical_trip_authorizations (school_id, student_id, authorized_by_user_id, destination, departure_time, return_time, purpose)
+                        VALUES (?, ?, ?, ?, NOW(), NOW() + INTERVAL '8 hours', ?)
+                    ");
+                    $stmt->execute([$schoolId, $studentId, $userId, $destination, $purpose]);
+                }
+                break;
+
+            case 'incidente':
+            case 'solicitud':
+            case 'daño':
+            case 'horario':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
+                if ($reason === '') {
+                    $reason = strtoupper($action) . ' - generado por sistema NEXO';
+                }
+
+                if ($studentId) {
+                    $incStmt = $conn->prepare("
+                        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
+                        VALUES (uuid_generate_v4(), ?, ?, ?, NOW())
+                    ");
+                    $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
                 }
 
                 // Notificación grupal para cambio de horario (NO para pedagógica — sin aviso a acudientes)

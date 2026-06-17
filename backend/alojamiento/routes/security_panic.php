@@ -18,19 +18,33 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
     }
 
     try {
-        // 1. Limpiar jwt_blocklist (invalidar TODAS las sesiones activas)
-        $stmt = $conn->prepare("DELETE FROM jwt_blocklist WHERE revoked_at < NOW() - INTERVAL '90 days'");
-        $stmt->execute();
-        
-        // NOTA CRÍTICA: NO truncar jwt_blocklist. La tabla jwt_blocklist es una lista negra (blacklist).
-        // Truncarla restauraría acceso a tokens previamente revocados por razones de seguridad,
-        // permitiendo que sesiones comprometidas vuelvan a ser válidas. En su lugar, limpiar solo
-        // entradas antiguas (>90 días) es suficiente para mantener el rendimiento.
-        
-        // 2. Desactivar los edge_devices del colegio del usuario autenticado
+        // 1. Desactivar los edge_devices del colegio del usuario autenticado
         $stmt = $conn->prepare("UPDATE edge_devices SET active = FALSE, last_ping = NOW() WHERE school_id = ?");
         $stmt->execute([$authUser['school_id']]);
         $affectedDevices = $stmt->rowCount();
+        
+        // 2. Registrar el evento de pánico en school_panic_events (esto revoca todas las sesiones)
+        $panicTimestamp = time();
+        $stmt = $conn->prepare("
+            INSERT INTO school_panic_events (school_id, triggered_by_user_id, devices_deactivated, metadata_json)
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            $authUser['school_id'],
+            $authUser['id'],
+            $affectedDevices,
+            json_encode(['user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'])
+        ]);
+
+        // 2.5. Cache panic event in Redis for fast JWT verification
+        try {
+            $redis = new Redis();
+            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+            if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
+            $redis->setex("panic:school:" . $authUser['school_id'], 86400, (string)$panicTimestamp);
+        } catch (Exception $e) {
+            securityLog('PANIC_REDIS_CACHE_ERROR', $e->getMessage());
+        }
         
         // 3. Registrar el evento de pánico en auditoría
         securityLog(
@@ -54,7 +68,8 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
             'status' => 'ok',
             'message' => 'Modo de emergencia activado',
             'sessions_revoked' => true,
-            'devices_deactivated' => $affectedDevices
+            'devices_deactivated' => $affectedDevices,
+            'panic_timestamp' => $panicTimestamp
         ]);
         
     } catch (Exception $e) {

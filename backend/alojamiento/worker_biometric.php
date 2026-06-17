@@ -8,6 +8,13 @@
 declare(ticks=1);
 require_once __DIR__ . '/db.php';
 
+// Configurar rol para bypass de RLS (igual que worker_audit.php y worker_twilio.php)
+try {
+    $pdo->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)");
+} catch (PDOException $e) {
+    logW('ROLE_SET_SKIP', $e->getMessage());
+}
+
 $shutdown = false;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
 
@@ -40,6 +47,7 @@ function processJob(array $job, PDO $conn): bool {
         case 'SYNC_ATTENDANCE':
             $doc = trim($data['doc'] ?? '');
             $evt = strtoupper($data['event'] ?? '');
+            $deviceId = $job['device_id'] ?? null;
             $fingerprint = hash('sha256', implode(':', [
                 (string)$instId,
                 $doc,
@@ -51,12 +59,14 @@ function processJob(array $job, PDO $conn): bool {
             // Si el worker re-procesa un job (ej. tras GC de zombies), el INSERT
             // es idempotente y no crea duplicados con distinto UUID.
             $stmt = $conn->prepare(
-                "INSERT INTO biometric_events(event_id,school_id,student_id,event_type,event_timestamp,source_device,event_fingerprint)
-                 SELECT uuid_generate_v4(),school_id,student_id,?,to_timestamp(?),'EDGE',?
-                 FROM students WHERE document_number=? LIMIT 1
-                 ON CONFLICT (event_fingerprint) DO NOTHING"
+                "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
+                 SELECT uuid_generate_v4(),school_id,student_id,
+                        ?,
+                        ?,'PROCESSED',to_timestamp(?),?
+                 FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
+                 ON CONFLICT (event_fingerprint, event_timestamp) DO NOTHING"
             );
-            $stmt->execute([$evt, $capturedAt, $fingerprint, $doc]);
+            $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
             return $stmt->rowCount() > 0;
 
         case 'REGISTER_STUDENT':
@@ -69,20 +79,53 @@ function processJob(array $job, PDO $conn): bool {
 
             $conn->beginTransaction();
             try {
-                $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
+                $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
                 $stmt->execute([$schoolId, $doc, $nombre]);
                 $studentId = $stmt->fetchColumn();
 
                 if (!empty($parentDoc) && !empty($parentName)) {
-                    $stmt = $conn->prepare("SELECT guardian_id FROM guardians WHERE document_number=?");
+                    // Search for guardian by document_number in users table
+                    $stmt = $conn->prepare("
+                        SELECT g.guardian_id, u.user_id FROM guardians g
+                        JOIN users u ON u.user_id = g.user_id
+                        WHERE u.document_number = ?
+                    ");
                     $stmt->execute([$parentDoc]);
-                    $guardianId = $stmt->fetchColumn();
-                    if ($guardianId) {
-                        $stmt = $conn->prepare("UPDATE guardians SET full_name=?, whatsapp_phone=COALESCE(?,whatsapp_phone) WHERE guardian_id=?");
-                        $stmt->execute([$parentName, $parentTel, $guardianId]);
+                    $guardianRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($guardianRow) {
+                        $guardianId = $guardianRow['guardian_id'];
+                        $userId = $guardianRow['user_id'];
+                        // Update user name and phone
+                        $nameParts = explode(' ', $parentName, 2);
+                        $firstName = $nameParts[0];
+                        $lastName = $nameParts[1] ?? '';
+                        $stmt = $conn->prepare("UPDATE users SET first_name=?, last_name=?, phone=COALESCE(?,phone) WHERE user_id=?");
+                        $stmt->execute([$firstName, $lastName, $parentTel, $userId]);
+                        // Update guardian whatsapp_phone
+                        $stmt = $conn->prepare("UPDATE guardians SET whatsapp_phone=COALESCE(?,whatsapp_phone) WHERE guardian_id=?");
+                        $stmt->execute([$parentTel, $guardianId]);
                     } else {
-                        $stmt = $conn->prepare("INSERT INTO guardians(document_number,full_name,whatsapp_phone) VALUES(?,?,?) RETURNING guardian_id");
-                        $stmt->execute([$parentDoc, $parentName, $parentTel]);
+                        // Obtener el role_id de un rol base para acudientes
+                        $roleStmt = $conn->prepare("SELECT role_id FROM roles WHERE role_name = 'GUARDIAN' LIMIT 1");
+                        $roleStmt->execute();
+                        $guardianRoleId = $roleStmt->fetchColumn();
+
+                        if (!$guardianRoleId) {
+                            throw new Exception('Rol GUARDIAN no encontrado en la DB');
+                        }
+
+                        // Insert user first
+                        $nameParts = explode(' ', $parentName, 2);
+                        $firstName = $nameParts[0];
+                        $lastName = $nameParts[1] ?? '';
+                        $lockedHash = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
+                        $stmt = $conn->prepare("INSERT INTO users(school_id,role_id,document_number,first_name,last_name,phone,password_hash,password_salt,active) VALUES(?,?,?,?,?,?,?,?,TRUE) RETURNING user_id");
+                        $stmt->execute([$schoolId, $guardianRoleId, $parentDoc, $firstName, $lastName, $parentTel, $lockedHash, '']);
+                        $userId = $stmt->fetchColumn();
+                        // Then insert guardian linking to user
+                        $stmt = $conn->prepare("INSERT INTO guardians(user_id,whatsapp_phone) VALUES(?,?) RETURNING guardian_id");
+                        $stmt->execute([$userId, $parentTel]);
                         $guardianId = $stmt->fetchColumn();
                     }
                     $stmt = $conn->prepare("SELECT 1 FROM guardian_student_relationships WHERE student_id=? AND guardian_id=?");
@@ -200,14 +243,22 @@ while (!$shutdown) {
                 $redis->lRem('queue:biometric_processing', $item, 0);
                 logW('OK', sprintf("action=%s req=%s", $job['action'] ?? '?', $job['request_id'] ?? 'n/a'));
             } else {
-                // Logic failure: move to retry, remove from processing
-                $redis->lPush('queue:biometric_ingest_retry', $item);
+                // Logic failure: reencolar en la cola principal para reintentar (igual que excepción DB)
+                $redis->lPush('queue:biometric_ingest', $item);
                 $redis->lRem('queue:biometric_processing', $item, 0);
+                logW('LOGIC_FAIL', sprintf("action=%s, requeued", $job['action'] ?? '?'));
             }
         } catch (Exception $e) {
             logW('ERR', $e->getMessage());
-            // PHP crashed or DB failed: requeue to main, remove from processing
-            $redis->lPush('queue:biometric_ingest', $item);
+            $jobArray = json_decode($item, true) ?: [];
+            $retries = ($jobArray['retries'] ?? 0) + 1;
+            $jobArray['retries'] = $retries;
+            
+            if ($retries <= 3) {
+                $redis->rPush('queue:biometric_ingest', json_encode($jobArray, JSON_UNESCAPED_UNICODE));
+            } else {
+                $redis->rPush('queue:biometric_dlq', json_encode($jobArray, JSON_UNESCAPED_UNICODE));
+            }
             $redis->lRem('queue:biometric_processing', $item, 0);
         }
     } catch (Exception $e) {
@@ -219,7 +270,7 @@ while (!$shutdown) {
     if (time() - $lastGc >= 60) {
         $lastGc = time();
         try {
-            $recovered = $redis->eval($scriptGc, ['queue:biometric_processing', 'queue:biometric_ingest'], 2, $GC_MAX_AGE_SEC, time());
+            $recovered = $redis->eval($scriptGc, ['queue:biometric_processing', 'queue:biometric_ingest', $GC_MAX_AGE_SEC, time()], 2);
             if ($recovered > 0) {
                 logW('GC_ZOMBIE', "Recovered {$recovered} zombie job(s) after {$GC_MAX_AGE_SEC}s");
             }

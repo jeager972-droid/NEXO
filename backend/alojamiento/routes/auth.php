@@ -214,6 +214,7 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             
             echo json_encode([
                 'status' => 'ok',
+                'token' => $token,
                 'user' => [
                     'id' => $user['user_id'],
                     'nombre' => $user['first_name'] . ' ' . $user['last_name'],
@@ -298,9 +299,12 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             $incrStmt = $conn->prepare("
                 UPDATE verification_codes
                 SET attempts = attempts + 1
-                WHERE user_id = ? AND purpose = 'login_2fa'
-                ORDER BY created_at DESC
-                LIMIT 1
+                WHERE code_id = (
+                    SELECT code_id FROM verification_codes
+                    WHERE user_id = ? AND purpose = 'login_2fa'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
             ");
             $incrStmt->execute([$user['user_id']]);
             http_response_code(400);
@@ -347,6 +351,7 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         securityLog('LOGIN_2FA_SUCCESS', "User authenticated via 2FA: " . $user['user_id']);
         echo json_encode([
             'status' => 'ok',
+            'token' => $token,
             'user' => [
                 'id' => $user['user_id'],
                 'nombre' => $user['first_name'] . ' ' . $user['last_name'],
@@ -366,7 +371,14 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
     exit;
 }
 
-if ($cleanPath === '/auth/logout') {
+if ($cleanPath === '/auth/logout' && $method === 'POST') {
+    // CSRF check: require X-Requested-With header
+    if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || 
+        $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest') {
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Request forbidden']));
+    }
+
     $token = extractBearerToken();
     if ($token) {
         try {

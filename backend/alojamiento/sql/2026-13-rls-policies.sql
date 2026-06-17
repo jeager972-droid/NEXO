@@ -231,14 +231,17 @@ CREATE POLICY sga_delete ON student_group_assignments FOR DELETE
           AND ag.school_id = get_current_school_id()
     ) OR is_super_rector());
 
--- jwt_blocklist: tabla global (sin school_id), solo SUPER_RECTOR puede ver/insertar
+-- jwt_blocklist: tabla global (sin school_id), permite INSERT/SELECT para operaciones del sistema
+-- FIX (BUG-8): jwt_blocklist es una tabla de sistema para revocación de JWT, no datos de usuario.
+-- Las operaciones revokeJwt() e isJwtRevoked() se ejecutan antes de requireAuth() configure el rol,
+-- por lo que la política no puede depender de is_super_rector(). Se permite acceso a cualquier conexión.
 ALTER TABLE jwt_blocklist ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS jbl_select ON jwt_blocklist;
 DROP POLICY IF EXISTS jbl_insert ON jwt_blocklist;
 CREATE POLICY jbl_select ON jwt_blocklist FOR SELECT
-    USING (is_super_rector());
+    USING (true);
 CREATE POLICY jbl_insert ON jwt_blocklist FOR INSERT
-    WITH CHECK (is_super_rector());
+    WITH CHECK (true);
 
 -- ============================================================
 -- NOTA PARA EL BACKEND PHP

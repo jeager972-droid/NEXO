@@ -58,7 +58,7 @@ if ($cleanPath === '/students') {
             $stmt = $conn->prepare("
                 INSERT INTO students (school_id, first_name, last_name, document_number, active)
                 VALUES (?, ?, ?, ?, TRUE)
-                ON CONFLICT (document_number) DO UPDATE
+                ON CONFLICT (school_id, document_number) DO UPDATE
                   SET first_name = EXCLUDED.first_name,
                       last_name  = EXCLUDED.last_name,
                       active     = TRUE
@@ -72,6 +72,13 @@ if ($cleanPath === '/students') {
                 $groupStmt->execute([$groupName, $schoolId]);
                 $groupId = $groupStmt->fetchColumn();
                 if ($groupId) {
+                    // Deactivate previous group assignments before creating the new one
+                    $deactivateStmt = $conn->prepare(
+                        "UPDATE student_group_assignments SET active = FALSE 
+                         WHERE student_id = ? AND group_id != ?"
+                    );
+                    $deactivateStmt->execute([$studentId, $groupId]);
+                    
                     $assignStmt = $conn->prepare("
                         INSERT INTO student_group_assignments (student_id, group_id, active)
                         VALUES (?, ?, TRUE)

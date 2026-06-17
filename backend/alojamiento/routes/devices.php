@@ -10,7 +10,7 @@ require_once __DIR__ . '/_auth_middleware.php';
 
 if ($cleanPath === '/devices' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
-    $stmt = $conn->prepare("SELECT device_id, name, location, active, last_ping, created_at FROM edge_devices WHERE school_id = ? ORDER BY created_at DESC");
+    $stmt = $conn->prepare("SELECT device_id, device_name, location, active, last_ping, created_at FROM edge_devices WHERE school_id = ? ORDER BY created_at DESC");
     $stmt->execute([$authUser['school_id']]);
     echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     exit;
@@ -29,7 +29,7 @@ if ($cleanPath === '/devices' && $method === 'POST') {
     $rawToken = bin2hex(random_bytes(32));
     $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
 
-    $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, name, location, token_hash) VALUES (?, ?, ?, ?) RETURNING device_id");
+    $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash) VALUES (?, ?, ?, ?) RETURNING device_id");
     $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash]);
     $deviceId = $stmt->fetchColumn();
 
@@ -225,7 +225,7 @@ if ($cleanPath === '/admin/devices' && $method === 'GET') {
         if ($healthOnly) {
             // Dispositivos sin ping en los últimos 5 minutos
             $stmt = $conn->prepare("
-                SELECT device_id, name, location, school_id, last_ping, status,
+                SELECT device_id, device_name, location, school_id, last_ping, status,
                        EXTRACT(EPOCH FROM (NOW() - last_ping))::INTEGER as seconds_since_ping
                 FROM edge_devices
                 WHERE last_ping < NOW() - INTERVAL '5 minutes'
@@ -235,7 +235,7 @@ if ($cleanPath === '/admin/devices' && $method === 'GET') {
             $stmt->execute();
         } else {
             $stmt = $conn->prepare("
-                SELECT device_id, name, location, school_id, last_ping, status,
+                SELECT device_id, device_name, location, school_id, last_ping, status,
                        EXTRACT(EPOCH FROM (NOW() - last_ping))::INTEGER as seconds_since_ping
                 FROM edge_devices
                 ORDER BY last_ping DESC NULLS LAST

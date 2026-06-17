@@ -504,15 +504,25 @@ const Profile = () => {
             onChange={e => setEmail(e.target.value)}
             placeholder="usuario@institucion.edu.co"
           />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => updateField('email_change', email)}
-              disabled={actionLoading || !email || email === profile?.email}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-            >
-              <Save size={12} /> Guardar
-            </button>
-
+          <div className="flex items-center justify-between">
+            <OtpBlock
+              purpose="email_change"
+              target={email}
+              label="correo electrónico"
+              disabled={!email || email === profile?.email}
+              onVerified={() => setVerified(v => ({ ...v, email: true }))}
+            />
+            <div className="flex items-center gap-2">
+              {verified.email && (
+                <button
+                  onClick={() => updateField('email_change', email)}
+                  disabled={actionLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
+                >
+                  <Save size={12} /> Guardar
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

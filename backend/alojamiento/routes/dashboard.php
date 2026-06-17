@@ -82,15 +82,16 @@ if ($cleanPath === '/dashboard/stats') {
         $absentCount = $absentStmt->fetchColumn();
 
         // 3. Alertas (SOS + Riesgos/Incidentes) (Bogotá TZ)
+        // SOS alerts don't have student_id, so they're counted globally without group filter
         $alertsSql = "
-            SELECT 
-                (SELECT COUNT(*) FROM sos_alerts sa WHERE sa.school_id = ? AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND sa.resolved = FALSE " . ($groupName ? " AND sa.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
+            SELECT
+                (SELECT COUNT(*) FROM sos_alerts sa WHERE sa.school_id = ? AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND sa.resolved = FALSE)
                 +
                 (SELECT COUNT(*) FROM attendance_incidents ai WHERE ai.school_id = ? AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%') " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
             AS total_alerts
         ";
         $alertsStmt = $conn->prepare($alertsSql);
-        $alertsParams = $groupName ? [$schoolId, $groupName, $schoolId, $groupName] : [$schoolId, $schoolId];
+        $alertsParams = $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId];
         $alertsStmt->execute($alertsParams);
         $alertsCount = $alertsStmt->fetchColumn();
 

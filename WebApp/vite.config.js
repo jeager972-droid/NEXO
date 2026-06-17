@@ -29,7 +29,7 @@ export default defineConfig({
         navigateFallback: '/app/index.html',
         runtimeCaching: [
           {
-            urlPattern: ({ url, request }) => url.pathname.startsWith('/api') && request.method === 'POST',
+            urlPattern: ({ url, request }) => url.pathname.startsWith('/v1') && request.method === 'POST',
             handler: 'NetworkOnly',
             options: {
               backgroundSync: {
@@ -41,7 +41,7 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api'),
+            urlPattern: ({ url }) => url.pathname.startsWith('/v1'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'nexo-api-cache',

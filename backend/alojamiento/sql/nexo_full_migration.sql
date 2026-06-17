@@ -14,14 +14,14 @@ CREATE INDEX IF NOT EXISTS idx_school_municipality ON schools(municipality_id);
 CREATE TABLE IF NOT EXISTS roles (role_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), role_name VARCHAR(100) UNIQUE NOT NULL, description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS role_permissions (role_permission_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), role_id UUID NOT NULL REFERENCES roles(role_id), permission_id UUID NOT NULL REFERENCES permissions(permission_id), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_role_permission_role ON role_permissions(role_id);
-CREATE TABLE IF NOT EXISTS users (user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), role_id UUID NOT NULL REFERENCES roles(role_id), document_number VARCHAR(30) UNIQUE NOT NULL, first_name VARCHAR(120) NOT NULL, last_name VARCHAR(120) NOT NULL, email VARCHAR(255), phone VARCHAR(30), password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE, last_login_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS users (user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), role_id UUID NOT NULL REFERENCES roles(role_id), document_number VARCHAR(30) NOT NULL, first_name VARCHAR(120) NOT NULL, last_name VARCHAR(120) NOT NULL, email VARCHAR(255) UNIQUE, phone VARCHAR(30), password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE, last_login_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ, CONSTRAINT uq_users_school_document UNIQUE (school_id, document_number));
 CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id); CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id);
 CREATE TABLE IF NOT EXISTS user_sessions (session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), user_id UUID NOT NULL REFERENCES users(user_id), refresh_token_hash TEXT NOT NULL, ip_address INET, user_agent TEXT, expires_at TIMESTAMPTZ NOT NULL, revoked BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), revoked_at TIMESTAMPTZ);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
 CREATE TABLE IF NOT EXISTS staff_records (staff_record_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), user_id UUID NOT NULL REFERENCES users(user_id), hired_at DATE, position_name VARCHAR(120), employee_code VARCHAR(120), active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_staff_school ON staff_records(school_id);
 CREATE TABLE IF NOT EXISTS guardians (guardian_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), user_id UUID UNIQUE NOT NULL REFERENCES users(user_id), whatsapp_phone VARCHAR(30) NOT NULL, emergency_contact BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-CREATE TABLE IF NOT EXISTS students (student_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), document_number VARCHAR(30) UNIQUE NOT NULL, first_name VARCHAR(120) NOT NULL, last_name VARCHAR(120) NOT NULL, birth_date DATE, biometric_hash TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS students (student_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), document_number VARCHAR(30) NOT NULL, first_name VARCHAR(120) NOT NULL, last_name VARCHAR(120) NOT NULL, birth_date DATE, biometric_hash TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ, CONSTRAINT uq_students_school_document UNIQUE (school_id, document_number));
 CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
 CREATE TABLE IF NOT EXISTS guardian_student_relationships (relationship_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), guardian_id UUID NOT NULL REFERENCES guardians(guardian_id), student_id UUID NOT NULL REFERENCES students(student_id), relationship_type VARCHAR(80), primary_guardian BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS academic_groups (group_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), group_name VARCHAR(120) NOT NULL, grade_level VARCHAR(50), academic_year INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS student_record_audit (audit_id UUID NOT NULL, school_
 CREATE TABLE IF NOT EXISTS global_audit_logs (log_id UUID NOT NULL, school_id UUID, performed_by_user_id UUID, action_type VARCHAR(120) NOT NULL, entity_type VARCHAR(120), entity_id UUID, action_details JSONB, ip_address INET, user_agent TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(log_id, created_at)) PARTITION BY RANGE(created_at);
 CREATE TABLE IF NOT EXISTS report_exports (report_export_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL, generated_by_user_id UUID NOT NULL, report_type VARCHAR(120) NOT NULL, file_format VARCHAR(50) NOT NULL, storage_path TEXT, generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), metadata_json JSONB);
 CREATE TABLE IF NOT EXISTS student_behavior_metrics (metric_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), student_id UUID NOT NULL REFERENCES students(student_id), calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), late_count INTEGER NOT NULL DEFAULT 0, absence_count INTEGER NOT NULL DEFAULT 0, total_events INTEGER NOT NULL DEFAULT 0, risk_score NUMERIC(5,2) NOT NULL DEFAULT 0.00, risk_level VARCHAR(20) CHECK(risk_level IN('LOW','MEDIUM','HIGH','CRITICAL')), calculation_window_days INTEGER NOT NULL DEFAULT 30, metadata_json JSONB, CONSTRAINT uq_behavior_student_window UNIQUE(student_id,calculation_window_days));
+CREATE TABLE IF NOT EXISTS student_tracking (tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE, status VARCHAR(50) NOT NULL DEFAULT 'en proceso', created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS student_tracking_notes (note_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), tracking_id UUID NOT NULL REFERENCES student_tracking(tracking_id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, note_text TEXT NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_tracking_school_status ON student_tracking(school_id, status);
+CREATE INDEX IF NOT EXISTS idx_tracking_notes_tid ON student_tracking_notes(tracking_id);
 
 -- MIGRATION TABLES
 CREATE TABLE IF NOT EXISTS rate_limits (rl_key TEXT PRIMARY KEY, window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(), hits INTEGER NOT NULL DEFAULT 0);
@@ -79,7 +83,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAU
 
 ALTER TABLE guardians ADD COLUMN IF NOT EXISTS whatsapp_phone_normalized TEXT;
 UPDATE guardians SET whatsapp_phone_normalized = regexp_replace(COALESCE(whatsapp_phone,''),'[^0-9+]','','g') WHERE whatsapp_phone_normalized IS NULL OR whatsapp_phone_normalized <> regexp_replace(COALESCE(whatsapp_phone,''),'[^0-9+]','','g');
-ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255), ADD COLUMN IF NOT EXISTS last_ping TIMESTAMPTZ;
+ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255), ADD COLUMN IF NOT EXISTS last_ping TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'unknown', ADD COLUMN IF NOT EXISTS last_seen_timestamp TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS location TEXT;
 ALTER TABLE global_audit_logs ADD COLUMN IF NOT EXISTS chain_hash TEXT, ADD COLUMN IF NOT EXISTS prev_audit_id UUID, ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- INDEXES
@@ -115,6 +119,18 @@ CREATE INDEX IF NOT EXISTS idx_student_audit_school_performed ON student_record_
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_role_permissions_role_permission') THEN ALTER TABLE role_permissions ADD CONSTRAINT uq_role_permissions_role_permission UNIQUE(role_id,permission_id); END IF; END $$;
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_guardian_student_relationship') THEN ALTER TABLE guardian_student_relationships ADD CONSTRAINT uq_guardian_student_relationship UNIQUE(guardian_id,student_id); END IF; END $$;
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_academic_group_school_year_name') THEN ALTER TABLE academic_groups ADD CONSTRAINT uq_academic_group_school_year_name UNIQUE(school_id,academic_year,group_name); END IF; END $$;
+
+-- FIX: Remove global UNIQUE on users.document_number and add composite UNIQUE with school_id (multi-tenant support)
+DO $$ BEGIN 
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_document_number_key') THEN 
+        ALTER TABLE users DROP CONSTRAINT users_document_number_key; 
+    END IF; 
+END $$;
+DO $$ BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_users_school_document') THEN 
+        ALTER TABLE users ADD CONSTRAINT uq_users_school_document UNIQUE (school_id, document_number); 
+    END IF; 
+END $$;
 
 -- PARTITIONS
 CREATE TABLE IF NOT EXISTS biometric_events_2026_05 PARTITION OF biometric_events FOR VALUES FROM('2026-05-01') TO('2026-06-01');
@@ -230,8 +246,10 @@ CREATE POLICY IF NOT EXISTS sga_delete ON student_group_assignments FOR DELETE U
 
 ALTER TABLE jwt_blocklist ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS jbl_select ON jwt_blocklist; DROP POLICY IF EXISTS jbl_insert ON jwt_blocklist;
-CREATE POLICY IF NOT EXISTS jbl_select ON jwt_blocklist FOR SELECT USING(is_super_rector());
-CREATE POLICY IF NOT EXISTS jbl_insert ON jwt_blocklist FOR INSERT WITH CHECK(is_super_rector());
+-- FIX (BUG-8): jwt_blocklist es tabla de sistema para revocación JWT, no datos de usuario.
+-- Las operaciones revokeJwt() e isJwtRevoked() se ejecutan antes de requireAuth() configure el rol.
+CREATE POLICY IF NOT EXISTS jbl_select ON jwt_blocklist FOR SELECT USING(true);
+CREATE POLICY IF NOT EXISTS jbl_insert ON jwt_blocklist FOR INSERT WITH CHECK(true);
 
 -- SEED DATA
 INSERT INTO departments(department_id, department_name) VALUES(uuid_generate_v4(), 'Bogotá D.C.') ON CONFLICT DO NOTHING;

@@ -25,7 +25,7 @@ const client = axios.create({
   withCredentials: true, // PILAR 2.2: Enviar cookies HttpOnly automáticamente
 });
 
-// Interceptor de request: timeout adaptativo + timestamp para telemetría
+// Interceptor de request: timeout adaptativo + timestamp para telemetría + iOS ITP fallback
 client.interceptors.request.use(
   (config) => {
     const url = config.url || '';
@@ -33,6 +33,13 @@ client.interceptors.request.use(
       config.timeout = SLOW_TIMEOUT;
     }
     config._t0 = performance.now();
+
+    // iOS ITP fallback: inyectar token desde sessionStorage cuando cookie es bloqueada
+    const storedToken = sessionStorage.getItem('nexo_token');
+    if (storedToken && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${storedToken}`;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

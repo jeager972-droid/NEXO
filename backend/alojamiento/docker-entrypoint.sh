@@ -127,5 +127,18 @@ echo "[nexo] Arrancando workers en segundo plano..."
 (while true; do php /var/www/html/worker_audit.php; sleep 2; done) > /dev/stdout 2>&1 &
 (while true; do php /var/www/html/worker_biometric.php; sleep 2; done) > /dev/stdout 2>&1 &
 
+echo "[nexo] Iniciando Mosquitto MQTT broker..."
+# Create minimal mosquitto config for production
+mkdir -p /mosquitto/config /mosquitto/data
+cat > /mosquitto/config/mosquitto.conf <<MOSQUITTOCONF
+listener 1883
+allow_anonymous true
+persistence true
+persistence_location /mosquitto/data/
+log_dest stdout
+MOSQUITTOCONF
+mosquitto -c /mosquitto/config/mosquitto.conf -d
+echo "[nexo] Mosquitto MQTT broker iniciado"
+
 echo "[nexo] Arrancando nginx en puerto ${PORT}..."
 exec nginx -g "daemon off;"

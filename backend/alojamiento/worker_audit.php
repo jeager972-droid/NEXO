@@ -23,17 +23,21 @@ function insertBatch($conn, array $rows) {
     try {
         $stmt = $conn->prepare("
             INSERT INTO global_audit_logs
-                (school_id, actor_id, event_type, description, ip_address, metadata_json, created_at)
+                (log_id, school_id, performed_by_user_id, action_type,
+                 description, ip_address, action_details, created_at)
             VALUES
-                (?, ?, ?, ?, ?, jsonb_build_object('uri', ?::text, 'request_id', ?::text), ?)
+                (uuid_generate_v4(), ?, ?, ?, ?,
+                 ?::inet,
+                 jsonb_build_object('uri', ?::text, 'request_id', ?::text),
+                 ?)
         ");
         foreach ($rows as $row) {
             $stmt->execute([
                 $row['school_id'],
-                $row['actor_id'],
-                $row['event_type'],
+                $row['actor_id'],       // campo en la cola Redis se llama así
+                $row['event_type'],     // ídem
                 $row['description'],
-                $row['ip_address'] ?? 'unknown',
+                $row['ip_address'] ?? '0.0.0.0',
                 $row['uri'] ?? 'N/A',
                 $row['request_id'] ?? null,
                 $row['created_at'] ?? gmdate('Y-m-d H:i:s')

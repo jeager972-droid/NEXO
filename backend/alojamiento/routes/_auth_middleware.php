@@ -224,6 +224,13 @@ if (!function_exists('verifyJwtToken')) {
             throw new Exception('Token revocado');
         }
 
+        // FIX: Check if school has panic event after token issuance
+        if (isset($payload['school_id']) && isset($payload['iat'])) {
+            if (isSchoolInPanicMode($payload['school_id'], (int)$payload['iat'])) {
+                throw new Exception('Sesión invalidada por modo de emergencia');
+            }
+        }
+
         return $payload;
     }
 }
@@ -307,6 +314,43 @@ if (!function_exists('revokeJwt')) {
             $stmt->execute([$jtiStr, (int)$exp]);
         } catch (Throwable $e) {
             securityLog('JWT_REVOKE_DB_ERROR', $e->getMessage());
+        }
+    }
+}
+
+if (!function_exists('isSchoolInPanicMode')) {
+    function isSchoolInPanicMode($schoolId, $tokenIat) {
+        // FIX: Check Redis first for performance
+        $redis = getRedisConnection();
+        if ($redis) {
+            try {
+                $panicKey = "panic:school:" . (string)$schoolId;
+                $panicTimestamp = $redis->get($panicKey);
+                if ($panicTimestamp && (int)$panicTimestamp > $tokenIat) {
+                    return true;
+                }
+            } catch (Exception $e) {
+                securityLog('PANIC_CHECK_REDIS_ERROR', $e->getMessage());
+            }
+        }
+
+        // Fallback to PostgreSQL
+        global $conn, $pdo;
+        $db = $conn ?? $pdo ?? null;
+        if (!$db) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare("
+                SELECT 1 FROM school_panic_events
+                WHERE school_id = ? AND triggered_at > to_timestamp(?)
+                LIMIT 1
+            ");
+            $stmt->execute([(string)$schoolId, $tokenIat]);
+            return (bool)$stmt->fetchColumn();
+        } catch (Throwable $e) {
+            securityLog('PANIC_CHECK_DB_ERROR', $e->getMessage());
+            return false;
         }
     }
 }
