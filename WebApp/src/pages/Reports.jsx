@@ -31,7 +31,8 @@ const Reports = () => {
     setIsDownloading(true);
     setDownloadStatus('');
     try {
-      const data = await reportsApi.getReport();
+      // BUG-05 FIX: pasar las fechas seleccionadas al endpoint
+      const data = await reportsApi.exportReport(startDate, endDate);
       const reportRows = Array.isArray(data) ? data : [];
 
       if (reportRows.length === 0) {
@@ -41,15 +42,16 @@ const Reports = () => {
 
       // Generar CSV real con BOM para compatibilidad con Excel
       const headers = ['Fecha', 'Estudiante', 'Hora', 'Tipo de evento'];
-      const csvRows = [
-        headers.join(';'),
-        ...reportRows.map(r => [
-          `"${r.date ?? ''}"`,
-          `"${r.student_id ?? ''}"`,
-          `"${r.time ?? ''}"`,
-          `"${r.event_type ?? ''}"`,
-        ].join(';')),
-      ];
+        const csvRows = [
+          headers.join(';'),
+          ...reportRows.map(r => [
+            `"${r.date ?? ''}"`,
+            // BUG-06 FIX: usar nombre real del estudiante
+            `"${r.student_name || ((r.last_name || '') + ' ' + (r.first_name || '')).trim() || r.student_id || ''}"`,
+            `"${r.time ?? ''}"`,
+            `"${r.event_type ?? ''}"`,
+          ].join(';')),
+        ];
       const csvContent = '\uFEFF' + csvRows.join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -154,8 +156,12 @@ const Reports = () => {
               {rows.length > 0 ? rows.map((row) => (
                 <tr key={`${row.student_id}-${row.time}-${row.date}`} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 text-sm text-gray-600">{row.date}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{row.student_id}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">-</td>
+                  {/* BUG-06 FIX: mostrar nombre real del estudiante */}
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    {row.student_name || `${row.last_name || ''} ${row.first_name || ''}`.trim() || row.student_id || '—'}
+                  </td>
+                  {/* BUG-06 FIX: mostrar grado/grupo real */}
+                  <td className="px-6 py-4 text-sm text-gray-600">{row.grade || row.group_name || '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{row.time}</td>
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

@@ -544,7 +544,15 @@ export const ConsultationDrawer = ({
                         {['Seguimiento Estudiantil', 'Alertas'].includes(item) && row.student_id && (
                           <td className="px-4 py-3 text-right">
                             <button 
-                              onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json)}
+                              onClick={() => {
+                let meta = null;
+                try {
+                  meta = typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json;
+                } catch {
+                  meta = null; // metadata malformada — continúa sin crashear
+                }
+                openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, meta);
+              }}
                               className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:bg-[#003366]/10 px-2 py-1 rounded transition-colors"
                             >
                               Ver

@@ -14,11 +14,12 @@ import { AuthContext } from '../context/AuthContext';
 const ADMIN_ROLES = ['RECTOR', 'COORDINADOR', 'SUPER_RECTOR'];
 
 const ALL_SUBS = [
-  'Inasistencias', 'Llegadas tarde', 'Evasión interna',
+  'Inasistencias', 'Llegadas tarde', 'Evasón interna',
   'Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario',
   'Salidas clase', 'Salidas colegio', 'Salidas pedagógicas',
   'Retornos pendientes', 'Historial permisos', 'Permisos emitidos',
-  'Alertas SOS emitidas', 'Evasiones internas', 'Seguimiento Estudiantil'
+  'Alertas SOS emitidas', 'Evasiones internas'
+  // BUG-03 FIX: 'Seguimiento Estudiantil' removido — tiene su propia página /seguimiento y no existe en DRAWER_CONFIG
 ];
 
 const Audit = () => {
@@ -49,7 +50,8 @@ const Audit = () => {
       id: 'disciplina',
       title: 'Disciplina',
       icon: ShieldAlert,
-      subdivisions: ['Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario', 'Seguimiento Estudiantil'],
+      // BUG-03 FIX: 'Seguimiento Estudiantil' removido — tiene su propia página /seguimiento
+      subdivisions: ['Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario'],
       exports: ['Excel', 'PDF']
     },
     {
@@ -443,6 +445,9 @@ function AuditDrawer({ activeSub, onClose }) {
 
   const config = DRAWER_CONFIG[activeSub];
 
+  // BUG-12 FIX: contador ref — evita que el loading termine antes cuando hay 2 peticiones paralelas
+  const metaLoadingCountRef = useRef(0);
+
   useEffect(() => {
     if (!activeSub) return;
     setData(null);
@@ -453,20 +458,29 @@ function AuditDrawer({ activeSub, onClose }) {
     setGroups([]);
     setStudents([]);
     setStaff([]);
+    metaLoadingCountRef.current = 0;
 
     if (config?.needsGroup || config?.needsStudent) {
+      metaLoadingCountRef.current++;
       setMetaLoading(true);
       auditApi.getGroups()
         .then(r => setGroups(r.data || []))
         .catch(() => {})
-        .finally(() => setMetaLoading(false));
+        .finally(() => {
+          metaLoadingCountRef.current--;
+          if (metaLoadingCountRef.current <= 0) setMetaLoading(false);
+        });
     }
     if (config?.needsStaff) {
+      metaLoadingCountRef.current++;
       setMetaLoading(true);
       auditApi.getStaff()
         .then(r => setStaff(r.data || []))
         .catch(() => {})
-        .finally(() => setMetaLoading(false));
+        .finally(() => {
+          metaLoadingCountRef.current--;
+          if (metaLoadingCountRef.current <= 0) setMetaLoading(false);
+        });
     }
   }, [activeSub]);
 
@@ -474,7 +488,8 @@ function AuditDrawer({ activeSub, onClose }) {
     if (!filters.groupId) { setStudents([]); return; }
     auditApi.getGroupStudents(filters.groupId)
       .then(r => setStudents(r.data || []))
-      .catch(() => setStudents([]));
+      // BUG-12 FIX: loguear error en vez de tragarlo en silencio
+      .catch((e) => { console.error('Error cargando estudiantes del grupo:', e); setStudents([]); });
   }, [filters.groupId]);
 
   const handleSearch = async () => {
@@ -849,6 +864,11 @@ function ExportModalContent({ module, format, onClose }) {
     setLoading(true);
     try {
       const rows = await fetchExportData();
+      // BUG-10 FIX: verificar filas antes de llamar download — evita toast success falso
+      if (rows.length === 0) {
+        setToast({ type: 'error', message: 'No hay datos para exportar en este período' });
+        return;
+      }
       if (format === 'Excel') downloadExcel(rows);
       else if (format === 'PDF') downloadPDF(rows);
       setToast({ type: 'success', message: `${format} de "${sub}" generado correctamente` });

@@ -57,7 +57,7 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.PSICORIENTADOR]
   },
   {
-    title: 'Consulta',
+    title: 'Auditoría',  // BUG-13 FIX: era 'Consulta', duplicado — renombrado para evitar colisión
     path: '/auditoria',
     icon: FileText,
     roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR]

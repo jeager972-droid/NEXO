@@ -74,11 +74,17 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
     if (!window.confirm('¿Seguro que deseas marcar este seguimiento como resuelto?')) return;
     setIsSubmitting(true);
     try {
-      await trackingApi.addNote(activeTrackingId, 'Seguimiento resuelto y cerrado.', 'resuelto');
-      onClose();
-      if (onRefresh) onRefresh();
+      const res = await trackingApi.addNote(activeTrackingId, 'Seguimiento resuelto y cerrado.', 'resuelto');
+      // BUG-11 FIX: verificar confirmación del backend antes de cerrar
+      if (res?.status === 'ok') {
+        if (onRefresh) onRefresh();
+        onClose();
+      } else {
+        alert('No se pudo resolver el seguimiento: ' + (res?.message || 'Error del servidor'));
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error resolviendo seguimiento:', err);
+      alert('Error al resolver el seguimiento: ' + (err.message || 'Error de red'));
     } finally {
       setIsSubmitting(false);
     }

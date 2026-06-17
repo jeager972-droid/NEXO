@@ -45,18 +45,23 @@ const Consultation = () => {
   const [queryError, setQueryError] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState('');
 
+  // BUG-08 FIX: separar en dos effects — grupos solo se recarga cuando cambia el rol,
+  // no en cada cambio de searchParams
   useEffect(() => {
     const isTeacherRole = user?.role === 'DOCENTE' || user?.role === 'PSICORIENTADOR';
     studentsApi.getGroups(isTeacherRole)
       .then(data => setGroups(Array.isArray(data) ? data : []))
       .catch(err => console.error('Error loading groups', err));
-      
+  }, [user?.role]);
+
+  useEffect(() => {
     const mod = searchParams.get('mod');
     if (mod) {
       setActiveItem(mod);
       setSearchParams({}, { replace: true });
     }
-  }, [user?.role, searchParams, setSearchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo al montar — consumimos y limpiamos el parámetro una sola vez
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 
@@ -105,8 +110,14 @@ const Consultation = () => {
       behaviorApi.getRiskAnalysis()
         .then(res => {
           if (res.status === 'ok') setRiskStudents(res.data || []);
+          else {
+            setQueryError(res.message || 'Error al cargar análisis de riesgo');
+          }
         })
-        .catch(err => console.error('Error fetching risk analysis', err))
+        .catch(err => {
+          console.error('Error fetching risk analysis', err);
+          setQueryError(err?.response?.data?.message || err.message || 'Error de red');
+        })
         .finally(() => setLoadingData(false));
     } else {
       consultationsApi.queryModule(activeItem)
@@ -114,9 +125,20 @@ const Consultation = () => {
           if (res.status === 'ok') {
             setDynamicData(res.data || []);
             setDynamicColumns(res.columns || {});
+          } else {
+            // BUG-14 FIX: mostrar error visible en vez de dejar pantalla vacía sin notificar
+            setQueryError(res.message || 'Error al consultar datos');
+            setDynamicData([]);
+            setDynamicColumns({});
           }
         })
-        .catch(err => console.error('Error fetching module data', err))
+        .catch(err => {
+          console.error('Error fetching module data', err);
+          // BUG-14 FIX: propagar error de red al estado visible
+          setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
+          setDynamicData([]);
+          setDynamicColumns({});
+        })
         .finally(() => setLoadingData(false));
     }
   }, [activeItem]);

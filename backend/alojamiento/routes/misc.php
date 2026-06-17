@@ -269,19 +269,41 @@ if ($cleanPath === '/consultation/search') {
 
 if ($cleanPath === '/reports/preview') {
     $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
+    // BUG-05 FIX (backend): leer parámetros de fecha desde la query string
+    $from = trim((string)($_GET['from'] ?? ''));
+    $to   = trim((string)($_GET['to']   ?? ''));
+
     try {
+        // BUG-06 FIX (backend): JOIN con students y academic_groups para retornar
+        // student_name y group_name — el frontend ya no muestra student_id desnudo
+        $params = [$authUser['school_id']];
+        $dateFilter = '';
+        if ($from !== '') {
+            $dateFilter .= ' AND be.event_timestamp::date >= ?';
+            $params[] = $from;
+        }
+        if ($to !== '') {
+            $dateFilter .= ' AND be.event_timestamp::date <= ?';
+            $params[] = $to;
+        }
+
         $stmt = $conn->prepare("
             SELECT
-                event_timestamp::date AS date,
-                TO_CHAR(event_timestamp, 'HH24:MI') AS time,
-                event_type,
-                student_id
-            FROM biometric_events
-            WHERE school_id = ?
-            ORDER BY event_timestamp DESC
-            LIMIT 25
+                be.event_timestamp::date AS date,
+                TO_CHAR(be.event_timestamp AT TIME ZONE 'America/Bogota', 'HH24:MI') AS time,
+                be.event_type,
+                (s.last_name || ' ' || s.first_name) AS student_name,
+                COALESCE(ag.group_name, '—') AS group_name
+            FROM biometric_events be
+            LEFT JOIN students s ON s.student_id = be.student_id
+            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE be.school_id = ?
+            $dateFilter
+            ORDER BY be.event_timestamp DESC
+            LIMIT 100
         ");
-        $stmt->execute([$authUser['school_id']]);
+        $stmt->execute($params);
         echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) {
         securityLog('REPORTS_PREVIEW_ERROR', $e->getMessage());

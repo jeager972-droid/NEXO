@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Fingerprint, Trash2, Search,
   ChevronLeft, ChevronRight, Check, X,
@@ -240,6 +240,8 @@ const Enrollment = () => {
   const [hasMore, setHasMore]         = useState(true);
   const [limit, setLimit]             = useState(50);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  // BUG-02 FIX: ref para rastrear in-flight sin depender del closure de loading
+  const fetchingRef = useRef(false);
 
   // Debounce search
   useEffect(() => {
@@ -253,7 +255,9 @@ const Enrollment = () => {
   }, [searchTerm]);
 
   const fetchStudents = useCallback(async (reset = false) => {
-    if (loading && !reset) return;
+    // BUG-02 FIX: usar ref en vez de loading (evita stale closure)
+    if (fetchingRef.current && !reset) return;
+    fetchingRef.current = true;
     setLoading(true);
     try {
       const cursor = reset ? 0 : lastId;
@@ -268,6 +272,7 @@ const Enrollment = () => {
     } catch (error) {
       console.error('Error fetching students', error);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
     }
   }, [lastId, limit, debouncedSearch]);

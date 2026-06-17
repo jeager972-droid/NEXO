@@ -58,7 +58,8 @@ export const AuthProvider = ({ children }) => {
       setUser(data.user);
       return data;
     } catch (error) {
-      throw error.response?.data?.message || error.message || 'Error al iniciar sesión';
+      // BUG-15 FIX: lanzar Error object, no string desnudo (err.message disponible en todos los consumers)
+      throw new Error(error.response?.data?.message || error.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }

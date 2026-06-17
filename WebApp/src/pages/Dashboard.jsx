@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -574,10 +574,19 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
   const [searchQuery, setSearchQuery] = useState('');
   const [localData, setLocalData] = useState([]);
   const navigate = useNavigate();
+  // BUG-07 FIX: ref para limpiar el timeout si el componente se desmonta antes de que expire
+  const successTimerRef = useRef(null);
 
   useEffect(() => {
     setLocalData(data || []);
   }, [data]);
+
+  // Cleanup del timer al desmontar — evita memory leak y crash en iOS/Tauri
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   // Sort alphabetically by last_name then first_name
   const sorted = [...localData].sort((a, b) => {
@@ -619,8 +628,8 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       if (res.status === 'ok') {
         // Show success mini-modal
         setSuccessModal({ studentName });
-        // After 1.5 seconds, remove from the local list so it disappears
-        setTimeout(() => {
+        // BUG-07 FIX: guardar ref del timer para poder cancelarlo al desmontar
+        successTimerRef.current = setTimeout(() => {
           setLocalData(prev => prev.filter(r => r.student_id !== studentId));
         }, 1500);
       } else {

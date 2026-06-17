@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -12,6 +12,75 @@ import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
 import { usersApi } from '../api/users';
 import { ROLES } from '../config/roles';
+
+// Definición estática fuera del componente — evita recreación en cada render
+const COMMANDS_CATALOG = [
+  {
+    id: 'citar',
+    title: 'Citar acudiente',
+    icon: Calendar,
+    roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
+    fields: ['group', 'student', 'date', 'time', 'message']
+  },
+  { 
+    id: 'autorizar', 
+    title: 'Autorizar salida', 
+    icon: ShieldCheck, 
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR],
+    fields: ['group', 'student', 'reason']
+  },
+  {
+    id: 'sos',
+    title: 'SOS',
+    icon: AlertOctagon,
+    roles: Object.values(ROLES),
+    fields: ['location', 'message'],
+    isUrgent: true
+  },
+  { 
+    id: 'daño', 
+    title: 'Reportar daño', 
+    icon: Wrench, 
+    roles: [ROLES.AUXILIAR, ROLES.PORTERO],
+    fields: ['description']
+  },
+  { 
+    id: 'solicitud', 
+    title: 'Mandar solicitud', 
+    icon: Send, 
+    roles: Object.values(ROLES),
+    fields: ['targetRole', 'message']
+  },
+  { 
+    id: 'pedagogica', 
+    title: 'Salida pedagógica', 
+    icon: Bus, 
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR],
+    fields: ['group', 'reason']
+  },
+  { 
+    id: 'horario', 
+    title: 'Cambio de horario', 
+    icon: Clock, 
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR],
+    fields: ['group', 'reason', 'time'],
+    warning: 'Este comando avisará a todos los padres de familia del grupo elegido.'
+  },
+  { 
+    id: 'permiso', 
+    title: 'Generar permiso', 
+    icon: UserCheck, 
+    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR],
+    fields: ['group', 'student', 'reason', 'timeRange']
+  },
+  {
+    id: 'incidente',
+    title: 'Reportar incidente',
+    icon: ShieldAlert,
+    roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR],
+    fields: ['group', 'student', 'location', 'message', 'targets']
+  }
+];
 
 const Operation = () => {
   const { user } = useAuth();
@@ -65,76 +134,12 @@ const Operation = () => {
     return () => controller.abort();
   }, [fetchData]);
 
-  const commands = [
-    {
-      id: 'citar',
-      title: 'Citar acudiente',
-      icon: Calendar,
-      roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-      fields: ['group', 'student', 'date', 'time', 'message']
-    },
-    { 
-      id: 'autorizar', 
-      title: 'Autorizar salida', 
-      icon: ShieldCheck, 
-      roles: [ROLES.COORDINADOR, ROLES.RECTOR],
-      fields: ['group', 'student', 'reason']
-    },
-    {
-      id: 'sos',
-      title: 'SOS',
-      icon: AlertOctagon,
-      roles: Object.values(ROLES),
-      fields: ['location', 'message'],
-      isUrgent: true
-    },
-    { 
-      id: 'daño', 
-      title: 'Reportar daño', 
-      icon: Wrench, 
-      roles: [ROLES.AUXILIAR, ROLES.PORTERO],
-      fields: ['description']
-    },
-    { 
-      id: 'solicitud', 
-      title: 'Mandar solicitud', 
-      icon: Send, 
-      roles: Object.values(ROLES),
-      fields: ['targetRole', 'message']
-    },
-    { 
-      id: 'pedagogica', 
-      title: 'Salida pedagógica', 
-      icon: Bus, 
-      roles: [ROLES.COORDINADOR, ROLES.RECTOR],
-      fields: ['group', 'reason']
-    },
-    { 
-      id: 'horario', 
-      title: 'Cambio de horario', 
-      icon: Clock, 
-      roles: [ROLES.COORDINADOR, ROLES.RECTOR],
-      fields: ['group', 'reason', 'time'],
-      warning: 'Este comando avisará a todos los padres de familia del grupo elegido.'
-    },
-    { 
-      id: 'permiso', 
-      title: 'Generar permiso', 
-      icon: UserCheck, 
-      roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR],
-      fields: ['group', 'student', 'reason', 'timeRange']
-    },
-    {
-      id: 'incidente',
-      title: 'Reportar incidente',
-      icon: ShieldAlert,
-      roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-      fields: ['group', 'student', 'location', 'message', 'targets']
-    }
-  ];
-
   const userRole = user?.role;
-  const filteredCommands = commands.filter(cmd => userRole && cmd.roles.includes(userRole));
+  // BUG-09 FIX: useMemo evita recracion en cada render y estabiliza la dep del useEffect
+  const filteredCommands = useMemo(
+    () => COMMANDS_CATALOG.filter(cmd => userRole && cmd.roles.includes(userRole)),
+    [userRole]
+  );
 
   useEffect(() => {
     const cmdTitle = searchParams.get('cmd');
@@ -467,7 +472,8 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
       }
       onClose();
     } catch (error) {
-      setSubmitStatus({ type: 'error', message: error.response?.data?.message || 'Error al ejecutar el comando institucional' });
+      // BUG-01 FIX: error.message contiene el mensaje real del backend (lo construye operationsApi.execute)
+      setSubmitStatus({ type: 'error', message: error.message || error.response?.data?.message || 'Error al ejecutar el comando institucional' });
     } finally {
       setIsSubmitting(false);
     }

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authApi } from '../api/auth';
+import { userStore } from '../store/userStore';
 
 const STAGGER = {
   container: {
@@ -58,7 +59,8 @@ const Login = () => {
       navigate('/');
     } catch (err) {
       console.error('Error detallado de login:', err);
-      setError(typeof err === 'string' ? err : 'Credenciales inválidas.');
+      // BUG-15 FIX: login() ahora lanza un Error object, no un string
+      setError(err instanceof Error ? err.message : typeof err === 'string' ? err : 'Credenciales inválidas.');
     } finally {
       setLoading(false);
     }
@@ -71,6 +73,9 @@ const Login = () => {
     try {
       const data = await authApi.verify2FA(email, otpCode);
       if (data.user) {
+        // BUG-04 FIX: persistir usuario en userStore y token en sessionStorage (iOS ITP)
+        userStore.set(data.user);
+        if (data.token) sessionStorage.setItem('nexo_token', data.token);
         if (setUser) setUser(data.user);
         navigate('/');
       } else {
