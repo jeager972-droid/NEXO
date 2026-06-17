@@ -6,132 +6,7 @@ import { motion } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
 
-const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
-function fmt12h(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  const day = d.getDate();
-  const month = MONTHS_ES[d.getMonth()];
-  const year = d.getFullYear();
-  let h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, '0');
-  const ampm = h >= 12 ? 'pm' : 'am';
-  h = h % 12 || 12;
-  return `${day} ${month} ${year}, ${h}:${m} ${ampm}`;
-}
-
-function fmtShortDate(iso) {
-  return fmt12h(iso);
-}
-
-function fmtShortDateOnly(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  const day = d.getDate();
-  const month = MONTHS_ES[d.getMonth()];
-  const year = d.getFullYear();
-  return `${day} ${month} ${year}`;
-}
-
-function formatCellValue(key, value) {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
-  const sk = String(key).toLowerCase();
-  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('detected') || sk.includes('emitted') || sk.includes('created')) {
-    const d = new Date(value);
-    if (!isNaN(d)) return fmtShortDate(value);
-  }
-  if (sk.includes('date')) {
-    const d = new Date(value);
-    if (!isNaN(d)) return fmtShortDateOnly(value);
-  }
-  // Humanizar enums conocidos
-  const sv = String(value).trim();
-  if (sv === 'en proceso') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 border border-amber-200">
-        En Proceso
-      </span>
-    );
-  }
-  if (sv === 'resuelto') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200">
-        Resuelto
-      </span>
-    );
-  }
-  if (ENUM_LABELS[sv]) return ENUM_LABELS[sv];
-  if (ENUM_LABELS[sv.toUpperCase()]) return ENUM_LABELS[sv.toUpperCase()];
-  if (sv.length > 100) return sv.slice(0, 100) + '…';
-  return sv;
-}
-
-const COLUMN_LABELS = {
-  first_name: 'Nombre', last_name: 'Apellido', document_number: 'Documento',
-  group_name: 'Grupo', event_timestamp: 'Fecha/Hora', event_type: 'Tipo',
-  event_result: 'Resultado', detected_at: 'Detectado', incident_type: 'Incidente',
-  permiso_type: 'Tipo', permiso_at: 'Fecha', reason: 'Motivo',
-  alert_type: 'Alerta', alert_at: 'Fecha', absent_since: 'Desde',
-  last_entry: 'Último ingreso', guardian_name: 'Acudiente',
-  guardian_phone: 'Teléfono', status: 'Estado', message: 'Mensaje',
-};
-
-function humanizeColumn(key) {
-  return COLUMN_LABELS[key] || key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
-}
-
-const EXCLUDE_COLS = [
-  'school_id','student_id','guardian_id','incident_id','alert_id','metadata_json','command_payload',
-  'sync_hash','event_signature','biometric_hash','device_id','event_id','log_id','audit_id',
-  'assignment_id','schedule_id','classroom_id','report_export_id','command_id','twilio_message_id',
-  'relationship_id','staff_record_id','previous_data','new_data',
-];
-
-// Enums conocidos a español — listado exhaustivo de valores reales del backend
-const ENUM_LABELS = {
-  // Tipos de eventos biométricos
-  CHECK_IN: 'Entrada', CHECK_OUT: 'Salida', LATE_ARRIVAL: 'Llegada tarde',
-  EARLY_EXIT: 'Salida anticipada', EARLY_DEPARTURE: 'Salida anticipada',
-  INGRESO_NORMAL: 'Ingreso normal', INGRESO_TARDE: 'Ingreso tarde',
-  WRONG_CLASSROOM: 'Salón incorrecto', EVASION_INTERNA: 'Evasión interna',
-  // Resultados de reconocimiento
-  MATCH: 'Coincidencia', NO_MATCH: 'Sin coincidencia',
-  PARTIAL_MATCH: 'Coincidencia parcial', SPOOF_DETECTED: 'Intento de fraude',
-  LIVENESS_FAIL: 'Prueba de vida fallida', TIMEOUT: 'Tiempo agotado',
-  // Estados generales
-  SUCCESS: 'Exitoso', FAILED: 'Fallido', PENDING: 'Pendiente',
-  APPROVED: 'Aprobado', REJECTED: 'Rechazado', SENT: 'Enviado',
-  DELIVERED: 'Entregado', UNDELIVERED: 'No entregado', READ: 'Leído',
-  // Alertas / SOS
-  SOS_WEBAPP: 'Alerta SOS', SOS_DEVICE: 'Alerta SOS (dispositivo)',
-  SOS_ALERT: 'Alerta SOS', PANIC: 'Pánico', ALARM: 'Alarma',
-  // Incidentes
-  INASISTENCIA: 'Inasistencia', UNAUTHORIZED_ABSENCE: 'Inasistencia',
-  CITACION: 'Citación a acudiente', CITACION_CONFIRMADA: 'Citación confirmada',
-  CITACION_REAGENDADA: 'Citación reagendada',
-  AUTORIZAR_SALIDA: 'Salida autorizada', AUTORIZAR: 'Salida autorizada',
-  PERMISO: 'Permiso de salida', PEDAGOGICA: 'Salida pedagógica',
-  SOLICITUD: 'Solicitud interna', DAÑO: 'Daño físico',
-  INCIDENTE: 'Incidente', HORARIO: 'Cambio de horario',
-  NOTIFY_ROLE: 'Notificación interna',
-  // Tipos de salida / permiso
-  class: 'Salida de clase', school: 'Salida del colegio', trip: 'Salida pedagógica',
-  // Dirección mensajes
-  INBOUND: 'Entrante', OUTBOUND: 'Saliente',
-  // Roles
-  RECTOR: 'Rector', SUPER_RECTOR: 'Super Rector', COORDINADOR: 'Coordinador',
-  DOCENTE: 'Docente', SECRETARIA: 'Secretaria', PORTERO: 'Portero',
-  AUXILIAR: 'Auxiliar', PSICORIENTADOR: 'Psicorientador',
-  // Niveles de riesgo
-  CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo',
-  // Boolean-like strings
-  TRUE: 'Sí', FALSE: 'No',
-  // Tipos de cita / motivo
-  COMPORTAMIENTO: 'Comportamiento', ACADEMICO: 'Académico', SALUD: 'Salud',
-  DISCIPLINA: 'Disciplina', OTRO: 'Otro',
-};
+import { fmt12h, formatCellValue, humanizeColumn, EXCLUDE_COLS } from '../utils/formatters';
 
 const RiskBadge = ({ level }) => {
   const [color, border, bg] = level === 'CRITICAL'
@@ -339,7 +214,7 @@ const TeacherQueryPanel = ({
           </div>
         )}
 
-        {!error && loadingData && (
+        {!error && loadingData && (!hasQueried || rows.length === 0) && (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
             <p className="text-xs text-slate-400 font-medium">Consultando registros…</p>
@@ -360,9 +235,14 @@ const TeacherQueryPanel = ({
           </div>
         )}
 
-        {!error && !loadingData && hasQueried && rows.length > 0 && (
-          <div className="p-5 space-y-5">
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        {!error && hasQueried && rows.length > 0 && (
+          <div className="p-5 space-y-5 relative">
+            {loadingData && (
+              <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 flex items-center justify-center z-10 backdrop-blur-sm rounded-lg">
+                <Loader2 size={32} strokeWidth={2} className="text-[#003366] animate-spin" />
+              </div>
+            )}
+            <div className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-opacity duration-200 ${loadingData ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -387,8 +267,11 @@ const TeacherQueryPanel = ({
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+              <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                 <p className="text-[10px] text-slate-400 font-medium">{rows.length} registro{rows.length !== 1 ? 's' : ''}</p>
+                {rows.length >= 50 && (
+                  <p className="text-[10px] text-amber-500 font-medium px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 rounded">Mostrando últimos {rows.length}</p>
+                )}
               </div>
             </div>
           </div>
@@ -456,7 +339,22 @@ export const ConsultationDrawer = ({
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-6">
-            {loadingData ? (
+            {error && !loadingData ? (
+              <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
+                <div className="w-14 h-14 flex items-center justify-center bg-red-50 border border-red-100 rounded-full">
+                  <AlertTriangle size={24} strokeWidth={1.5} className="text-red-400" />
+                </div>
+                <div className="text-center space-y-2 max-w-xs px-4">
+                  <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em',
+                              color: '#EF4444', textTransform: 'uppercase' }}>
+                    Error de consulta
+                  </p>
+                  <p style={{ fontSize: '11px', color: '#94A3B8', lineHeight: 1.6 }}>
+                    {error}
+                  </p>
+                </div>
+              </div>
+            ) : loadingData ? (
               <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
                 <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
                 <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase' }}>

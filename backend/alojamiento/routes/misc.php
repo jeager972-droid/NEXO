@@ -343,7 +343,14 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             SELECT g.guardian_id, u.school_id
             FROM guardians g
             JOIN users u ON u.user_id = g.user_id
-            WHERE g.whatsapp_phone_normalized = ?
+            WHERE regexp_replace(
+                    CASE 
+                      WHEN g.whatsapp_phone_normalized LIKE '+%' THEN g.whatsapp_phone_normalized
+                      WHEN g.whatsapp_phone_normalized LIKE '57%' THEN '+' || g.whatsapp_phone_normalized
+                      ELSE '+57' || regexp_replace(g.whatsapp_phone_normalized, '[^0-9]', '', 'g')
+                    END,
+                    '[^0-9+]', '', 'g'
+                  ) = ?
             LIMIT 1
         ");
         $guardianStmt->execute([$normalizedFrom]);
@@ -449,11 +456,14 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             $replyMsg = "Gracias. Hemos registrado su mensaje y se lo haremos llegar al profesor y pronto le informaremos la nueva fecha.";
             $sendAck = sendTwilioDirect($from, $replyMsg);
 
+            // Resolver teacher_user_id desde Redis (más confiable) o db
+            $resolvedTeacherId = $reagendarState['teacher_user_id'] ?? ($teacherRef['sender_user_id'] ?? null);
+
             // Notificar al profesor con motivo incluido
-            if ($teacherRef && !empty($teacherRef['sender_user_id'])) {
+            if ($resolvedTeacherId) {
                 try {
                     $meta = json_encode([
-                        'student_name' => $studentName ?: 'Estudiante',
+                        'student_name' => $studentName ?: ($reagendarState['student_name'] ?? 'Estudiante'),
                         'action' => 'reagendar_motivo',
                         'guardian_phone' => $from,
                         'motivo' => $motivo,
@@ -464,7 +474,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     ");
                     $notifStmt->execute([
                         $schoolId,
-                        $teacherRef['sender_user_id'],
+                        $resolvedTeacherId,
                         "El acudiente de: " . ($studentName ?: 'Estudiante') . " envió el motivo de reagendamiento. Ver detalles.",
                         $meta
                     ]);

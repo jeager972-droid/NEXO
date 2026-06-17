@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import {
   FileText, Users, ShieldAlert, MessageSquare,
   Clock, Activity, History, ChevronRight,
@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { auditApi } from '../api/audit';
 import { AuthContext } from '../context/AuthContext';
+import { formatCellValue as formatCell, humanizeColumn, EXCLUDE_COLS } from '../utils/formatters';
 
 const ADMIN_ROLES = ['RECTOR', 'COORDINADOR', 'SUPER_RECTOR'];
 
@@ -25,6 +26,11 @@ const ALL_SUBS = [
 const Audit = () => {
   const { user } = useContext(AuthContext);
   const isAdmin = ADMIN_ROLES.includes(user?.role_name || user?.role);
+  
+  // Fix 3.4: Route guard para Auditoría
+  if (!['SUPER_RECTOR', 'RECTOR'].includes(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [activeSub, setActiveSub] = useState(null);
@@ -211,227 +217,6 @@ const DRAWER_CONFIG = {
   'Alertas SOS emitidas': { api: auditApi.getSosAlerts, needsDates: true, needsGroup: true, needsStudent: true },
   'Evasiones internas': { api: auditApi.getAttendanceEvasion, needsDates: true, needsGroup: true, needsStudent: true },
 };
-
-const EXCLUDE_COLS = ['school_id','sync_hash','event_signature','metadata_json','command_payload','previous_data','new_data','biometric_hash','guardian_id','relationship_id','assignment_id','schedule_id','classroom_id','device_id','event_id','log_id','audit_id','report_export_id','command_id','twilio_message_id','incident_id','alert_id','staff_record_id'];
-
-/* ── Human-readable column names ── */
-const COLUMN_LABELS = {
-  'id': 'ID',
-  'student_id': 'ID Estudiante',
-  'first_name': 'Nombre',
-  'last_name': 'Apellido',
-  'name': 'Nombre',
-  'nombre': 'Nombre',
-  'document_number': 'Documento',
-  'documento': 'Documento',
-  'group_name': 'Grupo',
-  'group_id': 'ID Grupo',
-  'grupo': 'Grupo',
-  'grade_level': 'Grado',
-  'grado': 'Grado',
-  'classroom_name': 'Salón',
-  'salon': 'Salón',
-  'device_name': 'Dispositivo',
-  'event_type': 'Tipo de evento',
-  'tipo_evento': 'Tipo de evento',
-  'event_result': 'Resultado',
-  'event_timestamp': 'Fecha y hora',
-  'fecha_hora': 'Fecha y hora',
-  'confidence_score': 'Confianza',
-  'incident_type': 'Tipo de incidente',
-  'detected_at': 'Detectado',
-  'detectado': 'Detectado',
-  'emitted_at': 'Emitido',
-  'emitido': 'Emitido',
-  'resolved': 'Resuelto',
-  'resuelto': 'Resuelto',
-  'resolved_at': 'Resolución',
-  'resolucion': 'Resolución',
-  'alert_type': 'Tipo de alerta',
-  'tipo_alerta': 'Tipo de alerta',
-  'alert_description': 'Descripción',
-  'descripcion': 'Descripción',
-  'exit_time': 'Hora de salida',
-  'hora_salida': 'Hora de salida',
-  'return_time': 'Hora de retorno',
-  'hora_retorno': 'Hora de retorno',
-  'retorno_estimado': 'Retorno estimado',
-  'retorno_real': 'Retorno real',
-  'departure_time': 'Hora de partida',
-  'arrival_time': 'Hora de llegada',
-  'reason': 'Motivo',
-  'motivo': 'Motivo',
-  'description': 'Descripción',
-  'message': 'Mensaje',
-  'created_at': 'Creado',
-  'updated_at': 'Actualizado',
-  'active': 'Activo',
-  'executed_at': 'Ejecutado',
-  'ejecutado': 'Ejecutado',
-  'command_type': 'Tipo de comando',
-  'tipo_permiso': 'Tipo de permiso',
-  'action_type': 'Acción',
-  'action_details': 'Detalles',
-  'detalles': 'Detalles',
-  'ip_address': 'IP',
-  'sender_user_id': 'Remitente',
-  'emitter_first': 'Nombre emisor',
-  'emitter_last': 'Apellido emisor',
-  'emitido_por': 'Emitido por',
-  'resolver_first': 'Nombre resolutor',
-  'resolver_last': 'Apellido resolutor',
-  'resuelto_por': 'Resuelto por',
-  'minutes_to_resolve': 'Minutos para resolver',
-  'phone_number': 'Teléfono',
-  'message_content': 'Contenido',
-  'delivery_status': 'Estado de entrega',
-  'sent_at': 'Enviado',
-  'direction': 'Dirección',
-  'type_code': 'Código',
-  'day_of_week': 'Día',
-  'block_number': 'Bloque',
-  'start_time': 'Inicio',
-  'end_time': 'Fin',
-  'subject_name': 'Asignatura',
-  'teacher_name': 'Docente',
-  'docente': 'Docente',
-  'role_name': 'Rol',
-  'rol': 'Rol',
-  'email': 'Correo',
-  'correo': 'Correo',
-  'work_shift': 'Jornada',
-  'position_name': 'Cargo',
-  'hired_at': 'Contratación',
-  'employee_code': 'Código',
-  'birth_date': 'Fecha de nacimiento',
-  'guardian_name': 'Acudiente',
-  'whatsapp_phone': 'WhatsApp',
-  'primary_guardian': 'Principal',
-  'relationship_type': 'Parentesco',
-  'emergency_contact': 'Contacto de emergencia',
-  'count': 'Cantidad',
-  'total': 'Total',
-  'date': 'Fecha',
-  'time': 'Hora',
-  'status': 'Estado',
-  'estado': 'Estado',
-  'source': 'Origen',
-  'autorizado_por': 'Autorizado por',
-  'estudiante': 'Estudiante',
-  'destino': 'Destino',
-  'proposito': 'Propósito',
-  'tipo': 'Tipo',
-  'hora_evento': 'Hora del evento',
-  'cantidad_intentos': 'Cantidad de intentos',
-  'ultimo_intento': 'Último intento',
-  'periodo': 'Período',
-  'accion': 'Acción',
-  'creado': 'Creado',
-  'ip': 'IP',
-  'usuario': 'Usuario',
-  'navegador': 'Navegador',
-  'revocado': 'Revocado',
-  'revocacion': 'Revocación',
-  'expiracion': 'Expiración',
-  'tipo_comando': 'Tipo de comando',
-  'riesgo': 'Riesgo',
-  'nivel_riesgo': 'Nivel de riesgo',
-  'fecha_calculo': 'Fecha de cálculo',
-  'tardanzas': 'Tardanzas',
-  'inasistencias': 'Inasistencias',
-  'total_eventos': 'Total de eventos',
-  'ingresos': 'Ingresos',
-};
-
-/* ── Human-readable enum values ── */
-const VALUE_LABELS = {
-  'INASISTENCIA': 'Inasistencia',
-  'CITACION': 'Citación a acudiente',
-  'AUTORIZAR_SALIDA': 'Autorización de salida',
-  'PERMISO': 'Permiso',
-  'SOLICITUD': 'Solicitud interna',
-  'DAÑO': 'Reporte de daño',
-  'PEDAGOGICA': 'Salida pedagógica',
-  'HORARIO': 'Cambio de horario',
-  'INCIDENTE': 'Reporte de incidente',
-  'SOS_WEBAPP': 'Alerta SOS',
-  'SOS_DEVICE': 'Alerta SOS (dispositivo)',
-  'CHECK_IN': 'Entrada',
-  'CHECK_OUT': 'Salida',
-  'MATCH': 'Coincidencia',
-  'NO_MATCH': 'Sin coincidencia',
-  'SUCCESS': 'Exitoso',
-  'FAILED': 'Fallido',
-  'PENDING': 'Pendiente',
-  'DELIVERED': 'Entregado',
-  'UNDELIVERED': 'No entregado',
-  'READ': 'Leído',
-  'SENT': 'Enviado',
-  'RECEIVED': 'Recibido',
-  'INBOUND': 'Entrante',
-  'OUTBOUND': 'Saliente',
-  'NOTIFY_ROLE': 'Notificación',
-  'TRUE': 'Sí',
-  'FALSE': 'No',
-  'MANANA': 'Mañana',
-  'TARDE': 'Tarde',
-  'COMPLETA': 'Completa',
-  'RECTOR': 'Rector',
-  'COORDINADOR': 'Coordinador',
-  'DOCENTE': 'Docente',
-  'SECRETARIA': 'Secretaria',
-  'PORTERO': 'Portero',
-  'AUXILIAR': 'Auxiliar',
-  'PSICORIENTADOR': 'Psicorientador',
-  'SUPER_RECTOR': 'Super Rector',
-  'CRITICAL': 'Crítico',
-  'HIGH': 'Alto',
-  'MEDIUM': 'Medio',
-  'LOW': 'Bajo',
-  'APPROVED': 'Aprobado',
-  'REJECTED': 'Rechazado',
-  'INGRESO_NORMAL': 'Ingreso normal',
-  'INGRESO_TARDE': 'Ingreso tarde',
-  'LATE_ARRIVAL': 'Llegada tarde',
-  'EARLY_EXIT': 'Salida anticipada',
-  'EARLY:DEPARTURE': 'Salida anticipada',
-  'EARLY_DEPARTURE': 'Salida anticipada',
-  'LATE:ARRIVAL': 'Llegada tarde',
-  'UNAUTHORIZED:ABSENCE': 'Inasistencia no autorizada',
-  'UNAUTHORIZED_ABSENCE': 'Inasistencia no autorizada',
-  'EVASION_INTERNA': 'Evasión interna',
-  'WRONG_CLASSROOM': 'Salón incorrecto',
-  'CITACION_CONFIRMADA': 'Citación confirmada',
-  'CITACION_REAGENDADA': 'Citación reagendada',
-  'AUTORIZAR': 'Salida autorizada',
-  'PARTIAL_MATCH': 'Coincidencia parcial',
-  'SPOOF_DETECTED': 'Intento de fraude',
-  'LIVENESS_FAIL': 'Prueba de vida fallida',
-  'TIMEOUT': 'Tiempo agotado',
-  'PANIC': 'Pánico',
-  'ALARM': 'Alarma',
-  'SOS_ALERT': 'Alerta SOS',
-  'COMPORTAMIENTO': 'Comportamiento',
-  'ACADEMICO': 'Académico',
-  'SALUD': 'Salud',
-  'DISCIPLINA': 'Disciplina',
-  'OTRO': 'Otro',
-  'Salida de clase': 'Salida de clase',
-  'Salida del colegio': 'Salida del colegio',
-  'Salida pedagogica': 'Salida pedagógica',
-};
-
-function humanizeColumn(key) {
-  return COLUMN_LABELS[key] || key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
-}
-
-function humanizeValue(value) {
-  if (value === null || value === undefined) return '—';
-  const s = String(value).trim();
-  if (VALUE_LABELS[s]) return VALUE_LABELS[s];
-  if (VALUE_LABELS[s.toUpperCase()]) return VALUE_LABELS[s.toUpperCase()];
-  return s;
-}
 
 function AuditDrawer({ activeSub, onClose }) {
   const [filters, setFilters] = useState({ from: '', to: '', groupId: '', studentId: '', staffId: '', q: '' });
@@ -941,52 +726,6 @@ function ExportModalContent({ module, format, onClose }) {
       </AnimatePresence>
     </div>
   );
-}
-
-const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
-function fmtShortDate(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  const day = d.getDate();
-  const month = MONTHS_ES[d.getMonth()];
-  const year = d.getFullYear();
-  let h = d.getHours();
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ampm = h >= 12 ? 'pm' : 'am';
-  h = h % 12 || 12;
-  return `${day} ${month} ${year}, ${h}:${mm} ${ampm}`;
-}
-
-function fmtShortDateOnly(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  const day = d.getDate();
-  const month = MONTHS_ES[d.getMonth()];
-  const year = d.getFullYear();
-  return `${day} ${month} ${year}`;
-}
-
-function formatCell(key, value) {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
-  const sk = String(key).toLowerCase();
-  // Fechas con hora
-  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('created') || sk.includes('detected') || sk.includes('emitted') || sk.includes('resolved') || sk.includes('sent') || sk.includes('executed') || sk.includes('hora')) {
-    const d = new Date(value);
-    if (!isNaN(d)) return fmtShortDate(value);
-  }
-  // Solo fecha
-  if (sk.includes('date') || sk.includes('birth')) {
-    const d = new Date(value);
-    if (!isNaN(d)) return fmtShortDateOnly(value);
-  }
-  // Humanizar enums y valores conocidos
-  const human = humanizeValue(value);
-  if (human !== String(value)) return human;
-  const s = String(value);
-  if (s.length > 100) return s.slice(0, 100) + '…';
-  return s;
 }
 
 export default Audit;

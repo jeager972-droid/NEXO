@@ -82,18 +82,39 @@ if ($cleanPath === '/dashboard/stats') {
         $absentCount = $absentStmt->fetchColumn();
 
         // 3. Alertas (SOS + Riesgos/Incidentes) (Bogotá TZ)
-        // SOS alerts don't have student_id, so they're counted globally without group filter
-        $alertsSql = "
-            SELECT
-                (SELECT COUNT(*) FROM sos_alerts sa WHERE sa.school_id = ? AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND sa.resolved = FALSE)
-                +
-                (SELECT COUNT(*) FROM attendance_incidents ai WHERE ai.school_id = ? AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%') " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
-            AS total_alerts
-        ";
-        $alertsStmt = $conn->prepare($alertsSql);
-        $alertsParams = $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId];
-        $alertsStmt->execute($alertsParams);
-        $alertsCount = $alertsStmt->fetchColumn();
+        $isTeacher = ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR');
+        
+        if ($isTeacher) {
+            // Para docentes, no contar SOS (son globales, no del grupo) y asegurar filtro de grupo
+            $alertsSql = "
+                SELECT COUNT(*) FROM attendance_incidents ai
+                WHERE ai.school_id = ?
+                  AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+                  AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%')
+                  AND ai.student_id IN (
+                      SELECT sga.student_id FROM student_group_assignments sga
+                      JOIN academic_groups ag ON ag.group_id = sga.group_id
+                      JOIN schedules sch ON sch.group_id = ag.group_id
+                      WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                  )
+            ";
+            $alertsStmt = $conn->prepare($alertsSql);
+            $alertsStmt->execute([$schoolId, $authUser['id']]);
+            $alertsCount = $alertsStmt->fetchColumn();
+        } else {
+            // SOS alerts don't have student_id, so they're counted globally without group filter
+            $alertsSql = "
+                SELECT
+                    (SELECT COUNT(*) FROM sos_alerts sa WHERE sa.school_id = ? AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND sa.resolved = FALSE)
+                    +
+                    (SELECT COUNT(*) FROM attendance_incidents ai WHERE ai.school_id = ? AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%') " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
+                AS total_alerts
+            ";
+            $alertsStmt = $conn->prepare($alertsSql);
+            $alertsParams = $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId];
+            $alertsStmt->execute($alertsParams);
+            $alertsCount = $alertsStmt->fetchColumn();
+        }
 
         // 4. Tareas pendientes (Reportes) (Bogotá TZ) — no filtrar por grupo
         $tasksStmt = $conn->prepare("
@@ -307,7 +328,28 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                     ORDER BY ai.detected_at DESC
                 ");
                 $stmt->execute($params);
-                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                if (!$isTeacher) {
+                    $sosStmt = $conn->prepare("
+                        SELECT sa.alert_id::text as incident_id,
+                               'SOS_WEBAPP' as alert_type,
+                               sa.emitted_at as alert_at,
+                               NULL as student_id,
+                               u.first_name, u.last_name,
+                               '—' as document_number, 'Global' as group_name
+                        FROM sos_alerts sa
+                        JOIN users u ON u.user_id = sa.emitted_by_user_id
+                        WHERE sa.school_id = ?
+                          AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                        ORDER BY sa.emitted_at DESC
+                    ");
+                    $sosStmt->execute([$schoolId, $fromDate, $toDate]);
+                    $sosRows = $sosStmt->fetchAll(PDO::FETCH_ASSOC);
+                    $results = array_merge($results, $sosRows);
+                    usort($results, fn($a, $b) => strtotime($b['alert_at']) - strtotime($a['alert_at']));
+                }
+                $data = $results;
                 break;
 
             case 'permiso':
@@ -330,7 +372,12 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                 break;
         }
 
-        echo json_encode(['status' => 'ok', 'data' => $data]);
+        $responsePayload = ['status' => 'ok', 'data' => $data];
+        if ($category === 'alert' && empty($data)) {
+            $responsePayload['meta'] = ['message' => '0 incidentes, sin registro hoy (las alertas globales no se muestran a nivel de grupo)'];
+        }
+
+        echo json_encode($responsePayload);
     } catch (Exception $e) {
         securityLog('TEACHER_GROUP_DETAIL_ERROR', $e->getMessage());
         http_response_code(500);

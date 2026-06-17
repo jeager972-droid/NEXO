@@ -23,6 +23,7 @@ const OPERATION_COMMANDS = [
   { title: 'Cambio de horario', path: '/operacion', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
   { title: 'Generar permiso', path: '/operacion', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR] },
   { title: 'Reportar incidente', path: '/operacion', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
+  { title: 'Solicitar seguimiento', path: '/operacion', icon: FileText, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR] },
 ];
 
 const AUDIT_SUBDIVISIONS = [
@@ -115,22 +116,32 @@ const Layout = () => {
   const profileRef                        = useRef(null);
   const searchRef                         = useRef(null);
 
-  // Cargar conteo inicial de notificaciones
-  // Si ya se visitó la página de notificaciones esta sesión, el punto arranca en 0
+  // Polling y carga inicial de notificaciones
   useEffect(() => {
-    const alreadySeen = sessionStorage.getItem('nexo:notif-seen') === 'true';
-    if (alreadySeen) {
-      setNotifCount(0);
-      return;
-    }
-    notificationsApi.getAll()
-      .then(data => setNotifCount(Array.isArray(data) ? data.length : 0))
-      .catch(() => {});
+    const pollNotifs = () => {
+      const alreadySeen = sessionStorage.getItem('nexo:notif-seen') === 'true';
+      if (alreadySeen) return;
+      notificationsApi.getAll()
+        .then(data => {
+          const count = Array.isArray(data) ? data.length : 0;
+          setNotifCount(count);
+          if (count > 0) sessionStorage.removeItem('nexo:notif-seen');
+        })
+        .catch(() => {});
+    };
+
+    pollNotifs(); // Carga inicial
+    const interval = setInterval(pollNotifs, 30000); // Polling 30s
+    return () => clearInterval(interval);
   }, []);
 
-  // Escuchar cuando Notifications vacía la lista
+  // Escuchar cuando Notifications vacía la lista o nuevas de operaciones locales
   useEffect(() => {
-    const handler = (e) => setNotifCount(e.detail?.count ?? 0);
+    const handler = (e) => {
+      const count = e.detail?.count ?? 0;
+      setNotifCount(count);
+      if (count > 0) sessionStorage.removeItem('nexo:notif-seen');
+    };
     window.addEventListener('nexo:notif-count', handler);
     return () => window.removeEventListener('nexo:notif-count', handler);
   }, []);

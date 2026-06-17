@@ -126,9 +126,9 @@ const Dashboard = () => {
     case ROLES.COORDINADOR:
       return <AdminDashboard stats={stats} loading={loading} navigate={navigate} />;
     case ROLES.SECRETARIA:
+    case ROLES.PSICORIENTADOR:
       return <SecretaryDashboard tasks={stats.pendingTasks || []} loading={loading} />;
     case ROLES.DOCENTE:
-    case ROLES.PSICORIENTADOR:
       return <TeacherDashboard stats={stats} loading={loading} />;
     case ROLES.PORTERO:
     case ROLES.AUXILIAR:
@@ -155,7 +155,7 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
   }));
 
   const { user } = useAuth();
-  const shortcuts = user?.role === ROLES.COORDINADOR 
+  const shortcuts = (user?.role === ROLES.COORDINADOR || user?.role === ROLES.PSICORIENTADOR)
     ? [
         { label: 'Operación', icon: Activity, path: '/operacion' },
         { label: 'Consulta',  icon: Search,   path: '/consulta'  },

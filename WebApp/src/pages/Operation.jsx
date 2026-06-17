@@ -42,7 +42,7 @@ const COMMANDS_CATALOG = [
     title: 'Reportar daño', 
     icon: Wrench, 
     roles: [ROLES.AUXILIAR, ROLES.PORTERO],
-    fields: ['description']
+    fields: ['location', 'description']
   },
   { 
     id: 'solicitud', 
@@ -50,6 +50,13 @@ const COMMANDS_CATALOG = [
     icon: Send, 
     roles: Object.values(ROLES),
     fields: ['targetRole', 'message']
+  },
+  { 
+    id: 'seguimiento', 
+    title: 'Solicitar seguimiento', 
+    icon: FileText, 
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR],
+    fields: ['group', 'student', 'reason']
   },
   { 
     id: 'pedagogica', 
@@ -97,7 +104,9 @@ const Operation = () => {
     let groupsOk = false;
     let studentsOk = false;
     try {
-      const groupsData = await studentsApi.getGroups();
+      const uRole = user?.role_name || user?.role;
+      const isTeacherRole = uRole === 'DOCENTE' || uRole === 'PSICORIENTADOR';
+      const groupsData = await studentsApi.getGroups(isTeacherRole);
       if (!signal.aborted) {
         setGroups(Array.isArray(groupsData) ? groupsData : []);
         groupsOk = true;
@@ -464,6 +473,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
         case 'autorizar':   await operationsApi.salida(payload);                                      break;
         case 'permiso':     await operationsApi.permiso(payload);                                     break;
         case 'solicitud':   await operationsApi.execute('solicitud',  payload, '/operations/solicitud');  break;
+        case 'seguimiento': await operationsApi.execute('seguimiento',payload, '/operations/seguimiento'); break;
         case 'daño':        await operationsApi.execute('daño',       payload, '/operations/daño');       break;
         case 'pedagogica':  await operationsApi.execute('pedagogica', payload, '/operations/pedagogica'); break;
         case 'horario':     await operationsApi.execute('horario',    payload, '/operations/horario');    break;
@@ -471,6 +481,10 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
         default: throw new Error('Comando no soportado');
       }
       onClose();
+      // Activar optimísticamente el punto verde de notificaciones
+      if (['citar', 'permiso', 'autorizar', 'solicitud', 'seguimiento'].includes(command.id)) {
+        window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count: 1 } }));
+      }
     } catch (error) {
       // BUG-01 FIX: error.message contiene el mensaje real del backend (lo construye operationsApi.execute)
       setSubmitStatus({ type: 'error', message: error.message || error.response?.data?.message || 'Error al ejecutar el comando institucional' });
@@ -738,6 +752,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                   <textarea
                     value={formData.details || ''}
                     onChange={e => setFormData(p => ({ ...p, details: e.target.value }))}
+                    required={['citar', 'permiso', 'incidente'].includes(command.id)}
                     placeholder="Escribe aquí los detalles…"
                     rows={4}
                     className="resize-none dark:bg-slate-800 dark:text-white"

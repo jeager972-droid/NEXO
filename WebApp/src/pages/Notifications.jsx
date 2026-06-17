@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, CheckCircle2, Info, User, AlertTriangle, Loader2, Eye, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
 
@@ -20,6 +21,7 @@ const SEEN_KEY = 'nexo:notif-seen';
 
 const Notifications = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [clearing, setClearing]     = useState(false);
@@ -151,14 +153,24 @@ const Notifications = () => {
                         {notif.desc}
                       </p>
                       {parseMeta(notif.metadata_json) && (
-                        <button
-                          onClick={() => setDetailNotif(notif)}
-                          className={`mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                            notif.type === 'SOS' ? 'text-red-600 hover:text-red-700' : 'text-[#003366] hover:text-[#002855]'
-                          }`}
-                        >
-                          <Eye size={12} /> Ver detalles
-                        </button>
+                        <div className="mt-2 flex flex-wrap items-center gap-4">
+                          <button
+                            onClick={() => setDetailNotif(notif)}
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                              notif.type === 'SOS' ? 'text-red-600 hover:text-red-700' : 'text-[#003366] hover:text-[#002855]'
+                            }`}
+                          >
+                            <Eye size={12} /> Ver detalles
+                          </button>
+                          {parseMeta(notif.metadata_json).action === 'iniciar_seguimiento' && user?.role === 'PSICORIENTADOR' && (
+                            <button
+                              onClick={() => navigate('/seguimiento')}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 text-[9px] font-bold uppercase tracking-wider transition-colors"
+                            >
+                              <CheckCircle2 size={12} /> Empezar Seguimiento
+                            </button>
+                          )}
+                        </div>
                       )}
                       {notif.sender && (
                         <div className="mt-2 flex items-center gap-2">
@@ -245,6 +257,28 @@ const Notifications = () => {
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{f.value}</p>
                     </div>
                   ));
+                })()}
+
+                {/* Botón para iniciar seguimiento desde notificación */}
+                {(() => {
+                  const meta = parseMeta(detailNotif.metadata_json);
+                  if (meta?.action === 'iniciar_seguimiento' && meta?.student_id) {
+                    return (
+                      <div className="pt-4 mt-2" style={{ borderTop: '1.5px solid #F1F5F9' }}>
+                        <button
+                          onClick={() => {
+                            setDetailNotif(null);
+                            navigate(`/seguimiento?student_id=${meta.student_id}&student_name=${encodeURIComponent(meta.student_name || '')}`);
+                          }}
+                          className="w-full py-3 text-xs font-bold uppercase text-white transition-colors"
+                          style={{ backgroundColor: '#003366', letterSpacing: '0.15em' }}
+                        >
+                          Empezar Seguimiento
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
                 })()}
               </div>
             </motion.div>

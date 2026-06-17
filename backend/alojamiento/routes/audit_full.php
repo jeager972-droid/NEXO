@@ -100,7 +100,12 @@ if ($cleanPath === '/audit/attendance/general' && $method === 'GET') {
                 be.event_timestamp AS fecha_hora
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE be.school_id = ?
               {$where}
@@ -128,7 +133,12 @@ if ($cleanPath === '/audit/attendance/absences' && $method === 'GET') {
                 ai.resolved AS resuelto
             FROM attendance_incidents ai
             LEFT JOIN students s ON ai.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE ai.school_id = ? AND ai.incident_type = 'INASISTENCIA'
               {$where}
@@ -154,7 +164,12 @@ if ($cleanPath === '/audit/attendance/lates' && $method === 'GET') {
                 be.event_timestamp AS fecha_hora
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE be.school_id = ? AND be.event_type LIKE 'INGRESO_TARDE%'
               {$where}
@@ -181,7 +196,12 @@ if ($cleanPath === '/audit/attendance/evasion' && $method === 'GET') {
                 ai.resolved AS resuelto
             FROM attendance_incidents ai
             LEFT JOIN students s ON ai.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE ai.school_id = ? AND ai.incident_type = 'EVASION_INTERNA'
               {$where}
@@ -263,7 +283,12 @@ if ($cleanPath === '/audit/discipline/incidents' && $method === 'GET') {
                 si.resolved AS resuelto
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE si.school_id = ?
               {$where}
@@ -290,7 +315,12 @@ if ($cleanPath === '/audit/discipline/violations' && $method === 'GET') {
                 si.resolved AS resuelto
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE si.school_id = ? AND si.severity_level IN ('HIGH','CRITICAL')
               {$where}
@@ -316,7 +346,12 @@ if ($cleanPath === '/audit/discipline/wrong-classroom' && $method === 'GET') {
                 be.event_timestamp AS fecha_hora
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             LEFT JOIN classrooms c ON be.classroom_id = c.classroom_id
             WHERE be.school_id = ? AND be.event_result = 'WRONG_CLASSROOM'
@@ -343,7 +378,12 @@ if ($cleanPath === '/audit/discipline/biometric-spam' && $method === 'GET') {
                 COUNT(*) AS cantidad_intentos
             FROM biometric_events be
             INNER JOIN students s ON be.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE be.school_id = ?
               {$where}
@@ -372,7 +412,12 @@ if ($cleanPath === '/audit/discipline/reports' && $method === 'GET') {
                 si.resolved AS resuelto
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE si.school_id = ?
               {$where}
@@ -449,7 +494,12 @@ if ($cleanPath === '/audit/permissions/class-exits' && $method === 'GET') {
                 u.last_name || ' ' || u.first_name AS autorizado_por
             FROM class_exit_authorizations cea
             LEFT JOIN students s ON cea.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             LEFT JOIN users u ON cea.authorized_by_user_id = u.user_id
             WHERE cea.school_id = ?
@@ -480,7 +530,12 @@ if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
                 u.last_name || ' ' || u.first_name AS autorizado_por
             FROM school_exit_authorizations sea
             LEFT JOIN students s ON sea.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             LEFT JOIN users u ON sea.authorized_by_user_id = u.user_id
             WHERE sea.school_id = ?
@@ -496,26 +551,23 @@ if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
 // Salidas pedagógicas
 if ($cleanPath === '/audit/permissions/pedagogical' && $method === 'GET') {
     try {
-        $f = auditFilters('pta', 'departure_time');
+        $f = auditFilters('uc', 'executed_at');
         $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
-        $params = array_merge([$schoolId], $f['params']);
+        $params = array_merge([$schoolId, 'pedagogica'], $f['params']);
         $stmt = $conn->prepare("
             SELECT
-                s.last_name || ' ' || s.first_name AS estudiante,
-                COALESCE(ag.group_name, 'Sin grupo') AS grupo,
-                pta.destination AS destino,
-                pta.departure_time AS hora_salida,
-                pta.return_time AS hora_retorno,
-                pta.purpose AS proposito,
+                'Grupal' AS estudiante,
+                COALESCE(uc.command_payload->>'group', 'Todos') AS grupo,
+                COALESCE(uc.command_payload->>'destination', 'No especificado') AS destino,
+                uc.executed_at AS hora_salida,
+                NULL AS hora_retorno,
+                COALESCE(uc.command_payload->>'reason', 'Sin propósito especificado') AS proposito,
                 u.last_name || ' ' || u.first_name AS autorizado_por
-            FROM pedagogical_trip_authorizations pta
-            LEFT JOIN students s ON pta.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
-            LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
-            LEFT JOIN users u ON pta.authorized_by_user_id = u.user_id
-            WHERE pta.school_id = ?
+            FROM user_commands uc
+            LEFT JOIN users u ON uc.user_id = u.user_id
+            WHERE uc.school_id = ? AND uc.command_type = ?
               {$where}
-            ORDER BY pta.departure_time DESC
+            ORDER BY uc.executed_at DESC
             LIMIT 100
         ");
         $stmt->execute($params);
@@ -539,7 +591,12 @@ if ($cleanPath === '/audit/permissions/pending-returns' && $method === 'GET') {
                 u.last_name || ' ' || u.first_name AS autorizado_por
             FROM school_exit_authorizations sea
             LEFT JOIN students s ON sea.student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             LEFT JOIN users u ON sea.authorized_by_user_id = u.user_id
             WHERE sea.school_id = ? AND sea.actual_return_time IS NULL AND sea.status IN ('APPROVED','PENDING')
@@ -560,31 +617,23 @@ if ($cleanPath === '/audit/permissions/history' && $method === 'GET') {
         $stmt = $conn->prepare("
             (SELECT 'Salida de clase' AS tipo,
                     s.last_name || ' ' || s.first_name AS estudiante,
-                    exit_time AS hora_evento,
-                    authorization_reason AS motivo
+                    class_exit_authorizations.exit_time AS hora_evento,
+                    class_exit_authorizations.authorization_reason AS motivo
              FROM class_exit_authorizations
              LEFT JOIN students s ON class_exit_authorizations.student_id = s.student_id
-             WHERE school_id = ? AND exit_time BETWEEN ? AND ?)
+             WHERE class_exit_authorizations.school_id = ? AND class_exit_authorizations.exit_time BETWEEN ? AND ?)
             UNION ALL
             (SELECT 'Salida del colegio' AS tipo,
                     s.last_name || ' ' || s.first_name AS estudiante,
-                    exit_time AS hora_evento,
-                    authorization_reason AS motivo
+                    school_exit_authorizations.exit_time AS hora_evento,
+                    school_exit_authorizations.authorization_reason AS motivo
              FROM school_exit_authorizations
              LEFT JOIN students s ON school_exit_authorizations.student_id = s.student_id
-             WHERE school_id = ? AND exit_time BETWEEN ? AND ?)
-            UNION ALL
-            (SELECT 'Salida pedagogica' AS tipo,
-                    s.last_name || ' ' || s.first_name AS estudiante,
-                    departure_time AS hora_evento,
-                    purpose AS motivo
-             FROM pedagogical_trip_authorizations
-             LEFT JOIN students s ON pedagogical_trip_authorizations.student_id = s.student_id
-             WHERE school_id = ? AND departure_time BETWEEN ? AND ?)
+             WHERE school_exit_authorizations.school_id = ? AND school_exit_authorizations.exit_time BETWEEN ? AND ?)
             ORDER BY hora_evento DESC
             LIMIT 200
         ");
-        $stmt->execute([$schoolId, $from, $to, $schoolId, $from, $to, $schoolId, $from, $to]);
+        $stmt->execute([$schoolId, $from, $to, $schoolId, $from, $to]);
         auditJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Exception $e) { auditError($e->getMessage()); }
 }
@@ -786,7 +835,12 @@ if ($cleanPath === '/audit/teacher/incidents' && $method === 'GET') {
             FROM security_incidents si
             LEFT JOIN users u ON si.related_user_id = u.user_id
             LEFT JOIN students s ON si.related_student_id = s.student_id
-            LEFT JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
+            LEFT JOIN (
+                SELECT student_id, MIN(group_id) as group_id
+                FROM student_group_assignments
+                WHERE active = TRUE
+                GROUP BY student_id
+            ) sga ON s.student_id = sga.student_id
             LEFT JOIN academic_groups ag ON sga.group_id = ag.group_id
             WHERE si.school_id = ? AND si.related_user_id IN (
                 SELECT user_id FROM users WHERE school_id = ? AND role_id IN (
@@ -1135,7 +1189,7 @@ if ($cleanPath === '/audit/historical/permissions' && $method === 'GET') {
             UNION ALL
             (SELECT 'school' AS type, authorization_id, exit_time AS event_time, authorization_reason AS reason, created_at FROM school_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?)
             UNION ALL
-            (SELECT 'trip' AS type, authorization_id, departure_time AS event_time, purpose AS reason, created_at FROM pedagogical_trip_authorizations WHERE school_id = ? AND departure_time BETWEEN ? AND ?)
+            (SELECT 'trip' AS type, command_id AS authorization_id, executed_at AS event_time, COALESCE(command_payload->>'reason', 'pedagogica') AS reason, executed_at AS created_at FROM user_commands WHERE school_id = ? AND command_type = 'pedagogica' AND executed_at BETWEEN ? AND ?)
             ORDER BY event_time DESC LIMIT 200
         ");
         $stmt->execute([$schoolId, $from, $to, $schoolId, $from, $to, $schoolId, $from, $to]);
@@ -1280,7 +1334,7 @@ if ($cleanPath === '/audit/consolidated/permissions' && $method === 'GET') {
             SELECT
                 (SELECT COUNT(*) FROM class_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?) AS class_exits,
                 (SELECT COUNT(*) FROM school_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?) AS school_exits,
-                (SELECT COUNT(*) FROM pedagogical_trip_authorizations WHERE school_id = ? AND departure_time BETWEEN ? AND ?) AS trips
+                (SELECT COUNT(*) FROM user_commands WHERE school_id = ? AND command_type = 'pedagogica' AND executed_at BETWEEN ? AND ?) AS trips
         ");
         $stmt->execute([$schoolId, $from, $to, $schoolId, $from, $to, $schoolId, $from, $to]);
         auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
@@ -1375,7 +1429,7 @@ if (preg_match('#^/audit/groups/([^/]+)/students$#', $cleanPath, $m) && $method 
     try {
         $groupId = $m[1];
         $stmt = $conn->prepare("
-            SELECT s.student_id, s.first_name, s.last_name, s.document_number
+            SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number
             FROM students s
             INNER JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
             WHERE s.school_id = ? AND sga.group_id = ? AND s.active = TRUE

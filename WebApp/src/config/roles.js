@@ -54,7 +54,7 @@ export const SIDEBAR_ITEMS = [
     title: 'Consulta',
     path: '/consulta',
     icon: Search,
-    roles: [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.PSICORIENTADOR]
+    roles: [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
   },
   {
     title: 'Auditoría',  // BUG-13 FIX: era 'Consulta', duplicado — renombrado para evitar colisión

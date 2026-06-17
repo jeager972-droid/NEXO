@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
@@ -17,6 +17,12 @@ const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausente
 
 const Consultation = () => {
   const { user } = useAuth();
+  
+  const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
+  if (!allowedForConsulta.includes(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
+
   const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState(null);
   const [riskStudents, setRiskStudents] = useState([]);
@@ -72,14 +78,8 @@ const Consultation = () => {
     setQueryError(null);
     try {
       const res = await consultationsApi.queryModule(activeItem, selectedGroup, fromDate, toDate, selectedStudent);
-      if (res.status === 'ok') {
-        setDynamicData(res.data || []);
-        setDynamicColumns(res.columns || {});
-      } else {
-        setQueryError(res.message || 'Error al consultar datos');
-        setDynamicData([]);
-        setDynamicColumns({});
-      }
+      setDynamicData(res.data || []);
+      setDynamicColumns(res.columns || {});
     } catch (err) {
       console.error('Error fetching module data', err);
       setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
@@ -106,41 +106,46 @@ const Consultation = () => {
 
     // Non-teacher modules: auto-fetch
     setLoadingData(true);
+    const abortController = new AbortController();
+
     if (activeItem === 'Análisis de Riesgo') {
       behaviorApi.getRiskAnalysis()
         .then(res => {
-          if (res.status === 'ok') setRiskStudents(res.data || []);
-          else {
-            setQueryError(res.message || 'Error al cargar análisis de riesgo');
+          if (!abortController.signal.aborted) {
+            if (res.status === 'ok') setRiskStudents(res.data || []);
+            else setQueryError(res.message || 'Error al cargar análisis de riesgo');
           }
         })
         .catch(err => {
-          console.error('Error fetching risk analysis', err);
-          setQueryError(err?.response?.data?.message || err.message || 'Error de red');
+          if (!abortController.signal.aborted) {
+            console.error('Error fetching risk analysis', err);
+            setQueryError(err?.response?.data?.message || err.message || 'Error de red');
+          }
         })
-        .finally(() => setLoadingData(false));
+        .finally(() => {
+          if (!abortController.signal.aborted) setLoadingData(false);
+        });
     } else {
-      consultationsApi.queryModule(activeItem)
+      consultationsApi.queryModule(activeItem, '', '', '', '', abortController.signal)
         .then(res => {
-          if (res.status === 'ok') {
+          if (!abortController.signal.aborted) {
             setDynamicData(res.data || []);
             setDynamicColumns(res.columns || {});
-          } else {
-            // BUG-14 FIX: mostrar error visible en vez de dejar pantalla vacía sin notificar
-            setQueryError(res.message || 'Error al consultar datos');
+          }
+        })
+        .catch(err => {
+          if (!abortController.signal.aborted) {
+            console.error('Error fetching module data', err);
+            setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
             setDynamicData([]);
             setDynamicColumns({});
           }
         })
-        .catch(err => {
-          console.error('Error fetching module data', err);
-          // BUG-14 FIX: propagar error de red al estado visible
-          setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
-          setDynamicData([]);
-          setDynamicColumns({});
-        })
-        .finally(() => setLoadingData(false));
+        .finally(() => {
+          if (!abortController.signal.aborted) setLoadingData(false);
+        });
     }
+    return () => abortController.abort();
   }, [activeItem]);
 
   // Definición de módulos por rol
@@ -208,6 +213,11 @@ const Consultation = () => {
         title: 'Históricos', 
         icon: Database, 
         items: ['Reportes', 'Auditoría Local'] 
+      },
+      {
+        title: 'Control de Acceso',
+        icon: Activity,
+        items: ['Permisos Activos Hoy']
       }
     ]
   };
@@ -259,7 +269,13 @@ const Consultation = () => {
             {/* Items */}
             <div>
               {mod.items.map((item, i) => (
-                <button key={i} onClick={() => setActiveItem(item)}
+                <button key={i} onClick={() => {
+                  setActiveItem(item);
+                  setDynamicData([]);
+                  setDynamicColumns({});
+                  setHasQueried(false);
+                  setQueryError(null);
+                }}
                   className="group flex items-center justify-between w-full px-5 py-3 text-left bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-150"
                   style={{ borderBottom: i < mod.items.length - 1 ? '1px solid #F8FAFC' : 'none' }}>
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-white transition-colors"

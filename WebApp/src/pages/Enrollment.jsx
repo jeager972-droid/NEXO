@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Fingerprint, Trash2, Search,
-  ChevronLeft, ChevronRight, Check, X,
+  ChevronLeft, ChevronRight, Check, X, Loader2, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { ROLES } from '../config/roles';
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -69,40 +72,65 @@ const StepBar = ({ current, steps }) => (
 const STEPS = [
   { n: 1, label: 'Datos Básicos'   },
   { n: 2, label: 'Identificación'  },
-  { n: 3, label: 'Grado y Guardar' },
+  { n: 3, label: 'Grado y Grupo'   },
+  { n: 4, label: 'Registro Biométrico' },
 ];
 
 const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ nombres: '', apellidos: '', documento: '', grado: '' });
   const [groups, setGroups] = useState([]);
+  const [biometricStatus, setBiometricStatus] = useState('checking'); // 'checking' | 'connected' | 'error'
+  const [studentSaved, setStudentSaved] = useState(false);
+  const [savedStudentId, setSavedStudentId] = useState(null);
+
   const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
   const canNext = step === 1 ? !!(form.nombres && form.apellidos)
                 : step === 2 ? !!form.documento
-                : !!form.grado;
+                : step === 3 ? !!form.grado
+                : false;
 
   useEffect(() => {
     studentsApi.getGroups().then(setGroups).catch(() => {});
   }, []);
 
-  const handleSave = async () => {
+  const handleSaveAndProceed = async () => {
     setLoading(true);
+    setSaveError('');
     try {
-      await studentsApi.create({
+      const result = await studentsApi.create({
         first_name: form.nombres,
         last_name:  form.apellidos,
         document:   form.documento,
         grade:      form.grado,
       });
+      setSavedStudentId(result.student_id);
+      setStudentSaved(true);
       onRefresh?.();
-      onClose();
+      setStep(4);
     } catch (err) {
       console.error('Error al guardar estudiante:', err);
+      const msg = err?.response?.data?.message || 'Error al guardar el estudiante. Intenta de nuevo.';
+      setSaveError(msg);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (step !== 4) return;
+    setBiometricStatus('checking');
+    // Verificar si hay lector biométrico disponible
+    fetch('http://localhost:8765/status', { signal: AbortSignal.timeout(3000) })
+      .then(res => res.json())
+      .then(data => {
+        if (data.connected) setBiometricStatus('connected');
+        else setBiometricStatus('error');
+      })
+      .catch(() => setBiometricStatus('error'));
+  }, [step]);
 
   return (
     <>
@@ -197,7 +225,51 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     </div>
                   ))}
                 </div>
+                {saveError && (
+                  <p className="text-xs font-semibold text-red-500 mt-2">{saveError}</p>
+                )}
               </>)}
+
+              {step === 4 && (
+                <div className="space-y-5">
+                  {biometricStatus === 'checking' && (
+                    <div className="flex flex-col items-center gap-3 py-8">
+                      <Loader2 size={32} className="animate-spin text-[#003366]" />
+                      <p className="text-xs font-semibold text-slate-500">Buscando lector biométrico...</p>
+                    </div>
+                  )}
+                  {biometricStatus === 'error' && (
+                    <div className="p-5 border-2 border-red-200 bg-red-50 space-y-3 mt-4">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={18} className="text-red-500" />
+                        <p className="text-sm font-bold text-red-700">Lector no encontrado</p>
+                      </div>
+                      <p className="text-xs text-red-600 leading-relaxed">
+                        No se encontró conexión con el lector de huellas. El estudiante fue registrado en el sistema pero <strong>no puede completar el enrolamiento biométrico</strong> en este momento.
+                      </p>
+                      <p className="text-xs text-red-600">
+                        Para vincular la huella, conecta el lector e ingresa nuevamente al registro del estudiante.
+                      </p>
+                      <button
+                        onClick={onClose}
+                        className="w-full py-2.5 mt-2 text-xs font-bold uppercase text-white"
+                        style={{ backgroundColor: '#003366', letterSpacing: '0.12em' }}
+                      >
+                        Cerrar — Completar biometría después
+                      </button>
+                    </div>
+                  )}
+                  {biometricStatus === 'connected' && (
+                    <div className="space-y-4 mt-4 p-5" style={{ border: '1.5px solid rgba(0,166,126,0.3)', backgroundColor: 'rgba(0,166,126,0.05)' }}>
+                      <div className="flex items-center gap-2 text-green-600">
+                        <Fingerprint size={20} />
+                        <p className="text-sm font-bold">Lector conectado.</p>
+                      </div>
+                      <p className="text-xs text-slate-600 font-medium">Solicita al estudiante que coloque su dedo en el lector para completar el registro.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -216,13 +288,14 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
               style={{ backgroundColor: '#003366', letterSpacing: '0.12em' }}>
               Siguiente <ChevronRight size={13} strokeWidth={2} />
             </button>
-          ) : (
-            <button onClick={handleSave} disabled={!canNext || loading}
+          ) : step === 3 ? (
+            <button onClick={handleSaveAndProceed} disabled={!canNext || loading}
               className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold uppercase text-white disabled:opacity-50 transition-colors"
               style={{ backgroundColor: '#003366', letterSpacing: '0.12em' }}>
-              <Check size={13} strokeWidth={2.5} /> {loading ? 'Guardando...' : 'Guardar Registro'}
+              {loading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} strokeWidth={2.5} />} 
+              {loading ? 'Guardando...' : 'Guardar y Continuar'}
             </button>
-          )}
+          ) : null}
         </div>
       </motion.div>
     </>
@@ -232,6 +305,11 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
 // ── Enrollment page ───────────────────────────────────────────────────────────
 
 const Enrollment = () => {
+  const { user } = useAuth();
+  if (user?.role !== ROLES.SECRETARIA) {
+    return <Navigate to="/" replace />;
+  }
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm]   = useState('');
   const [students, setStudents]       = useState([]);

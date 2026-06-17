@@ -565,6 +565,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
                 }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => 'Permiso generado correctamente',
+                    'data'    => ['action' => $action, 'student_id' => $studentId]
+                ]);
                 break;
 
             case 'autorizar_salida':
@@ -664,20 +671,97 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
                 }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => 'Salida autorizada correctamente',
+                    'data'    => ['action' => $action, 'student_id' => $studentId]
+                ]);
                 break;
 
             case 'pedagogica':
-                $studentId = $params['student'] ?? $params['student_id'] ?? null;
-                $destination = trim((string)($params['destination'] ?? $params['destino'] ?? ''));
-                $purpose = trim((string)($params['purpose'] ?? $params['proposito'] ?? $params['reason'] ?? ''));
-                
-                if ($studentId && $destination) {
-                    $stmt = $conn->prepare("
-                        INSERT INTO pedagogical_trip_authorizations (school_id, student_id, authorized_by_user_id, destination, departure_time, return_time, purpose)
-                        VALUES (?, ?, ?, ?, NOW(), NOW() + INTERVAL '8 hours', ?)
+                $groupName   = trim((string)($params['group'] ?? ''));
+                $purpose     = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
+                $destination = trim((string)($params['destination'] ?? $purpose));
+
+                if ($groupName) {
+                    // Notificar a todos los acudientes del grupo vía WhatsApp
+                    $guardStmt = $conn->prepare("
+                        SELECT DISTINCT g.whatsapp_phone, g.guardian_id
+                        FROM guardians g
+                        JOIN guardian_student_relationships gsr ON g.guardian_id = gsr.guardian_id
+                        JOIN student_group_assignments sga ON gsr.student_id = sga.student_id AND sga.active = TRUE
+                        JOIN academic_groups ag ON sga.group_id = ag.group_id
+                        WHERE ag.group_name = ? AND ag.school_id = ?
                     ");
-                    $stmt->execute([$schoolId, $studentId, $userId, $destination, $purpose]);
+                    $guardStmt->execute([$groupName, $schoolId]);
+                    $msg = "🚌 *NEXO — Salida pedagógica*\n\nGrupo: *{$groupName}*\nMotivo: {$purpose}\n\nMantente informado sobre el regreso de tu estudiante.";
+                    while ($gRow = $guardStmt->fetch(PDO::FETCH_ASSOC)) {
+                        if (!empty($gRow['whatsapp_phone'])) {
+                            enqueueTwilioJob($gRow['whatsapp_phone'], $msg, $schoolId, null, $gRow['guardian_id'], $userId, 'PEDAGOGICA');
+                        }
+                    }
                 }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => 'Salida pedagógica registrada y acudientes notificados',
+                ]);
+                break;
+
+            case 'seguimiento':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
+                
+                if ($studentId) {
+                    $stuMetaStmt = $conn->prepare("
+                        SELECT s.first_name, s.last_name, ag.group_name
+                        FROM students s
+                        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                        WHERE s.student_id = ?
+                        LIMIT 1
+                    ");
+                    $stuMetaStmt->execute([$studentId]);
+                    $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
+                    $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
+                    $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
+                    $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+
+                    $meta = json_encode([
+                        'student_id' => $studentId,
+                        'student_name' => trim($studentName),
+                        'group_name' => $groupName,
+                        'sender_name' => $senderName,
+                        'reason' => $reason,
+                        'action' => 'iniciar_seguimiento',
+                    ], JSON_UNESCAPED_UNICODE);
+
+                    $psicoStmt = $conn->prepare("
+                        SELECT user_id FROM users
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'PSICORIENTADOR') AND active = TRUE
+                    ");
+                    $psicoStmt->execute([$schoolId]);
+                    while ($pRow = $psicoStmt->fetch(PDO::FETCH_ASSOC)) {
+                        try {
+                            $notifStmt = $conn->prepare("
+                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                                VALUES (?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())
+                            ");
+                            $notifStmt->execute([$schoolId, $pRow['user_id'], "{$senderName} solicita iniciar seguimiento. Ver detalles.", $meta]);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] Seguimiento notification insert error: " . $e->getMessage());
+                        }
+                    }
+                }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => 'Solicitud de seguimiento enviada a psicorientación',
+                ]);
                 break;
 
             case 'incidente':
@@ -853,8 +937,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 // Daño sin estudiante: notificar coordinación
                 if ($action === 'daño' && !$studentId) {
-                    $targetRole = 'COORDINADOR';
-                    $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *DAÑO*\nReportado por: {$role}\nDetalle: {$reason}";
+                    $targetRole   = 'COORDINADOR';
+                    $locationDaño = trim((string)($params['location'] ?? 'No especificada'));
+                    $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *DAÑO*\nUbicación: {$locationDaño}\nReportado por: {$role}\nDetalle: {$reason}";
                     $dStmt = $conn->prepare("
                         SELECT phone FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?)
