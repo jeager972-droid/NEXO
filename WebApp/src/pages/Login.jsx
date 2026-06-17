@@ -185,7 +185,8 @@ const Login = () => {
               </motion.button>
             </div>
           ) : (
-            <>
+            (
+              <>
               <FieldWrapper label="Correo Electrónico" icon={Mail}>
             <input
               type="email"
@@ -270,7 +271,9 @@ const Login = () => {
               )}
             </motion.button>
           </motion.div>
-          </>}
+          </>
+            )
+          )}
         </motion.form>
 
         {/* Footer */}
