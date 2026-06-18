@@ -49,6 +49,10 @@ function App() {
 
   useEffect(() => {
     const setupDeepLink = async () => {
+      // FIX: Solo intentar deep linking si estamos en entorno nativo (Tauri)
+      if (!window.__TAURI__) {
+        return; // Salir silenciosamente en navegadores web
+      }
       try {
         const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link')
         await onOpenUrl((urls) => {
@@ -60,7 +64,7 @@ function App() {
           }
         })
       } catch (e) {
-        console.log('Deep link not supported in this environment')
+        console.warn('Deep link failed in native environment:', e)
       }
     }
     setupDeepLink()
