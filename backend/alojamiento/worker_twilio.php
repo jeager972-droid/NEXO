@@ -158,6 +158,19 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     $typeCode     = $job['type_code'] ?? 'OUTBOUND';
     $retries      = (int)($job['retries'] ?? 0);
 
+    if ($schoolId) {
+        try {
+            // Esto le dice a PostgreSQL: "Soy el Worker, pero estoy trabajando para ESTA escuela".
+            $conn->query("SELECT set_config('app.current_school_id', '$schoolId', false)");
+            // Aseguramos que el rol sea SUPER (ya lo tenías, pero por seguridad lo refuerzamos)
+            $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)"); 
+        } catch (Exception $e) {
+            securityLog('WORKER_CONTEXT_SET_FAIL', $e->getMessage());
+            // Si falla esto, no podemos procesar el job. Hacemos reintentar.
+            return; 
+        }
+    }
+
     // FIX: Dedup por número+contenido en ventana de 30s para evitar envenenamiento de cola
     $dedupKey = 'twilio:dedup:' . md5($to . '|' . $body);
     if ($redis->get($dedupKey)) {
@@ -178,9 +191,18 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     if ($send['ok']) {
         // Marcar dedup para evitar duplicados por 30 segundos
         $redis->setex($dedupKey, 30, '1');
-        logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
-            ['action' => 'worker_sent'],
-            $studentId, $guardianId, $senderUserId, $send['sid'], 'SENT');
+        
+        if (!empty($job['message_id'])) {
+            try {
+                $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'SENT', provider_message_sid = ?, metadata_json = ?::jsonb WHERE twilio_message_id = ?");
+                $upd->execute([$send['sid'], json_encode(['action' => 'worker_sent'], JSON_UNESCAPED_UNICODE), $job['message_id']]);
+            } catch (Exception $e) { securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage()); }
+        } else {
+            logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
+                ['action' => 'worker_sent'],
+                $studentId, $guardianId, $senderUserId, $send['sid'], 'SENT');
+        }
+        
         securityLog('TWILIO_WORKER_SENT', "SID: {$send['sid']} To: $to");
         return;
     }
@@ -193,9 +215,16 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         $redis->zAdd($delayQueue, $nextTry, json_encode($job, JSON_UNESCAPED_UNICODE));
         securityLog('TWILIO_WORKER_RETRY', "To: $to Retry: {$job['retries']} Delay: {$delayMs}ms Error: {$send['error']}");
     } else {
-        logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
-            ['action' => 'worker_failed', 'error' => $send['error']],
-            $studentId, $guardianId, $senderUserId, null, 'FAILED_PERMANENT');
+        if (!empty($job['message_id'])) {
+            try {
+                $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'FAILED_PERMANENT', metadata_json = ?::jsonb WHERE twilio_message_id = ?");
+                $upd->execute([json_encode(['action' => 'worker_failed', 'error' => $send['error']], JSON_UNESCAPED_UNICODE), $job['message_id']]);
+            } catch (Exception $e) { securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage()); }
+        } else {
+            logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
+                ['action' => 'worker_failed', 'error' => $send['error']],
+                $studentId, $guardianId, $senderUserId, null, 'FAILED_PERMANENT');
+        }
         securityLog('TWILIO_WORKER_DEAD_LETTER', "To: $to Error: {$send['error']}");
     }
 }

@@ -30,6 +30,11 @@ try {
         PDO::ATTR_EMULATE_PREPARES => true,
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
     ]);
+
+    // FIX: Set HMAC secret for audit chain hashing to avoid default secret
+    if ($hmacSecret = getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET')) {
+        $pdo->exec("SELECT set_config('app.nexo_hmac_secret', '" . addslashes($hmacSecret) . "', false)");
+    }
 } catch (PDOException $e) {
     error_log("DB Error: " . $e->getMessage());
     header('Content-Type: application/json');

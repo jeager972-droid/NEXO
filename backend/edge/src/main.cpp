@@ -156,6 +156,7 @@ private:
         static std::atomic<uint64_t> nonceCounter{0};
 
         for (auto& record : audits) { // <-- ACTUALIZADO
+            m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
             if (m_stop.load(std::memory_order_acquire)) break;
 
             Estudiante est;
@@ -346,10 +347,10 @@ bool checkNtpSync() {
         try {
             double offset = std::stod(result);
             if (std::abs(offset) > 60.0) {
-                LOG_ERROR("System clock offset is {:.2f} seconds > 60s", offset);
-                return false;
+                LOG_WARN("Clock offset {:.2f}s. Sync recommended but not blocking.", offset);
+            } else {
+                LOG_INFO("NTP offset: {:.2f} seconds", offset);
             }
-            LOG_INFO("NTP offset: {:.2f} seconds", offset);
             return true;
         } catch (...) {
             LOG_WARN("Could not parse NTP offset");
@@ -495,6 +496,9 @@ private:
 
     void run() {
         LOG_INFO("[HealthMonitor] Started (check every 30s)");
+        int syncStrikes = 0;
+        int mqttStrikes = 0;
+
         while (!m_stop.load(std::memory_order_acquire)) {
             std::this_thread::sleep_for(CHECK_INTERVAL);
 
@@ -503,18 +507,30 @@ private:
             // Check SyncWorker heartbeat
             auto syncDelta = now - m_sync.lastActivity();
             if (syncDelta > SYNC_MAX_STALE) {
-                LOG_CRITICAL("[HealthMonitor] SyncWorker stale for {}s. Forcing self-destruction.",
-                             std::chrono::duration_cast<std::chrono::seconds>(syncDelta).count());
-                exit(1);
+                syncStrikes++;
+                LOG_ERROR("[HealthMonitor] SyncWorker stale for {}s (Strike {}/5).",
+                             std::chrono::duration_cast<std::chrono::seconds>(syncDelta).count(), syncStrikes);
+                if (syncStrikes >= 5) {
+                    LOG_CRITICAL("[HealthMonitor] SyncWorker permanently dead. Forcing self-destruction.");
+                    exit(1);
+                }
+            } else {
+                syncStrikes = 0;
             }
 
             // Check MQTT heartbeat (only if mqtt is configured)
             if (m_mqtt) {
                 auto mqttDelta = now - m_mqtt->lastActivity();
                 if (mqttDelta > MQTT_MAX_STALE) {
-                    LOG_CRITICAL("[HealthMonitor] MQTT thread stale for {}s. Forcing self-destruction.",
-                                 std::chrono::duration_cast<std::chrono::seconds>(mqttDelta).count());
-                    exit(1);
+                    mqttStrikes++;
+                    LOG_ERROR("[HealthMonitor] MQTT thread stale for {}s (Strike {}/5).",
+                                 std::chrono::duration_cast<std::chrono::seconds>(mqttDelta).count(), mqttStrikes);
+                    if (mqttStrikes >= 5) {
+                        LOG_CRITICAL("[HealthMonitor] MQTT thread permanently dead. Forcing self-destruction.");
+                        exit(1);
+                    }
+                } else {
+                    mqttStrikes = 0;
                 }
             }
         }
@@ -845,6 +861,9 @@ int main() {
                     if (res) {
                         handleBiometricMatch(uid, display.get(), notification.get(), syncWorker);
                     }
+                    
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Evita 100% CPU si falla rápido
+                    
                     std::string key;
                     if (readLineNonBlocking(key, 200) && !key.empty() && key[0] == 's') {
                         LOG_INFO("Exiting PERPETUAL mode");

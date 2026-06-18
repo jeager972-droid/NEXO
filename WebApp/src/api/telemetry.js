@@ -1,5 +1,5 @@
 import client from './client.js';
-import { userStore } from '../store/userStore';
+
 
 // ── Configuración ──────────────────────────────────────────
 const FLUSH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
@@ -102,8 +102,9 @@ function buildPing() {
 
 // ── Flush: envía cola + ping al backend ───────────────────
 export async function flushTelemetry() {
-  // No enviar si no hay sesión activa (usuario no logueado)
-  if (!userStore.get()) return;
+  // No enviar si estamos en rutas públicas
+  const publicRoutes = ['/login', '/instalar', '/descargas', '/app/login'];
+  if (publicRoutes.some(route => window.location.pathname.includes(route))) return;
 
   const events = [...queue, buildPing()];
   queue.length = 0; // limpiar cola antes del await (evita doble envío)

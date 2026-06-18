@@ -163,6 +163,7 @@ function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = n
 }
 
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
+    global $conn;
     $enqueued = false;
     $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
     if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
@@ -173,6 +174,25 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
 
+    $msgId = null;
+    try {
+        if ($conn) {
+            $stmt = $conn->query("SELECT uuid_generate_v4()");
+            $msgId = $stmt->fetchColumn();
+            $insStmt = $conn->prepare("
+                INSERT INTO twilio_messages (
+                    twilio_message_id, school_id, student_id, guardian_id, sender_user_id,
+                    type_code, direction, phone_number, message_content, delivery_status, sent_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, 'OUTBOUND', ?, ?, 'QUEUED', NOW()
+                )
+            ");
+            $insStmt->execute([$msgId, $schoolId, $studentId, $guardianId, $senderUserId, $typeCode, $toNorm, $body]);
+        }
+    } catch (Exception $e) {
+        securityLog('TWILIO_PRE_INSERT_FAILED', $e->getMessage());
+    }
+
     try {
         $redis = new Redis();
         $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
@@ -180,6 +200,7 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         $redis->select((int)(getenv('REDIS_DB') ?: 0));
 
         $payload = json_encode([
+            'message_id' => $msgId,
             'to' => $toNorm,
             'body' => $body,
             'school_id' => $schoolId,
@@ -192,7 +213,7 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         ], JSON_UNESCAPED_UNICODE);
         $redis->rPush('queue:twilio', $payload);
         $enqueued = true;
-        return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm];
+        return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm, 'message_id' => $msgId];
     } catch (Exception $e) {
         securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
     }
@@ -262,6 +283,21 @@ function logTwilioMessageSafe($conn, $schoolId, $typeCode, $direction, $phone, $
  * )
  */
 if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $input['action'] === 'EXECUTE_COMMAND')) {
+    
+    // Nuevo endpoint para consultar estado de mensajes de twilio
+    if ($cleanPath === '/operations/twilio-status' && $method === 'POST') {
+        $msgIds = $input['message_ids'] ?? [];
+        if (empty($msgIds) || !is_array($msgIds)) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'message_ids is required']));
+        }
+        $in = str_repeat('?,', count($msgIds) - 1) . '?';
+        $stmt = $conn->prepare("SELECT twilio_message_id, delivery_status FROM twilio_messages WHERE twilio_message_id IN ($in)");
+        $stmt->execute($msgIds);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        exit(json_encode(['status' => 'ok', 'data' => $results]));
+    }
+
     $action = filter_var($input['command'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $pathMap = [
         '/operations/sos' => 'sos',
@@ -503,7 +539,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 }
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
-                $resp = json_encode(['status' => 'ok', 'message' => 'Citación enviada al acudiente', 'delivery' => $deliveryResults]);
+                $resp = json_encode(['status' => 'ok', 'message' => 'Citación encolada para envío. Puede tardar unos segundos.', 'delivery' => $deliveryResults]);
                 securityLog('CITACION_RESPONSE', "HTTP 200 | $resp");
                 echo $resp;
                 break;

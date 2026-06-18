@@ -19,6 +19,9 @@ if ($cleanPath === '/webhooks/twilio/status' && $method === 'POST') {
 
     if ($messageSid && $status) {
         try {
+            // BYPASS RLS: Es un proceso de sistema autenticado por HMAC, no un usuario
+            $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', true)");
+            
             $errorJson = $errorCode ? json_encode(['code' => $errorCode, 'msg' => $errorMessage]) : '{}';
             
             $stmt = $conn->prepare("
@@ -29,7 +32,11 @@ if ($cleanPath === '/webhooks/twilio/status' && $method === 'POST') {
             ");
             $stmt->execute([strtoupper($status), $errorJson, $messageSid]);
             
-            securityLog('TWILIO_STATUS_UPDATE', "SID: $messageSid, Status: $status, To: $to");
+            if ($stmt->rowCount() === 0) {
+                securityLog('TWILIO_STATUS_DB_WARN', "Update affected 0 rows for SID: $messageSid");
+            } else {
+                securityLog('TWILIO_STATUS_UPDATE', "SID: $messageSid, Status: $status, To: $to");
+            }
         } catch (Exception $e) {
             securityLog('TWILIO_STATUS_DB_ERROR', $e->getMessage());
         }

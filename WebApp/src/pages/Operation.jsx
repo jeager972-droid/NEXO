@@ -422,6 +422,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
   const [step, setStep]               = useState(command.warning ? 'warning' : 'form');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
+  const [pollingStatus, setPollingStatus] = useState('QUEUED');
   const [formData, setFormData]         = useState({
     group: '', student: '', date: '', time: '', timeStart: '', timeEnd: '',
     location: '', message: '', reason: '', targetRole: '', targetUser: '', description: '', targets: [], details: '',
@@ -455,6 +456,34 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
     }
   };
 
+  const pollTwilioStatus = async (msgIds) => {
+      let attempts = 0;
+      const interval = setInterval(async () => {
+          try {
+              const res = await operationsApi.checkTwilioStatus(msgIds);
+              if (res && res.data) {
+                  const allSent = res.data.every(m => m.delivery_status === 'SENT' || m.delivery_status === 'DELIVERED' || m.delivery_status === 'READ');
+                  const anyFailed = res.data.some(m => m.delivery_status && m.delivery_status.startsWith('FAILED'));
+                  if (allSent) {
+                      setPollingStatus('SENT');
+                      clearInterval(interval);
+                      setTimeout(() => onClose(), 3000);
+                  } else if (anyFailed) {
+                      setPollingStatus('FAILED');
+                      clearInterval(interval);
+                  }
+              }
+          } catch (e) {
+              console.error(e);
+          }
+          attempts++;
+          if (attempts > 12) {
+              clearInterval(interval);
+              setPollingStatus('TIMEOUT');
+          }
+      }, 10000);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -467,23 +496,34 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
       if (command.id === 'solicitud' && formData.targetUser) {
         payload.recipient_id = formData.targetUser;
       }
+      let result;
       switch (command.id) {
-        case 'sos':         await operationsApi.sos(payload);                                         break;
-        case 'citar':       await operationsApi.citacion(payload);                                    break;
-        case 'autorizar':   await operationsApi.salida(payload);                                      break;
-        case 'permiso':     await operationsApi.permiso(payload);                                     break;
-        case 'solicitud':   await operationsApi.execute('solicitud',  payload, '/operations/solicitud');  break;
-        case 'seguimiento': await operationsApi.execute('seguimiento',payload, '/operations/seguimiento'); break;
-        case 'daño':        await operationsApi.execute('daño',       payload, '/operations/daño');       break;
-        case 'pedagogica':  await operationsApi.execute('pedagogica', payload, '/operations/pedagogica'); break;
-        case 'horario':     await operationsApi.execute('horario',    payload, '/operations/horario');    break;
-        case 'incidente':   await operationsApi.execute('incidente',  payload, '/operations/incidente');  break;
+        case 'sos':         result = await operationsApi.sos(payload);                                         break;
+        case 'citar':       result = await operationsApi.citacion(payload);                                    break;
+        case 'autorizar':   result = await operationsApi.salida(payload);                                      break;
+        case 'permiso':     result = await operationsApi.permiso(payload);                                     break;
+        case 'solicitud':   result = await operationsApi.execute('solicitud',  payload, '/operations/solicitud');  break;
+        case 'seguimiento': result = await operationsApi.execute('seguimiento',payload, '/operations/seguimiento'); break;
+        case 'daño':        result = await operationsApi.execute('daño',       payload, '/operations/daño');       break;
+        case 'pedagogica':  result = await operationsApi.execute('pedagogica', payload, '/operations/pedagogica'); break;
+        case 'horario':     result = await operationsApi.execute('horario',    payload, '/operations/horario');    break;
+        case 'incidente':   result = await operationsApi.execute('incidente',  payload, '/operations/incidente');  break;
         default: throw new Error('Comando no soportado');
       }
-      onClose();
-      // Activar optimísticamente el punto verde de notificaciones
+      
       if (['citar', 'permiso', 'autorizar', 'solicitud', 'seguimiento'].includes(command.id)) {
         window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count: 1 } }));
+      }
+
+      let msgIds = [];
+      if (result && result.delivery) {
+          msgIds = result.delivery.map(d => d.message_id).filter(Boolean);
+      }
+      if (msgIds.length > 0) {
+          setStep('polling');
+          pollTwilioStatus(msgIds);
+      } else {
+          onClose();
       }
     } catch (error) {
       // BUG-01 FIX: error.message contiene el mensaje real del backend (lo construye operationsApi.execute)
@@ -562,7 +602,42 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
 
         {/* Drawer body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {step === 'warning' ? (
+          {step === 'polling' ? (
+              <div className="flex flex-col items-center justify-center h-full space-y-6 text-center">
+                  {pollingStatus === 'QUEUED' && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
+                          <Loader2 size={48} className="animate-spin mx-auto mb-4" style={{ color: accentColor }} />
+                          <div>
+                              <p className="text-lg font-bold text-slate-800 dark:text-white">Enviando mensaje...</p>
+                              <p className="text-xs text-slate-500 mt-2 font-medium">Puede tardar unos segundos. Por favor espera.</p>
+                          </div>
+                      </motion.div>
+                  )}
+                  {pollingStatus === 'SENT' && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
+                          <CheckCircle2 size={56} className="text-green-500 mx-auto mb-4" />
+                          <div>
+                              <p className="text-xl font-bold text-slate-800 dark:text-white">¡Mensaje Enviado!</p>
+                              <p className="text-xs text-slate-500 mt-2 font-medium">El mensaje fue entregado exitosamente.</p>
+                          </div>
+                      </motion.div>
+                  )}
+                  {(pollingStatus === 'FAILED' || pollingStatus === 'TIMEOUT') && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
+                          <AlertTriangle size={56} className="text-red-500 mx-auto mb-4" />
+                          <div>
+                              <p className="text-lg font-bold text-slate-800 dark:text-white">Aviso de envío</p>
+                              <p className="text-xs text-slate-500 mt-2 font-medium max-w-[250px] mx-auto leading-relaxed">
+                                {pollingStatus === 'TIMEOUT' ? 'El sistema está demorando más de lo normal en enviar. Se enviará en segundo plano.' : 'No se pudo verificar el estado del envío. Revisa tu historial de mensajes.'}
+                              </p>
+                          </div>
+                          <button onClick={onClose} className="mt-6 px-6 py-2.5 bg-slate-100 dark:bg-slate-800 dark:text-white text-slate-700 hover:bg-slate-200 font-bold uppercase text-[10px] tracking-widest rounded transition-colors">
+                              Cerrar
+                          </button>
+                      </motion.div>
+                  )}
+              </div>
+          ) : step === 'warning' ? (
             <div className="space-y-6 py-4">
               <div
                 className="flex items-start gap-3 p-4"

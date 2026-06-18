@@ -163,14 +163,8 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             $normalizedRole = normalizeRole($user['role_name']);
             $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
 
-            // Si tiene teléfono verificado, enviar alerta de seguridad por WhatsApp
-            $userPhone = isset($user['phone']) ? preg_replace('/[^0-9+]/', '', $user['phone']) : '';
-            if ($userPhone !== '' && !empty($user['phone_verified'])) {
-                $alertMsg = "🔐 *NEXO — Alerta de seguridad*\n\nSe detectó un inicio de sesión en tu cuenta.\nSi no fuiste tú, contacta al administrador inmediatamente.";
-                sendTwilioDirect($userPhone, $alertMsg);
-            }
-
             // 2FA opcional: si LOGIN_2FA_ENABLED=true y usuario tiene teléfono verificado
+            $userPhone = isset($user['phone']) ? preg_replace('/[^0-9+]/', '', $user['phone']) : '';
             $twoFaEnabled = getenv('LOGIN_2FA_ENABLED') === 'true';
             if ($twoFaEnabled && $userPhone !== '' && !empty($user['phone_verified'])) {
                 $code = str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
@@ -183,15 +177,22 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 $ins->execute([$user['user_id'], $user['email'], $code, $expiresAt]);
 
                 $otpResult = sendTwilioDirect($userPhone, "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.");
-                if ($otpResult['ok']) {
-                    http_response_code(202);
-                    echo json_encode([
-                        'status' => '2fa_required',
-                        'message' => 'Se envió un código de verificación a tu WhatsApp. Ingrésalo para continuar.',
-                        'requires_2fa' => true
-                    ]);
-                    exit;
+                
+                // SI NO SE PUDO ENVIAR, BLOQUEAR EL LOGIN
+                if (!$otpResult['ok']) {
+                    http_response_code(503); // Service Unavailable
+                    securityLog('2FA_DELIVERY_FAILED', "Cannot send 2FA to user {$user['user_id']}");
+                    exit(json_encode(['status' => 'error', 'message' => 'Servicio de seguridad no disponible. Intente más tarde o contacte soporte.']));
                 }
+
+                // Si se envió OK, pedir código
+                http_response_code(202);
+                echo json_encode([
+                    'status' => '2fa_required',
+                    'message' => 'Se envió un código de verificación a tu WhatsApp. Ingrésalo para continuar.',
+                    'requires_2fa' => true
+                ]);
+                exit;
             }
 
             $token = issueJwtToken([

@@ -60,14 +60,17 @@ const Consultation = () => {
       .catch(err => console.error('Error loading groups', err));
   }, [user?.role]);
 
+  const [initialModHandled, setInitialModHandled] = useState(false);
+
   useEffect(() => {
-    const mod = searchParams.get('mod');
-    if (mod) {
-      setActiveItem(mod);
-      setSearchParams({}, { replace: true });
+    if (!initialModHandled) {
+      const mod = searchParams.get('mod');
+      if (mod) {
+        setActiveItem(mod);
+      }
+      setInitialModHandled(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Solo al montar — consumimos y limpiamos el parámetro una sola vez
+  }, [searchParams, initialModHandled]);
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 

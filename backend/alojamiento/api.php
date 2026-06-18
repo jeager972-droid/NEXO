@@ -109,7 +109,15 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
             securityLog('RATE_LIMIT_EXCEEDED', "Hits: $hits, IP: $ip");
             exit(json_encode(['status' => 'error', 'message' => 'Too many requests']));
         }
-    } catch (Exception $e) { /* Fallback */ }
+    } catch (Exception $e) {
+        // <--- CAMBIO CRÍTICO --->
+        // Si Redis está caído, NO dejamos pasar todo ciegamente.
+        // Registramos el fallo y matamos la petición para evitar DOS.
+        securityLog('RATE_LIMIT_REDIS_DOWN', 'Redis unavailable, blocking request for safety');
+        http_response_code(503); // Service Unavailable
+        exit(json_encode(['status' => 'error', 'message' => 'Sistema sobrecargado. Intente en 1 minuto.']));
+        // <--- FIN CAMBIO --->
+    }
 }
 
 enforceRateLimitRedis();
@@ -194,6 +202,14 @@ if (isset($input['payload'])) {
 
             // Buscar dispositivo por device_id (O(1) lookup, evita UUID vs int crash)
             $requestDeviceId = $data['device_id'] ?? null;
+
+            // FAIL-FAST: Si no es un UUID válido, rechazar antes de golpear PDO
+            if (!$requestDeviceId || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $requestDeviceId)) {
+                securityLog('EDGE_INVALID_DEVICE_ID', 'Device ID malformado', null, null, $requestId);
+                http_response_code(400);
+                exit(json_encode(['status' => 'error', 'message' => 'Formato de Device ID inválido']));
+            }
+
             $stmt = $conn->prepare("SELECT device_id, school_id, active, token_hash FROM edge_devices WHERE device_id = ? AND active = TRUE");
             $stmt->execute([$requestDeviceId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);

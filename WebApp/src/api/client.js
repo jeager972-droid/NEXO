@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { userStore } from '../store/userStore';
+
 
 // Base URL: VITE_API_BASE_URL debe apuntar al backend (sin /v1 trailing).
 // El backend normaliza rutas via cleanPath, así que usamos la raíz.
@@ -34,12 +34,6 @@ client.interceptors.request.use(
     }
     config._t0 = performance.now();
 
-    // iOS ITP fallback: inyectar token desde sessionStorage cuando cookie es bloqueada
-    const storedToken = sessionStorage.getItem('nexo_token');
-    if (storedToken && !config.headers['Authorization']) {
-      config.headers['Authorization'] = `Bearer ${storedToken}`;
-    }
-
     return config;
   },
   (error) => Promise.reject(error)
@@ -72,13 +66,15 @@ client.interceptors.response.use(
   (error) => {
     emitLatency(error.config, error.response?.status ?? 0);
     if (error.response?.status === 401) {
-      userStore.clear();
-      // FIX: No redirigir si estamos en rutas públicas
-      const publicRoutes = ['/app/login', '/app/instalar/', '/app/descargas'];
+
+      // FIX: No redirigir si estamos en rutas públicas o si la petición fue explícitamente de autenticación
+      const publicRoutes = ['/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
       const isPublicRoute = publicRoutes.some(route => currentPath.startsWith(route) || currentPath.includes(route));
-      if (!isPublicRoute) {
-        window.location.href = '/app/login';
+      const isAuthRequest = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/verify-2fa');
+      
+      if (!isAuthRequest && !isPublicRoute) {
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

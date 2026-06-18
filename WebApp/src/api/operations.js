@@ -29,4 +29,8 @@ export const operationsApi = {
   permiso: async (data) => {
     return operationsApi.execute('permiso', data, '/operations/permiso');
   },
+  checkTwilioStatus: async (messageIds) => {
+    const response = await client.post('/operations/twilio-status', { message_ids: messageIds });
+    return response.data;
+  },
 };

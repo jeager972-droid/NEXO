@@ -255,3 +255,19 @@ CREATE POLICY jbl_insert ON jwt_blocklist FOR INSERT
 -- las políticas RLS. Sin esta línea, get_current_school_id() retorna
 -- NULL y las políticas bloquean TODAS las filas (fail-closed).
 -- ============================================================
+
+-- ============================================================
+-- 9. TABLAS MULTI-TENANT RESTANTES (Users y Notifications)
+-- ============================================================
+
+-- Users
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY users_select ON users FOR SELECT
+    USING (school_id = get_current_school_id() OR is_super_rector());
+
+-- Notifications
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY notifications_select ON notifications FOR SELECT
+    USING (school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY notifications_insert ON notifications FOR INSERT
+    WITH CHECK (school_id = get_current_school_id() OR is_super_rector());

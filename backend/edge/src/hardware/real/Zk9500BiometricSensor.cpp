@@ -81,30 +81,16 @@ public:
     NexoResult<void> searchUser(const std::vector<uint8_t>& /*ignorado*/, uint32_t& matchedUserId, float& matchScore) override {
         if (!m_isReady) return NexoResult<void>::fail(NexoError::NotInitialized);
 
-        // FIX: std::async elimina el riesgo de detached thread + dangling pointer
-        auto future = std::async(std::launch::async, [this]() -> std::pair<int, std::vector<uint8_t>> {
-            unsigned char fpTemplate[2048];
-            unsigned int cbTemplate = 2048;
-            int ret = ZKFPM_AcquireFingerprint(m_hDevice.get(), fpTemplate, cbTemplate, nullptr, nullptr);
-            std::vector<uint8_t> tpl;
-            if (ret == 0) {
-                tpl.assign(fpTemplate, fpTemplate + cbTemplate);
-            }
-            return {ret, tpl};
-        });
-
-        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
-            LOG_WARN("Fingerprint acquisition timeout (5s)");
-            return NexoResult<void>::fail(NexoError::Timeout, "Timeout esperando huella");
-        }
-
-        auto result = future.get();
-        if (result.first != 0) {
-            return NexoResult<void>::fail(NexoError::BadQuality, "Fallo lectura huella");
+        unsigned char fpTemplate[2048];
+        unsigned int cbTemplate = 2048;
+        int ret = ZKFPM_AcquireFingerprint(m_hDevice.get(), fpTemplate, cbTemplate, nullptr, nullptr);
+        
+        if (ret != 0) {
+             return NexoResult<void>::fail(NexoError::BadQuality, "Fallo lectura huella");
         }
 
         unsigned int fid = 0, score = 0;
-        if (ZKFPM_DBIdentify(m_hDBCache.get(), result.second.data(), static_cast<unsigned int>(result.second.size()), &fid, &score) == 0) {
+        if (ZKFPM_DBIdentify(m_hDBCache.get(), fpTemplate, cbTemplate, &fid, &score) == 0) {
             float normalizedScore = static_cast<float>(score) / 10.0f;
             normalizedScore = std::min(normalizedScore, 100.0f);
             if (static_cast<int>(normalizedScore) >= m_matchThreshold) {

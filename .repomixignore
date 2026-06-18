@@ -28,12 +28,7 @@ cmake_install.cmake
 compile_commands.json
 
 # === Bundles JS/CSS compilados por Vite ===
-backend/alojamiento/assets/index-*.js
-backend/alojamiento/assets/index-*.css
-backend/alojamiento/assets/gsap-*.js
-backend/alojamiento/assets/three-*.js
-backend/alojamiento/assets/three-vendor-*.js
-backend/alojamiento/assets/react-vendor-*.js
+backend/alojamiento/assets/**
 
 # === Assets binarios pesados ===
 **/*.glb

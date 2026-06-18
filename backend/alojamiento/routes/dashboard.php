@@ -6,8 +6,9 @@ require_once __DIR__ . '/_auth_middleware.php';
 if ($cleanPath === '/dashboard/stats') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];
+    $userRole = strtoupper($authUser['role'] ?? '');
     $groupName = $_GET['group_name'] ?? '';
-    securityLog('DASHBOARD_STATS_REQUEST', "School ID: " . ($schoolId ?? 'NULL') . " Group: " . ($groupName ?: 'ALL'));
+    securityLog('DASHBOARD_STATS_REQUEST', "School ID: " . ($schoolId ?? 'NULL') . " Group: " . ($groupName ?: 'ALL') . " Role: $userRole");
 
     if (!$schoolId) {
         http_response_code(400);
@@ -134,7 +135,6 @@ if ($cleanPath === '/dashboard/stats') {
         $pendingTasks = $tasksStmt->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Estudiantes por grupo (FIX: docentes solo ven grupos asignados via schedules)
-        $userRole = strtoupper($authUser['role'] ?? '');
         $teacherFilter = '';
         if ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR') {
             $teacherFilter = " AND ag.group_id IN (

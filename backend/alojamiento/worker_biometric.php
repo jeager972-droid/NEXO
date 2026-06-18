@@ -43,6 +43,16 @@ function processJob(array $job, PDO $conn): bool {
     $instId = $job['school_id'] ?? 0;
     $capturedAt = (int)($data['captured_at'] ?? 0);
 
+    if ($instId) {
+        try {
+            // FIX: Inyectar contexto de escuela para trazabilidad en auditoría
+            $conn->query("SELECT set_config('app.current_school_id', '" . addslashes((string)$instId) . "', false)");
+        } catch (Exception $e) {
+            logW('CONTEXT_FAIL', $e->getMessage());
+            return false;
+        }
+    }
+
     switch ($action) {
         case 'SYNC_ATTENDANCE':
             $doc = trim($data['doc'] ?? '');
@@ -99,7 +109,7 @@ function processJob(array $job, PDO $conn): bool {
                         // Update user name and phone
                         $nameParts = explode(' ', $parentName, 2);
                         $firstName = $nameParts[0];
-                        $lastName = $nameParts[1] ?? '';
+                        $lastName = $nameParts[1] ?? $firstName; // Fallback al primer nombre para evitar colapso NOT NULL
                         $stmt = $conn->prepare("UPDATE users SET first_name=?, last_name=?, phone=COALESCE(?,phone) WHERE user_id=?");
                         $stmt->execute([$firstName, $lastName, $parentTel, $userId]);
                         // Update guardian whatsapp_phone
@@ -118,7 +128,7 @@ function processJob(array $job, PDO $conn): bool {
                         // Insert user first
                         $nameParts = explode(' ', $parentName, 2);
                         $firstName = $nameParts[0];
-                        $lastName = $nameParts[1] ?? '';
+                        $lastName = $nameParts[1] ?? $firstName; // Fallback al primer nombre para evitar colapso NOT NULL
                         $lockedHash = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
                         $stmt = $conn->prepare("INSERT INTO users(school_id,role_id,document_number,first_name,last_name,phone,password_hash,password_salt,active) VALUES(?,?,?,?,?,?,?,?,TRUE) RETURNING user_id");
                         $stmt->execute([$schoolId, $guardianRoleId, $parentDoc, $firstName, $lastName, $parentTel, $lockedHash, '']);
