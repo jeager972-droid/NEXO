@@ -5,7 +5,7 @@ import {
   AlertOctagon, ShieldCheck, ShieldAlert, AlertTriangle,
   MapPin, Clock, Bus, Calendar,
   Wrench, Send, X, UserCheck, ChevronRight, ChevronDown,
-  CheckCircle2, Loader2,
+  CheckCircle2, Loader2, FileText,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { operationsApi } from '../api/operations';

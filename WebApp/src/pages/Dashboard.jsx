@@ -610,7 +610,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
     switch (category) {
       case 'present':  return [...base, { key: 'last_entry',  label: 'Último ingreso' }];
       case 'absent':   return [...base, { key: 'absent_since', label: 'Desde' }];
-      case 'alert':    return [...base, { key: 'alert_type', label: 'Evento' }, { key: 'alert_at', label: 'Fecha' }, { key: '_action', label: 'Acción' }];
+      case 'alert':    return [...base, { key: 'alert_type', label: 'Evento' }, { key: 'alert_at', label: 'Fecha' }, user?.role !== ROLES.DOCENTE ? { key: '_action', label: 'Acción' } : null].filter(Boolean);
       case 'permiso':  return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
       default:         return base;
     }

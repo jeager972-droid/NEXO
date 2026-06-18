@@ -423,7 +423,7 @@ export const ConsultationDrawer = ({
                           {dynamicColumns[k]}
                         </th>
                       ))}
-                      {['Seguimiento Estudiantil', 'Alertas'].includes(item) && (
+                      {['Seguimiento Estudiantil', 'Alertas'].includes(item) && user?.role !== 'DOCENTE' && (
                         <th className="px-4 py-3 text-right" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
                           Acción
                         </th>
@@ -439,18 +439,18 @@ export const ConsultationDrawer = ({
                             {formatCellValue(k, row[k])}
                           </td>
                         ))}
-                        {['Seguimiento Estudiantil', 'Alertas'].includes(item) && row.student_id && (
+                        {['Seguimiento Estudiantil', 'Alertas'].includes(item) && user?.role !== 'DOCENTE' && row.student_id && (
                           <td className="px-4 py-3 text-right">
                             <button 
                               onClick={() => {
-                let meta = null;
-                try {
-                  meta = typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json;
-                } catch {
-                  meta = null; // metadata malformada — continúa sin crashear
-                }
-                openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, meta);
-              }}
+                                let meta = null;
+                                try {
+                                  meta = typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json;
+                                } catch {
+                                  meta = null; // metadata malformada — continúa sin crashear
+                                }
+                                openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, meta)
+                              }}
                               className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:bg-[#003366]/10 px-2 py-1 rounded transition-colors"
                             >
                               Ver

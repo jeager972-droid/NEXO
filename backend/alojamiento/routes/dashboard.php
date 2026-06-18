@@ -96,10 +96,15 @@ if ($cleanPath === '/dashboard/stats') {
                       JOIN academic_groups ag ON ag.group_id = sga.group_id
                       JOIN schedules sch ON sch.group_id = ag.group_id
                       WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                      " . ($groupName ? " AND ag.group_name = ?" : "") . "
                   )
             ";
             $alertsStmt = $conn->prepare($alertsSql);
-            $alertsStmt->execute([$schoolId, $authUser['id']]);
+            if ($groupName) {
+                $alertsStmt->execute([$schoolId, $authUser['id'], $groupName]);
+            } else {
+                $alertsStmt->execute([$schoolId, $authUser['id']]);
+            }
             $alertsCount = $alertsStmt->fetchColumn();
         } else {
             // SOS alerts don't have student_id, so they're counted globally without group filter
