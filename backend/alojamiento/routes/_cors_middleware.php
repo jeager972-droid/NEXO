@@ -1,17 +1,28 @@
 <?php
 // _cors_middleware.php
-$allowedOrigins = array_filter(explode(',', getenv('CORS_ALLOW_ORIGINS') ?: ''));
+$allowedOriginsStr = getenv('CORS_ALLOW_ORIGINS') ?: '';
+$allowedOrigins = array_filter(explode(',', $allowedOriginsStr));
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+$isAllowed = false;
+
+if ($origin) {
+    if (in_array($origin, $allowedOrigins)) {
+        $isAllowed = true;
+    } else if (in_array('*', $allowedOrigins)) {
+        $isAllowed = true;
+    } else if (preg_match('/^https:\/\/[a-zA-Z0-9\-]+\.vercel\.app$/', $origin)) {
+        $isAllowed = true;
+    } else if (empty($allowedOrigins)) {
+        $isAllowed = true;
+    }
+}
 
 // Si el origen de la petición está en nuestra lista blanca, lo permitimos
-if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowedOrigins)) {
-    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+if ($isAllowed && $origin) {
+    header('Access-Control-Allow-Origin: ' . $origin);
     header('Access-Control-Allow-Credentials: true'); // Crucial para enviar cookies HttpOnly
     header('Access-Control-Max-Age: 86400'); // Cachea el preflight por 1 día
-} elseif (empty($allowedOrigins) && isset($_SERVER['HTTP_ORIGIN'])) {
-    // Fallback if no allowed origins are configured
-    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
-    header('Access-Control-Allow-Credentials: true');
-    header('Access-Control-Max-Age: 86400');
 }
 
 // INTERCEPTAR PETICIONES OPTIONS (Preflight CORS)
