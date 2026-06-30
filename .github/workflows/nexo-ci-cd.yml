@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install C++ Deps
-      run: sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev libsqlite3-dev
+      run: sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev libsqlite3-dev libspdlog-dev libmosquitto-dev
     - name: Build C++ Edge
       run: |
         cd backend/edge
