@@ -19,17 +19,15 @@ NEXO es una plataforma educativa para Colombia que combina:
                          └───────────────┬──────────────┬─────────────┘
                                          │              │
                 ┌────────────────────────▼──┐        ┌──▼─────────────────────────────┐
-                │ WebApp/.git (HEAD adelante)│        │ Logica de negocio/alojamiento/.git│
+                │ WebApp/                    │        │ backend/alojamiento/           │
                 │ Frontend React + espejo de │        │ Backend PHP productivo + Docker│
                 │ backend PHP (idéntico)     │        │ (Railway)                      │
                 └────────────────────────────┘        └────────────────────────────────┘
 
 Carpetas físicas:
   WebApp/                            ← React/Vite/PWA + ESPEJO de backend (no autoritativo)
-  Logica de negocio/alojamiento/     ← Backend PHP autoritativo (Dockerfile, .htaccess, start.sh)
-  Logica de negocio/src + include/   ← Edge ESP32 (Arduino) — sin git
-  Gestion de Proyecto/               ← Documentación — sin git
-  Includes/, logs/, platformio.ini   ← Build artifacts y config edge — sin git
+  backend/alojamiento/               ← Backend PHP autoritativo (Dockerfile, .htaccess, start.sh)
+  backend/edge/                      ← Edge Raspberry Pi (C++)
 ```
 
 ### 2.1 Flujo de datos actual
