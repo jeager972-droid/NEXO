@@ -19,8 +19,8 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 COPY . .
 RUN chown -R www-data:www-data /var/www/html
 
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN cp /var/www/html/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
