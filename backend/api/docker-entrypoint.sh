@@ -145,9 +145,9 @@ run_worker_with_backoff() {
     done
 }
 
-run_worker_with_backoff "worker_twilio.php" > /dev/stdout 2>&1 &
-run_worker_with_backoff "worker_audit.php" > /dev/stdout 2>&1 &
-run_worker_with_backoff "worker_biometric.php" > /dev/stdout 2>&1 &
+run_worker_with_backoff "workers/worker_twilio.php" > /dev/stdout 2>&1 &
+run_worker_with_backoff "workers/worker_audit.php" > /dev/stdout 2>&1 &
+run_worker_with_backoff "workers/worker_biometric.php" > /dev/stdout 2>&1 &
 
 echo "[nexo] Iniciando Mosquitto MQTT broker..."
 # Create mosquitto config for production (Auth si hay variables, fallback a open solo si faltan)

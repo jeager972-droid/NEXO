@@ -46,9 +46,9 @@ jobs:
       with:
         php-version: '8.2'
     - name: PHP Syntax Lint
-      run: find backend/alojamiento -name "*.php" -print0 | xargs -0 -n1 php -l
+      run: find backend/api -name "*.php" -print0 | xargs -0 -n1 php -l
     - name: Run PHP Tests
-      run: cd backend/alojamiento && php tests/PanicButtonTest.php
+      run: cd backend/api && php tests/PanicButtonTest.php
 
   deploy-backend-railway:
     needs: [build-webapp-react, test-backend-php, build-edge-cpp]
