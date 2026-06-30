@@ -46,5 +46,19 @@
       "name": "cross-arm64-pi4",
       "configurePreset": "cross-arm64-pi4"
     }
+  ],
+  "testPresets": [
+    {
+      "name": "dev-x86",
+      "configurePreset": "dev-x86"
+    },
+    {
+      "name": "release-x86",
+      "configurePreset": "release-x86"
+    },
+    {
+      "name": "cross-arm64-pi4",
+      "configurePreset": "cross-arm64-pi4"
+    }
   ]
 }
