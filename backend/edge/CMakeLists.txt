@@ -75,10 +75,13 @@ target_link_libraries(nexo-edge PRIVATE
     SQLite::SQLite3
     spdlog::spdlog
     nlohmann_json::nlohmann_json
-    ${ZKFP_LIB}
     ${MOSQUITTO_LIBRARIES}
     ${MOSQUITTO_LIB}
 )
+
+if(ZKFP_LIB)
+    target_link_libraries(nexo-edge PRIVATE ${ZKFP_LIB})
+endif()
 
 target_include_directories(nexo-edge PRIVATE ${MOSQUITTO_INCLUDE_DIRS})
 
