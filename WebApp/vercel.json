@@ -2,7 +2,17 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "redirects": [
-    { "source": "/", "destination": "/app/", "permanent": false }
+    { "source": "/", "destination": "/app/", "permanent": false },
+    { "source": "/login", "destination": "/app/login", "permanent": false },
+    { "source": "/operacion", "destination": "/app/operacion", "permanent": false },
+    { "source": "/notificaciones", "destination": "/app/notificaciones", "permanent": false },
+    { "source": "/perfil", "destination": "/app/perfil", "permanent": false },
+    { "source": "/consulta", "destination": "/app/consulta", "permanent": false },
+    { "source": "/seguimiento", "destination": "/app/seguimiento", "permanent": false },
+    { "source": "/auditoria", "destination": "/app/auditoria", "permanent": false },
+    { "source": "/informes", "destination": "/app/informes", "permanent": false },
+    { "source": "/enrolamiento", "destination": "/app/enrolamiento", "permanent": false },
+    { "source": "/descargas", "destination": "/app/descargas", "permanent": false }
   ],
   "rewrites": [
     {
@@ -10,7 +20,11 @@
       "destination": "/assets/:file*"
     },
     {
-      "source": "/app/((?!assets/).*)",
+      "source": "/app/(.*)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],

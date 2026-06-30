@@ -23,6 +23,7 @@ import {
   FileText, 
   Search, 
   UserPlus,
+  BarChart2,
 } from 'lucide-react';
 
 export const SIDEBAR_ITEMS = [
@@ -57,9 +58,15 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
   },
   {
-    title: 'Auditoría',  // BUG-13 FIX: era 'Consulta', duplicado — renombrado para evitar colisión
+    title: 'Auditoría',
     path: '/auditoria',
     icon: FileText,
+    roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR]
+  },
+  {
+    title: 'Informes',
+    path: '/informes',
+    icon: BarChart2,
     roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR]
   },
   {

@@ -2,7 +2,18 @@
 .git
 .gitignore
 .dockerignore
+.git-backup-old/
 *.md
+_dev/
+
+# Landing page separada — no va en el contenedor del backend
+frontend/
+
+# Assets 3D de la landing (texturas, modelos GLB)
+assets-3d/
+
+# Archivos de desarrollo local
+check_roles.php
+create_tables.php
 debug_db.php
 create_estudiantes.php
-_dev/

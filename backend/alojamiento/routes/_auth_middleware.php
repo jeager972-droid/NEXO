@@ -8,6 +8,7 @@ global $conn;
  */
 if (!defined('ROLES')) {
     define('ROLES', [
+        'SUPER_RECTOR' => 'SUPER_RECTOR', // Nota: Rol de emergencia/mantenimiento, tiene bypass de RLS y acceso al botón de pánico
         'RECTOR' => 'RECTOR',
         'COORDINADOR' => 'COORDINADOR',
         'DOCENTE' => 'DOCENTE',
@@ -369,18 +370,14 @@ if (!function_exists('extractBearerToken')) {
             }
         }
         if (preg_match('/Bearer\s+([A-Za-z0-9\-\._]+)/', $authHeader, $matches)) {
-            error_log('[AUTH] Token extracted from Authorization header');
             return $matches[1];
         }
 
         // 2. Si no hay header, intentar desde cookie (nuevo flujo con HttpOnly)
-        error_log('[AUTH] Cookies available: ' . json_encode(array_keys($_COOKIE)));
         if (isset($_COOKIE['token']) && !empty($_COOKIE['token'])) {
-            error_log('[AUTH] Token extracted from cookie (length: ' . strlen($_COOKIE['token']) . ')');
             return $_COOKIE['token'];
         }
 
-        error_log('[AUTH] No token found in Authorization header or cookie');
         return null;
     }
 }

@@ -1,7 +1,8 @@
 <?php
-// routes/operations.php - Manejo de comandos (SOS, Inasistencia)
+// routes/operations.php - Manejo de comandos (SOS, Inasistencia, Citación, etc.)
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
+require_once __DIR__ . '/../lib/twilio.php'; // funciones Twilio compartidas
 
 function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     try {
@@ -24,139 +25,21 @@ function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     }
 }
 
-function getTwilioStatusCallbackUrl() {
-    $base = getenv('TWILIO_WEBHOOK_URL_BASE') ?: getenv('APP_URL') ?: '';
-    if ($base === '') return null;
-    return rtrim($base, '/') . '/v1/webhooks/twilio/status';
-}
-
-function sendTwilioDirect($to, $body) {
-    $sid   = getenv('TWILIO_ACCOUNT_SID');
-    $token = getenv('TWILIO_AUTH_TOKEN');
-    $from  = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
-    if (!$sid || !$token || !$from) {
-        $missing = [];
-        if (!$sid)   $missing[] = 'TWILIO_ACCOUNT_SID';
-        if (!$token) $missing[] = 'TWILIO_AUTH_TOKEN';
-        if (!$from)  $missing[] = 'TWILIO_WHATSAPP_FROM (or TWILIO_FROM_NUMBER)';
-        $err = 'Missing Twilio credentials: ' . implode(', ', $missing);
-        securityLog('TWILIO_DIRECT_CREDENTIALS_MISSING', $err);
-        error_log("[TWILIO] CREDENTIALS MISSING: " . implode(', ', $missing));
-        return ['ok' => false, 'error' => $err];
-    }
-    $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
-    if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
-    $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
-
-    $fromNorm = preg_replace('/^whatsapp:/i', '', trim((string)$from));
-    if ($fromNorm !== '' && $fromNorm[0] !== '+') $fromNorm = '+' . $fromNorm;
-    $fromNorm = preg_replace('/[^0-9\+]/', '', $fromNorm);
-
-    error_log("[TWILIO] sendTwilioDirect from={$fromNorm} to={$toNorm} sid_prefix=" . substr($sid, 0, 6));
-
-    // 1) Intentar mensaje de sesión
-    $url     = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json";
-    $payload = [
-        'From' => "whatsapp:$fromNorm",
-        'To'   => "whatsapp:$toNorm",
-        'Body' => $body
-    ];
-    $statusCallback = getTwilioStatusCallbackUrl();
-    if ($statusCallback) {
-        $payload['StatusCallback'] = $statusCallback;
-    }
-
-    error_log("[TWILIO] curl init url={$url} to={$toNorm}");
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($payload));
-    curl_setopt($ch, CURLOPT_USERPWD, "$sid:$token");
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err      = curl_error($ch);
-    curl_close($ch);
-
-    error_log("[TWILIO] curl result httpCode={$httpCode} curl_err=" . ($err ?: 'none') . " response_len=" . ($response === false ? 'false' : strlen($response)));
-
-    // 2) Detectar 63016/63015 y reintentar con template
-    if ($response !== false && $httpCode >= 400) {
-        $json = json_decode($response, true);
-        $twilioCode = $json['code'] ?? $json['error_code'] ?? $httpCode;
-        error_log("[TWILIO] Twilio error code={$twilioCode} msg=" . ($json['message'] ?? 'n/a'));
-        if (in_array($twilioCode, [63016, 63015])) {
-            $templateSid = getenv('TWILIO_WHATSAPP_TEMPLATE_SID');
-            error_log("[TWILIO] Template fallback templateSid=" . ($templateSid ?: 'NOT_SET'));
-            if ($templateSid) {
-                $templatePayload = [
-                    'From' => "whatsapp:$fromNorm",
-                    'To'   => "whatsapp:$toNorm",
-                    'ContentSid' => $templateSid,
-                    'ContentVariables' => json_encode(['1' => $body], JSON_UNESCAPED_UNICODE)
-                ];
-                if ($statusCallback) {
-                    $templatePayload['StatusCallback'] = $statusCallback;
-                }
-                $ch2 = curl_init($url);
-                curl_setopt($ch2, CURLOPT_POST, true);
-                curl_setopt($ch2, CURLOPT_POSTFIELDS, http_build_query($templatePayload));
-                curl_setopt($ch2, CURLOPT_USERPWD, "$sid:$token");
-                curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch2, CURLOPT_TIMEOUT, 15);
-                curl_setopt($ch2, CURLOPT_SSL_VERIFYPEER, true);
-                $response2 = curl_exec($ch2);
-                $httpCode2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-                curl_close($ch2);
-                error_log("[TWILIO] Template fallback httpCode={$httpCode2}");
-                if ($response2 !== false && $httpCode2 < 400) {
-                    $json2 = json_decode($response2, true);
-                    return ['ok' => true, 'error' => null, 'sid' => $json2['sid'] ?? null];
-                }
-                return ['ok' => false, 'error' => "[$twilioCode] Template fallback falló", 'sid' => null];
-            }
-            return ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID.", 'sid' => null];
-        }
-    }
-
-    if ($response === false || $httpCode >= 400) {
-        $errorDetail = $err ?: "HTTP $httpCode";
-        if ($response) {
-            $errorDetail .= " | Response: " . substr($response, 0, 500);
-        }
-        securityLog('TWILIO_DIRECT_ERROR', "To:$toNorm HTTP:$httpCode Error:$errorDetail");
-        error_log("[TWILIO] FAILED: {$errorDetail}");
-        return ['ok' => false, 'error' => $errorDetail, 'sid' => null];
-    }
-    $json = json_decode($response, true);
-    $sidStr = isset($json['sid']) ? $json['sid'] : 'N/A';
-    securityLog('TWILIO_DIRECT_OK', "SID:{$sidStr} To:$toNorm");
-    error_log("[TWILIO] SUCCESS sid={$sidStr}");
-    return ['ok' => true, 'error' => null, 'sid' => $json['sid'] ?? null];
-}
-
 function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
     global $conn;
-    $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
-    if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
-    $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
-
+    $toNorm = normalizeWhatsAppPhone($to);
     if (empty($toNorm) || $toNorm === '+') {
         securityLog('TWILIO_SEND_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
-
     $result = sendTwilioDirect($to, $body);
-
     if ($result['ok']) {
-        logTwilioMessageSafe($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
+        logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
             ['action' => 'api_direct_sent', 'source' => 'sendTwilioNow'],
             $studentId, $guardianId, $senderUserId, $result['sid'], 'SENT');
         return ['ok' => true, 'reason' => 'sent', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
     }
-
-    logTwilioMessageSafe($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
+    logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
         ['action' => 'api_direct_failed', 'error' => $result['error'], 'source' => 'sendTwilioNow'],
         $studentId, $guardianId, $senderUserId, null, 'FAILED');
     return ['ok' => false, 'reason' => 'twilio_api_error', 'error' => $result['error'], 'phone_norm' => $toNorm];
@@ -164,102 +47,51 @@ function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = n
 
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
     global $conn;
-    $enqueued = false;
-    $toNorm = preg_replace('/^whatsapp:/i', '', trim((string)$to));
-    if ($toNorm !== '' && $toNorm[0] !== '+') $toNorm = '+' . $toNorm;
-    $toNorm = preg_replace('/[^0-9\+]/', '', $toNorm);
-
+    $toNorm = normalizeWhatsAppPhone($to);
     if (empty($toNorm) || $toNorm === '+') {
         securityLog('TWILIO_ENQUEUE_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
-
     $msgId = null;
     try {
         if ($conn) {
-            $stmt = $conn->query("SELECT uuid_generate_v4()");
+            $stmt  = $conn->query("SELECT uuid_generate_v4()");
             $msgId = $stmt->fetchColumn();
-            $insStmt = $conn->prepare("
+            $ins   = $conn->prepare("
                 INSERT INTO twilio_messages (
                     twilio_message_id, school_id, student_id, guardian_id, sender_user_id,
                     type_code, direction, phone_number, message_content, delivery_status, sent_at
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, 'OUTBOUND', ?, ?, 'QUEUED', NOW()
-                )
+                ) VALUES (?, ?, ?, ?, ?, ?, 'OUTBOUND', ?, ?, 'QUEUED', NOW())
             ");
-            $insStmt->execute([$msgId, $schoolId, $studentId, $guardianId, $senderUserId, $typeCode, $toNorm, $body]);
+            $ins->execute([$msgId, $schoolId, $studentId, $guardianId, $senderUserId, $typeCode, $toNorm, $body]);
         }
     } catch (Exception $e) {
         securityLog('TWILIO_PRE_INSERT_FAILED', $e->getMessage());
     }
-
     try {
         $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', (int)(getenv('REDISPORT') ?: 6379));
         if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
         $redis->select((int)(getenv('REDIS_DB') ?: 0));
-
-        $payload = json_encode([
-            'message_id' => $msgId,
-            'to' => $toNorm,
-            'body' => $body,
-            'school_id' => $schoolId,
-            'student_id' => $studentId,
-            'guardian_id' => $guardianId,
-            'sender_user_id' => $senderUserId,
-            'type_code' => $typeCode,
-            'retries' => 0,
-            'created_at' => time()
-        ], JSON_UNESCAPED_UNICODE);
-        $redis->rPush('queue:twilio', $payload);
-        $enqueued = true;
+        $redis->rPush('queue:twilio', json_encode([
+            'message_id' => $msgId, 'to' => $toNorm, 'body' => $body,
+            'school_id' => $schoolId, 'student_id' => $studentId,
+            'guardian_id' => $guardianId, 'sender_user_id' => $senderUserId,
+            'type_code' => $typeCode, 'retries' => 0, 'created_at' => time()
+        ], JSON_UNESCAPED_UNICODE));
         return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm, 'message_id' => $msgId];
     } catch (Exception $e) {
         securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
     }
-
-    // Fallback: si Redis no está disponible, enviar directamente
-    if (!$enqueued) {
-        $result = sendTwilioDirect($to, $body);
-        if ($result['ok']) {
-            securityLog('TWILIO_DIRECT_SENT', "SID: {$result['sid']} To: $to");
-            return ['ok' => true, 'reason' => 'direct', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
-        } else {
-            securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
-            return ['ok' => false, 'reason' => 'direct_failed', 'error' => $result['error'], 'phone_norm' => $toNorm];
-        }
+    // Fallback: Redis no disponible — enviar directamente
+    $result = sendTwilioDirect($to, $body);
+    if ($result['ok']) {
+        securityLog('TWILIO_DIRECT_SENT', "SID: {$result['sid']} To: $to");
+        return ['ok' => true, 'reason' => 'direct', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
     }
+    securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
+    return ['ok' => false, 'reason' => 'direct_failed', 'error' => $result['error'], 'phone_norm' => $toNorm];
 }
-
-function logTwilioMessageSafe($conn, $schoolId, $typeCode, $direction, $phone, $content, $meta = [], $studentId = null, $guardianId = null, $senderUserId = null, $providerSid = null, $deliveryStatus = null) {
-    try {
-        $stmt = $conn->prepare("
-            INSERT INTO twilio_messages (
-                twilio_message_id, school_id, student_id, guardian_id, sender_user_id,
-                type_code, direction, phone_number, message_content, provider_message_sid,
-                delivery_status, sent_at, metadata_json
-            ) VALUES (
-                uuid_generate_v4(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?::jsonb
-            )
-        ");
-        $stmt->execute([
-            $schoolId,
-            $studentId,
-            $guardianId,
-            $senderUserId,
-            $typeCode,
-            $direction,
-            $phone,
-            $content,
-            $providerSid,
-            $deliveryStatus,
-            json_encode($meta, JSON_UNESCAPED_UNICODE)
-        ]);
-    } catch (Exception $e) {
-        securityLog('TWILIO_LOG_ERROR', $e->getMessage());
-    }
-}
-
 /**
  * @OA\Post(
  *     path="/operations/sos",
@@ -310,6 +142,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         '/operations/pedagogica' => 'pedagogica',
         '/operations/horario' => 'horario',
         '/operations/incidente' => 'incidente',
+        '/operations/seguimiento' => 'seguimiento',
     ];
     if (isset($pathMap[$cleanPath])) {
         $action = $pathMap[$cleanPath];
@@ -331,7 +164,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         'solicitud' => ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
         'daño' => ['AUXILIAR', 'PORTERO'],
         'pedagogica' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
-        'horario' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR']
+        'horario' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
+        'seguimiento' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR']
     ];
 
     if (!isset($rolePermissions[$action]) || !in_array($role, $rolePermissions[$action])) {
@@ -464,6 +298,21 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     http_response_code(400);
                     echo json_encode(['status' => 'error', 'message' => 'student_id requerido para citación']);
                     break;
+                }
+
+                $isTeacher = ($role === 'DOCENTE' || $role === 'PSICORIENTADOR');
+                if ($isTeacher) {
+                    $valStmt = $conn->prepare("
+                        SELECT 1 FROM student_group_assignments sga
+                        JOIN schedules sch ON sch.group_id = sga.group_id
+                        WHERE sga.student_id = ? AND sch.teacher_user_id = ? AND sga.active = TRUE
+                    ");
+                    $valStmt->execute([$studentId, $userId]);
+                    if (!$valStmt->fetchColumn()) {
+                        http_response_code(403);
+                        echo json_encode(['status' => 'error', 'message' => 'No puedes citar a un estudiante que no pertenece a tus grupos.']);
+                        break;
+                    }
                 }
 
                 $studentStmt = $conn->prepare("
@@ -804,6 +653,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
             case 'solicitud':
             case 'daño':
             case 'horario':
+            case 'pedagogica':
+            case 'seguimiento':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 if ($reason === '') {

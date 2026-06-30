@@ -31,9 +31,10 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
     ]);
 
-    // FIX: Set HMAC secret for audit chain hashing to avoid default secret
+    // SECURITY-FIX: Usar prepared statement — addslashes() no es seguro para PostgreSQL
     if ($hmacSecret = getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET')) {
-        $pdo->exec("SELECT set_config('app.nexo_hmac_secret', '" . addslashes($hmacSecret) . "', false)");
+        $stmt = $pdo->prepare("SELECT set_config('app.nexo_hmac_secret', ?, false)");
+        $stmt->execute([$hmacSecret]);
     }
 } catch (PDOException $e) {
     error_log("DB Error: " . $e->getMessage());

@@ -22,21 +22,30 @@ if ($cleanPath === '/consultations/query') {
     }
 
     // Helper: validar que el docente/psicorientador tenga asignado el grupo
-    // FIX: si no tiene schedules, fallback a validar que el grupo pertenezca a la institución
     $teacherGroupFilter = '';
     $isTeacher = in_array($userRoleUpper, ['DOCENTE', 'PSICORIENTADOR']);
-    if ($isTeacher && $groupName) {
-        $checkStmt = $conn->prepare("
-            SELECT 1 FROM schedules sch
-            JOIN academic_groups ag ON ag.group_id = sch.group_id
-            WHERE sch.teacher_user_id = ? AND ag.group_name = ?
-            LIMIT 1
-        ");
-        $checkStmt->execute([$userId, $groupName]);
-        $hasSchedule = (bool)$checkStmt->fetchColumn();
-        if (!$hasSchedule) {
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'No tienes acceso a este grupo.']));
+    if ($isTeacher) {
+        if ($groupName) {
+            $checkStmt = $conn->prepare("
+                SELECT 1 FROM schedules sch
+                JOIN academic_groups ag ON ag.group_id = sch.group_id
+                WHERE sch.teacher_user_id = ? AND ag.group_name = ?
+                LIMIT 1
+            ");
+            $checkStmt->execute([$userId, $groupName]);
+            $hasSchedule = (bool)$checkStmt->fetchColumn();
+            if (!$hasSchedule) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'No tienes acceso a este grupo.']));
+            }
+        } else {
+            // FIX: Si el docente NO envía grupo, forzamos que solo vea estudiantes de sus propios grupos
+            $safeUserId = $conn->quote($userId);
+            $teacherGroupFilter = " AND s.student_id IN (
+                SELECT sga.student_id FROM student_group_assignments sga
+                JOIN schedules sch ON sch.group_id = sga.group_id
+                WHERE sch.teacher_user_id = {$safeUserId} AND sga.active = TRUE
+            )";
         }
     }
 
@@ -68,7 +77,7 @@ if ($cleanPath === '/consultations/query') {
                     FROM students s
                     JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
                     JOIN academic_groups ag ON sga.group_id = ag.group_id
-                    WHERE s.school_id = ? AND s.active = TRUE {$groupFilter}
+                    WHERE s.school_id = ? AND s.active = TRUE {$groupFilter} {$teacherGroupFilter}
                     ORDER BY ag.group_name, s.last_name
                     LIMIT 100
                 ");
@@ -89,9 +98,10 @@ if ($cleanPath === '/consultations/query') {
                     JOIN students s ON be.student_id = s.student_id
                     WHERE be.school_id = ?
                       AND (be.event_type LIKE 'INGRESO_TARDE%' OR be.event_type LIKE 'LATE%' OR be.event_result = 'LATE')
-                      AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND be.event_timestamp >= (?::date AT TIME ZONE 'America/Bogota') AND be.event_timestamp < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
                       {$gFilter}
                       {$sFilter}
+                      {$teacherGroupFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 50
                 ");
@@ -112,9 +122,10 @@ if ($cleanPath === '/consultations/query') {
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
                     WHERE ai.school_id = ? AND ai.incident_type IN ('UNAUTHORIZED_ABSENCE', 'INASISTENCIA')
-                      AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND ai.detected_at >= (?::date AT TIME ZONE 'America/Bogota') AND ai.detected_at < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
                       {$gFilter}
                       {$sFilter}
+                      {$teacherGroupFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
@@ -138,9 +149,10 @@ if ($cleanPath === '/consultations/query') {
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
                     WHERE ai.school_id = ? AND ai.incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
-                      AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND ai.detected_at >= (?::date AT TIME ZONE 'America/Bogota') AND ai.detected_at < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
                       {$gFilter}
                       {$sFilter}
+                      {$teacherGroupFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
@@ -166,8 +178,9 @@ if ($cleanPath === '/consultations/query') {
                     FROM biometric_events be
                     JOIN students s ON be.student_id = s.student_id
                     WHERE be.school_id = :sid
-                      AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date
-                          BETWEEN :date_from AND :date_to
+                      AND be.event_timestamp >= (:date_from::date AT TIME ZONE 'America/Bogota')
+                      AND be.event_timestamp < ((:date_to::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      {$teacherGroupFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 500
                 ");
@@ -188,6 +201,7 @@ if ($cleanPath === '/consultations/query') {
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
                     WHERE ai.school_id = ? AND (ai.incident_type IN ('INCIDENTE', 'DAÑO', 'SOS') OR ai.incident_type LIKE 'RISK_ALERT%')
+                      {$teacherGroupFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
@@ -203,6 +217,7 @@ if ($cleanPath === '/consultations/query') {
                         FROM student_tracking st
                         JOIN students s ON st.student_id = s.student_id
                         WHERE st.school_id = ?
+                          {$teacherGroupFilter}
                         ORDER BY CASE WHEN st.status = 'en proceso' THEN 1 ELSE 2 END, st.updated_at DESC
                         LIMIT 100
                     ");
@@ -281,7 +296,8 @@ if ($cleanPath === '/consultations/query') {
                     JOIN students s ON be.student_id = s.student_id
                     WHERE be.school_id = ?
                       AND be.event_result IN ('NO_MATCH', 'SPOOF_DETECTED', 'LIVENESS_FAIL', 'TIMEOUT')
-                      AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND be.event_timestamp >= (?::date AT TIME ZONE 'America/Bogota') AND be.event_timestamp < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      {$teacherGroupFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 100
                 ");
@@ -304,7 +320,8 @@ if ($cleanPath === '/consultations/query') {
                     LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
                     LEFT JOIN users u ON u.user_id = cea.authorized_by_user_id
                     WHERE cea.school_id = ?
-                      AND (cea.exit_time AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND cea.exit_time >= (?::date AT TIME ZONE 'America/Bogota') AND cea.exit_time < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      {$teacherGroupFilter}
                     ORDER BY cea.exit_time DESC
                     LIMIT 100
                 ");
@@ -328,7 +345,8 @@ if ($cleanPath === '/consultations/query') {
                     LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
                     LEFT JOIN users u ON u.user_id = sea.authorized_by_user_id
                     WHERE sea.school_id = ?
-                      AND (sea.exit_time AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND sea.exit_time >= (?::date AT TIME ZONE 'America/Bogota') AND sea.exit_time < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      {$teacherGroupFilter}
                     ORDER BY sea.exit_time DESC
                     LIMIT 100
                 ");
@@ -350,7 +368,7 @@ if ($cleanPath === '/consultations/query') {
                     FROM user_commands uc
                     LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
                     WHERE uc.school_id = ? AND uc.command_type = 'PEDAGOGICA'
-                      AND (uc.executed_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+                      AND uc.executed_at >= (?::date AT TIME ZONE 'America/Bogota') AND uc.executed_at < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
                     ORDER BY uc.executed_at DESC
                     LIMIT 50
                 ");

@@ -13,5 +13,23 @@ export const consultationsApi = {
       throw new Error(data.message || 'Error en el módulo de consulta');
     }
     return data;
-  }
+  },
+
+  // Busqueda directa (buscador de elementos individuales)
+  search: async (query, module) => {
+    const response = await client.get('/consultation/search', { params: { q: query, module } });
+    return response.data?.data ?? response.data ?? [];
+  },
+
+  // Detalle de un item por ID
+  getItemDetails: async (itemId, module) => {
+    if (!itemId) return null;
+    try {
+      const response = await client.get('/consultation/details', { params: { id: itemId, module } });
+      return response.data?.data ?? null;
+    } catch (e) {
+      console.error('getItemDetails error:', e);
+      return null;
+    }
+  },
 };

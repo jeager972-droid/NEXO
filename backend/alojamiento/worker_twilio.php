@@ -4,46 +4,12 @@
  * Ejecutar bajo supervisor: php worker_twilio.php
  */
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/lib/twilio.php'; // normalizeWhatsAppPhone, getTwilioStatusCallbackUrl, sendTwilioDirect, logTwilioMessage
 
+// securityLog se mantiene local: en el worker escribe a stderr, no a DB
 function securityLog($event, $details = '') {
-    $ip = 'worker';
-    $uri = 'worker_twilio.php';
-    $fallbackMsg = sprintf("[%s] [EVENT:%s] [DETAILS:%s] [IP:%s]\n", gmdate('Y-m-d H:i:s'), $event, $details, $ip);
+    $fallbackMsg = sprintf("[%s] [EVENT:%s] [DETAILS:%s]\n", gmdate('Y-m-d H:i:s'), $event, $details);
     file_put_contents('php://stderr', $fallbackMsg);
-}
-
-function logTwilioMessage($conn, $schoolId, $typeCode, $direction, $phone, $content, $meta = [], $studentId = null, $guardianId = null, $senderUserId = null, $providerSid = null, $deliveryStatus = null) {
-    try {
-        $stmt = $conn->prepare("INSERT INTO twilio_messages (
-                twilio_message_id, school_id, student_id, guardian_id, sender_user_id,
-                type_code, direction, phone_number, message_content, provider_message_sid,
-                delivery_status, sent_at, metadata_json
-            ) VALUES (
-                uuid_generate_v4(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?::jsonb
-            )");
-        $stmt->execute([
-            $schoolId, $studentId, $guardianId, $senderUserId,
-            $typeCode, $direction, $phone, $content,
-            $providerSid, $deliveryStatus,
-            json_encode($meta, JSON_UNESCAPED_UNICODE)
-        ]);
-    } catch (Exception $e) {
-        securityLog('TWILIO_LOG_ERROR', $e->getMessage());
-    }
-}
-
-function normalizeWhatsAppPhone($value) {
-    $value = trim((string)$value);
-    $value = preg_replace('/^whatsapp:/i', '', $value);
-    if ($value === '') return '';
-    if ($value[0] !== '+') $value = '+' . $value;
-    return preg_replace('/[^0-9\+]/', '', $value);
-}
-
-function getTwilioStatusCallbackUrl() {
-    $base = getenv('TWILIO_WEBHOOK_URL_BASE') ?: getenv('APP_URL') ?: '';
-    if ($base === '') return null;
-    return rtrim($base, '/') . '/v1/webhooks/twilio/status';
 }
 
 function buildTwilioPayload($to, $body, $templateSid = null, $templateVars = null) {
@@ -160,14 +126,14 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
 
     if ($schoolId) {
         try {
-            // Esto le dice a PostgreSQL: "Soy el Worker, pero estoy trabajando para ESTA escuela".
-            $conn->query("SELECT set_config('app.current_school_id', '$schoolId', false)");
-            // Aseguramos que el rol sea SUPER (ya lo tenías, pero por seguridad lo refuerzamos)
-            $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)"); 
+            // SECURITY-FIX: prepared statements — $schoolId viene de Redis (no confiable)
+            $stmtSchool = $conn->prepare("SELECT set_config('app.current_school_id', ?, false)");
+            $stmtSchool->execute([(string)$schoolId]);
+            $stmtRole = $conn->prepare("SELECT set_config('app.current_role', ?, false)");
+            $stmtRole->execute(['SUPER_RECTOR']);
         } catch (Exception $e) {
             securityLog('WORKER_CONTEXT_SET_FAIL', $e->getMessage());
-            // Si falla esto, no podemos procesar el job. Hacemos reintentar.
-            return; 
+            return;
         }
     }
 

@@ -51,7 +51,7 @@ if ($cleanPath === '/dashboard/stats') {
                 SELECT COUNT(DISTINCT student_id)
                 FROM biometric_events
                 WHERE school_id = ?
-                  AND (event_timestamp AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+                  AND event_timestamp >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
                   AND event_type LIKE 'INGRESO_%'
                   {$groupJoin}
             ";
@@ -74,7 +74,7 @@ if ($cleanPath === '/dashboard/stats') {
         $absentSql = "
             SELECT COUNT(*) FROM attendance_incidents ai
             WHERE school_id = ?
-              AND (detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+              AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
               AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
               " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . "
         ";
@@ -128,7 +128,7 @@ if ($cleanPath === '/dashboard/stats') {
             TO_CHAR(generated_at AT TIME ZONE 'America/Bogota', 'HH24:MI') as time
             FROM report_exports
             WHERE school_id = ?
-              AND (generated_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+              AND generated_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND generated_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
             LIMIT 5
         ");
         $tasksStmt->execute([$schoolId]);
@@ -191,7 +191,7 @@ if ($cleanPath === '/dashboard/stats') {
         $permSql = "
             SELECT COUNT(*) FROM attendance_incidents ai
             WHERE school_id = ?
-              AND (detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+              AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
               AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
               " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . "
         ";

@@ -9,19 +9,17 @@ on:
 jobs:
   build-edge-cpp:
     runs-on: ubuntu-22.04
-    # El edge C++ es firmware embebido — su fallo no debe bloquear el deploy web/backend
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
     - name: Install C++ Deps
       run: sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev libsqlite3-dev
     - name: Build C++ Edge
       run: |
-        cd "Logica de negocio/edge"
+        cd backend/edge
         cmake --preset dev-x86
         cmake --build --preset dev-x86
     - name: Run Edge Tests
-      run: cd "Logica de negocio/edge" && ctest --preset dev-x86 --output-on-failure
+      run: cd backend/edge && ctest --preset dev-x86 --output-on-failure
 
   build-webapp-react:
     runs-on: ubuntu-latest
@@ -34,12 +32,26 @@ jobs:
         cache-dependency-path: WebApp/package-lock.json
     - name: Install dependencies
       run: cd WebApp && npm ci
+    - name: Lint WebApp
+      run: cd WebApp && npm run lint
     - name: Build Vite
       run: cd WebApp && npm run build
 
+  test-backend-php:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+    - name: PHP Syntax Lint
+      run: find backend/alojamiento -name "*.php" -print0 | xargs -0 -n1 php -l
+    - name: Run PHP Tests
+      run: cd backend/alojamiento && php tests/PanicButtonTest.php
+
   deploy-backend-railway:
-    # Solo depende del build de webapp — el edge C++ es independiente
-    needs: [build-webapp-react]
+    needs: [build-webapp-react, test-backend-php, build-edge-cpp]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

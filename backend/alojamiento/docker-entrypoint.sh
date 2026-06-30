@@ -64,12 +64,17 @@ http {
             try_files \$uri \$uri/ /api.php?\$query_string;
         }
 
-        # PHP handler — api.php maneja CORS internamente
-        location ~ \.php\$ {
+        # PHP handler EXCLUSIVO para api.php
+        location = /api.php {
             include fastcgi_params;
             fastcgi_pass unix:/run/php/php-fpm.sock;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
             fastcgi_hide_header X-Powered-By;
+        }
+
+        # Bloquear cualquier otro script de PHP interno
+        location ~ \.php\$ {
+            deny all;
         }
     }
 }
@@ -122,21 +127,54 @@ for i in $(seq 1 30); do
 done
 [ -S /run/php/php-fpm.sock ] && echo "[nexo] Socket listo." || echo "[nexo] WARN: socket no encontrado, continuando igual"
 
-echo "[nexo] Arrancando workers en segundo plano..."
-(while true; do php /var/www/html/worker_twilio.php; sleep 2; done) > /dev/stdout 2>&1 &
-(while true; do php /var/www/html/worker_audit.php; sleep 2; done) > /dev/stdout 2>&1 &
-(while true; do php /var/www/html/worker_biometric.php; sleep 2; done) > /dev/stdout 2>&1 &
+echo "[nexo] Arrancando workers en segundo plano con backoff exponencial..."
+run_worker_with_backoff() {
+    local worker_file=$1
+    local backoff=2
+    local max_backoff=60
+    while true; do
+        if php "/var/www/html/$worker_file"; then
+            backoff=2
+        else
+            echo "[nexo] WARN: $worker_file falló. Reintentando en ${backoff}s..."
+            sleep $backoff
+            backoff=$((backoff * 2))
+            if [ $backoff -gt $max_backoff ]; then backoff=$max_backoff; fi
+        fi
+        sleep 2
+    done
+}
+
+run_worker_with_backoff "worker_twilio.php" > /dev/stdout 2>&1 &
+run_worker_with_backoff "worker_audit.php" > /dev/stdout 2>&1 &
+run_worker_with_backoff "worker_biometric.php" > /dev/stdout 2>&1 &
 
 echo "[nexo] Iniciando Mosquitto MQTT broker..."
-# Create minimal mosquitto config for production
+# Create mosquitto config for production (Auth si hay variables, fallback a open solo si faltan)
 mkdir -p /mosquitto/config /mosquitto/data
-cat > /mosquitto/config/mosquitto.conf <<MOSQUITTOCONF
+
+if [ -n "$MQTT_USER" ] && [ -n "$MQTT_PASS" ]; then
+    echo "[nexo] Habilitando autenticación MQTT..."
+    touch /mosquitto/config/passwd
+    mosquitto_passwd -b -c /mosquitto/config/passwd "$MQTT_USER" "$MQTT_PASS"
+    cat > /mosquitto/config/mosquitto.conf <<MOSQUITTOCONF
+listener 1883
+allow_anonymous false
+password_file /mosquitto/config/passwd
+persistence true
+persistence_location /mosquitto/data/
+log_dest stdout
+MOSQUITTOCONF
+else
+    echo "[nexo] WARN: Iniciando MQTT sin autenticación (Falta MQTT_USER o MQTT_PASS)"
+    cat > /mosquitto/config/mosquitto.conf <<MOSQUITTOCONF
 listener 1883
 allow_anonymous true
 persistence true
 persistence_location /mosquitto/data/
 log_dest stdout
 MOSQUITTOCONF
+fi
 mosquitto -c /mosquitto/config/mosquitto.conf -d
 echo "[nexo] Mosquitto MQTT broker iniciado"
 

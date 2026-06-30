@@ -45,8 +45,9 @@ function processJob(array $job, PDO $conn): bool {
 
     if ($instId) {
         try {
-            // FIX: Inyectar contexto de escuela para trazabilidad en auditoría
-            $conn->query("SELECT set_config('app.current_school_id', '" . addslashes((string)$instId) . "', false)");
+            // SECURITY-FIX: prepared statement — $instId viene de Redis (no confiable)
+            $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, false)");
+            $stmtCtx->execute([(string)$instId]);
         } catch (Exception $e) {
             logW('CONTEXT_FAIL', $e->getMessage());
             return false;

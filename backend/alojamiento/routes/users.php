@@ -63,6 +63,12 @@ function sendTwilioWhatsAppOtp($to, $code, $purpose) {
 // ============================================================================
 if ($cleanPath === '/users/by-role' && $method === 'GET') {
     try {
+        $userRole = strtoupper($authUser['role'] ?? '');
+        $allowedDirectoryRoles = ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'SECRETARIA', 'DOCENTE', 'PSICORIENTADOR'];
+        if (!in_array($userRole, $allowedDirectoryRoles, true)) {
+            usersJson(['status' => 'error', 'message' => 'No tienes permisos para consultar el directorio de personal'], 403);
+        }
+
         $roleName = $_GET['role'] ?? '';
         $sameShift = ($_GET['same_shift'] ?? '0') === '1';
 

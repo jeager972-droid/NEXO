@@ -18,8 +18,9 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
-// FIX: no CSP en API responses; el frontend controla su propia CSP via meta tag
-header("Content-Security-Policy: default-src *; connect-src *; img-src * data:; style-src * 'unsafe-inline'; font-src * data:; frame-ancestors 'none';");
+// CSP en API JSON: solo frame-ancestors es relevante (previene clickjacking).
+// Las respuestas JSON no tienen DOM, un CSP con * no protege nada y es ruido.
+header("Content-Security-Policy: frame-ancestors 'none';");
 
 require_once __DIR__ . '/boot_check.php';
 require_once __DIR__ . '/db.php';
@@ -106,26 +107,42 @@ $cleanPath = '/' . $cleanPath;
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];
 
-// Incluir todas las rutas (operations primero para que sendTwilioDirect esté disponible en auth.php)
+// operations.php se carga siempre porque exporta la función sendTwilioDirect (usada por auth.php y otros)
 require_once __DIR__ . '/routes/operations.php';
-require_once __DIR__ . '/routes/auth.php';
-require_once __DIR__ . '/routes/dashboard.php';
-require_once __DIR__ . '/routes/students.php';
-require_once __DIR__ . '/routes/groups.php';
-require_once __DIR__ . '/routes/misc.php';
-require_once __DIR__ . '/routes/twilio_delivery.php';
-require_once __DIR__ . '/routes/devices.php';
-require_once __DIR__ . '/routes/audit_logs.php';
-require_once __DIR__ . '/routes/security_panic.php';
-require_once __DIR__ . '/routes/audit_integrity.php';
-require_once __DIR__ . '/routes/audit_full.php';
-require_once __DIR__ . '/routes/behavior.php';
-require_once __DIR__ . '/routes/admin.php';
-require_once __DIR__ . '/routes/metrics.php';
-require_once __DIR__ . '/routes/telemetry.php';
-require_once __DIR__ . '/routes/users.php';
-require_once __DIR__ . '/routes/consultations.php';
-require_once __DIR__ . '/routes/tracking.php';
+
+$prefix = explode('/', trim($cleanPath, '/'))[0];
+$routeMap = [
+    'auth' => 'auth.php',
+    'dashboard' => 'dashboard.php',
+    'students' => 'students.php',
+    'groups' => 'groups.php',
+    'contacto' => 'misc.php',
+    'notifications' => 'misc.php',
+    'reports' => 'misc.php',
+    'webhooks' => 'twilio_delivery.php',
+    'operations' => 'operations.php',
+    'devices' => 'devices.php',
+    'audit' => ['audit_logs.php', 'audit_integrity.php', 'audit_full.php'],
+    'security' => 'security_panic.php',
+    'behavior' => 'behavior.php',
+    'admin' => 'admin.php',
+    'metrics' => 'metrics.php',
+    'telemetry' => 'telemetry.php',
+    'users' => 'users.php',
+    'consultation' => 'consultations.php',
+    'consultations' => 'consultations.php',
+    'tracking' => 'tracking.php',
+];
+
+if (isset($routeMap[$prefix])) {
+    $files = (array)$routeMap[$prefix];
+    foreach ($files as $f) {
+        // operations.php ya está incluido arriba
+        if ($f !== 'operations.php') {
+            require_once __DIR__ . '/routes/' . $f;
+        }
+    }
+}
 
 /**
  * @OA\Post(

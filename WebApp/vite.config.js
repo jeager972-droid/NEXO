@@ -8,7 +8,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: 'hidden',
     target: 'es2020',
     cssCodeSplit: true,
     rollupOptions: {
@@ -46,7 +46,8 @@ export default defineConfig({
             options: {
               cacheName: 'nexo-api-cache',
               networkTimeoutSeconds: 5,
-              cacheableResponse: { statuses: [0, 200] },
+              // BUGFIX: Status 0 = opaque/CORS failure. Cachearlo sirve datos corruptos.
+              cacheableResponse: { statuses: [200] },
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 }
             }
           },

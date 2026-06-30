@@ -95,14 +95,6 @@ function verifyUserPassword($password, $hash) {
 if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
     $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
     $password = $input['password'] ?? '';
-    $logInput = $input;
-    if (isset($logInput['password'])) {
-        $logInput['password'] = '***';
-    }
-    error_log('[LOGIN] Input: ' . json_encode($logInput));
-    error_log('[LOGIN] EMAIL=' . $email);
-    error_log('[LOGIN] $conn available: ' . ($conn ? 'YES' : 'NO'));
-
     if (empty($email) || empty($password)) {
         http_response_code(400);
         exit(json_encode(['status' => 'error', 'message' => 'Email y contraseña requeridos']));
@@ -215,7 +207,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             
             echo json_encode([
                 'status' => 'ok',
-                'token' => $token,
                 'user' => [
                     'id' => $user['user_id'],
                     'nombre' => $user['first_name'] . ' ' . $user['last_name'],
@@ -352,7 +343,6 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         securityLog('LOGIN_2FA_SUCCESS', "User authenticated via 2FA: " . $user['user_id']);
         echo json_encode([
             'status' => 'ok',
-            'token' => $token,
             'user' => [
                 'id' => $user['user_id'],
                 'nombre' => $user['first_name'] . ' ' . $user['last_name'],

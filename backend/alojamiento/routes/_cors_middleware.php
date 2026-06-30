@@ -9,12 +9,6 @@ $isAllowed = false;
 if ($origin) {
     if (in_array($origin, $allowedOrigins)) {
         $isAllowed = true;
-    } else if (in_array('*', $allowedOrigins)) {
-        $isAllowed = true;
-    } else if (preg_match('/^https:\/\/[a-zA-Z0-9\-]+\.vercel\.app$/', $origin)) {
-        $isAllowed = true;
-    } else if (empty($allowedOrigins)) {
-        $isAllowed = true;
     }
 }
 

@@ -5,9 +5,10 @@
  */
 
 $required = [
-    'DATABASE_URL'      => 'URL de conexión PostgreSQL (o PGHOST/PGDATABASE/PGUSER/PGPASSWORD)',
-    'NEXO_AES_KEY'      => 'Clave AES-256-GCM para cifrado de datos sensibles',
-    'REDISHOST'         => 'Host de Redis para colas y rate limiting',
+    'DATABASE_URL'       => 'URL de conexión PostgreSQL (o PGHOST/PGDATABASE/PGUSER/PGPASSWORD)',
+    'NEXO_AES_KEY'       => 'Clave AES-256-GCM para cifrado de datos sensibles',
+    'REDISHOST'          => 'Host de Redis para colas y rate limiting',
+    'CORS_ALLOW_ORIGINS' => 'Orígenes exactos para CORS (sin wildcards)',
 ];
 
 $missing = [];
@@ -31,7 +32,6 @@ if (!$hasRS256 && !$hasHMAC && !$hasRawKey) {
 
 // Validación opcional pero recomendada
 $recommended = [
-    'CORS_ALLOW_ORIGINS' => 'Orígenes exactos para CORS (sin wildcards)',
     'JWT_ISSUER'         => 'Issuer del JWT',
     'JWT_AUDIENCE'       => 'Audience del JWT',
 ];

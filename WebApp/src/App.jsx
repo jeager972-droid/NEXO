@@ -25,7 +25,6 @@ const InstallPage = lazy(() => import('./pages/InstallPage'))
 const Profile = lazy(() => import('./pages/Profile'))
 
 function App() {
-  // NEXO v2.0 — deploy forced
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -114,7 +113,7 @@ function App() {
 
                 <Route
                   path="/consulta"
-                  element={<ProtectedRoute allowedRoles={Object.values(ROLES)} />}
+                  element={<ProtectedRoute allowedRoles={[ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}
                 >
                   <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
                 </Route>
