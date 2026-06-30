@@ -124,7 +124,7 @@ bool CloudManager::syncRecord(const std::string& jsonData) {
         ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), response);
     }
 
-    if (ok) LOG_DEBUG("Cloud sync OK"); else LOG_ERROR("Cloud sync failed");
+    if (ok) { LOG_DEBUG("Cloud sync OK"); } else { LOG_ERROR("Cloud sync failed"); }
     return ok;
 }
 

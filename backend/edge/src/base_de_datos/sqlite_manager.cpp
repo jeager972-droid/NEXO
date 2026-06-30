@@ -222,8 +222,8 @@ bool SqliteManager::clearAudit(const std::string& documento, const std::string& 
     return true;
 }
 
-bool SqliteManager::checkInasistencia(const std::string& doc) { return false; }
-bool SqliteManager::deleteInasistencia(const std::string& doc) { return true; }
-bool SqliteManager::savePAE(const std::string& doc, bool r) { return true; }
-bool SqliteManager::setConfig(const std::string& k, const std::string& v) { return true; }
-std::string SqliteManager::getConfig(const std::string& k, const std::string& d) { return d; }
+bool SqliteManager::checkInasistencia(const std::string& /*doc*/) { return false; }
+bool SqliteManager::deleteInasistencia(const std::string& /*doc*/) { return true; }
+bool SqliteManager::savePAE(const std::string& /*doc*/, bool /*r*/) { return true; }
+bool SqliteManager::setConfig(const std::string& /*k*/, const std::string& /*v*/) { return true; }
+std::string SqliteManager::getConfig(const std::string& /*k*/, const std::string& d) { return d; }

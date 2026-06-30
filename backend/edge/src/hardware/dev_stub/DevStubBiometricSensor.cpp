@@ -33,7 +33,7 @@ NexoResult<void> DevStubBiometricSensor::searchUser(const std::vector<uint8_t>& 
     }
 
     LOG_DEBUG("[STUB] Search user (no match - stub)");
-    return NexoResult<void>::fail(NexoError::NotFound, "No match (stub)");
+    return NexoResult<void>::fail(NexoError::NoMatch, "No match (stub)");
 }
 
 NexoResult<void> DevStubBiometricSensor::deleteUser(uint32_t userId) {
