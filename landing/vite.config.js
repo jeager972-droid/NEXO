@@ -6,8 +6,8 @@ import viteCompression from 'vite-plugin-compression'
 export default defineConfig({
   base: '/',
   build: {
-    outDir: '../',
-    emptyOutDir: false,
+    outDir: 'dist',
+    emptyOutDir: true,
     sourcemap: false,
     target: 'es2020',
     cssCodeSplit: true,
