@@ -3,8 +3,8 @@
  * NEXO Twilio Worker — Outbox Pattern
  * Ejecutar bajo supervisor: php worker_twilio.php
  */
-require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/lib/twilio.php'; // normalizeWhatsAppPhone, getTwilioStatusCallbackUrl, sendTwilioDirect, logTwilioMessage
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../lib/twilio.php'; // normalizeWhatsAppPhone, getTwilioStatusCallbackUrl, sendTwilioDirect, logTwilioMessage
 
 // securityLog se mantiene local: en el worker escribe a stderr, no a DB
 function securityLog($event, $details = '') {

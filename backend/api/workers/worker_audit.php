@@ -3,7 +3,7 @@
  * NEXO Audit Log Worker — Procesa logs de auditoría encolados en Redis
  * Ejecutar bajo supervisor o como servicio Docker: php worker_audit.php
  */
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/../db.php';
 
 function logWorker($event, $details = '') {
     $msg = sprintf("[%s] [AUDIT_WORKER] [%s] %s\n", gmdate('Y-m-d H:i:s'), $event, $details);

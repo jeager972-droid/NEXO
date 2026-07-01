@@ -6,7 +6,7 @@
  */
 
 declare(ticks=1);
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/../db.php';
 
 // Configurar rol para bypass de RLS (igual que worker_audit.php y worker_twilio.php)
 try {
