@@ -1,0 +1,12 @@
+.git
+.gitignore
+.dockerignore
+.env
+.env.*
+node_modules/
+landing/node_modules/
+WebApp/node_modules/
+backend/api/.git-backup-old/
+*.md
+frontend/
+assets-3d/

@@ -4,8 +4,8 @@ services:
   # NIST CP-2: Contingency Planning (API Service Cluster)
   api:
     build: 
-      context: .
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: backend/api/Dockerfile
     ports:
       - "8080:80"
     environment:
@@ -47,8 +47,8 @@ services:
   # Audit Log Worker (procesa cola Redis de logs de auditoría)
   audit-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: backend/api/Dockerfile
     command: php /var/www/html/worker_audit.php
     environment:
       - REDIS_HOST=redis
@@ -69,8 +69,8 @@ services:
   # Biometric Ingestion Worker (procesa cola Redis async)
   biometric-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: backend/api/Dockerfile
     command: php /var/www/html/worker_biometric.php
     environment:
       - REDIS_HOST=redis
@@ -100,7 +100,7 @@ services:
   # PgBouncer (pool de conexiones PostgreSQL)
   pgbouncer:
     build:
-      context: ./pgbouncer
+      context: ../../backend/api/infra/pgbouncer
     environment:
       - DB_USER=nexo_user
       - DB_PASSWORD=${DB_PASSWORD}

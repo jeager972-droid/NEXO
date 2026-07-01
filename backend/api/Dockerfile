@@ -12,11 +12,11 @@ RUN apt-get update \
 RUN install-php-extensions pdo_pgsql mysqli redis sockets zip pcntl
 
 WORKDIR /var/www/html
-COPY composer.json composer.lock* ./
+COPY backend/api/composer.json backend/api/composer.lock* ./
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-COPY . .
+COPY backend/api/ .
 RUN chown -R www-data:www-data /var/www/html
 
 RUN cp /var/www/html/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh \
