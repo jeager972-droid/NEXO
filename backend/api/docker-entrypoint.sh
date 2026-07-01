@@ -36,14 +36,11 @@ http {
 
     server {
         listen ${PORT} default_server;
+        listen [::]:${PORT} default_server;
         root /var/www/html;
         index index.html index.php;
 
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
 
         # Bloquear archivos sensibles
         location ~ /\. { deny all; }
@@ -98,7 +95,7 @@ echo "[nexo] Configurando OPcache..."
 mkdir -p /usr/local/etc/php/conf.d
 cat > /usr/local/etc/php/conf.d/opcache.ini <<OPCACHE
 opcache.enable=1
-opcache.memory_consumption=256
+opcache.memory_consumption=64
 opcache.interned_strings_buffer=16
 opcache.max_accelerated_files=10000
 opcache.revalidate_freq=0
@@ -154,7 +151,7 @@ if [ -n "$MQTT_USER" ] && [ -n "$MQTT_PASS" ]; then
     touch /mosquitto/config/passwd
     mosquitto_passwd -b -c /mosquitto/config/passwd "$MQTT_USER" "$MQTT_PASS"
     cat > /mosquitto/config/mosquitto.conf <<MOSQUITTOCONF
-listener 1883
+listener 1883 127.0.0.1
 allow_anonymous false
 password_file /mosquitto/config/passwd
 persistence true
@@ -164,7 +161,7 @@ MOSQUITTOCONF
 else
     echo "[nexo] WARN: Iniciando MQTT sin autenticación (Falta MQTT_USER o MQTT_PASS)"
     cat > /mosquitto/config/mosquitto.conf <<MOSQUITTOCONF
-listener 1883
+listener 1883 127.0.0.1
 allow_anonymous true
 persistence true
 persistence_location /mosquitto/data/
