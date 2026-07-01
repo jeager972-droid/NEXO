@@ -39,6 +39,8 @@ http {
         listen [::]:8080 default_server;
         listen 80;
         listen [::]:80;
+        listen 1883;
+        listen [::]:1883;
         root /var/www/html;
         index index.html index.php;
 
@@ -176,8 +178,8 @@ persistence_location /mosquitto/data/
 log_dest stdout
 MOSQUITTOCONF
 fi
-mosquitto -c /mosquitto/config/mosquitto.conf -d
-echo "[nexo] Mosquitto MQTT broker iniciado"
+# mosquitto -c /mosquitto/config/mosquitto.conf -d
+echo "[nexo] Mosquitto MQTT broker deshabilitado temporalmente para pruebas de red"
 
 echo "[nexo] Arrancando nginx en puerto 8080 (en background)..."
 nginx
