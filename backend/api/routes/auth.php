@@ -8,7 +8,7 @@ global $cleanPath, $conn, $input, $method;
  *     version="7.5.0",
  *     description="API REST para la plataforma educativa NEXO - Control de asistencia biométrica"
  * )
- * @OA\Server(url="https://nexo-production-13c0.up.railway.app", description="Production")
+ * @OA\Server(url="https://nexo-production-dbe3.up.railway.app", description="Production")
  * @OA\Server(url="http://localhost:8080", description="Local Development")
  */
 

@@ -99,7 +99,7 @@ export default function ContactModal({ onClose }) {
     try {
       const API_BASE =
         import.meta?.env?.VITE_API_BASE_URL ||
-        'https://nexo-production-13c0.up.railway.app/v1'
+        'https://nexo-production-dbe3.up.railway.app/v1'
 
       const res = await fetch(`${API_BASE}/contacto`, {
         method: 'POST',

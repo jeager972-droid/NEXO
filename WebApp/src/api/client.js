@@ -5,7 +5,7 @@ import axios from 'axios';
 // El backend normaliza rutas via cleanPath, así que usamos la raíz.
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  'https://nexo-production-13c0.up.railway.app/v1';
+  'https://nexo-production-dbe3.up.railway.app/v1';
 
 if (import.meta.env.PROD && !API_BASE_URL.startsWith('https://')) {
   throw new Error('VITE_API_BASE_URL debe usar HTTPS en producción');
