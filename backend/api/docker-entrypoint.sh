@@ -11,12 +11,11 @@ echo "[nexo] USANDO PORT=$PORT"
 # Reemplazar nginx.conf COMPLETO — sin depender de symlinks ni includes problemáticos
 cat > /etc/nginx/nginx.conf <<EOF
 user www-data;
-worker_processes auto;
+worker_processes 1;
 pid /run/nginx.pid;
 error_log /dev/stderr warn;
 
 events {
-    use epoll;
     worker_connections 10240;
 }
 
@@ -37,7 +36,6 @@ http {
 
     server {
         listen ${PORT} default_server;
-        listen [::]:${PORT} default_server ipv6only=on;
         root /var/www/html;
         index index.html index.php;
 
