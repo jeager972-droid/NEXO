@@ -35,8 +35,8 @@ http {
     access_log /dev/stdout;
 
     server {
-        listen ${PORT} default_server;
-        listen [::]:${PORT} default_server;
+        listen 8080 default_server;
+        listen 80;
         root /var/www/html;
         index index.html index.php;
 
@@ -52,7 +52,13 @@ http {
             return 200 "OK\n";
         }
 
-        # Catch-all: intenta archivo estático, si no existe → api.php
+        # Debugging: direct serve index for root
+        location = / {
+            root /var/www/html;
+            try_files /index.html =404;
+        }
+
+        # Catch-all
         location / {
             try_files \$uri \$uri/ /api.php?\$query_string;
         }
