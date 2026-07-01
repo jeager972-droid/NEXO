@@ -28,8 +28,8 @@ http {
         image/vnd.radiance hdr;
     }
     default_type application/octet-stream;
-    sendfile on;
-    gzip on;
+    sendfile off;
+    gzip off;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
     keepalive_timeout 65;
     server_tokens off;
