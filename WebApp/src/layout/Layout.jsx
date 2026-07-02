@@ -119,13 +119,14 @@ const Layout = () => {
   // Polling y carga inicial de notificaciones
   useEffect(() => {
     const pollNotifs = () => {
-      const alreadySeen = sessionStorage.getItem('nexo:notif-seen') === 'true';
-      if (alreadySeen) return;
       notificationsApi.getAll()
         .then(data => {
           const count = Array.isArray(data) ? data.length : 0;
+          const lastSeenCount = parseInt(sessionStorage.getItem('nexo:notif-last-count') || '0', 10);
           setNotifCount(count);
-          if (count > 0) sessionStorage.removeItem('nexo:notif-seen');
+          if (count > lastSeenCount) {
+            sessionStorage.setItem('nexo:notif-last-count', count.toString());
+          }
         })
         .catch(() => {});
     };
@@ -140,7 +141,7 @@ const Layout = () => {
     const handler = (e) => {
       const count = e.detail?.count ?? 0;
       setNotifCount(count);
-      if (count > 0) sessionStorage.removeItem('nexo:notif-seen');
+      sessionStorage.setItem('nexo:notif-last-count', count.toString());
     };
     window.addEventListener('nexo:notif-count', handler);
     return () => window.removeEventListener('nexo:notif-count', handler);

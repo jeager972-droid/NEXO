@@ -15,112 +15,173 @@ if ($cleanPath === '/dashboard/stats') {
         exit(json_encode(['status' => 'error', 'message' => 'ID de institución requerido']));
     }
 
+    // Caché agresivo de toda la respuesta (TTL 30s) para evitar queries repetidas
+    $cacheKey = "dashboard:stats:{$schoolId}:{$userRole}:{$groupName}";
+    try {
+        $redis = getRedisConnection();
+        if ($redis) {
+            $cached = $redis->get($cacheKey);
+            if ($cached !== false) {
+                header('X-Dashboard-Cache: HIT');
+                echo $cached;
+                exit;
+            }
+        }
+    } catch (Exception $e) { /* Redis no disponible, continuar sin caché */ }
+
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        // FIX: Intentar leer contador de presentes desde Redis primero (cache)
-        $presentCount = null;
-        $today = gmdate('Y-m-d');
-        try {
-            $redis = new Redis();
-            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-            if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-            $cached = $redis->get("school:{$schoolId}:present:{$today}");
-            if ($cached !== false) {
-                $presentCount = (int)$cached;
-            }
-        } catch (Exception $e) { /* Redis no disponible, fallback a DB */ }
-
         // Build group filter JOINs if group_name provided
-        $groupJoin = '';
+        $groupFilter = '';
         $groupParams = [];
         if ($groupName) {
-            $groupJoin = "
-                AND student_id IN (
-                    SELECT sga.student_id
-                    FROM student_group_assignments sga
-                    JOIN academic_groups ag ON ag.group_id = sga.group_id
-                    WHERE ag.group_name = ? AND sga.active = TRUE
-                )";
+            $groupFilter = " AND student_id IN (
+                SELECT sga.student_id
+                FROM student_group_assignments sga
+                JOIN academic_groups ag ON ag.group_id = sga.group_id
+                WHERE ag.group_name = ? AND sga.active = TRUE
+            )";
             $groupParams = [$groupName];
         }
 
-        // 1. Conteo de estudiantes presentes (Bogotá TZ) - FIX: LIKE 'INGRESO_%'
-        if ($presentCount === null) {
-            $presentSql = "
-                SELECT COUNT(DISTINCT student_id)
-                FROM biometric_events
-                WHERE school_id = ?
-                  AND event_timestamp >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
-                  AND event_type LIKE 'INGRESO_%'
-                  {$groupJoin}
-            ";
-            $presentStmt = $conn->prepare($presentSql);
-            $presentStmt->execute(array_merge([$schoolId], $groupParams));
-            $presentCount = $presentStmt->fetchColumn();
-
-            // Guardar en caché para próximas consultas (TTL 5 minutos) — solo si no hay filtro de grupo
-            if (!$groupName) {
-                try {
-                    $redis = new Redis();
-                    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-                    if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-                    $redis->setex("school:{$schoolId}:present:{$today}", 300, (int)$presentCount);
-                } catch (Exception $e) { /* Redis no disponible, se omite caché */ }
-            }
-        }
-
-        // 2. Conteo de inasistencias (Bogotá TZ)
-        $absentSql = "
-            SELECT COUNT(*) FROM attendance_incidents ai
-            WHERE school_id = ?
-              AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
-              AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
-              " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . "
-        ";
-        $absentStmt = $conn->prepare($absentSql);
-        $absentStmt->execute($groupName ? [$schoolId, $groupName] : [$schoolId]);
-        $absentCount = $absentStmt->fetchColumn();
-
-        // 3. Alertas (SOS + Riesgos/Incidentes) (Bogotá TZ)
+        // CONSOLIDACIÓN: Una sola query con CTEs para todos los COUNTs (presentes, ausentes, alertas, permisos)
+        // Esto reduce 4 round-trips a 1 solo round-trip a la DB
         $isTeacher = ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR');
         
         if ($isTeacher) {
-            // Para docentes, no contar SOS (son globales, no del grupo) y asegurar filtro de grupo
-            $alertsSql = "
-                SELECT COUNT(*) FROM attendance_incidents ai
-                WHERE ai.school_id = ?
-                  AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
-                  AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%')
-                  AND ai.student_id IN (
-                      SELECT sga.student_id FROM student_group_assignments sga
-                      JOIN academic_groups ag ON ag.group_id = sga.group_id
-                      JOIN schedules sch ON sch.group_id = ag.group_id
-                      WHERE sch.teacher_user_id = ? AND sga.active = TRUE
-                      " . ($groupName ? " AND ag.group_name = ?" : "") . "
-                  )
+            // Para docentes: filtro por grupos asignados en schedules
+            $statsSql = "
+                WITH present_cte AS (
+                    SELECT COUNT(DISTINCT student_id) as cnt
+                    FROM biometric_events
+                    WHERE school_id = ?
+                      AND event_timestamp >= CURRENT_DATE AT TIME ZONE 'America/Bogota' 
+                      AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
+                      AND event_type LIKE 'INGRESO_%'
+                      {$groupFilter}
+                      AND student_id IN (
+                          SELECT sga.student_id FROM student_group_assignments sga
+                          JOIN academic_groups ag ON ag.group_id = sga.group_id
+                          JOIN schedules sch ON sch.group_id = ag.group_id
+                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                      )
+                ),
+                absent_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' 
+                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
+                      AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
+                      {$groupFilter}
+                      AND student_id IN (
+                          SELECT sga.student_id FROM student_group_assignments sga
+                          JOIN academic_groups ag ON ag.group_id = sga.group_id
+                          JOIN schedules sch ON sch.group_id = ag.group_id
+                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                      )
+                ),
+                alerts_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND (detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+                      AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%')
+                      AND student_id IN (
+                          SELECT sga.student_id FROM student_group_assignments sga
+                          JOIN academic_groups ag ON ag.group_id = sga.group_id
+                          JOIN schedules sch ON sch.group_id = ag.group_id
+                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                          " . ($groupName ? " AND ag.group_name = ?" : "") . "
+                      )
+                ),
+                perm_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' 
+                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
+                      AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
+                      {$groupFilter}
+                      AND student_id IN (
+                          SELECT sga.student_id FROM student_group_assignments sga
+                          JOIN academic_groups ag ON ag.group_id = sga.group_id
+                          JOIN schedules sch ON sch.group_id = ag.group_id
+                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                      )
+                )
+                SELECT 
+                    (SELECT cnt FROM present_cte) as present_count,
+                    (SELECT cnt FROM absent_cte) as absent_count,
+                    (SELECT cnt FROM alerts_cte) as alerts_count,
+                    (SELECT cnt FROM perm_cte) as perm_count
             ";
-            $alertsStmt = $conn->prepare($alertsSql);
-            if ($groupName) {
-                $alertsStmt->execute([$schoolId, $authUser['id'], $groupName]);
-            } else {
-                $alertsStmt->execute([$schoolId, $authUser['id']]);
-            }
-            $alertsCount = $alertsStmt->fetchColumn();
+            $statsParams = array_merge(
+                [$schoolId, $authUser['id']],
+                [$schoolId, $authUser['id']],
+                $groupName ? [$schoolId, $authUser['id'], $groupName] : [$schoolId, $authUser['id']],
+                [$schoolId, $authUser['id']]
+            );
         } else {
-            // SOS alerts don't have student_id, so they're counted globally without group filter
-            $alertsSql = "
-                SELECT
-                    (SELECT COUNT(*) FROM sos_alerts sa WHERE sa.school_id = ? AND (sa.emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND sa.resolved = FALSE)
-                    +
-                    (SELECT COUNT(*) FROM attendance_incidents ai WHERE ai.school_id = ? AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR ai.incident_type LIKE 'RISK_ALERT%') " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . ")
-                AS total_alerts
+            // Para roles globales (RECTOR, ADMIN, etc.)
+            $statsSql = "
+                WITH present_cte AS (
+                    SELECT COUNT(DISTINCT student_id) as cnt
+                    FROM biometric_events
+                    WHERE school_id = ?
+                      AND event_timestamp >= CURRENT_DATE AT TIME ZONE 'America/Bogota' 
+                      AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
+                      AND event_type LIKE 'INGRESO_%'
+                      {$groupFilter}
+                ),
+                absent_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' 
+                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
+                      AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
+                      {$groupFilter}
+                ),
+                alerts_cte AS (
+                    SELECT 
+                        (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND (emitted_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND resolved = FALSE)
+                        +
+                        (SELECT COUNT(*) FROM attendance_incidents WHERE school_id = ? AND (detected_at AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
+                    as cnt
+                ),
+                perm_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' 
+                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
+                      AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
+                      {$groupFilter}
+                )
+                SELECT 
+                    (SELECT cnt FROM present_cte) as present_count,
+                    (SELECT cnt FROM absent_cte) as absent_count,
+                    (SELECT cnt FROM alerts_cte) as alerts_count,
+                    (SELECT cnt FROM perm_cte) as perm_count
             ";
-            $alertsStmt = $conn->prepare($alertsSql);
-            $alertsParams = $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId];
-            $alertsStmt->execute($alertsParams);
-            $alertsCount = $alertsStmt->fetchColumn();
+            $statsParams = array_merge(
+                [$schoolId],
+                [$schoolId],
+                $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId],
+                [$schoolId]
+            );
         }
+
+        $statsStmt = $conn->prepare($statsSql);
+        $statsStmt->execute($statsParams);
+        $statsRow = $statsStmt->fetch(PDO::FETCH_ASSOC);
+        
+        $presentCount = (int)($statsRow['present_count'] ?? 0);
+        $absentCount = (int)($statsRow['absent_count'] ?? 0);
+        $alertsCount = (int)($statsRow['alerts_count'] ?? 0);
+        $permCount = (int)($statsRow['perm_count'] ?? 0);
 
         // 4. Tareas pendientes (Reportes) (Bogotá TZ) — no filtrar por grupo
         $tasksStmt = $conn->prepare("
@@ -187,19 +248,7 @@ if ($cleanPath === '/dashboard/stats') {
             $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
         }
 
-        // 4b. Conteo de permisos hoy (para completar las 4 cards del docente)
-        $permSql = "
-            SELECT COUNT(*) FROM attendance_incidents ai
-            WHERE school_id = ?
-              AND detected_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota' AND detected_at < (CURRENT_DATE + INTERVAL '1 day') AT TIME ZONE 'America/Bogota'
-              AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
-              " . ($groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "") . "
-        ";
-        $permStmt = $conn->prepare($permSql);
-        $permStmt->execute($groupName ? [$schoolId, $groupName] : [$schoolId]);
-        $permCount = $permStmt->fetchColumn();
-
-        echo json_encode([
+        $response = json_encode([
             'status' => 'ok',
             'presentCount' => (int)$presentCount,
             'absentCount' => (int)$absentCount,
@@ -215,6 +264,16 @@ if ($cleanPath === '/dashboard/stats') {
                 'permisos' => (int)$permCount
             ]
         ]);
+
+        // Guardar en caché Redis por 30s
+        try {
+            $redis = getRedisConnection();
+            if ($redis) {
+                $redis->setex($cacheKey, 30, $response);
+            }
+        } catch (Exception $e) { /* Redis no disponible, omitir caché */ }
+
+        echo $response;
     } catch (Exception $e) {
         securityLog('DASHBOARD_ERROR', $e->getMessage());
         http_response_code(500);

@@ -28,7 +28,8 @@ http {
     }
     default_type application/octet-stream;
     sendfile off;
-    gzip off;
+    gzip on;
+    gzip_min_length 512;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
     keepalive_timeout 65;
     server_tokens off;
@@ -48,7 +49,6 @@ http {
 
         # Bloquear archivos sensibles
         location ~ /\. { deny all; }
-        location ^~ /_dev/ { deny all; }
 
         # Health check para Railway
         location = /health {
@@ -95,7 +95,7 @@ listen.group = www-data
 listen.mode = 0660
 clear_env = no
 pm = dynamic
-pm.max_children = 100
+pm.max_children = 25
 pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
@@ -183,6 +183,13 @@ echo "[nexo] Mosquitto MQTT broker deshabilitado temporalmente para pruebas de r
 
 echo "[nexo] Arrancando nginx en puerto 8080 (en background)..."
 nginx
+
+echo "[nexo] Configurando supercronic para tareas periódicas..."
+mkdir -p /var/www/html/infra/logs
+chmod +x /var/www/html/infra/scripts/recalc_risk.sh
+chmod +x /var/www/html/infra/scripts/create_monthly_partition.sh
+cp /var/www/html/infra/scripts/crontab /etc/supercronic/crontab
+/usr/local/bin/supercronic /etc/supercronic/crontab > /dev/stdout 2>&1 &
 
 echo "[nexo] Manteniendo contenedor vivo para debug..."
 tail -f /dev/null

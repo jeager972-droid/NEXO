@@ -168,16 +168,35 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 ");
                 $ins->execute([$user['user_id'], $user['email'], $code, $expiresAt]);
 
-                $otpResult = sendTwilioDirect($userPhone, "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.");
-                
-                // SI NO SE PUDO ENVIAR, BLOQUEAR EL LOGIN
-                if (!$otpResult['ok']) {
-                    http_response_code(503); // Service Unavailable
-                    securityLog('2FA_DELIVERY_FAILED', "Cannot send 2FA to user {$user['user_id']}");
-                    exit(json_encode(['status' => 'error', 'message' => 'Servicio de seguridad no disponible. Intente más tarde o contacte soporte.']));
+                // Cambio: encolar OTP en Redis para envío asíncrono (evita bloqueo de 2s en login)
+                try {
+                    $redis = getRedisConnection();
+                    if ($redis) {
+                        $redis->select((int)(getenv('REDIS_DB') ?: 0));
+                        $redis->rPush('queue:twilio', json_encode([
+                            'to' => $userPhone,
+                            'body' => "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.",
+                            'school_id' => $user['school_id'],
+                            'student_id' => null,
+                            'guardian_id' => null,
+                            'sender_user_id' => $user['user_id'],
+                            'type_code' => 'LOGIN_2FA',
+                            'retries' => 0,
+                            'created_at' => time()
+                        ], JSON_UNESCAPED_UNICODE));
+                    }
+                } catch (Exception $e) {
+                    securityLog('2FA_REDIS_ENQUEUE_FAILED', $e->getMessage());
+                    // Si Redis falla, intentar envío directo con timeout reducido
+                    $otpResult = sendTwilioDirect($userPhone, "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.");
+                    if (!$otpResult['ok']) {
+                        http_response_code(503);
+                        securityLog('2FA_DELIVERY_FAILED', "Cannot send 2FA to user {$user['user_id']}");
+                        exit(json_encode(['status' => 'error', 'message' => 'Servicio de seguridad no disponible. Intente más tarde o contacte soporte.']));
+                    }
                 }
 
-                // Si se envió OK, pedir código
+                // Responder inmediatamente sin esperar confirmación de Twilio
                 http_response_code(202);
                 echo json_encode([
                     'status' => '2fa_required',

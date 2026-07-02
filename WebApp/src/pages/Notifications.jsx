@@ -16,8 +16,8 @@ function emitCount(count) {
   window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
 }
 
-// Clave para marcar notificaciones como vistas en la sesión
-const SEEN_KEY = 'nexo:notif-seen';
+// Clave para guardar el último conteo de notificaciones vistas
+const LAST_COUNT_KEY = 'nexo:notif-last-count';
 
 const Notifications = () => {
   const { user } = useAuth();
@@ -36,9 +36,9 @@ const Notifications = () => {
         const list = Array.isArray(data) ? data : [];
         setNotifications(list);
         // Al entrar a la pantalla de notificaciones, marcarlas como vistas:
-        // el punto verde desaparece y se persiste en sessionStorage
+        // el punto verde desaparece y se persiste el conteo actual
         emitCount(0);
-        sessionStorage.setItem(SEEN_KEY, 'true');
+        sessionStorage.setItem(LAST_COUNT_KEY, '0');
       } catch (error) {
         console.error('Error fetching notifications', error);
       } finally {

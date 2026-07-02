@@ -18,8 +18,7 @@ module.exports = {
     ],
     'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     'react/prop-types': 'off',
-    // TODO Fase 3: Corregir hooks condicionales en Operation.jsx, Reports.jsx, Consultation.jsx
-    'react-hooks/rules-of-hooks': 'warn',
+    'react-hooks/rules-of-hooks': 'error',
     'no-useless-escape': 'warn',
     'no-undef': 'warn',
     'react/jsx-no-undef': 'warn',

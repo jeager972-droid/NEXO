@@ -48,16 +48,18 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
     // Rate-limit: máx 5 solicitudes por IP por hora
     $contactIp = md5(getRealClientIp());
     try {
-        $rl = new Redis();
-        $rl->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $rl->auth($pass);
-        $key = "rl:contacto:{$contactIp}";
-        $hits = $rl->incr($key);
-        if ($hits === 1) $rl->expire($key, 3600);
-        if ($hits > 5) {
-            http_response_code(429);
-            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
-            exit;
+        $rl = getRedisConnection();
+        if (!$rl) {
+            // Fallback: permitir sin rate limit si Redis no está disponible
+        } else {
+            $key = "rl:contacto:{$contactIp}";
+            $hits = $rl->incr($key);
+            if ($hits === 1) $rl->expire($key, 3600);
+            if ($hits > 5) {
+                http_response_code(429);
+                echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
+                exit;
+            }
         }
     } catch (Throwable $e) { /* Redis down — allow */ }
 
@@ -99,18 +101,36 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         // No bloqueamos — igual notificamos
     }
 
-    // Notificar al equipo por WhatsApp
+    // Notificar al equipo por WhatsApp (no-crítica, usar cola asíncrona)
     $ownerPhone = getenv('NEXO_OWNER_WHATSAPP') ?: getenv('TWILIO_ADMIN_PHONE') ?: '';
-    if ($ownerPhone !== '' && function_exists('sendTwilioDirect')) {
-        $cargoLabel = mb_convert_case($cargo, MB_CASE_TITLE, 'UTF-8');
-        $notifMsg = "📥 *NEXO — Nueva solicitud de contacto*\n\n"
-            . "Nombre: *{$nombre}* ({$cargoLabel})\n"
-            . "Institución: {$institucion}\n"
-            . "Municipio: {$municipio}\n"
-            . "Email: {$email}\n"
-            . "WhatsApp: {$whatsapp}"
-            . ($mensaje !== '' ? "\nMensaje: {$mensaje}" : '');
-        sendTwilioDirect($ownerPhone, $notifMsg);
+    if ($ownerPhone !== '') {
+        try {
+            $redis = getRedisConnection();
+            if ($redis) {
+                $redis->select((int)(getenv('REDIS_DB') ?: 0));
+                $cargoLabel = mb_convert_case($cargo, MB_CASE_TITLE, 'UTF-8');
+                $notifMsg = "📥 *NEXO — Nueva solicitud de contacto*\n\n"
+                    . "Nombre: *{$nombre}* ({$cargoLabel})\n"
+                    . "Institución: {$institucion}\n"
+                    . "Municipio: {$municipio}\n"
+                    . "Email: {$email}\n"
+                    . "WhatsApp: {$whatsapp}"
+                    . ($mensaje !== '' ? "\nMensaje: {$mensaje}" : '');
+                $redis->rPush('queue:twilio', json_encode([
+                    'to' => $ownerPhone,
+                    'body' => $notifMsg,
+                    'school_id' => null,
+                    'student_id' => null,
+                    'guardian_id' => null,
+                    'sender_user_id' => null,
+                    'type_code' => 'CONTACT_LEAD',
+                    'retries' => 0,
+                    'created_at' => time()
+                ], JSON_UNESCAPED_UNICODE));
+            }
+        } catch (Exception $e) {
+            // Silenciar: notificación no-crítica no debe fallar el request
+        }
     }
 
     securityLog('CONTACT_LEAD_RECEIVED', "Email:{$email} Cargo:{$cargo} Inst:{$institucion}");
@@ -389,9 +409,10 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         $reagendarState = null;
         $redisConv = null;
         try {
-            $redisConv = new Redis();
-            $redisConv->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-            if ($pass = getenv('REDIS_PASSWORD')) $redisConv->auth($pass);
+            $redisConv = getRedisConnection();
+            if (!$redisConv) {
+                // Redis no disponible, continuar sin contexto
+            }
 
             // Estado de reagendamiento pendiente
             $reagRaw = $redisConv->get('reagendar:' . $normalizedFrom);

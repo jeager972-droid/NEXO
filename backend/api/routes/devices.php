@@ -97,11 +97,11 @@ if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) &&
 
     // Fallback: Redis para compatibilidad V1
     try {
-        $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-        $redis->lPush("device:{$deviceId}:commands", json_encode($cmdPayload, JSON_UNESCAPED_UNICODE));
-        $redis->expire("device:{$deviceId}:commands", 86400);
+        $redis = getRedisConnection();
+        if ($redis) {
+            $redis->lPush("device:{$deviceId}:commands", json_encode($cmdPayload, JSON_UNESCAPED_UNICODE));
+            $redis->expire("device:{$deviceId}:commands", 86400);
+        }
     } catch (Exception $e) {
         if (!$mqttOk) {
             securityLog('DEVICE_COMMAND_ERROR', $e->getMessage());
@@ -142,9 +142,10 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
     $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
-        $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
+        $redis = getRedisConnection();
+        if (!$redis) {
+            $commands = [];
+        }
 
         $commands = [];
         $queue = "device:{$deviceId}:commands";

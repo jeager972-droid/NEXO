@@ -45,14 +45,39 @@ function normalizePhone($value) {
 }
 
 function sendTwilioWhatsAppOtp($to, $code, $purpose) {
+    $body = "🔐 *NEXO — Código de verificación*\n\nTu código es: *{$code}*\n\nVálido por 10 minutos. No lo compartas.";
+
+    error_log('[OTP] Enviando código a ' . $to . ' purpose=' . $purpose);
+
+    // Cambio: usar cola Redis asíncrona para evitar bloqueo
+    try {
+        $redis = getRedisConnection();
+        if ($redis) {
+            $redis->select((int)(getenv('REDIS_DB') ?: 0));
+            $redis->rPush('queue:twilio', json_encode([
+                'to' => $to,
+                'body' => $body,
+                'school_id' => null,
+                'student_id' => null,
+                'guardian_id' => null,
+                'sender_user_id' => null,
+                'type_code' => 'PHONE_VERIFICATION',
+                'retries' => 0,
+                'created_at' => time()
+            ], JSON_UNESCAPED_UNICODE));
+            error_log('[OTP] Enqueued to Redis queue');
+            return ['ok' => true, 'queued' => true];
+        }
+    } catch (Exception $e) {
+        error_log('[OTP] Redis enqueue failed: ' . $e->getMessage());
+    }
+
+    // Fallback: envío directo con timeout reducido
     if (!function_exists('sendTwilioDirect')) {
         error_log('[OTP] sendTwilioDirect no está definida. Verifica que operations.php se incluya antes que users.php.');
         return ['ok' => false, 'error' => 'sendTwilioDirect no disponible. Contacta soporte.'];
     }
 
-    $body = "🔐 *NEXO — Código de verificación*\n\nTu código es: *{$code}*\n\nVálido por 10 minutos. No lo compartas.";
-
-    error_log('[OTP] Enviando código a ' . $to . ' purpose=' . $purpose);
     $result = sendTwilioDirect($to, $body);
     error_log('[OTP] Resultado Twilio: ' . json_encode($result));
     return $result;

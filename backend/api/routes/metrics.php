@@ -71,9 +71,10 @@ if ($cleanPath === '/metrics') {
 
     // Redis colas
     try {
-        $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
+        $redis = getRedisConnection();
+        if (!$redis) {
+            $metrics['redis_queues'] = ['status' => 'unavailable'];
+        }
 
         $auditQueueLen = $redis->lLen('queue:audit_logs');
         $twilioQueueLen = $redis->lLen('queue:twilio');

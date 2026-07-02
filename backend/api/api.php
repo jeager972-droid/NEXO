@@ -72,10 +72,8 @@ function getRealClientIp() {
 
 function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
     try {
-        if (!class_exists('Redis')) return;
-        $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
+        $redis = getRedisConnection();
+        if (!$redis) return;
         $ip = getRealClientIp();
         $key = "rl:" . ($userId ? "u:{$userId}:" : "ip:") . md5($ip);
         $hits = $redis->incr($key);
@@ -86,13 +84,8 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
             exit(json_encode(['status' => 'error', 'message' => 'Too many requests']));
         }
     } catch (Exception $e) {
-        // <--- CAMBIO CRÍTICO --->
-        // Si Redis está caído, NO dejamos pasar todo ciegamente.
-        // Registramos el fallo y matamos la petición para evitar DOS.
-        securityLog('RATE_LIMIT_REDIS_DOWN', 'Redis unavailable, blocking request for safety');
-        http_response_code(503); // Service Unavailable
-        exit(json_encode(['status' => 'error', 'message' => 'Sistema sobrecargado. Intente en 1 minuto.']));
-        // <--- FIN CAMBIO --->
+        // Si Redis falla, loggear pero no bloquear (fallback a sin rate limit)
+        securityLog('RATE_LIMIT_REDIS_DOWN', 'Redis unavailable, allowing request without rate limit');
     }
 }
 
@@ -235,10 +228,8 @@ if (isset($input['payload'])) {
             $nonce = $data['nonce'] ?? '';
             if (!empty($nonce)) {
                 try {
-                    $redis = new Redis();
-                    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-                    if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-                    if (!$redis->set($nonce, '1', ['nx', 'ex' => 604800])) {
+                    $redis = getRedisConnection();
+                    if ($redis && !$redis->set($nonce, '1', ['nx', 'ex' => 604800])) {
                         securityLog('EDGE_REPLAY_NONCE_DUPLICATE', "Nonce reusado: $nonce", null, null, $requestId);
                         http_response_code(403);
                         exit(json_encode(['status' => 'error', 'message' => 'Nonce already used']));
@@ -252,9 +243,11 @@ if (isset($input['payload'])) {
             // V2: 100% Async Ingestion — No tocar PostgreSQL en el request path
             $action = $data['action'] ?? 'UNKNOWN';
             try {
-                $redisIngest = new Redis();
-                $redisIngest->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-                if ($pass = getenv('REDIS_PASSWORD')) $redisIngest->auth($pass);
+                $redisIngest = getRedisConnection();
+                if (!$redisIngest) {
+                    http_response_code(503);
+                    exit(json_encode(['status' => 'error', 'message' => 'Redis unavailable for ingestion']));
+                }
 
                 $queuePayload = json_encode([
                     'action' => $action,
@@ -297,9 +290,11 @@ if ($cleanPath === '/health/workers') {
     $checks = [];
     $allHealthy = true;
     try {
-        $redisHealth = new Redis();
-        $redisHealth->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-        if ($pass = getenv('REDIS_PASSWORD')) $redisHealth->auth($pass);
+        $redisHealth = getRedisConnection();
+        if (!$redisHealth) {
+            $checks['redis'] = ['status' => 'unhealthy', 'message' => 'Redis connection failed'];
+            $allHealthy = false;
+        }
 
         // Audit worker
         $auditHeartbeat = (int)$redisHealth->get('worker:audit:last_heartbeat');

@@ -28,7 +28,8 @@ try {
         // FIX (SRE-1): EMULATE_PREPARES=true elimina prepared statements del servidor,
         // haciendo cada query autocontenida. Requerido para PgBouncer pool_mode=transaction.
         PDO::ATTR_EMULATE_PREPARES => true,
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_TIMEOUT => 5  // Timeout de 5s para fallar rápido si DB está lenta
     ]);
 
     // SECURITY-FIX: Usar prepared statement — addslashes() no es seguro para PostgreSQL

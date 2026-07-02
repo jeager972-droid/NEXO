@@ -32,17 +32,8 @@ function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = n
         securityLog('TWILIO_SEND_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
-    $result = sendTwilioDirect($to, $body);
-    if ($result['ok']) {
-        logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
-            ['action' => 'api_direct_sent', 'source' => 'sendTwilioNow'],
-            $studentId, $guardianId, $senderUserId, $result['sid'], 'SENT');
-        return ['ok' => true, 'reason' => 'sent', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
-    }
-    logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $toNorm, $body,
-        ['action' => 'api_direct_failed', 'error' => $result['error'], 'source' => 'sendTwilioNow'],
-        $studentId, $guardianId, $senderUserId, null, 'FAILED');
-    return ['ok' => false, 'reason' => 'twilio_api_error', 'error' => $result['error'], 'phone_norm' => $toNorm];
+    // Cambio: usar cola asíncrona por defecto en lugar de envío síncrono bloqueante
+    return enqueueTwilioJob($to, $body, $schoolId, $studentId, $guardianId, $senderUserId, $typeCode);
 }
 
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
@@ -69,17 +60,19 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         securityLog('TWILIO_PRE_INSERT_FAILED', $e->getMessage());
     }
     try {
-        $redis = new Redis();
-        $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', (int)(getenv('REDISPORT') ?: 6379));
-        if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-        $redis->select((int)(getenv('REDIS_DB') ?: 0));
-        $redis->rPush('queue:twilio', json_encode([
-            'message_id' => $msgId, 'to' => $toNorm, 'body' => $body,
-            'school_id' => $schoolId, 'student_id' => $studentId,
-            'guardian_id' => $guardianId, 'sender_user_id' => $senderUserId,
-            'type_code' => $typeCode, 'retries' => 0, 'created_at' => time()
-        ], JSON_UNESCAPED_UNICODE));
-        return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm, 'message_id' => $msgId];
+        $redis = getRedisConnection();
+        if (!$redis) {
+            securityLog('TWILIO_REDIS_UNAVAILABLE', 'Redis unavailable for Twilio queue');
+        } else {
+            $redis->select((int)(getenv('REDIS_DB') ?: 0));
+            $redis->rPush('queue:twilio', json_encode([
+                'message_id' => $msgId, 'to' => $toNorm, 'body' => $body,
+                'school_id' => $schoolId, 'student_id' => $studentId,
+                'guardian_id' => $guardianId, 'sender_user_id' => $senderUserId,
+                'type_code' => $typeCode, 'retries' => 0, 'created_at' => time()
+            ], JSON_UNESCAPED_UNICODE));
+            return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm, 'message_id' => $msgId];
+        }
     } catch (Exception $e) {
         securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
     }
@@ -199,33 +192,45 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $notifyRoles = ['RECTOR', 'SUPER_RECTOR', 'COORDINADOR'];
                 }
 
-                foreach ($notifyRoles as $nr) {
-                    $nStmt = $conn->prepare("
-                        SELECT user_id, phone FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?) AND active = TRUE
-                    ");
-                    $nStmt->execute([$schoolId, $nr]);
-                    while ($nRow = $nStmt->fetch(PDO::FETCH_ASSOC)) {
-                        if (!empty($nRow['phone'])) {
-                            enqueueTwilioJob($nRow['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
+                // FIX: Colapsar SELECT de roles en una sola query y hacer batch INSERT de notifications
+                $placeholders = implode(',', array_fill(0, count($notifyRoles), '?'));
+                $nStmt = $conn->prepare("
+                    SELECT user_id, phone FROM users
+                    WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) IN ($placeholders)) AND active = TRUE
+                ");
+                $nStmt->execute(array_merge([$schoolId], $notifyRoles));
+                $recipients = $nStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                if (!empty($recipients)) {
+                    // Batch enqueue Twilio
+                    foreach ($recipients as $r) {
+                        if (!empty($r['phone'])) {
+                            enqueueTwilioJob($r['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
                         }
-                        // Insertar notificación interna real con metadata
-                        try {
-                            $sosMeta = json_encode([
-                                'location' => $location,
-                                'message' => $message,
-                                'reporter_name' => $reporterName,
-                                'reporter_role' => $role,
-                                'action' => 'sos',
-                            ], JSON_UNESCAPED_UNICODE);
-                            $notifStmt = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, 'Alerta SOS', ?, 'SOS', ?::jsonb, NOW())
-                            ");
-                            $notifStmt->execute([$schoolId, $nRow['user_id'], "{$reporterName} envió una alerta SOS. Ver detalles.", $sosMeta]);
-                        } catch (Throwable $e) {
-                            error_log("[OPERATIONS] SOS notification insert error: " . $e->getMessage());
-                        }
+                    }
+
+                    // Batch INSERT notifications
+                    $rows = [];
+                    $params = [];
+                    $sosMeta = json_encode([
+                        'location' => $location,
+                        'message' => $message,
+                        'reporter_name' => $reporterName,
+                        'reporter_role' => $role,
+                        'action' => 'sos',
+                    ], JSON_UNESCAPED_UNICODE);
+                    foreach ($recipients as $r) {
+                        $rows[] = "(?, ?, 'Alerta SOS', ?, 'SOS', ?::jsonb, NOW())";
+                        $params[] = $schoolId;
+                        $params[] = $r['user_id'];
+                        $params[] = "{$reporterName} envió una alerta SOS. Ver detalles.";
+                        $params[] = $sosMeta;
+                    }
+                    $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                    try {
+                        $conn->prepare($sql)->execute($params);
+                    } catch (Throwable $e) {
+                        error_log("[OPERATIONS] SOS notification batch insert error: " . $e->getMessage());
                     }
                 }
 
@@ -374,9 +379,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 // FIX: Persistir estado de conversación en Redis para que el webhook inbound
                 // resuelva el student_id exacto en lugar de usar LIMIT 1 arbitrario.
                 try {
-                    $redisConv = new Redis();
-                    $redisConv->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-                    if ($pass = getenv('REDIS_PASSWORD')) $redisConv->auth($pass);
+                    $redisConv = getRedisConnection();
+                    if (!$redisConv) {
+                        // Redis no disponible, continuar sin persistencia
+                    }
                     $redisConv->select((int)(getenv('REDIS_DB') ?: 0));
                     $convPayload = json_encode(['student_id' => (string)$studentId, 'guardian_id' => (string)$target['guardian_id'], 'school_id' => (string)$schoolId, 'ts' => time()], JSON_UNESCAPED_UNICODE);
                     $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['whatsapp_phone']), 172800, $convPayload);
@@ -433,20 +439,29 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'permiso',
                     ], JSON_UNESCAPED_UNICODE);
 
+                    // FIX: Batch INSERT notifications para coordinadores
                     $coordStmt = $conn->prepare("
                         SELECT user_id FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
                     ");
                     $coordStmt->execute([$schoolId]);
-                    while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($coords)) {
+                        $rows = [];
+                        $params = [];
+                        foreach ($coords as $c) {
+                            $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
+                            $params[] = $schoolId;
+                            $params[] = $c['user_id'];
+                            $params[] = 'Permiso';
+                            $params[] = "Nuevo permiso registrado. Ver detalles.";
+                            $params[] = $meta;
+                        }
+                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                         try {
-                            $notifStmt = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
-                            ");
-                            $notifStmt->execute([$schoolId, $cRow['user_id'], 'Permiso', "Nuevo permiso registrado. Ver detalles.", $meta]);
+                            $conn->prepare($sql)->execute($params);
                         } catch (Throwable $e) {
-                            error_log("[OPERATIONS] Permiso notification insert error: " . $e->getMessage());
+                            error_log("[OPERATIONS] Permiso notification batch insert error: " . $e->getMessage());
                         }
                     }
                 }
@@ -499,20 +514,29 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'autorizar_salida',
                     ], JSON_UNESCAPED_UNICODE);
 
+                    // FIX: Batch INSERT notifications para coordinadores
                     $coordStmt = $conn->prepare("
                         SELECT user_id FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
                     ");
                     $coordStmt->execute([$schoolId]);
-                    while ($cRow = $coordStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($coords)) {
+                        $rows = [];
+                        $params = [];
+                        foreach ($coords as $c) {
+                            $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
+                            $params[] = $schoolId;
+                            $params[] = $c['user_id'];
+                            $params[] = 'Salida autorizada';
+                            $params[] = "Nueva salida autorizada registrada. Ver detalles.";
+                            $params[] = $meta;
+                        }
+                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                         try {
-                            $notifStmt = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
-                            ");
-                            $notifStmt->execute([$schoolId, $cRow['user_id'], 'Salida autorizada', "Nueva salida autorizada registrada. Ver detalles.", $meta]);
+                            $conn->prepare($sql)->execute($params);
                         } catch (Throwable $e) {
-                            error_log("[OPERATIONS] Autorizar salida notification insert error: " . $e->getMessage());
+                            error_log("[OPERATIONS] Autorizar salida notification batch insert error: " . $e->getMessage());
                         }
                     }
 
@@ -536,9 +560,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                             // Guardar contexto en Redis para manejar respuesta '9'
                             try {
-                                $redisCtx = new Redis();
-                                $redisCtx->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-                                if ($pass = getenv('REDIS_PASSWORD')) $redisCtx->auth($pass);
+                                $redisCtx = getRedisConnection();
+                                if (!$redisCtx) {
+                                    // Redis no disponible, continuar sin contexto
+                                }
                                 $redisCtx->select((int)(getenv('REDIS_DB') ?: 0));
                                 $normalizedPhone = preg_replace('/[^0-9+]/', '', $gRow['whatsapp_phone']);
                                 $ctxPayload = json_encode([
@@ -624,20 +649,28 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'iniciar_seguimiento',
                     ], JSON_UNESCAPED_UNICODE);
 
+                    // FIX: Batch INSERT notifications para psicorientadores
                     $psicoStmt = $conn->prepare("
                         SELECT user_id FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'PSICORIENTADOR') AND active = TRUE
                     ");
                     $psicoStmt->execute([$schoolId]);
-                    while ($pRow = $psicoStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $psicos = $psicoStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($psicos)) {
+                        $rows = [];
+                        $params = [];
+                        foreach ($psicos as $p) {
+                            $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
+                            $params[] = $schoolId;
+                            $params[] = $p['user_id'];
+                            $params[] = "{$senderName} solicita iniciar seguimiento. Ver detalles.";
+                            $params[] = $meta;
+                        }
+                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                         try {
-                            $notifStmt = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())
-                            ");
-                            $notifStmt->execute([$schoolId, $pRow['user_id'], "{$senderName} solicita iniciar seguimiento. Ver detalles.", $meta]);
+                            $conn->prepare($sql)->execute($params);
                         } catch (Throwable $e) {
-                            error_log("[OPERATIONS] Seguimiento notification insert error: " . $e->getMessage());
+                            error_log("[OPERATIONS] Seguimiento notification batch insert error: " . $e->getMessage());
                         }
                     }
                 }
@@ -799,24 +832,34 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'incidente',
                     ], JSON_UNESCAPED_UNICODE);
 
+                    // FIX: Colapsar SELECT de roles y batch INSERT notifications para incidente
                     $incNotifRoles = [];
                     if (in_array('coordinacion', $targets) || empty($targets)) $incNotifRoles[] = 'COORDINADOR';
                     if (in_array('rector', $targets)) $incNotifRoles[] = 'RECTOR';
-                    foreach (array_unique($incNotifRoles) as $incRole) {
+                    if (!empty($incNotifRoles)) {
+                        $placeholders = implode(',', array_fill(0, count($incNotifRoles), '?'));
                         $incStmt2 = $conn->prepare("
                             SELECT user_id FROM users
-                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?) AND active = TRUE
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) IN ($placeholders)) AND active = TRUE
                         ");
-                        $incStmt2->execute([$schoolId, $incRole]);
-                        while ($incRow = $incStmt2->fetch(PDO::FETCH_ASSOC)) {
+                        $incStmt2->execute(array_merge([$schoolId], $incNotifRoles));
+                        $incRecipients = $incStmt2->fetchAll(PDO::FETCH_ASSOC);
+                        if (!empty($incRecipients)) {
+                            $rows = [];
+                            $params = [];
+                            foreach ($incRecipients as $r) {
+                                $rows[] = "(?, ?, ?, ?, 'SOS', ?::jsonb, NOW())";
+                                $params[] = $schoolId;
+                                $params[] = $r['user_id'];
+                                $params[] = 'Incidente';
+                                $params[] = "Nuevo incidente reportado. Ver detalles.";
+                                $params[] = $incMeta;
+                            }
+                            $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                             try {
-                                $incNotif = $conn->prepare("
-                                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                    VALUES (?, ?, ?, ?, 'SOS', ?::jsonb, NOW())
-                                ");
-                                $incNotif->execute([$schoolId, $incRow['user_id'], 'Incidente', "Nuevo incidente reportado. Ver detalles.", $incMeta]);
+                                $conn->prepare($sql)->execute($params);
                             } catch (Throwable $e) {
-                                error_log("[OPERATIONS] Incidente notification insert error: " . $e->getMessage());
+                                error_log("[OPERATIONS] Incidente notification batch insert error: " . $e->getMessage());
                             }
                         }
                     }

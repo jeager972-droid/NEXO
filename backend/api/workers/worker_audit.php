@@ -12,7 +12,8 @@ function logWorker($event, $details = '') {
 
 function connectRedis() {
     $redis = new Redis();
-    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+    // Timeout de 100ms para evitar bloqueos en workers de fondo
+    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
     if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
     return $redis;
 }
@@ -111,16 +112,18 @@ while (!$shutdown) {
                 $redis->set('worker:audit:last_heartbeat', time(), 600);
             } catch (Exception $e) {
                 logWorker('BATCH_ERROR', $e->getMessage());
-                // Opcional: reencolar los logs fallidos en una cola de reintentos
+                // Reencolar los logs fallidos en la cola de reintentos
                 foreach ($batch as $row) {
                     $redis->rPush($queue, json_encode($row, JSON_UNESCAPED_UNICODE));
                 }
+                // Escalar al catch externo para forzar restart del supervisor
+                throw $e;
             }
             $batch = [];
         }
     } catch (Exception $e) {
         logWorker('FATAL', $e->getMessage());
-        sleep(5);
+        exit(1); // Let supervisor restart with backoff
     }
 
     // Pequeña pausa para no saturar CPU

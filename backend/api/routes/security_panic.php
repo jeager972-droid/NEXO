@@ -38,10 +38,10 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
 
         // 2.5. Cache panic event in Redis for fast JWT verification
         try {
-            $redis = new Redis();
-            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
-            if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-            $redis->setex("panic:school:" . $authUser['school_id'], 86400, (string)$panicTimestamp);
+            $redis = getRedisConnection();
+            if ($redis) {
+                $redis->setex("panic:school:" . $authUser['school_id'], 86400, (string)$panicTimestamp);
+            }
         } catch (Exception $e) {
             securityLog('PANIC_REDIS_CACHE_ERROR', $e->getMessage());
         }
@@ -54,15 +54,15 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
             $authUser['school_id']
         );
         
-        // 4. Notificar al Rector (y a todos los SUPER_RECTOR)
+        // 4. Notificar al Rector (y a todos los SUPER_RECTOR del mismo colegio)
         $stmt = $conn->prepare("
             INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
             SELECT school_id, user_id, 'ALERTA DE SEGURIDAD', 'Se activó el botón de pánico. Todas las sesiones y dispositivos han sido invalidados.', 'CRITICAL', NOW()
             FROM users u
             JOIN roles r ON u.role_id = r.role_id
-            WHERE r.role_name = 'SUPER_RECTOR' AND u.active = TRUE
+            WHERE r.role_name = 'SUPER_RECTOR' AND u.active = TRUE AND u.school_id = ?
         ");
-        $stmt->execute();
+        $stmt->execute([$authUser['school_id']]);
         
         echo json_encode([
             'status' => 'ok',

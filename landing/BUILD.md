@@ -3,8 +3,8 @@
 ## Arquitectura de Assets
 
 ```
-backend/alojamiento/
-├── assets/                    ← Assets públicos (servidos por nginx/Apache)
+landing/
+├── public/                    ← Assets públicos (servidos por nginx/Apache)
 │   ├── models/
 │   │   ├── nodo.glb
 │   │   ├── planeta.glb
@@ -18,10 +18,9 @@ backend/alojamiento/
 │           ├── Ground080_2K-JPG_Color.jpg
 │           ├── Ground080_2K-JPG_NormalGL.jpg
 │           └── Ground080_2K-JPG_Roughness.jpg
-└── frontend/
-    ├── src/landing/           ← Código fuente React + Three.js
-    ├── dist/                  ← Build output (generado por Vite)
-    └── package.json
+└── src/
+    ├── landing/               ← Código fuente React + Three.js
+    └── dist/                  ← Build output (generado por Vite)
 ```
 
 ---
@@ -31,19 +30,19 @@ backend/alojamiento/
 ### 1. Compilación Vite
 
 ```bash
-cd /home/john/proyectos/NEXO/backend/alojamiento/frontend
+cd /home/john/proyectos/NEXO/landing
 npm run build
 ```
 
-**Output:** `/home/john/proyectos/NEXO/backend/alojamiento/frontend/dist/`
+**Output:** `/home/john/proyectos/NEXO/landing/dist/`
 
 ### 2. Verificación de Assets
 
-Los assets **ya están** en `/backend/alojamiento/assets/`. Vite los referencia mediante rutas relativas (`assets/models/nodo.glb`).
+Los assets **ya están** en `/home/john/proyectos/NEXO/landing/public/`. Vite los referencia mediante rutas relativas (`assets/models/nodo.glb`).
 
 **CRÍTICO:** El servidor web (nginx/Apache) debe servir:
-- `/` → `frontend/dist/index.html`
-- `/assets/*` → `assets/*` (carpeta raíz de alojamiento)
+- `/` → `landing/dist/index.html`
+- `/assets/*` → `landing/public/*`
 
 ---
 
@@ -55,17 +54,17 @@ Los assets **ya están** en `/backend/alojamiento/assets/`. Vite los referencia 
 server {
     listen 80;
     server_name nexo.local;
-    root /home/john/proyectos/NEXO/backend/alojamiento;
+    root /home/john/proyectos/NEXO/landing;
 
     # Landing page
     location / {
-        alias /home/john/proyectos/NEXO/backend/alojamiento/frontend/dist/;
+        alias /home/john/proyectos/NEXO/landing/dist/;
         try_files $uri $uri/ /index.html;
     }
 
     # Assets estáticos (GLB, EXR, JPG)
     location /assets/ {
-        alias /home/john/proyectos/NEXO/backend/alojamiento/assets/;
+        alias /home/john/proyectos/NEXO/landing/public/;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
@@ -109,7 +108,7 @@ AddType image/x-exr .exr
 - [x] UnrealBloomPass fotográfico (strength 0.5, radius 1.2, threshold 0.88)
 - [x] Tipografía industrial-brutalist (font-weight 900, letter-spacing -0.06em)
 - [x] ScrollTrigger.refresh(true) tras carga de modelos (1.5s)
-- [ ] Assets copiados a `/backend/alojamiento/assets/` (verificar manualmente)
+- [ ] Assets copiados a `/home/john/proyectos/NEXO/landing/public/` (verificar manualmente)
 - [ ] Build ejecutado: `npm run build`
 - [ ] Servidor web configurado (nginx/Apache)
 
@@ -128,12 +127,12 @@ echo "=================================="
 
 # 1. Build frontend
 echo "📦 Building frontend..."
-cd /home/john/proyectos/NEXO/backend/alojamiento/frontend
+cd /home/john/proyectos/NEXO/landing
 npm run build
 
 # 2. Verificar assets
 echo "🔍 Verificando assets..."
-ASSETS_DIR="/home/john/proyectos/NEXO/backend/alojamiento/assets"
+ASSETS_DIR="/home/john/proyectos/NEXO/landing/public"
 REQUIRED_FILES=(
     "models/nodo.glb"
     "models/planeta.glb"
@@ -151,24 +150,24 @@ done
 echo "✅ Assets verificados"
 
 # 3. Permisos (opcional, solo si es necesario)
-# chmod -R 755 /home/john/proyectos/NEXO/backend/alojamiento/frontend/dist
-# chmod -R 755 /home/john/proyectos/NEXO/backend/alojamiento/assets
+# chmod -R 755 /home/john/proyectos/NEXO/landing/dist
+# chmod -R 755 /home/john/proyectos/NEXO/landing/public
 
 echo "✅ Deploy completado"
 echo ""
 echo "📍 Rutas:"
-echo "   - Frontend: /backend/alojamiento/frontend/dist/"
-echo "   - Assets:   /backend/alojamiento/assets/"
+echo "   - Frontend: /home/john/proyectos/NEXO/landing/dist/"
+echo "   - Assets:   /home/john/proyectos/NEXO/landing/public/"
 echo ""
 echo "🌐 Configurar servidor web para servir:"
-echo "   / → frontend/dist/index.html"
-echo "   /assets/* → assets/*"
+echo "   / → landing/dist/index.html"
+echo "   /assets/* → landing/public/*"
 ```
 
-Guardar como `/home/john/proyectos/NEXO/backend/alojamiento/deploy-nexo-landing.sh` y ejecutar:
+Guardar como `/home/john/proyectos/NEXO/landing/deploy-nexo-landing.sh` y ejecutar:
 
 ```bash
-chmod +x /home/john/proyectos/NEXO/backend/alojamiento/deploy-nexo-landing.sh
+chmod +x /home/john/proyectos/NEXO/landing/deploy-nexo-landing.sh
 ./deploy-nexo-landing.sh
 ```
 
@@ -178,7 +177,7 @@ chmod +x /home/john/proyectos/NEXO/backend/alojamiento/deploy-nexo-landing.sh
 
 ### Vite Config (opcional)
 
-Crear `/home/john/proyectos/NEXO/backend/alojamiento/frontend/vite.config.js`:
+Crear `/home/john/proyectos/NEXO/landing/vite.config.js`:
 
 ```js
 import { defineConfig } from 'vite'

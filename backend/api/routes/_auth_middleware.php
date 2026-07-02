@@ -238,13 +238,27 @@ if (!function_exists('verifyJwtToken')) {
 
 if (!function_exists('getRedisConnection')) {
     function getRedisConnection() {
+        static $redis = null;
+        static $attempted = false;
+
+        if ($redis !== null) {
+            return $redis;
+        }
+        if ($attempted) {
+            // Ya falló una vez en este request; no reintentar (evita 20x 100ms de timeout)
+            return null;
+        }
+        $attempted = true;
+
         try {
             if (!class_exists('Redis')) return null;
             $redis = new Redis();
-            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+            // Timeout de 100ms para evitar bloqueos de 25s cuando Redis está lento
+            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
             if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
             return $redis;
         } catch (Exception $e) {
+            $redis = null;
             return null;
         }
     }
@@ -405,15 +419,21 @@ if (!function_exists('requireAuth')) {
         try {
             $claims = verifyJwtToken($token);
 
+            // FIX: Fusionar query de usuario con set_config school_id en una sola query con CTE
+            // Esto reduce de 2 round-trips a 1 round-trip "pesado" + 1 trivial (set_config role)
             $stmt = $conn->prepare("
-                SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
-                       u.profile_photo_url, u.work_shift,
-                       r.role_name, s.school_id, s.school_name
-                FROM users u
-                INNER JOIN roles r ON u.role_id = r.role_id
-                INNER JOIN schools s ON u.school_id = s.school_id
-                WHERE u.user_id = ? AND u.active = TRUE
-                LIMIT 1
+                WITH u AS (
+                    SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
+                           u.profile_photo_url, u.work_shift,
+                           r.role_name, s.school_id, s.school_name
+                    FROM users u
+                    INNER JOIN roles r ON u.role_id = r.role_id
+                    INNER JOIN schools s ON u.school_id = s.school_id
+                    WHERE u.user_id = ? AND u.active = TRUE
+                    LIMIT 1
+                )
+                SELECT u.*, set_config('app.current_school_id', u.school_id::text, true) AS _cfg1
+                FROM u
             ");
             $stmt->execute([$claims['sub']]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -430,8 +450,9 @@ if (!function_exists('requireAuth')) {
             }
 
             // FIX: Configurar el contexto de PostgreSQL para Row-Level Security (RLS) usando set_config
-            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
-            $stmtConfig->execute([(string)$user['school_id'], $normalizedRole]);
+            // Nota: set_config del rol es query separada porque necesita el rol normalizado (calculado después)
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_role', ?, true)");
+            $stmtConfig->execute([$normalizedRole]);
 
             return [
                 'id' => $user['user_id'],

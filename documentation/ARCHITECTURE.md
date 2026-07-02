@@ -15,28 +15,36 @@ NEXO es una plataforma educativa para Colombia que combina:
 ```
                          ┌────────────────────────────────────────────┐
                          │             GitHub: 0nto/NEXO              │
-                         │            (un solo remoto, dos vistas)    │
+                         │            (un solo remoto)                │
                          └───────────────┬──────────────┬─────────────┘
                                          │              │
                 ┌────────────────────────▼──┐        ┌──▼─────────────────────────────┐
-                │ WebApp/                    │        │ backend/alojamiento/           │
-                │ Frontend React + espejo de │        │ Backend PHP productivo + Docker│
-                │ backend PHP (idéntico)     │        │ (Railway)                      │
+                │ WebApp/                    │        │ backend/api/                   │
+                │ Frontend React + Tauri     │        │ Backend PHP productivo + Docker│
+                │ (PWA + Desktop)            │        │ (Railway)                      │
                 └────────────────────────────┘        └────────────────────────────────┘
+                                         │
+                                         └──────────┐
+                                                    │
+                                         ┌────────▼─────────────────────┐
+                                         │ landing/                       │
+                                         │ Landing page estática (Vite)  │
+                                         └────────────────────────────────┘
 
 Carpetas físicas:
-  WebApp/                            ← React/Vite/PWA + ESPEJO de backend (no autoritativo)
-  backend/alojamiento/               ← Backend PHP autoritativo (Dockerfile, .htaccess, start.sh)
-  backend/edge/                      ← Edge Raspberry Pi (C++)
+  WebApp/                            ← React/Vite/PWA + Tauri (Desktop)
+  backend/api/                       ← Backend PHP autoritativo (Dockerfile, .htaccess)
+  backend/edge/                      ← Edge Raspberry Pi 4 (C++20)
+  landing/                           ← Landing page promocional (Three.js)
 ```
 
 ### 2.1 Flujo de datos actual
 
 ```
-[ESP32 / Edge]                [WebApp/api.php   ≡   alojamiento/api.php]
+[Edge C++ / Raspberry Pi]      [backend/api/api.php]
    biometría                       ├── decryptPayload(AES-256-GCM)
-   sqlite local         ─────────► ├── ❌ NO INSERT en PostgreSQL  (R1)
-   AES-256-GCM                     └── responde 200 OK falso
+   sqlite local         ─────────► ├── ingest asíncrona (Redis queue)
+   AES-256-GCM                     └── workers procesan → PostgreSQL
                                                     │
                                                     ▼
                                             PostgreSQL (Railway)
@@ -47,10 +55,9 @@ Carpetas físicas:
 
 ### 2.2 Problemas estructurales heredados
 
-- Backend duplicado byte-a-byte (ver `STAGE_0_AUDIT.md` §2).
-- Edge sigue siendo Arduino/ESP32, no Raspberry Pi/Linux.
-- Ingestión cloud descarta datos (`R1`).
-- Concurrencia bloqueante (`R3`), rate limit no horizontal (`R4`), auditoría mutable (`R5`).
+- Ingestión cloud requiere validación adicional de device tokens (TODO en devices.php).
+- Edge C++ en desarrollo activo - infraestructura completa pero requiere validación en hardware real.
+- Mosquitto MQTT deshabilitado temporalmente para pruebas de red.
 
 ---
 
@@ -124,7 +131,7 @@ nexo-client/      (React + Tauri + Capacitor + PWA)
 | Etapa | Foco                                          | Reversible | Riesgo si se omite |
 |-------|-----------------------------------------------|------------|--------------------|
 | 0     | Contención, audit, source-of-truth            | Sí         | Cambios destructivos sin red de seguridad |
-| 1     | Edge: Arduino/ESP32 → Raspberry Pi 4 / Linux  | Parcial    | Hardware no producción-ready |
+| 1     | Edge: Infraestructura C++ Raspberry Pi 4     | Parcial    | Hardware no producción-ready |
 | 2     | Cimientos: ingesta, SQL safe, async, Redis    | Parcial    | Pérdida silenciosa de datos |
 | 3     | SAT, store-and-forward, repo limpio           | Sí         | No hay valor diferencial |
 | 4     | Multiplataforma (Tauri / Capacitor / PWA L3)  | Sí         | Comisiones 30% en stores |

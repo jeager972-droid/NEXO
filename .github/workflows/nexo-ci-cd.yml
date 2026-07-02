@@ -50,8 +50,22 @@ jobs:
     - name: Run PHP Tests
       run: cd backend/api && php tests/PanicButtonTest.php
 
+  build-landing:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: landing/package-lock.json
+    - name: Install dependencies
+      run: cd landing && npm ci
+    - name: Build Landing
+      run: cd landing && npm run build
+
   deploy-backend-railway:
-    needs: [build-webapp-react, test-backend-php, build-edge-cpp]
+    needs: [build-webapp-react, test-backend-php, build-edge-cpp, build-landing]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

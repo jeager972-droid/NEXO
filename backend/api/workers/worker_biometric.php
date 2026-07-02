@@ -24,7 +24,8 @@ function logW(string $e, string $m): void {
 
 function getRedis() {
     $r = new Redis();
-    $r->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+    // Timeout de 100ms para evitar bloqueos en workers de fondo
+    $r->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
     if ($pass = getenv('REDIS_PASSWORD')) $r->auth($pass);
     return $r;
 }
@@ -264,17 +265,19 @@ while (!$shutdown) {
             $jobArray = json_decode($item, true) ?: [];
             $retries = ($jobArray['retries'] ?? 0) + 1;
             $jobArray['retries'] = $retries;
-            
+
             if ($retries <= 3) {
                 $redis->rPush('queue:biometric_ingest', json_encode($jobArray, JSON_UNESCAPED_UNICODE));
             } else {
                 $redis->rPush('queue:biometric_dlq', json_encode($jobArray, JSON_UNESCAPED_UNICODE));
             }
             $redis->lRem('queue:biometric_processing', $item, 0);
+            // Escalar al catch externo para forzar restart del supervisor (reconecta PDO)
+            throw $e;
         }
     } catch (Exception $e) {
         logW('FATAL', $e->getMessage());
-        sleep(2); $redis = getRedis();
+        exit(1); // Let supervisor restart with backoff (reconnects both Redis and PDO)
     }
 
     // FIX (SRE-2): Ejecutar GC de zombies cada 60 segundos.

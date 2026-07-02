@@ -1,0 +1,8 @@
+# Crontab para NEXO - Tareas periódicas
+# Formato: MIN HOUR DOM MON DOW COMMAND
+
+# Recalcular métricas de riesgo conductual - Todos los días a las 2 AM UTC
+0 2 * * * /var/www/html/infra/scripts/recalc_risk.sh >> /var/www/html/infra/logs/recalc_risk.log 2>&1
+
+# Crear partición mensual para biometric_events - Día 1 de cada mes a las 3 AM UTC
+0 3 1 * * /var/www/html/infra/scripts/create_monthly_partition.sh >> /var/www/html/infra/logs/partition_creation.log 2>&1

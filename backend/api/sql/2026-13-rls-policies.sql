@@ -12,7 +12,7 @@
 
 -- 1. Función auxiliar: obtener school_id del contexto de sesión
 CREATE OR REPLACE FUNCTION get_current_school_id()
-RETURNS INTEGER AS $$
+RETURNS INTEGER STABLE AS $$
 DECLARE
     v_school_id TEXT;
 BEGIN
@@ -28,7 +28,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 2. Función auxiliar: verificar si el rol actual es SUPER_RECTOR
 CREATE OR REPLACE FUNCTION is_super_rector()
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN STABLE AS $$
 DECLARE
     v_role TEXT;
 BEGIN

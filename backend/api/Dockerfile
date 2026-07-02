@@ -16,7 +16,10 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # nginx — sin apache2, sin MPM, sin conflictos
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx git unzip net-tools curl mosquitto mosquitto-clients \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && wget -qO /usr/local/bin/supercronic https://github.com/aptible/supercronic/releases/download/v0.2.1/supercronic-linux-amd64 \
+    && chmod +x /usr/local/bin/supercronic \
+    && mkdir -p /etc/supercronic
 
 RUN install-php-extensions pdo_pgsql mysqli redis sockets zip pcntl
 

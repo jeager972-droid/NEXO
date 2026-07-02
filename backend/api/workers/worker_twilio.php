@@ -108,7 +108,8 @@ function sendTwilioWhatsAppDirect($to, $body) {
 
 function connectRedis() {
     $redis = new Redis();
-    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379);
+    // Timeout de 100ms para evitar bloqueos en workers de fondo
+    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
     if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
     $redis->select((int)(getenv('REDIS_DB') ?: 0));
     return $redis;
@@ -162,7 +163,10 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
             try {
                 $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'SENT', provider_message_sid = ?, metadata_json = ?::jsonb WHERE twilio_message_id = ?");
                 $upd->execute([$send['sid'], json_encode(['action' => 'worker_sent'], JSON_UNESCAPED_UNICODE), $job['message_id']]);
-            } catch (Exception $e) { securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage()); }
+            } catch (Exception $e) {
+                securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
+                throw $e; // Escalar al catch externo para forzar restart del supervisor
+            }
         } else {
             logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
                 ['action' => 'worker_sent'],
@@ -185,7 +189,10 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
             try {
                 $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'FAILED_PERMANENT', metadata_json = ?::jsonb WHERE twilio_message_id = ?");
                 $upd->execute([json_encode(['action' => 'worker_failed', 'error' => $send['error']], JSON_UNESCAPED_UNICODE), $job['message_id']]);
-            } catch (Exception $e) { securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage()); }
+            } catch (Exception $e) {
+                securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
+                throw $e; // Escalar al catch externo para forzar restart del supervisor
+            }
         } else {
             logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
                 ['action' => 'worker_failed', 'error' => $send['error']],
@@ -256,7 +263,7 @@ while (!$shutdown) {
         }
     } catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());
-        sleep(5);
+        exit(1); // Let supervisor restart with backoff
     }
 
     // FIX: Forzar GC y monitorear memoria en vez de matar el proceso
