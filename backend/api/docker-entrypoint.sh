@@ -56,6 +56,12 @@ http {
             return 200 "OK\n";
         }
 
+        # Health check workers para Railway
+        location = /health/workers {
+            add_header Content-Type text/plain always;
+            return 200 "OK\n";
+        }
+
         # Debugging: direct serve index for root
         location = / {
             root /var/www/html;
