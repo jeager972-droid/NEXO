@@ -5,6 +5,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
+import { useAuth } from '../hooks/useAuth';
 
 import { fmt12h, formatCellValue, humanizeColumn, EXCLUDE_COLS } from '../utils/formatters';
 
@@ -290,6 +291,7 @@ export const ConsultationDrawer = ({
   fromDate, setFromDate, toDate, setToDate, onQuery, onClose, error,
   executeQuery
 }) => {
+  const { user } = useAuth();
   const keys = Object.keys(dynamicColumns);
   const [trackingModalOpen, setTrackingModalOpen] = useState(false);
   const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
