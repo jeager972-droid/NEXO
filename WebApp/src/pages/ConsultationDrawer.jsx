@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Search, Activity, X, Loader2, CalendarDays, Filter, Eye, AlertTriangle
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
 
