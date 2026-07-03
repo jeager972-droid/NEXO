@@ -338,8 +338,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 }
 
                 $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
-                $citTime = !empty($params['time']) ? filter_var($params['time'], FILTER_SANITIZE_SPECIAL_CHARS) : '';
-                $citReason = !empty($params['reason']) ? filter_var($params['reason'], FILTER_SANITIZE_SPECIAL_CHARS) : (!empty($params['message']) ? filter_var($params['message'], FILTER_SANITIZE_SPECIAL_CHARS) : '');
+                $citTime = !empty($params['time']) ? trim((string)$params['time']) : '';
+                $citReason = !empty($params['reason']) ? trim((string)$params['reason']) : (!empty($params['message']) ? trim((string)$params['message']) : '');
 
                 $citMsg = "Citación para {$studentName}.";
                 if ($citTime) $citMsg .= "\nHora: {$citTime}";
