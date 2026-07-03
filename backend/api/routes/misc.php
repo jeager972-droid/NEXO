@@ -2,14 +2,7 @@
 // routes/misc.php - Rutas misceláneas
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
-
-function normalizeWhatsAppPhone($value) {
-    $value = trim((string)$value);
-    $value = preg_replace('/^whatsapp:/i', '', $value);
-    if ($value === '') return '';
-    if ($value[0] !== '+') $value = '+' . $value;
-    return preg_replace('/[^0-9\+]/', '', $value);
-}
+require_once __DIR__ . '/../lib/twilio.php'; // normalizeWhatsAppPhone, sendTwilioDirect
 
 function verifyTwilioSignature() {
     $authToken = getenv('TWILIO_AUTH_TOKEN') ?: '';

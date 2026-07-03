@@ -12,10 +12,16 @@ WITH admin_role AS (SELECT role_id FROM roles WHERE role_name='SUPER_RECTOR' LIM
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
 SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,role_id,'111111111','Administrador','NEXO','admin@nexo.edu','3000000000','$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_admin',TRUE,NOW() FROM admin_role ON CONFLICT(email) DO NOTHING;
 
-INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
-SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,r.role_id,doc,fname,lname,email,'300'||(1000000+s)::TEXT,'$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_docente',TRUE,NOW()
+INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, work_shift, active, created_at)
+SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,r.role_id,doc,fname,lname,email,'300'||(1000000+s)::TEXT,'$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_docente','tarde',TRUE,NOW()
 FROM (VALUES(1,'222222222','Carlos','Martinez','cmartinez@colegionacional.edu.co'),(2,'333333333','Ana','Rodriguez','arodriguez@colegionacional.edu.co'),(3,'444444444','Luis','Gonzalez','lgonzalez@colegionacional.edu.co'),(4,'555555555','Maria','Lopez','mlopez@colegionacional.edu.co'),(5,'666666666','Pedro','Sanchez','psanchez@colegionacional.edu.co'),(6,'777777777','Jose','Ramirez','jramirez@colegionacional.edu.co'),(7,'888888888','Diana','Torres','dtorres@colegionacional.edu.co'),(8,'999999999','Camila','Castro','ccastro@colegionacional.edu.co')) AS t(s,doc,fname,lname,email)
 JOIN roles r ON r.role_name='DOCENTE' ON CONFLICT(email) DO NOTHING;
+
+-- Usuarios adicionales por rol con jornada tarde
+INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, work_shift, active, created_at)
+SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,r.role_id,doc,fname,lname,email,'300'||(2000000+s)::TEXT,'$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_nexo','tarde',TRUE,NOW()
+FROM (VALUES(1,'100000001','Roberto','Coordinador','coordinador@nexo.edu'),(2,'100000002','Laura','Secretaria','secretaria@nexo.edu'),(3,'100000003','Miguel','Portero','portero@nexo.edu'),(4,'100000004','Carmen','Auxiliar','auxiliar@nexo.edu'),(5,'100000005','Patricia','Psicorientadora','psicorientador@nexo.edu')) AS t(s,doc,fname,lname,email)
+JOIN roles r ON r.role_name=CASE WHEN s=1 THEN 'COORDINADOR' WHEN s=2 THEN 'SECRETARIA' WHEN s=3 THEN 'PORTERO' WHEN s=4 THEN 'AUXILIAR' WHEN s=5 THEN 'PSICORIENTADOR' END ON CONFLICT(email) DO NOTHING;
 
 INSERT INTO classrooms(classroom_id, school_id, classroom_name, building, created_at) VALUES('c1aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::UUID,'a3333333-3333-3333-3333-333333333333'::UUID,'Salon 101','Bloque A',NOW()),('c2bbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::UUID,'a3333333-3333-3333-3333-333333333333'::UUID,'Salon 102','Bloque A',NOW()),('c3cccccc-cccc-cccc-cccc-cccccccccccc'::UUID,'a3333333-3333-3333-3333-333333333333'::UUID,'Salon 201','Bloque B',NOW()),('c4dddddd-dddd-dddd-dddd-dddddddddddd'::UUID,'a3333333-3333-3333-3333-333333333333'::UUID,'Salon 202','Bloque B',NOW()),('c5eeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::UUID,'a3333333-3333-3333-3333-333333333333'::UUID,'Laboratorio','Bloque C',NOW()) ON CONFLICT DO NOTHING;
 
@@ -45,10 +51,10 @@ v_guard_role_id:=(SELECT role_id FROM roles WHERE role_name='GUARDIAN' LIMIT 1);
 FOR i IN 1..50 LOOP
 v_user:=gen_random_uuid(); v_guard:=gen_random_uuid();
 INSERT INTO users(user_id,school_id,role_id,document_number,first_name,last_name,email,phone,password_hash,password_salt,active,created_at)
-VALUES(v_user,'a3333333-3333-3333-3333-333333333333'::UUID,v_guard_role_id,'g'||(100000000+i)::TEXT,gnames[1+(i%10)],'Acudiente '||i,'guardian'||i||'@test.com',CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,'$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_guardian',TRUE,NOW()) ON CONFLICT(email) DO NOTHING;
+VALUES(v_user,'a3333333-3333-3333-3333-333333333333'::UUID,v_guard_role_id,'g'||(100000000+i)::TEXT,gnames[1+(i%10)],'Acudiente '||i,'guardian'||i||'@test.com','+573243607948','$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_guardian',TRUE,NOW()) ON CONFLICT(email) DO NOTHING;
 IF FOUND THEN
 INSERT INTO guardians(guardian_id,user_id,whatsapp_phone,emergency_contact,created_at)
-VALUES(v_guard,v_user,CASE WHEN i=1 THEN '+573243607948' ELSE '+57'||(3000000000+i)::TEXT END,CASE WHEN i%5=0 THEN TRUE ELSE FALSE END,NOW()) ON CONFLICT(user_id) DO NOTHING;
+VALUES(v_guard,v_user,'+573243607948',CASE WHEN i%5=0 THEN TRUE ELSE FALSE END,NOW()) ON CONFLICT(user_id) DO NOTHING;
 END IF;
 END LOOP;
 END $$;
