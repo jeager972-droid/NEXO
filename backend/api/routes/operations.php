@@ -117,9 +117,60 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
             exit(json_encode(['status' => 'error', 'message' => 'message_ids is required']));
         }
         $in = str_repeat('?,', count($msgIds) - 1) . '?';
-        $stmt = $conn->prepare("SELECT twilio_message_id, delivery_status FROM twilio_messages WHERE twilio_message_id IN ($in)");
+        $stmt = $conn->prepare("SELECT twilio_message_id, delivery_status, provider_message_sid FROM twilio_messages WHERE twilio_message_id IN ($in)");
         $stmt->execute($msgIds);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Fallback: Si los mensajes están en QUEUED y tienen provider_message_sid, consultar Twilio API directamente
+        $needsTwilioCheck = [];
+        foreach ($results as &$msg) {
+            if ($msg['delivery_status'] === 'QUEUED' && !empty($msg['provider_message_sid'])) {
+                $needsTwilioCheck[] = $msg['provider_message_sid'];
+            }
+        }
+        
+        if (!empty($needsTwilioCheck)) {
+            $sid = getenv('TWILIO_ACCOUNT_SID');
+            $token = getenv('TWILIO_AUTH_TOKEN');
+            if ($sid && $token) {
+                foreach ($needsTwilioCheck as $providerSid) {
+                    try {
+                        $url = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages/$providerSid.json";
+                        $ch = curl_init($url);
+                        curl_setopt_array($ch, [
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_USERPWD => "$sid:$token",
+                            CURLOPT_TIMEOUT => 3,
+                        ]);
+                        $response = curl_exec($ch);
+                        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        curl_close($ch);
+                        
+                        if ($response && $httpCode === 200) {
+                            $twilioData = json_decode($response, true);
+                            $twilioStatus = strtoupper($twilioData['status'] ?? 'UNKNOWN');
+                            
+                            // Actualizar en DB
+                            $updateStmt = $conn->prepare("UPDATE twilio_messages SET delivery_status = ? WHERE provider_message_sid = ?");
+                            $updateStmt->execute([$twilioStatus, $providerSid]);
+                            
+                            // Actualizar resultado
+                            foreach ($results as &$r) {
+                                if ($r['provider_message_sid'] === $providerSid) {
+                                    $r['delivery_status'] = $twilioStatus;
+                                    $r['_source'] = 'twilio_api_fallback';
+                                }
+                            }
+                            
+                            error_log("[TWILIO_STATUS] Fallback API check: SID $providerSid Status $twilioStatus");
+                        }
+                    } catch (Exception $e) {
+                        error_log("[TWILIO_STATUS] Fallback API error for $providerSid: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+        
         exit(json_encode(['status' => 'ok', 'data' => $results]));
     }
 

@@ -28,8 +28,13 @@ function normalizeWhatsAppPhone(string $value): string {
 
 function getTwilioStatusCallbackUrl(): ?string {
     $base = getenv('TWILIO_WEBHOOK_URL_BASE') ?: getenv('APP_URL') ?: '';
-    if ($base === '') return null;
-    return rtrim($base, '/') . '/v1/webhooks/twilio/status';
+    if ($base === '') {
+        error_log("[TWILIO] WARNING: Neither TWILIO_WEBHOOK_URL_BASE nor APP_URL are set");
+        return null;
+    }
+    $fullUrl = rtrim($base, '/') . '/v1/webhooks/twilio/status';
+    error_log("[TWILIO] StatusCallback URL: $fullUrl (from env: " . (getenv('TWILIO_WEBHOOK_URL_BASE') ? 'TWILIO_WEBHOOK_URL_BASE' : 'APP_URL') . ")");
+    return $fullUrl;
 }
 
 // ── Envío directo a la API de Twilio ─────────────────────────────────────────
@@ -75,7 +80,12 @@ function sendTwilioDirect(string $to, string $body): array {
     ];
 
     $statusCallback = getTwilioStatusCallbackUrl();
-    if ($statusCallback) $payload['StatusCallback'] = $statusCallback;
+    if ($statusCallback) {
+        $payload['StatusCallback'] = $statusCallback;
+        error_log("[TWILIO] StatusCallback URL set to: $statusCallback");
+    } else {
+        error_log("[TWILIO] WARNING: StatusCallback URL is NULL - TWILIO_WEBHOOK_URL_BASE or APP_URL not set");
+    }
 
     $result = _twilioHttpPost($url, $payload, $sid, $token);
 

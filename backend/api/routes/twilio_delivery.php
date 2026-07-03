@@ -1,12 +1,28 @@
 <?php
 global $cleanPath, $conn, $method;
 
+// DEBUG: Log que el archivo se cargó
+error_log("[TWILIO_DELIVERY] File loaded. cleanPath: $cleanPath, method: $method");
+
+// DEBUG: Simple GET endpoint to test if webhook is accessible
+if ($cleanPath === '/webhooks/twilio/status' && $method === 'GET') {
+    http_response_code(200);
+    echo json_encode(['status' => 'ok', 'message' => 'Webhook endpoint is accessible']);
+    exit;
+}
+
 if ($cleanPath === '/webhooks/twilio/status' && $method === 'POST') {
+    // DEBUG: Log incoming webhook request
+    error_log("[TWILIO_STATUS] Webhook received. SID: " . ($_POST['MessageSid'] ?? 'N/A') . " Status: " . ($_POST['MessageStatus'] ?? 'N/A'));
+    error_log("[TWILIO_STATUS] Full POST data: " . json_encode($_POST));
+    
     if (function_exists('verifyTwilioSignature') && !verifyTwilioSignature()) {
+        error_log("[TWILIO_STATUS] Signature verification FAILED. Rejecting request.");
         securityLog('TWILIO_WEBHOOK_REJECTED', 'Firma inválida en status callback');
         http_response_code(403);
         exit;
     }
+    error_log("[TWILIO_STATUS] Signature verification PASSED.");
 
     $messageSid = $_POST['MessageSid'] ?? '';
     $status = $_POST['MessageStatus'] ?? '';
@@ -40,6 +56,8 @@ if ($cleanPath === '/webhooks/twilio/status' && $method === 'POST') {
         } catch (Exception $e) {
             securityLog('TWILIO_STATUS_DB_ERROR', $e->getMessage());
         }
+    } else {
+        error_log("[TWILIO_STATUS] Missing required fields. MessageSid: $messageSid, Status: $status");
     }
 
     http_response_code(200);

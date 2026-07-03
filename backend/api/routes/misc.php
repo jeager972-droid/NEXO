@@ -7,7 +7,11 @@ require_once __DIR__ . '/../lib/twilio.php'; // normalizeWhatsAppPhone, sendTwil
 function verifyTwilioSignature() {
     $authToken = getenv('TWILIO_AUTH_TOKEN') ?: '';
     $provided = $_SERVER['HTTP_X_TWILIO_SIGNATURE'] ?? '';
+    
+    error_log("[TWILIO_SIG] authToken: " . ($authToken ? 'SET' : 'NULL') . " provided: " . ($provided ? 'SET' : 'NULL'));
+    
     if ($authToken === '' || $provided === '') {
+        error_log("[TWILIO_SIG] FAIL: Missing authToken or provided signature");
         return false;
     }
 
@@ -23,15 +27,21 @@ function verifyTwilioSignature() {
 
     $uri = $_SERVER['REQUEST_URI'] ?? '';
     $url = rtrim($baseUrl, '/') . $uri;
+    
+    error_log("[TWILIO_SIG] baseUrl: $baseUrl uri: $url fullUrl: $url");
 
     $params = $_POST ?: [];
     ksort($params);
+    
+    error_log("[TWILIO_SIG] POST params: " . json_encode($params));
 
     $data = $url;
     foreach ($params as $k => $v) {
         $data .= $k . $v;
     }
     $expected = base64_encode(hash_hmac('sha1', $data, $authToken, true));
+    
+    error_log("[TWILIO_SIG] expected: $expected provided: $provided match: " . (hash_equals($expected, $provided) ? 'YES' : 'NO'));
 
     return hash_equals($expected, $provided);
 }

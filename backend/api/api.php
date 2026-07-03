@@ -97,6 +97,9 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $cleanPath = trim(urldecode(preg_replace('/^\/(v1|api\.php)/i', '', parse_url($uri, PHP_URL_PATH))), "/");
 $cleanPath = '/' . $cleanPath;
 
+// DEBUG: Log routing info
+error_log("[ROUTING] URI: $uri, Method: $method, cleanPath: $cleanPath");
+
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];
 
