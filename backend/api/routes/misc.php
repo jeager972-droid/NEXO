@@ -441,6 +441,9 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         ");
         $teacherStmt->execute([$schoolId, $guardianId]);
         $teacherRef = $teacherStmt->fetch(PDO::FETCH_ASSOC);
+        
+        // DEBUG: Log teacher lookup result
+        securityLog('CITACION_TEACHER_LOOKUP', "Guardian:$guardianId School:$schoolId TeacherRef:" . ($teacherRef ? json_encode($teacherRef) : 'NULL'));
 
         // Resolver nombre del estudiante (por student_id o guardian fallback)
         $studentName = '';
@@ -482,6 +485,8 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         'guardian_phone' => $from,
                         'motivo' => $motivo,
                     ], JSON_UNESCAPED_UNICODE);
+                    // DEBUG: Log notification attempt
+                    securityLog('CITACION_NOTIF_ATTEMPT', "Type:reagendar_motivo Teacher:$resolvedTeacherId Student:$studentName");
                     $notifStmt = $conn->prepare("
                         INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
                         VALUES (?, ?, 'Reagendamiento', ?, 'INFO', ?::jsonb, NOW())
@@ -492,9 +497,12 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         "El acudiente de: " . ($studentName ?: 'Estudiante') . " envió el motivo de reagendamiento. Ver detalles.",
                         $meta
                     ]);
+                    securityLog('CITACION_NOTIF_SUCCESS', "Type:reagendar_motivo Teacher:$resolvedTeacherId");
                 } catch (Throwable $e) {
-                    securityLog('CITACION_NOTIF_ERROR', $e->getMessage());
+                    securityLog('CITACION_NOTIF_ERROR', "Type:reagendar_motivo Error:" . $e->getMessage());
                 }
+            } else {
+                securityLog('CITACION_NOTIF_SKIP', "Type:reagendar_motivo Reason:NoTeacherId TeacherRef:" . json_encode($teacherRef));
             }
 
             // Limpiar estado
@@ -584,6 +592,8 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         'action' => 'citacion_confirmada',
                         'guardian_phone' => $from,
                     ], JSON_UNESCAPED_UNICODE);
+                    // DEBUG: Log notification attempt
+                    securityLog('CITACION_NOTIF_ATTEMPT', "Type:confirmada Teacher:{$teacherRef['sender_user_id']} Student:$studentName");
                     $notifStmt = $conn->prepare("
                         INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
                         VALUES (?, ?, 'Citación confirmada', ?, 'SUCCESS', ?::jsonb, NOW())
@@ -594,9 +604,12 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         "El acudiente de: " . ($studentName ?: 'Estudiante') . " confirmó asistencia a la citación.",
                         $meta
                     ]);
+                    securityLog('CITACION_NOTIF_SUCCESS', "Type:confirmada Teacher:{$teacherRef['sender_user_id']}");
                 } catch (Throwable $e) {
-                    securityLog('CITACION_NOTIF_ERROR', $e->getMessage());
+                    securityLog('CITACION_NOTIF_ERROR', "Type:confirmada Error:" . $e->getMessage());
                 }
+            } else {
+                securityLog('CITACION_NOTIF_SKIP', "Type:confirmada Reason:NoTeacherRef TeacherRef:" . json_encode($teacherRef));
             }
 
             securityLog('CITACION_CONFIRMADA', "Guardian:$guardianId School:$schoolId Student:" . ($resolvedStudentId ?? 'fallback'));

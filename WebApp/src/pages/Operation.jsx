@@ -477,11 +477,11 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
               console.error(e);
           }
           attempts++;
-          if (attempts > 12) {
+          if (attempts > 15) {
               clearInterval(interval);
               setPollingStatus('TIMEOUT');
           }
-      }, 10000);
+      }, 2000);
   };
 
   const handleSubmit = async (e) => {
