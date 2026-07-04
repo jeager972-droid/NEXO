@@ -22,6 +22,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
 
     if ($cleanPath === '/tracking/start' && $method === 'POST') {
         $studentId = $input['student_id'] ?? null;
+        $reason = $input['reason'] ?? null;
         if ($studentId !== null && !isValidUUID($studentId)) {
             http_response_code(400);
             header('Content-Type: application/json');
@@ -47,6 +48,33 @@ if (strpos($cleanPath, '/tracking') === 0) {
             $stmt = $conn->prepare("INSERT INTO student_tracking (school_id, student_id, status) VALUES (?, ?, 'en proceso') RETURNING tracking_id");
             $stmt->execute([$schoolId, $studentId]);
             $trackingId = $stmt->fetchColumn();
+
+            // Si no se proporcionó motivo, buscarlo en la notificación
+            if (!$reason) {
+                $notifStmt = $conn->prepare("
+                    SELECT metadata_json
+                    FROM notifications
+                    WHERE school_id = ?
+                      AND metadata_json->>'student_id' = ?
+                      AND metadata_json->>'action' = 'iniciar_seguimiento'
+                    LIMIT 1
+                ");
+                $notifStmt->execute([$schoolId, $studentId]);
+                $notif = $notifStmt->fetch(PDO::FETCH_ASSOC);
+                if ($notif && $notif['metadata_json']) {
+                    $meta = json_decode($notif['metadata_json'], true);
+                    $reason = $meta['reason'] ?? '';
+                }
+            }
+
+            // Agregar nota inicial con el motivo
+            if ($reason) {
+                $noteStmt = $conn->prepare("
+                    INSERT INTO student_tracking_notes (tracking_id, user_id, note_text)
+                    VALUES (?, ?, ?)
+                ");
+                $noteStmt->execute([$trackingId, $userId, "Motivo de solicitud: " . $reason]);
+            }
 
             // Eliminar notificaciones de seguimiento para este estudiante
             $delNotifStmt = $conn->prepare("

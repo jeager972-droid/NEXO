@@ -1,8 +1,12 @@
 import apiClient from './client';
 
 export const trackingApi = {
-  startTracking: async (studentId) => {
-    const response = await apiClient.post('/tracking/start', { student_id: studentId });
+  startTracking: async (studentId, reason = null) => {
+    const payload = { student_id: studentId };
+    if (reason) {
+      payload.reason = reason;
+    }
+    const response = await apiClient.post('/tracking/start', payload);
     return response.data;
   },
 

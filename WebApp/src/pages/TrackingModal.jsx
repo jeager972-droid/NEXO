@@ -10,6 +10,8 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
   const [noteText, setNoteText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTrackingId, setActiveTrackingId] = useState(trackingId);
+  const [resolveReason, setResolveReason] = useState('');
+  const [showResolvePrompt, setShowResolvePrompt] = useState(false);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -39,7 +41,11 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
   const handleStartTracking = async () => {
     setIsSubmitting(true);
     try {
-      const res = await trackingApi.startTracking(studentId);
+      let reason = '';
+      if (metadata && metadata.risk_score) {
+        reason = `Análisis de Riesgo - Score: ${metadata.risk_score}/100, Inasistencias: ${metadata.absence_count || 0}, Llegadas tarde: ${metadata.late_count || 0}`;
+      }
+      const res = await trackingApi.startTracking(studentId, reason);
       if (res.status === 'ok') {
         setActiveTrackingId(res.tracking_id);
         if (onRefresh) onRefresh();
@@ -71,13 +77,21 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
   };
 
   const handleResolve = async () => {
-    if (!window.confirm('¿Seguro que deseas marcar este seguimiento como resuelto?')) return;
+    setShowResolvePrompt(true);
+  };
+
+  const confirmResolve = async () => {
+    if (!resolveReason.trim()) {
+      alert('Por favor escribe el motivo de cierre del seguimiento.');
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const res = await trackingApi.addNote(activeTrackingId, 'Seguimiento resuelto y cerrado.', 'resuelto');
-      // BUG-11 FIX: verificar confirmación del backend antes de cerrar
+      const res = await trackingApi.addNote(activeTrackingId, `Motivo de cierre: ${resolveReason}`, 'resuelto');
       if (res?.status === 'ok') {
         if (onRefresh) onRefresh();
+        setShowResolvePrompt(false);
+        setResolveReason('');
         onClose();
       } else {
         alert('No se pudo resolver el seguimiento: ' + (res?.message || 'Error del servidor'));
@@ -205,6 +219,54 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
           </div>
         )}
       </motion.div>
+
+      <AnimatePresence>
+        {showResolvePrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-lg shadow-2xl p-6"
+            >
+              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-800 dark:text-white mb-4">
+                Motivo de Cierre
+              </h3>
+              <textarea
+                value={resolveReason}
+                onChange={(e) => setResolveReason(e.target.value)}
+                placeholder="Describe el motivo por el cual se cierra el seguimiento..."
+                className="w-full text-xs p-3 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[#003366]"
+                rows={4}
+                autoFocus
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setShowResolvePrompt(false);
+                    setResolveReason('');
+                  }}
+                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmResolve}
+                  disabled={isSubmitting || !resolveReason.trim()}
+                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#003366] rounded hover:bg-[#002244] transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Cerrando...' : 'Cerrar Seguimiento'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

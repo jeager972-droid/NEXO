@@ -402,8 +402,13 @@ export const ConsultationDrawer = ({
                         </td>
                         <td className="px-4 py-4"><RiskBadge level={s.risk_level} /></td>
                         <td className="px-4 py-4 text-right">
-                          <button 
-                            onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`)}
+                          <button
+                            onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, {
+                              risk_score: s.risk_score,
+                              absence_count: s.absence_count,
+                              late_count: s.late_count,
+                              risk_level: s.risk_level
+                            })}
                             className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:underline"
                           >
                             Empezar Seguimiento
