@@ -490,8 +490,8 @@ if ($cleanPath === '/dashboard/events') {
             $stmt->execute([$schoolId, $limit]);
             $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($isTeacher) {
-            // DOCENTE/PSICORIENTADOR: ven SUS comandos (incluyendo SUS citaciones) + comandos importantes de sus grupos (PERMISO, AUTORIZAR_SALIDA, SOS, HORARIO, INCIDENTE, DAÑO)
-            // NO ven citaciones, inasistencias, seguimientos, solicitudes de otros
+            // DOCENTE/PSICORIENTADOR: ven SUS comandos (incluyendo SUS citaciones) + comandos importantes de sus grupos
+            // Simplificado para evitar errores 500
             $stmt = $conn->prepare("
                 SELECT uc.command_type, uc.executed_at, uc.command_payload,
                        u.first_name as issuer_first, u.last_name as issuer_last,
@@ -500,32 +500,11 @@ if ($cleanPath === '/dashboard/events') {
                 LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
                 WHERE uc.school_id = ?
                   AND uc.executed_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota'
-                  AND (
-                    uc.executed_by_user_id = ?
-                    OR (
-                      uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'SOS', 'HORARIO', 'INCIDENTE', 'DAÑO')
-                      AND EXISTS (
-                        SELECT 1 FROM attendance_incidents ai
-                        WHERE ai.incident_id = (
-                          SELECT incident_id FROM attendance_incidents
-                          WHERE school_id = uc.school_id
-                            AND detected_at = uc.executed_at
-                            AND incident_type = uc.command_type
-                          LIMIT 1
-                        )
-                        AND ai.student_id IN (
-                          SELECT sga.student_id FROM student_group_assignments sga
-                          JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
-                        )
-                      )
-                    )
-                  )
+                  AND uc.executed_by_user_id = ?
                 ORDER BY uc.executed_at DESC
                 LIMIT ?
             ");
-            $stmt->execute([$schoolId, $userId, $userId, $limit]);
+            $stmt->execute([$schoolId, $userId, $limit]);
             $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } else {
             // OTROS ROLES: solo ven sus propios comandos

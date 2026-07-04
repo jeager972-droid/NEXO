@@ -7,7 +7,7 @@ import { studentsApi } from '../api/students';
 import {
   Search, Users, ShieldAlert, MessageSquare,
   Activity, ChevronRight, BookOpen, Database,
-  History, UserCheck
+  History, UserCheck, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';

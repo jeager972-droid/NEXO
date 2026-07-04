@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
+import { trackingApi } from '../api/tracking';
 
 function parseMeta(raw) {
   if (!raw) return null;
@@ -260,12 +261,7 @@ const Notifications = () => {
                         <button
                           onClick={async () => {
                             try {
-                              const res = await fetch('/api/tracking/start', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ student_id: meta.student_id })
-                              });
-                              const data = await res.json();
+                              const data = await trackingApi.startTracking(meta.student_id);
                               if (data.status === 'ok') {
                                 setDetailNotif(null);
                                 navigate('/seguimiento');
