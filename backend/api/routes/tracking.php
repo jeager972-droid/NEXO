@@ -48,6 +48,15 @@ if (strpos($cleanPath, '/tracking') === 0) {
             $stmt->execute([$schoolId, $studentId]);
             $trackingId = $stmt->fetchColumn();
 
+            // Eliminar notificaciones de seguimiento para este estudiante
+            $delNotifStmt = $conn->prepare("
+                DELETE FROM notifications
+                WHERE school_id = ?
+                  AND metadata_json->>'student_id' = ?
+                  AND metadata_json->>'action' = 'iniciar_seguimiento'
+            ");
+            $delNotifStmt->execute([$schoolId, $studentId]);
+
             echo json_encode(['status' => 'ok', 'message' => 'Seguimiento iniciado', 'tracking_id' => $trackingId]);
         } catch (Throwable $e) {
             http_response_code(500);

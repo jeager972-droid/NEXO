@@ -1,10 +1,7 @@
 <?php
 global $cleanPath, $conn, $method;
 
-// DEBUG: Log que el archivo se cargó
-error_log("[TWILIO_DELIVERY] File loaded. cleanPath: $cleanPath, method: $method");
-
-// DEBUG: Simple GET endpoint to test if webhook is accessible
+// Health check endpoint para verificar que el webhook sea accesible
 if ($cleanPath === '/webhooks/twilio/status' && $method === 'GET') {
     http_response_code(200);
     echo json_encode(['status' => 'ok', 'message' => 'Webhook endpoint is accessible']);

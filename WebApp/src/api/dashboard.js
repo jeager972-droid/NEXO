@@ -13,4 +13,8 @@ export const dashboardApi = {
     });
     return response.data;
   },
+  getEvents: async () => {
+    const response = await client.get('/dashboard/events');
+    return response.data;
+  },
 };

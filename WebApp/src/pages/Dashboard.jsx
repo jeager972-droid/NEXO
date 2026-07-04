@@ -132,7 +132,7 @@ const Dashboard = () => {
       return <TeacherDashboard stats={stats} loading={loading} />;
     case ROLES.PORTERO:
     case ROLES.AUXILIAR:
-      return <StaffDashboard navigate={navigate} logout={logout} />;
+      return <StaffDashboard />;
     default:
       return (
         <p className="text-center py-20 text-slate-400 dark:text-slate-600 text-xs uppercase tracking-widest">
@@ -145,25 +145,8 @@ const Dashboard = () => {
 // ── Command Center — Admin / Rector / Coordinador ─────────────────────────────
 
 const AdminDashboard = ({ stats, loading, navigate }) => {
-
-
-  const stream = (stats.pendingTasks || []).slice(0, 8).map((t, i) => ({
-    label: t.title || t.description || 'Evento registrado',
-    time:  t.time  || '—',
-    type:  t.type  === 'alert' ? 'alert' : 'default',
-    index: i,
-  }));
-
-  const { user } = useAuth();
-  const shortcuts = (user?.role === ROLES.COORDINADOR || user?.role === ROLES.PSICORIENTADOR)
-    ? [
-        { label: 'Operación', icon: Activity, path: '/operacion' },
-        { label: 'Consulta',  icon: Search,   path: '/consulta'  },
-      ]
-    : [
-        { label: 'Operación', icon: Activity, path: '/operacion' },
-        { label: 'Consulta',  icon: Search,   path: '/auditoria' },
-      ];
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
@@ -198,6 +181,32 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
     { key: 'alert',   label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12 },
   ];
 
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        if (res?.status === 'ok') {
+          setEvents(res.data || []);
+        } else {
+          setEvents([]);
+        }
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
+
+  const stream = events.slice(0, 8).map((ev, i) => ({
+    label: ev.label,
+    time: ev.time,
+    type: ev.type,
+    index: i,
+  }));
+
   return (
     <div className="space-y-6">
       {/* ── Estadísticas del Día ── */}
@@ -215,48 +224,24 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
         </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* ── Eventos Recientes ── */}
-        <section className="lg:col-span-2">
-          <SectionLabel title="Eventos Recientes" sub="Últimas novedades institucionales" />
-          <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
-            {loading
-              ? <StreamSkeleton />
-              : stream.length > 0
-                ? stream.map((ev, i) => <StreamRow key={i} {...ev} index={i} />)
-                : (
-                  <div className="flex items-center justify-center h-40">
-                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
-                      Sin eventos recientes
-                    </p>
-                  </div>
-                )
-            }
-          </div>
-        </section>
-
-        {/* ── Accesos Rápidos ── */}
-        <section>
-          <SectionLabel title="Accesos Rápidos" sub="Módulos del sistema" />
-          <div style={{ border: '1.5px solid #E2E8F0' }}>
-            {shortcuts.map((s, i, arr) => (
-              <button
-                key={s.path}
-                onClick={() => navigate(s.path)}
-                className="group flex items-center gap-3 w-full px-4 py-3.5 bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-150"
-                style={{ borderBottom: i < arr.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}
-              >
-                <s.icon size={15} strokeWidth={2} className="text-gov-900 group-hover:text-white transition-colors shrink-0" />
-                <span className="flex-1 text-xs font-bold uppercase text-slate-700 dark:text-slate-300 group-hover:text-white transition-colors"
-                      style={{ letterSpacing: '0.1em' }}>
-                  {s.label}
-                </span>
-                <ChevronRight size={13} className="text-slate-300 group-hover:text-white/60 transition-colors shrink-0" />
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
+      {/* ── Eventos Recientes ── */}
+      <section>
+        <SectionLabel title="Eventos Recientes" sub="Últimas novedades institucionales" />
+        <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
+          {eventsLoading
+            ? <StreamSkeleton />
+            : stream.length > 0
+              ? stream.map((ev, i) => <StreamRow key={i} {...ev} index={i} />)
+              : (
+                <div className="flex items-center justify-center h-40">
+                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                    Sin eventos recientes
+                  </p>
+                </div>
+              )
+          }
+        </div>
+      </section>
 
       {/* ── Detail Drawer ── */}
       <AnimatePresence>
@@ -277,36 +262,67 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
 
 // ── Secretaria ────────────────────────────────────────────────────────────────
 
-const SecretaryDashboard = ({ tasks, loading }) => (
-  <div className="space-y-5">
-    <SectionLabel title="Panel Secretaría" sub="Tareas administrativas pendientes" />
-    <div style={{ border: '1.5px solid #E2E8F0' }} className="bg-white dark:bg-slate-900">
-      {loading
-        ? <div className="p-6"><StreamSkeleton /></div>
-        : tasks.length > 0
-          ? tasks.map((t, i) => (
-              <div key={t.id || i}
-                   className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                   style={{ borderBottom: i < tasks.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
-                <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: '#00A67E' }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
-                  <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t.time}</p>
-                </div>
-                <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
-              </div>
-            ))
-          : (
-            <div className="flex items-center justify-center py-16">
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
-                No hay tareas pendientes
-              </p>
-            </div>
-          )
+const SecretaryDashboard = () => {
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        if (res?.status === 'ok') {
+          setEvents(res.data || []);
+        } else {
+          setEvents([]);
+        }
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
       }
+    };
+    loadEvents();
+  }, []);
+
+  const stream = events.slice(0, 8).map((ev, i) => ({
+    label: ev.label,
+    time: ev.time,
+    type: ev.type,
+    index: i,
+  }));
+
+  return (
+    <div className="space-y-5">
+      <SectionLabel title="Panel Secretaría" sub="Eventos recientes" />
+      <div style={{ border: '1.5px solid #E2E8F0' }} className="bg-white dark:bg-slate-900">
+        {eventsLoading
+          ? <div className="p-6"><StreamSkeleton /></div>
+          : stream.length > 0
+            ? stream.map((ev, i) => (
+                <div key={i}
+                     className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
+                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? '#DC2626' : '#00A67E' }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
+                    <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
+                  </div>
+                  <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
+                </div>
+              ))
+            : (
+              <div className="flex items-center justify-center py-16">
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                  Sin eventos recientes
+                </p>
+              </div>
+            )
+        }
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── Docente / Psicorientador ──────────────────────────────────────────────────
 
@@ -334,6 +350,9 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData]         = useState([]);
   const [detailLoading, setDetailLoading]   = useState(false);
+
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   // Group search dropdown state
   const [groupOpen, setGroupOpen]   = useState(false);
@@ -374,6 +393,26 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
       .catch(err => console.error('Error fetching group stats', err))
       .finally(() => setGroupLoading(false));
   }, [selectedGroup]);
+
+  // Load events
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        if (res?.status === 'ok') {
+          setEvents(res.data || []);
+        } else {
+          setEvents([]);
+        }
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
 
   const openDetail = async (category) => {
     if (!selectedGroup) return;
@@ -515,6 +554,40 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               )}
             </div>
           )}
+
+          {/* ── Eventos Recientes ── */}
+          <section>
+            <SectionLabel title="Eventos Recientes" sub="Últimas novedades de tus grupos" />
+            <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
+              {eventsLoading
+                ? <StreamSkeleton />
+                : events.length > 0
+                  ? events.map((ev, i) => (
+                      <div key={i}
+                           className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                           style={{ borderBottom: i < events.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
+                        <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? '#DC2626' : '#00A67E' }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
+                          <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
+                        </div>
+                        {ev.issuer && (
+                          <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                            {ev.issuer}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  : (
+                    <div className="flex items-center justify-center h-40">
+                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                        Sin eventos recientes
+                      </p>
+                    </div>
+                  )
+              }
+            </div>
+          </section>
         </>
       )}
 
@@ -632,6 +705,8 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
         successTimerRef.current = setTimeout(() => {
           setLocalData(prev => prev.filter(r => r.student_id !== studentId));
         }, 1500);
+        // Notificar a la página de Seguimiento que debe refrescar
+        window.dispatchEvent(new CustomEvent('nexo:tracking-refresh'));
       } else {
         alert("Error al iniciar seguimiento: " + (res.message || "Error del servidor"));
         // Revert on error
@@ -832,37 +907,66 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
-const StaffDashboard = ({ navigate, logout }) => (
-  <div className="space-y-5">
-    <SectionLabel title="Panel de Servicio" sub="Accesos operacionales rápidos" />
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {[
-        { label: 'Panel de Operación', icon: Activity, path: '/operacion',    accent: '#003366' },
-        { label: 'Notificaciones',     icon: Bell,     path: '/notificaciones', accent: '#00A67E' },
-      ].map(s => (
-        <button
-          key={s.path}
-          onClick={() => navigate(s.path)}
-          className="group flex flex-col items-start gap-4 p-7 bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-200 text-left"
-          style={{ border: '1.5px solid #E2E8F0' }}
-        >
-          <s.icon size={22} strokeWidth={1.5} style={{ color: s.accent }} className="group-hover:text-white transition-colors" />
-          <span className="text-sm font-black uppercase text-slate-800 dark:text-white group-hover:text-white transition-colors"
-                style={{ letterSpacing: '0.1em' }}>
-            {s.label}
-          </span>
-        </button>
-      ))}
+const StaffDashboard = () => {
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        if (res?.status === 'ok') {
+          setEvents(res.data || []);
+        } else {
+          setEvents([]);
+        }
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
+
+  const stream = events.slice(0, 8).map((ev, i) => ({
+    label: ev.label,
+    time: ev.time,
+    type: ev.type,
+    index: i,
+  }));
+
+  return (
+    <div className="space-y-5">
+      <SectionLabel title="Panel de Servicio" sub="Eventos recientes" />
+      <div style={{ border: '1.5px solid #E2E8F0' }} className="bg-white dark:bg-slate-900">
+        {eventsLoading
+          ? <div className="p-6"><StreamSkeleton /></div>
+          : stream.length > 0
+            ? stream.map((ev, i) => (
+                <div key={i}
+                     className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
+                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? '#DC2626' : '#00A67E' }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
+                    <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
+                  </div>
+                  <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
+                </div>
+              ))
+            : (
+              <div className="flex items-center justify-center py-16">
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                  Sin eventos recientes
+                </p>
+              </div>
+            )
+        }
+      </div>
     </div>
-    <button
-      onClick={logout}
-      className="flex items-center gap-2 text-slate-400 hover:text-red-500 transition-colors"
-      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase' }}
-    >
-      <LogOut size={14} strokeWidth={2} />
-      Finalizar Sesión
-    </button>
-  </div>
-);
+  );
+};
 
 export default Dashboard;

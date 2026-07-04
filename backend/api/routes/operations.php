@@ -490,6 +490,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'permiso',
                     ], JSON_UNESCAPED_UNICODE);
 
+                    // FIX: Insertar en attendance_incidents para que aparezca en el dashboard
+                    $incStmt = $conn->prepare("
+                        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                        VALUES (uuid_generate_v4(), ?, ?, 'PERMISO', NOW(), ?::jsonb)
+                    ");
+                    $incStmt->execute([$schoolId, $studentId, $meta]);
+
                     // FIX: Batch INSERT notifications para coordinadores
                     $coordStmt = $conn->prepare("
                         SELECT user_id FROM users
@@ -564,6 +571,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'time_end' => $params['timeEnd'] ?? null,
                         'action' => 'autorizar_salida',
                     ], JSON_UNESCAPED_UNICODE);
+
+                    // FIX: Insertar en attendance_incidents para que aparezca en el dashboard
+                    $incStmt = $conn->prepare("
+                        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                        VALUES (uuid_generate_v4(), ?, ?, 'AUTORIZAR_SALIDA', NOW(), ?::jsonb)
+                    ");
+                    $incStmt->execute([$schoolId, $studentId, $meta]);
 
                     // FIX: Batch INSERT notifications para coordinadores
                     $coordStmt = $conn->prepare("
@@ -737,8 +751,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
             case 'solicitud':
             case 'daño':
             case 'horario':
-            case 'pedagogica':
-            case 'seguimiento':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 if ($reason === '') {

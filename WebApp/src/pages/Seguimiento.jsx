@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { trackingApi } from '../api/tracking';
 import { TrackingModal } from './TrackingModal';
 import { FileText, Search, Activity, UserCheck, CalendarDays, Loader2 } from 'lucide-react';
@@ -12,12 +13,14 @@ const SectionLabel = ({ title, sub }) => (
 );
 
 export default function Seguimiento() {
+  const [searchParams] = useSearchParams();
   const [trackings, setTrackings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const [trackingModalOpen, setTrackingModalOpen] = useState(false);
   const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
+  const [autoStartStudent, setAutoStartStudent] = useState(null);
 
   const fetchTrackings = async () => {
     setLoading(true);
@@ -35,7 +38,33 @@ export default function Seguimiento() {
 
   useEffect(() => {
     fetchTrackings();
-  }, []);
+
+    // Escuchar evento de actualización de seguimiento
+    const handleRefresh = () => {
+      fetchTrackings();
+    };
+
+    window.addEventListener('nexo:tracking-refresh', handleRefresh);
+
+    // Verificar si se debe iniciar seguimiento automáticamente desde notificación
+    const studentId = searchParams.get('student_id');
+    const studentName = searchParams.get('student_name');
+    if (studentId) {
+      setAutoStartStudent({ id: studentId, name: studentName || 'Estudiante' });
+      // Iniciar seguimiento automáticamente
+      trackingApi.startTracking(studentId)
+        .then(res => {
+          if (res.status === 'ok') {
+            fetchTrackings(); // Refrescar lista
+          }
+        })
+        .catch(err => console.error('Error iniciando seguimiento automático:', err));
+    }
+
+    return () => {
+      window.removeEventListener('nexo:tracking-refresh', handleRefresh);
+    };
+  }, [searchParams]);
 
   const openTracking = (trackingId, studentName, studentId) => {
     setSelectedTrackingTarget({ trackingId, studentName, studentId });

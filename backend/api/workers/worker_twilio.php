@@ -31,6 +31,9 @@ function buildTwilioPayload($to, $body, $templateSid = null, $templateVars = nul
     $statusCallback = getTwilioStatusCallbackUrl();
     if ($statusCallback) {
         $payload['StatusCallback'] = $statusCallback;
+        securityLog('TWILIO_STATUS_CALLBACK_SET', "URL: $statusCallback");
+    } else {
+        securityLog('TWILIO_STATUS_CALLBACK_MISSING', 'TWILIO_WEBHOOK_URL_BASE or APP_URL not set');
     }
     return $payload;
 }

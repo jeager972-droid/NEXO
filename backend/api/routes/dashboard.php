@@ -449,4 +449,166 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     }
     exit;
 }
+
+// ============================================================================
+// GET /dashboard/events
+// Params: none (filtered by role automatically)
+// ============================================================================
+if ($cleanPath === '/dashboard/events') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userId = $authUser['id'];
+    $userRole = strtoupper($authUser['role'] ?? '');
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $isTeacher = ($userRole === 'DOCENTE' || $userRole === 'PSICORIENTADOR');
+        $isGlobalAdmin = ($userRole === 'RECTOR' || $userRole === 'SUPER_RECTOR' || $userRole === 'COORDINADOR');
+
+        $events = [];
+        $limit = 20;
+
+        if ($isGlobalAdmin) {
+            // RECTOR/COORDINADOR: ven SOLO eventos importantes (PERMISO, AUTORIZAR_SALIDA, HORARIO, INCIDENTE, DAÑO, SOS, PEDAGOGICA)
+            // + TODOS los seguimientos (ejecutados por coordinadores o ellos mismos)
+            // NO ven citaciones, inasistencias, solicitudes
+            $stmt = $conn->prepare("
+                SELECT uc.command_type, uc.executed_at, uc.command_payload,
+                       u.first_name as issuer_first, u.last_name as issuer_last,
+                       u.role as issuer_role
+                FROM user_commands uc
+                LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                WHERE uc.school_id = ?
+                  AND uc.executed_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota'
+                  AND (
+                    uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'HORARIO', 'INCIDENTE', 'DAÑO', 'SOS', 'PEDAGOGICA', 'SEGUIMIENTO')
+                  )
+                ORDER BY uc.executed_at DESC
+                LIMIT ?
+            ");
+            $stmt->execute([$schoolId, $limit]);
+            $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } elseif ($isTeacher) {
+            // DOCENTE/PSICORIENTADOR: ven SUS comandos (incluyendo SUS citaciones) + comandos importantes de sus grupos (PERMISO, AUTORIZAR_SALIDA, SOS, HORARIO, INCIDENTE, DAÑO)
+            // NO ven citaciones, inasistencias, seguimientos, solicitudes de otros
+            $stmt = $conn->prepare("
+                SELECT uc.command_type, uc.executed_at, uc.command_payload,
+                       u.first_name as issuer_first, u.last_name as issuer_last,
+                       u.role as issuer_role
+                FROM user_commands uc
+                LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                WHERE uc.school_id = ?
+                  AND uc.executed_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota'
+                  AND (
+                    uc.executed_by_user_id = ?
+                    OR (
+                      uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'SOS', 'HORARIO', 'INCIDENTE', 'DAÑO')
+                      AND EXISTS (
+                        SELECT 1 FROM attendance_incidents ai
+                        WHERE ai.incident_id = (
+                          SELECT incident_id FROM attendance_incidents
+                          WHERE school_id = uc.school_id
+                            AND detected_at = uc.executed_at
+                            AND incident_type = uc.command_type
+                          LIMIT 1
+                        )
+                        AND ai.student_id IN (
+                          SELECT sga.student_id FROM student_group_assignments sga
+                          JOIN academic_groups ag ON ag.group_id = sga.group_id
+                          JOIN schedules sch ON sch.group_id = ag.group_id
+                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                        )
+                      )
+                    )
+                  )
+                ORDER BY uc.executed_at DESC
+                LIMIT ?
+            ");
+            $stmt->execute([$schoolId, $userId, $userId, $limit]);
+            $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            // OTROS ROLES: solo ven sus propios comandos
+            $stmt = $conn->prepare("
+                SELECT uc.command_type, uc.executed_at, uc.command_payload,
+                       u.first_name as issuer_first, u.last_name as issuer_last,
+                       u.role as issuer_role
+                FROM user_commands uc
+                LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                WHERE uc.school_id = ?
+                  AND uc.executed_by_user_id = ?
+                  AND uc.executed_at >= CURRENT_DATE AT TIME ZONE 'America/Bogota'
+                ORDER BY uc.executed_at DESC
+                LIMIT ?
+            ");
+            $stmt->execute([$schoolId, $userId, $limit]);
+            $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Formatear eventos para el frontend
+        $formattedEvents = [];
+        foreach ($events as $ev) {
+            $payload = json_decode($ev['command_payload'], true);
+            $reason = $payload['reason'] ?? $payload['message'] ?? $payload['description'] ?? '';
+            $studentName = $payload['student_name'] ?? '';
+            $issuerName = trim($ev['issuer_first'] . ' ' . $ev['issuer_last']);
+            $issuerRole = $ev['issuer_role'] ?? '';
+
+            $label = '';
+            switch (strtoupper($ev['command_type'])) {
+                case 'PERMISO':
+                    $label = $studentName ? "Permiso: {$studentName}" : "Permiso generado";
+                    break;
+                case 'AUTORIZAR_SALIDA':
+                    $label = $studentName ? "Salida autorizada: {$studentName}" : "Salida autorizada";
+                    break;
+                case 'SOS':
+                    $label = "Alerta SOS";
+                    break;
+                case 'CITACION':
+                    $label = $studentName ? "Citación: {$studentName}" : "Citación enviada";
+                    break;
+                case 'INASISTENCIA':
+                    $label = $studentName ? "Inasistencia: {$studentName}" : "Inasistencia reportada";
+                    break;
+                case 'INCIDENTE':
+                    $label = "Incidente: {$reason}";
+                    break;
+                case 'PEDAGOGICA':
+                    $label = "Salida pedagógica: {$reason}";
+                    break;
+                case 'SEGUIMIENTO':
+                    $label = $studentName ? "Seguimiento: {$studentName}" : "Seguimiento iniciado";
+                    break;
+                case 'SOLICITUD':
+                    $label = "Solicitud interna";
+                    break;
+                case 'DAÑO':
+                    $label = "Reporte de daño: {$reason}";
+                    break;
+                case 'HORARIO':
+                    $label = "Cambio de horario";
+                    break;
+                default:
+                    $label = $ev['command_type'];
+            }
+
+            $formattedEvents[] = [
+                'label' => $label,
+                'time' => date('H:i', strtotime($ev['executed_at'])),
+                'type' => in_array(strtoupper($ev['command_type']), ['SOS', 'INCIDENTE']) ? 'alert' : 'default',
+                'issuer' => $issuerName,
+                'issuer_role' => $issuerRole,
+                'command_type' => $ev['command_type'],
+            ];
+        }
+
+        echo json_encode(['status' => 'ok', 'data' => $formattedEvents]);
+    } catch (Exception $e) {
+        securityLog('DASHBOARD_EVENTS_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener eventos']);
+    }
+    exit;
+}
 ?>
