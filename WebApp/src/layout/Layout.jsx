@@ -21,7 +21,7 @@ const OPERATION_COMMANDS = [
   { title: 'Mandar solicitud', path: '/operacion', icon: Send, roles: Object.values(ROLES) },
   { title: 'Salida pedagógica', path: '/operacion', icon: Bus, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
   { title: 'Cambio de horario', path: '/operacion', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-  { title: 'Generar permiso', path: '/operacion', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR] },
+  { title: 'Generar permiso', path: '/operacion', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR] },
   { title: 'Reportar incidente', path: '/operacion', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
   { title: 'Solicitar seguimiento', path: '/operacion', icon: FileText, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR] },
 ];
