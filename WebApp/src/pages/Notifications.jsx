@@ -162,14 +162,6 @@ const Notifications = () => {
                           >
                             <Eye size={12} /> Ver detalles
                           </button>
-                          {parseMeta(notif.metadata_json).action === 'iniciar_seguimiento' && user?.role === 'PSICORIENTADOR' && (
-                            <button
-                              onClick={() => navigate('/seguimiento')}
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 text-[9px] font-bold uppercase tracking-wider transition-colors"
-                            >
-                              <CheckCircle2 size={12} /> Empezar Seguimiento
-                            </button>
-                          )}
                         </div>
                       )}
                       {notif.sender && (
@@ -266,9 +258,26 @@ const Notifications = () => {
                     return (
                       <div className="pt-4 mt-2" style={{ borderTop: '1.5px solid #F1F5F9' }}>
                         <button
-                          onClick={() => {
-                            setDetailNotif(null);
-                            navigate(`/seguimiento?student_id=${meta.student_id}&student_name=${encodeURIComponent(meta.student_name || '')}`);
+                          onClick={async () => {
+                            try {
+                              const res = await fetch('/api/tracking/start', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ student_id: meta.student_id })
+                              });
+                              const data = await res.json();
+                              if (data.status === 'ok') {
+                                setDetailNotif(null);
+                                navigate('/seguimiento');
+                                // Refrescar notificaciones
+                                window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count: -1 } }));
+                              } else {
+                                alert('Error al iniciar seguimiento: ' + (data.message || 'Error del servidor'));
+                              }
+                            } catch (e) {
+                              console.error(e);
+                              alert('Error al iniciar el seguimiento');
+                            }
                           }}
                           className="w-full py-3 text-xs font-bold uppercase text-white transition-colors"
                           style={{ backgroundColor: '#003366', letterSpacing: '0.15em' }}
