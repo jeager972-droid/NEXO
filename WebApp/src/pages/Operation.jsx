@@ -73,11 +73,11 @@ const COMMANDS_CATALOG = [
     fields: ['group', 'reason', 'time'],
     warning: 'Este comando avisará a todos los padres de familia del grupo elegido.'
   },
-  { 
-    id: 'permiso', 
-    title: 'Generar permiso', 
-    icon: UserCheck, 
-    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR],
+  {
+    id: 'permiso',
+    title: 'Generar permiso',
+    icon: UserCheck,
+    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR],
     fields: ['group', 'student', 'reason', 'timeRange']
   },
   {

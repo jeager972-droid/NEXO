@@ -231,6 +231,27 @@ if ($cleanPath === '/consultations/query') {
                 }
                 break;
 
+            case 'Seguimientos completados':
+                try {
+                    $stmt = $conn->prepare("
+                        SELECT s.first_name, s.last_name, s.document_number, st.status, st.updated_at, st.tracking_id, st.student_id
+                        FROM student_tracking st
+                        JOIN students s ON st.student_id = s.student_id
+                        WHERE st.school_id = ?
+                          AND st.status != 'en proceso'
+                        ORDER BY st.updated_at DESC
+                        LIMIT 100
+                    ");
+                    $stmt->execute([$schoolId]);
+                    $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'document_number' => 'Documento', 'status' => 'Estado', 'updated_at' => 'Última Act.'];
+                } catch (PDOException $e) {
+                    $data = [];
+                    $columns = ['info' => 'Sin datos de seguimientos completados disponibles'];
+                    securityLog('TRACKING_TABLE_MISSING', $e->getMessage());
+                }
+                break;
+
             case 'Mensajes Enviados':
             case 'Respuestas Acudientes':
             case 'Citaciones':

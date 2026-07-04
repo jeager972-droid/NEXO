@@ -167,9 +167,9 @@ const Consultation = () => {
         items: ['Análisis de Riesgo']
       },
       {
-        title: 'Mis Clases',
-        icon: BookOpen,
-        items: ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
+        title: 'Seguimientos',
+        icon: FileText,
+        items: ['Seguimientos completados']
       }
     ],
     [ROLES.COORDINADOR]: [
