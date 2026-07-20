@@ -17,12 +17,6 @@ const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausente
 
 const Consultation = () => {
   const { user } = useAuth();
-  
-  const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
-  if (!allowedForConsulta.includes(user?.role)) {
-    return <Navigate to="/" replace />;
-  }
-
   const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState(null);
   const [riskStudents, setRiskStudents] = useState([]);
@@ -68,9 +62,13 @@ const Consultation = () => {
       if (mod) {
         setActiveItem(mod);
       }
-      setInitialModHandled(true);
     }
-  }, [searchParams, initialModHandled]);
+  }, [initialModHandled, searchParams]);
+
+  const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
+  if (!allowedForConsulta.includes(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 

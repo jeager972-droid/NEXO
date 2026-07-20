@@ -318,7 +318,7 @@ struct LocalTime {
 LocalTime getLocalTimeBogota() {
     time_t now = time(nullptr);
     struct tm tm_buf{};
-    setenv('TZ', 'UTC', 1);
+    setenv("TZ", "UTC", 1);
     tzset();
     localtime_r(&now, &tm_buf);
     return {tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, true};

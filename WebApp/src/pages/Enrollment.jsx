@@ -306,10 +306,6 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
 
 const Enrollment = () => {
   const { user } = useAuth();
-  if (user?.role !== ROLES.SECRETARIA) {
-    return <Navigate to="/" replace />;
-  }
-
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm]   = useState('');
   const [students, setStudents]       = useState([]);
@@ -360,6 +356,10 @@ const Enrollment = () => {
     fetchStudents(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, limit]);
+
+  if (user?.role !== ROLES.SECRETARIA) {
+    return <Navigate to="/" replace />;
+  }
 
   const loadMore = () => {
     if (!loading && hasMore) {

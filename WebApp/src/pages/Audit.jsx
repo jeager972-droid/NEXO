@@ -26,13 +26,7 @@ const ALL_SUBS = [
 const Audit = () => {
   const { user } = useContext(AuthContext);
   const isAdmin = ADMIN_ROLES.includes(user?.role_name || user?.role);
-  
-  // Fix 3.4: Route guard para Auditoría
-  if (!['SUPER_RECTOR', 'RECTOR'].includes(user?.role)) {
-    return <Navigate to="/" replace />;
-  }
   const [searchParams, setSearchParams] = useSearchParams();
-
   const [activeSub, setActiveSub] = useState(null);
   const [exportModal, setExportModal] = useState(null);
 
@@ -43,6 +37,11 @@ const Audit = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // Fix 3.4: Route guard para Auditoría
+  if (!['SUPER_RECTOR', 'RECTOR'].includes(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
 
   const modules = [
     {
