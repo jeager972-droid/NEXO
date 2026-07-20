@@ -1,24 +1,16 @@
 <?php
-// routes/misc.php - Rutas misceláneas
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
-require_once __DIR__ . '/../lib/twilio.php'; // normalizeWhatsAppPhone, sendTwilioDirect
+require_once __DIR__ . '/../lib/twilio.php';
 
 function verifyTwilioSignature() {
     $authToken = getenv('TWILIO_AUTH_TOKEN') ?: '';
     $provided = $_SERVER['HTTP_X_TWILIO_SIGNATURE'] ?? '';
-    
-    error_log("[TWILIO_SIG] authToken: " . ($authToken ? 'SET' : 'NULL') . " provided: " . ($provided ? 'SET' : 'NULL'));
-    
+
     if ($authToken === '' || $provided === '') {
-        error_log("[TWILIO_SIG] FAIL: Missing authToken or provided signature");
         return false;
     }
 
-    // FIX (SRE-4): Reconstrucción de URL basada EXCLUSIVAMENTE en la variable de entorno
-    // inmutable TWILIO_WEBHOOK_URL_BASE (ej: https://nexo.railway.app).
-    // NUNCA usar X-Forwarded-Proto ni HTTP_HOST porque un atacante puede spoofearlos
-    // y forzar una URL que coincida con su propia firma HMAC, bypasenado la validación.
     $baseUrl = getenv('TWILIO_WEBHOOK_URL_BASE') ?: '';
     if ($baseUrl === '') {
         error_log('TWILIO_WEBHOOK_URL_BASE no definida. Rechazando webhook Twilio.');
@@ -27,33 +19,25 @@ function verifyTwilioSignature() {
 
     $uri = $_SERVER['REQUEST_URI'] ?? '';
     $url = rtrim($baseUrl, '/') . $uri;
-    
-    error_log("[TWILIO_SIG] baseUrl: $baseUrl uri: $url fullUrl: $url");
 
     $params = $_POST ?: [];
     ksort($params);
-    
-    error_log("[TWILIO_SIG] POST params: " . json_encode($params));
 
     $data = $url;
     foreach ($params as $k => $v) {
         $data .= $k . $v;
     }
     $expected = base64_encode(hash_hmac('sha1', $data, $authToken, true));
-    
-    error_log("[TWILIO_SIG] expected: $expected provided: $provided match: " . (hash_equals($expected, $provided) ? 'YES' : 'NO'));
 
     return hash_equals($expected, $provided);
 }
 
-// ── POST /contacto — public lead capture (landing page contact form) ──────────
+
 if ($cleanPath === '/contacto' && $method === 'POST') {
-    // Rate-limit: máx 5 solicitudes por IP por hora
     $contactIp = md5(getRealClientIp());
     try {
         $rl = getRedisConnection();
         if (!$rl) {
-            // Fallback: permitir sin rate limit si Redis no está disponible
         } else {
             $key = "rl:contacto:{$contactIp}";
             $hits = $rl->incr($key);
@@ -66,15 +50,14 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         }
     } catch (Throwable $e) { /* Redis down — allow */ }
 
-    $nombre      = trim((string)($input['nombre'] ?? ''));
-    $cargo       = trim((string)($input['cargo'] ?? ''));
-    $institucion = trim((string)($input['institucion'] ?? ''));
-    $municipio   = trim((string)($input['municipio'] ?? ''));
+    $nombre      = trim((string)($input['name'] ?? ''));
+    $cargo       = trim((string)($input['position'] ?? ''));
+    $institucion = trim((string)($input['institution'] ?? ''));
+    $municipio   = trim((string)($input['city'] ?? ''));
     $email       = trim((string)($input['email'] ?? ''));
     $whatsapp    = trim((string)($input['whatsapp'] ?? ''));
-    $mensaje     = trim((string)($input['mensaje'] ?? ''));
+    $mensaje     = trim((string)($input['message'] ?? ''));
 
-    // Validaciones básicas
     if ($nombre === '' || $cargo === '' || $institucion === '' || $municipio === '' || $email === '' || $whatsapp === '') {
         http_response_code(400);
         echo json_encode(['status' => 'error', 'message' => 'Todos los campos obligatorios deben completarse.']);
@@ -92,7 +75,6 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         exit;
     }
 
-    // Persistir en tabla contact_leads
     try {
         $ins = $conn->prepare("
             INSERT INTO contact_leads (nombre, cargo, institucion, municipio, email, whatsapp, mensaje, ip_address)
@@ -101,10 +83,8 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         $ins->execute([$nombre, $cargo, $institucion, $municipio, $email, $whatsapp, $mensaje ?: null, getRealClientIp()]);
     } catch (Throwable $e) {
         securityLog('CONTACT_LEAD_INSERT_ERROR', $e->getMessage());
-        // No bloqueamos — igual notificamos
     }
 
-    // Notificar al equipo por WhatsApp (no-crítica, usar cola asíncrona)
     $ownerPhone = getenv('NEXO_OWNER_WHATSAPP') ?: getenv('TWILIO_ADMIN_PHONE') ?: '';
     if ($ownerPhone !== '') {
         try {
@@ -132,7 +112,6 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
                 ], JSON_UNESCAPED_UNICODE));
             }
         } catch (Exception $e) {
-            // Silenciar: notificación no-crítica no debe fallar el request
         }
     }
 
@@ -197,7 +176,7 @@ if ($cleanPath === '/notifications') {
                        n.title,
                        n.message AS desc,
                        n.metadata_json,
-                       TO_CHAR(n.created_at AT TIME ZONE 'America/Bogota', 'DD/MM HH24:MI') AS time,
+                       TO_CHAR(n.created_at, 'DD/MM HH24:MI') AS time,
                        n.created_at AS occurred_at
                 FROM notifications n
                 WHERE n.user_id = ?
@@ -207,13 +186,12 @@ if ($cleanPath === '/notifications') {
             $stmt->execute([$userId]);
             $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $colErr) {
-            // Fallback si metadata_json no existe todavía
             $stmt = $conn->prepare("
                 SELECT n.notification_id AS id,
                        n.type,
                        n.title,
                        n.message AS desc,
-                       TO_CHAR(n.created_at AT TIME ZONE 'America/Bogota', 'DD/MM HH24:MI') AS time,
+                       TO_CHAR(n.created_at, 'DD/MM HH24:MI') AS time,
                        n.created_at AS occurred_at
                 FROM notifications n
                 WHERE n.user_id = ?
@@ -236,7 +214,6 @@ if ($cleanPath === '/notifications') {
     exit;
 }
 
-// DELETE /notifications — vaciar todas las notificaciones del usuario
 if ($cleanPath === '/notifications/clear' && $method === 'POST') {
     $authUser = requireAuth();
     try {
@@ -291,7 +268,7 @@ if ($cleanPath === '/consultation/search') {
 }
 
 if ($cleanPath === '/reports/preview') {
-    $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     // BUG-05 FIX (backend): leer parámetros de fecha desde la query string
     $from = trim((string)($_GET['from'] ?? ''));
     $to   = trim((string)($_GET['to']   ?? ''));
@@ -313,7 +290,7 @@ if ($cleanPath === '/reports/preview') {
         $stmt = $conn->prepare("
             SELECT
                 be.event_timestamp::date AS date,
-                TO_CHAR(be.event_timestamp AT TIME ZONE 'America/Bogota', 'HH24:MI') AS time,
+                TO_CHAR(be.event_timestamp, 'HH24:MI') AS time,
                 be.event_type,
                 (s.last_name || ' ' || s.first_name) AS student_name,
                 COALESCE(ag.group_name, '—') AS group_name
@@ -414,10 +391,8 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         try {
             $redisConv = getRedisConnection();
             if (!$redisConv) {
-                // Redis no disponible, continuar sin contexto
             }
 
-            // Estado de reagendamiento pendiente
             $reagRaw = $redisConv->get('reagendar:' . $normalizedFrom);
             if ($reagRaw) {
                 $reagendarState = json_decode($reagRaw, true);
@@ -429,15 +404,12 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 if (!empty($conv['student_id'])) {
                     $resolvedStudentId = $conv['student_id'];
                 }
-                // Para respuesta 1 consumimos; para 2 la reemplazamos por reagendar
             }
         } catch (Throwable $e) {
             securityLog('TWILIO_CONV_REDIS_FALLBACK', $e->getMessage());
         }
 
-        // Resolver profesor que emitió la citación más reciente
         $teacherRef = null;
-        $teacher = null;
         $teacherStmt = $conn->prepare("
             SELECT sender_user_id
             FROM twilio_messages
@@ -452,10 +424,8 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         $teacherStmt->execute([$schoolId, $guardianId]);
         $teacherRef = $teacherStmt->fetch(PDO::FETCH_ASSOC);
         
-        // DEBUG: Log teacher lookup result
         securityLog('CITACION_TEACHER_LOOKUP', "Guardian:$guardianId School:$schoolId TeacherRef:" . ($teacherRef ? json_encode($teacherRef) : 'NULL'));
 
-        // Resolver nombre del estudiante (por student_id o guardian fallback)
         $studentName = '';
         if ($resolvedStudentId) {
             $sNameStmt = $conn->prepare("SELECT first_name, last_name FROM students WHERE student_id = ?");
@@ -477,13 +447,11 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             $studentName = trim(($sNameRow['first_name'] ?? '') . ' ' . ($sNameRow['last_name'] ?? ''));
         }
 
-        // ── Caso A: Acudiente envió motivo de reagendamiento ──
         if ($reagendarState && $trimBody !== '1' && $trimBody !== '2') {
             $motivo = $body;
             $replyMsg = "Gracias. Hemos registrado su mensaje y se lo haremos llegar al profesor y pronto le informaremos la nueva fecha.";
             $sendAck = sendTwilioDirect($from, $replyMsg);
 
-            // Resolver teacher_user_id desde Redis (más confiable) o db
             $resolvedTeacherId = $reagendarState['teacher_user_id'] ?? ($teacherRef['sender_user_id'] ?? null);
 
             // Notificar al profesor con motivo incluido
@@ -495,7 +463,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         'guardian_phone' => $from,
                         'motivo' => $motivo,
                     ], JSON_UNESCAPED_UNICODE);
-                    // DEBUG: Log notification attempt
                     securityLog('CITACION_NOTIF_ATTEMPT', "Type:reagendar_motivo Teacher:$resolvedTeacherId Student:$studentName");
                     $notifStmt = $conn->prepare("
                         INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
@@ -515,7 +482,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 securityLog('CITACION_NOTIF_SKIP', "Type:reagendar_motivo Reason:NoTeacherId TeacherRef:" . json_encode($teacherRef));
             }
 
-            // Limpiar estado
             try {
                 if ($redisConv) {
                     $redisConv->del('reagendar:' . $normalizedFrom);
@@ -531,7 +497,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         }
 
         if ($trimBody === '1') {
-            // Limpiar conversación
             try {
                 if ($redisConv) {
                     $redisConv->del('conversation:' . $normalizedFrom);
@@ -594,7 +559,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 ]);
             }
 
-            // Notificación interna al profesor con nombre del estudiante
             if ($teacherRef && !empty($teacherRef['sender_user_id'])) {
                 try {
                     $meta = json_encode([
@@ -602,7 +566,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         'action' => 'citacion_confirmada',
                         'guardian_phone' => $from,
                     ], JSON_UNESCAPED_UNICODE);
-                    // DEBUG: Log notification attempt
                     securityLog('CITACION_NOTIF_ATTEMPT', "Type:confirmada Teacher:{$teacherRef['sender_user_id']} Student:$studentName");
                     $notifStmt = $conn->prepare("
                         INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
@@ -624,7 +587,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
 
             securityLog('CITACION_CONFIRMADA', "Guardian:$guardianId School:$schoolId Student:" . ($resolvedStudentId ?? 'fallback'));
         } elseif ($trimBody === '2') {
-            // Guardar estado de reagendamiento en Redis (no consumir todavía)
             try {
                 if ($redisConv) {
                     $redisConv->del('conversation:' . $normalizedFrom);
@@ -661,9 +623,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 json_encode(['source' => 'twilio-webhook-reply2-ack', 'error' => $sendAck['error'] ?? null], JSON_UNESCAPED_UNICODE)
             ]);
 
-            // Notificación de reagendamiento diferida: solo cuando llegue el motivo
-
-            // Extract student_id from subquery to validate before insertion
             $studentIdStmt = $conn->prepare("
                 SELECT s.student_id
                 FROM guardian_student_relationships gsr
@@ -675,7 +634,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             $studentIdStmt->execute([$guardianId]);
             $resolvedStudentIdForPanel = $studentIdStmt->fetchColumn();
 
-            // Only insert if student_id is valid (not NULL)
             if ($resolvedStudentIdForPanel) {
                 $panelStmt = $conn->prepare("
                     INSERT INTO attendance_incidents (
@@ -716,7 +674,6 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 $ackMsg = "Hemos recibido su reporte. Notificaremos a la institución de inmediato.";
                 sendTwilioDirect($from, $ackMsg);
 
-                // Notificación interna al emisor del permiso (coordinador/rector)
                 if ($issuerUserId) {
                     try {
                         $salMeta = json_encode([
@@ -740,14 +697,12 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     }
                 }
 
-                // Limpiar contexto de Redis
                 try {
                     if ($redisConv) $redisConv->del('salida_context:' . $normalizedFrom);
                 } catch (Throwable $e) {}
 
                 securityLog('SALIDA_REPORTADA_NO_AUTORIZADA', "Guardian:$guardianId Student:$sId");
             } else {
-                // No hay contexto de salida — ignorar silenciosamente
                 securityLog('TWILIO_INBOUND_9_NO_CONTEXT', "Guardian:$guardianId From:$from");
             }
 

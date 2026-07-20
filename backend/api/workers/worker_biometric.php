@@ -1,16 +1,16 @@
 <?php
 /**
  * worker_biometric.php — Reliable Queue Pattern (Zero-Data-Loss).
- * Usa RPOPLPUSH para mover atómicamente de ingest -> processing.
+ * Usa LMOVE para mover atómicamente de ingest -> processing.
  * Solo elimina de processing tras commit() exitoso en PostgreSQL.
  */
 
 declare(ticks=1);
 require_once __DIR__ . '/../db.php';
 
-// Configurar rol para bypass de RLS (igual que worker_audit.php y worker_twilio.php)
+// Configurar rol de sistema para workers (no bypass, usa school_id por contexto)
 try {
-    $pdo->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)");
+    $pdo->query("SELECT set_config('app.current_role', 'SYSTEM_WORKER', false)");
 } catch (PDOException $e) {
     logW('ROLE_SET_SKIP', $e->getMessage());
 }
@@ -41,7 +41,7 @@ function sendHeartbeat($redis) {
 function processJob(array $job, PDO $conn): bool {
     $action = $job['action'] ?? 'UNKNOWN';
     $data   = $job['data'] ?? [];
-    $instId = $job['school_id'] ?? 0;
+    $instId = $job['school_id'] ?? null;
     $capturedAt = (int)($data['captured_at'] ?? 0);
 
     if ($instId) {
@@ -87,7 +87,7 @@ function processJob(array $job, PDO $conn): bool {
             $parentTel = trim($data['parent_tel'] ?? '');
             $parentDoc = trim($data['parent_doc'] ?? '');
             $parentName = trim($data['parent_name'] ?? '');
-            if ($schoolId <= 0 || empty($doc) || empty($nombre)) return false;
+            if (empty($schoolId) || empty($doc) || empty($nombre)) return false;
 
             $conn->beginTransaction();
             try {
@@ -104,7 +104,7 @@ function processJob(array $job, PDO $conn): bool {
                     ");
                     $stmt->execute([$parentDoc]);
                     $guardianRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
+
                     if ($guardianRow) {
                         $guardianId = $guardianRow['guardian_id'];
                         $userId = $guardianRow['user_id'];
@@ -117,8 +117,9 @@ function processJob(array $job, PDO $conn): bool {
                         // Update guardian whatsapp_phone
                         $stmt = $conn->prepare("UPDATE guardians SET whatsapp_phone=COALESCE(?,whatsapp_phone) WHERE guardian_id=?");
                         $stmt->execute([$parentTel, $guardianId]);
+
                     } else {
-                        // Obtener el role_id de un rol base para acudientes
+                        // Obtener el role_id de GUARDIAN
                         $roleStmt = $conn->prepare("SELECT role_id FROM roles WHERE role_name = 'GUARDIAN' LIMIT 1");
                         $roleStmt->execute();
                         $guardianRoleId = $roleStmt->fetchColumn();
@@ -130,7 +131,7 @@ function processJob(array $job, PDO $conn): bool {
                         // Insert user first
                         $nameParts = explode(' ', $parentName, 2);
                         $firstName = $nameParts[0];
-                        $lastName = $nameParts[1] ?? $firstName; // Fallback al primer nombre para evitar colapso NOT NULL
+                        $lastName = $nameParts[1] ?? $firstName;
                         $lockedHash = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
                         $stmt = $conn->prepare("INSERT INTO users(school_id,role_id,document_number,first_name,last_name,phone,password_hash,password_salt,active) VALUES(?,?,?,?,?,?,?,?,TRUE) RETURNING user_id");
                         $stmt->execute([$schoolId, $guardianRoleId, $parentDoc, $firstName, $lastName, $parentTel, $lockedHash, '']);
@@ -143,9 +144,10 @@ function processJob(array $job, PDO $conn): bool {
                     $stmt = $conn->prepare("SELECT 1 FROM guardian_student_relationships WHERE student_id=? AND guardian_id=?");
                     $stmt->execute([$studentId, $guardianId]);
                     if (!$stmt->fetchColumn()) {
-                        $stmt = $conn->prepare("INSERT INTO guardian_student_relationships(student_id,guardian_id,primary_guardian,relationship_type) VALUES(?,?,TRUE,'ACUDIENTE')");
+                        $stmt = $conn->prepare("INSERT INTO guardian_student_relationships(student_id,guardian_id,primary_guardian,relationship_type) VALUES(?,?,TRUE,'GUARDIAN')");
                         $stmt->execute([$studentId, $guardianId]);
                     }
+
                 }
                 $conn->commit(); return true;
             } catch (Exception $e) {
@@ -155,7 +157,7 @@ function processJob(array $job, PDO $conn): bool {
         case 'DELETE_STUDENT':
             $doc = trim($data['doc'] ?? ''); $schoolId = $instId;
             if (empty($doc)) return false;
-            if ($schoolId > 0) {
+            if (!empty($schoolId)) {
                 $stmt = $conn->prepare("UPDATE students SET active=FALSE,biometric_hash=NULL WHERE document_number=? AND school_id=? RETURNING student_id");
                 $stmt->execute([$doc, $schoolId]);
             } else {
@@ -170,17 +172,17 @@ function processJob(array $job, PDO $conn): bool {
 }
 
 // ============================================================
-// Reliable Queue: RPOPLPUSH atomically moves ingest -> processing
+// Reliable Queue: LMOVE atomically moves ingest -> processing
 // ============================================================
 
-// FIX (SRE-2): Script Lua atómico que hace RPOPLPUSH + inyecta timestamp.
+// FIX (SRE-2): Script Lua atómico que hace LMOVE + inyecta timestamp.
 // Esto garantiza que, si el worker muere, el GC pueda medir cuánto tiempo
 // lleva el item en processing y reinsertarlo.
 $scriptReliablePop = <<<'LUA'
 local ingest = KEYS[1]
 local processing = KEYS[2]
 local now = tonumber(ARGV[1])
-local item = redis.call('RPOPLPUSH', ingest, processing)
+local item = redis.call('LMOVE', ingest, processing, 'RIGHT', 'LEFT')
 if item then
     local ok, job = pcall(cjson.decode, item)
     if ok and job then

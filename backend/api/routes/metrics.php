@@ -4,7 +4,6 @@
 global $cleanPath;
 
 if ($cleanPath === '/metrics') {
-    // Proteger con clave de acceso para Prometheus/internal
     $metricsKey = getenv('METRICS_SECRET_KEY') ?: '';
     $providedKey = $_SERVER['HTTP_X_METRICS_KEY'] ?? ($_GET['key'] ?? '');
     if ($metricsKey !== '' && !hash_equals($metricsKey, $providedKey)) {
@@ -15,79 +14,113 @@ if ($cleanPath === '/metrics') {
 
     $metrics = [];
     global $conn;
+    $now = time();
 
-    // Métricas HTTP — sin middleware real, emitimos 0 para no simular
-    $metrics[] = '# HELP http_requests_total Total HTTP requests';
-    $metrics[] = '# TYPE http_requests_total counter';
-    $metrics[] = 'http_requests_total 0';
-
-    $metrics[] = '# HELP http_request_duration_seconds HTTP request latency';
-    $metrics[] = '# TYPE http_request_duration_seconds histogram';
-    $metrics[] = 'http_request_duration_seconds_bucket{le="0.1"} 0';
-    $metrics[] = 'http_request_duration_seconds_bucket{le="0.5"} 0';
-    $metrics[] = 'http_request_duration_seconds_bucket{le="1.0"} 0';
-    $metrics[] = 'http_request_duration_seconds_bucket{le="+Inf"} 0';
-    $metrics[] = 'http_request_duration_seconds_sum 0';
-    $metrics[] = 'http_request_duration_seconds_count 0';
-
-    $metrics[] = '# HELP http_errors_5xx_total Total HTTP 5xx errors';
-    $metrics[] = '# TYPE http_errors_5xx_total counter';
-    $metrics[] = 'http_errors_5xx_total 0';
-
-    // Autenticación real
-    $metrics[] = '# HELP auth_logins_total Total login attempts';
-    $metrics[] = '# TYPE auth_logins_total counter';
-    try {
-        $loginCount = $conn->query("SELECT COUNT(*) FROM rate_limits WHERE rl_key LIKE 'login:%'")->fetchColumn();
-        $metrics[] = 'auth_logins_total ' . (int)$loginCount;
-    } catch (Exception $e) {
-        $metrics[] = 'auth_logins_total 0';
+    // Helper para emitir métricas
+    function emit($name, $type, $help, $values) {
+        global $metrics;
+        $metrics[] = "# HELP $name $help";
+        $metrics[] = "# TYPE $name $type";
+        foreach ($values as $v) {
+            $metrics[] = is_array($v) ? ($name . $v[0] . ' ' . $v[1]) : ($name . ' ' . $v);
+        }
     }
 
-    // Biométricos
-    $metrics[] = '# HELP biometric_events_ingested_total Total biometric events ingested';
-    $metrics[] = '# TYPE biometric_events_ingested_total counter';
+    // ── Database ──
     try {
-        $bioCount = $conn->query("SELECT COUNT(*) FROM biometric_events")->fetchColumn();
-        $metrics[] = 'biometric_events_ingested_total ' . (int)$bioCount;
+        $dbUp = 1;
+        $activeConns = $conn->query("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")->fetchColumn();
+        $idleConns = $conn->query("SELECT count(*) FROM pg_stat_activity WHERE state = 'idle'")->fetchColumn();
     } catch (Exception $e) {
-        $metrics[] = 'biometric_events_ingested_total 0';
+        $dbUp = 0;
+        $activeConns = 0;
+        $idleConns = 0;
     }
+    emit('nexo_db_up', 'gauge', 'Database connectivity', [$dbUp]);
+    emit('nexo_db_connections_active', 'gauge', 'Active PostgreSQL connections', [(int)$activeConns]);
+    emit('nexo_db_connections_idle', 'gauge', 'Idle PostgreSQL connections', [(int)$idleConns]);
 
-    // Twilio real
-    $metrics[] = '# HELP twilio_messages_sent_total Total Twilio messages sent';
-    $metrics[] = '# TYPE twilio_messages_sent_total counter';
-    $metrics[] = '# HELP twilio_messages_failed_total Total Twilio messages failed';
-    $metrics[] = '# TYPE twilio_messages_failed_total counter';
-    try {
-        $sent = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status='SENT'")->fetchColumn();
-        $failed = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status='FAILED_PERMANENT'")->fetchColumn();
-        $metrics[] = 'twilio_messages_sent_total ' . (int)$sent;
-        $metrics[] = 'twilio_messages_failed_total ' . (int)$failed;
-    } catch (Exception $e) {
-        $metrics[] = 'twilio_messages_sent_total 0';
-        $metrics[] = 'twilio_messages_failed_total 0';
-    }
-
-    // Redis colas
+    // ── Workers ──
     try {
         $redis = getRedisConnection();
-        if (!$redis) {
-            $metrics['redis_queues'] = ['status' => 'unavailable'];
+        $workers = [
+            'audit' => 'worker:audit:last_heartbeat',
+            'twilio' => 'worker:twilio:last_heartbeat',
+            'biometric' => 'worker:biometric:last_heartbeat',
+        ];
+        foreach ($workers as $name => $key) {
+            $hb = (int)$redis->get($key);
+            $age = $hb > 0 ? $now - $hb : 99999;
+            emit("nexo_worker_up", 'gauge', "Worker $name health", [['{worker="' . $name . '"}', $age <= 300 ? 1 : 0]]);
+            emit("nexo_worker_heartbeat_age_seconds", 'gauge', "Seconds since last heartbeat", [['{worker="' . $name . '"}', $age]]);
         }
-
-        $auditQueueLen = $redis->lLen('queue:audit_logs');
-        $twilioQueueLen = $redis->lLen('queue:twilio');
-        $twilioDelayedLen = $redis->zCard('queue:twilio:delayed');
-
-        $metrics[] = '# HELP redis_queue_length Current length of Redis queues';
-        $metrics[] = '# TYPE redis_queue_length gauge';
-        $metrics[] = 'redis_queue_length{queue="audit_logs"} ' . (int)$auditQueueLen;
-        $metrics[] = 'redis_queue_length{queue="twilio"} ' . (int)$twilioQueueLen;
-        $metrics[] = 'redis_queue_length{queue="twilio_delayed"} ' . (int)$twilioDelayedLen;
     } catch (Exception $e) {
-        $metrics[] = '# Redis metrics unavailable';
+        emit('nexo_worker_up', 'gauge', 'Worker health', [['{worker="all"}', 0]]);
     }
+
+    // ── Queues ──
+    try {
+        $redis = getRedisConnection();
+        $queues = [
+            'biometric_ingest' => 'queue:biometric_ingest',
+            'twilio' => 'queue:twilio',
+            'audit_logs' => 'queue:audit_logs',
+        ];
+        foreach ($queues as $name => $key) {
+            $len = (int)$redis->lLen($key);
+            emit('nexo_queue_length', 'gauge', 'Redis queue length', [['{queue="' . $name . '"}', $len]]);
+        }
+    } catch (Exception $e) {
+        emit('nexo_queue_length', 'gauge', 'Redis queue length', [['{queue="all"}', -1]]);
+    }
+
+    // ── Business metrics ──
+    try {
+        $loginCount = $conn->query("SELECT COUNT(*) FROM rate_limits WHERE rl_key LIKE 'login:%'")->fetchColumn();
+        emit('nexo_auth_logins_total', 'counter', 'Total login attempts', [(int)$loginCount]);
+    } catch (Exception $e) {
+        emit('nexo_auth_logins_total', 'counter', 'Total login attempts', [0]);
+    }
+
+    try {
+        $bioToday = $conn->query("SELECT COUNT(*) FROM biometric_events WHERE event_timestamp >= CURRENT_DATE")->fetchColumn();
+        emit('nexo_biometric_events_today', 'gauge', 'Biometric events today', [(int)$bioToday]);
+    } catch (Exception $e) {
+        emit('nexo_biometric_events_today', 'gauge', 'Biometric events today', [0]);
+    }
+
+    try {
+        $sent = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status IN ('SENT','DELIVERED','READ')")->fetchColumn();
+        $failed = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status IN ('FAILED','FAILED_PERMANENT','UNDELIVERED')")->fetchColumn();
+        $pending = $conn->query("SELECT COUNT(*) FROM twilio_messages WHERE direction='OUTBOUND' AND delivery_status='QUEUED'")->fetchColumn();
+        emit('nexo_twilio_sent_total', 'counter', 'Twilio messages sent', [(int)$sent]);
+        emit('nexo_twilio_failed_total', 'counter', 'Twilio messages failed', [(int)$failed]);
+        emit('nexo_twilio_pending', 'gauge', 'Twilio messages pending', [(int)$pending]);
+    } catch (Exception $e) {
+        emit('nexo_twilio_sent_total', 'counter', 'Twilio messages sent', [0]);
+        emit('nexo_twilio_failed_total', 'counter', 'Twilio messages failed', [0]);
+        emit('nexo_twilio_pending', 'gauge', 'Twilio messages pending', [0]);
+    }
+
+    try {
+        $alertsToday = $conn->query("SELECT COUNT(*) FROM attendance_incidents WHERE detected_at >= CURRENT_DATE AND incident_type LIKE 'RISK_ALERT%'")->fetchColumn();
+        emit('nexo_risk_alerts_today', 'gauge', 'Risk alerts today', [(int)$alertsToday]);
+    } catch (Exception $e) {
+        emit('nexo_risk_alerts_today', 'gauge', 'Risk alerts today', [0]);
+    }
+
+    try {
+        $panicCount = $conn->query("SELECT COUNT(*) FROM school_panic_events WHERE triggered_at >= CURRENT_DATE - INTERVAL '30 days'")->fetchColumn();
+        emit('nexo_panic_events_30d', 'gauge', 'Panic events last 30 days', [(int)$panicCount]);
+    } catch (Exception $e) {
+        emit('nexo_panic_events_30d', 'gauge', 'Panic events last 30 days', [0]);
+    }
+
+    // ── Disk ──
+    $free = disk_free_space('.');
+    $total = disk_total_space('.');
+    $usedPct = $total > 0 ? round((1 - $free / $total) * 100, 2) : 0;
+    emit('nexo_disk_used_percent', 'gauge', 'Disk usage percent', [$usedPct]);
 
     header('Content-Type: text/plain; charset=utf-8');
     echo implode("\n", $metrics) . "\n";

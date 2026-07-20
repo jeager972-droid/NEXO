@@ -5,10 +5,10 @@ require_once __DIR__ . '/_auth_middleware.php';
 /**
  * T4: Validación de Integridad de la Cadena de Auditoría
  * GET /audit/integrity
- * Requiere rol RECTOR o SUPER_RECTOR
+ * Requiere rol RECTOR o COORDINATOR
  */
 if ($cleanPath === '/audit/integrity' && $method === 'GET') {
-    $authUser = requireAuth(['RECTOR', 'COORDINADOR', 'SUPER_RECTOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     
     try {
         // Usar la función de validación de cadena en PostgreSQL

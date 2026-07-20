@@ -4,6 +4,80 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- =============================================================================
+-- SCHEMA MIGRATION TRACKING SYSTEM
+-- Tabla de control de versiones de migraciones ejecutadas.
+-- Cada migración debe registrarse aquí tras su ejecución exitosa.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    migration_id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    filename          VARCHAR(255) NOT NULL UNIQUE,
+    version_label     VARCHAR(50),           -- ej: '2026-07', 'v1.2.3'
+    description       TEXT,
+    checksum          VARCHAR(64),           -- SHA-256 del archivo ejecutado
+    executed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    executed_by       VARCHAR(100),          -- usuario o proceso que ejecutó
+    execution_time_ms INTEGER,               -- duración de la migración
+    success           BOOLEAN NOT NULL DEFAULT TRUE,
+    rollback_script   TEXT,                  -- SQL para revertir (opcional)
+    notes             TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_executed_at
+    ON schema_migrations(executed_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_version
+    ON schema_migrations(version_label);
+
+-- Función helper: verificar si una migración ya fue ejecutada
+CREATE OR REPLACE FUNCTION migration_was_executed(p_filename VARCHAR(255))
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS(
+        SELECT 1 FROM schema_migrations
+        WHERE filename = p_filename AND success = TRUE
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Función helper: registrar una migración ejecutada
+CREATE OR REPLACE FUNCTION register_migration(
+    p_filename          VARCHAR(255),
+    p_version_label     VARCHAR(50) DEFAULT NULL,
+    p_description       TEXT DEFAULT NULL,
+    p_checksum          VARCHAR(64) DEFAULT NULL,
+    p_executed_by       VARCHAR(100) DEFAULT NULL,
+    p_execution_time_ms INTEGER DEFAULT NULL,
+    p_notes             TEXT DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+    v_id UUID;
+BEGIN
+    INSERT INTO schema_migrations (
+        filename, version_label, description, checksum,
+        executed_by, execution_time_ms, notes
+    ) VALUES (
+        p_filename, p_version_label, p_description, p_checksum,
+        p_executed_by, p_execution_time_ms, p_notes
+    )
+    ON CONFLICT (filename) DO UPDATE SET
+        success = TRUE,
+        executed_at = NOW(),
+        execution_time_ms = COALESCE(EXCLUDED.execution_time_ms, schema_migrations.execution_time_ms),
+        notes = COALESCE(EXCLUDED.notes, schema_migrations.notes)
+    RETURNING migration_id INTO v_id;
+    RETURN v_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- DOCUMENTATION
+COMMENT ON TABLE users IS 'Core user accounts with authentication credentials. Multi-tenant by school_id.';
+COMMENT ON TABLE students IS 'Student enrollment records. Soft-deletable. Multi-tenant by school_id.';
+COMMENT ON TABLE guardians IS 'Guardian/parent profiles linked to users. WhatsApp phone is primary contact method.';
+COMMENT ON TABLE biometric_events IS 'Biometric scan events from edge devices. Partitioned by event_timestamp for performance.';
+COMMENT ON TABLE school_panic_events IS 'Emergency panic button events. Triggers device deactivation cascade.';
+
 -- BASE TABLES
 CREATE TABLE IF NOT EXISTS permissions (permission_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), permission_code VARCHAR(120) UNIQUE NOT NULL, description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS departments (department_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), department_name VARCHAR(120) UNIQUE NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
@@ -20,6 +94,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (session_id UUID PRIMARY KEY DEFAULT uu
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
 CREATE TABLE IF NOT EXISTS staff_records (staff_record_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), user_id UUID NOT NULL REFERENCES users(user_id), hired_at DATE, position_name VARCHAR(120), employee_code VARCHAR(120), active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_staff_school ON staff_records(school_id);
+CREATE INDEX IF NOT EXISTS idx_staff_user ON staff_records(user_id);
 CREATE TABLE IF NOT EXISTS guardians (guardian_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), user_id UUID UNIQUE NOT NULL REFERENCES users(user_id), whatsapp_phone VARCHAR(30) NOT NULL, emergency_contact BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS students (student_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), document_number VARCHAR(30) NOT NULL, first_name VARCHAR(120) NOT NULL, last_name VARCHAR(120) NOT NULL, birth_date DATE, biometric_hash TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ, CONSTRAINT uq_students_school_document UNIQUE (school_id, document_number));
 CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
@@ -30,11 +105,12 @@ CREATE TABLE IF NOT EXISTS classrooms (classroom_id UUID PRIMARY KEY DEFAULT uui
 CREATE TABLE IF NOT EXISTS subjects (subject_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), subject_name VARCHAR(120) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS schedules (schedule_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), group_id UUID NOT NULL REFERENCES academic_groups(group_id), classroom_id UUID NOT NULL REFERENCES classrooms(classroom_id), teacher_user_id UUID NOT NULL REFERENCES users(user_id), subject_id UUID NOT NULL REFERENCES subjects(subject_id), day_of_week INTEGER NOT NULL, block_number INTEGER NOT NULL, start_time TIME NOT NULL, end_time TIME NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS edge_devices (device_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), classroom_id UUID REFERENCES classrooms(classroom_id), device_name VARCHAR(120) NOT NULL, public_key TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, last_sync_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-CREATE TABLE IF NOT EXISTS biometric_events (event_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID, device_id UUID NOT NULL, classroom_id UUID, schedule_id UUID, event_type VARCHAR(120) NOT NULL, event_result VARCHAR(120) NOT NULL, confidence_score NUMERIC(5,2), sync_hash TEXT, event_signature TEXT, event_timestamp TIMESTAMPTZ NOT NULL, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(event_id, event_timestamp)) PARTITION BY RANGE(event_timestamp);
+CREATE TABLE IF NOT EXISTS biometric_events (event_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID, device_id UUID NOT NULL, classroom_id UUID, schedule_id UUID, event_type VARCHAR(120) NOT NULL, event_result VARCHAR(120) NOT NULL, confidence_score NUMERIC(5,2), sync_hash TEXT, event_signature TEXT, event_fingerprint VARCHAR(64), event_timestamp TIMESTAMPTZ NOT NULL, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(event_id, event_timestamp)) PARTITION BY RANGE(event_timestamp);
 CREATE TABLE IF NOT EXISTS notifications (notification_id UUID DEFAULT uuid_generate_v4() PRIMARY KEY, school_id UUID NOT NULL, user_id UUID NOT NULL, title VARCHAR(200) NOT NULL, message TEXT NOT NULL, type VARCHAR(50) NOT NULL DEFAULT 'INFO', metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS attendance_incidents (incident_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID NOT NULL, related_event_id UUID, incident_type VARCHAR(120) NOT NULL, detected_at TIMESTAMPTZ NOT NULL, resolved BOOLEAN NOT NULL DEFAULT FALSE, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(incident_id, detected_at)) PARTITION BY RANGE(detected_at);
 CREATE TABLE IF NOT EXISTS internal_messages (message_id UUID NOT NULL, school_id UUID NOT NULL, sender_user_id UUID NOT NULL, receiver_user_id UUID NOT NULL, subject VARCHAR(255), message_content TEXT NOT NULL, sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), read_at TIMESTAMPTZ, metadata_json JSONB, PRIMARY KEY(message_id, sent_at)) PARTITION BY RANGE(sent_at);
+CREATE INDEX IF NOT EXISTS idx_internal_messages_sent_at ON internal_messages(sent_at DESC);
 CREATE TABLE IF NOT EXISTS twilio_message_types (type_code VARCHAR(100) PRIMARY KEY, description TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS twilio_messages (twilio_message_id UUID NOT NULL DEFAULT uuid_generate_v4(), school_id UUID NOT NULL, student_id UUID, guardian_id UUID, sender_user_id UUID, type_code VARCHAR(100) NOT NULL, direction VARCHAR(20) NOT NULL, phone_number VARCHAR(30) NOT NULL, message_content TEXT NOT NULL, provider_message_sid VARCHAR(255), delivery_status VARCHAR(100), sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), received_at TIMESTAMPTZ, metadata_json JSONB, PRIMARY KEY(twilio_message_id, sent_at)) PARTITION BY RANGE(sent_at);
 CREATE TABLE IF NOT EXISTS user_commands (command_id UUID NOT NULL DEFAULT uuid_generate_v4(), school_id UUID NOT NULL, executed_by_user_id UUID NOT NULL, command_type VARCHAR(120) NOT NULL, target_entity_type VARCHAR(120), target_entity_id UUID, command_payload JSONB, executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), metadata_json JSONB, PRIMARY KEY(command_id, executed_at)) PARTITION BY RANGE(executed_at);
@@ -49,8 +125,37 @@ CREATE TABLE IF NOT EXISTS report_exports (report_export_id UUID PRIMARY KEY DEF
 CREATE TABLE IF NOT EXISTS student_behavior_metrics (metric_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), student_id UUID NOT NULL REFERENCES students(student_id), calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), late_count INTEGER NOT NULL DEFAULT 0, absence_count INTEGER NOT NULL DEFAULT 0, total_events INTEGER NOT NULL DEFAULT 0, risk_score NUMERIC(5,2) NOT NULL DEFAULT 0.00, risk_level VARCHAR(20) CHECK(risk_level IN('LOW','MEDIUM','HIGH','CRITICAL')), calculation_window_days INTEGER NOT NULL DEFAULT 30, metadata_json JSONB, CONSTRAINT uq_behavior_student_window UNIQUE(student_id,calculation_window_days));
 CREATE TABLE IF NOT EXISTS student_tracking (tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE, status VARCHAR(50) NOT NULL DEFAULT 'en proceso', created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS student_tracking_notes (note_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), tracking_id UUID NOT NULL REFERENCES student_tracking(tracking_id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, note_text TEXT NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS school_panic_events (panic_event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), triggered_by_user_id UUID NOT NULL REFERENCES users(user_id), triggered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), devices_deactivated INTEGER NOT NULL DEFAULT 0, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_school_panic_events_school_triggered ON school_panic_events(school_id, triggered_at DESC);
+CREATE TABLE IF NOT EXISTS system_telemetry (id BIGSERIAL PRIMARY KEY, session_id UUID NOT NULL, app_version TEXT NOT NULL DEFAULT 'unknown', platform TEXT NOT NULL DEFAULT 'web' CHECK (platform IN ('web', 'desktop', 'android', 'ios')), event_type TEXT NOT NULL CHECK (event_type IN ('JS_ERROR', 'API_LATENCY', 'BIOMETRIC_LATENCY', 'APP_PING', 'RENDER_SLOW')), severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('debug', 'info', 'warn', 'error')), payload JSONB NOT NULL DEFAULT '{}', user_agent TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON system_telemetry (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_telemetry_event_type ON system_telemetry (event_type);
+CREATE INDEX IF NOT EXISTS idx_telemetry_severity ON system_telemetry (severity) WHERE severity IN ('warn', 'error');
+CREATE INDEX IF NOT EXISTS idx_telemetry_session ON system_telemetry (session_id);
+CREATE INDEX IF NOT EXISTS idx_telemetry_payload_gin ON system_telemetry USING GIN (payload);
+ALTER TABLE system_telemetry ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS telemetry_select_super_rector ON system_telemetry;
+CREATE POLICY telemetry_select_super_rector ON system_telemetry FOR SELECT USING (get_current_school_id() IS NOT NULL);
+DROP POLICY IF EXISTS telemetry_insert_authenticated ON system_telemetry;
+CREATE POLICY telemetry_insert_authenticated ON system_telemetry FOR INSERT WITH CHECK (current_setting('app.current_role', true) IS NOT NULL AND current_setting('app.current_role', true) != '');
 CREATE INDEX IF NOT EXISTS idx_tracking_school_status ON student_tracking(school_id, status);
 CREATE INDEX IF NOT EXISTS idx_tracking_notes_tid ON student_tracking_notes(tracking_id);
+
+-- contact_leads (landing page form submissions)
+CREATE TABLE IF NOT EXISTS contact_leads (
+    lead_id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    nombre       VARCHAR(200)  NOT NULL,
+    cargo        VARCHAR(100)  NOT NULL,
+    institucion  VARCHAR(300)  NOT NULL,
+    municipio    VARCHAR(200)  NOT NULL,
+    email        VARCHAR(254)  NOT NULL,
+    whatsapp     VARCHAR(30)   NOT NULL,
+    mensaje      TEXT,
+    ip_address   VARCHAR(45),
+    created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_contact_leads_email ON contact_leads(email);
+CREATE INDEX IF NOT EXISTS idx_contact_leads_created_at ON contact_leads(created_at);
 
 -- MIGRATION TABLES
 CREATE TABLE IF NOT EXISTS rate_limits (rl_key TEXT PRIMARY KEY, window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(), hits INTEGER NOT NULL DEFAULT 0);
@@ -107,6 +212,7 @@ CREATE INDEX IF NOT EXISTS idx_student_group_assignments_group_active ON student
 CREATE INDEX IF NOT EXISTS idx_report_exports_school_generated ON report_exports(school_id, generated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_security_incidents_school_detected ON security_incidents(school_id, detected_at DESC, resolved);
 CREATE INDEX IF NOT EXISTS idx_biometric_events_school_student_time ON biometric_events(school_id, student_id, event_timestamp DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_biometric_events_fingerprint ON biometric_events(event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_students_document_number ON students(document_number);
 CREATE INDEX IF NOT EXISTS idx_behavior_risk_score ON student_behavior_metrics(school_id, risk_level, calculated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_behavior_student ON student_behavior_metrics(student_id, calculated_at DESC);
@@ -119,6 +225,10 @@ CREATE INDEX IF NOT EXISTS idx_student_audit_school_performed ON student_record_
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_role_permissions_role_permission') THEN ALTER TABLE role_permissions ADD CONSTRAINT uq_role_permissions_role_permission UNIQUE(role_id,permission_id); END IF; END $$;
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_guardian_student_relationship') THEN ALTER TABLE guardian_student_relationships ADD CONSTRAINT uq_guardian_student_relationship UNIQUE(guardian_id,student_id); END IF; END $$;
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_academic_group_school_year_name') THEN ALTER TABLE academic_groups ADD CONSTRAINT uq_academic_group_school_year_name UNIQUE(school_id,academic_year,group_name); END IF; END $$;
+
+-- FIX (BUG-1): student_group_assignments missing UNIQUE constraint
+-- The INSERT in routes/students.php uses ON CONFLICT (student_id, group_id)
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_sga_student_group') THEN ALTER TABLE student_group_assignments ADD CONSTRAINT uq_sga_student_group UNIQUE(student_id, group_id); END IF; END $$;
 
 -- FIX: Remove global UNIQUE on users.document_number and add composite UNIQUE with school_id (multi-tenant support)
 DO $$ BEGIN 
@@ -167,82 +277,119 @@ CREATE OR REPLACE FUNCTION fn_recalculate_school_metrics(p_school_id UUID) RETUR
 
 -- RLS HELPERS
 CREATE OR REPLACE FUNCTION get_current_school_id() RETURNS UUID AS $$ DECLARE v_school_id TEXT; BEGIN v_school_id := current_setting('app.current_school_id', true); IF v_school_id IS NULL OR v_school_id = '' THEN RETURN NULL; END IF; RETURN v_school_id::UUID; EXCEPTION WHEN OTHERS THEN RETURN NULL; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
-CREATE OR REPLACE FUNCTION is_super_rector() RETURNS BOOLEAN AS $$ DECLARE v_role TEXT; BEGIN v_role := current_setting('app.current_role', true); RETURN(v_role = 'SUPER_RECTOR'); EXCEPTION WHEN OTHERS THEN RETURN FALSE; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- RLS POLICIES
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS students_select ON students; DROP POLICY IF EXISTS students_insert ON students; DROP POLICY IF EXISTS students_update ON students; DROP POLICY IF EXISTS students_delete ON students;
-CREATE POLICY students_select ON students FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY students_insert ON students FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY students_update ON students FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY students_delete ON students FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY students_select ON students FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY students_insert ON students FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY students_update ON students FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY students_delete ON students FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE biometric_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS be_select ON biometric_events; DROP POLICY IF EXISTS be_insert ON biometric_events; DROP POLICY IF EXISTS be_update ON biometric_events; DROP POLICY IF EXISTS be_delete ON biometric_events;
-CREATE POLICY be_select ON biometric_events FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY be_insert ON biometric_events FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY be_update ON biometric_events FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY be_delete ON biometric_events FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY be_select ON biometric_events FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY be_insert ON biometric_events FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY be_update ON biometric_events FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY be_delete ON biometric_events FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE attendance_incidents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ai_select ON attendance_incidents; DROP POLICY IF EXISTS ai_insert ON attendance_incidents; DROP POLICY IF EXISTS ai_update ON attendance_incidents; DROP POLICY IF EXISTS ai_delete ON attendance_incidents;
-CREATE POLICY ai_select ON attendance_incidents FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY ai_insert ON attendance_incidents FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY ai_update ON attendance_incidents FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY ai_delete ON attendance_incidents FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY ai_select ON attendance_incidents FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY ai_insert ON attendance_incidents FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY ai_update ON attendance_incidents FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY ai_delete ON attendance_incidents FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE sos_alerts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS sos_select ON sos_alerts; DROP POLICY IF EXISTS sos_insert ON sos_alerts; DROP POLICY IF EXISTS sos_update ON sos_alerts; DROP POLICY IF EXISTS sos_delete ON sos_alerts;
-CREATE POLICY sos_select ON sos_alerts FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY sos_insert ON sos_alerts FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY sos_update ON sos_alerts FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY sos_delete ON sos_alerts FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY sos_select ON sos_alerts FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY sos_insert ON sos_alerts FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY sos_update ON sos_alerts FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY sos_delete ON sos_alerts FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE global_audit_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS gal_select ON global_audit_logs; DROP POLICY IF EXISTS gal_insert ON global_audit_logs;
-CREATE POLICY gal_select ON global_audit_logs FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY gal_insert ON global_audit_logs FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY gal_select ON global_audit_logs FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY gal_insert ON global_audit_logs FOR INSERT WITH CHECK(school_id = get_current_school_id());
 
 ALTER TABLE twilio_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tm_select ON twilio_messages; DROP POLICY IF EXISTS tm_insert ON twilio_messages; DROP POLICY IF EXISTS tm_update ON twilio_messages; DROP POLICY IF EXISTS tm_delete ON twilio_messages;
-CREATE POLICY tm_select ON twilio_messages FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY tm_insert ON twilio_messages FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY tm_update ON twilio_messages FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY tm_delete ON twilio_messages FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY tm_select ON twilio_messages FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY tm_insert ON twilio_messages FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY tm_update ON twilio_messages FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY tm_delete ON twilio_messages FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE edge_devices ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ed_select ON edge_devices; DROP POLICY IF EXISTS ed_insert ON edge_devices; DROP POLICY IF EXISTS ed_update ON edge_devices; DROP POLICY IF EXISTS ed_delete ON edge_devices;
-CREATE POLICY ed_select ON edge_devices FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY ed_insert ON edge_devices FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY ed_update ON edge_devices FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY ed_delete ON edge_devices FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY ed_select ON edge_devices FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY ed_insert ON edge_devices FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY ed_update ON edge_devices FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY ed_delete ON edge_devices FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE student_behavior_metrics ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS sbm_select ON student_behavior_metrics; DROP POLICY IF EXISTS sbm_insert ON student_behavior_metrics; DROP POLICY IF EXISTS sbm_update ON student_behavior_metrics; DROP POLICY IF EXISTS sbm_delete ON student_behavior_metrics;
-CREATE POLICY sbm_select ON student_behavior_metrics FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY sbm_insert ON student_behavior_metrics FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY sbm_update ON student_behavior_metrics FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY sbm_delete ON student_behavior_metrics FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY sbm_select ON student_behavior_metrics FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY sbm_insert ON student_behavior_metrics FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY sbm_update ON student_behavior_metrics FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY sbm_delete ON student_behavior_metrics FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE user_commands ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS uc_select ON user_commands; DROP POLICY IF EXISTS uc_insert ON user_commands; DROP POLICY IF EXISTS uc_update ON user_commands; DROP POLICY IF EXISTS uc_delete ON user_commands;
-CREATE POLICY uc_select ON user_commands FOR SELECT USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY uc_insert ON user_commands FOR INSERT WITH CHECK(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY uc_update ON user_commands FOR UPDATE USING(school_id = get_current_school_id() OR is_super_rector());
-CREATE POLICY uc_delete ON user_commands FOR DELETE USING(school_id = get_current_school_id() OR is_super_rector());
+CREATE POLICY uc_select ON user_commands FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY uc_insert ON user_commands FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY uc_update ON user_commands FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY uc_delete ON user_commands FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE guardian_student_relationships ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS gsr_select ON guardian_student_relationships; DROP POLICY IF EXISTS gsr_insert ON guardian_student_relationships; DROP POLICY IF EXISTS gsr_delete ON guardian_student_relationships;
-CREATE POLICY gsr_select ON guardian_student_relationships FOR SELECT USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()) OR is_super_rector());
-CREATE POLICY gsr_insert ON guardian_student_relationships FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()) OR is_super_rector());
-CREATE POLICY gsr_delete ON guardian_student_relationships FOR DELETE USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()) OR is_super_rector());
+CREATE POLICY gsr_select ON guardian_student_relationships FOR SELECT USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()));
+CREATE POLICY gsr_insert ON guardian_student_relationships FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()));
+CREATE POLICY gsr_delete ON guardian_student_relationships FOR DELETE USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()));
 
 ALTER TABLE student_group_assignments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS sga_select ON student_group_assignments; DROP POLICY IF EXISTS sga_insert ON student_group_assignments; DROP POLICY IF EXISTS sga_update ON student_group_assignments; DROP POLICY IF EXISTS sga_delete ON student_group_assignments;
-CREATE POLICY sga_select ON student_group_assignments FOR SELECT USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()) OR is_super_rector());
-CREATE POLICY sga_insert ON student_group_assignments FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()) OR is_super_rector());
-CREATE POLICY sga_update ON student_group_assignments FOR UPDATE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()) OR is_super_rector());
-CREATE POLICY sga_delete ON student_group_assignments FOR DELETE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()) OR is_super_rector());
+CREATE POLICY sga_select ON student_group_assignments FOR SELECT USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
+CREATE POLICY sga_insert ON student_group_assignments FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
+CREATE POLICY sga_update ON student_group_assignments FOR UPDATE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
+CREATE POLICY sga_delete ON student_group_assignments FOR DELETE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS users_select ON users; DROP POLICY IF EXISTS users_insert ON users; DROP POLICY IF EXISTS users_update ON users; DROP POLICY IF EXISTS users_delete ON users;
+CREATE POLICY users_select ON users FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY users_insert ON users FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY users_update ON users FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY users_delete ON users FOR DELETE USING(school_id = get_current_school_id());
+
+ALTER TABLE guardians ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS guardians_select ON guardians; DROP POLICY IF EXISTS guardians_insert ON guardians; DROP POLICY IF EXISTS guardians_update ON guardians; DROP POLICY IF EXISTS guardians_delete ON guardians;
+CREATE POLICY guardians_select ON guardians FOR SELECT USING(EXISTS(SELECT 1 FROM users u WHERE u.user_id = guardians.user_id AND u.school_id = get_current_school_id()));
+CREATE POLICY guardians_insert ON guardians FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM users u WHERE u.user_id = guardians.user_id AND u.school_id = get_current_school_id()));
+CREATE POLICY guardians_update ON guardians FOR UPDATE USING(EXISTS(SELECT 1 FROM users u WHERE u.user_id = guardians.user_id AND u.school_id = get_current_school_id()));
+CREATE POLICY guardians_delete ON guardians FOR DELETE USING(EXISTS(SELECT 1 FROM users u WHERE u.user_id = guardians.user_id AND u.school_id = get_current_school_id()));
+
+ALTER TABLE school_panic_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS spe_select ON school_panic_events; DROP POLICY IF EXISTS spe_insert ON school_panic_events; DROP POLICY IF EXISTS spe_delete ON school_panic_events;
+CREATE POLICY spe_select ON school_panic_events FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY spe_insert ON school_panic_events FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY spe_delete ON school_panic_events FOR DELETE USING(school_id = get_current_school_id());
+
+ALTER TABLE student_tracking ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS st_select ON student_tracking; DROP POLICY IF EXISTS st_insert ON student_tracking; DROP POLICY IF EXISTS st_update ON student_tracking; DROP POLICY IF EXISTS st_delete ON student_tracking;
+CREATE POLICY st_select ON student_tracking FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY st_insert ON student_tracking FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY st_update ON student_tracking FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY st_delete ON student_tracking FOR DELETE USING(school_id = get_current_school_id());
+
+ALTER TABLE student_tracking_notes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS stn_select ON student_tracking_notes; DROP POLICY IF EXISTS stn_insert ON student_tracking_notes; DROP POLICY IF EXISTS stn_delete ON student_tracking_notes;
+CREATE POLICY stn_select ON student_tracking_notes FOR SELECT USING(EXISTS(SELECT 1 FROM student_tracking st WHERE st.tracking_id = student_tracking_notes.tracking_id AND st.school_id = get_current_school_id()));
+CREATE POLICY stn_insert ON student_tracking_notes FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM student_tracking st WHERE st.tracking_id = student_tracking_notes.tracking_id AND st.school_id = get_current_school_id()));
+CREATE POLICY stn_delete ON student_tracking_notes FOR DELETE USING(EXISTS(SELECT 1 FROM student_tracking st WHERE st.tracking_id = student_tracking_notes.tracking_id AND st.school_id = get_current_school_id()));
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS notif_select ON notifications; DROP POLICY IF EXISTS notif_insert ON notifications; DROP POLICY IF EXISTS notif_delete ON notifications;
+CREATE POLICY notif_select ON notifications FOR SELECT USING(school_id = get_current_school_id());
+CREATE POLICY notif_insert ON notifications FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY notif_delete ON notifications FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE jwt_blocklist ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS jbl_select ON jwt_blocklist; DROP POLICY IF EXISTS jbl_insert ON jwt_blocklist;
@@ -256,12 +403,180 @@ INSERT INTO departments(department_id, department_name) VALUES(uuid_generate_v4(
 INSERT INTO municipalities(municipality_id, department_id, municipality_name) SELECT uuid_generate_v4(), d.department_id, 'Bogotá D.C.' FROM departments d WHERE d.department_name = 'Bogotá D.C.' ON CONFLICT DO NOTHING;
 INSERT INTO schools(school_id, municipality_id, dane_code, school_name, address, phone, email, active) SELECT uuid_generate_v4(), m.municipality_id, '000000000', 'Institución Educativa NEXO', 'Calle 1 # 1-1', '6010000000', 'contacto@nexo.edu', TRUE FROM municipalities m JOIN departments d ON d.department_id = m.department_id WHERE d.department_name = 'Bogotá D.C.' ON CONFLICT DO NOTHING;
 
-INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'SUPER_RECTOR', 'Super administrador') ON CONFLICT(role_name) DO NOTHING;
-INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'RECTOR', 'Director de institución') ON CONFLICT(role_name) DO NOTHING;
-INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'TEACHER', 'Docente') ON CONFLICT(role_name) DO NOTHING;
-INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'GUARDIAN', 'Acudiente') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'RECTOR', 'School principal') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'COORDINATOR', 'Academic / disciplinary coordinator') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'TEACHER', 'Classroom teacher') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'SECRETARY', 'Administrative secretary') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'SECURITY', 'Security guard / gatekeeper') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'AUXILIARY', 'Administrative auxiliary') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'COUNSELOR', 'School counselor / psychologist') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'GUARDIAN', 'Student guardian / parent') ON CONFLICT(role_name) DO NOTHING;
 
 -- ADMIN USER (password: admin123 | generate hash with: php -r "echo password_hash('admin123', PASSWORD_BCRYPT);")
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, password_hash, password_salt, active)
 SELECT uuid_generate_v4(), s.school_id, r.role_id, '111111111', 'Admin', 'NEXO', 'admin@nexo.edu', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'salt', TRUE
-FROM schools s, roles r WHERE r.role_name = 'SUPER_RECTOR' ON CONFLICT(email) DO NOTHING;
+FROM schools s, roles r WHERE r.role_name = 'RECTOR' ON CONFLICT(email) DO NOTHING;
+
+-- =============================================================================
+-- PERMISSIONS (canonical — inglés, alineado con PHP)
+-- =============================================================================
+INSERT INTO permissions (permission_id, permission_code, description) VALUES
+    (uuid_generate_v4(), 'dashboard.teacher_view', 'View dashboard filtered by assigned groups'),
+    (uuid_generate_v4(), 'dashboard.global_view', 'View full institution dashboard'),
+    (uuid_generate_v4(), 'operations.sos', 'Generate SOS alert'),
+    (uuid_generate_v4(), 'operations.inasistencia', 'Report absence and notify guardian'),
+    (uuid_generate_v4(), 'operations.citacion', 'Send guardian citation via WhatsApp'),
+    (uuid_generate_v4(), 'operations.autorizar_salida', 'Authorize student exit'),
+    (uuid_generate_v4(), 'operations.permiso', 'Generate class exit permission'),
+    (uuid_generate_v4(), 'operations.solicitud', 'Send internal request to another user'),
+    (uuid_generate_v4(), 'operations.daño', 'Report institutional damage'),
+    (uuid_generate_v4(), 'operations.pedagogica', 'Register group pedagogical exit'),
+    (uuid_generate_v4(), 'operations.horario', 'Notify group schedule change'),
+    (uuid_generate_v4(), 'operations.incidente', 'Report disciplinary incident'),
+    (uuid_generate_v4(), 'operations.seguimiento', 'Request counselor tracking'),
+    (uuid_generate_v4(), 'consultations.teacher_view', 'View queries filtered by assigned groups'),
+    (uuid_generate_v4(), 'consultations.global_view', 'View all institution queries'),
+    (uuid_generate_v4(), 'reports.preview', 'View biometric report preview'),
+    (uuid_generate_v4(), 'reports.export', 'Export institutional reports'),
+    (uuid_generate_v4(), 'devices.manage', 'Register, revoke and command EDGE devices'),
+    (uuid_generate_v4(), 'devices.admin_health', 'View global device health check'),
+    (uuid_generate_v4(), 'audit.view', 'View full audit modules'),
+    (uuid_generate_v4(), 'audit.integrity', 'Validate audit hash chain integrity'),
+    (uuid_generate_v4(), 'security.panic', 'Activate emergency panic mode'),
+    (uuid_generate_v4(), 'admin.recalc_risk', 'Recalculate student risk metrics'),
+    (uuid_generate_v4(), 'admin.users_manage', 'Manage system users'),
+    (uuid_generate_v4(), 'students.create', 'Create and edit students'),
+    (uuid_generate_v4(), 'students.view', 'View student list'),
+    (uuid_generate_v4(), 'tracking.manage', 'Manage student tracking cases'),
+    (uuid_generate_v4(), 'behavior.view_risk', 'View behavioral risk metrics')
+ON CONFLICT (permission_code) DO NOTHING;
+
+-- =============================================================================
+-- ROLE_PERMISSIONS (helper function + assignments)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION assign_permission_to_role(p_role_name VARCHAR, p_permission_code VARCHAR)
+RETURNS VOID AS $$
+DECLARE
+    v_role_id UUID;
+    v_permission_id UUID;
+BEGIN
+    SELECT role_id INTO v_role_id FROM roles WHERE role_name = p_role_name;
+    SELECT permission_id INTO v_permission_id FROM permissions WHERE permission_code = p_permission_code;
+    IF v_role_id IS NOT NULL AND v_permission_id IS NOT NULL THEN
+        INSERT INTO role_permissions (role_id, permission_id)
+        VALUES (v_role_id, v_permission_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RECTOR: all permissions (rol máximo)
+SELECT assign_permission_to_role('RECTOR', 'dashboard.global_view');
+SELECT assign_permission_to_role('RECTOR', 'operations.sos');
+SELECT assign_permission_to_role('RECTOR', 'operations.inasistencia');
+SELECT assign_permission_to_role('RECTOR', 'operations.citacion');
+SELECT assign_permission_to_role('RECTOR', 'operations.autorizar_salida');
+SELECT assign_permission_to_role('RECTOR', 'operations.permiso');
+SELECT assign_permission_to_role('RECTOR', 'operations.solicitud');
+SELECT assign_permission_to_role('RECTOR', 'operations.daño');
+SELECT assign_permission_to_role('RECTOR', 'operations.pedagogica');
+SELECT assign_permission_to_role('RECTOR', 'operations.horario');
+SELECT assign_permission_to_role('RECTOR', 'operations.incidente');
+SELECT assign_permission_to_role('RECTOR', 'operations.seguimiento');
+SELECT assign_permission_to_role('RECTOR', 'consultations.global_view');
+SELECT assign_permission_to_role('RECTOR', 'reports.preview');
+SELECT assign_permission_to_role('RECTOR', 'reports.export');
+SELECT assign_permission_to_role('RECTOR', 'devices.manage');
+SELECT assign_permission_to_role('RECTOR', 'audit.view');
+SELECT assign_permission_to_role('RECTOR', 'audit.integrity');
+SELECT assign_permission_to_role('RECTOR', 'security.panic');
+SELECT assign_permission_to_role('RECTOR', 'admin.recalc_risk');
+SELECT assign_permission_to_role('RECTOR', 'admin.users_manage');
+SELECT assign_permission_to_role('RECTOR', 'students.create');
+SELECT assign_permission_to_role('RECTOR', 'students.view');
+SELECT assign_permission_to_role('RECTOR', 'tracking.manage');
+SELECT assign_permission_to_role('RECTOR', 'behavior.view_risk');
+
+-- COORDINATOR: similar to RECTOR minus admin functions
+SELECT assign_permission_to_role('COORDINATOR', 'dashboard.global_view');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.sos');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.inasistencia');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.citacion');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.autorizar_salida');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.permiso');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.solicitud');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.daño');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.pedagogica');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.horario');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.incidente');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.seguimiento');
+SELECT assign_permission_to_role('COORDINATOR', 'consultations.global_view');
+SELECT assign_permission_to_role('COORDINATOR', 'reports.preview');
+SELECT assign_permission_to_role('COORDINATOR', 'reports.export');
+SELECT assign_permission_to_role('COORDINATOR', 'devices.manage');
+SELECT assign_permission_to_role('COORDINATOR', 'audit.view');
+SELECT assign_permission_to_role('COORDINATOR', 'audit.integrity');
+SELECT assign_permission_to_role('COORDINATOR', 'security.panic');
+SELECT assign_permission_to_role('COORDINATOR', 'students.create');
+SELECT assign_permission_to_role('COORDINATOR', 'students.view');
+SELECT assign_permission_to_role('COORDINATOR', 'tracking.manage');
+SELECT assign_permission_to_role('COORDINATOR', 'behavior.view_risk');
+
+-- TEACHER: classroom operations only
+SELECT assign_permission_to_role('TEACHER', 'dashboard.teacher_view');
+SELECT assign_permission_to_role('TEACHER', 'operations.inasistencia');
+SELECT assign_permission_to_role('TEACHER', 'operations.citacion');
+SELECT assign_permission_to_role('TEACHER', 'operations.permiso');
+SELECT assign_permission_to_role('TEACHER', 'operations.pedagogica');
+SELECT assign_permission_to_role('TEACHER', 'operations.horario');
+SELECT assign_permission_to_role('TEACHER', 'operations.incidente');
+SELECT assign_permission_to_role('TEACHER', 'operations.seguimiento');
+SELECT assign_permission_to_role('TEACHER', 'consultations.teacher_view');
+SELECT assign_permission_to_role('TEACHER', 'reports.preview');
+SELECT assign_permission_to_role('TEACHER', 'students.view');
+SELECT assign_permission_to_role('TEACHER', 'behavior.view_risk');
+
+-- SECRETARY: student management, reports, queries
+SELECT assign_permission_to_role('SECRETARY', 'dashboard.global_view');
+SELECT assign_permission_to_role('SECRETARY', 'students.create');
+SELECT assign_permission_to_role('SECRETARY', 'students.view');
+SELECT assign_permission_to_role('SECRETARY', 'consultations.global_view');
+SELECT assign_permission_to_role('SECRETARY', 'reports.preview');
+SELECT assign_permission_to_role('SECRETARY', 'reports.export');
+SELECT assign_permission_to_role('SECRETARY', 'operations.solicitud');
+
+-- COUNSELOR: tracking, behavior, consultations
+SELECT assign_permission_to_role('COUNSELOR', 'dashboard.teacher_view');
+SELECT assign_permission_to_role('COUNSELOR', 'tracking.manage');
+SELECT assign_permission_to_role('COUNSELOR', 'behavior.view_risk');
+SELECT assign_permission_to_role('COUNSELOR', 'consultations.teacher_view');
+SELECT assign_permission_to_role('COUNSELOR', 'consultations.global_view');
+SELECT assign_permission_to_role('COUNSELOR', 'operations.seguimiento');
+SELECT assign_permission_to_role('COUNSELOR', 'students.view');
+
+-- SECURITY: view only
+SELECT assign_permission_to_role('SECURITY', 'students.view');
+SELECT assign_permission_to_role('SECURITY', 'consultations.global_view');
+SELECT assign_permission_to_role('SECURITY', 'reports.preview');
+
+-- AUXILIARY: similar to secretary minus student creation
+SELECT assign_permission_to_role('AUXILIARY', 'dashboard.global_view');
+SELECT assign_permission_to_role('AUXILIARY', 'students.view');
+SELECT assign_permission_to_role('AUXILIARY', 'consultations.global_view');
+SELECT assign_permission_to_role('AUXILIARY', 'reports.preview');
+SELECT assign_permission_to_role('AUXILIARY', 'operations.solicitud');
+
+DROP FUNCTION IF EXISTS assign_permission_to_role(VARCHAR, VARCHAR);
+
+-- =============================================================================
+-- REGISTRO DE LA MIGRACIÓN BASE
+-- =============================================================================
+SELECT register_migration(
+    'nexo_full_migration.sql',
+    '2026-05',
+    'Esquema base completo consolidado: tablas, índices, constraints, triggers, funciones, RLS, particiones, seed mínimo',
+    NULL,
+    CURRENT_USER,
+    NULL,
+    'Incluye consolidación de múltiples migraciones antiguas. Generación UUID.'
+);

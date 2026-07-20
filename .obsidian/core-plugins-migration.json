@@ -1,0 +1,13 @@
+{
+  "daily-notes": {
+    "folder": "vault/10-DIARIO",
+    "template": "vault/12-PLANTILLAS/📅 Daily Note",
+    "dateFormat": "YYYY-MM-DD",
+    "newFileLocation": "folder",
+    "openOnStartup": false
+  },
+  "templates": {
+    "folder": "vault/12-PLANTILLAS"
+  },
+  "workspaces": {}
+}

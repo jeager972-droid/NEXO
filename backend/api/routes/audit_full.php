@@ -10,7 +10,7 @@ if (strpos($cleanPath, '/audit/') !== 0) {
     return; // No es ruta de auditoría, salir silenciosamente
 }
 
-$authUser = requireAuth(['RECTOR', 'COORDINADOR', 'SUPER_RECTOR']);
+$authUser = requireAuth(['RECTOR', 'COORDINATOR']);
 $schoolId = $authUser['school_id'];
 
 function auditJson($data, $code = 200) {
@@ -37,7 +37,7 @@ function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
     $from = $_GET['from'] ?? null;
     $to   = $_GET['to']   ?? null;
     if ($from && $to) {
-        $conds[] = "({$tableAlias}.{$dateCol} AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?";
+        $conds[] = "({$tableAlias}.{$dateCol})::date BETWEEN ? AND ?";
         $params[] = $from;
         $params[] = $to;
     }
@@ -225,7 +225,7 @@ if ($cleanPath === '/audit/attendance/by-group' && $method === 'GET') {
             LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
             LEFT JOIN biometric_events be ON sga.student_id = be.student_id
                 AND be.school_id = ?
-                AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+                AND (be.event_timestamp)::date = (CURRENT_TIMESTAMP)::date
             WHERE ag.school_id = ?
             GROUP BY ag.group_id, ag.group_name
             ORDER BY ag.group_name
@@ -248,7 +248,7 @@ if ($cleanPath === '/audit/attendance/by-student' && $method === 'GET') {
                    COUNT(*) FILTER (WHERE be.event_type LIKE 'INASISTENCIA%') AS inasistencias
             FROM students s
             LEFT JOIN biometric_events be ON s.student_id = be.student_id
-            WHERE s.school_id = ? AND s.active = TRUE
+            WHERE s.school_id = ? AND s.deleted_at IS NULL
         ";
         $params = [$schoolId];
         if ($q !== '') {
@@ -783,7 +783,7 @@ if ($cleanPath === '/audit/teacher/classes' && $method === 'GET') {
             LEFT JOIN users u ON sch.teacher_user_id = u.user_id
             LEFT JOIN biometric_events be ON be.schedule_id = sch.schedule_id
                 AND be.event_type LIKE 'INGRESO_%'
-                AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')::date
+                AND (be.event_timestamp)::date = (CURRENT_TIMESTAMP)::date
             WHERE sch.teacher_user_id IN (
                 SELECT user_id FROM users WHERE school_id = ? AND role_id IN (
                     SELECT role_id FROM roles WHERE role_name = 'TEACHER'
@@ -975,7 +975,7 @@ if ($cleanPath === '/audit/security/admin-activity' && $method === 'GET') {
             LEFT JOIN users u ON gal.performed_by_user_id = u.user_id
             WHERE gal.school_id = ? AND gal.performed_by_user_id IN (
                 SELECT user_id FROM users WHERE school_id = ? AND role_id IN (
-                    SELECT role_id FROM roles WHERE role_name IN ('RECTOR','SUPER_RECTOR','COORDINADOR')
+                    SELECT role_id FROM roles WHERE role_name IN ('RECTOR','COORDINATOR')
                 )
             )
             ORDER BY gal.created_at DESC
@@ -1157,7 +1157,7 @@ if ($cleanPath === '/audit/historical/attendance' && $method === 'GET') {
         $stmt = $conn->prepare("
             SELECT be.event_id, be.event_type, be.event_timestamp, s.first_name, s.last_name
             FROM biometric_events be LEFT JOIN students s ON be.student_id = s.student_id
-            WHERE be.school_id = ? AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+            WHERE be.school_id = ? AND (be.event_timestamp)::date BETWEEN ? AND ?
             ORDER BY be.event_timestamp DESC LIMIT 200
         ");
         $stmt->execute([$schoolId, $from, $to]);
@@ -1172,7 +1172,7 @@ if ($cleanPath === '/audit/historical/discipline' && $method === 'GET') {
         $stmt = $conn->prepare("
             SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved, s.first_name, s.last_name
             FROM security_incidents si LEFT JOIN students s ON si.related_student_id = s.student_id
-            WHERE si.school_id = ? AND (si.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+            WHERE si.school_id = ? AND (si.detected_at)::date BETWEEN ? AND ?
             ORDER BY si.detected_at DESC LIMIT 200
         ");
         $stmt->execute([$schoolId, $from, $to]);
@@ -1204,7 +1204,7 @@ if ($cleanPath === '/audit/historical/messaging' && $method === 'GET') {
         $stmt = $conn->prepare("
             SELECT tm.twilio_message_id, tm.phone_number, tm.message_content, tm.direction, tm.type_code, tm.delivery_status, tm.sent_at, s.first_name, s.last_name
             FROM twilio_messages tm LEFT JOIN students s ON tm.student_id = s.student_id
-            WHERE tm.school_id = ? AND (tm.sent_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+            WHERE tm.school_id = ? AND (tm.sent_at)::date BETWEEN ? AND ?
             ORDER BY tm.sent_at DESC LIMIT 200
         ");
         $stmt->execute([$schoolId, $from, $to]);
@@ -1267,16 +1267,16 @@ if ($cleanPath === '/audit/historical/download-consolidated' && $method === 'GET
         $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
         $to   = $_GET['to']   ?? date('Y-m-d');
         $consolidated = [];
-        $stmt = $conn->prepare("SELECT 'attendance' AS section, COUNT(*) AS count FROM biometric_events WHERE school_id = ? AND (event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?");
+        $stmt = $conn->prepare("SELECT 'attendance' AS section, COUNT(*) AS count FROM biometric_events WHERE school_id = ? AND (event_timestamp)::date BETWEEN ? AND ?");
         $stmt->execute([$schoolId, $from, $to]);
         $consolidated[] = $stmt->fetch(PDO::FETCH_ASSOC);
-        $stmt = $conn->prepare("SELECT 'discipline' AS section, COUNT(*) AS count FROM security_incidents WHERE school_id = ? AND (detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?");
+        $stmt = $conn->prepare("SELECT 'discipline' AS section, COUNT(*) AS count FROM security_incidents WHERE school_id = ? AND (detected_at)::date BETWEEN ? AND ?");
         $stmt->execute([$schoolId, $from, $to]);
         $consolidated[] = $stmt->fetch(PDO::FETCH_ASSOC);
-        $stmt = $conn->prepare("SELECT 'messages' AS section, COUNT(*) AS count FROM twilio_messages WHERE school_id = ? AND (sent_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?");
+        $stmt = $conn->prepare("SELECT 'messages' AS section, COUNT(*) AS count FROM twilio_messages WHERE school_id = ? AND (sent_at)::date BETWEEN ? AND ?");
         $stmt->execute([$schoolId, $from, $to]);
         $consolidated[] = $stmt->fetch(PDO::FETCH_ASSOC);
-        $stmt = $conn->prepare("SELECT 'sos' AS section, COUNT(*) AS count FROM sos_alerts WHERE school_id = ? AND (emitted_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?");
+        $stmt = $conn->prepare("SELECT 'sos' AS section, COUNT(*) AS count FROM sos_alerts WHERE school_id = ? AND (emitted_at)::date BETWEEN ? AND ?");
         $stmt->execute([$schoolId, $from, $to]);
         $consolidated[] = $stmt->fetch(PDO::FETCH_ASSOC);
         auditJson(['status' => 'ok', 'from' => $from, 'to' => $to, 'data' => $consolidated]);
@@ -1299,7 +1299,7 @@ if ($cleanPath === '/audit/consolidated/attendance' && $method === 'GET') {
                 COUNT(*) FILTER (WHERE event_type LIKE 'INASISTENCIA%') AS absences,
                 COUNT(DISTINCT student_id) AS unique_students
             FROM biometric_events
-            WHERE school_id = ? AND (event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+            WHERE school_id = ? AND (event_timestamp)::date BETWEEN ? AND ?
         ");
         $stmt->execute([$schoolId, $from, $to]);
         auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
@@ -1319,7 +1319,7 @@ if ($cleanPath === '/audit/consolidated/discipline' && $method === 'GET') {
                 COUNT(*) FILTER (WHERE severity_level = 'LOW') AS low,
                 COUNT(*) FILTER (WHERE resolved = TRUE) AS resolved
             FROM security_incidents
-            WHERE school_id = ? AND (detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+            WHERE school_id = ? AND (detected_at)::date BETWEEN ? AND ?
         ");
         $stmt->execute([$schoolId, $from, $to]);
         auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
@@ -1352,7 +1352,7 @@ if ($cleanPath === '/audit/consolidated/messaging' && $method === 'GET') {
                 COUNT(*) FILTER (WHERE delivery_status NOT IN ('delivered','read','sent')) AS failed,
                 COUNT(*) FILTER (WHERE type_code = 'CITACION') AS citations
             FROM twilio_messages
-            WHERE school_id = ? AND (sent_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
+            WHERE school_id = ? AND (sent_at)::date BETWEEN ? AND ?
         ");
         $stmt->execute([$schoolId, $from, $to]);
         auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
@@ -1395,12 +1395,12 @@ if ($cleanPath === '/audit/consolidated/institutional' && $method === 'GET') {
         $to   = $_GET['to']   ?? date('Y-m-d');
         $stmt = $conn->prepare("
             SELECT
-                (SELECT COUNT(*) FROM students WHERE school_id = ? AND active = TRUE) AS active_students,
-                (SELECT COUNT(*) FROM users WHERE school_id = ? AND active = TRUE) AS active_users,
+                (SELECT COUNT(*) FROM students WHERE school_id = ? AND deleted_at IS NULL) AS active_students,
+                (SELECT COUNT(*) FROM users WHERE school_id = ? AND deleted_at IS NULL) AS active_users,
                 (SELECT COUNT(*) FROM academic_groups WHERE school_id = ?) AS groups,
-                (SELECT COUNT(*) FROM biometric_events WHERE school_id = ? AND (event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?) AS total_events,
-                (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND (emitted_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?) AS sos_count,
-                (SELECT COUNT(*) FROM security_incidents WHERE school_id = ? AND (detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?) AS incidents_count
+                (SELECT COUNT(*) FROM biometric_events WHERE school_id = ? AND (event_timestamp)::date BETWEEN ? AND ?) AS total_events,
+                (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND (emitted_at)::date BETWEEN ? AND ?) AS sos_count,
+                (SELECT COUNT(*) FROM security_incidents WHERE school_id = ? AND (detected_at)::date BETWEEN ? AND ?) AS incidents_count
         ");
         $stmt->execute([$schoolId, $schoolId, $schoolId, $schoolId, $from, $to, $schoolId, $from, $to, $schoolId, $from, $to]);
         auditJson(['status' => 'ok', 'period' => [$from, $to], 'summary' => $stmt->fetch(PDO::FETCH_ASSOC)]);
@@ -1432,7 +1432,7 @@ if (preg_match('#^/audit/groups/([^/]+)/students$#', $cleanPath, $m) && $method 
             SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number
             FROM students s
             INNER JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
-            WHERE s.school_id = ? AND sga.group_id = ? AND s.active = TRUE
+            WHERE s.school_id = ? AND sga.group_id = ? AND s.deleted_at IS NULL
             ORDER BY s.last_name, s.first_name
         ");
         $stmt->execute([$schoolId, $groupId]);
@@ -1446,7 +1446,7 @@ if ($cleanPath === '/audit/staff' && $method === 'GET') {
             SELECT u.user_id, u.first_name, u.last_name, u.email, r.role_name
             FROM users u
             LEFT JOIN roles r ON u.role_id = r.role_id
-            WHERE u.school_id = ? AND u.active = TRUE
+            WHERE u.school_id = ? AND u.deleted_at IS NULL
               AND r.role_name NOT IN ('STUDENT','ESTUDIANTE')
             ORDER BY u.last_name, u.first_name
         ");

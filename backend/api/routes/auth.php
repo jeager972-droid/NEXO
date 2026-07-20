@@ -1,18 +1,7 @@
 <?php
-// routes/auth.php - Manejo de autenticación
 global $cleanPath, $conn, $input, $method;
 
-/**
- * @OA\Info(
- *     title="NEXO API",
- *     version="7.5.0",
- *     description="API REST para la plataforma educativa NEXO - Control de asistencia biométrica"
- * )
- * @OA\Server(url="https://nexo-production-dbe3.up.railway.app", description="Production")
- * @OA\Server(url="http://localhost:8080", description="Local Development")
- */
 
-// ROLES y normalizeRole() ahora están en _auth_middleware.php para disponibilidad global
 require_once __DIR__ . '/_auth_middleware.php';
 
 function isLoginThrottled($email) {
@@ -23,7 +12,7 @@ function isLoginThrottled($email) {
     $maxAttempts = 8;
 
     if (!$conn) {
-        return false; // Sin DB no podemos verificar — log en enforceRateLimit ya cubre
+        return false;
     }
     try {
         $sql = "
@@ -59,39 +48,6 @@ function verifyUserPassword($password, $hash) {
     return password_verify($password, $hash);
 }
 
-/**
- * @OA\Post(
- *     path="/auth/login",
- *     summary="Iniciar sesión",
- *     description="Autentica un usuario y devuelve un JWT en cookie HttpOnly",
- *     tags={"Autenticación"},
- *     @OA\RequestBody(
- *         required=true,
- *         @OA\JsonContent(
- *             required={"email", "password"},
- *             @OA\Property(property="email", type="string", format="email", example="rector@colegio.edu"),
- *             @OA\Property(property="password", type="string", format="password", example="SecurePass123!")
- *         )
- *     ),
- *     @OA\Response(
- *         response=200,
- *         description="Login exitoso",
- *         @OA\JsonContent(
- *             @OA\Property(property="status", type="string", example="ok"),
- *             @OA\Property(property="user", type="object",
- *                 @OA\Property(property="id", type="integer"),
- *                 @OA\Property(property="email", type="string"),
- *                 @OA\Property(property="role", type="string", enum={"RECTOR","COORDINADOR","DOCENTE","SECRETARIA","PORTERO","AUXILIAR","PSICORIENTADOR"}),
- *                 @OA\Property(property="school_id", type="integer"),
- *                 @OA\Property(property="school_name", type="string")
- *             )
- *         )
- *     ),
- *     @OA\Response(response=400, description="Email o contraseña faltantes"),
- *     @OA\Response(response=401, description="Credenciales inválidas"),
- *     @OA\Response(response=429, description="Demasiados intentos (rate limited)")
- * )
- */
 if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
     $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
     $password = $input['password'] ?? '';
@@ -107,7 +63,7 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        $checkUser = $conn->prepare("SELECT user_id, school_id, role_id, active FROM users WHERE email = :email");
+        $checkUser = $conn->prepare("SELECT user_id, school_id, role_id, (deleted_at IS NULL) AS active FROM users WHERE email = :email");
         $checkUser->execute(['email' => $email]);
         $rawUser = $checkUser->fetch(PDO::FETCH_ASSOC);
 
@@ -117,7 +73,7 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
         }
 
         $stmt = $conn->prepare("
-            SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, u.active,
+            SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
                    u.profile_photo_url, u.work_shift, u.phone, u.phone_verified,
                    r.role_name, s.school_id, s.school_name
             FROM users u
@@ -137,12 +93,16 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
         if (verifyUserPassword($password, $user['password_hash'])) {
             securityLog('LOGIN_SUCCESS', "User authenticated: " . $user['user_id']);
 
-            // Re-hash si el hash actual usa crypt() legacy o necesita upgrade
             if (password_needs_rehash($user['password_hash'], PASSWORD_BCRYPT, ['cost' => 12])) {
                 try {
                     $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-                    $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
-                    $rehashStmt->execute([$newHash, $user['user_id']]);
+                    try {
+                        $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ?, password_salt = NULL WHERE user_id = ?");
+                        $rehashStmt->execute([$newHash, $user['user_id']]);
+                    } catch (PDOException $e) {
+                        $rehashStmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
+                        $rehashStmt->execute([$newHash, $user['user_id']]);
+                    }
                     securityLog('PASSWORD_REHASHED', 'User ' . $user['user_id'] . ' migrated to bcrypt cost=12');
                 } catch (Throwable $e) {
                     securityLog('PASSWORD_REHASH_FAILED', $e->getMessage());
@@ -155,7 +115,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             $normalizedRole = normalizeRole($user['role_name']);
             $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
 
-            // 2FA opcional: si LOGIN_2FA_ENABLED=true y usuario tiene teléfono verificado
             $userPhone = isset($user['phone']) ? preg_replace('/[^0-9+]/', '', $user['phone']) : '';
             $twoFaEnabled = getenv('LOGIN_2FA_ENABLED') === 'true';
             if ($twoFaEnabled && $userPhone !== '' && !empty($user['phone_verified'])) {
@@ -168,7 +127,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 ");
                 $ins->execute([$user['user_id'], $user['email'], $code, $expiresAt]);
 
-                // Cambio: encolar OTP en Redis para envío asíncrono (evita bloqueo de 2s en login)
                 try {
                     $redis = getRedisConnection();
                     if ($redis) {
@@ -187,7 +145,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                     }
                 } catch (Exception $e) {
                     securityLog('2FA_REDIS_ENQUEUE_FAILED', $e->getMessage());
-                    // Si Redis falla, intentar envío directo con timeout reducido
                     $otpResult = sendTwilioDirect($userPhone, "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.");
                     if (!$otpResult['ok']) {
                         http_response_code(503);
@@ -196,7 +153,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                     }
                 }
 
-                // Responder inmediatamente sin esperar confirmación de Twilio
                 http_response_code(202);
                 echo json_encode([
                     'status' => '2fa_required',
@@ -214,7 +170,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 'exp' => time() + $tokenTtlSeconds
             ]);
             
-            // PILAR 2.2: Cookie HttpOnly, Secure, SameSite=None (cross-domain)
             $cookieOpts = [
                 'expires' => time() + $tokenTtlSeconds,
                 'path' => '/',
@@ -257,11 +212,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
     exit;
 }
 
-// ============================================================================
-// POST /auth/verify-2fa
-// Body: { email: string, code: string }
-// Completa el login después de 2FA enviado por WhatsApp
-// ============================================================================
 if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
     try {
         $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
@@ -278,7 +228,7 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         }
 
         $userStmt = $conn->prepare("
-            SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
+            SELECT u.user_id, u.email, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
                    u.profile_photo_url, u.work_shift,
                    r.role_name, s.school_id, s.school_name
             FROM users u
@@ -306,7 +256,6 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         $codeRow = $codeStmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$codeRow) {
-            // Increment attempts for the most recent code (even if it doesn't match)
             $incrStmt = $conn->prepare("
                 UPDATE verification_codes
                 SET attempts = attempts + 1
@@ -336,7 +285,6 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             exit(json_encode(['status' => 'error', 'message' => 'Código expirado']));
         }
 
-        // Marcar código como usado
         $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
         $mark->execute([$codeRow['code_id']]);
 
@@ -382,7 +330,6 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
 }
 
 if ($cleanPath === '/auth/logout' && $method === 'POST') {
-    // CSRF check: require X-Requested-With header
     if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || 
         $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest') {
         http_response_code(403);

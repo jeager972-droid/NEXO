@@ -1,8 +1,7 @@
 <?php
-// routes/operations.php - Manejo de comandos (SOS, Inasistencia, Citación, etc.)
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
-require_once __DIR__ . '/../lib/twilio.php'; // funciones Twilio compartidas
+require_once __DIR__ . '/../lib/twilio.php';
 
 function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     try {
@@ -32,7 +31,6 @@ function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = n
         securityLog('TWILIO_SEND_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
-    // Cambio: usar cola asíncrona por defecto en lugar de envío síncrono bloqueante
     return enqueueTwilioJob($to, $body, $schoolId, $studentId, $guardianId, $senderUserId, $typeCode);
 }
 
@@ -76,7 +74,6 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
     } catch (Exception $e) {
         securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
     }
-    // Fallback: Redis no disponible — enviar directamente
     $result = sendTwilioDirect($to, $body);
     if ($result['ok']) {
         securityLog('TWILIO_DIRECT_SENT', "SID: {$result['sid']} To: $to");
@@ -85,31 +82,8 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
     securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
     return ['ok' => false, 'reason' => 'direct_failed', 'error' => $result['error'], 'phone_norm' => $toNorm];
 }
-/**
- * @OA\Post(
- *     path="/operations/sos",
- *     summary="Registrar alerta SOS",
- *     description="Registra una alerta de emergencia SOS en el sistema. Notifica a las autoridades del colegio.",
- *     tags={"Operaciones"},
- *     security={{"cookieAuth":{}}},
- *     @OA\RequestBody(
- *         required=true,
- *         @OA\JsonContent(
- *             required={"params"},
- *             @OA\Property(property="params", type="object",
- *                 @OA\Property(property="location", type="string", example="Patio central"),
- *                 @OA\Property(property="message", type="string", example="Estudiante desmayado")
- *             )
- *         )
- *     ),
- *     @OA\Response(response=200, description="Alerta registrada"),
- *     @OA\Response(response=403, description="Rol no autorizado"),
- *     @OA\Response(response=401, description="No autenticado")
- * )
- */
 if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $input['action'] === 'EXECUTE_COMMAND')) {
     
-    // Nuevo endpoint para consultar estado de mensajes de twilio
     if ($cleanPath === '/operations/twilio-status' && $method === 'POST') {
         $msgIds = $input['message_ids'] ?? [];
         if (empty($msgIds) || !is_array($msgIds)) {
@@ -121,7 +95,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         $stmt->execute($msgIds);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Fallback: Si los mensajes están en QUEUED y tienen provider_message_sid, consultar Twilio API directamente
         $needsTwilioCheck = [];
         foreach ($results as &$msg) {
             if ($msg['delivery_status'] === 'QUEUED' && !empty($msg['provider_message_sid'])) {
@@ -150,11 +123,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             $twilioData = json_decode($response, true);
                             $twilioStatus = strtoupper($twilioData['status'] ?? 'UNKNOWN');
                             
-                            // Actualizar en DB
                             $updateStmt = $conn->prepare("UPDATE twilio_messages SET delivery_status = ? WHERE provider_message_sid = ?");
                             $updateStmt->execute([$twilioStatus, $providerSid]);
                             
-                            // Actualizar resultado
                             foreach ($results as &$r) {
                                 if ($r['provider_message_sid'] === $providerSid) {
                                     $r['delivery_status'] = $twilioStatus;
@@ -198,21 +169,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     $role = $authUser['role'];
     $params = $input['params'] ?? [];
 
-    $rolePermissions = [
-        'sos' => ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
-        'citacion' => ['COORDINADOR', 'DOCENTE', 'PSICORIENTADOR'],
-        'inasistencia' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'AUXILIAR', 'PORTERO'],
-        'autorizar_salida' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
-        'permiso' => ['DOCENTE', 'COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'PSICORIENTADOR'],
-        'incidente' => ['DOCENTE', 'PSICORIENTADOR'],
-        'solicitud' => ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR'],
-        'daño' => ['AUXILIAR', 'PORTERO'],
-        'pedagogica' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
-        'horario' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR'],
-        'seguimiento' => ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR']
-    ];
-
-    if (!isset($rolePermissions[$action]) || !in_array($role, $rolePermissions[$action])) {
+    if (!in_array('operations.' . $action, $authUser['permissions'] ?? [])) {
         securityLog('UNAUTHORIZED_COMMAND_ATTEMPT', "User: $userId, Role: $role, Cmd: $action");
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
@@ -230,20 +187,18 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 ");
                 $sosStmt->execute([$schoolId, $userId, $message]);
 
-                // Notificar Coordinación y Rectoría por WhatsApp y notificaciones internas
                 $reporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
                 $sosMsg = "🚨 *NEXO — ALERTA SOS*\n\nUbicación: {$location}\nMensaje: {$message}\nReportado por: {$reporterName} ({$role})\n\nVerifique la plataforma inmediatamente.";
 
                 $notifyRoles = [];
-                if ($role === 'RECTOR' || $role === 'SUPER_RECTOR') {
-                    $notifyRoles = ['COORDINADOR'];
-                } else if ($role === 'COORDINADOR') {
-                    $notifyRoles = ['RECTOR', 'SUPER_RECTOR'];
+                if ($role === 'RECTOR') {
+                    $notifyRoles = ['COORDINATOR'];
+                } else if ($role === 'COORDINATOR') {
+                    $notifyRoles = ['RECTOR'];
                 } else {
-                    $notifyRoles = ['RECTOR', 'SUPER_RECTOR', 'COORDINADOR'];
+                    $notifyRoles = ['RECTOR', 'COORDINATOR'];
                 }
 
-                // FIX: Colapsar SELECT de roles en una sola query y hacer batch INSERT de notifications
                 $placeholders = implode(',', array_fill(0, count($notifyRoles), '?'));
                 $nStmt = $conn->prepare("
                     SELECT user_id, phone FROM users
@@ -253,14 +208,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $recipients = $nStmt->fetchAll(PDO::FETCH_ASSOC);
 
                 if (!empty($recipients)) {
-                    // Batch enqueue Twilio
                     foreach ($recipients as $r) {
                         if (!empty($r['phone'])) {
                             enqueueTwilioJob($r['phone'], $sosMsg, $schoolId, null, null, $userId, 'SOS_ALERT');
                         }
                     }
 
-                    // Batch INSERT notifications
                     $rows = [];
                     $params = [];
                     $sosMeta = json_encode([
@@ -356,7 +309,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     break;
                 }
 
-                $isTeacher = ($role === 'DOCENTE' || $role === 'PSICORIENTADOR');
+                $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? []);
                 if ($isTeacher) {
                     $valStmt = $conn->prepare("
                         SELECT 1 FROM student_group_assignments sga
@@ -402,7 +355,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $deliveryResults[] = enqueueTwilioJob($target['guardian_user_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
                 }
 
-                // Validar que al menos un mensaje fue enviado
                 $anyOk = false;
                 $allMissingPhone = true;
                 foreach ($deliveryResults as $dr) {
@@ -427,18 +379,15 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     break;
                 }
 
-                // FIX: Persistir estado de conversación en Redis para que el webhook inbound
-                // resuelva el student_id exacto en lugar de usar LIMIT 1 arbitrario.
                 try {
                     $redisConv = getRedisConnection();
-                    if (!$redisConv) {
-                        // Redis no disponible, continuar sin persistencia
-                    }
-                    $redisConv->select((int)(getenv('REDIS_DB') ?: 0));
-                    $convPayload = json_encode(['student_id' => (string)$studentId, 'guardian_id' => (string)$target['guardian_id'], 'school_id' => (string)$schoolId, 'ts' => time()], JSON_UNESCAPED_UNICODE);
-                    $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['whatsapp_phone']), 172800, $convPayload);
-                    if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
-                        $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['guardian_user_phone']), 172800, $convPayload);
+                    if ($redisConv) {
+                        $redisConv->select((int)(getenv('REDIS_DB') ?: 0));
+                        $convPayload = json_encode(['student_id' => (string)$studentId, 'guardian_id' => (string)$target['guardian_id'], 'school_id' => (string)$schoolId, 'ts' => time()], JSON_UNESCAPED_UNICODE);
+                        $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['whatsapp_phone']), 172800, $convPayload);
+                        if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
+                            $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['guardian_user_phone']), 172800, $convPayload);
+                        }
                     }
                 } catch (Exception $e) {
                     securityLog('TWILIO_CONV_REDIS_SKIP', $e->getMessage());
@@ -500,7 +449,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     // FIX: Batch INSERT notifications para coordinadores
                     $coordStmt = $conn->prepare("
                         SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
                     ");
                     $coordStmt->execute([$schoolId]);
                     $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -582,7 +531,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     // FIX: Batch INSERT notifications para coordinadores
                     $coordStmt = $conn->prepare("
                         SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR') AND active = TRUE
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
                     ");
                     $coordStmt->execute([$schoolId]);
                     $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -605,7 +554,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
 
-                    // Enviar WhatsApp al acudiente avisándole
                     if (!empty($stuMeta)) {
                         $guardsStmt = $conn->prepare("
                             SELECT g.guardian_id, g.whatsapp_phone, u.phone AS guardian_user_phone
@@ -623,23 +571,21 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             $salidaMsg = "\xF0\x9F\x9F\xA2 *NEXO — Salida autorizada*\n\nSe ha permitido la salida de *{$sName}* del colegio.\n\nSi usted no autorizó esto o fue un error, responda *9* a este mensaje y le notificaremos a la institución inmediatamente.";
                             $sendResult = enqueueTwilioJob($gRow['whatsapp_phone'], $salidaMsg, $schoolId, $studentId, $gRow['guardian_id'], $userId, 'AUTORIZAR_SALIDA');
 
-                            // Guardar contexto en Redis para manejar respuesta '9'
                             try {
                                 $redisCtx = getRedisConnection();
-                                if (!$redisCtx) {
-                                    // Redis no disponible, continuar sin contexto
+                                if ($redisCtx) {
+                                    $redisCtx->select((int)(getenv('REDIS_DB') ?: 0));
+                                    $normalizedPhone = preg_replace('/[^0-9+]/', '', $gRow['whatsapp_phone']);
+                                    $ctxPayload = json_encode([
+                                        'action' => 'autorizar_salida',
+                                        'student_id' => $studentId,
+                                        'student_name' => $sName,
+                                        'issuer_user_id' => $userId,
+                                        'school_id' => $schoolId,
+                                        'ts' => time(),
+                                    ], JSON_UNESCAPED_UNICODE);
+                                    $redisCtx->setex('salida_context:' . $normalizedPhone, 86400, $ctxPayload);
                                 }
-                                $redisCtx->select((int)(getenv('REDIS_DB') ?: 0));
-                                $normalizedPhone = preg_replace('/[^0-9+]/', '', $gRow['whatsapp_phone']);
-                                $ctxPayload = json_encode([
-                                    'action' => 'autorizar_salida',
-                                    'student_id' => $studentId,
-                                    'student_name' => $sName,
-                                    'issuer_user_id' => $userId,
-                                    'school_id' => $schoolId,
-                                    'ts' => time(),
-                                ], JSON_UNESCAPED_UNICODE);
-                                $redisCtx->setex('salida_context:' . $normalizedPhone, 86400, $ctxPayload);
                             } catch (Throwable $e) {
                                 securityLog('SALIDA_REDIS_CTX_ERROR', $e->getMessage());
                             }
@@ -661,7 +607,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $destination = trim((string)($params['destination'] ?? $purpose));
 
                 if ($groupName) {
-                    // Notificar a todos los acudientes del grupo vía WhatsApp
                     $guardStmt = $conn->prepare("
                         SELECT DISTINCT g.whatsapp_phone, g.guardian_id
                         FROM guardians g
@@ -714,10 +659,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'iniciar_seguimiento',
                     ], JSON_UNESCAPED_UNICODE);
 
-                    // FIX: Batch INSERT notifications para psicorientadores
                     $psicoStmt = $conn->prepare("
                         SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'PSICORIENTADOR') AND active = TRUE
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COUNSELOR') AND active = TRUE
                     ");
                     $psicoStmt->execute([$schoolId]);
                     $psicos = $psicoStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -765,7 +709,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
                 }
 
-                // Notificación grupal para cambio de horario (NO para pedagógica — sin aviso a acudientes)
                 if ($action === 'horario' && !empty($params['group'])) {
                     $groupName = filter_var($params['group'], FILTER_SANITIZE_SPECIAL_CHARS);
                     $groupStmt = $conn->prepare("
@@ -784,7 +727,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                // Solicitud interna: guardar mensaje interno + WhatsApp si tiene teléfono + notificación interna
                 if ($action === 'solicitud' && !empty($params['recipient_id'])) {
                     $recStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ? AND school_id = ?");
                     $recStmt->execute([$params['recipient_id'], $schoolId]);
@@ -805,7 +747,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
                         }
 
-                        // Notificación interna con metadata
                         try {
                             $solMeta = json_encode([
                                 'sender_name' => $senderName,
@@ -824,7 +765,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                // Incidente: respetar targets seleccionados
                 if ($action === 'incidente') {
                     $targets = $params['targets'] ?? [];
                     if ($studentId && in_array('padre', $targets)) {
@@ -858,7 +798,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     if (in_array('coordinacion', $targets)) {
                         $cStmt = $conn->prepare("
                             SELECT phone FROM users
-                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINADOR')
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR')
                         ");
                         $cStmt->execute([$schoolId]);
                         while ($cRow = $cStmt->fetch(PDO::FETCH_ASSOC)) {
@@ -868,9 +808,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             }
                         }
                     }
-                    // Fallback: sin targets ni estudiante → notificar coordinación vía WhatsApp
                     if (empty($targets) && !$studentId) {
-                        $targetRole = 'COORDINADOR';
+                        $targetRole = 'COORDINATOR';
                         $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *INCIDENTE*\nReportado por: {$role}\nDetalle: {$reason}";
                         $fStmt = $conn->prepare("
                             SELECT phone FROM users
@@ -884,7 +823,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
 
-                    // Internal notifications (DB) for COORDINADOR and RECTOR
                     $reporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
                     $incMeta = json_encode([
                         'reporter_name' => $reporterName,
@@ -895,9 +833,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'incidente',
                     ], JSON_UNESCAPED_UNICODE);
 
-                    // FIX: Colapsar SELECT de roles y batch INSERT notifications para incidente
                     $incNotifRoles = [];
-                    if (in_array('coordinacion', $targets) || empty($targets)) $incNotifRoles[] = 'COORDINADOR';
+                    if (in_array('coordinacion', $targets) || empty($targets)) $incNotifRoles[] = 'COORDINATOR';
                     if (in_array('rector', $targets)) $incNotifRoles[] = 'RECTOR';
                     if (!empty($incNotifRoles)) {
                         $placeholders = implode(',', array_fill(0, count($incNotifRoles), '?'));
@@ -928,9 +865,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                // Daño sin estudiante: notificar coordinación
                 if ($action === 'daño' && !$studentId) {
-                    $targetRole   = 'COORDINADOR';
+                    $targetRole   = 'COORDINATOR';
                     $locationDaño = trim((string)($params['location'] ?? 'No especificada'));
                     $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *DAÑO*\nUbicación: {$locationDaño}\nReportado por: {$role}\nDetalle: {$reason}";
                     $dStmt = $conn->prepare("

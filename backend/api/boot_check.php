@@ -25,8 +25,7 @@ $jwtPublic  = getenv('JWT_PUBLIC_KEY');
 $jwtSecret  = getenv('JWT_SECRET');
 $hasRS256   = ($jwtPrivate !== false && trim($jwtPrivate) !== '') && ($jwtPublic !== false && trim($jwtPublic) !== '');
 $hasHMAC    = ($jwtSecret !== false && trim($jwtSecret) !== '');
-$hasRawKey  = ($jwtPrivate !== false && trim($jwtPrivate) !== ''); // JWT_PRIVATE_KEY as HMAC fallback
-if (!$hasRS256 && !$hasHMAC && !$hasRawKey) {
+if (!$hasRS256 && !$hasHMAC) {
     $missing[] = 'JWT_PRIVATE_KEY + JWT_PUBLIC_KEY (RS256) o JWT_SECRET (HS256) — se necesita al menos un método de firma JWT';
 }
 

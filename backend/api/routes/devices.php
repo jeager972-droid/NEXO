@@ -9,7 +9,7 @@ global $cleanPath, $conn, $method, $input;
 require_once __DIR__ . '/_auth_middleware.php';
 
 if ($cleanPath === '/devices' && $method === 'GET') {
-    $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $stmt = $conn->prepare("SELECT device_id, device_name, location, active, last_ping, created_at FROM edge_devices WHERE school_id = ? ORDER BY created_at DESC");
     $stmt->execute([$authUser['school_id']]);
     echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
@@ -17,7 +17,7 @@ if ($cleanPath === '/devices' && $method === 'GET') {
 }
 
 if ($cleanPath === '/devices' && $method === 'POST') {
-    $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $name = trim($input['name'] ?? '');
     $location = trim($input['location'] ?? '');
     
@@ -44,7 +44,7 @@ if ($cleanPath === '/devices' && $method === 'POST') {
 }
 
 if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method === 'DELETE') {
-    $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $deviceId = $matches[1];
 
     // Validación estricta de UUID para prevenir errores en PostgreSQL
@@ -64,7 +64,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
 
 // Enviar comando a un dispositivo edge (M2M) — V2: MQTT Pub/Sub con Redis fallback
 if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method === 'POST') {
-    $authUser = requireAuth(['RECTOR', 'COORDINADOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $deviceId = $matches[1];
 
     $ownerStmt = $conn->prepare("SELECT 1 FROM edge_devices WHERE device_id = ? AND school_id = ?");
@@ -130,7 +130,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', true)")->execute();
+    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
     $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -184,7 +184,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'SUPER_RECTOR', true)")->execute();
+    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
     $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -219,7 +219,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
 
 // Admin: listar dispositivos con health check
 if ($cleanPath === '/admin/devices' && $method === 'GET') {
-    $authUser = requireAuth(['SUPER_RECTOR']);
+    $authUser = requireAuth(['RECTOR']);
     $healthOnly = isset($_GET['health']) && $_GET['health'] === '1';
 
     try {

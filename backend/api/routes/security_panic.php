@@ -5,16 +5,17 @@ require_once __DIR__ . '/_auth_middleware.php';
 /**
  * T3: Botón de Pánico Administrativo
  * POST /security/panic
- * Requiere rol SUPER_RECTOR
+ * Requiere rol RECTOR o COORDINADOR
  */
 if ($cleanPath === '/security/panic' && $method === 'POST') {
     $authUser = requireAuth();
     
-    // Validar rol SUPER_RECTOR (único con poder de pánico)
-    if (empty($authUser['role']) || strtoupper($authUser['role']) !== 'SUPER_RECTOR') {
+    // Validar rol (únicos con poder de pánico)
+    $role = strtoupper($authUser['role'] ?? '');
+    if ($role !== 'RECTOR' && $role !== 'COORDINATOR') {
         securityLog('SECURITY_PANIC_DENIED', 'Intento no autorizado', $authUser['id'] ?? null, $authUser['school_id'] ?? null);
         http_response_code(403);
-        exit(json_encode(['status' => 'error', 'message' => 'Acceso denegado. Se requiere rol SUPER_RECTOR.']));
+        exit(json_encode(['status' => 'error', 'message' => 'Acceso denegado. Se requiere rol RECTOR o COORDINADOR.']));
     }
 
     try {
@@ -54,13 +55,13 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
             $authUser['school_id']
         );
         
-        // 4. Notificar al Rector (y a todos los SUPER_RECTOR del mismo colegio)
+        // 4. Notificar a Rectores y Coordinadores del mismo colegio
         $stmt = $conn->prepare("
             INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
             SELECT school_id, user_id, 'ALERTA DE SEGURIDAD', 'Se activó el botón de pánico. Todas las sesiones y dispositivos han sido invalidados.', 'CRITICAL', NOW()
             FROM users u
             JOIN roles r ON u.role_id = r.role_id
-            WHERE r.role_name = 'SUPER_RECTOR' AND u.active = TRUE AND u.school_id = ?
+            WHERE r.role_name IN ('RECTOR', 'COORDINATOR') AND u.deleted_at IS NULL AND u.school_id = ?
         ");
         $stmt->execute([$authUser['school_id']]);
         

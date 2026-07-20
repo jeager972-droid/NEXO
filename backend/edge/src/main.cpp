@@ -159,11 +159,17 @@ private:
             m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
             if (m_stop.load(std::memory_order_acquire)) break;
 
+            if (record.attempts >= 5) {
+                LOG_WARN("[SyncWorker] Registro de auditoria doc={} id={} fallo mas de 5 veces. Marcando error (synced=-1) en DLQ.", record.documento, record.id);
+                db.markAuditError(record.id);
+                continue;
+            }
+
             Estudiante est;
             if (!db.getEstudianteByDocumento(record.documento, est)) {
                 // FIX: Evita el bucle infinito al limpiar huérfanos
                 LOG_WARN("[SyncWorker] Registro huerfano para doc {}. Limpiando cola.", record.documento);
-                db.clearAudit(record.documento, record.event);
+                db.clearAudit(record.id);
                 continue;
             }
 
@@ -183,11 +189,12 @@ private:
             std::string payload = j.dump();
 
             if (CloudManager::getInstance().syncRecord(payload)) {
-                db.clearAudit(record.documento, record.event); // <-- ACTUALIZADO
+                db.clearAudit(record.id); // <-- ACTUALIZADO a usar ID
                 ++synced;
                 delayMs = 1000; // Resetear delay al exito
             } else {
                 ++failed;
+                db.incrementAuditAttempt(record.id);
                 // PILAR 1.2: Exponential Backoff con Jitter (±30%)
                 double j_val = 1.0 + jitter(gen);
                 int sleepMs = static_cast<int>(delayMs * j_val);
@@ -311,7 +318,7 @@ struct LocalTime {
 LocalTime getLocalTimeBogota() {
     time_t now = time(nullptr);
     struct tm tm_buf{};
-    setenv("TZ", "America/Bogota", 1);
+    setenv('TZ', 'UTC', 1);
     tzset();
     localtime_r(&now, &tm_buf);
     return {tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, true};

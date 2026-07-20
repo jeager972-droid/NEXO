@@ -6,7 +6,6 @@ $dbname = getenv('PGDATABASE');
 $user = getenv('PGUSER');
 $pass = getenv('PGPASSWORD');
 
-// Prioridad a DATABASE_URL si existe
 if ($databaseUrl) {
     $dbparts = parse_url($databaseUrl);
     if ($dbparts) {
@@ -25,14 +24,11 @@ if (!$host || !$dbname) {
 try {
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
     $pdo = new PDO($dsn, $user, $pass, [
-        // FIX (SRE-1): EMULATE_PREPARES=true elimina prepared statements del servidor,
-        // haciendo cada query autocontenida. Requerido para PgBouncer pool_mode=transaction.
-        PDO::ATTR_EMULATE_PREPARES => true,
+        PDO::ATTR_EMULATE_PREPARES => false,
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_TIMEOUT => 5  // Timeout de 5s para fallar rápido si DB está lenta
+        PDO::ATTR_TIMEOUT => 5
     ]);
 
-    // SECURITY-FIX: Usar prepared statement — addslashes() no es seguro para PostgreSQL
     if ($hmacSecret = getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET')) {
         $stmt = $pdo->prepare("SELECT set_config('app.nexo_hmac_secret', ?, false)");
         $stmt->execute([$hmacSecret]);

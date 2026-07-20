@@ -62,7 +62,7 @@ $iat = time() - 10;
 $claims = [
     'sub' => 'test_user',
     'school_id' => $schoolId,
-    'role' => 'SUPER_RECTOR',
+    'role' => 'RECTOR',
     'exp' => time() + 3600
 ];
 
@@ -103,7 +103,7 @@ if ($redis) {
     $newClaims = [
         'sub' => 'test_user_new',
         'school_id' => $schoolId,
-        'role' => 'SUPER_RECTOR',
+        'role' => 'RECTOR',
         'exp' => time() + 3600
     ];
     $newToken = issueJwtToken($newClaims);

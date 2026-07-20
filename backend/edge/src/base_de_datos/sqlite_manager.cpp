@@ -50,11 +50,13 @@ bool SqliteManager::createTables() {
         CREATE TABLE IF NOT EXISTS patrones (documento TEXT PRIMARY KEY, ingresos_temprano INTEGER DEFAULT 0, ingresos_tarde INTEGER DEFAULT 0, asistencia_total INTEGER DEFAULT 0);
         -- PAE (Programa de Alimentacion Escolar) eliminado por decision de arquitectura
         CREATE TABLE IF NOT EXISTS inasistencias (documento TEXT PRIMARY KEY, fecha TEXT DEFAULT (date('now')));
-        CREATE TABLE IF NOT EXISTS audit_trail (id INTEGER PRIMARY KEY AUTOINCREMENT, documento TEXT NOT NULL, event TEXT NOT NULL, fecha TEXT DEFAULT (datetime('now')), synced INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS audit_trail (id INTEGER PRIMARY KEY AUTOINCREMENT, documento TEXT NOT NULL, event TEXT NOT NULL, fecha TEXT DEFAULT (datetime('now')), synced INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
         CREATE INDEX IF NOT EXISTS idx_audit_synced ON audit_trail(synced);
     )";
-    return sqlite3_exec(db, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
+    bool ok = sqlite3_exec(db, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
+    sqlite3_exec(db, "ALTER TABLE audit_trail ADD COLUMN attempts INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+    return ok;
 }
 
 // Ejecuta un statement con manejo de SQLITE_LOCKED (Race Conditions)
@@ -197,16 +199,28 @@ bool SqliteManager::saveAudit(const std::string& documento, const std::string& e
 
 bool SqliteManager::getPendingAudits(std::vector<AuditRecord>& audits) {
     // strftime('%s', fecha) convierte la fecha original a Timestamp UNIX
-    const char* sql = "SELECT documento, event, CAST(strftime('%s', fecha) AS INTEGER) FROM audit_trail WHERE synced = 0 ORDER BY id LIMIT 50;";
+    const char* sql = "SELECT id, documento, event, CAST(strftime('%s', fecha) AS INTEGER), attempts FROM audit_trail WHERE synced = 0 ORDER BY id LIMIT 50;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
     while (executeWithRetry(stmt) == SQLITE_ROW) {
         audits.push_back({
-            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+            sqlite3_column_int(stmt, 0),
             reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
-            sqlite3_column_int(stmt, 2)
+            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)),
+            sqlite3_column_int(stmt, 3),
+            sqlite3_column_int(stmt, 4)
         });
     }
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+bool SqliteManager::clearAudit(int id) {
+    const char* sql = "UPDATE audit_trail SET synced = 1 WHERE id = ?;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, id);
+    executeWithRetry(stmt);
     sqlite3_finalize(stmt);
     return true;
 }
@@ -217,6 +231,26 @@ bool SqliteManager::clearAudit(const std::string& documento, const std::string& 
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
     sqlite3_bind_text(stmt, 1, documento.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 2, event.c_str(), -1, SQLITE_TRANSIENT);
+    executeWithRetry(stmt);
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+bool SqliteManager::incrementAuditAttempt(int id) {
+    const char* sql = "UPDATE audit_trail SET attempts = attempts + 1 WHERE id = ?;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, id);
+    executeWithRetry(stmt);
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+bool SqliteManager::markAuditError(int id) {
+    const char* sql = "UPDATE audit_trail SET synced = -1 WHERE id = ?;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, id);
     executeWithRetry(stmt);
     sqlite3_finalize(stmt);
     return true;

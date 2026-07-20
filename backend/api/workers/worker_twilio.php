@@ -134,7 +134,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
             $stmtSchool = $conn->prepare("SELECT set_config('app.current_school_id', ?, false)");
             $stmtSchool->execute([(string)$schoolId]);
             $stmtRole = $conn->prepare("SELECT set_config('app.current_role', ?, false)");
-            $stmtRole->execute(['SUPER_RECTOR']);
+            $stmtRole->execute(['SYSTEM_WORKER']);
         } catch (Exception $e) {
             securityLog('WORKER_CONTEXT_SET_FAIL', $e->getMessage());
             return;
@@ -210,7 +210,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
    ============================================================ */
 $conn = $pdo;
 try {
-    $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)");
+    $conn->query("SELECT set_config('app.current_role', 'SYSTEM_WORKER', false)");
 } catch (PDOException $e) {
     securityLog('WORKER_ROLE_SET_SKIP', $e->getMessage());
 }

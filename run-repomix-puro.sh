@@ -32,12 +32,12 @@ echo "  Se empaquetarán solo tus propias líneas."
 echo "========================================"
 
 # --- Ejecutar repomix ---
-# Lee el .repomixignore donde ya hemos bloqueado 'assets/**'
+# Lee el .repomixignore donde están TODAS las exclusiones configuradas
+# NO usamos --ignore ni --include para que .repomixignore tenga control total
 $REPOMIX_CMD \
     --output "$OUTPUT_FILE" \
     --style xml \
-    --ignore "**/*.json,**/*.md,**/*.txt,**/*.lock" \
-    --include "**/*.js,**/*.jsx,**/*.ts,**/*.tsx,**/*.html,**/*.css,**/*.php,**/*.py,**/*.sh,**/*.c,**/*.cpp,**/*.h,**/*.ino,**/*.sql" \
+    --verbose \
     "$SCRIPT_DIR"
 
 echo ""

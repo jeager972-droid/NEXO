@@ -10,6 +10,14 @@
 .vscode/
 .vercel/
 .agents/
+.gitkeep
+.gitignore
+.dockerignore
+.htaccess
+**/.htaccess
+**/manifest.webmanifest
+**/.clang-format
+**/.clang-tidy
 
 # === Dependencias ===
 **/node_modules/**
@@ -29,6 +37,13 @@ compile_commands.json
 
 # === Bundles JS/CSS compilados por Vite ===
 backend/alojamiento/assets/**
+backend/api/assets/**
+**/assets/**/*.js
+**/assets/**/*.css
+**/assets/**/*.woff2
+**/assets/**/*.woff
+**/assets/**/*.ttf
+**/assets/**/*.eot
 
 # === Assets binarios pesados ===
 **/*.glb
@@ -63,6 +78,13 @@ backend/alojamiento/frontend/public/assets-3d/
 *.bin
 *.elf
 backend/lib/
+**/*.map
+**/*.min.js
+**/*.min.css
+
+# === Service Workers generados automáticamente ===
+**/sw.js
+**/workbox*.js
 
 # === PHP: binarios y locks de Composer ===
 backend/alojamiento/composer.phar
@@ -113,3 +135,78 @@ skills-lock.json
 repomix-output.xml
 repomix-output.txt
 repomix-output.md
+nexo-codigo-puro.xml
+
+# === Archivos de configuración y metadata (no código fuente) ===
+railway.json
+*.vercel.json
+**/vercel.json
+**/CMakePresets.json
+**/config.example.json
+docker-compose.yml
+docker-compose.yaml
+**/*.yml
+**/*.yaml
+
+# === Documentación y READMEs ===
+**/*.md
+**/BUILD_INSTRUCTIONS.md
+**/README.md
+
+# === HTML templates (no código fuente) ===
+**/index.html
+
+# === Package files (no código fuente) ===
+**/package.json
+**/package-lock.json
+**/composer.json
+**/composer.lock
+
+# === Build logs y temporales ===
+**/dev_server_log.txt
+**/CMakeLists.txt
+
+# === Archivos de configuración de build (no código fuente) ===
+**/vite.config.js
+**/vite.config.ts
+**/tailwind.config.js
+**/tailwind.config.ts
+**/postcss.config.js
+**/postcss.config.cjs
+**/eslint.config.js
+**/eslint.config.mjs
+**/.eslintrc.*
+**/.prettierrc.*
+**/tsconfig.json
+
+# === Dockerfiles (infraestructura, no código fuente) ===
+**/Dockerfile*
+**/docker-compose*
+**/docker-entrypoint.sh
+**/entrypoint.sh
+**/setup_*.sh
+**/install_deps*.sh
+
+# === Scripts de mantenimiento y build (no código fuente) ===
+**/build.sh
+**/START.sh
+**/infra/scripts/*.sh
+**/dev_tools/*.sh
+
+# === Archivos de configuración de infraestructura ===
+**/*.ini
+**/crontab
+**/pgbouncer.ini
+
+# === Assets binarios y multimedia (no código fuente) ===
+**/*.svg
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.ico
+**/*.webp
+**/*.mp3
+**/*.mp4
+**/*.wav
+**/*.ogg

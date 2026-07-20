@@ -18,31 +18,85 @@ function connectRedis() {
     return $redis;
 }
 
+function generateUuidV4() {
+    $data = random_bytes(16);
+    $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+    $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+}
+
+function calculateAuditHash($prevHash, $schoolId, $actorId, $eventType, $description, $ipAddress, $createdAt, $secret) {
+    $prevHash = $prevHash ?: 'GENESIS';
+    $schoolId = $schoolId ?: 'NULL';
+    $actorId = $actorId ?: 'NULL';
+    $payload = "{$prevHash}|{$schoolId}|{$actorId}|{$eventType}|{$description}|{$ipAddress}|{$createdAt}";
+    return hash_hmac('sha256', $payload, $secret);
+}
+
 function insertBatch($conn, array $rows) {
     if (empty($rows)) return;
+    
+    $secret = getenv('APP_NEXO_HMAC_SECRET') ?: 'default-secret-change-me';
+    $lastHashes = []; // Cache en memoria para el batch
+
     $conn->beginTransaction();
     try {
         $stmt = $conn->prepare("
             INSERT INTO global_audit_logs
                 (log_id, school_id, performed_by_user_id, action_type,
-                 description, ip_address, action_details, created_at)
+                 description, ip_address, action_details, created_at,
+                 prev_audit_id, chain_hash)
             VALUES
-                (uuid_generate_v4(), ?, ?, ?, ?,
+                (?, ?, ?, ?, ?,
                  ?::inet,
-                 jsonb_build_object('uri', ?::text, 'request_id', ?::text),
-                 ?)
+                 ?::jsonb,
+                 ?, ?, ?)
         ");
+        
         foreach ($rows as $row) {
+            $schoolId = $row['school_id'];
+            
+            if (!isset($lastHashes[$schoolId])) {
+                $chk = $conn->prepare("SELECT log_id, chain_hash FROM global_audit_logs WHERE school_id = ? ORDER BY created_at DESC, log_id DESC LIMIT 1");
+                $chk->execute([$schoolId]);
+                $lastHashes[$schoolId] = $chk->fetch(PDO::FETCH_ASSOC) ?: ['log_id' => null, 'chain_hash' => 'GENESIS'];
+            }
+            
+            $prevAuditId = $lastHashes[$schoolId]['log_id'];
+            $prevHash = $lastHashes[$schoolId]['chain_hash'];
+            
+            $logId = generateUuidV4();
+            $actorId = $row['actor_id'];
+            $eventType = $row['event_type'];
+            $description = $row['description'];
+            $ipAddress = $row['ip_address'] ?? '0.0.0.0';
+            
+            // Format to match PostgreSQL jsonb::text cast style
+            $uriStr = isset($row['uri']) ? '"' . str_replace('"', '\"', $row['uri']) . '"' : '"N/A"';
+            $reqStr = isset($row['request_id']) ? '"' . str_replace('"', '\"', $row['request_id']) . '"' : 'null';
+            $actionDetailsJson = '{"uri": ' . $uriStr . ', "request_id": ' . $reqStr . '}';
+            
+            // Format to match PostgreSQL timestamptz cast style (YYYY-MM-DD HH:MM:SS+00)
+            $createdAt = $row['created_at'] ?? gmdate('Y-m-d H:i:s');
+            $createdAtPg = date('Y-m-d H:i:s+00', strtotime($createdAt));
+
+            $hash = calculateAuditHash($prevHash, $schoolId, $actorId, $eventType, $actionDetailsJson, $ipAddress, $createdAtPg, $secret);
+
             $stmt->execute([
-                $row['school_id'],
-                $row['actor_id'],       // campo en la cola Redis se llama así
-                $row['event_type'],     // ídem
-                $row['description'],
-                $row['ip_address'] ?? '0.0.0.0',
-                $row['uri'] ?? 'N/A',
-                $row['request_id'] ?? null,
-                $row['created_at'] ?? gmdate('Y-m-d H:i:s')
+                $logId,
+                $schoolId,
+                $actorId,
+                $eventType,
+                $description,
+                $ipAddress,
+                $actionDetailsJson,
+                $createdAt,
+                $prevAuditId,
+                $hash
             ]);
+            
+            // Actualizar la caché del lote para el siguiente registro
+            $lastHashes[$schoolId] = ['log_id' => $logId, 'chain_hash' => $hash];
         }
         $conn->commit();
         logWorker('BATCH_INSERT', 'Inserted ' . count($rows) . ' audit records');
@@ -63,7 +117,7 @@ pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
 
 $conn = $pdo;
 try {
-    $conn->query("SELECT set_config('app.current_role', 'SUPER_RECTOR', false)");
+    $conn->query("SELECT set_config('app.current_role', 'SYSTEM_WORKER', false)");
 } catch (PDOException $e) {
     logWorker('ROLE_SET_SKIP', $e->getMessage());
 }

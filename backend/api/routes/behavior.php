@@ -2,6 +2,7 @@
 // routes/behavior.php - Métricas de comportamiento y riesgo estudiantil
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
+require_once __DIR__ . '/../lib/RiskScoreEngine.php';
 
 if ($cleanPath === '/behavior/risk') {
     $authUser = requireAuth();
@@ -23,7 +24,7 @@ if ($cleanPath === '/behavior/risk') {
                 'status' => 'ok',
                 'data' => [],
                 'meta' => [
-                    'message' => 'Métricas aún no calculadas. Ejecute fn_recalculate_school_metrics para esta escuela.',
+                    'message' => 'Métricas aún no calculadas. Llama a /admin/recalc-risk para esta escuela.',
                     'school_id' => $schoolId
                 ]
             ]);

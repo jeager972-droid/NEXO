@@ -20,7 +20,6 @@ export function fmt12h(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return String(iso);
   return d.toLocaleString('es-CO', {
-    timeZone: 'America/Bogota',
     day: 'numeric', month: 'short', year: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true
   });

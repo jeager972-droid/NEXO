@@ -1,45 +1,36 @@
 <?php
-/**
- * NEXO GLOBAL API v7.5 - SECURE AUDIT & EDGE READY
- */
 
-// FIX: En producción, los notices/warnings de PHP NO deben ir a stdout (contaminan JSON)
+
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 ini_set('log_errors', '1');
 ini_set('error_log', 'php://stderr');
 
-/* ============================================================
-   CORS HARDENING — ejecutado SIEMPRE antes de cualquier lógica
-   ============================================================ */
 require_once __DIR__ . '/routes/_cors_middleware.php';
 
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
-// CSP en API JSON: solo frame-ancestors es relevante (previene clickjacking).
-// Las respuestas JSON no tienen DOM, un CSP con * no protege nada y es ruido.
 header("Content-Security-Policy: frame-ancestors 'none';");
 
 require_once __DIR__ . '/boot_check.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/routes/_auth_middleware.php';
 
-// FIX: Asignar $conn INMEDIATAMENTE después de db.php para que esté disponible en todas las rutas
 $conn = $pdo;
 
-// E15: securityLog() ASÍNCRONO — encola en Redis, no INSERT síncrono
+
 function securityLog($event, $details = '', $actorId = null, $schoolId = null, $requestId = null) {
     $ip = getRealClientIp();
     $uri = $_SERVER['REQUEST_URI'] ?? 'N/A';
 
-    // Fallback inmediato a stderr (nunca falla)
+
     $rid = $requestId ? " [REQ:$requestId]" : '';
     $fallbackMsg = sprintf("[%s] [EVENT:%s]%s [DETAILS:%s] [IP:%s]\n", gmdate('Y-m-d H:i:s'), $event, $rid, $details, $ip);
     file_put_contents('php://stderr', $fallbackMsg);
 
-    // FIX: Encolar en Redis para procesamiento asíncrono por worker_audit.php
+
     try {
         $redis = getRedisConnection();
         if ($redis) {
@@ -84,7 +75,7 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
             exit(json_encode(['status' => 'error', 'message' => 'Too many requests']));
         }
     } catch (Exception $e) {
-        // Si Redis falla, loggear pero no bloquear (fallback a sin rate limit)
+
         securityLog('RATE_LIMIT_REDIS_DOWN', 'Redis unavailable, allowing request without rate limit');
     }
 }
@@ -100,7 +91,7 @@ $cleanPath = '/' . $cleanPath;
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];
 
-// operations.php se carga siempre porque exporta la función sendTwilioDirect (usada por auth.php y otros)
+
 require_once __DIR__ . '/routes/operations.php';
 
 $prefix = explode('/', trim($cleanPath, '/'))[0];
@@ -130,40 +121,13 @@ $routeMap = [
 if (isset($routeMap[$prefix])) {
     $files = (array)$routeMap[$prefix];
     foreach ($files as $f) {
-        // operations.php ya está incluido arriba
+
         if ($f !== 'operations.php') {
             require_once __DIR__ . '/routes/' . $f;
         }
     }
 }
 
-/**
- * @OA\Post(
- *     path="/v1/ingest/biometric",
- *     summary="Ingesta biométrica desde el Edge",
- *     description="Endpoint para que los nodos edge envíen eventos de asistencia biométrica cifrados con AES-256-GCM.",
- *     tags={"Edge"},
- *     @OA\RequestBody(
- *         required=true,
- *         @OA\JsonContent(
- *             required={"payload"},
- *             @OA\Property(property="payload", type="string", description="Base64 de datos cifrados (IV + ciphertext + tag)")
- *         )
- *     ),
- *     @OA\Response(
- *         response=200,
- *         description="Evento sincronizado",
- *         @OA\JsonContent(
- *             @OA\Property(property="status", type="string", example="ok"),
- *             @OA\Property(property="sync", type="integer"),
- *             @OA\Property(property="persisted", type="integer")
- *         )
- *     ),
- *     @OA\Response(response=400, description="Payload inválido"),
- *     @OA\Response(response=403, description="Timestamp inválido o nonce reusado")
- * )
- */
-// Endpoint EDGE (Reescrito y Seguro)
 if (isset($input['payload'])) {
     $aesKey = getenv('NEXO_AES_KEY');
     $decoded = base64_decode($input['payload'], true);
@@ -177,7 +141,7 @@ if (isset($input['payload'])) {
             $requestId = $data['request_id'] ?? null;
             if ($requestId) header("X-Request-ID: $requestId");
 
-            // FIX: Validar device_token M2M para evitar spoofing de sedes
+
             $deviceToken = $data['device_token'] ?? '';
             if (empty($deviceToken)) {
                 securityLog('EDGE_NO_DEVICE_TOKEN', 'Missing device token', null, null, $requestId);
@@ -185,10 +149,8 @@ if (isset($input['payload'])) {
                 exit(json_encode(['status' => 'error', 'message' => 'Device token required']));
             }
 
-            // Buscar dispositivo por device_id (O(1) lookup, evita UUID vs int crash)
             $requestDeviceId = $data['device_id'] ?? null;
 
-            // FAIL-FAST: Si no es un UUID válido, rechazar antes de golpear PDO
             if (!$requestDeviceId || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $requestDeviceId)) {
                 securityLog('EDGE_INVALID_DEVICE_ID', 'Device ID malformado', null, null, $requestId);
                 http_response_code(400);
@@ -211,20 +173,20 @@ if (isset($input['payload'])) {
                 exit(json_encode(['status' => 'error', 'message' => 'Invalid device token']));
             }
 
-            // Forzar el school_id real del dispositivo (ignorar el del payload)
+
             $instId = (string)$realSchoolId;
             $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
             $stmtConfig->execute([$instId]);
 
-            // FIX: Ampliar ventana a 7 días para permitir modo offline-first (fines de semana)
+
             $capturedAt = isset($data['captured_at']) ? (int)$data['captured_at'] : 0;
-            if (abs(time() - $capturedAt) > 604800) {  // 604800 segundos = 7 días
+            if (abs(time() - $capturedAt) > 604800) {
                 securityLog('EDGE_REPLAY_ATTACK_OR_SYNC_DELAY', 'Paquete demasiado viejo/futuro', null, null, $requestId);
                 http_response_code(403);
                 exit(json_encode(['status' => 'error', 'message' => 'Timestamp invalid']));
             }
 
-            // FIX: El nonce también debe expirar en 7 días para tolerar modo offline
+
             $nonce = $data['nonce'] ?? '';
             if (!empty($nonce)) {
                 try {
@@ -240,7 +202,7 @@ if (isset($input['payload'])) {
                     exit(json_encode(['status' => 'error', 'message' => 'Nonce validation unavailable']));
                 }
             }
-            // V2: 100% Async Ingestion — No tocar PostgreSQL en el request path
+
             $action = $data['action'] ?? 'UNKNOWN';
             try {
                 $redisIngest = getRedisConnection();
@@ -261,7 +223,7 @@ if (isset($input['payload'])) {
                 $redisIngest->rPush('queue:biometric_ingest', $queuePayload);
                 $redisIngest->expire('queue:biometric_ingest', 86400);
 
-                // Contador diario en Redis para dashboard (no bloquea)
+
                 if ($action === 'SYNC_ATTENDANCE') {
                     $today = gmdate('Y-m-d');
                     $redisIngest->incr("school:{$instId}:present:{$today}");
@@ -282,56 +244,100 @@ if (isset($input['payload'])) {
     exit(json_encode(['status'=>'error','message'=>'Integrity fail']));
 }
 
-// ============================================================
-// HEALTH CHECK: Estado de workers
-// ============================================================
-if ($cleanPath === '/health/workers') {
+
+if ($cleanPath === '/health' || $cleanPath === '/health/workers') {
     header('Content-Type: application/json; charset=utf-8');
     $checks = [];
     $allHealthy = true;
+    $startTime = microtime(true);
+
+    // 1. Database health
     try {
-        $redisHealth = getRedisConnection();
-        if (!$redisHealth) {
-            $checks['redis'] = ['status' => 'unhealthy', 'message' => 'Redis connection failed'];
+        global $conn;
+        if ($conn) {
+            $conn->query("SELECT 1");
+            $checks['database'] = ['status' => 'healthy', 'latency_ms' => round((microtime(true) - $startTime) * 1000, 2)];
+        } else {
+            $checks['database'] = ['status' => 'unhealthy', 'message' => 'Connection not available'];
             $allHealthy = false;
         }
-
-        // Audit worker
-        $auditHeartbeat = (int)$redisHealth->get('worker:audit:last_heartbeat');
-        $auditAge = time() - $auditHeartbeat;
-        $checks['audit_worker'] = [
-            'last_heartbeat' => $auditHeartbeat,
-            'seconds_ago' => $auditAge,
-            'healthy' => $auditAge <= 300
-        ];
-        if ($auditAge > 300) $allHealthy = false;
-
-        // Twilio worker
-        $twilioHeartbeat = (int)$redisHealth->get('worker:twilio:last_heartbeat');
-        $twilioAge = time() - $twilioHeartbeat;
-        $checks['twilio_worker'] = [
-            'last_heartbeat' => $twilioHeartbeat,
-            'seconds_ago' => $twilioAge,
-            'healthy' => $twilioAge <= 300
-        ];
-        if ($twilioAge > 300) $allHealthy = false;
-
-        // Biometric worker
-        $bioHeartbeat = (int)$redisHealth->get('worker:biometric:last_heartbeat');
-        $bioAge = time() - $bioHeartbeat;
-        $checks['biometric_worker'] = [
-            'last_heartbeat' => $bioHeartbeat,
-            'seconds_ago' => $bioAge,
-            'healthy' => $bioAge <= 300
-        ];
-        if ($bioAge > 300) $allHealthy = false;
-
-        http_response_code($allHealthy ? 200 : 503);
-        echo json_encode(['status' => $allHealthy ? 'ok' : 'degraded', 'checks' => $checks]);
     } catch (Exception $e) {
-        http_response_code(503);
-        echo json_encode(['status' => 'error', 'message' => 'Health check unavailable: ' . $e->getMessage()]);
+        $checks['database'] = ['status' => 'unhealthy', 'message' => $e->getMessage()];
+        $allHealthy = false;
     }
+
+    // 2. Redis health
+    try {
+        $redisHealth = getRedisConnection();
+        if ($redisHealth) {
+            $redisHealth->ping();
+            $checks['redis'] = ['status' => 'healthy'];
+        } else {
+            $checks['redis'] = ['status' => 'unhealthy', 'message' => 'Connection failed'];
+            $allHealthy = false;
+        }
+    } catch (Exception $e) {
+        $checks['redis'] = ['status' => 'unhealthy', 'message' => $e->getMessage()];
+        $allHealthy = false;
+    }
+
+    // 3. Worker heartbeats (only if Redis is up)
+    if (isset($checks['redis']['status']) && $checks['redis']['status'] === 'healthy') {
+        $workers = [
+            'audit_worker' => 'worker:audit:last_heartbeat',
+            'twilio_worker' => 'worker:twilio:last_heartbeat',
+            'biometric_worker' => 'worker:biometric:last_heartbeat',
+        ];
+        foreach ($workers as $name => $key) {
+            $heartbeat = (int)$redisHealth->get($key);
+            $age = time() - $heartbeat;
+            $healthy = $heartbeat > 0 && $age <= 300;
+            $checks[$name] = [
+                'last_heartbeat' => $heartbeat,
+                'seconds_ago' => $age,
+                'healthy' => $healthy
+            ];
+            if (!$healthy) $allHealthy = false;
+        }
+
+        // 4. Queue depths (alert thresholds)
+        $queues = [
+            'queue:biometric_ingest' => 1000,
+            'queue:twilio' => 500,
+            'queue:audit_logs' => 1000,
+        ];
+        foreach ($queues as $queue => $threshold) {
+            try {
+                $len = $redisHealth->lLen($queue);
+                $checks['queue_' . basename($queue)] = [
+                    'length' => (int)$len,
+                    'threshold' => $threshold,
+                    'healthy' => $len < $threshold
+                ];
+                if ($len >= $threshold) $allHealthy = false;
+            } catch (Exception $e) {
+                $checks['queue_' . basename($queue)] = ['status' => 'unknown', 'error' => $e->getMessage()];
+            }
+        }
+    }
+
+    // 5. Disk space (basic)
+    $freeSpace = disk_free_space('.');
+    $totalSpace = disk_total_space('.');
+    $diskPercent = $totalSpace > 0 ? round((1 - $freeSpace / $totalSpace) * 100, 1) : 0;
+    $checks['disk'] = [
+        'free_gb' => round($freeSpace / 1024 / 1024 / 1024, 2),
+        'used_percent' => $diskPercent,
+        'healthy' => $diskPercent < 90
+    ];
+    if ($diskPercent >= 90) $allHealthy = false;
+
+    http_response_code($allHealthy ? 200 : 503);
+    echo json_encode([
+        'status' => $allHealthy ? 'ok' : 'degraded',
+        'timestamp' => gmdate('c'),
+        'checks' => $checks
+    ], JSON_PRETTY_PRINT);
     exit;
 }
 

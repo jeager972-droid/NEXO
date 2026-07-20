@@ -93,7 +93,7 @@ static std::string jsonObj(std::initializer_list<std::pair<std::string, std::str
     return j.dump();
 }
 
-std::string CloudManager::buildAuthenticatedRequest(const std::string& jsonData, int instId) {
+std::string CloudManager::buildAuthenticatedRequest(const std::string& jsonData, const std::string& instId) {
     Encryption& crypto = Encryption::getInstance();
     if (!crypto.isKeyProvisioned()) { LOG_ERROR("AES key not provisioned"); return ""; }
     std::string encrypted = crypto.encrypt(jsonData);
@@ -149,7 +149,7 @@ bool CloudManager::registerStaff(const std::string& doc, const std::string& nomb
         && resp.find("\"status\":\"ok\"") != std::string::npos;
 }
 
-bool CloudManager::wipeInstitution(int instId) {
+bool CloudManager::wipeInstitution(const std::string& instId) {
     std::string json = jsonObj({{"action","WIPE_INSTITUTION"}});
     std::string body = buildAuthenticatedRequest(json, instId);
     if (body.empty()) return false;
@@ -158,18 +158,24 @@ bool CloudManager::wipeInstitution(int instId) {
         && resp.find("\"status\":\"ok\"") != std::string::npos;
 }
 
-int CloudManager::verifyInstitution(const std::string& nombre) {
+std::string CloudManager::verifyInstitution(const std::string& nombre) {
     std::string json = jsonObj({{"action","VERIFY_INSTITUTION"},{"nombre",nombre}});
-    std::string body = buildAuthenticatedRequest(json, 0);
-    if (body.empty()) return -1;
+    std::string body = buildAuthenticatedRequest(json, "");
+    if (body.empty()) return "";
     std::string resp;
-    if (!curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)) return -1;
-    auto pos = resp.find("\"inst_id\":");
-    if (pos == std::string::npos) return -1;
-    return std::atoi(resp.c_str() + pos + 10);
+    if (!curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)) return "";
+    try {
+        nlohmann::json j = nlohmann::json::parse(resp);
+        if (j.contains("inst_id")) {
+            if (j["inst_id"].is_string()) return j["inst_id"];
+        }
+    } catch (...) {
+        LOG_WARN("Failed to parse JSON in verifyInstitution");
+    }
+    return "";
 }
 
-bool CloudManager::verifyGroup(int instId, const std::string& salon) {
+bool CloudManager::verifyGroup(const std::string& instId, const std::string& salon) {
     std::string json = jsonObj({{"action","VERIFY_GROUP"},{"salon",salon}});
     std::string body = buildAuthenticatedRequest(json, instId);
     if (body.empty()) return false;

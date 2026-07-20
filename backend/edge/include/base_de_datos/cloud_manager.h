@@ -22,21 +22,21 @@ public:
     bool registerStaff(const std::string& doc, const std::string& nombre, const std::string& tel,
                        const std::string& rol, const std::string& jornada);
     bool deleteStudent(const std::string& doc);
-    bool wipeInstitution(int instId);
-    int  verifyInstitution(const std::string& nombre);
-    bool verifyGroup(int instId, const std::string& salon);
+    bool wipeInstitution(const std::string& instId);
+    std::string verifyInstitution(const std::string& nombre);
+    bool verifyGroup(const std::string& instId, const std::string& salon);
 
-    void setInstitutionId(int id) { m_instId = id; }
-    int  getInstitutionId() const { return m_instId; }
+    void setInstitutionId(const std::string& id) { m_instId = id; }
+    std::string getInstitutionId() const { return m_instId; }
 
     void setHttpClient(IHttpClient* client) { m_httpClient = client; }
 
 private:
     CloudManager();
     std::string m_apiUrl;
-    int m_instId = -1;
+    std::string m_instId = "";
     IHttpClient* m_httpClient = nullptr; // nullptr = usar libcurl real
 
-    std::string buildAuthenticatedRequest(const std::string& jsonData, int instId);
+    std::string buildAuthenticatedRequest(const std::string& jsonData, const std::string& instId);
     std::string loadApiUrl();
 };

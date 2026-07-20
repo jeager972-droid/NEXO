@@ -1,0 +1,34 @@
+{
+  "defaultViewMode": "preview",
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "vault/10-DIARIO",
+  "attachmentFolderPath": "vault/_assets",
+  "template": {
+    "folder": "vault/12-PLANTILLAS"
+  },
+  "userIgnoreFilters": [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "vendor",
+    "*.lock",
+    "*.map",
+    "*.xml"
+  ],
+  "promptDelete": true,
+  "trashOption": "local",
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "pdfExportSettings": {
+    "pageSize": "A4"
+  },
+  "spellcheck": false,
+  "strictLineBreaks": false,
+  "foldIndent": true,
+  "showLineNumber": false,
+  "tabSize": 2,
+  "readableLineLength": true,
+  "showFrontmatter": false
+}

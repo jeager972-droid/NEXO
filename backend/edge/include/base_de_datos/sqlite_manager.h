@@ -14,9 +14,11 @@ struct Estudiante {
 };
 
 struct AuditRecord {
+    int id;
     std::string documento;
     std::string event;
     int timestamp;
+    int attempts;
 };
 
 class SqliteManager {
@@ -51,7 +53,10 @@ public:
     // Audit trail
     bool saveAudit(const std::string& documento, const std::string& event);
     bool getPendingAudits(std::vector<AuditRecord>& audits);
-    bool clearAudit(const std::string& documento, const std::string& event);
+    bool clearAudit(int id);
+    bool clearAudit(const std::string& documento, const std::string& event); // Keep for compatibility
+    bool incrementAuditAttempt(int id);
+    bool markAuditError(int id);
 
     // Config KV store
     bool setConfig(const std::string& key, const std::string& value);

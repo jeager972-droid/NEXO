@@ -15,7 +15,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
     $userId = $authUser['id'];
     $role = strtoupper($authUser['role'] ?? '');
 
-    if (!in_array($role, ['COORDINADOR', 'RECTOR', 'SUPER_RECTOR', 'PSICORIENTADOR'])) {
+    if (!in_array($role, ['COORDINATOR', 'RECTOR', 'COUNSELOR'])) {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
     }

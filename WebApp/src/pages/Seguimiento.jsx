@@ -139,7 +139,7 @@ export default function Seguimiento() {
                       </td>
                       <td className="px-5 py-4">
                         <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                          {new Date(t.updated_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' })}
+                          {new Date(t.updated_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right">

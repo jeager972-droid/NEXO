@@ -8,55 +8,40 @@ global $conn;
  */
 if (!defined('ROLES')) {
     define('ROLES', [
-        'SUPER_RECTOR' => 'SUPER_RECTOR', // Nota: Rol de emergencia/mantenimiento, tiene bypass de RLS y acceso al botón de pánico
         'RECTOR' => 'RECTOR',
-        'COORDINADOR' => 'COORDINADOR',
-        'DOCENTE' => 'DOCENTE',
-        'SECRETARIA' => 'SECRETARIA',
-        'PORTERO' => 'PORTERO',
-        'AUXILIAR' => 'AUXILIAR',
-        'PSICORIENTADOR' => 'PSICORIENTADOR'
+        'COORDINATOR' => 'COORDINATOR',
+        'TEACHER' => 'TEACHER',
+        'SECRETARY' => 'SECRETARY',
+        'SECURITY' => 'SECURITY',
+        'AUXILIARY' => 'AUXILIARY',
+        'COUNSELOR' => 'COUNSELOR',
+        'GUARDIAN' => 'GUARDIAN'
     ]);
 }
 
-/**
- * Normaliza cualquier variante de rol del backend a la constante oficial.
- */
 if (!function_exists('normalizeRole')) {
-    function normalizeRole($dbRole) {
-        $dbRole = strtoupper(trim($dbRole));
+    /**
+     * Normaliza nombres de rol legacy a canonical.
+     * Mapea variantes antiguas a los roles oficiales en inglés.
+     */
+    function normalizeRole($rawRole) {
         $map = [
-            'SUPER_RECTOR' => 'SUPER_RECTOR',
-            'PROFESOR' => 'DOCENTE',
-            'PROFESORA' => 'DOCENTE',
-            'DOCENTE' => 'DOCENTE',
-            'TEACHER' => 'DOCENTE',
-            'ADMINISTRADOR' => 'RECTOR',
-            'RECTOR' => 'RECTOR',
-            'RECTORA' => 'RECTOR',
-            'ADMIN' => 'RECTOR',
-            'COORDINADOR' => 'COORDINADOR',
-            'COORDINADORA' => 'COORDINADOR',
-            'SECRETARIA' => 'SECRETARIA',
-            'SECRETARIO' => 'SECRETARIA',
-            'PORTERO' => 'PORTERO',
-            'PORTERA' => 'PORTERO',
-            'AUXILIAR' => 'AUXILIAR',
-            'PSICORIENTADOR' => 'PSICORIENTADOR',
-            'PSICORIENTADORA' => 'PSICORIENTADOR',
-            'SUPER_ADMIN' => 'RECTOR'
+            'TEACHER' => 'TEACHER',
+            'COORDINATOR' => 'COORDINATOR',
+            'SECRETARY' => 'SECRETARY',
+            'SECURITY' => 'SECURITY',
+            'AUXILIARY' => 'AUXILIARY',
+            'COUNSELOR' => 'COUNSELOR',
+            'GUARDIAN' => 'GUARDIAN',
+            'PRINCIPAL' => 'RECTOR',
+            'PSYCHOLOGIST' => 'COUNSELOR',
         ];
-        if (!isset($map[$dbRole])) {
-            error_log('[SECURITY] Rol no reconocido en normalizeRole: ' . json_encode($dbRole));
-            http_response_code(403);
-            header('Content-Type: application/json');
-            echo json_encode(['error' => 'Rol de usuario no reconocido en el sistema.']);
-            exit();
-        }
-
-        return $map[$dbRole];
+        $upper = strtoupper(trim((string)$rawRole));
+        return $map[$upper] ?? $upper;
     }
 }
+
+
 
 if (!function_exists('b64url_encode')) {
     function b64url_encode($data) {
@@ -106,7 +91,6 @@ if (!function_exists('issueJwtToken')) {
             'jti' => bin2hex(random_bytes(16))
         ], $claims);
 
-        // Determine signing algorithm: RS256 if valid PEM, else HS256 fallback
         $alg = 'HS256';
         $rsaKey = null;
         if ($privateKeyPem !== '') {
@@ -131,12 +115,10 @@ if (!function_exists('issueJwtToken')) {
                 throw new Exception('Fallo al firmar JWT con RS256');
             }
         } else {
-            // HS256: prefer JWT_SECRET, fallback to raw JWT_PRIVATE_KEY value
-            $secret = $hmacSecret !== '' ? $hmacSecret : $privateKeyPem;
-            if ($secret === '') {
+            if ($hmacSecret === '') {
                 throw new Exception('JWT: no signing key. Configure JWT_PRIVATE_KEY (RSA PEM) or JWT_SECRET (HMAC)');
             }
-            $signature = hash_hmac('sha256', $signingInput, $secret, true);
+            $signature = hash_hmac('sha256', $signingInput, $hmacSecret, true);
         }
 
         return $signingInput . '.' . b64url_encode($signature);
@@ -184,9 +166,6 @@ if (!function_exists('verifyJwtToken')) {
         } elseif ($alg === 'HS256') {
             $hmacSecret = getenv('JWT_SECRET') ?: '';
             if ($hmacSecret === '') {
-                $hmacSecret = loadPemFromEnv('JWT_PRIVATE_KEY');
-            }
-            if ($hmacSecret === '') {
                 throw new Exception('JWT_SECRET no configurada para verificar HS256');
             }
             $expected = hash_hmac('sha256', $signingInput, $hmacSecret, true);
@@ -225,7 +204,6 @@ if (!function_exists('verifyJwtToken')) {
             throw new Exception('Token revocado');
         }
 
-        // FIX: Check if school has panic event after token issuance
         if (isset($payload['school_id']) && isset($payload['iat'])) {
             if (isSchoolInPanicMode($payload['school_id'], (int)$payload['iat'])) {
                 throw new Exception('Sesión invalidada por modo de emergencia');
@@ -245,7 +223,6 @@ if (!function_exists('getRedisConnection')) {
             return $redis;
         }
         if ($attempted) {
-            // Ya falló una vez en este request; no reintentar (evita 20x 100ms de timeout)
             return null;
         }
         $attempted = true;
@@ -253,7 +230,6 @@ if (!function_exists('getRedisConnection')) {
         try {
             if (!class_exists('Redis')) return null;
             $redis = new Redis();
-            // Timeout de 100ms para evitar bloqueos de 25s cuando Redis está lento
             $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
             if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
             return $redis;
@@ -266,7 +242,6 @@ if (!function_exists('getRedisConnection')) {
 
 if (!function_exists('isJwtRevoked')) {
     function isJwtRevoked($jti) {
-        // FIX: Intentar Redis primero para evitar lecturas masivas a PostgreSQL
         $redis = getRedisConnection();
         if ($redis) {
             try {
@@ -276,7 +251,6 @@ if (!function_exists('isJwtRevoked')) {
             }
         }
 
-        // Fallback a PostgreSQL
         global $conn, $pdo;
         $db = $conn ?? $pdo ?? null;
         if (!$db) {
@@ -284,10 +258,6 @@ if (!function_exists('isJwtRevoked')) {
             return false;
         }
         try {
-            // FIX: Limpieza probabilística (1%) para evitar ataque DoS sobre el WAL
-            if (random_int(1, 100) === 1) {
-                $db->exec("DELETE FROM jwt_blocklist WHERE expires_at < NOW()");
-            }
             $stmt = $db->prepare("SELECT 1 FROM jwt_blocklist WHERE jti = ? LIMIT 1");
             $stmt->execute([(string)$jti]);
             return (bool)$stmt->fetchColumn();
@@ -302,7 +272,6 @@ if (!function_exists('revokeJwt')) {
     function revokeJwt($jti, $exp) {
         $jtiStr = (string)$jti;
 
-        // FIX: Guardar en Redis con TTL para consultas rápidas
         $redis = getRedisConnection();
         if ($redis) {
             try {
@@ -313,7 +282,6 @@ if (!function_exists('revokeJwt')) {
             }
         }
 
-        // También persistir en PostgreSQL como respaldo permanente
         global $conn, $pdo;
         $db = $conn ?? $pdo ?? null;
         if (!$db) {
@@ -335,7 +303,6 @@ if (!function_exists('revokeJwt')) {
 
 if (!function_exists('isSchoolInPanicMode')) {
     function isSchoolInPanicMode($schoolId, $tokenIat) {
-        // FIX: Check Redis first for performance
         $redis = getRedisConnection();
         if ($redis) {
             try {
@@ -349,7 +316,6 @@ if (!function_exists('isSchoolInPanicMode')) {
             }
         }
 
-        // Fallback to PostgreSQL
         global $conn, $pdo;
         $db = $conn ?? $pdo ?? null;
         if (!$db) {
@@ -372,7 +338,6 @@ if (!function_exists('isSchoolInPanicMode')) {
 
 if (!function_exists('extractBearerToken')) {
     function extractBearerToken() {
-        // 1. Intentar desde header Authorization (compatibilidad con clientes antiguos)
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
         if ($authHeader === '') {
             if (function_exists('getallheaders')) {
@@ -387,7 +352,6 @@ if (!function_exists('extractBearerToken')) {
             return $matches[1];
         }
 
-        // 2. Si no hay header, intentar desde cookie (nuevo flujo con HttpOnly)
         if (isset($_COOKIE['token']) && !empty($_COOKIE['token'])) {
             return $_COOKIE['token'];
         }
@@ -400,7 +364,6 @@ if (!function_exists('requireAuth')) {
     function requireAuth($allowedRoles = null) {
         global $conn;
 
-        // FIX: CSRF mitigación — exigir X-Requested-With en peticiones que modifican estado
         if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'DELETE', 'PATCH'])) {
             if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest') {
                 http_response_code(403);
@@ -419,17 +382,15 @@ if (!function_exists('requireAuth')) {
         try {
             $claims = verifyJwtToken($token);
 
-            // FIX: Fusionar query de usuario con set_config school_id en una sola query con CTE
-            // Esto reduce de 2 round-trips a 1 round-trip "pesado" + 1 trivial (set_config role)
             $stmt = $conn->prepare("
                 WITH u AS (
-                    SELECT u.user_id, u.email, u.first_name, u.last_name, u.active,
+                    SELECT u.user_id, u.email, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
                            u.profile_photo_url, u.work_shift,
-                           r.role_name, s.school_id, s.school_name
+                           u.role_id, r.role_name, s.school_id, s.school_name
                     FROM users u
                     INNER JOIN roles r ON u.role_id = r.role_id
                     INNER JOIN schools s ON u.school_id = s.school_id
-                    WHERE u.user_id = ? AND u.active = TRUE
+                    WHERE u.user_id = ? AND u.deleted_at IS NULL
                     LIMIT 1
                 )
                 SELECT u.*, set_config('app.current_school_id', u.school_id::text, true) AS _cfg1
@@ -443,27 +404,37 @@ if (!function_exists('requireAuth')) {
                 exit(json_encode(['status' => 'error', 'message' => 'Usuario no encontrado o inactivo']));
             }
 
-            $normalizedRole = normalizeRole($user['role_name']);
-            if (is_array($allowedRoles) && !in_array($normalizedRole, $allowedRoles, true)) {
+            $roleName = strtoupper(trim($user['role_name']));
+            if (is_array($allowedRoles) && !in_array($roleName, $allowedRoles, true)) {
                 http_response_code(403);
                 exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
             }
 
-            // FIX: Configurar el contexto de PostgreSQL para Row-Level Security (RLS) usando set_config
-            // Nota: set_config del rol es query separada porque necesita el rol normalizado (calculado después)
+            // Fetch permissions
+            $permsStmt = $conn->prepare("
+                SELECT p.permission_code 
+                FROM role_permissions rp
+                JOIN permissions p ON rp.permission_id = p.permission_id
+                WHERE rp.role_id = ?
+            ");
+            $permsStmt->execute([$user['role_id']]);
+            $permissions = $permsStmt->fetchAll(PDO::FETCH_COLUMN);
+
             $stmtConfig = $conn->prepare("SELECT set_config('app.current_role', ?, true)");
-            $stmtConfig->execute([$normalizedRole]);
+            $stmtConfig->execute([$roleName]);
 
             return [
                 'id' => $user['user_id'],
                 'email' => $user['email'],
                 'nombre' => trim($user['first_name'] . ' ' . $user['last_name']),
-                'role' => $normalizedRole,
+                'role' => $roleName,
+                'role_id' => $user['role_id'],
                 'school_id' => $user['school_id'],
                 'school_name' => $user['school_name'],
                 'profile_photo_url' => $user['profile_photo_url'] ?? null,
                 'work_shift' => $user['work_shift'] ?? null,
-                'claims' => $claims
+                'claims' => $claims,
+                'permissions' => $permissions
             ];
         } catch (Exception $e) {
             securityLog('AUTH_REQUIRED_FAILED', $e->getMessage());
@@ -472,4 +443,86 @@ if (!function_exists('requireAuth')) {
         }
     }
 }
-?>
+
+// =============================================================================
+// ALERTAS PROACTIVAS — Detectar condiciones críticas y notificar
+// =============================================================================
+if (!function_exists('checkCriticalAlerts')) {
+    /**
+     * Verifica condiciones críticas del sistema y emite alertas.
+     * Llamar periódicamente (ej: cada minuto vía cron o worker).
+     */
+    function checkCriticalAlerts($conn, $redis) {
+        $alerts = [];
+
+        // 1. Worker down
+        $workers = [
+            'audit' => ['key' => 'worker:audit:last_heartbeat', 'max_age' => 300],
+            'twilio' => ['key' => 'worker:twilio:last_heartbeat', 'max_age' => 300],
+            'biometric' => ['key' => 'worker:biometric:last_heartbeat', 'max_age' => 300],
+        ];
+        foreach ($workers as $name => $cfg) {
+            $hb = (int)$redis->get($cfg['key']);
+            if ($hb === 0 || (time() - $hb) > $cfg['max_age']) {
+                $alerts[] = "CRITICAL: Worker '$name' heartbeat missing (>{$cfg['max_age']}s)";
+            }
+        }
+
+        // 2. Queue overflow
+        $queues = [
+            'queue:biometric_ingest' => 5000,
+            'queue:twilio' => 2000,
+            'queue:audit_logs' => 5000,
+        ];
+        foreach ($queues as $queue => $threshold) {
+            $len = (int)$redis->lLen($queue);
+            if ($len > $threshold) {
+                $alerts[] = "WARNING: Queue '$queue' overflow: $len > $threshold";
+            }
+        }
+
+        // 3. DB connection saturation
+        try {
+            $activeConns = $conn->query("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")->fetchColumn();
+            if ($activeConns > 80) {
+                $alerts[] = "WARNING: DB active connections high: $activeConns";
+            }
+        } catch (Exception $e) {
+            $alerts[] = "CRITICAL: DB health check failed: " . $e->getMessage();
+        }
+
+        // 4. Recent panic events
+        try {
+            $panicCount = $conn->query("SELECT COUNT(*) FROM school_panic_events WHERE triggered_at >= NOW() - INTERVAL '1 hour'")->fetchColumn();
+            if ($panicCount > 0) {
+                $alerts[] = "CRITICAL: $panicCount panic event(s) in last hour";
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+
+        // 5. Failed logins spike
+        try {
+            $failedLogins = $conn->query("SELECT COUNT(*) FROM rate_limits WHERE rl_key LIKE 'login:%' AND window_start >= NOW() - INTERVAL '5 minutes'")->fetchColumn();
+            if ($failedLogins > 50) {
+                $alerts[] = "WARNING: Failed login spike: $failedLogins in 5min";
+            }
+        } catch (Exception $e) {
+            // ignore
+        }
+
+        // Log alerts
+        foreach ($alerts as $alert) {
+            securityLog('SYSTEM_ALERT', $alert);
+            // Also push to Redis for real-time monitoring
+            try {
+                $redis->lPush('alerts:system', json_encode(['msg' => $alert, 'ts' => time()]));
+                $redis->lTrim('alerts:system', 0, 99);
+            } catch (Exception $e) {
+                // Redis down, already logged via securityLog fallback
+            }
+        }
+
+        return $alerts;
+    }
+}

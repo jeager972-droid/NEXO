@@ -1,45 +1,10 @@
 <?php
-// routes/students.php - Gestión de estudiantes
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
-/**
- * @OA\Get(
- *     path="/students",
- *     summary="Listar estudiantes",
- *     description="Obtiene la lista paginada de estudiantes de la escuela autenticada. Soporta búsqueda por nombre, apellido o documento.",
- *     tags={"Estudiantes"},
- *     security={{"cookieAuth":{}}},
- *     @OA\Parameter(name="last_id", in="query", description="Último student_id recibido (cursor)", @OA\Schema(type="integer", default=0)),
- *     @OA\Parameter(name="limit", in="query", description="Resultados por página (max 100)", @OA\Schema(type="integer", default=50)),
- *     @OA\Parameter(name="search", in="query", description="Término de búsqueda", @OA\Schema(type="string")),
- *     @OA\Response(
- *         response=200,
- *         description="Lista de estudiantes",
- *         @OA\JsonContent(
- *             @OA\Property(property="status", type="string", example="ok"),
- *             @OA\Property(property="data", type="array", @OA\Items(
- *                 @OA\Property(property="id", type="integer"),
- *                 @OA\Property(property="first_name", type="string"),
- *                 @OA\Property(property="last_name", type="string"),
- *                 @OA\Property(property="document_number", type="string"),
- *                 @OA\Property(property="active", type="boolean"),
- *                 @OA\Property(property="group_name", type="string")
- *             )),
- *             @OA\Property(property="meta", type="object",
- *                 @OA\Property(property="limit", type="integer"),
- *                 @OA\Property(property="last_id", type="integer"),
- *                 @OA\Property(property="has_more", type="boolean")
- *             )
- *         )
- *     ),
- *     @OA\Response(response=400, description="ID de institución requerido"),
- *     @OA\Response(response=401, description="No autenticado")
- * )
- */
 if ($cleanPath === '/students') {
     if ($method === 'POST') {
-        $authUser = requireAuth(['SECRETARIA', 'RECTOR', 'COORDINADOR']);
+        $authUser = requireAuth(['SECRETARY', 'RECTOR', 'COORDINATOR']);
         $schoolId = $authUser['school_id'];
 
         $firstName  = trim($input['first_name'] ?? '');
@@ -56,12 +21,12 @@ if ($cleanPath === '/students') {
             $conn->beginTransaction();
 
             $stmt = $conn->prepare("
-                INSERT INTO students (school_id, first_name, last_name, document_number, active)
-                VALUES (?, ?, ?, ?, TRUE)
+                INSERT INTO students (school_id, first_name, last_name, document_number)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT (school_id, document_number) DO UPDATE
                   SET first_name = EXCLUDED.first_name,
                       last_name  = EXCLUDED.last_name,
-                      active     = TRUE
+                      deleted_at = NULL
                 RETURNING student_id
             ");
             $stmt->execute([$schoolId, $firstName, $lastName, $document]);
@@ -72,7 +37,6 @@ if ($cleanPath === '/students') {
                 $groupStmt->execute([$groupName, $schoolId]);
                 $groupId = $groupStmt->fetchColumn();
                 if ($groupId) {
-                    // Deactivate previous group assignments before creating the new one
                     $deactivateStmt = $conn->prepare(
                         "UPDATE student_group_assignments SET active = FALSE 
                          WHERE student_id = ? AND group_id != ?"
@@ -109,7 +73,6 @@ if ($cleanPath === '/students') {
 
     try {
         $limit = min(100, max(1, (int)($_GET['limit'] ?? 50)));
-        $lastId = trim($_GET['last_id'] ?? '');
         $search = trim($_GET['search'] ?? '');
 
         $params = [$schoolId];
@@ -121,9 +84,10 @@ if ($cleanPath === '/students') {
             $params[] = $groupName;
         }
 
-        if ($lastId !== '' && $lastId !== '0') {
-            $whereClauses[] = 's.student_id > ?';
-            $params[] = $lastId;
+        $lastCreatedAt = trim($_GET['last_created_at'] ?? '');
+        if ($lastCreatedAt !== '') {
+            $whereClauses[] = 's.created_at < ?';
+            $params[] = $lastCreatedAt;
         }
 
         if ($search !== '') {
@@ -136,7 +100,6 @@ if ($cleanPath === '/students') {
 
         $whereSql = implode(' AND ', $whereClauses);
 
-        // FIX: Cursor pagination (keyset) — O(1) rendimiento en cualquier página
         $params[] = $limit;
         $stmt = $conn->prepare("
             SELECT
@@ -144,7 +107,8 @@ if ($cleanPath === '/students') {
                 s.first_name,
                 s.last_name,
                 s.document_number,
-                s.active,
+                (s.deleted_at IS NULL) as active,
+                s.created_at,
                 COALESCE(ag.group_name, 'Sin grupo') as group_name
             FROM students s
             LEFT JOIN student_group_assignments sga
@@ -152,21 +116,21 @@ if ($cleanPath === '/students') {
             LEFT JOIN academic_groups ag
               ON sga.group_id = ag.group_id
             WHERE {$whereSql}
-            ORDER BY s.student_id
+            ORDER BY s.created_at DESC, s.student_id DESC
             LIMIT ?
         ");
         $stmt->execute($params);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $nextLastId = count($students) > 0 ? $students[count($students) - 1]['id'] : $lastId;
+        $lastRow = count($students) > 0 ? $students[count($students) - 1] : null;
 
         echo json_encode([
             'status' => 'ok',
-            'data' => $students,
-            'meta' => [
-                'limit' => $limit,
-                'last_id' => $nextLastId,
-                'has_more' => count($students) === $limit
+            'data'   => $students,
+            'meta'   => [
+                'limit'           => $limit,
+                'last_created_at' => $lastRow ? $lastRow['created_at'] : null,
+                'has_more'        => count($students) === $limit,
             ]
         ]);
     } catch (Exception $e) {

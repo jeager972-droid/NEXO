@@ -1,0 +1,78 @@
+<?php
+/**
+ * 13_RegressionTest.php
+ * Verifica que bugs anteriores no regresen.
+ */
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class RegressionTest extends PHPUnit\Framework\TestCase
+{
+    private string $migrationSql;
+    private string $allPhp;
+
+    public function setUp(): void
+    {
+        $this->migrationSql = file_get_contents(__DIR__ . '/../sql/nexo_full_migration.sql');
+        $this->allPhp = '';
+        foreach (glob(__DIR__ . '/../routes/*.php') as $f) $this->allPhp .= file_get_contents($f);
+        foreach (glob(__DIR__ . '/../workers/*.php') as $f) $this->allPhp .= file_get_contents($f);
+        foreach (glob(__DIR__ . '/../lib/*.php') as $f) $this->allPhp .= file_get_contents($f);
+    }
+
+    public function testSuperRectorRemoved(): void
+    {
+        $this->assertStringNotContainsStringIgnoringCase('is_super_rector', $this->allPhp,
+            'BUG-REGRESSION: is_super_rector() debe estar eliminado');
+        $this->assertStringNotContainsStringIgnoringCase('SUPER_RECTOR', $this->allPhp,
+            'BUG-REGRESSION: SUPER_RECTOR debe estar eliminado del PHP');
+        $this->assertStringNotContainsStringIgnoringCase('SUPER_RECTOR', $this->migrationSql,
+            'BUG-REGRESSION: SUPER_RECTOR debe estar eliminado del SQL');
+    }
+
+    public function testGuardianRoleRestored(): void
+    {
+        $this->assertStringContainsStringIgnoringCase('GUARDIAN', $this->migrationSql,
+            'BUG-REGRESSION: Rol GUARDIAN debe existir en SQL');
+        $this->assertStringContainsStringIgnoringCase('GUARDIAN', $this->allPhp,
+            'BUG-REGRESSION: Rol GUARDIAN debe usarse en PHP');
+        $this->assertStringContainsStringIgnoringCase('guardians', $this->migrationSql,
+            'BUG-REGRESSION: Tabla guardians debe existir');
+    }
+
+    public function testGuardianPhoneNormalization(): void
+    {
+        $this->assertStringContainsString('whatsapp_phone_normalized', $this->migrationSql,
+            'BUG-REGRESSION: Columna whatsapp_phone_normalized debe existir');
+        $this->assertStringContainsString('trg_guardians_normalize_phone', $this->migrationSql,
+            'BUG-REGRESSION: Trigger de normalización de teléfono debe existir');
+    }
+
+    public function testNoDuplicateDocumentNumbers(): void
+    {
+        // El UNIQUE compuesto (school_id, document_number) debe existir
+        $this->assertStringContainsString('uq_users_school_document', $this->migrationSql,
+            'BUG-REGRESSION: UNIQUE compuesto uq_users_school_document debe existir');
+        $this->assertStringContainsString('uq_students_school_document', $this->migrationSql,
+            'BUG-REGRESSION: UNIQUE compuesto uq_students_school_document debe existir');
+    }
+
+    public function testAuditChainIntegrity(): void
+    {
+        $this->assertStringContainsString('chain_hash', $this->migrationSql,
+            'BUG-REGRESSION: chain_hash debe existir para integridad de auditoría');
+        $this->assertStringContainsString('prev_audit_id', $this->migrationSql,
+            'BUG-REGRESSION: prev_audit_id debe existir para cadena de auditoría');
+    }
+
+    public function testJwtBlocklistOpenPolicy(): void
+    {
+        $this->assertStringContainsString('jbl_select ON jwt_blocklist FOR SELECT USING(true)', $this->migrationSql,
+            'BUG-REGRESSION: jwt_blocklist debe mantener policy abierta para operaciones previas a auth');
+    }
+
+    public function testStudentGroupAssignmentUniqueConstraint(): void
+    {
+        $this->assertStringContainsString('uq_sga_student_group', $this->migrationSql,
+            'BUG-REGRESSION: UNIQUE constraint uq_sga_student_group debe existir');
+    }
+}

@@ -16,10 +16,10 @@ const CARGO_OPTIONS = [
 
 function validate(data) {
   const errors = {}
-  if (!data.nombre.trim())      errors.nombre    = 'El nombre es obligatorio.'
-  if (!data.cargo)              errors.cargo     = 'Selecciona tu cargo.'
-  if (!data.institucion.trim()) errors.institucion = 'El nombre de la institución es obligatorio.'
-  if (!data.municipio.trim())   errors.municipio = 'El municipio y departamento son obligatorios.'
+  if (!data.name.trim())      errors.name    = 'El nombre es obligatorio.'
+  if (!data.position)              errors.position     = 'Selecciona tu cargo.'
+  if (!data.institution.trim()) errors.institution = 'El nombre de la institución es obligatorio.'
+  if (!data.city.trim())   errors.city = 'El municipio y departamento son obligatorios.'
 
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!data.email.trim())           errors.email = 'El correo es obligatorio.'
@@ -32,7 +32,7 @@ function validate(data) {
   return errors
 }
 
-const INITIAL = { nombre: '', cargo: '', institucion: '', municipio: '', email: '', whatsapp: '', mensaje: '' }
+const INITIAL = { name: '', position: '', institution: '', city: '', email: '', whatsapp: '', message: '' }
 
 export default function ContactModal({ onClose }) {
   const overlayRef = useRef()
@@ -233,13 +233,13 @@ export default function ContactModal({ onClose }) {
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--nx-text)', marginBottom: '0.4rem' }}>
                   Nombre completo *
                 </label>
-                <input type="text" value={form.nombre} onChange={set('nombre')}
+                <input type="text" value={form.name} onChange={set('name')}
                   placeholder="Tu nombre completo"
-                  style={inputStyle('nombre')}
+                  style={inputStyle('name')}
                   onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
-                  onBlur={e => e.target.style.borderColor = errors.nombre ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
+                  onBlur={e => e.target.style.borderColor = errors.name ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
-                {errors.nombre && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.nombre}</p>}
+                {errors.name && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.name}</p>}
               </div>
 
               {/* 2. Cargo */}
@@ -247,13 +247,13 @@ export default function ContactModal({ onClose }) {
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--nx-text)', marginBottom: '0.4rem' }}>
                   Cargo *
                 </label>
-                <select value={form.cargo} onChange={set('cargo')}
-                  style={{ ...inputStyle('cargo'), appearance: 'none', cursor: 'pointer' }}>
+                <select value={form.position} onChange={set('position')}
+                  style={{ ...inputStyle('position'), appearance: 'none', cursor: 'pointer' }}>
                   {CARGO_OPTIONS.map(o => (
                     <option key={o.value} value={o.value} style={{ background: '#f7fcf7' }}>{o.label}</option>
                   ))}
                 </select>
-                {errors.cargo && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.cargo}</p>}
+                {errors.position && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.position}</p>}
               </div>
 
               {/* 3. Institución educativa */}
@@ -261,13 +261,13 @@ export default function ContactModal({ onClose }) {
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--nx-text)', marginBottom: '0.4rem' }}>
                   Nombre de la institución *
                 </label>
-                <input type="text" value={form.institucion} onChange={set('institucion')}
+                <input type="text" value={form.institution} onChange={set('institution')}
                   placeholder="I.E. San Carlos, Colegio..."
-                  style={inputStyle('institucion')}
+                  style={inputStyle('institution')}
                   onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
-                  onBlur={e => e.target.style.borderColor = errors.institucion ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
+                  onBlur={e => e.target.style.borderColor = errors.institution ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
-                {errors.institucion && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.institucion}</p>}
+                {errors.institution && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.institution}</p>}
               </div>
 
               {/* 4. Municipio y departamento */}
@@ -275,13 +275,13 @@ export default function ContactModal({ onClose }) {
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--nx-text)', marginBottom: '0.4rem' }}>
                   Municipio y departamento *
                 </label>
-                <input type="text" value={form.municipio} onChange={set('municipio')}
+                <input type="text" value={form.city} onChange={set('city')}
                   placeholder="Medellín, Antioquia"
-                  style={inputStyle('municipio')}
+                  style={inputStyle('city')}
                   onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
-                  onBlur={e => e.target.style.borderColor = errors.municipio ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
+                  onBlur={e => e.target.style.borderColor = errors.city ? 'rgba(255,80,80,0.6)' : 'var(--nx-border)'}
                 />
-                {errors.municipio && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.municipio}</p>}
+                {errors.city && <p style={{ fontSize: '0.72rem', color: '#ff7070', marginTop: '0.3rem' }}>{errors.city}</p>}
               </div>
 
               {/* 5. Correo electrónico */}
@@ -319,18 +319,18 @@ export default function ContactModal({ onClose }) {
                   <span style={{ fontWeight: 400, color: 'var(--nx-muted)', marginLeft: '0.4rem' }}>(opcional)</span>
                 </label>
                 <textarea
-                  value={form.mensaje}
+                  value={form.message}
                   onChange={e => {
-                    if (e.target.value.length <= 300) set('mensaje')(e)
+                    if (e.target.value.length <= 300) set('message')(e)
                   }}
                   placeholder="Cuéntanos el contexto de tu institución..."
                   rows={3}
-                  style={{ ...inputStyle('mensaje'), resize: 'vertical', minHeight: '80px' }}
+                  style={{ ...inputStyle('message'), resize: 'vertical', minHeight: '80px' }}
                   onFocus={e => e.target.style.borderColor = 'rgba(45, 110, 48, 0.5)'}
                   onBlur={e => e.target.style.borderColor = 'var(--nx-border)'}
                 />
                 <p style={{ fontSize: '0.68rem', color: 'var(--nx-muted-2)', marginTop: '0.25rem', textAlign: 'right' }}>
-                  {form.mensaje.length}/300
+                  {form.message.length}/300
                 </p>
               </div>
 

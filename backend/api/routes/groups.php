@@ -1,5 +1,4 @@
 <?php
-// routes/groups.php - Gestión de grupos académicos
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
@@ -14,10 +13,9 @@ if ($cleanPath === '/groups') {
 
     try {
         $userRole = strtoupper($authUser['role'] ?? '');
-        $isTeacher = in_array($userRole, ['DOCENTE', 'PSICORIENTADOR']);
+        $isTeacher = in_array($userRole, ['TEACHER', 'COUNSELOR']);
 
         if ($teacherOnly && $isTeacher) {
-            // FIX: intentar grupos via schedules; si no hay, fallback a todos los grupos de la institución
             $stmt = $conn->prepare("
                 SELECT ag.group_id as id, ag.group_name as name, ag.grade_level
                 FROM schedules sch

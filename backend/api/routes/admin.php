@@ -2,37 +2,33 @@
 // routes/admin.php - Endpoints administrativos protegidos
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
+require_once __DIR__ . '/../lib/RiskScoreEngine.php';
 
 if ($cleanPath === '/admin/recalc-risk') {
-    $authUser = requireAuth(['SUPER_RECTOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $schoolId = $input['school_id'] ?? null;
 
     try {
         $processed = 0;
-        $errors = [];
+        $errors    = [];
 
         if ($schoolId) {
             // Recalcular una escuela específica
-            $stmt = $conn->prepare("SELECT fn_recalculate_school_metrics(?)");
-            $stmt->execute([$schoolId]);
-            $count = $stmt->fetchColumn();
-            $processed = (int)$count;
+            $processed = RiskScoreEngine::recalculateSchool($conn, $schoolId);
         } else {
             // Recalcular todas las escuelas activas
-            $stmt = $conn->query("SELECT school_id, school_name FROM schools WHERE active = TRUE");
+            $stmt    = $conn->query("SELECT school_id, school_name FROM schools WHERE active = TRUE");
             $schools = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             foreach ($schools as $school) {
                 try {
-                    $recalcStmt = $conn->prepare("SELECT fn_recalculate_school_metrics(?)");
-                    $recalcStmt->execute([$school['school_id']]);
-                    $count = $recalcStmt->fetchColumn();
-                    $processed += (int)$count;
+                    $count     = RiskScoreEngine::recalculateSchool($conn, $school['school_id']);
+                    $processed += $count;
                 } catch (Exception $e) {
                     $errors[] = [
-                        'school_id' => $school['school_id'],
+                        'school_id'   => $school['school_id'],
                         'school_name' => $school['school_name'],
-                        'error' => $e->getMessage()
+                        'error'       => $e->getMessage()
                     ];
                 }
             }
@@ -41,12 +37,13 @@ if ($cleanPath === '/admin/recalc-risk') {
         securityLog('ADMIN_RECALC_RISK', "Processed: {$processed} students", $authUser['id'], $schoolId);
 
         echo json_encode([
-            'status' => 'ok',
+            'status'    => 'ok',
             'processed' => $processed,
-            'errors' => $errors,
-            'meta' => [
+            'errors'    => $errors,
+            'meta'      => [
                 'triggered_by' => $authUser['email'],
-                'timestamp' => gmdate('c')
+                'timestamp'    => gmdate('c'),
+                'engine'       => 'RiskScoreEngine v2.0',
             ]
         ]);
     } catch (Exception $e) {

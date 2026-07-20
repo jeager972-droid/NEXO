@@ -181,7 +181,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
                     <div key={note.note_id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded border border-slate-100 dark:border-slate-800">
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{note.first_name} {note.last_name} ({note.role_name})</span>
-                        <span className="text-[9px] text-slate-400 uppercase tracking-widest">{new Date(note.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' })}</span>
+                        <span className="text-[9px] text-slate-400 uppercase tracking-widest">{new Date(note.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</span>
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{note.note_text}</p>
                     </div>

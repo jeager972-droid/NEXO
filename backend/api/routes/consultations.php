@@ -9,6 +9,7 @@ if ($cleanPath === '/consultations/query') {
     $userId   = $authUser['id'];
     $role     = $authUser['role'];
 
+    // El frontend DEBE enviar slugs inmutables, no textos de UI en español.
     $module = filter_var($input['module'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $groupName = filter_var($input['group_name'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $studentId = filter_var($input['student_id'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
@@ -23,7 +24,7 @@ if ($cleanPath === '/consultations/query') {
 
     // Helper: validar que el docente/psicorientador tenga asignado el grupo
     $teacherGroupFilter = '';
-    $isTeacher = in_array($userRoleUpper, ['DOCENTE', 'PSICORIENTADOR']);
+    $isTeacher = in_array('consultations.teacher_view', $authUser['permissions'] ?? []);
     if ($isTeacher) {
         if ($groupName) {
             $checkStmt = $conn->prepare("
@@ -49,15 +50,6 @@ if ($cleanPath === '/consultations/query') {
         }
     }
 
-    // Helper: subquery para filtrar estudiantes de un grupo
-    $groupSubSql = function($alias = 's') {
-        return " AND {$alias}.student_id IN (
-            SELECT sga.student_id FROM student_group_assignments sga
-            JOIN academic_groups ag ON ag.group_id = sga.group_id
-            WHERE ag.group_name = ? AND sga.active = TRUE
-        )";
-    };
-
     // Fechas por defecto: hoy
     if (!$fromDate) $fromDate = gmdate('Y-m-d');
     if (!$toDate) $toDate = gmdate('Y-m-d');
@@ -70,14 +62,14 @@ if ($cleanPath === '/consultations/query') {
             // ==========================================
             // DOCENTES & PSICORIENTADOR: Mis Clases
             // ==========================================
-            case 'Estudiantes del Grupo':
+            case 'group_students':
                 $groupFilter = $groupName ? " AND ag.group_name = ?" : "";
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, s.document_number, ag.group_name
                     FROM students s
                     JOIN student_group_assignments sga ON s.student_id = sga.student_id AND sga.active = TRUE
                     JOIN academic_groups ag ON sga.group_id = ag.group_id
-                    WHERE s.school_id = ? AND s.active = TRUE {$groupFilter} {$teacherGroupFilter}
+                    WHERE s.school_id = ? AND s.deleted_at IS NULL {$groupFilter} {$teacherGroupFilter}
                     ORDER BY ag.group_name, s.last_name
                     LIMIT 100
                 ");
@@ -88,8 +80,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'document_number' => 'Documento', 'group_name' => 'Grupo'];
                 break;
 
-            case 'Llegadas Tarde':
-            case 'Historial Tardanzas':
+            case 'late_arrivals':
                 $gFilter = $groupName ? " AND be.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
                 $sFilter = $studentId ? " AND be.student_id = ?" : "";
                 $stmt = $conn->prepare("
@@ -98,7 +89,7 @@ if ($cleanPath === '/consultations/query') {
                     JOIN students s ON be.student_id = s.student_id
                     WHERE be.school_id = ?
                       AND (be.event_type LIKE 'INGRESO_TARDE%' OR be.event_type LIKE 'LATE%' OR be.event_result = 'LATE')
-                      AND be.event_timestamp >= (?::date AT TIME ZONE 'America/Bogota') AND be.event_timestamp < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND be.event_timestamp >= (?::date) AND be.event_timestamp < ((?::date + INTERVAL '1 day'))
                       {$gFilter}
                       {$sFilter}
                       {$teacherGroupFilter}
@@ -113,8 +104,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Tipo', 'event_result' => 'Resultado'];
                 break;
 
-            case 'Inasistencias':
-            case 'Estudiantes Ausentes':
+            case 'absences':
                 $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
                 $sFilter = $studentId ? " AND ai.student_id = ?" : "";
                 $stmt = $conn->prepare("
@@ -122,7 +112,7 @@ if ($cleanPath === '/consultations/query') {
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
                     WHERE ai.school_id = ? AND ai.incident_type IN ('UNAUTHORIZED_ABSENCE', 'INASISTENCIA')
-                      AND ai.detected_at >= (?::date AT TIME ZONE 'America/Bogota') AND ai.detected_at < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
                       {$gFilter}
                       {$sFilter}
                       {$teacherGroupFilter}
@@ -137,11 +127,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Incidente'];
                 break;
 
-            case 'Estudiantes fuera del salón':
-            case 'Estudiantes con Permiso':
-            case 'Mis Permisos':
-            case 'Permisos Activos':
-            case 'Permisos Activos Hoy':
+            case 'active_permissions':
                 $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
                 $sFilter = $studentId ? " AND ai.student_id = ?" : "";
                 $stmt = $conn->prepare("
@@ -149,7 +135,7 @@ if ($cleanPath === '/consultations/query') {
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
                     WHERE ai.school_id = ? AND ai.incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
-                      AND ai.detected_at >= (?::date AT TIME ZONE 'America/Bogota') AND ai.detected_at < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
                       {$gFilter}
                       {$sFilter}
                       {$teacherGroupFilter}
@@ -167,9 +153,7 @@ if ($cleanPath === '/consultations/query') {
             // ==========================================
             // HISTORIAL & MENSAJERÍA
             // ==========================================
-            case 'Historial Asistencia':
-            case 'Asistencia General':
-            case 'Asistencia Institucional':
+            case 'attendance_history':
                 $dateFrom = $input['date_from'] ?? $fromDate;
                 $dateTo   = $input['date_to']   ?? $toDate;
 
@@ -178,8 +162,8 @@ if ($cleanPath === '/consultations/query') {
                     FROM biometric_events be
                     JOIN students s ON be.student_id = s.student_id
                     WHERE be.school_id = :sid
-                      AND be.event_timestamp >= (:date_from::date AT TIME ZONE 'America/Bogota')
-                      AND be.event_timestamp < ((:date_to::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND be.event_timestamp >= (:date_from::date)
+                      AND be.event_timestamp < ((:date_to::date + INTERVAL '1 day'))
                       {$teacherGroupFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 500
@@ -193,9 +177,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Evento'];
                 break;
 
-            case 'Incidentes Disciplinarios':
-            case 'Vulneraciones':
-            case 'Alertas':
+            case 'incidents':
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, ai.incident_type, ai.detected_at, ai.metadata_json, s.student_id
                     FROM attendance_incidents ai
@@ -210,7 +192,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'incident_type' => 'Tipo', 'detected_at' => 'Fecha'];
                 break;
 
-            case 'Seguimiento Estudiantil':
+            case 'student_tracking_active':
                 try {
                     $stmt = $conn->prepare("
                         SELECT s.first_name, s.last_name, s.document_number, st.status, st.updated_at, st.tracking_id, st.student_id
@@ -231,7 +213,7 @@ if ($cleanPath === '/consultations/query') {
                 }
                 break;
 
-            case 'Seguimientos completados':
+            case 'student_tracking_completed':
                 try {
                     $stmt = $conn->prepare("
                         SELECT s.first_name, s.last_name, s.document_number, st.status, st.updated_at, st.tracking_id, st.student_id
@@ -252,11 +234,8 @@ if ($cleanPath === '/consultations/query') {
                 }
                 break;
 
-            case 'Mensajes Enviados':
-            case 'Respuestas Acudientes':
-            case 'Citaciones':
-                $adminRoles = ['SECRETARIA', 'COORDINADOR', 'RECTOR',
-                               'SUPER_RECTOR'];
+            case 'sent_messages':
+                $adminRoles = ['SECRETARY', 'COORDINATOR', 'RECTOR'];
                 $isAdmin = in_array($authUser['role'], $adminRoles);
 
                 if ($isAdmin) {
@@ -292,7 +271,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['phone_number' => 'Teléfono', 'type_code' => 'Tipo', 'message_content' => 'Mensaje', 'sent_at' => 'Enviado', 'delivery_status' => 'Estado'];
                 break;
 
-            case 'Mensajes Internos':
+            case 'internal_messages':
                 $stmt = $conn->prepare("
                     SELECT u.first_name as sender_name, u.last_name as sender_last, im.subject, im.message_content, im.sent_at
                     FROM internal_messages im
@@ -309,7 +288,7 @@ if ($cleanPath === '/consultations/query') {
             // ==========================================
             // COORDINACIÓN: Módulos de Permisos y Salidas
             // ==========================================
-            case 'Spam Biométrico':
+            case 'biometric_spam':
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type, be.event_result,
                            COUNT(*) OVER (PARTITION BY be.student_id) as intentos
@@ -317,7 +296,7 @@ if ($cleanPath === '/consultations/query') {
                     JOIN students s ON be.student_id = s.student_id
                     WHERE be.school_id = ?
                       AND be.event_result IN ('NO_MATCH', 'SPOOF_DETECTED', 'LIVENESS_FAIL', 'TIMEOUT')
-                      AND be.event_timestamp >= (?::date AT TIME ZONE 'America/Bogota') AND be.event_timestamp < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND be.event_timestamp >= (?::date) AND be.event_timestamp < ((?::date + INTERVAL '1 day'))
                       {$teacherGroupFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 100
@@ -329,7 +308,7 @@ if ($cleanPath === '/consultations/query') {
                             'event_result' => 'Resultado', 'intentos' => 'Intentos'];
                 break;
 
-            case 'Permisos Emitidos':
+            case 'issued_permissions':
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, ag.group_name,
                            cea.authorization_reason as reason,
@@ -341,7 +320,7 @@ if ($cleanPath === '/consultations/query') {
                     LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
                     LEFT JOIN users u ON u.user_id = cea.authorized_by_user_id
                     WHERE cea.school_id = ?
-                      AND cea.exit_time >= (?::date AT TIME ZONE 'America/Bogota') AND cea.exit_time < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND cea.exit_time >= (?::date) AND cea.exit_time < ((?::date + INTERVAL '1 day'))
                       {$teacherGroupFilter}
                     ORDER BY cea.exit_time DESC
                     LIMIT 100
@@ -354,7 +333,7 @@ if ($cleanPath === '/consultations/query') {
                             'issuer_first' => 'Autorizado por'];
                 break;
 
-            case 'Salidas del colegio permitidas':
+            case 'school_exits':
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, ag.group_name,
                            sea.authorization_reason as reason,
@@ -366,7 +345,7 @@ if ($cleanPath === '/consultations/query') {
                     LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
                     LEFT JOIN users u ON u.user_id = sea.authorized_by_user_id
                     WHERE sea.school_id = ?
-                      AND sea.exit_time >= (?::date AT TIME ZONE 'America/Bogota') AND sea.exit_time < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND sea.exit_time >= (?::date) AND sea.exit_time < ((?::date + INTERVAL '1 day'))
                       {$teacherGroupFilter}
                     ORDER BY sea.exit_time DESC
                     LIMIT 100
@@ -378,7 +357,7 @@ if ($cleanPath === '/consultations/query') {
                             'exit_time' => 'Fecha Salida', 'status' => 'Estado'];
                 break;
 
-            case 'Salidas Pedagógicas':
+            case 'pedagogical_trips':
                 // Consulta user_commands tipo PEDAGOGICA (el nuevo flujo ya no inserta en
                 // pedagogical_trip_authorizations sino que notifica vía WhatsApp directamente)
                 $stmt = $conn->prepare("
@@ -389,7 +368,7 @@ if ($cleanPath === '/consultations/query') {
                     FROM user_commands uc
                     LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
                     WHERE uc.school_id = ? AND uc.command_type = 'PEDAGOGICA'
-                      AND uc.executed_at >= (?::date AT TIME ZONE 'America/Bogota') AND uc.executed_at < ((?::date + INTERVAL '1 day') AT TIME ZONE 'America/Bogota')
+                      AND uc.executed_at >= (?::date) AND uc.executed_at < ((?::date + INTERVAL '1 day'))
                     ORDER BY uc.executed_at DESC
                     LIMIT 50
                 ");
@@ -412,8 +391,7 @@ if ($cleanPath === '/consultations/query') {
             // ==========================================
             // COORDINACIÓN & RECTORÍA & SECRETARÍA
             // ==========================================
-            case 'TODOS los grupos':
-            case 'Grupos':
+            case 'all_groups':
                 $stmt = $conn->prepare("
                     SELECT group_name, grade_level, academic_year
                     FROM academic_groups
@@ -425,42 +403,44 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['group_name' => 'Grupo', 'grade_level' => 'Grado', 'academic_year' => 'Año'];
                 break;
 
-            case 'TODOS los profesores':
-            case 'Profesores':
+            case 'all_teachers':
                 $stmt = $conn->prepare("
                     SELECT u.first_name, u.last_name, u.email, u.phone
                     FROM users u
                     JOIN roles r ON u.role_id = r.role_id
-                    WHERE u.school_id = ? AND r.role_name IN ('DOCENTE', 'TEACHER') AND u.active = TRUE
+                    WHERE u.school_id = ? AND r.role_name = 'TEACHER' AND u.deleted_at IS NULL
                 ");
                 $stmt->execute([$schoolId]);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'email' => 'Email', 'phone' => 'Teléfono'];
                 break;
 
-            case 'Estudiantes':
-                $lastId   = $input['last_id'] ?? null;
+            case 'all_students':
+                // FIX: Cursor pagination (keyset) con UUID (usando created_at y student_id como desempate)
+                $lastCreatedAt = $input['last_created_at'] ?? null;
+                $lastStudentId = $input['last_student_id'] ?? null;
                 $pageSize = 100;
 
-                if ($lastId) {
+                if ($lastCreatedAt) {
                     $stmt = $conn->prepare("
-                        SELECT first_name, last_name, document_number
+                        SELECT first_name, last_name, document_number, created_at, student_id
                         FROM students
                         WHERE school_id = :sid AND active = TRUE
-                          AND student_id > :last_id
-                        ORDER BY student_id ASC
+                          AND (created_at, student_id) < (:last_created_at, :last_student_id::UUID)
+                        ORDER BY created_at DESC, student_id DESC
                         LIMIT :page_size
                     ");
-                    $stmt->bindValue(':sid',       $schoolId,  PDO::PARAM_STR);
-                    $stmt->bindValue(':last_id',   $lastId,    PDO::PARAM_STR);
-                    $stmt->bindValue(':page_size', $pageSize,  PDO::PARAM_INT);
+                    $stmt->bindValue(':sid',             $schoolId,      PDO::PARAM_STR);
+                    $stmt->bindValue(':last_created_at', $lastCreatedAt, PDO::PARAM_STR);
+                    $stmt->bindValue(':last_student_id', $lastStudentId, PDO::PARAM_STR);
+                    $stmt->bindValue(':page_size',       $pageSize,      PDO::PARAM_INT);
                     $stmt->execute();
                 } else {
                     $stmt = $conn->prepare("
-                        SELECT first_name, last_name, document_number
+                        SELECT first_name, last_name, document_number, created_at, student_id
                         FROM students
                         WHERE school_id = :sid AND active = TRUE
-                        ORDER BY student_id ASC
+                        ORDER BY created_at DESC, student_id DESC
                         LIMIT :page_size
                     ");
                     $stmt->bindValue(':sid',       $schoolId, PDO::PARAM_STR);
@@ -471,7 +451,7 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'document_number' => 'Documento'];
                 break;
 
-            case 'Acudientes':
+            case 'all_guardians':
                 $stmt = $conn->prepare(
                     "SELECT
                          g.guardian_id,
@@ -493,21 +473,11 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['full_name' => 'Nombre', 'phone' => 'Teléfono', 'whatsapp_phone' => 'WhatsApp'];
                 break;
 
-            case 'Métricas Institucionales':
-            case 'Métricas Globales':
-            case 'Estadísticas Históricas':
-            case 'Indicadores Críticos':
-            case 'Grupos Críticos':
-            case 'Estudiantes Críticos':
-            case 'Reportes Históricos':
-            case 'TODOS los Consolidados':
-            case 'Históricos Completos':
-            case 'Exportaciones Institucionales':
-            case 'Matrículas':
+            case 'institutional_metrics':
                 $stmt = $conn->prepare("
                     SELECT s.first_name, s.last_name, s.document_number,
                            COALESCE(ag.group_name, 'Sin grupo') as group_name,
-                           TO_CHAR(s.created_at AT TIME ZONE 'America/Bogota', 'DD/MM/YYYY') as enrolled_at,
+                           TO_CHAR(s.created_at, 'DD/MM/YYYY') as enrolled_at,
                            CASE WHEN s.active THEN 'Activo' ELSE 'Inactivo' END as estado
                     FROM students s
                     LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
@@ -523,14 +493,44 @@ if ($cleanPath === '/consultations/query') {
                             'enrolled_at' => 'Matrícula', 'estado' => 'Estado'];
                 break;
 
-            case 'Personal Institucional':
-            case 'Auxiliares':
-            case 'Portería':
-                $roleFilter = [
-                    'Personal Institucional' => ['DOCENTE', 'SECRETARIA', 'PORTERO', 'AUXILIAR', 'PSICORIENTADOR', 'COORDINADOR'],
-                    'Auxiliares'             => ['AUXILIAR'],
-                    'Portería'               => ['PORTERO'],
-                ][$module];
+            case 'staff':
+                $roleFilter = ['TEACHER', 'SECRETARY', 'SECURITY', 'AUXILIARY', 'COUNSELOR', 'COORDINATOR'];
+                $placeholders = implode(',', array_fill(0, count($roleFilter), '?'));
+                $stmt = $conn->prepare("
+                    SELECT u.first_name, u.last_name, u.email, u.phone, r.role_name as rol,
+                           CASE WHEN u.active THEN 'Activo' ELSE 'Inactivo' END as estado
+                    FROM users u
+                    JOIN roles r ON r.role_id = u.role_id
+                    WHERE u.school_id = ? AND UPPER(r.role_name) IN ($placeholders)
+                    ORDER BY u.last_name, u.first_name
+                ");
+                $stmt->execute(array_merge([$schoolId], $roleFilter));
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido',
+                            'email' => 'Email', 'phone' => 'Teléfono',
+                            'rol' => 'Rol', 'estado' => 'Estado'];
+                break;
+                
+            case 'staff_auxiliary':
+                $roleFilter = ['AUXILIARY'];
+                $placeholders = implode(',', array_fill(0, count($roleFilter), '?'));
+                $stmt = $conn->prepare("
+                    SELECT u.first_name, u.last_name, u.email, u.phone, r.role_name as rol,
+                           CASE WHEN u.active THEN 'Activo' ELSE 'Inactivo' END as estado
+                    FROM users u
+                    JOIN roles r ON r.role_id = u.role_id
+                    WHERE u.school_id = ? AND UPPER(r.role_name) IN ($placeholders)
+                    ORDER BY u.last_name, u.first_name
+                ");
+                $stmt->execute(array_merge([$schoolId], $roleFilter));
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido',
+                            'email' => 'Email', 'phone' => 'Teléfono',
+                            'rol' => 'Rol', 'estado' => 'Estado'];
+                break;
+                
+            case 'staff_security':
+                $roleFilter = ['SECURITY'];
                 $placeholders = implode(',', array_fill(0, count($roleFilter), '?'));
                 $stmt = $conn->prepare("
                     SELECT u.first_name, u.last_name, u.email, u.phone, r.role_name as rol,
@@ -547,11 +547,10 @@ if ($cleanPath === '/consultations/query') {
                             'rol' => 'Rol', 'estado' => 'Estado'];
                 break;
 
-            case 'Reportes':
-            case 'Auditoría Local':
+            case 'reports':
                 $stmt = $conn->prepare("
                     SELECT report_type as tipo, 
-                           TO_CHAR(generated_at AT TIME ZONE 'America/Bogota', 'DD/MM/YYYY HH12:MI AM') as generado_en,
+                           TO_CHAR(generated_at, 'DD/MM/YYYY HH12:MI AM') as generado_en,
                            format as formato,
                            COALESCE(status, 'completado') as estado
                     FROM report_exports
@@ -564,15 +563,14 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['tipo' => 'Tipo', 'generado_en' => 'Generado en', 'formato' => 'Formato', 'estado' => 'Estado'];
                 break;
 
-            case 'Cambios Registro':
-            case 'Autorizaciones Emitidas':
+            case 'audit_logs':
                 $data = [];
                 $columns = ['info' => 'Información'];
                 break;
 
             default:
                 $data = [];
-                $columns = ['info' => 'Información'];
+                $columns = ['info' => 'Módulo desconocido'];
                 break;
         }
 

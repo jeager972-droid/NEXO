@@ -89,7 +89,7 @@ function sendTwilioWhatsAppOtp($to, $code, $purpose) {
 if ($cleanPath === '/users/by-role' && $method === 'GET') {
     try {
         $userRole = strtoupper($authUser['role'] ?? '');
-        $allowedDirectoryRoles = ['SUPER_RECTOR', 'RECTOR', 'COORDINADOR', 'SECRETARIA', 'DOCENTE', 'PSICORIENTADOR'];
+        $allowedDirectoryRoles = ['RECTOR', 'COORDINATOR', 'SECRETARY', 'TEACHER', 'COUNSELOR'];
         if (!in_array($userRole, $allowedDirectoryRoles, true)) {
             usersJson(['status' => 'error', 'message' => 'No tienes permisos para consultar el directorio de personal'], 403);
         }
@@ -114,7 +114,7 @@ if ($cleanPath === '/users/by-role' && $method === 'GET') {
                    r.role_name, u.work_shift
             FROM users u
             INNER JOIN roles r ON u.role_id = r.role_id
-            WHERE u.school_id = ? AND r.role_name = ? AND u.active = TRUE
+            WHERE u.school_id = ? AND r.role_name = ? AND u.deleted_at IS NULL
         ";
         $params = [$schoolId, $roleName];
 
@@ -142,7 +142,7 @@ if ($cleanPath === '/users/me/extended' && $method === 'GET') {
         $stmt = $conn->prepare("
             SELECT user_id, first_name, last_name, email, phone, backup_email,
                    profile_photo_url, work_shift, email_verified, phone_verified,
-                   document_number, active, created_at, updated_at
+                   document_number, (deleted_at IS NULL) AS active, created_at, updated_at
             FROM users WHERE user_id = ?
         ");
         $stmt->execute([$userId]);
@@ -439,8 +439,13 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
         // (bloque OTP eliminado)
 
         $newHash = password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]);
-        $upd = $conn->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE user_id = ?");
-        $upd->execute([$newHash, $userId]);
+        try {
+            $upd = $conn->prepare("UPDATE users SET password_hash = ?, password_salt = NULL, updated_at = NOW() WHERE user_id = ?");
+            $upd->execute([$newHash, $userId]);
+        } catch (PDOException $e) {
+            $upd = $conn->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE user_id = ?");
+            $upd->execute([$newHash, $userId]);
+        }
 
         usersJson(['status' => 'ok', 'message' => 'Contraseña actualizada correctamente']);
     } catch (Throwable $e) {
