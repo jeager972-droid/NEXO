@@ -17,12 +17,12 @@ RUN install-php-extensions pdo_pgsql mysqli redis sockets zip pcntl
 
 WORKDIR /var/www/html
 
-# Build context is the monorepo root
-COPY backend/api/composer.json backend/api/composer.lock* ./
+# Build context is backend/api directory
+COPY composer.json composer.lock* ./
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-COPY backend/api/ .
+COPY . .
 
 RUN chown -R www-data:www-data /var/www/html
 
