@@ -7,7 +7,7 @@ import { studentsApi } from '../api/students';
 import {
   Search, Users, ShieldAlert, MessageSquare,
   Activity, ChevronRight, BookOpen, Database,
-  History, UserCheck, FileText
+  UserCheck, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
@@ -64,11 +64,6 @@ const Consultation = () => {
       }
     }
   }, [initialModHandled, searchParams]);
-
-  const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
-  if (!allowedForConsulta.includes(user?.role)) {
-    return <Navigate to="/" replace />;
-  }
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 
@@ -148,6 +143,11 @@ const Consultation = () => {
     }
     return () => abortController.abort();
   }, [activeItem]);
+
+  const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
+  if (!allowedForConsulta.includes(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
 
   // Definición de módulos por rol
   const rbacModules = {
