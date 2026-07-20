@@ -1,12 +1,4 @@
-# Stage 1: Build Landing Page
-FROM node:20-alpine AS frontend-builder
-WORKDIR /app
-COPY landing/package*.json ./
-RUN npm ci
-COPY landing/ .
-RUN npm run build
-
-# Stage 2: PHP API
+# PHP API Dockerfile
 FROM php:8.2-fpm
 # CORS fix applied - nginx catch-all → api.php - v3.0
 
@@ -31,8 +23,6 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 COPY backend/api/ .
-# Copy frontend build output
-COPY --from=frontend-builder /app/dist/ ./
 
 RUN chown -R www-data:www-data /var/www/html
 

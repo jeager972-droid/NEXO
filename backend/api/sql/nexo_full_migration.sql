@@ -275,9 +275,8 @@ CREATE OR REPLACE FUNCTION fn_calculate_student_risk(p_student_id UUID, p_school
 
 CREATE OR REPLACE FUNCTION fn_recalculate_school_metrics(p_school_id UUID) RETURNS INTEGER AS $$ DECLARE v_count INTEGER; BEGIN INSERT INTO student_behavior_metrics(school_id, student_id, calculated_at, late_count, absence_count, total_events, risk_score, risk_level, calculation_window_days, metadata_json) SELECT p_school_id, s.student_id, NOW(), COALESCE(be.late_count, 0), COALESCE(be.absence_count, 0), COALESCE(be.total_events, 0), LEAST(100.00, COALESCE(be.late_count, 0) * 5.0 + COALESCE(be.absence_count, 0) * 15.0 + GREATEST(0, (COALESCE(be.total_events, 0) - 20) * 0.5)), CASE WHEN LEAST(100.00, COALESCE(be.late_count, 0) * 5.0 + COALESCE(be.absence_count, 0) * 15.0 + GREATEST(0, (COALESCE(be.total_events, 0) - 20) * 0.5)) >= 80 THEN 'CRITICAL' WHEN LEAST(100.00, COALESCE(be.late_count, 0) * 5.0 + COALESCE(be.absence_count, 0) * 15.0 + GREATEST(0, (COALESCE(be.total_events, 0) - 20) * 0.5)) >= 60 THEN 'HIGH' WHEN LEAST(100.00, COALESCE(be.late_count, 0) * 5.0 + COALESCE(be.absence_count, 0) * 15.0 + GREATEST(0, (COALESCE(be.total_events, 0) - 20) * 0.5)) >= 30 THEN 'MEDIUM' ELSE 'LOW' END, 30, jsonb_build_object('recalculated_at', NOW()) FROM students s LEFT JOIN(SELECT student_id, COUNT(*) FILTER(WHERE event_type LIKE 'INGRESO_TARDE%') AS late_count, COUNT(*) FILTER(WHERE event_type LIKE 'INASISTENCIA%') AS absence_count, COUNT(*) AS total_events FROM biometric_events WHERE event_timestamp >= NOW() - INTERVAL '30 days' GROUP BY student_id) be ON be.student_id = s.student_id WHERE s.school_id = p_school_id AND s.active = TRUE ON CONFLICT(student_id, calculation_window_days) DO UPDATE SET calculated_at = EXCLUDED.calculated_at, late_count = EXCLUDED.late_count, absence_count = EXCLUDED.absence_count, total_events = EXCLUDED.total_events, risk_score = EXCLUDED.risk_score, risk_level = EXCLUDED.risk_level, metadata_json = EXCLUDED.metadata_json; GET DIAGNOSTICS v_count = ROW_COUNT; RETURN v_count; END; $$ LANGUAGE plpgsql;
 
--- RLS HELPERS
+-- RLS HELPERS (moved before usage to fix order dependency)
 CREATE OR REPLACE FUNCTION get_current_school_id() RETURNS UUID AS $$ DECLARE v_school_id TEXT; BEGIN v_school_id := current_setting('app.current_school_id', true); IF v_school_id IS NULL OR v_school_id = '' THEN RETURN NULL; END IF; RETURN v_school_id::UUID; EXCEPTION WHEN OTHERS THEN RETURN NULL; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
--- RLS POLICIES
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS students_select ON students; DROP POLICY IF EXISTS students_insert ON students; DROP POLICY IF EXISTS students_update ON students; DROP POLICY IF EXISTS students_delete ON students;
 CREATE POLICY students_select ON students FOR SELECT USING(school_id = get_current_school_id());
@@ -572,11 +571,11 @@ DROP FUNCTION IF EXISTS assign_permission_to_role(VARCHAR, VARCHAR);
 -- REGISTRO DE LA MIGRACIÓN BASE
 -- =============================================================================
 SELECT register_migration(
-    'nexo_full_migration.sql',
-    '2026-05',
-    'Esquema base completo consolidado: tablas, índices, constraints, triggers, funciones, RLS, particiones, seed mínimo',
-    NULL,
-    CURRENT_USER,
-    NULL,
-    'Incluye consolidación de múltiples migraciones antiguas. Generación UUID.'
+    'nexo_full_migration.sql'::VARCHAR,
+    '2026-05'::VARCHAR,
+    'Esquema base completo consolidado: tablas, índices, constraints, triggers, funciones, RLS, particiones, seed mínimo'::TEXT,
+    NULL::VARCHAR,
+    CURRENT_USER::VARCHAR,
+    NULL::INTEGER,
+    'Incluye consolidación de múltiples migraciones antiguas. Generación UUID.'::TEXT
 );
