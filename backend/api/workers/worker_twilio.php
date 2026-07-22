@@ -160,7 +160,7 @@ function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
             }
             return ['ok' => false, 'error' => 'Template fallback también falló: ' . $templateSend['error'], 'sid' => null];
         }
-        return ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID en Railway.", 'sid' => null];
+        return ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID como variable de entorno.", 'sid' => null];
     }
 
     return $send;

@@ -429,9 +429,9 @@ Ver archivo separado `LEGACY_UNUSED_CODE.md` para el listado detallado. Resumen:
 - `RealGpioManager` define una clase anónima sin registro en fábrica: `main.cpp` no la usa actualmente.
 - `RealOledDisplay` incluye fuente 5x8 embebida y se asume segmento re-mapeado; el comentario sugiere invertir bits si la pantalla se ve invertida.
 - `Encryption` almacena la clave AES como `std::vector<char>` y hace `mlock`; `initialize()` lee `nexo_aes_key_b64` directamente sin decodificar base64 (la clave se guarda en texto plano como string de 32 chars, no como 32 bytes aleatorios), lo que debilita el propósito de la clave AES.
-- `ConfigManager` tiene URL de producción hardcodeada (`nexo-production-dbe3.up.railway.app`) en el default.
+- `ConfigManager` no tiene URL por defecto; `api_url` debe configurarse en `config.json`.
 - `CMakeLists.txt` no enlaza `libmosquitto` de forma robusta cuando `pkg_check_modules` falla; la variable `MOSQUITTO_LIB` puede quedar vacía y aún así se enlaza.
-- `setup_nexo.sh` asume estructura legacy `Logica de negocio/edge`, que ya no existe en el repo actual (`backend/edge`).
+- `setup_nexo.sh` apunta a `backend/edge`.
 - `Dockerfile.edge` no instala `libspdlog`, `libmosquitto` ni `catch2` (descargados por FetchContent en build, pero runtime de spdlog/mosquitto podría faltar).
 - `CMakePresets.json` referencia `cmake/arm64-pi4-toolchain.cmake` que no existe en el repositorio.
 - `config.example.json` define pines GPIO `32`, `33`, `34`, pero `RealGpioManager.cpp` usa líneas `17`, `27`, `22` hardcodeadas.
@@ -548,7 +548,7 @@ Ver archivo separado `LEGACY_UNUSED_CODE.md` para el listado detallado. Resumen:
 ### 9.4 Landing page
 
 - **Preloader timer-based**: `Preloader.jsx` oculta el overlay por tiempo (~1.6s) en lugar de esperar a la carga real de assets 3D; no hay handler de fallo de carga del modelo.
-- **Contacto hardcodeado**: `ContactModal.jsx` postea a `nexo-production-dbe3.up.railway.app/v1/contacto` con fallback `import.meta?.env?.VITE_API_BASE_URL`; la URL de producción está embebida.
+- **Contacto hardcodeado**: `ContactModal.jsx` usaba un fallback de URL; ahora depende de `VITE_API_BASE_URL`.
 - **Dashboard placeholder**: `DashboardPage.jsx` es un contenedor vacío vinculado desde el hero ("¿Quién construyó NEXO?"); requiere implementación futura.
 - **Cookie consent**: flujo funcional con localStorage, categorías analytics/marketing/preferences no se integran aún con scripts reales (ningún tag de tracking está presente).
 - **CustomCursor en móvil**: se desactiva por `matchMedia('(pointer: coarse)')`, pero el hook de resize y listeners de mouse se ejecutan aunque retornen temprano; podría limpiarse más.
@@ -559,7 +559,7 @@ Ver archivo separado `LEGACY_UNUSED_CODE.md` para el listado detallado. Resumen:
 
 - **Auth centralizada en cookie HttpOnly**: `WebApp/src/api/client.js` configura `withCredentials: true` y un interceptor global 401; no se almacena JWT en localStorage.
 - **RBAC duplicado parcial**: `WebApp/src/config/roles.js` es la fuente de verdad del sidebar, pero `WebApp/src/App.jsx` y `WebApp/src/routes/ProtectedRoute.jsx` también repiten lógica de roles. Unificar en un helper `hasAnyRole()` reduciría duplicación.
-- **URL de producción hardcodeada**: `WebApp/src/api/client.js` usa `nexo-production-dbe3.up.railway.app/v1` como fallback, igual que landing.
+- **URL de producción hardcodeada**: `WebApp/src/api/client.js` usaba un fallback de URL; ahora depende de `VITE_API_BASE_URL`.
 - **PWA install handling**: `WebApp/src/components/PwaInstallPrompt.jsx` y `WebApp/src/pages/InstallPage.jsx` capturan `beforeinstallprompt`, pero iOS Safari requiere instrucciones manuales mantenidas en `InstallPage.jsx`.
 - **Timeout adaptativo**: `WebApp/src/api/client.js` extiende timeout a 45s para rutas `/operations/` y `/reports/`; sin embargo no hay lógica de cancelación ni abort controller explícito.
 - **Telemetría en cola**: `WebApp/src/api/telemetry.js` envía un flush cada 5 minutos o 100 eventos, sin mecanismo de reintentos en envío fallido.

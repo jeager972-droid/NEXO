@@ -114,9 +114,7 @@ export default function ContactModal({ onClose }) {
     setStatus('loading')
 
     try {
-      const API_BASE =
-        import.meta?.env?.VITE_API_BASE_URL ||
-        'https://nexo-production-dbe3.up.railway.app/v1'
+      const API_BASE = import.meta?.env?.VITE_API_BASE_URL || ''
 
       const res = await fetch(`${API_BASE}/contacto`, {
         method: 'POST',

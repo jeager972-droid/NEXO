@@ -8,5 +8,3 @@ landing/node_modules/
 WebApp/node_modules/
 backend/api/.git-backup-old/
 *.md
-frontend/
-assets-3d/

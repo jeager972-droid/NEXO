@@ -44,7 +44,7 @@ NEXO está dividido en cuatro componentes principales:
 └──────────────────┬─────────────────────────────────────┬───────────────────┘
                    │                                     │
         ┌──────────▼──────────┐              ┌──────────▼──────────┐
-        │  PostgreSQL (Railway)│              │  Redis (Railway)    │
+        │  PostgreSQL (Supabase)│             │  Redis (Upstash)    │
         │  Datos + RLS         │              │  Colas + cache      │
         └──────────┬───────────┘              └──────────┬──────────┘
                    │                                     │
@@ -238,7 +238,7 @@ Los permisos se cargan dinámicamente desde `role_permissions` en cada autentica
 - **Sesión**: cookie `HttpOnly` + `X-Requested-With` para CSRF; WebApp usa `withCredentials: true`.
 - **Autorización**: RBAC en PHP + RLS en PostgreSQL.
 - **Cifrado en tránsito**: HTTPS everywhere; payload edge con AES-256-GCM.
-- **Cifrado en reposo**: PostgreSQL en Railway; AES key en variable de entorno `NEXO_AES_KEY`.
+- **Cifrado en reposo**: PostgreSQL en Supabase; AES key en variable de entorno `NEXO_AES_KEY`.
 - **Auditoría**: `global_audit_logs` con cadena HMAC; `/audit/integrity` valida la cadena.
 - **Panic mode**: invalida sesiones activas de una escuela vía `school_panic_events` + Redis.
 
@@ -246,19 +246,17 @@ Los permisos se cargan dinámicamente desde `role_permissions` en cada autentica
 
 ## 7. Despliegue actual (MVP)
 
-Actualmente el proyecto opera en modo **MVP transitorio** para minimizar costos:
+La arquitectura oficial de despliegue es:
 
-- **Backend + Landing Page**: comparten el mismo servidor Nginx en Railway.
-  - La landing sirve `index.html` estático.
-  - `api.php` actúa como front controller de la API.
-- **WebApp**: desplegada de forma separada, típicamente en Vercel, con `base: '/app/'`.
+- **Backend PHP API** → Render (`api.nexo.com` o URL de Render).
+- **WebApp** → Vercel (`app.nexo.com`) con `base: '/app/'`.
+- **Landing Page** → Vercel (`nexo.com`).
+- **PostgreSQL** → Supabase.
+- **Redis** → Upstash.
+- **MQTT** → Mosquitto propio (deshabilitado temporalmente en Docker).
 - **Edge**: compila para Raspberry Pi 4 con `setup_nexo.sh` / `CMakePresets.json`.
 
-Ver `documentation/DEPLOYMENT_STRATEGY.md` y `documentation/FUTURE_MIGRATION_GUIDE.md` para el plan de migración a 3 dominios profesionales:
-
-- `nexo.com` → Landing (Vercel)
-- `app.nexo.com` → WebApp (Vercel)
-- `api.nexo.com` → Backend API (Railway)
+La configuración se realiza mediante variables de entorno; no hay URLs de servicios hardcodeadas en el repositorio.
 
 ---
 
@@ -335,8 +333,6 @@ bash setup_nexo.sh
 | `documentation/ARCHITECTURE.md` | Arquitectura actual vs objetivo, diagramas, flujos, dependencias. |
 | `documentation/ROUTES_WORKERS_AUDIT.md` | Auditoría completa de rutas PHP, workers, SQL, tests y edge. |
 | `documentation/LEGACY_UNUSED_CODE.md` | Código legacy, duplicaciones, deuda técnica y candidatos a refactor. |
-| `documentation/DEPLOYMENT_STRATEGY.md` | Estrategia de despliegue MVP actual. |
-| `documentation/FUTURE_MIGRATION_GUIDE.md` | Guía para migrar a 3 dominios profesionales. |
 | `plan.md` | Plan de trabajo Etapas 2-8 (migraciones, compatibilidad, roles, seguridad, deuda técnica). |
 | `backend/api/README.md` | Quick start, variables de entorno, endpoints y estructura del API. |
 | `backend/edge/README.md` | Guía de build y operación del nodo Raspberry Pi. |

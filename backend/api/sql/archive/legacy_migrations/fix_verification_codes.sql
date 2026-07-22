@@ -1,5 +1,5 @@
 -- FIX: Create missing verification_codes table and user columns
--- Run this in Railway PostgreSQL immediately
+-- Run this in PostgreSQL immediately
 -- Safe to run multiple times (idempotent)
 
 -- 1. Add missing columns to users table

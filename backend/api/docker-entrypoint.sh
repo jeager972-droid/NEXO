@@ -2,7 +2,7 @@
 set -e
 
 echo "[nexo] ===== VARIABLES DE ENTORNO COMPLETAS ====="
-env | grep -E '(PORT|RAILWAY|HOST|BIND)' | sort
+env | grep -E '(PORT|HOST|BIND)' | sort
 echo "[nexo] =========================================="
 
 PORT="${PORT:-8080}"
@@ -43,29 +43,28 @@ http {
         listen 1883;
         listen [::]:1883;
         root /var/www/html;
-        index index.html index.php;
+        index index.php;
 
 
 
         # Bloquear archivos sensibles
         location ~ /\. { deny all; }
 
-        # Health check para Railway
+        # Health check
         location = /health {
             add_header Content-Type text/plain always;
             return 200 "OK\n";
         }
 
-        # Health check workers para Railway
+        # Health check workers
         location = /health/workers {
             add_header Content-Type text/plain always;
             return 200 "OK\n";
         }
 
-        # Debugging: direct serve index for root
+        # Root should hit the PHP API, not a static landing page
         location = / {
-            root /var/www/html;
-            try_files /index.html =404;
+            try_files /api.php =404;
         }
 
         # Catch-all

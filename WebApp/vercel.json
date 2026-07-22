@@ -1,5 +1,4 @@
 {
-  "_comment": "Vercel deployment config / NEXO Institucional. Responsabilidad: compilar la SPA, redirigir rutas sin /app/ al basename /app/, servir index.html para SPAs y exponer headers de seguridad (HSTS, X-Frame-Options, Permissions-Policy, etc.).",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "redirects": [

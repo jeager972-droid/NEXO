@@ -211,7 +211,7 @@ if ($cleanPath === '/users/me/extended' && $method === 'GET') {
 
 // ============================================================================
 // POST /users/upload-photo
-// Stores image as base64 data URL in DB (Railway-safe, no local files)
+// Stores image as base64 data URL in DB (cloud-safe, no local files)
 // ============================================================================
 if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
     try {

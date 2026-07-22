@@ -12,14 +12,14 @@
 #   2. Detecta el gestor de paquetes (apt-get, dnf, yum).
 #   3. Instala dependencias nativas según el gestor.
 #   4. Crea directorios /var/lib/nexo y /var/log/nexo.
-#   5. Verifica la carpeta "Logica de negocio/edge" (ruta legacy del repo).
+#   5. Verifica la carpeta "backend/edge".
 #   6. Configura y compila con `cmake --preset dev-x86`.
 #
 # USO:
 #   bash setup_nexo.sh
 #
 # ADVERTENCIAS:
-#   - Asume estructura de directorios legacy "Logica de negocio/edge".
+#   - Asume estructura de directorios "backend/edge".
 #   - No instala libspdlog ni catch2 de forma explícita (usa repositorios).
 #   - Requiere privilegios de root para crear /var/lib/nexo y /var/log/nexo.
 # =============================================================================
@@ -111,9 +111,9 @@ fi
 echo ""
 
 # Check if we're in the correct directory
-if [[ ! -d "Logica de negocio/edge" ]]; then
+if [[ ! -d "backend/edge" ]]; then
     echo "❌ ERROR: This script must be run from the NEXO project root directory"
-    echo "   Expected directory structure: Logica de negocio/edge/"
+    echo "   Expected directory structure: backend/edge/"
     exit 1
 fi
 
@@ -122,7 +122,7 @@ echo ""
 
 # Build the project
 echo "🔨 Building NEXO Edge with CMake (dev-x86 preset)..."
-cd "Logica de negocio/edge"
+cd "backend/edge"
 
 if [[ ! -d "build" ]]; then
     cmake --preset dev-x86

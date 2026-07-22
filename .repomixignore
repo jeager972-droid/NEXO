@@ -36,8 +36,6 @@ cmake_install.cmake
 compile_commands.json
 
 # === Bundles JS/CSS compilados por Vite ===
-backend/alojamiento/assets/**
-backend/api/assets/**
 **/assets/**/*.js
 **/assets/**/*.css
 **/assets/**/*.woff2
@@ -50,18 +48,8 @@ backend/api/assets/**
 **/*.gltf
 **/*.hdr
 **/*.exr
-backend/alojamiento/assets/environments/
-backend/alojamiento/assets/texturas-arena/
-backend/alojamiento/assets/textures/
-backend/alojamiento/assets/logo/
-backend/alojamiento/assets/models/
-backend/alojamiento/assets/downloads/
-backend/alojamiento/assets-3d/
 WebApp/public/assets/
 WebApp/public/downloads/
-backend/alojamiento/public/assets/
-backend/alojamiento/frontend/public/assets/
-backend/alojamiento/frontend/public/assets-3d/
 
 # === Archivos de compresión estática (.br / .gz) ===
 # Son generados automáticamente; el source ya está presente sin compresión
@@ -87,13 +75,9 @@ backend/lib/
 **/workbox*.js
 
 # === PHP: binarios y locks de Composer ===
-backend/alojamiento/composer.phar
-backend/alojamiento/composer-setup.php
-backend/alojamiento/composer.lock
 
 # === JavaScript: package-lock (no es código fuente; es lockfile) ===
 WebApp/package-lock.json
-backend/alojamiento/frontend/package-lock.json
 
 # === Secretos y entornos ===
 *.pem
@@ -107,8 +91,6 @@ backend/alojamiento/frontend/package-lock.json
 # === Logs y archivos temporales ===
 logs/
 *.log
-backend/alojamiento/frontend/dev_server_log.txt
-backend/alojamiento/frontend/build.log
 __pycache__/
 *.pyc
 *.pyo
@@ -116,18 +98,11 @@ __pycache__/
 # === Archivos comprimidos / artefactos de release ===
 *.zip
 landing-downloads.zip
-backend/alojamiento/frontend/nexo-frontend.zip
 
 # === Scratch, debug y dev-only ===
-backend/alojamiento/frontend/scratch/
-backend/alojamiento/frontend/dist/
-backend/alojamiento/_dev/
-backend/alojamiento/debug_db.php
-backend/alojamiento/frontend/node_modules/
 
 # === Archivos sueltos sin valor ===
 Dockerfile.bak
-Logica
 Nuevo documento de texto.txt
 skills-lock.json
 
@@ -138,8 +113,6 @@ repomix-output.md
 nexo-codigo-puro.xml
 
 # === Archivos de configuración y metadata (no código fuente) ===
-railway.json
-*.vercel.json
 **/vercel.json
 **/CMakePresets.json
 **/config.example.json

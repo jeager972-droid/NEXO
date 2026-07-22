@@ -1,5 +1,5 @@
 -- ============================================================
--- Índices adicionales para PostgreSQL (Railway)
+-- Índices adicionales para PostgreSQL
 -- ============================================================
 
 -- 1. Índice parcial para audit_trail: solo registros no sincronizados

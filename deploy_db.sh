@@ -4,7 +4,12 @@
 
 set -e
 
-DB_URL="postgresql://postgres:nexus@db.owlzoztdcqwyxkdmqovj.supabase.co:5432/postgres"
+DB_URL="${DATABASE_URL:-}"
+
+if [ -z "$DB_URL" ]; then
+    echo "ERROR: DATABASE_URL no está configurada."
+    exit 1
+fi
 
 echo "=========================================="
 echo "NEXO Database Deployment"

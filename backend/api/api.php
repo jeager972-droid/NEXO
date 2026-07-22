@@ -34,7 +34,7 @@
  *   - routes/operations.php : siempre incluido por compatibilidad de helpers.
  *
  * Es utilizado por:
- *   - Toda petición HTTP al backend (Railway/Docker).
+ *   - Toda petición HTTP al backend (Render/Docker).
  */
 
 ini_set('display_errors', '0');

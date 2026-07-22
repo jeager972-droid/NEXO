@@ -21,7 +21,7 @@ NEXO es una plataforma educativa para Colombia que combina:
                 ┌────────────────────────▼──┐        ┌──▼─────────────────────────────┐
                 │ WebApp/                    │        │ backend/api/                   │
                 │ Frontend React + Tauri     │        │ Backend PHP productivo + Docker│
-                │ (PWA + Desktop)            │        │ (Railway)                      │
+                │ (PWA + Desktop)            │        │ (Render)                       │
                 └────────────────────────────┘        └────────────────────────────────┘
                                          │
                                          └──────────┐
@@ -47,7 +47,7 @@ Carpetas físicas:
    AES-256-GCM                     └── workers procesan → PostgreSQL
                                                     │
                                                     ▼
-                                            PostgreSQL (Railway)
+                                            PostgreSQL (Supabase)
                                                     ▲
                                                     │
 [Frontend React] ── axios ──► /v1/* (rutas autenticadas con JWT)
@@ -142,7 +142,7 @@ index.html
 **Build y despliegue:**
 
 - `npm install` → `bash build.sh` (o `npm run build`) genera `landing/dist/`.
-- `dist/` es un sitio estático; sirve con nginx, Apache, Vercel, Railway, etc.
+- `dist/` es un sitio estático; sirve con nginx, Apache, Vercel, Render, etc.
 - Assets pesados (modelo 3D, imágenes, logo) viven en `public/assets/`.
 
 **Dependencias clave:**

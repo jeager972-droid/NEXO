@@ -137,7 +137,7 @@ function sendTwilioDirect(string $to, string $body): array {
             return ['ok' => false, 'error' => "[{$result['twilio_code']}] Template fallback falló", 'sid' => null];
         }
 
-        return ['ok' => false, 'error' => "[{$result['twilio_code']}] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID en Railway.", 'sid' => null];
+        return ['ok' => false, 'error' => "[{$result['twilio_code']}] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID como variable de entorno.", 'sid' => null];
     }
 
     if ($result['ok']) {

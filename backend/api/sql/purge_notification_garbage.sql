@@ -1,6 +1,6 @@
 -- ============================================================================
 -- PURGE: Limpieza de datos de notificaciones "basura"
--- Ejecutar en Railway PostgreSQL (con precaución, hacer backup primero)
+-- Ejecutar en PostgreSQL (con precaución, hacer backup primero)
 -- ============================================================================
 
 -- 1. ELIMINAR incidentes de asistencia viejos (test/duplicados) que NO sean permisos

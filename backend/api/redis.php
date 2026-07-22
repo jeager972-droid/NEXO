@@ -34,6 +34,7 @@ if (!function_exists('getRedisConnection')) {
      * }
      */
     function _nexoResolveRedisConfig(): array {
+        // 1. REDIS_URL tiene prioridad absoluta: puede ser redis://, rediss:// o tls://.
         $url = getenv('REDIS_URL');
         if ($url !== false && trim($url) !== '') {
             $parts = parse_url($url);
@@ -41,11 +42,13 @@ if (!function_exists('getRedisConnection')) {
                 throw new RedisException('REDIS_URL is malformed: ' . $url);
             }
 
+            // Esquema rediss:// o tls:// indican que Upstash/u otro servicio requiere TLS.
             $scheme = strtolower($parts['scheme'] ?? 'rediss');
             $tls = in_array($scheme, ['rediss', 'tls'], true);
 
             $host = $parts['host'];
             $port = (int)($parts['port'] ?? 6379);
+            // Decodificar credenciales por si la URL las trae URL-encoded.
             $user = isset($parts['user']) ? urldecode($parts['user']) : '';
             $pass = isset($parts['pass']) ? urldecode($parts['pass']) : '';
 
@@ -81,12 +84,13 @@ if (!function_exists('getRedisConnection')) {
             ];
         }
 
-        // Fallback a variables individuales (Redis local / variables sueltas).
+        // 2. Fallback: variables individuales para Redis local o despliegues sin URL.
         $host = getenv('REDISHOST') ?: '127.0.0.1';
         $port = (int)(getenv('REDISPORT') ?: 6379);
         $pass = getenv('REDIS_PASSWORD') ?: '';
         $user = getenv('REDIS_USER') ?: '';
 
+        // Detectar TLS si REDISHOST empieza con tls:// o rediss://.
         $tls = false;
         if (preg_match('/^(rediss|tls):\/\//i', $host)) {
             $tls = true;
@@ -96,6 +100,7 @@ if (!function_exists('getRedisConnection')) {
                 $port = (int)($parsed['port'] ?? $port);
             }
         }
+        // REDIS_TLS=true/1 permite forzar TLS incluso sin prefijo en REDISHOST.
         if (getenv('REDIS_TLS')) {
             $tlsEnv = strtolower(trim(getenv('REDIS_TLS')));
             $tls = ($tlsEnv !== '' && $tlsEnv !== 'false' && $tlsEnv !== '0' && $tlsEnv !== 'no' && $tlsEnv !== 'off');
@@ -125,6 +130,7 @@ if (!function_exists('getRedisConnection')) {
      * @return Redis|null Instancia conectada, o null en caso de fallo.
      */
     function getRedisConnection(): ?Redis {
+        // Singleton: solo se intenta una conexión por petición/proceso.
         static $redis = null;
         static $attempted = false;
 
@@ -137,6 +143,7 @@ if (!function_exists('getRedisConnection')) {
         $attempted = true;
 
         try {
+            // Si la extensión phpredis no está cargada, no bloquear la API.
             if (!class_exists('Redis')) {
                 return null;
             }
@@ -146,6 +153,7 @@ if (!function_exists('getRedisConnection')) {
             $redisInstance = new Redis();
             $context = [];
 
+            // 3. Contexto SSL obligatorio para TLS; sin esto phpredis no realiza el handshake.
             if ($config['tls']) {
                 $verifyPeer = getenv('REDIS_SSL_VERIFY_PEER');
                 $verify = true;
@@ -153,6 +161,7 @@ if (!function_exists('getRedisConnection')) {
                     $verify = filter_var($verifyPeer, FILTER_VALIDATE_BOOLEAN);
                 }
 
+                // verify_peer/verify_peer_name true por defecto; SNI ayuda con certificados como el de Upstash.
                 $context['stream'] = [
                     'verify_peer'      => $verify,
                     'verify_peer_name' => $verify,
@@ -161,6 +170,7 @@ if (!function_exists('getRedisConnection')) {
                 ];
             }
 
+            // El prefijo tls:// es lo que le indica a phpredis que debe negociar TLS.
             $host = $config['tls'] ? 'tls://' . $config['host'] : $config['host'];
 
             $connected = $redisInstance->connect(
@@ -177,8 +187,10 @@ if (!function_exists('getRedisConnection')) {
                 throw new RedisException("Could not connect to Redis at {$host}:{$config['port']}");
             }
 
+            // 4. Autenticar. Upstash normalmente usa usuario "default" y el token como password.
             if ($config['pass'] !== '') {
                 if ($config['user'] !== '' && $config['user'] !== 'default') {
+                    // auth(array) permite usuario distinto de default (ACLs Redis 6+).
                     $redisInstance->auth(['user' => $config['user'], 'pass' => $config['pass']]);
                 } else {
                     $redisInstance->auth($config['pass']);

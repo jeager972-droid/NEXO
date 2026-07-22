@@ -1,6 +1,6 @@
 # ============================================================
 # NEXO Security .htaccess - Hardened for Government Compliance
-# Compatible con Apache 2.4 (php:8.2-apache Docker / Railway)
+# Compatible con Apache 2.4 (php:8.2-apache Docker / Render)
 # ============================================================
 
 # Deshabilitar listado de directorios
@@ -48,12 +48,10 @@ ServerSignature Off
     # Permitir fotos de perfil subidas por usuarios
     RewriteRule ^uploads/avatars/ - [L]
 
-    # Prevenir hotlinking de recursos estáticos
+    # Prevenir hotlinking de recursos estáticos (permitir referrers de NEXO y Vercel)
     RewriteCond %{HTTP_REFERER} !^$ [NC]
     RewriteCond %{HTTP_REFERER} !^https?://(www\.)?(.+\.)?nexo\. [NC]
-    RewriteCond %{HTTP_REFERER} !^https?://(.+\.)?railway\.app [NC]
-    RewriteCond %{HTTP_REFERER} !^https?://(.+\.)?azure\.com [NC]
-    RewriteCond %{HTTP_REFERER} !^https?://(.+\.)?azurewebsites\.net [NC]
+    RewriteCond %{HTTP_REFERER} !^https?://(.+\.)?vercel\.app [NC]
     RewriteRule \.(jpg|jpeg|png|gif|svg)$ - [F,L]
 </IfModule>
 
@@ -67,7 +65,7 @@ ServerSignature Off
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://nexo-production-13c0.up.railway.app; frame-ancestors 'none';"
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';"
     # No exponer versión de PHP
     Header always unset X-Powered-By
 </IfModule>

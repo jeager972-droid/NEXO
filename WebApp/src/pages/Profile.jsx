@@ -243,7 +243,7 @@ const Profile = () => {
   }, []);
 
   /* ─── Photo upload ─── */
-  // FIX: comprimir/redimensionar en navegador antes de enviar (evita límite Railway)
+  // FIX: comprimir/redimensionar en navegador antes de enviar (evita límite de tamaño)
   const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.8) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();

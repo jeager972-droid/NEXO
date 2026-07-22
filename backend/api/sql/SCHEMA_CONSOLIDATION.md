@@ -170,7 +170,7 @@ sql/
 
 4. **Seed condicional:** `nexo_seed.sql` inserta datos masivos sin verificar si la base ya tiene datos reales. Considerar un flag o verificación antes de ejecutar en producción.
 
-5. **Scripts de mantenimiento como cron jobs:** `cleanup_maintenance.sql` y `purge_notification_garbage.sql` podrían convertirse en jobs programados en Railway o pg_cron.
+5. **Scripts de mantenimiento como cron jobs:** `cleanup_maintenance.sql` y `purge_notification_garbage.sql` podrían convertirse en jobs programados en Render, Supabase o pg_cron.
 
 6. **Tests de integridad del esquema:** Crear un script que verifique que todas las tablas, columnas, índices y constraints esperados existan tras ejecutar `nexo_full_migration.sql`.
 

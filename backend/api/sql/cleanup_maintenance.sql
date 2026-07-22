@@ -1,6 +1,6 @@
 -- ============================================================
 -- NEXO MAINTENANCE CLEANUP
--- Ejecutar diariamente (CRON o Railway Scheduler)
+-- Ejecutar diariamente (CRON o scheduler)
 -- psql $DATABASE_URL -f cleanup_maintenance.sql
 -- ============================================================
 
