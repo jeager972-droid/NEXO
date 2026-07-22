@@ -10,14 +10,13 @@
  * Estos valores deben coincidir exactamente entre Backend y Frontend.
  */
 export const ROLES = {
-  SUPER_RECTOR: 'SUPER_RECTOR',
   RECTOR: 'RECTOR',
-  COORDINADOR: 'COORDINADOR',
-  DOCENTE: 'DOCENTE',
-  SECRETARIA: 'SECRETARIA',
-  PORTERO: 'PORTERO',
-  AUXILIAR: 'AUXILIAR',
-  PSICORIENTADOR: 'PSICORIENTADOR'
+  COORDINADOR: 'COORDINATOR',
+  DOCENTE: 'TEACHER',
+  SECRETARIA: 'SECRETARY',
+  PORTERO: 'SECURITY',
+  AUXILIAR: 'AUXILIARY',
+  PSICORIENTADOR: 'COUNSELOR'
 };
 
 /**
@@ -38,25 +37,25 @@ export const SIDEBAR_ITEMS = [
     title: 'Inicio',
     path: '/',
     icon: LayoutDashboard,
-    roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
+    roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
   },
   {
     title: 'Operación',
     path: '/operacion',
     icon: Activity,
-    roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
+    roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
   },
   {
     title: 'Notificaciones',
     path: '/notificaciones',
     icon: Bell,
-    roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
+    roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]
   },
   {
     title: 'Seguimiento',
     path: '/seguimiento',
     icon: FileText,
-    roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR, ROLES.PSICORIENTADOR]
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR]
   },
   {
     title: 'Consulta',
@@ -68,13 +67,13 @@ export const SIDEBAR_ITEMS = [
     title: 'Auditoría',
     path: '/auditoria',
     icon: FileText,
-    roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR]
+    roles: [ROLES.RECTOR]
   },
   {
     title: 'Informes',
     path: '/informes',
     icon: BarChart2,
-    roles: [ROLES.SUPER_RECTOR, ROLES.RECTOR]
+    roles: [ROLES.RECTOR]
   },
   {
     title: 'Enrolamiento',
@@ -85,7 +84,6 @@ export const SIDEBAR_ITEMS = [
 ];
 
 export const ROLE_DISPLAY = {
-  [ROLES.SUPER_RECTOR]:  'Admin',
   [ROLES.RECTOR]:        'Rector',
   [ROLES.COORDINADOR]:   'Coordinador',
   [ROLES.DOCENTE]:       'Docente',

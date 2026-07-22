@@ -2,7 +2,7 @@
  * Enrollment page / NEXO Institucional
  * Responsabilidad: Registro y gestión de estudiantes: listado paginado con scroll infinito,
  * búsqueda, drawer de registro en múltiples pasos y huella digital (mock/lector externo).
- * Limitado a SECRETARIA/SUPER_RECTOR.
+ * Limitado a SECRETARIA.
  * Dependencias: React, react-router-dom, framer-motion, studentsApi, useAuth, ROLES.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';

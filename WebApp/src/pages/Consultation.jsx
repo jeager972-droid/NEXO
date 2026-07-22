@@ -54,7 +54,7 @@ const Consultation = () => {
   // BUG-08 FIX: separar en dos effects — grupos solo se recarga cuando cambia el rol,
   // no en cada cambio de searchParams
   useEffect(() => {
-    const isTeacherRole = user?.role === 'DOCENTE' || user?.role === 'PSICORIENTADOR';
+    const isTeacherRole = user?.role === ROLES.DOCENTE || user?.role === ROLES.PSICORIENTADOR;
     studentsApi.getGroups(isTeacherRole)
       .then(data => setGroups(Array.isArray(data) ? data : []))
       .catch(err => console.error('Error loading groups', err));

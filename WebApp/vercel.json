@@ -20,6 +20,10 @@
       "destination": "/assets/:file*"
     },
     {
+      "source": "/app/:file.:ext",
+      "destination": "/:file.:ext"
+    },
+    {
       "source": "/app/(.*)",
       "destination": "/index.html"
     },

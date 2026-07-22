@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
 import { useAuth } from '../hooks/useAuth';
+import { ROLES } from '../config/roles';
 
 import { fmt12h, formatCellValue, humanizeColumn, EXCLUDE_COLS } from '../utils/formatters';
 
@@ -436,7 +437,7 @@ export const ConsultationDrawer = ({
                           {dynamicColumns[k]}
                         </th>
                       ))}
-                      {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== 'DOCENTE' && (
+                      {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== ROLES.DOCENTE && (
                         <th className="px-4 py-3 text-right" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
                           Acción
                         </th>
@@ -452,7 +453,7 @@ export const ConsultationDrawer = ({
                             {formatCellValue(k, row[k])}
                           </td>
                         ))}
-                        {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== 'DOCENTE' && row.student_id && (
+                        {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== ROLES.DOCENTE && row.student_id && (
                           <td className="px-4 py-3 text-right">
                             <button
                               onClick={() => {

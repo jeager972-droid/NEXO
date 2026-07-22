@@ -1,7 +1,7 @@
 /**
  * Dashboard page / NEXO Institucional
- * Responsabilidad: Vista de inicio dinámica según el rol: SUPER_RECTOR/RECTOR ven
- * KPIs globales, DOCENTE/CORDINADOR su grupo y SECRETARIA/PSICORIENTADOR tareas clave.
+ * Responsabilidad: Vista de inicio dinámica según el rol: RECTOR ve
+ * KPIs globales, TEACHER/COORDINATOR su grupo y SECRETARY/COUNSELOR tareas clave.
  * Incluye drill-down de métricas por grupo/categoría y apertura de TrackingModal.
  * Dependencias: React, react-router-dom, framer-motion, dashboardApi, trackingApi, ROLES, useAuth.
  */
@@ -128,7 +128,6 @@ const Dashboard = () => {
   }, [user]);
 
   switch (user?.role) {
-    case ROLES.SUPER_RECTOR:
     case ROLES.RECTOR:
     case ROLES.COORDINADOR:
       return <AdminDashboard stats={stats} loading={loading} navigate={navigate} />;

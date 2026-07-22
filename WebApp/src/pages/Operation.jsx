@@ -62,7 +62,7 @@ const COMMANDS_CATALOG = [
     id: 'seguimiento', 
     title: 'Solicitar seguimiento', 
     icon: FileText, 
-    roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR],
+    roles: [ROLES.COORDINADOR, ROLES.RECTOR],
     fields: ['group', 'student', 'reason']
   },
   { 
@@ -112,7 +112,7 @@ const Operation = () => {
     let studentsOk = false;
     try {
       const uRole = user?.role_name || user?.role;
-      const isTeacherRole = uRole === 'DOCENTE' || uRole === 'PSICORIENTADOR';
+      const isTeacherRole = uRole === ROLES.DOCENTE || uRole === ROLES.PSICORIENTADOR;
       const groupsData = await studentsApi.getGroups(isTeacherRole);
       if (!signal.aborted) {
         setGroups(Array.isArray(groupsData) ? groupsData : []);

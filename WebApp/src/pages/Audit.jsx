@@ -1,6 +1,6 @@
 /**
  * Audit page / NEXO Institucional
- * Responsabilidad: Panel de auditoría para SUPER_RECTOR/RECTOR. Muestra módulos de reporte,
+ * Responsabilidad: Panel de auditoría para RECTOR. Muestra módulos de reporte,
  * drawer con filtros (fechas, grupo, estudiante, personal), tabla de resultados y
  * exportación manual a CSV/PDF por submódulo.
  * Dependencias: React, react-router-dom, framer-motion, auditApi, AuthContext, formatters.
@@ -18,9 +18,10 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { auditApi } from '../api/audit';
 import { AuthContext } from '../context/AuthContext';
+import { ROLES } from '../config/roles';
 import { formatCellValue as formatCell, humanizeColumn, EXCLUDE_COLS } from '../utils/formatters';
 
-const ADMIN_ROLES = ['RECTOR', 'COORDINADOR', 'SUPER_RECTOR'];
+const ADMIN_ROLES = [ROLES.RECTOR, ROLES.COORDINADOR];
 
 const ALL_SUBS = [
   'Inasistencias', 'Llegadas tarde', 'Evasón interna',
@@ -47,7 +48,7 @@ const Audit = () => {
   }, [searchParams, setSearchParams]);
 
   // Fix 3.4: Route guard para Auditoría
-  if (!['SUPER_RECTOR', 'RECTOR'].includes(user?.role)) {
+  if (![ROLES.RECTOR].includes(user?.role)) {
     return <Navigate to="/" replace />;
   }
 

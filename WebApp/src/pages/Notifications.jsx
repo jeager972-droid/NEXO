@@ -9,6 +9,7 @@ import { Bell, CheckCircle2, Info, User, AlertTriangle, Loader2, Eye, X, Trash2 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { ROLES } from '../config/roles';
 import { notificationsApi } from '../api/notifications';
 import { trackingApi } from '../api/tracking';
 
@@ -34,7 +35,7 @@ const Notifications = () => {
   const [clearing, setClearing]     = useState(false);
   const [detailNotif, setDetailNotif] = useState(null);
 
-  const isStaff = user?.role === 'PORTERO' || user?.role === 'AUXILIAR';
+  const isStaff = user?.role === ROLES.PORTERO || user?.role === ROLES.AUXILIAR;
 
   useEffect(() => {
     const fetchNotifications = async () => {

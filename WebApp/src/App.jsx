@@ -127,21 +127,21 @@ function App() {
 
                 <Route
                   path="/seguimiento"
-                  element={<ProtectedRoute allowedRoles={[ROLES.COORDINADOR, ROLES.RECTOR, ROLES.SUPER_RECTOR, ROLES.PSICORIENTADOR]} />}
+                  element={<ProtectedRoute allowedRoles={[ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR]} />}
                 >
                   <Route index element={<ErrorBoundary><Seguimiento /></ErrorBoundary>} />
                 </Route>
 
                 <Route
                   path="/auditoria"
-                  element={<ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />}
+                  element={<ProtectedRoute allowedRoles={[ROLES.RECTOR]} />}
                 >
                   <Route index element={<ErrorBoundary><Audit /></ErrorBoundary>} />
                 </Route>
 
                 <Route
                   path="/informes"
-                  element={<ProtectedRoute allowedRoles={[ROLES.SUPER_RECTOR, ROLES.RECTOR]} />}
+                  element={<ProtectedRoute allowedRoles={[ROLES.RECTOR]} />}
                 >
                   <Route index element={<ErrorBoundary><Reports /></ErrorBoundary>} />
                 </Route>
