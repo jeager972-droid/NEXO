@@ -1,3 +1,20 @@
+/**
+ * =============================================================================
+ * ContactModal.jsx — Modal de contacto para la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra un formulario de contacto institucional con validación inline,
+ *   animaciones GSAP y envío POST al endpoint `/contacto`. Gestiona estados de
+ *   carga, error de servidor y éxito.
+ *
+ * CAMPOS:
+ *   - Nombre, cargo, institución, ciudad, correo, WhatsApp, mensaje opcional
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap
+ * =============================================================================
+ */
+
 import { useRef, useState, useEffect } from 'react'
 import gsap from 'gsap'
 

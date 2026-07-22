@@ -1,13 +1,34 @@
 <?php
 /**
- * NEXO Boot Check — Valida variables de entorno críticas antes de arrancar
- * Si falta algo, el sistema falla closed (no arranca).
+ * =============================================================================
+ * boot_check.php — Validación de variables críticas antes del arranque.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Revisa las variables de entorno obligatorias para que la API no arranque
+ * con configuración incompleta (fail-closed). Además valida que exista al
+ * menos un mecanismo de firma JWT (RS256 con JWT_PRIVATE_KEY/JWT_PUBLIC_KEY
+ * o HS256 con JWT_SECRET) y emite advertencias para variables recomendadas.
+ *
+ * Variables requeridas:
+ *   - DATABASE_URL (o PGHOST/PGDATABASE/PGUSER/PGPASSWORD)
+ *   - NEXO_AES_KEY (clave AES-256-GCM para cifrado edge)
+ *   - REDISHOST (Redis para colas, rate limit y cache)
+ *   - CORS_ALLOW_ORIGINS (orígenes exactos permitidos)
+ *
+ * Variables recomendadas:
+ *   - JWT_ISSUER, JWT_AUDIENCE
+ *
+ * Si falta alguna requerida, responde HTTP 503 y termina la ejecución.
+ *
+ * Es utilizado por:
+ *   - api.php al inicio de cada petición.
  */
 
 $required = [
     'DATABASE_URL'       => 'URL de conexión PostgreSQL (o PGHOST/PGDATABASE/PGUSER/PGPASSWORD)',
     'NEXO_AES_KEY'       => 'Clave AES-256-GCM para cifrado de datos sensibles',
-    'REDISHOST'          => 'Host de Redis para colas y rate limiting',
     'CORS_ALLOW_ORIGINS' => 'Orígenes exactos para CORS (sin wildcards)',
 ];
 
@@ -17,6 +38,13 @@ foreach ($required as $key => $desc) {
     if ($val === false || trim($val) === '') {
         $missing[] = "$key ($desc)";
     }
+}
+
+// Redis puede configurarse con REDIS_URL (prioridad) o con REDISHOST.
+$redisUrl  = getenv('REDIS_URL');
+$redisHost = getenv('REDISHOST');
+if (($redisUrl === false || trim($redisUrl) === '') && ($redisHost === false || trim($redisHost) === '')) {
+    $missing[] = 'REDIS_URL o REDISHOST (configuración de Redis)';
 }
 
 // JWT: require RS256 keys (JWT_PRIVATE_KEY + JWT_PUBLIC_KEY) OR HMAC secret (JWT_SECRET)

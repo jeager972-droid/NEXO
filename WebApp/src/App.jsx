@@ -1,3 +1,10 @@
+/**
+ * WebApp router / NEXO Institucional
+ * Responsabilidad: Definir las rutas de la SPA, proteger con ProtectedRoute, aplicar
+ * lazy-loading de páginas, inicializar telemetría, capturar beforeinstallprompt PWA
+ * y manejar deep links de Tauri. Envuelve rutas autenticadas con Layout y ErrorBoundary.
+ * Dependencias: react-router-dom, framer-motion, AuthContext, ProtectedRoute, Layout, PwaInstallPrompt, api/telemetry.
+ */
 import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'

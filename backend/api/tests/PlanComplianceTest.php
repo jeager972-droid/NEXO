@@ -1,7 +1,19 @@
 <?php
 /**
- * PlanComplianceTest — Verificación EXHAUSTIVA sin omisiones
- * Revisa línea por línea que todo esté alineado
+ * =============================================================================
+ * PlanComplianceTest — Verificación exhaustiva del plan de migración/consolidación.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Script autónomo que realiza una auditoría profunda SQL↔PHP en secciones:
+ *   A. Canonización (inglés, UUID, sin SUPER_RECTOR).
+ *   B. Seed data alineada (roles, guardians, admin, etc.).
+ *   C. PHP backend alineado con DB (tablas, columnas, roles, permisos, guardian).
+ *   D. Funciones SQL y RLS.
+ *   E. Sintaxis y calidad de código PHP.
+ *   F. Cumplimiento de etapas del plan (archivos de documentación y estructura).
+ *
+ * USO:
+ *   php tests/PlanComplianceTest.php
  */
 
 class PlanComplianceTest {

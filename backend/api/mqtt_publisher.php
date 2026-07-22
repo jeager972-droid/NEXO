@@ -1,7 +1,37 @@
 <?php
 /**
- * mqtt_publisher.php — Helper para publicar comandos a dispositivos EDGE via MQTT.
- * Usado por routes/devices.php en lugar de Redis para V2 (Pub/Sub).
+ * =============================================================================
+ * mqtt_publisher.php — Publicador de comandos a dispositivos EDGE vía MQTT.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone publishDeviceCommand(), que publica un mensaje JSON en el tópico
+ * `nexo/devices/{deviceId}/commands` usando php-mqtt/client. Si no puede
+ * conectarse, retorna false para que el caller (routes/devices.php) haga
+ * fallback a Redis o a otro mecanismo.
+ *
+ * FLUJO
+ * -----
+ *   publishDeviceCommand(deviceId, payload)
+ *        │
+ *        ▼
+ *   Conectar a MQTT_HOST:MQTT_PORT (auth opcional)
+ *        │
+ *        ▼
+ *   publish("nexo/devices/{deviceId}/commands", json(payload), QoS 1)
+ *        │
+ *        ▼
+ *   disconnect()
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - vendor/autoload.php y php-mqtt/client.
+ *   - Variables de entorno: MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS.
+ *
+ * Es utilizado por:
+ *   - routes/devices.php : envío de comandos a edge devices (MQTT preferido, Redis fallback).
  */
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -9,6 +39,13 @@ require_once __DIR__ . '/vendor/autoload.php';
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;
 
+/**
+ * Publica un comando JSON en el tópico MQTT del dispositivo indicado.
+ *
+ * @param string $deviceId UUID del edge device destino.
+ * @param array $payload Comando a publicar (se codifica a JSON).
+ * @return bool True si se publicó exitosamente; false en caso contrario.
+ */
 function publishDeviceCommand(string $deviceId, array $payload): bool {
     $host = getenv('MQTT_HOST') ?: 'localhost';
     $port = (int)(getenv('MQTT_PORT') ?: 1883);

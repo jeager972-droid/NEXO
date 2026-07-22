@@ -1,3 +1,9 @@
+/**
+ * Sidebar / NEXO Institucional
+ * Responsabilidad: Navegación lateral (responsive, fijo en móvil) con items filtrados
+ * por rol, logo NEXO, toggle modo oscuro y tarjeta de identidad del usuario.
+ * Dependencias: react-router-dom, useAuth, useTheme, config/roles, LogoNexo, lucide-react, framer-motion.
+ */
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { SIDEBAR_ITEMS, getRoleDisplay } from '../config/roles';

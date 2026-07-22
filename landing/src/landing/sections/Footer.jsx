@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * Footer.jsx — Pie de página de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra el logo, enlaces legales (privacidad, tratamiento de datos,
+ *   términos) y copyright. Abre LegalModal al hacer clic en los enlaces.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ *   - LegalModal
+ * =============================================================================
+ */
+
 // Footer — minimal, legally compliant (Ley 1581 Colombia)
 import { useState } from 'react'
 import LegalModal from '../components/LegalModal'

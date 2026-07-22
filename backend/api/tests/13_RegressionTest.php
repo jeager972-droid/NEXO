@@ -1,7 +1,18 @@
 <?php
 /**
- * 13_RegressionTest.php
- * Verifica que bugs anteriores no regresen.
+ * =============================================================================
+ * 13_RegressionTest.php — Test de regresión.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica estáticamente que errores previos no vuelvan:
+ *   - Eliminación completa de SUPER_RECTOR (SQL y PHP).
+ *   - Preservación del rol GUARDIAN y tabla guardians.
+ *   - Normalización de teléfono (whatsapp_phone_normalized y trigger).
+ *   - Constraints UNIQUE de document_number por escuela.
+ *   - Integridad de cadena de auditoría (chain_hash, prev_audit_id).
+ *   - Policy abierta de jwt_blocklist para operaciones pre-auth.
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

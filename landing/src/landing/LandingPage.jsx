@@ -1,4 +1,25 @@
-// LandingPage — orchestrates all 10 modules of the NEXO world-class landing
+/**
+ * =============================================================================
+ * LandingPage.jsx — Página principal de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Orquesta todas las secciones de la landing (Hero, Problema, Cómo funciona,
+ *   Propuesta de valor, El nodo, Roles, Seguridad, Descarga, CTA final y Footer).
+ *   Gestiona el registro único del plugin GSAP ScrollTrigger, el refresh con
+ *   debounce y el flujo de consentimiento de cookies.
+ *
+ * FLUJO:
+ *   1. Registrar ScrollTrigger.
+ *   2. Refrescar layout tras montaje y resize (debounced).
+ *   3. Renderizar Navbar, secciones, Footer y modales de cookies.
+ *
+ * DEPENDENCIAS:
+ *   - gsap / ScrollTrigger
+ *   - Secciones y componentes de landing/
+ *   - useCookieConsent
+ * =============================================================================
+ */
+
 import React, { useEffect, Suspense, lazy } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'

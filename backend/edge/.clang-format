@@ -1,3 +1,16 @@
+# =============================================================================
+# .clang-format — Configuración de formato de código C++ para NEXO Edge.
+# =============================================================================
+# RESPONSABILIDAD:
+#   Define el estilo de formato aplicado a los archivos C++ del edge. Hereda
+#   de Google Style con ajustes: ancho de columna 100, indentación de 4
+#   espacios, sin tabuladores, llaves Attach, funciones cortas solo si están
+#   vacías, y ordenamiento automático de includes.
+#
+# USO:
+#   clang-format -i src/*.cpp include/**/*.h
+# =============================================================================
+
 ---
 BasedOnStyle: Google
 Language: Cpp

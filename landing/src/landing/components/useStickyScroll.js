@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * useStickyScroll.js — Hook de animaciones de entrada por sección.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Aplica animaciones de fade-in/y al montar cada sección, con detección de
+ *   mobile. En desktop usa GSAP + ScrollTrigger; en mobile usa
+ *   IntersectionObserver para mayor fluidez. Soporta flags isFirst/isLast.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ *   - gsap / ScrollTrigger
+ * =============================================================================
+ */
+
 import { useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'

@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * ValuePropSection.jsx — Sección de propuesta de valor "antes/después" NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Contrasta 4 escenarios operativos "Sin NEXO" vs "Con NEXO" en una tabla
+ *   de dos columnas animadas. En desktop las columnas se deslizan desde lados
+ *   opuestos y las filas aparecen con stagger.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap / ScrollTrigger
+ *   - useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'

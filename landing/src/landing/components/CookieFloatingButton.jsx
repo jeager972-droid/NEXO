@@ -1,3 +1,20 @@
+/**
+ * =============================================================================
+ * CookieFloatingButton.jsx — Botón flotante para gestionar cookies.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Botón circular fijo que reaparece tras aceptar/rechazar cookies para
+ *   permitir al usuario reabrir el gestor de preferencias. Oculta tooltip en
+ *   móvil y tiene efecto hover scale.
+ *
+ * PROPS:
+ *   - onClick
+ *
+ * DEPENDENCIAS:
+ *   - lucide-react (Shield)
+ * =============================================================================
+ */
+
 import { Shield } from 'lucide-react'
 
 const CookieFloatingButton = ({ onClick }) => {

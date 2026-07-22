@@ -1,3 +1,13 @@
+/**
+ * =============================================================================
+ * DevStubBiometricSensor.cpp — Implementación stub del sensor biométrico.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Simula un sensor biométrico para pruebas sin hardware. Inicialización
+ *   inmediata, enrolamiento devuelve template dummy, búsqueda simula un match
+ *   cada 5 intentos con delay de 500 ms.
+ */
+
 #include "hardware/dev_stub/DevStubBiometricSensor.h"
 #include "utils/Logger.h"
 #include <thread>

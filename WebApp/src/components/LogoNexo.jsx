@@ -1,3 +1,10 @@
+/**
+ * LogoNexo / NEXO Institucional
+ * Responsabilidad: Logo SVG reutilizable de NEXO con variantes de color (default/light)
+ * y opción de mostrar/ocultar la marca textual.
+ * Dependencias: React.
+ * Props: { className?: string, showText?: boolean, variant?: 'default' | 'light' }.
+ */
 import React from 'react';
 
 const LogoNexo = ({ className = "h-12", showText = true, variant = 'default' }) => {

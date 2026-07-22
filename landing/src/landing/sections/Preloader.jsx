@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * Preloader.jsx — Pantalla de carga inicial de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra el logo NEXO y una barra de progreso animada durante ~1.6s, luego
+ *   desliza el overlay hacia arriba con GSAP. Incluye límite de seguridad de
+ *   4s para ocultarse siempre.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap
+ * =============================================================================
+ */
+
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 

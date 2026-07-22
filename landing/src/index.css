@@ -1,3 +1,22 @@
+/**
+ * =============================================================================
+ * index.css — Hoja de estilos global de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Define design tokens CSS (paleta verde corporativa, tipografía, easing),
+ *   utilidades de componentes (botones, tarjetas, navbar, timeline), scrollbars,
+ *   animaciones reveal y estilos responsive mobile. Integra Tailwind v4 vía
+ *   @import con reglas @source para el scanner.
+ *
+ * SECCIONES:
+ *   - Design tokens / :root
+ *   - Base, scrollbar, canvas bg
+ *   - Componentes reutilizables (eyebrow, títulos, botones, tarjetas)
+ *   - Timeline, tabs, hotspots, security grid
+ *   - Responsive mobile
+ * =============================================================================
+ */
+
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 @import "tailwindcss" source(none);

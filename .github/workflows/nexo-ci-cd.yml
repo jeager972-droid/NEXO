@@ -63,16 +63,3 @@ jobs:
       run: cd landing && npm ci
     - name: Build Landing
       run: cd landing && npm run build
-
-  deploy-backend-railway:
-    needs: [build-webapp-react, test-backend-php, build-edge-cpp, build-landing]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Install Railway CLI
-      run: npm i -g @railway/cli
-    - name: Deploy to Railway
-      run: railway up --detach
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

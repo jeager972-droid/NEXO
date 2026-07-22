@@ -1,3 +1,9 @@
+/**
+ * Unauthorized page / NEXO Institucional
+ * Responsabilidad: Pantalla de error 403 cuando el rol autenticado no puede acceder a una
+ * ruta protegida. Ofrece botón para volver al dashboard.
+ * Dependencias: React, react-router-dom, lucide-react.
+ */
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 

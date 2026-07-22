@@ -4,6 +4,29 @@
 #include <cstdint>
 #include <sqlite3.h>
 
+/**
+ * =============================================================================
+ * sqlite_manager.h — Interfaz singleton de la base de datos local SQLite.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Mantiene el almacenamiento local del dispositivo edge: estudiantes,
+ *   patrones de asistencia, inasistencias (legacy), audit_trail para envíos
+ *   pendientes y tabla config (clave/valor). Todos los templates de huella
+ *   se cifran con Encryption antes de guardarse y se descifran al leerse.
+ *
+ * TABLAS:
+ *   - estudiantes: documento (PK), nombre, tel/nombre acudiente, huella_id,
+ *     template_huella (base64 cifrado).
+ *   - patrones: resumen de ingresos tempranos/tardes por estudiante.
+ *   - inasistencias: legacy (no implementado en cpp).
+ *   - audit_trail: eventos locales pendientes de sincronizar con la nube.
+ *   - config: pares clave/valor (AES key, token, etc.).
+ *
+ * DEPENDENCIAS:
+ *   - sqlite3
+ *   - base_de_datos/encryption.h (cifrado de templates)
+ *   - openssl/rand.h (IV aleatorio para templates)
+ */
 struct Estudiante {
     std::string documento;
     std::string nombre;

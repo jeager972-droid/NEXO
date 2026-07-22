@@ -1,7 +1,34 @@
 <?php
+/**
+ * =============================================================================
+ * routes/students.php — Gestión de estudiantes.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone endpoints para crear y listar estudiantes de una escuela:
+ *   - POST /students : crea/actualiza un estudiante (upsert por school_id + document_number)
+ *                      y opcionalmente lo asigna a un grupo.
+ *   - GET  /students : lista paginada con filtros por búsqueda, grupo y cursor
+ *                      (last_created_at). Requiere autenticación.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación y roles.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: módulo de estudiantes, matrícula, selectores de estudiante.
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+// ============================================================================
+// POST /students — Crear o actualizar estudiante y asignar grupo.
+// GET  /students — Listado paginado y filtrado de estudiantes.
+// ============================================================================
 if ($cleanPath === '/students') {
     if ($method === 'POST') {
         $authUser = requireAuth(['SECRETARY', 'RECTOR', 'COORDINATOR']);

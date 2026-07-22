@@ -1,5 +1,41 @@
 <?php
-
+/**
+ * =============================================================================
+ * api.php — Punto de entrada único (front controller) de la API REST de NEXO.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * - Aplicar headers de seguridad y CORS.
+ * - Validar variables críticas (boot_check.php) y conectar a BD (db.php).
+ * - Instaurar rate limiting global vía Redis.
+ * - Enrutar peticiones a los archivos correspondientes en routes/.
+ * - Recibir y validar payloads cifrados de dispositivos EDGE (AES-256-GCM).
+ * - Proveer endpoint /health para verificar BD, Redis, workers, colas y disco.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   security headers → boot_check → db.php → rate limit → parse URI/body
+ *        │
+ *        ├── Si hay payload cifrado: descifrar, validar device token/nonce,
+ *        │   encolar en queue:biometric_ingest y responder 202 Accepted.
+ *        │
+ *        ├── Si /health: ejecutar health checks.
+ *        │
+ *        └── Si no: buscar $prefix en $routeMap y require_once routes/<file>.php
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - routes/_cors_middleware.php : CORS.
+ *   - boot_check.php : validación de env críticos.
+ *   - db.php : conexión PDO ($pdo).
+ *   - routes/_auth_middleware.php : getRedisConnection, helpers JWT.
+ *   - routes/operations.php : siempre incluido por compatibilidad de helpers.
+ *
+ * Es utilizado por:
+ *   - Toda petición HTTP al backend (Railway/Docker).
+ */
 
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
@@ -8,6 +44,7 @@ ini_set('error_log', 'php://stderr');
 
 require_once __DIR__ . '/routes/_cors_middleware.php';
 
+// Headers de seguridad HTTP básicos.
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -21,6 +58,16 @@ require_once __DIR__ . '/routes/_auth_middleware.php';
 $conn = $pdo;
 
 
+/**
+ * Registra un evento de seguridad en stderr y en la cola Redis audit_logs.
+ *
+ * @param string $event Código del evento.
+ * @param string $details Descripción adicional.
+ * @param string|null $actorId UUID del usuario.
+ * @param string|null $schoolId UUID de la escuela.
+ * @param string|null $requestId ID de trazabilidad de la petición.
+ * @return void
+ */
 function securityLog($event, $details = '', $actorId = null, $schoolId = null, $requestId = null) {
     $ip = getRealClientIp();
     $uri = $_SERVER['REQUEST_URI'] ?? 'N/A';
@@ -50,6 +97,11 @@ function securityLog($event, $details = '', $actorId = null, $schoolId = null, $
     }
 }
 
+/**
+ * Obtiene la IP real del cliente respetando proxies (Cloudflare, X-Forwarded-For).
+ *
+ * @return string Dirección IP validada o 0.0.0.0.
+ */
 function getRealClientIp() {
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
     if (isset($_SERVER['HTTP_CF_CONNECTING_IP'])) {
@@ -61,6 +113,14 @@ function getRealClientIp() {
     return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
 }
 
+/**
+ * Aplica rate limiting global con Redis (sliding window por IP o usuario).
+ *
+ * @param string|null $userId UUID del usuario autenticado (opcional).
+ * @param int $maxReqs Máximo de peticiones en la ventana.
+ * @param int $window Ventana en segundos.
+ * @return void
+ */
 function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
     try {
         $redis = getRedisConnection();
@@ -80,9 +140,14 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
     }
 }
 
+// Aplicar rate limiting global antes de procesar la petición.
 enforceRateLimitRedis();
 
 header('Content-Type: application/json; charset=utf-8');
+
+// ============================================================================
+// Parseo de URI y body. $cleanPath se normaliza para soportar /v1/ y /api.php.
+// ============================================================================
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $cleanPath = trim(urldecode(preg_replace('/^\/(v1|api\.php)/i', '', parse_url($uri, PHP_URL_PATH))), "/");
@@ -91,7 +156,7 @@ $cleanPath = '/' . $cleanPath;
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];
 
-
+// operations.php se carga siempre para exponer helpers Twilio a otras rutas.
 require_once __DIR__ . '/routes/operations.php';
 
 $prefix = explode('/', trim($cleanPath, '/'))[0];
@@ -118,6 +183,9 @@ $routeMap = [
     'tracking' => 'tracking.php',
 ];
 
+// ============================================================================
+// Routing: según el primer segmento se incluyen uno o varios archivos de routes/.
+// ============================================================================
 if (isset($routeMap[$prefix])) {
     $files = (array)$routeMap[$prefix];
     foreach ($files as $f) {
@@ -128,6 +196,10 @@ if (isset($routeMap[$prefix])) {
     }
 }
 
+// ============================================================================
+// Endpoint de ingesta EDGE (cifrado AES-256-GCM).
+// El payload puede venir en cualquier path; se detecta por la clave 'payload'.
+// ============================================================================
 if (isset($input['payload'])) {
     $aesKey = getenv('NEXO_AES_KEY');
     $decoded = base64_decode($input['payload'], true);
@@ -245,6 +317,10 @@ if (isset($input['payload'])) {
 }
 
 
+// ============================================================================
+// GET /health / /health/workers — Verificación de salud de BD, Redis,
+// workers, colas y espacio en disco.
+// ============================================================================
 if ($cleanPath === '/health' || $cleanPath === '/health/workers') {
     header('Content-Type: application/json; charset=utf-8');
     $checks = [];

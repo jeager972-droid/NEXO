@@ -1,3 +1,9 @@
+/**
+ * Reports page / NEXO Institucional
+ * Responsabilidad: Generación/exportación de reportes institucionales: selección de rango
+ * de fechas, previsualización y descarga en CSV con mapeo a nombres/grupos reales.
+ * Dependencias: React, lucide-react, reportsApi.
+ */
 import { useEffect, useState } from 'react';
 import { 
   FileSpreadsheet, 

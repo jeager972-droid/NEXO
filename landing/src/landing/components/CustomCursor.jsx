@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * CustomCursor.jsx — Cursor personalizado desktop para la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Implementa un cursor de dos capas (dot y ring) con GSAP para desktop.
+ *   El anillo sigue al cursor con lerp y cambia de tamaño/color sobre elementos
+ *   interactivos. Se deshabilita en dispositivos táctiles.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap
+ * =============================================================================
+ */
+
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 

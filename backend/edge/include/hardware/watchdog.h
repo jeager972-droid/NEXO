@@ -2,6 +2,20 @@
 #include <fstream>
 #include <string>
 
+/**
+ * =============================================================================
+ * watchdog.h — Wrapper del watchdog de hardware Linux (/dev/watchdog).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Abre /dev/watchdog y permite "patear" (pat) el perro guardián desde el
+ *   bucle principal. Si el proceso se bloquea, el kernel reinicia la placa.
+ *   disable() escribe 'V' para apagar el watchdog en shutdown graceful.
+ *
+ * USO:
+ *   HardwareWatchdog wdt;
+ *   while (running) { wdt.pat(); }
+ *   // al salir: wdt.disable() o destruir.
+ */
 class HardwareWatchdog {
 public:
     explicit HardwareWatchdog(const std::string& device = "/dev/watchdog");

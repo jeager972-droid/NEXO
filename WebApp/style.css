@@ -1,3 +1,9 @@
+/*
+  WebApp legacy global styles / NEXO Institucional
+  Responsabilidad: Estilos globales base heredados del scaffold Vite. Define modo
+  claro/oscuro por prefers-color-scheme y estilos por defecto de links y botones.
+  Nota: index.css carga Tailwind; este archivo se mantiene por compatibilidad.
+*/
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

@@ -1,3 +1,9 @@
+/**
+ * Notifications page / NEXO Institucional
+ * Responsabilidad: Bandeja de notificaciones del usuario: lista, lectura, limpieza,
+ * enlace a TrackingModal y emisión del conteo no leído al Layout.
+ * Dependencias: React, react-router-dom, framer-motion, useAuth, notificationsApi, trackingApi.
+ */
 import { useState, useEffect } from 'react';
 import { Bell, CheckCircle2, Info, User, AlertTriangle, Loader2, Eye, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

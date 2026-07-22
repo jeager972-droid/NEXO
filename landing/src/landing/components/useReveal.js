@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * useReveal.js — Hook de IntersectionObserver para revelar elementos al scroll.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Observa elementos con clase .nx-reveal dentro del ref proporcionado y les
+ *   agrega la clase .is-visible cuando entran al viewport, disparando las
+ *   transiciones CSS definidas en index.css.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ * =============================================================================
+ */
+
 import { useEffect, useRef } from 'react'
 
 // Shared IntersectionObserver hook for scroll reveal

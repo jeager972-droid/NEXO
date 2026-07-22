@@ -1,3 +1,9 @@
+/**
+ * WebApp entry / NEXO Institucional
+ * Responsabilidad: Montar la SPA React en #root, registrar el Service Worker PWA,
+ * limpiar SWs viejos y proveer ThemeProvider + AuthProvider bajo BrowserRouter con basename /app/.
+ * Dependencias: React 18, react-dom/client, react-router-dom, virtual:pwa-register, Auth/Theme contexts.
+ */
 import '@fontsource-variable/inter'
 import React from 'react'
 import ReactDOM from 'react-dom/client'

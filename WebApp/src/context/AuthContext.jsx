@@ -1,3 +1,10 @@
+/**
+ * AuthContext / NEXO Institucional
+ * Responsabilidad: Proveer estado global de autenticación (user, loading, login, logout).
+ * La fuente de verdad es authApi.getMe() (cookie HttpOnly); no confía en localStorage.
+ * Soporta flujo interrumpido de 2FA y redirige a /login cuando la sesión es inválida.
+ * Dependencias: React, react-router-dom, authApi, userStore.
+ */
 import { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth';

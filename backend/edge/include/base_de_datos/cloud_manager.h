@@ -4,9 +4,38 @@
 #include "hal/IHttpClient.h"
 
 /**
- * CloudManager — Linux-native cloud sync via libcurl.
- * Target: Raspberry Pi 4 → Railway (Postgres).
- * URL leída de /opt/nexo/config.json (api_url) o env NEXO_API_URL.
+ * =============================================================================
+ * cloud_manager.h — Interfaz del gestor de sincronización con la nube (CloudManager).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Interfaz singleton para sincronizar registros de asistencia y ejecutar
+ *   comandos cloud (registro/eliminación de estudiantes/personal, wipe,
+ *   verificación de instituciones/grupos). Construye requests autenticados
+ *   cifrando el JSON de payload con AES-256-GCM y enviándolo vía libcurl
+ *   (o un IHttpClient inyectado para testing).
+ *
+ * FLUJO TÍPICO (syncRecord):
+ *   syncRecord(jsonData)
+ *        │
+ *        ▼
+ *   buildAuthenticatedRequest(jsonData, instId)
+ *        │  ├─ Cifra payload con Encryption (AES-256-GCM)
+ *        │  └─ Añade inst_id, token opcional, payload base64
+ *        ▼
+ *   curlPost / httpClientPost(m_httpClient)
+ *        │  ├─ Headers: Content-Type, User-Agent, X-NEXO-TOKEN
+ *        │  └─ Verifica HTTP 200 o 202
+ *        ▼
+ *   retorna ok/fail
+ *
+ * DEPENDENCIAS:
+ *   - base_de_datos/encryption.h  : AES-256-GCM y token.
+ *   - hal/IHttpClient.h           : abstracción HTTP para dev stubs/tests.
+ *   - libcurl                     : transporte real en Linux/RPi4.
+ *
+ * CONFIGURACIÓN:
+ *   - NEXO_API_URL (env) o /opt/nexo/config.json api_url.
+ *   - m_instId seteado desde setInstitutionId().
  */
 class CloudManager {
 public:

@@ -1,6 +1,67 @@
 <?php
-// Shared auth/RBAC helpers for all routes.
+/**
+ * =============================================================================
+ * _auth_middleware.php — Middleware central de autenticación, autorización (RBAC)
+ *                         y utilidades criptográficas compartidas.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Provee a todos los endpoints de backend/api/routes un conjunto uniforme de
+ * funciones para:
+ *   1. Normalizar roles legacy a un catálogo canónico (única fuente de verdad).
+ *   2. Emitir y verificar tokens JWT (RS256 preferido, HS256 fallback).
+ *   3. Conectar y reutilizar una instancia singleton de Redis.
+ *   4. Gestionar la revocación de JWT y el "modo pánico" por escuela.
+ *   5. Extraer tokens Bearer de cabeceras, cabeceras Apache/redirect o cookies.
+ *   6. Validar que un usuario autenticado tenga el rol requerido (requireAuth).
+ *   7. Monitorizar la salud crítica de workers, colas, base de datos y eventos
+ *      de seguridad (checkCriticalAlerts).
+ *
+ * Este archivo NO debe contener lógica de negocio; únicamente helpers de
+ * seguridad y autenticación reutilizables.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   Request HTTP
+ *        │
+ *        ▼
+ *   extractBearerToken() ──► verifyJwtToken() ──► isJwtRevoked() / isSchoolInPanicMode()
+ *        │
+ *        ▼
+ *   requireAuth(['RECTOR','COORDINATOR'])
+ *        │
+ *        ▼
+ *   Carga usuario + permisos desde PostgreSQL
+ *        │
+ *        ▼
+ *   Retorna array con id, role, school_id, permissions, claims
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - $conn / $pdo : conexión PDO a PostgreSQL (definida en api.php / db.php).
+ *   - Redis        : extensión php-redis; conecta a REDISHOST/REDISPORT/REDIS_PASSWORD.
+ *   - openssl      : para firma/verificación RS256.
+ *   - Variables de entorno: JWT_PRIVATE_KEY, JWT_PUBLIC_KEY, JWT_SECRET, JWT_KEY_ID,
+ *     JWT_ISSUER, JWT_AUDIENCE, REDISHOST, REDISPORT, REDIS_PASSWORD.
+ *
+ * Es utilizado por:
+ *   - Prácticamente todos los archivos en backend/api/routes/*.php mediante
+ *     `require_once __DIR__ . '/_auth_middleware.php'`.
+ *   - workers/worker_twilio.php y workers/worker_biometric.php que usan helpers
+ *     como getRedisConnection() y set_config de PostgreSQL.
+ *
+ * POSIBLES EXCEPCIONES
+ * --------------------
+ *   - Exception : si falla la firma/verificación JWT o faltan claves.
+ *   - PDOException : errores de conexión/consulta a PostgreSQL.
+ *   - RedisException : errores de conexión a Redis (normalmente silenciados).
+ */
+
 global $conn;
+
+require_once __DIR__ . '/../redis.php';
 
 /**
  * UNIFICACIÓN GLOBAL DE ROLES (Fuente de Verdad Única)
@@ -21,8 +82,16 @@ if (!defined('ROLES')) {
 
 if (!function_exists('normalizeRole')) {
     /**
-     * Normaliza nombres de rol legacy a canonical.
-     * Mapea variantes antiguas a los roles oficiales en inglés.
+     * Normaliza nombres de rol legacy al catálogo canónico ROLES.
+     *
+     * @param mixed $rawRole Valor crudo del rol (p. ej. 'PRINCIPAL', 'PSYCHOLOGIST').
+     * @return string Rol canónico en inglés o el valor original en mayúsculas.
+     *
+     * Efectos secundarios: ninguno.
+     * Precondiciones: $rawRole debe ser convertible a string.
+     * Postcondiciones: retorna siempre un string en mayúsculas.
+     * Nota: 'PRINCIPAL' → 'RECTOR' y 'PSYCHOLOGIST' → 'COUNSELOR' son legados
+     *       de versiones anteriores del modelo de roles.
      */
     function normalizeRole($rawRole) {
         $map = [
@@ -44,12 +113,24 @@ if (!function_exists('normalizeRole')) {
 
 
 if (!function_exists('b64url_encode')) {
+    /**
+     * Codifica datos binarios a Base64URL según RFC 4648 (sin padding, sin +/).
+     *
+     * @param string $data Datos a codificar.
+     * @return string Cadena Base64URL.
+     */
     function b64url_encode($data) {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
     }
 }
 
 if (!function_exists('b64url_decode')) {
+    /**
+     * Decodifica una cadena Base64URL a su representación binaria original.
+     *
+     * @param string $data Cadena Base64URL.
+     * @return string|false Datos decodificados o false si son inválidos.
+     */
     function b64url_decode($data) {
         $remainder = strlen($data) % 4;
         if ($remainder > 0) {
@@ -60,6 +141,21 @@ if (!function_exists('b64url_decode')) {
 }
 
 if (!function_exists('loadPemFromEnv')) {
+    /**
+     * Carga una clave PEM (o HMAC) desde una variable de entorno.
+     *
+     * Soporta tres formatos:
+     *   1. Base64 de un PEM que contenga "BEGIN".
+     *   2. PEM plano con \n escaped.
+     *   3. Secreto HMAC plano.
+     *
+     * @param string $keyName Nombre de la variable de entorno.
+     * @return string Clave lista para usar con openssl o hash_hmac.
+     *
+     * Efectos secundarios: ninguno.
+     * Precondiciones: la variable de entorno debe existir o retornará ''.
+     * Postcondiciones: retorna string; nunca null.
+     */
     function loadPemFromEnv($keyName) {
         $raw = getenv($keyName) ?: '';
         if ($raw === '') {
@@ -76,6 +172,29 @@ if (!function_exists('loadPemFromEnv')) {
 }
 
 if (!function_exists('issueJwtToken')) {
+    /**
+     * Emite un token JWT firmado para un usuario autenticado.
+     *
+     * @param array $claims Claims adicionales (normalmente sub, role, school_id, exp).
+     * @return string Token JWT completo (header.payload.signature).
+     *
+     * Efectos secundarios:
+     *   - Llama a random_bytes() para generar el jti.
+     *   - Puede escribir un error_log si la clave RSA no es válida.
+     *   - En PHP < 8.0 libera la clave RSA con openssl_free_key.
+     *
+     * Precondiciones:
+     *   - Debe existir JWT_PRIVATE_KEY (RS256) o JWT_SECRET (HS256).
+     * Postcondiciones:
+     *   - Retorna un JWT firmado listo para entregar al cliente.
+     *
+     * Posibles excepciones:
+     *   - Exception: fallo al firmar con RS256 o clave HMAC ausente.
+     *
+     * Nota de seguridad: si existe JWT_PRIVATE_KEY válida se usa RS256; de lo
+     * contrario se revierte a HS256 usando JWT_SECRET. El campo `nbf` se retrasa
+     * 2 segundos para evitar rechazos por desfase de reloj.
+     */
     function issueJwtToken($claims) {
         $privateKeyPem = loadPemFromEnv('JWT_PRIVATE_KEY');
         $hmacSecret = getenv('JWT_SECRET') ?: '';
@@ -126,6 +245,27 @@ if (!function_exists('issueJwtToken')) {
 }
 
 if (!function_exists('verifyJwtToken')) {
+    /**
+     * Verifica la firma, la estructura y la vigencia de un token JWT.
+     *
+     * @param string $token JWT recibido del cliente.
+     * @return array Payload decodificado del JWT.
+     *
+     * Efectos secundarios:
+     *   - Puede consultar Redis para verificar si el JTI está revocado.
+     *   - Puede consultar Redis/DB para verificar modo pánico de la escuela.
+     *   - En PHP < 8.0 libera la clave pública RSA con openssl_free_key.
+     *
+     * Precondiciones:
+     *   - El token debe tener tres segmentos Base64URL separados por puntos.
+     *   - Debe existir la clave pública (RS256) o secreto (HS256) correspondiente.
+     * Postcondiciones:
+     *   - Retorna el payload decodificado si todas las validaciones pasan.
+     *
+     * Posibles excepciones:
+     *   - Exception: formato inválido, firma errónea, token expirado,
+     *     issuer/audience incorrectos, JTI revocado o modo pánico activo.
+     */
     function verifyJwtToken($token) {
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
@@ -214,33 +354,19 @@ if (!function_exists('verifyJwtToken')) {
     }
 }
 
-if (!function_exists('getRedisConnection')) {
-    function getRedisConnection() {
-        static $redis = null;
-        static $attempted = false;
-
-        if ($redis !== null) {
-            return $redis;
-        }
-        if ($attempted) {
-            return null;
-        }
-        $attempted = true;
-
-        try {
-            if (!class_exists('Redis')) return null;
-            $redis = new Redis();
-            $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
-            if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-            return $redis;
-        } catch (Exception $e) {
-            $redis = null;
-            return null;
-        }
-    }
-}
 
 if (!function_exists('isJwtRevoked')) {
+    /**
+     * Indica si un JTI (JWT ID) ha sido revocado.
+     *
+     * @param string $jti Identificador único del JWT.
+     * @return bool True si el token está en la blocklist.
+     *
+     * Efectos secundarios: consulta Redis y, como fallback, PostgreSQL.
+     * Precondiciones: $jti debe ser string convertible.
+     * Postcondiciones: retorna booleano. En fallo de servicios retorna false
+     *                  (fail-open para no bloquear peticiones).
+     */
     function isJwtRevoked($jti) {
         $redis = getRedisConnection();
         if ($redis) {
@@ -269,6 +395,19 @@ if (!function_exists('isJwtRevoked')) {
 }
 
 if (!function_exists('revokeJwt')) {
+    /**
+     * Invalida un JWT agregando su JTI a la blocklist.
+     *
+     * @param string $jti Identificador del JWT a revocar.
+     * @param int $exp Timestamp de expiración del token.
+     * @return void
+     *
+     * Efectos secundarios:
+     *   - Inserta/actualiza jwt_blocklist en PostgreSQL.
+     *   - Crea clave expirable en Redis "jwt:blocklist:<jti>".
+     * Precondiciones: $exp debe ser timestamp futuro para TTL correcto.
+     * Postcondiciones: el token queda inválido en subsiguientes verificaciones.
+     */
     function revokeJwt($jti, $exp) {
         $jtiStr = (string)$jti;
 
@@ -302,6 +441,17 @@ if (!function_exists('revokeJwt')) {
 }
 
 if (!function_exists('isSchoolInPanicMode')) {
+    /**
+     * Determina si una escuela activó el modo pánico posterior a la emisión del token.
+     *
+     * @param string $schoolId UUID de la escuela.
+     * @param int $tokenIat Timestamp 'iat' del JWT.
+     * @return bool True si el modo pánico invalida la sesión.
+     *
+     * Efectos secundarios: consulta Redis y, como fallback, PostgreSQL.
+     * Precondiciones: token debe contener school_id e iat.
+     * Postcondiciones: retorna true si existe panic event con triggered_at > tokenIat.
+     */
     function isSchoolInPanicMode($schoolId, $tokenIat) {
         $redis = getRedisConnection();
         if ($redis) {
@@ -337,6 +487,18 @@ if (!function_exists('isSchoolInPanicMode')) {
 }
 
 if (!function_exists('extractBearerToken')) {
+    /**
+     * Extrae el token Bearer de la cabecera Authorization o de la cookie 'token'.
+     *
+     * @return string|null Token JWT sin el prefijo "Bearer " o null.
+     *
+     * Efectos secundarios: ninguno (solo lectura de superglobales).
+     * Precondiciones: cliente debe enviar Authorization: Bearer <token> o cookie token.
+     * Postcondiciones: retorna null si no se encuentra token.
+     *
+     * Nota: Soporta HTTP_AUTHORIZATION, REDIRECT_HTTP_AUTHORIZATION, getallheaders()
+     *       y apache_request_headers() para compatibilidad con distintos hostings.
+     */
     function extractBearerToken() {
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
         if ($authHeader === '') {
@@ -361,6 +523,29 @@ if (!function_exists('extractBearerToken')) {
 }
 
 if (!function_exists('requireAuth')) {
+    /**
+     * Requiere autenticación JWT y opcionalmente un rol permitido.
+     *
+     * @param array|null $allowedRoles Roles permitidos (ej. ['RECTOR','COORDINATOR']).
+     * @return array Datos del usuario autenticado.
+     *
+     * Efectos secundarios:
+     *   - Establece app.current_school_id y app.current_role en PostgreSQL.
+     *   - Puede finalizar la ejecución con HTTP 401/403.
+     *   - Registra eventos de seguridad via securityLog().
+     *
+     * Precondiciones:
+     *   - Debe existir $conn (PDO) global.
+     *   - El cliente debe enviar token válido.
+     * Postcondiciones:
+     *   - Retorna array con id, email, role, school_id, permissions, claims.
+     *
+     * Posibles excepciones:
+     *   - No lanza excepciones hacia el llamante: termina con exit(json_encode(...)).
+     *
+     * Nota de seguridad: también valida cabecera X-Requested-With: XMLHttpRequest
+     * para métodos mutantes, mitigando CSRF en peticiones cross-origin.
+     */
     function requireAuth($allowedRoles = null) {
         global $conn;
 
@@ -450,7 +635,24 @@ if (!function_exists('requireAuth')) {
 if (!function_exists('checkCriticalAlerts')) {
     /**
      * Verifica condiciones críticas del sistema y emite alertas.
-     * Llamar periódicamente (ej: cada minuto vía cron o worker).
+     *
+     * @param PDO $conn Conexión PDO a PostgreSQL.
+     * @param Redis $redis Conexión Redis activa.
+     * @return array Lista de mensajes de alerta generados.
+     *
+     * Efectos secundarios:
+     *   - Escribe logs de seguridad via securityLog() para cada alerta.
+     *   - Empuja alertas a la lista 'alerts:system' en Redis (limitada a 100).
+     *
+     * Precondiciones: $conn y $redis deben estar disponibles.
+     * Postcondiciones: retorna array de strings (puede estar vacío).
+     *
+     * Monitorea:
+     *   1. Heartbeats de workers audit/twilio/biometric (>300s sin señal).
+     *   2. Longitud de colas Redis (biometric_ingest >5000, twilio >2000, audit_logs >5000).
+     *   3. Conexiones activas de PostgreSQL (>80).
+     *   4. Eventos de pánico en la última hora.
+     *   5. Picos de intentos fallidos de login (>50 en 5 minutos).
      */
     function checkCriticalAlerts($conn, $redis) {
         $alerts = [];

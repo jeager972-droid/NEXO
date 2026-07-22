@@ -1,12 +1,53 @@
 <?php
+/**
+ * =============================================================================
+ * routes/security_panic.php — Botón de pánico administrativo.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone POST /security/panic. Solo RECTOR o COORDINATOR pueden activarlo.
+ * Al activarse:
+ *   1. Desactiva todos los edge_devices de la escuela.
+ *   2. Registra el evento en school_panic_events (invalida sesiones JWT).
+ *   3. Cachea el timestamp en Redis "panic:school:<id>" para verificación rápida.
+ *   4. Notifica a Rectores y Coordinadores mediante la tabla notifications.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   POST /security/panic
+ *        │
+ *        ▼
+ *   Validar rol RECTOR/COORDINATOR
+ *        │
+ *        ▼
+ *   UPDATE edge_devices SET active = FALSE
+ *        │
+ *        ▼
+ *   INSERT school_panic_events + Redis cache
+ *        │
+ *        ▼
+ *   Notificar a directivos
+ *        │
+ *        ▼
+ *   {status:'ok', sessions_revoked:true, devices_deactivated:N}
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación, roles, getRedisConnection().
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: botón de emergencia en panel de seguridad.
+ */
+
 global $cleanPath, $conn, $method, $input;
 require_once __DIR__ . '/_auth_middleware.php';
 
-/**
- * T3: Botón de Pánico Administrativo
- * POST /security/panic
- * Requiere rol RECTOR o COORDINADOR
- */
+// ============================================================================
+// POST /security/panic — Activa modo de emergencia para toda la escuela.
+// ============================================================================
 if ($cleanPath === '/security/panic' && $method === 'POST') {
     $authUser = requireAuth();
     

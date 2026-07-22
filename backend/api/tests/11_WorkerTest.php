@@ -1,7 +1,15 @@
 <?php
 /**
- * 11_WorkerTest.php
- * Verifica workers (biométrico, Twilio, etc.).
+ * =============================================================================
+ * 11_WorkerTest.php — Test de workers de background.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Examina archivos de workers/ para verificar:
+ *   - Existe al menos un worker biométrico, uno de Twilio/WhatsApp.
+ *   - worker_biometric maneja guardianes y tabla guardians.
+ *   - Todos los workers usan prepared statements para acceso a BD.
+ *
+ * NOTA: test estático; no ejecuta los workers.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

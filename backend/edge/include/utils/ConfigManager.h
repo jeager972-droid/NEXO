@@ -3,6 +3,20 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
+/**
+ * =============================================================================
+ * ConfigManager.h — Singleton de configuración JSON del edge.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Carga config.json (por defecto) y provee acceso tipado a valores de
+ *   configuración: api_url, db_path, log_path, device_id, device_token,
+ *   mqtt_host, sensor_match_threshold, etc. Si un valor no existe retorna
+ *   su default documentado.
+ *
+ * ARCHIVO POR DEFECTO:
+ *   - config.json (ruta relativa al directorio de ejecución)
+ *   - /opt/nexo/config.json para despliegues en RPi
+ */
 class ConfigManager {
 public:
     static ConfigManager& getInstance() {

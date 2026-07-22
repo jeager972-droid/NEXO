@@ -1,9 +1,21 @@
 <?php
 /**
- * Test de alineación completa SQL ↔ PHP
- * Verifica que toda tabla, columna y rol en PHP exista en SQL
- * Verifica que SUPER_RECTOR no exista
- * Verifica que GUARDIAN SÍ exista como rol
+ * =============================================================================
+ * SchemaPhpAlignmentTest — Test de alineación completa SQL ↔ PHP.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Script autónomo que compara el esquema SQL con todo el código PHP del
+ *   backend para detectar discrepancias:
+ *   - Tablas referenciadas en PHP (FROM/JOIN/INTO/UPDATE) existen en SQL.
+ *   - Columnas en INSERTs PHP existen en SQL.
+ *   - Roles y permisos usados en PHP existen en SQL.
+ *   - SUPER_RECTOR eliminado por completo.
+ *   - GUARDIAN preservado como rol.
+ *   - Funciones SQL requeridas definidas.
+ *   - RLS en tablas críticas.
+ *
+ * USO:
+ *   php tests/SchemaPhpAlignmentTest.php
  */
 
 class SchemaPhpAlignmentTest {

@@ -1,6 +1,28 @@
 #!/bin/bash
-# NEXO Edge Setup and Build Script
-# This script installs dependencies and builds the NEXO Edge project for Linux
+# =============================================================================
+# setup_nexo.sh — Script de setup y build para NEXO Edge en Linux.
+# =============================================================================
+# RESPONSABILIDAD:
+#   Automatiza la instalación de dependencias, la creación de directorios de
+#   datos/logs (/var/lib/nexo y /var/log/nexo), la verificación de estructura
+#   de proyecto y la compilación con CMake (preset dev-x86).
+#
+# FLUJO:
+#   1. Verifica que el SO sea Linux.
+#   2. Detecta el gestor de paquetes (apt-get, dnf, yum).
+#   3. Instala dependencias nativas según el gestor.
+#   4. Crea directorios /var/lib/nexo y /var/log/nexo.
+#   5. Verifica la carpeta "Logica de negocio/edge" (ruta legacy del repo).
+#   6. Configura y compila con `cmake --preset dev-x86`.
+#
+# USO:
+#   bash setup_nexo.sh
+#
+# ADVERTENCIAS:
+#   - Asume estructura de directorios legacy "Logica de negocio/edge".
+#   - No instala libspdlog ni catch2 de forma explícita (usa repositorios).
+#   - Requiere privilegios de root para crear /var/lib/nexo y /var/log/nexo.
+# =============================================================================
 
 set -e  # Exit on error
 

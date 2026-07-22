@@ -1,7 +1,31 @@
 <?php
+/**
+ * =============================================================================
+ * routes/audit_logs.php — Consulta de registros globales de auditoría.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone GET /audit/global para que RECTOR o COORDINADOR consulten los últimos
+ * 100 registros de global_audit_logs de su escuela, enriquecidos con el nombre
+ * del actor.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación y roles.
+ *   - $conn : conexión PDO global.
+ *
+ * Es utilizado por:
+ *   - backend/api/api.php (routing) y panel de auditoría del frontend.
+ */
+
 global $cleanPath, $conn, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+// ============================================================================
+// GET /audit/global — Últimos 100 registros de auditoría de la escuela.
+// ============================================================================
 if ($cleanPath === '/audit/global' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $schoolId = $authUser['school_id'];

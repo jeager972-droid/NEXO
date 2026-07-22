@@ -1,3 +1,19 @@
+/**
+ * =============================================================================
+ * FinalCTASection.jsx — Sección final de llamado a la acción de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Cierra la landing con el CTA principal "Quiero que NEXO llegue a mi
+ *   institución", abriendo el ContactModal. Incluye animación de
+ *   materialización carácter a carácter del título, enlaces legales y datos de
+ *   contacto directo.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap / ScrollTrigger
+ *   - ContactModal, LegalModal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'

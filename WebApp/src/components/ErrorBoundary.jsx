@@ -1,3 +1,11 @@
+/**
+ * ErrorBoundary / NEXO Institucional
+ * Responsabilidad: Capturar errores de renderizado en React y mostrar una interfaz de
+ * error con recarga, evitando que toda la SPA se quede en blanco. Registra errores en consola.
+ * Tipo: React Class Component (componentDidCatch).
+ * Dependencias: React Component.
+ * Propiedades: { children }.
+ */
 import { Component } from 'react'
 
 export default class ErrorBoundary extends Component {

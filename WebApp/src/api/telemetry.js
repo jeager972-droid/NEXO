@@ -1,3 +1,10 @@
+/**
+ * telemetry / NEXO Institucional
+ * Responsabilidad: Recolectar eventos no sensibles (errores, latencia API, uso biométrico,
+ * rendimiento de render y pings) y enviarlos periódicamente al backend. Cola limitada
+ * a 100 eventos con flush cada 5 min.
+ * Dependencias: axios client.js, navegador APIs (PerformanceObserver, window.onerror, etc.).
+ */
 import client from './client.js';
 
 

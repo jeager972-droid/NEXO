@@ -1,7 +1,15 @@
 <?php
 /**
- * 07_PartitionTest.php
- * Verifica tablas particionadas y sus particiones.
+ * =============================================================================
+ * 07_PartitionTest.php — Test de particionamiento por rango.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica en sql/nexo_full_migration.sql que:
+ *   - Tablas de alto volumen estén particionadas por RANGE.
+ *   - Existan particiones DEFAULT para datos sin rango.
+ *   - Las columnas de particionamiento sean NOT NULL.
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

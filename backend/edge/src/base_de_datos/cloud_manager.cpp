@@ -1,3 +1,22 @@
+/**
+ * =============================================================================
+ * cloud_manager.cpp — Implementación del gestor de sincronización con la nube.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Implementa CloudManager: lee la URL de la API desde env/config, cifra el
+ *   payload con AES-256-GCM y lo envía por libcurl o un IHttpClient inyectado.
+ *   También implementa comandos cloud: registerStudent, registerStaff,
+ *   deleteStudent, wipeInstitution, verifyInstitution, verifyGroup.
+ *
+ * SECCIONES:
+ *   1. loadApiUrl()          — resolución de NEXO_API_URL / config.json
+ *   2. curlPost()            — POST real via libcurl (SSL, timeouts)
+ *   3. httpClientPost()      — POST via IHttpClient (dev/tests)
+ *   4. buildAuthenticatedRequest() — empaqueta JSON cifrado + inst_id + token
+ *   5. syncRecord()          — envía registro de asistencia
+ *   6. Comandos administrativos cloud.
+ */
+
 #include "base_de_datos/cloud_manager.h"
 #include "utils/Logger.h"
 #include <curl/curl.h>

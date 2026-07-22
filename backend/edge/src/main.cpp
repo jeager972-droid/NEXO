@@ -1,3 +1,38 @@
+/**
+ * =============================================================================
+ * main.cpp — Punto de entrada y bucle principal del nodo edge NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Inicializa toda la infraestructura del dispositivo edge (config, logger,
+ *   SQLite, criptografía, sensor biométrico, display, notificaciones) y arranca
+ *   los workers de sincronización y comandos. Proporciona un menú interactivo
+ *   para modos de asistencia, secretaría y sync manual, además de procesar
+ *   comandos recibidos por MQTT. Incluye HealthMonitor y watchdog de hardware.
+ *
+ * FLUJO GENERAL:
+ *   main()
+ *      │
+ *      ├── curl_global_init / ConfigManager / Logger
+ *      ├── Verificación de reloj (NTP + año >= 2024)
+ *      ├── SQLite / Encryption / Security provisioning
+ *      ├── HAL: sensor biométrico, display, notificaciones (stub/real)
+ *      ├── SyncWorker.start()  -> cola audit_trail -> CloudManager
+ *      ├── MqttCommandWorker.start() (opcional, V2)
+ *      ├── HealthMonitor.start() (monitorea SyncWorker/MQTT)
+ *      ├── HardwareWatchdog
+ *      │
+ *      └── Bucle principal: menú → modo perpetuo / secretaría / sync manual
+ *              └── handleBiometricMatch() -> AuditTrail -> SQLite -> nudge sync
+ *
+ * DEPENDENCIAS:
+ *   - SQLite, OpenSSL, libcurl, spdlog, nlohmann/json
+ *   - libmosquitto (MQTT, opcional)
+ *   - libgpiod + /dev/gpiochip4 (GPIO real, opcional)
+ *   - /dev/i2c-1 + OLED SSD1306 (opcional)
+ *   - /dev/watchdog (hardware watchdog, opcional)
+ *   - libzkfp (ZKTeco ZK9500, opcional; en modo stub no se usa)
+ */
+
 #include <iostream>
 #include <csignal>
 #include <atomic>
@@ -34,23 +69,30 @@
 #include "hardware/dev_stub/DevStubNotification.h"
 #include "interoperabilidad/audit_trail.h"
 
-// ============================================================
+// =============================================================================
 // Globals
-// ============================================================
+// =============================================================================
+// g_shutdownRequested: señal de SIGINT/SIGTERM para graceful shutdown.
+// g_clockValid:        false si NTP/año indica que el reloj no es confiable;
+//                      en ese caso se bloquean las lecturas biométricas.
 std::atomic<bool> g_shutdownRequested(false);
 std::atomic<bool> g_clockValid(true);
 
-// ============================================================
+// =============================================================================
 // Signal handler
-// ============================================================
+// =============================================================================
+// Captura SIGINT y SIGTERM para levantar g_shutdownRequested.
 void signalHandler(int signal) {
     g_shutdownRequested.store(true, std::memory_order_release);
     (void)signal;
 }
 
-// ============================================================
+// =============================================================================
 // Non-blocking stdin reader using poll()
-// ============================================================
+// =============================================================================
+// Lee líneas desde stdin sin bloquear, de modo que el bucle principal pueda
+// seguir pateando el watchdog y procesando comandos MQTT. En systemd (sin TTY)
+// retorna false inmediatamente.
 bool readLineNonBlocking(std::string& out, int timeoutMs = 500) {
     out.clear();
     
@@ -88,9 +130,12 @@ bool readLineNonBlocking(std::string& out, int timeoutMs = 500) {
     return false;
 }
 
-// ============================================================
+// =============================================================================
 // Async Cloud Sync Worker
-// ============================================================
+// =============================================================================
+// Hilo que consume audit_trail en lotes y envía cada evento cifrado al
+// backend usando CloudManager. Implementa DLQ después de 5 intentos fallidos,
+// backoff exponencial con jitter y nudge manual desde main/secretaría.
 class SyncWorker {
 public:
     void start() {
@@ -209,9 +254,11 @@ private:
     }
 };
 
-// ============================================================
-// Command Worker (M2M — recibe comandos desde la nube)
-// ============================================================
+// =============================================================================
+// Command Worker (M2M — recibe comandos desde la nube via HTTP polling)
+// =============================================================================
+// (V1) Hilo que cada 30s consulta /devices/commands por HTTP. En V2 este rol
+// es desempeñado por MqttCommandWorker; esta clase queda como fallback.
 class CommandWorker {
 public:
     void start(const std::string& apiBase, const std::string& deviceToken, const std::string& deviceId) {
@@ -307,9 +354,11 @@ private:
     }
 };
 
-// ============================================================
+// =============================================================================
 // Time helpers (POSIX)
-// ============================================================
+// =============================================================================
+// Obtiene hora UTC en zona Bogotá y clasifica el ingreso en PUNTUAL, MANANA,
+// TARDE, MADRUGADA o EXTRAORDINARIO para fines de reporte.
 struct LocalTime {
     int hour = 0, min = 0, sec = 0;
     bool valid = false;
@@ -336,9 +385,11 @@ std::string checkLateStatus() {
     return "EXTRAORDINARIO";
 }
 
-// ============================================================
+// =============================================================================
 // NTP / System Clock Verification
-// ============================================================
+// =============================================================================
+// Verifica sincronización NTP y que el año del sistema sea >= 2024. Si el
+// reloj es inválido, g_clockValid=false y se bloquean lecturas biométricas.
 bool checkNtpSync() {
     std::array<char, 128> buffer;
     std::string result;
@@ -378,9 +429,11 @@ bool checkSystemClock() {
     return true;
 }
 
-// ============================================================
+// =============================================================================
 // Security Provisioning Wizard (Headless-safe)
-// ============================================================
+// =============================================================================
+// Carga AES key (32 bytes) y API token desde /boot/nexo_provision.json o de
+// forma interactiva (TTY). El archivo de provisionamiento se elimina tras usar.
 bool runSecurityProvisioning() {
     Encryption& crypto = Encryption::getInstance();
 
@@ -474,9 +527,12 @@ bool runSecurityProvisioning() {
     return true;
 }
 
-// ============================================================
+// =============================================================================
 // Health Monitor: Detecta threads muertos y fuerza reinicio
-// ============================================================
+// =============================================================================
+// Supervisor interno que revisa lastActivity() de SyncWorker y MqttCommandWorker
+// cada 30s. Si un worker está inactivo más de 180s/240s acumula strikes y, tras
+// 5 strikes, exit(1) para que systemd reinicie el servicio.
 class HealthMonitor {
 public:
     HealthMonitor(SyncWorker& syncWorker, MqttCommandWorker* mqttWorker)
@@ -545,9 +601,12 @@ private:
     }
 };
 
-// ============================================================
-// Business Logic: Handle biometric match (ZK9500)
-// ============================================================
+// =============================================================================
+// Business Logic: Handle biometric match
+// =============================================================================
+// Llamado cuando el sensor identifica una huella. Busca el estudiante por
+// huella_id, registra el evento en AuditTrail (bloquea si falla SQLite) y,
+// luego de confirmar persistencia, notifica éxito y actualiza patrones.
 void handleBiometricMatch(uint32_t huellaId,
                           IDisplay* display,
                           INotification* notification,
@@ -609,9 +668,11 @@ void handleBiometricMatch(uint32_t huellaId,
     display->clear();
 }
 
-// ============================================================
+// =============================================================================
 // Main Menu
-// ============================================================
+// =============================================================================
+// Menú interactivo de consola para modos: control de asistencia, PAE
+// (deprecado), modo secretaría, sync manual y opciones de simulación.
 void showMainMenu() {
     std::cout << "\n"
         "====================================================\n"
@@ -687,9 +748,11 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
     }
 }
 
-// ============================================================
+// =============================================================================
 // MAIN
-// ============================================================
+// =============================================================================
+// Punto de entrada: inicializa subsistemas, arranca workers, configura
+// señales, instancia watchdog y entra al menú/bucle principal.
 int main() {
     // FIX: Previene Errores de segmentación en libcurl para hilos múltiples
     curl_global_init(CURL_GLOBAL_DEFAULT);

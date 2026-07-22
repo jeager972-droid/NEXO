@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * ProblemSection.jsx — Sección de declaración del problema de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Presenta tres problemas del sistema educativo colombiano (registro manual,
+ *   fugas de trazabilidad, comunicación tardía con familias) con tarjetas
+ *   animadas. El título se descompone en palabras para animación stagger.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap / ScrollTrigger
+ *   - useReveal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'

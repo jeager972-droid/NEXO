@@ -1,3 +1,9 @@
+/**
+ * auth API / NEXO Institucional
+ * Responsabilidad: Wrappers para endpoints de autenticación: login, verificación 2FA,
+ * logout y obtención del usuario actual.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const authApi = {

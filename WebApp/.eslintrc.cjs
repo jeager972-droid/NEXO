@@ -1,3 +1,9 @@
+/**
+ * WebApp ESLint config / NEXO Institucional
+ * Responsabilidad: Reglas de lint para React 18 con JSX runtime, hooks y react-refresh.
+ * Desactiva prop-types y define entorno browser/es2020.
+ * Dependencias: eslint, eslint-plugin-react, eslint-plugin-react-hooks, eslint-plugin-react-refresh.
+ */
 module.exports = {
   root: true,
   env: { browser: true, es2020: true },

@@ -1,3 +1,10 @@
+/**
+ * Login page / NEXO Institucional
+ * Responsabilidad: Formulario de autenticación con email/contraseña, flujo de 2FA,
+ * manejo de errores del backend, autenticación biométrica nativa y animaciones de entrada.
+ * Redirige al dashboard tras login exitoso.
+ * Dependencias: React, react-router-dom, framer-motion, useAuth, authApi, nativeAuth.
+ */
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';

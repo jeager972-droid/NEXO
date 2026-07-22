@@ -1,3 +1,10 @@
+/**
+ * Operation page / NEXO Institucional
+ * Responsabilidad: Centro de comandos institucionales: citar acudiente, autorizar salida,
+ * alerta SOS, permisos pedagógicos, etc. Renderiza formularios dinámicos por comando,
+ * carga destinatarios según rol y realiza polling de estado de mensajes.
+ * Dependencias: React, react-router-dom, framer-motion, useAuth, operationsApi, studentsApi, usersApi, ROLES.
+ */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';

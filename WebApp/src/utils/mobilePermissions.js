@@ -1,3 +1,9 @@
+/**
+ * mobilePermissions / NEXO Institucional
+ * Responsabilidad: Helpers para solicitar permisos del navegador/móvil: notificaciones,
+ * cámara y soporte de WebAuthn. Retorna estados seguros sin lanzar excepciones.
+ * Dependencias: Navegador APIs (Notification, navigator.mediaDevices, PublicKeyCredential).
+ */
 export async function requestNotificationPermission() {
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported'
   if (Notification.permission === 'granted') return 'granted'

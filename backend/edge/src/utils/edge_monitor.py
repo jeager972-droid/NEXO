@@ -1,8 +1,26 @@
 #!/usr/bin/env python3
 """
-T2: Watchdog (Heartbeat) - Edge Monitor
-Envía ping cada 60s a /devices/ping.
-Si el servidor no recibe ping en 180s, marca active=FALSE.
+=============================================================================
+edge_monitor.py — Watchdog/heartbeat del edge hacia la nube.
+=============================================================================
+RESPONSABILIDAD:
+  Script independiente que envía un ping periódico (POST /devices/ping) al
+  backend para indicar que el dispositivo está activo. Lee NEXO_API_BASE o
+  /opt/nexo/config.json para la URL, y NEXO_DEVICE_TOKEN / NEXO_DEVICE_ID
+  para autenticar. Intervalo configurable vía NEXO_HEARTBEAT_INTERVAL (s).
+
+VARIABLES DE ENTORNO:
+  - NEXO_API_BASE: URL base del backend.
+  - NEXO_DEVICE_TOKEN: token del dispositivo.
+  - NEXO_DEVICE_ID: identificador del edge.
+  - NEXO_HEARTBEAT_INTERVAL: segundos entre pings (default 60).
+
+FLUJO:
+  main() -> bucle infinito -> send_ping() -> sleep(INTERVAL_SECONDS)
+
+NOTA:
+  El backend usa este heartbeat para marcar active=FALSE si no recibe ping
+  en 180 segundos (tres intervalos).
 """
 
 import os

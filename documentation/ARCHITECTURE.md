@@ -59,6 +59,172 @@ Carpetas físicas:
 - Edge C++ en desarrollo activo - infraestructura completa pero requiere validación en hardware real.
 - Mosquitto MQTT deshabilitado temporalmente para pruebas de red.
 
+### 2.3 Edge actual (estructura C++ validada)
+
+```
+backend/edge/
+├── include/
+│   ├── base_de_datos/       CloudManager, Encryption, SqliteManager
+│   ├── hal/                 IBiometricSensor, IDisplay, IHttpClient, INotification
+│   ├── hardware/dev_stub/   Implementaciones stub
+│   ├── hardware/watchdog.h  Wrapper /dev/watchdog
+│   ├── interoperabilidad/   AuditTrail facade
+│   ├── mqtt/                MqttCommandWorker
+│   └── utils/               ConfigManager, Logger, NexoResult
+├── src/
+│   ├── base_de_datos/       cloud_manager.cpp, encryption.cpp, sqlite_manager.cpp
+│   ├── hardware/            Stub, real (GPIO, OLED, ZK9500), watchdog
+│   ├── mqtt/                mqtt_command_worker.cpp
+│   ├── utils/               ConfigManager.cpp, edge_monitor.py
+│   └── main.cpp             Punto de entrada, SyncWorker, HealthMonitor
+```
+
+Flujo local: sensor `searchUser()` → `main.cpp` → `SqliteManager` → `AuditTrail` → `SyncWorker` → `CloudManager` POST AES-256-GCM.
+
+### 2.4 Build, scripts y configuración del edge
+
+| Archivo | Propósito |
+|---------|-----------|
+| `CMakeLists.txt` | Definición del ejecutable `nexo-edge`, dependencias y tests Catch2. |
+| `CMakePresets.json` | Presets `dev-x86`, `release-x86`, `cross-arm64-pi4`. |
+| `setup_nexo.sh` | Setup + build automático en Linux (instala deps, crea `/var/lib/nexo`, `/var/log/nexo`). |
+| `scripts/install_deps_debian.sh` | Instalador de dependencias para Debian/Ubuntu. |
+| `scripts/install_deps_fedora.sh` | Instalador de dependencias para Fedora/RHEL/CentOS. |
+| `Dockerfile.edge` | Build multi-stage para imagen ARM64 (Pi 4). |
+| `config.example.json` | Ejemplo de configuración runtime del edge. |
+| `.clang-format` / `.clang-tidy` | Estilo de código y análisis estático. |
+| `tests/test_crypto.cpp` / `tests/test_sqlite.cpp` | Tests Catch2 de cripto y SQLite. |
+
+### 2.5 Landing page (Vite + React + Three.js)
+
+```
+landing/
+├── index.html              # Punto de entrada HTML con SEO/OpenGraph
+├── package.json            # Deps: React, Vite, Tailwind v4, GSAP, R3F
+├── vite.config.js          # Build con compresión, code-splitting, Terser
+├── build.sh                # Atajo `npm run build`
+├── src/
+│   ├── main.jsx            # React 18 root
+│   ├── App.jsx             # Router raíz / + Preloader
+│   ├── index.css           # Tokens CSS, utilidades, responsive
+│   ├── landing/
+│   │   ├── LandingPage.jsx # Orquesta secciones, cookies, ScrollTrigger
+│   │   ├── components/     # Navbar, modales, canvas, hooks
+│   │   ├── core/           # NexoModel (R3F)
+│   │   ├── hooks/          # useCookieConsent
+│   │   └── sections/       # Hero, Problem, HowItWorks, ValueProp, Node,
+│   │                       # Roles, Security, Download, FinalCTA, Footer
+│   └── dashboard/
+│       └── DashboardPage.jsx   # Placeholder ruta /dashboard
+```
+
+**Flujo de renderizado:**
+
+```
+index.html
+  └── main.jsx
+        └── App.jsx (BrowserRouter + Suspense + Preloader)
+              └── LandingPage.jsx
+                    ├── CustomCursor (desktop)
+                    ├── Navbar
+                    ├── HeroSection              [id="hero"]
+                    ├── ProblemSection           [id="el-problema"]
+                    ├── HowItWorksSection        [id="como-funciona"]
+                    ├── ValuePropSection         [id="propuesta-de-valor"]
+                    ├── NodeSection              [id="el-nodo"]
+                    ├── RolesSection             [id="roles"]
+                    ├── SecuritySection          [id="seguridad"]
+                    ├── DownloadSection          [id="descarga"]
+                    ├── FinalCTASection          [id="contacto"]
+                    └── Footer
+```
+
+**Build y despliegue:**
+
+- `npm install` → `bash build.sh` (o `npm run build`) genera `landing/dist/`.
+- `dist/` es un sitio estático; sirve con nginx, Apache, Vercel, Railway, etc.
+- Assets pesados (modelo 3D, imágenes, logo) viven en `public/assets/`.
+
+**Dependencias clave:**
+
+- React 19 + Vite 6 + React Router DOM 7.
+- Tailwind CSS v4 vía `@tailwindcss/vite`.
+- GSAP + ScrollTrigger para animaciones de scroll.
+- React Three Fiber / Drei para modelo 3D del nodo y red institucional.
+- lucide-react para iconos.
+
+---
+
+### 2.6 WebApp institucional (React + Vite + PWA + Tauri)
+
+```
+WebApp/
+├── index.html              # Entrada HTML, manifest PWA, CSP, SEO
+├── package.json            # Deps: React 18, Vite 5, Tailwind 3, Framer Motion, Axios
+├── vite.config.js          # Base /app/, PWA Workbox, code-splitting manual
+├── tailwind.config.js      # Tokens institucionales (gov, bio), darkMode class
+├── postcss.config.js       # Tailwind + autoprefixer
+├── vercel.json             # Rewrites/redirects /app/* a index.html + headers HSTS
+├── src/
+│   ├── main.jsx            # Root: BrowserRouter basename /app/, PWA SW, providers
+│   ├── App.jsx             # Routing lazy, ProtectedRoute, PWA install, deep links
+│   ├── index.css           # Tailwind directives + estilos globales
+│   ├── api/                # client, auth, audit, dashboard, notifications, behavior,
+│   │                       # consultations, operations, reports, students, telemetry,
+│   │                       # tracking, users
+│   ├── components/         # ErrorBoundary, LogoNexo, PwaInstallPrompt
+│   ├── config/roles.js     # ROLES y SIDEBAR_ITEMS (fuente de verdad RBAC)
+│   ├── context/            # AuthContext, ThemeContext
+│   ├── hooks/useAuth.js    # Consumidor de AuthContext
+│   ├── layout/             # Layout (shell) + Sidebar
+│   ├── pages/              # Login, Dashboard, Operation, Notifications, Reports,
+│   │                       # Consultation, ConsultationDrawer, Enrollment, Audit,
+│   │                       # Seguimiento, TrackingModal, Downloads, InstallPage,
+│   │                       # Profile, Unauthorized
+│   ├── routes/             # ProtectedRoute
+│   ├── store/userStore.js  # Singleton en memoria del usuario actual
+│   └── utils/              # cn, formatters, mobilePermissions, nativeAuth
+```
+
+**Flujo de renderizado:**
+
+```
+index.html
+  └── main.jsx (BrowserRouter basename /app/)
+        └── App.jsx (Routes + Suspense)
+              ├── Layout (rutas protegidas)
+              │     ├── Dashboard
+              │     ├── Operation
+              │     ├── Notifications
+              │     ├── Reports
+              │     ├── Consultation + ConsultationDrawer
+              │     ├── Enrollment
+              │     ├── Audit
+              │     ├── Seguimiento
+              │     └── Profile
+              ├── Login
+              ├── Unauthorized
+              ├── Downloads
+              └── InstallPage
+```
+
+**Arquitectura de seguridad y comunicación:**
+
+- Autenticación con cookie **HttpOnly** (`withCredentials: true`).
+- Token JWT en cookie gestionado por el backend; el frontend no almacena tokens en localStorage.
+- RBAC en frontend via `ROLES` + `SIDEBAR_ITEMS` + `ProtectedRoute`.
+- Telemetría no sensible: errores, latencia API, eventos biométricos y pings, con cola de 100 eventos y flush cada 5 min.
+- PWA: service worker Workbox con cache de assets, rutas API con `NetworkFirst` y cola de sincronización para POST `/v1`.
+- Tauri desktop/mobile: plugins de biometría y store seguro para refresh token.
+
+**Dependencias clave:**
+
+- React 18 + Vite 5 + React Router DOM 6.
+- Tailwind CSS 3 con darkMode basado en clase.
+- Framer Motion para transiciones y modales.
+- Axios con interceptores adaptativos de timeout y redirección 401.
+- lucide-react para iconografía.
+
 ---
 
 ## 3. Arquitectura objetivo (post-Etapa 4)

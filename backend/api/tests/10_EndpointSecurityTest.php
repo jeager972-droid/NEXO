@@ -1,7 +1,17 @@
 <?php
 /**
- * 10_EndpointSecurityTest.php
- * Verifica seguridad en endpoints PHP.
+ * =============================================================================
+ * 10_EndpointSecurityTest.php — Test de seguridad de endpoints PHP.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Examina archivos de routes/ y _auth_middleware.php para verificar:
+ *   - El middleware define requireAuth() y maneja JWT.
+ *   - Las rutas usan prepared statements.
+ *   - No hay concatenación sospechosa de variables en SQL.
+ *   - No hay echo directo que pueda filtrar información.
+ *   - Los roles son canónicos (GUARDIAN, no ACUDIENTE) y existe rate limiting.
+ *
+ * NOTA: test estático; no ejecuta el servidor.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

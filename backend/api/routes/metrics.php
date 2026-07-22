@@ -1,5 +1,31 @@
 <?php
-// routes/metrics.php - Métricas Prometheus para observabilidad
+/**
+ * =============================================================================
+ * routes/metrics.php — Endpoint de métricas Prometheus para observabilidad.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone GET /metrics en formato Prometheus exposition. Recopila métricas de:
+ *   - Salud de PostgreSQL (up, conexiones activas/idle).
+ *   - Heartbeats de workers (audit, twilio, biometric).
+ *   - Longitud de colas Redis (biometric_ingest, twilio, audit_logs).
+ *   - Métricas de negocio (login attempts, eventos biométricos, Twilio, alertas
+ *     de riesgo, eventos de pánico).
+ *   - Uso de disco.
+ *
+ * La autenticación es opcional mediante METRICS_SECRET_KEY en cabecera X-Metrics-Key
+ * o query param ?key=.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - $conn : conexión PDO.
+ *   - getRedisConnection() de _auth_middleware.php.
+ *
+ * Es utilizado por:
+ *   - Prometheus / Grafana u otro scraper de métricas.
+ */
 
 global $cleanPath;
 

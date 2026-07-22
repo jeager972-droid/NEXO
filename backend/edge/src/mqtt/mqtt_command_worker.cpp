@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * mqtt_command_worker.cpp — Worker MQTT para comandos M2M.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Implementa MqttCommandWorker: inicializa libmosquitto, conecta al broker,
+ *   se suscribe al tópico del dispositivo y ejecuta mosquitto_loop en un hilo.
+ *   Callbacks de red (onConnect, onMessage, onDisconnect) actualizan estado y
+ *   encolan comandos. popCommand() consume la cola de forma segura desde el
+ *   hilo principal.
+ *
+ * SEGURIDAD:
+ *   onMessage no accede a base de datos ni hardware; solo hace push a queue.
+ */
+
 #include "mqtt/mqtt_command_worker.h"
 #include "utils/Logger.h"
 #include <chrono>

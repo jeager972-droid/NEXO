@@ -1,6 +1,31 @@
 <?php
 /**
- * routes/users.php — Endpoints para gestión de usuarios, perfil, fotos y verificación OTP vía Twilio WhatsApp.
+ * =============================================================================
+ * routes/users.php — Gestión de usuarios, perfil, fotos y verificación OTP.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone endpoints para operaciones sobre usuarios autenticados:
+ *   - GET  /users/by-role              : directorio de usuarios por rol y turno.
+ *   - GET  /users/me/extended          : datos extendidos del perfil.
+ *   - POST /users/upload-photo         : guardar foto de perfil en base64.
+ *   - POST /users/send-verification    : enviar OTP por WhatsApp (Twilio).
+ *   - POST /users/verify-code          : validar OTP y aplicar cambio verificado.
+ *   - POST /users/update-profile       : actualizar perfil tras verificación OTP.
+ *   - POST /users/delete-field         : eliminar email/teléfono/backup_email.
+ *   - POST /users/change-password      : cambiar contraseña.
+ *   - GET  /users/me/photo             : URL de foto de perfil (legacy).
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación y getRedisConnection.
+ *   - lib/twilio.php : sendTwilioDirect (fallback OTP).
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: perfil de usuario, configuración, directorio.
  */
 
 global $cleanPath, $conn, $method, $input;
@@ -14,6 +39,13 @@ $authUser = requireAuth();
 $schoolId = $authUser['school_id'];
 $userId   = $authUser['id']; // FIX: requireAuth retorna 'id', no 'user_id'
 
+/**
+ * Emite respuesta JSON y termina la ejecución.
+ *
+ * @param mixed $data Datos a codificar.
+ * @param int $code Código HTTP.
+ * @return never
+ */
 function usersJson($data, $code = 200) {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
@@ -21,10 +53,24 @@ function usersJson($data, $code = 200) {
     exit;
 }
 
+/**
+ * Genera un código OTP numérico de 6 dígitos.
+ *
+ * @return string Código OTP.
+ */
 function generateOtpCode() {
     return str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
 }
 
+/**
+ * Normaliza un número de teléfono al formato internacional +<país><número>.
+ *
+ * @param string $value Número raw (puede incluir 'whatsapp:' y separadores).
+ * @return string Número normalizado o cadena vacía.
+ *
+ * Nota: asume números colombianos móviles (10 dígitos iniciando en 3) como
+ * fallback; para otros países usa el código de país explícito.
+ */
 function normalizePhone($value) {
     $value = trim((string)$value);
     $value = preg_replace('/^whatsapp:/i', '', $value);
@@ -44,6 +90,14 @@ function normalizePhone($value) {
     return '+' . $digits;
 }
 
+/**
+ * Encola (o envía directamente) un mensaje de WhatsApp con el OTP.
+ *
+ * @param string $to Número destino normalizado.
+ * @param string $code Código OTP de 6 dígitos.
+ * @param string $purpose Propósito del OTP (phone_change, email_change, etc.).
+ * @return array Resultado de la operación.
+ */
 function sendTwilioWhatsAppOtp($to, $code, $purpose) {
     $body = "🔐 *NEXO — Código de verificación*\n\nTu código es: *{$code}*\n\nVálido por 10 minutos. No lo compartas.";
 
@@ -53,7 +107,6 @@ function sendTwilioWhatsAppOtp($to, $code, $purpose) {
     try {
         $redis = getRedisConnection();
         if ($redis) {
-            $redis->select((int)(getenv('REDIS_DB') ?: 0));
             $redis->rPush('queue:twilio', json_encode([
                 'to' => $to,
                 'body' => $body,

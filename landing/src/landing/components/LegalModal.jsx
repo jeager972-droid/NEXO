@@ -1,3 +1,21 @@
+/**
+ * =============================================================================
+ * LegalModal.jsx — Modal de textos legales de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra los textos de Privacidad, Tratamiento de Datos y Términos de Uso
+ *   en un modal scrollable. Parsea el contenido Markdown-like (títulos **,
+ *   bullets) a JSX. Bloquea scroll del body y cierra con Escape o click overlay.
+ *
+ * PROPS:
+ *   - type: 'privacy' | 'treatment' | 'terms'
+ *   - onClose
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ * =============================================================================
+ */
+
 import { useEffect, useRef } from 'react'
 
 // Legal modal for Privacy Policy, Data Treatment, and Terms of Use

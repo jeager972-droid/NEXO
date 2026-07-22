@@ -1,7 +1,16 @@
 <?php
 /**
- * 02_ForeignKeyTest.php
- * Verifica integridad referencial exhaustiva de Foreign Keys.
+ * =============================================================================
+ * 02_ForeignKeyTest.php — Test de integridad referencial (Foreign Keys).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Parsea sql/nexo_full_migration.sql para extraer CREATE TABLE, columnas y
+ *   REFERENCES (inline y ALTER TABLE ADD CONSTRAINT), y verifica que:
+ *   - Ninguna FK apunte a tablas o columnas inexistentes.
+ *   - Las FKs requeridas (users.school_id, students.school_id,
+ *     biometric_events.device_id, etc.) estén presentes.
+ *
+ * NOTA: no requiere PostgreSQL corriendo; es un test estático del SQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

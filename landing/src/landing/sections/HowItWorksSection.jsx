@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * HowItWorksSection.jsx — Sección "Cómo funciona" de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Ilustra el flujo operativo de NEXO en 4 pasos con una timeline animada.
+ *   En desktop anima una línea SVG con scroll scrub y activa cada paso por
+ *   ScrollTrigger. En mobile usa una timeline vertical con fill progresivo.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap / ScrollTrigger
+ *   - useReveal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'

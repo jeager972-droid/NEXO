@@ -1,3 +1,9 @@
+/**
+ * reports API / NEXO Institucional
+ * Responsabilidad: Cliente para previsualizar reportes y exportarlos con filtro por
+ * rango de fechas.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const reportsApi = {

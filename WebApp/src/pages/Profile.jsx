@@ -1,3 +1,11 @@
+/**
+ * Profile page / NEXO Institucional
+ * Responsabilidad: Gestión de la cuenta institional: información personal, cambio de foto
+ * (compresión previa), cambio de contraseña, y contacto con verificación OTP por WhatsApp
+ * (correo, teléfono, correo de respaldo) con guardado/eliminación.
+ * Dependencias: React, useAuth, usersApi, lucide-react, framer-motion.
+ * Subcomponentes: SectionCard, TextField, InlineToast, OtpBlock.
+ */
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';

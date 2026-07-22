@@ -1,8 +1,66 @@
 <?php
+/**
+ * =============================================================================
+ * routes/operations.php — Comandos operativos y acciones de usuario.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Recibe acciones (comandos) del frontend a través del endpoint
+ * POST /operations/execute. Cada comando (sos, inasistencia, citacion, permiso,
+ * autorizar_salida, pedagogica, seguimiento, incidente, solicitud, daño,
+ * horario) ejecuta lógica específica: inserta registros en la base de datos,
+ * notifica a acudientes/teachers/coordinadores vía Twilio, y deja trazabilidad
+ * en user_commands. También incluye un endpoint para consultar estado de
+ * mensajes Twilio y reenviar si es necesario.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   POST /operations/execute {action, ...payload}
+ *        │
+ *        ▼
+ *   logUserCommand(...) ──► switch($action)
+ *        │
+ *        ├── sos            ──► INSERT sos_alerts + notificar
+ *        ├── inasistencia   ──► INSERT attendance_incidents
+ *        ├── citacion       ──► INSERT + WhatsApp a acudiente
+ *        ├── permiso        ──► INSERT class_exit_authorizations
+ *        ├── autorizar_salida/salida ──► INSERT school_exit_authorizations + WhatsApp
+ *        ├── pedagogica     ──► INSERT + notificar
+ *        ├── seguimiento    ──► INSERT student_tracking + notificación
+ *        ├── incidente      ──► INSERT attendance_incidents
+ *        ├── solicitud      ──► INSERT internal_messages
+ *        ├── daño           ──► INSERT user_commands + notificar
+ *        └── horario        ──► UPDATE schedules
+ *        │
+ *        ▼
+ *   JSON {status:'ok', data}
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación, roles, getRedisConnection.
+ *   - lib/twilio.php : normalizeWhatsAppPhone, sendTwilioDirect, logTwilioMessage.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: formularios de comando (SOS, citaciones, permisos, etc.).
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 require_once __DIR__ . '/../lib/twilio.php';
 
+/**
+ * Registra un comando ejecutado por un usuario en user_commands.
+ *
+ * @param PDO $conn Conexión PDO.
+ * @param string $schoolId UUID de la escuela.
+ * @param string $userId UUID del ejecutor.
+ * @param string $action Tipo de comando.
+ * @param array $payload Datos adicionales del comando.
+ * @return void
+ */
 function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     try {
         $stmt = $conn->prepare("
@@ -24,6 +82,18 @@ function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
     }
 }
 
+/**
+ * Envía un mensaje WhatsApp de forma síncrona, con validación de teléfono.
+ *
+ * @param string $to Número destino (raw).
+ * @param string $body Cuerpo del mensaje.
+ * @param string $schoolId UUID de la escuela.
+ * @param string|null $studentId UUID del estudiante relacionado.
+ * @param string|null $guardianId UUID del acudiente relacionado.
+ * @param string|null $senderUserId UUID del remitente.
+ * @param string $typeCode Código de tipo (p. ej. 'CITACION').
+ * @return array Resultado de la operación (ok, reason, sid, etc.).
+ */
 function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
     global $conn;
     $toNorm = normalizeWhatsAppPhone($to);
@@ -34,6 +104,20 @@ function sendTwilioNow($to, $body, $schoolId, $studentId = null, $guardianId = n
     return enqueueTwilioJob($to, $body, $schoolId, $studentId, $guardianId, $senderUserId, $typeCode);
 }
 
+/**
+ * Encola un trabajo de Twilio en Redis para worker_twilio.php, con fallback directo.
+ *
+ * @param string $to Número destino (raw).
+ * @param string $body Cuerpo del mensaje.
+ * @param string $schoolId UUID de la escuela.
+ * @param string|null $studentId UUID del estudiante.
+ * @param string|null $guardianId UUID del acudiente.
+ * @param string|null $senderUserId UUID del remitente.
+ * @param string $typeCode Código de tipo del mensaje.
+ * @return array Resultado: {ok, reason, queue/message_id/sid}.
+ *
+ * Nota: Si Redis no está disponible, cae a sendTwilioDirect().
+ */
 function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId = null, $senderUserId = null, $typeCode = 'OUTBOUND') {
     global $conn;
     $toNorm = normalizeWhatsAppPhone($to);
@@ -62,7 +146,6 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         if (!$redis) {
             securityLog('TWILIO_REDIS_UNAVAILABLE', 'Redis unavailable for Twilio queue');
         } else {
-            $redis->select((int)(getenv('REDIS_DB') ?: 0));
             $redis->rPush('queue:twilio', json_encode([
                 'message_id' => $msgId, 'to' => $toNorm, 'body' => $body,
                 'school_id' => $schoolId, 'student_id' => $studentId,
@@ -82,8 +165,15 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
     securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
     return ['ok' => false, 'reason' => 'direct_failed', 'error' => $result['error'], 'phone_norm' => $toNorm];
 }
+// ============================================================================
+// Rutas bajo /operations/*
+//   - POST /operations/twilio-status : consulta masiva de estado de mensajes Twilio.
+//   - POST /operations/<command>     : dispatcher a switch de comandos operativos.
+// También acepta action=EXECUTE_COMMAND legacy por compatibilidad.
+// ============================================================================
 if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $input['action'] === 'EXECUTE_COMMAND')) {
     
+    // POST /operations/twilio-status — Estado de mensajes, fallback a API de Twilio.
     if ($cleanPath === '/operations/twilio-status' && $method === 'POST') {
         $msgIds = $input['message_ids'] ?? [];
         if (empty($msgIds) || !is_array($msgIds)) {
@@ -175,6 +265,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
     }
 
+    // Dispatcher de comandos operativos. Cada case inserta/actualiza DB, notifica
+    // por Twilio a acudientes/directivos y registra user_commands.
+    // Acciones: sos, inasistencia, citacion, autorizar_salida, permiso, solicitud,
+    // daño, pedagogica, horario, incidente, seguimiento.
     try {
         switch ($action) {
             case 'sos':
@@ -382,7 +476,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 try {
                     $redisConv = getRedisConnection();
                     if ($redisConv) {
-                        $redisConv->select((int)(getenv('REDIS_DB') ?: 0));
                         $convPayload = json_encode(['student_id' => (string)$studentId, 'guardian_id' => (string)$target['guardian_id'], 'school_id' => (string)$schoolId, 'ts' => time()], JSON_UNESCAPED_UNICODE);
                         $redisConv->setex('conversation:' . preg_replace('/[^0-9+]/', '', $target['whatsapp_phone']), 172800, $convPayload);
                         if (!empty($target['guardian_user_phone']) && $target['guardian_user_phone'] !== $target['whatsapp_phone']) {
@@ -574,7 +667,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             try {
                                 $redisCtx = getRedisConnection();
                                 if ($redisCtx) {
-                                    $redisCtx->select((int)(getenv('REDIS_DB') ?: 0));
                                     $normalizedPhone = preg_replace('/[^0-9+]/', '', $gRow['whatsapp_phone']);
                                     $ctxPayload = json_encode([
                                         'action' => 'autorizar_salida',

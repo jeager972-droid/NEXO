@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * SecuritySection.jsx — Sección de seguridad y confianza de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Comunica los pilares de seguridad de NEXO: biometría en el nodo,
+ *   encriptación E2E, auditoría total, cumplimiento MEN/SIC y Ley 1581.
+ *   Muestra un escudo SVG decorativo y tarjetas de trust points.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ *   - useReveal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'

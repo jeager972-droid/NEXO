@@ -1,3 +1,9 @@
+/**
+ * students API / NEXO Institucional
+ * Responsabilidad: Cliente para gestión de estudiantes: listado paginado/busqueda,
+ * grupos, creación y normalización/deduplicación de registros.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 const normalizeStudent = (student) => ({

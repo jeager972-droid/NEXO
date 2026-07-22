@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * CookieManager.jsx — Modal de preferencias de cookies.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Permite al usuario personalizar categorías de cookies (necesarias,
+ *   analíticas, marketing, preferencias) mediante toggles. Persiste mediante
+ *   callbacks del hook useCookieConsent y bloquea scroll mientras está abierto.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, lucide-react (X)
+ *   - COOKIE_CATEGORIES de useCookieConsent
+ * =============================================================================
+ */
+
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { COOKIE_CATEGORIES } from '../hooks/useCookieConsent'

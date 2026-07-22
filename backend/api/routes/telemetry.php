@@ -1,8 +1,31 @@
 <?php
-// routes/telemetry.php — Telemetría privada del desarrollador NEXO
+/**
+ * =============================================================================
+ * routes/telemetry.php — Ingesta de telemetría del cliente.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Recibe lotes de eventos de telemetría desde el frontend (errores JS,
+ * latencias, pings), valida la estructura, sanitiza PII y escribe en
+ * system_telemetry. Es restringido: descarta campos sensibles y trunca strings.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: servicio de telemetría (web/desktop/mobile).
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+// ============================================================================
+// POST /telemetry — Ingesta validada y sanitizada de eventos de telemetría.
+// ============================================================================
 if ($cleanPath !== '/telemetry' || $method !== 'POST') return;
 
 $actor = requireAuth();

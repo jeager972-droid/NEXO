@@ -1,3 +1,21 @@
+/**
+ * =============================================================================
+ * App.jsx — Router raíz de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Envuelve la aplicación en BrowserRouter, ErrorBoundary y Suspense. Define
+ *   la ruta raíz `/` que renderiza <LandingPage />. El preloader se muestra
+ *   globalmente mientras carga.
+ *
+ * RUTAS:
+ *   - / → LandingPage (marketing site)
+ *
+ * DEPENDENCIAS:
+ *   - react-router-dom
+ *   - LandingPage, Preloader, ErrorBoundary
+ * =============================================================================
+ */
+
 import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import LandingPage   from './landing/LandingPage'

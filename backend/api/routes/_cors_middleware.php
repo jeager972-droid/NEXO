@@ -1,5 +1,46 @@
 <?php
-// _cors_middleware.php
+/**
+ * =============================================================================
+ * _cors_middleware.php — Middleware de Cross-Origin Resource Sharing (CORS).
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Configura las cabeceras HTTP necesarias para permitir peticiones cross-origin
+ * desde orígenes declarados en la variable de entorno CORS_ALLOW_ORIGINS. Además
+ * intercepta las peticiones OPTIONS (preflight) respondiendo con 204 No Content
+ * antes de que lleguen al resto de la lógica de la API.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   HTTP Request
+ *        │
+ *        ▼
+ *   ¿Origin en CORS_ALLOW_ORIGINS?
+ *        │
+ *        ├── SI ──► Agregar Access-Control-Allow-Origin, Allow-Credentials, Max-Age
+ *        │
+ *        ▼
+ *   ¿METHOD === OPTIONS?
+ *        │
+ *        └── SI ──► Agregar Allow-Methods / Allow-Headers ──► 204 No Content exit
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - Variable de entorno CORS_ALLOW_ORIGINS (lista separada por comas).
+ *   - Superglobales $_SERVER (HTTP_ORIGIN, REQUEST_METHOD, etc.).
+ *
+ * Es utilizado por:
+ *   - backend/api/api.php lo incluye al inicio de cada petición para permitir
+ *     que el frontend React (alojado en otro dominio) se comunique con la API.
+ *
+ * POSIBLES EXCEPCIONES
+ * --------------------
+ *   - Ninguna. Este middleware es pasivo: si no hay origen o no está permitido
+ *     simplemente no agrega cabeceras CORS (el navegador bloqueará la respuesta).
+ */
+
 $allowedOriginsStr = getenv('CORS_ALLOW_ORIGINS') ?: '';
 $allowedOrigins = array_filter(explode(',', $allowedOriginsStr));
 $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';

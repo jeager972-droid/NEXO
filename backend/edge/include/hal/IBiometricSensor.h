@@ -5,6 +5,26 @@
 #include <vector>
 #include "utils/NexoResult.h"
 
+/**
+ * =============================================================================
+ * IBiometricSensor.h — Interfaz abstracta del sensor biométrico.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Define el contrato que cualquier sensor biométrico (real o stub) debe
+ *   cumplir: inicialización, enrolamiento, búsqueda 1:N, eliminación de usuario
+ *   y consulta de estado. Permite inyectar implementaciones DevStub o ZK9500
+ *   sin modificar main.cpp.
+ *
+ * FLUJO:
+ *   initialize() -> isReady()
+ *        │
+ *        ├── enrollUser(userId, templateOut) -> guardar template cifrado
+ *        └── searchUser(templateData, matchedUserId, matchScore) -> identificar
+ *
+ * IMPLEMENTACIONES:
+ *   - hardware/dev_stub/DevStubBiometricSensor : simulación sin hardware.
+ *   - hardware/real/Zk9500BiometricSensor      : sensor ZKTeco ZK9500.
+ */
 class IBiometricSensor {
 public:
     virtual ~IBiometricSensor() = default;

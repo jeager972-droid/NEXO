@@ -1,8 +1,26 @@
 <?php
 /**
- * routes/audit_full.php — Endpoints completos para el módulo de Auditoría.
- * Cada subdivisión del grid de Audit.jsx tiene su propio endpoint.
+ * =============================================================================
+ * routes/audit_full.php — Módulo completo de auditoría institucional.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone decenas de endpoints bajo /audit/* organizados por categorías:
+ * asistencia, disciplina, permisos, mensajería, actividad docente, seguridad,
+ * SOS, históricos, reportes consolidados y metadatos. Cada endpoint retorna
+ * JSON tabulado para el grid de Audit.jsx del frontend.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación (RECTOR/COORDINATOR).
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: módulo de Auditoría (Audit.jsx).
  */
+
 global $cleanPath, $conn, $method, $input;
 require_once __DIR__ . '/_auth_middleware.php';
 
@@ -13,6 +31,13 @@ if (strpos($cleanPath, '/audit/') !== 0) {
 $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
 $schoolId = $authUser['school_id'];
 
+/**
+ * Emite una respuesta JSON y finaliza la ejecución.
+ *
+ * @param mixed $data Datos a codificar.
+ * @param int $code Código HTTP.
+ * @return never
+ */
 function auditJson($data, $code = 200) {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
@@ -20,10 +45,23 @@ function auditJson($data, $code = 200) {
     exit;
 }
 
+/**
+ * Emite respuesta de error JSON.
+ *
+ * @param string $msg Mensaje de error.
+ * @param int $code Código HTTP.
+ * @return never
+ */
 function auditError($msg, $code = 500) {
     auditJson(['status' => 'error', 'message' => $msg], $code);
 }
 
+/**
+ * Valida que un string sea un UUID v4.
+ *
+ * @param mixed $value Valor a validar.
+ * @return bool True si es UUID v4.
+ */
 function isValidUUID($value) {
     return (bool) preg_match(
         '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
@@ -31,6 +69,14 @@ function isValidUUID($value) {
     );
 }
 
+/**
+ * Construye condiciones y parámetros de filtro por rango de fechas, grupo y estudiante.
+ *
+ * @param string $tableAlias Alias de tabla en la consulta.
+ * @param string $dateCol Columna de fecha a filtrar.
+ * @param string|null $studentCol Columna de estudiante (null para omitir filtro).
+ * @return array ['conds' => array, 'params' => array]
+ */
 function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
     $conds = [];
     $params = [];

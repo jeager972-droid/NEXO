@@ -1,3 +1,13 @@
+/**
+ * =============================================================================
+ * RealGpioManager.cpp — Implementación de notificación con GPIO real (RPi 4).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Implementa INotification usando libgpiod para controlar LEDs y buzzer en
+ *   un Raspberry Pi 4. Abre gpiochip4, configura líneas 17 (verde), 27 (rojo)
+ *   y 22 (buzzer) como salidas. Emite patrones de beep/LED según el estado.
+ */
+
 #include "hal/INotification.h"
 #include <gpiod.h>
 #include <thread>

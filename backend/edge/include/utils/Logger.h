@@ -13,6 +13,15 @@
 #define LOG_ERROR(...)    if(spdlog::default_logger()) spdlog::error(__VA_ARGS__)
 #define LOG_CRITICAL(...) if(spdlog::default_logger()) spdlog::critical(__VA_ARGS__)
 
+/**
+ * =============================================================================
+ * Logger.h — Inicialización del logger del edge usando spdlog.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Configura el logger por defecto de spdlog con salida a consola (color) y
+ *   archivo rotativo (5 MB x 3 archivos). Soporta niveles trace/debug/info/
+ *   warn/error. Los macros LOG_* verifican que el logger esté inicializado.
+ */
 class Logger {
 public:
     static void initialize(const std::string& logPath = "nexo-edge.log",

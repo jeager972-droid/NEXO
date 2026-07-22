@@ -1,3 +1,9 @@
+/**
+ * users API / NEXO Institucional
+ * Responsabilidad: Cliente para operaciones de usuario: búsqueda por rol, perfil extendido,
+ * subida de foto, códigos de verificación WhatsApp y cambio de contraseña/datos.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const usersApi = {

@@ -8,8 +8,26 @@
 #include <mosquitto.h>
 
 /**
- * MqttCommandWorker — V2: Suscripción persistente MQTT para comandos M2M.
- * Thread-safe: callback de red solo pushea a queue; main thread consume.
+ * =============================================================================
+ * mqtt_command_worker.h — Worker MQTT para recepción de comandos cloud (M2M).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Mantiene una conexión persistente a un broker MQTT usando mosquitto.
+ *   Se suscribe a `nexo/devices/{deviceId}/commands`. Los callbacks de red
+ *   (onMessage) solo encolan el payload; el hilo principal consume la cola
+ *   de forma segura y ejecuta comandos (REBOOT, RELOAD_CONFIG, FORCE_SYNC,
+ *   UPDATE_FIRMWARE). Expone lastActivity() para HealthMonitor.
+ *
+ * FLUJO:
+ *   start() -> mosquitto_connect -> runLoop() -> mosquitto_loop()
+ *        │
+ *        ├── onConnect -> subscribe al tópico
+ *        ├── onMessage -> pushCommand() (cola protegida)
+ *        └── onDisconnect -> m_connected = false
+ *
+ * DEPENDENCIAS:
+ *   - libmosquitto
+ *   - HealthMonitor lee lastActivity() periódicamente.
  */
 class MqttCommandWorker {
 public:

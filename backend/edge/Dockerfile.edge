@@ -1,3 +1,20 @@
+# =============================================================================
+# Dockerfile.edge — Imagen Docker multi-stage para compilar y ejecutar NEXO Edge
+# =============================================================================
+# RESPONSABILIDAD:
+#   Crea una imagen ARM64 (Raspberry Pi 4) con dos etapas:
+#     1. builder: instala dependencias de build y compila con el preset
+#        cross-arm64-pi4 de CMake.
+#     2. runtime: imagen mínima con librerías runtime y el binario nexo-edge.
+#
+# USO:
+#   docker build -f Dockerfile.edge -t nexo-edge .
+#
+# NOTAS:
+#   - Requiere Docker con soporte para arm64v8 (buildx o runner ARM64).
+#   - No incluye libspdlog ni libmosquitto runtime (verificar dependencias).
+# =============================================================================
+
 # Stage 1: Build
 FROM arm64v8/ubuntu:22.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive

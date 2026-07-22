@@ -1,3 +1,19 @@
+/**
+ * =============================================================================
+ * CredibilityBar.jsx — Barra de métricas de credibilidad de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra métricas animadas (estudiantes monitoreados, instituciones activas,
+ *   uptime, etc.) con contadores que se activan al entrar en viewport. Usa
+ *   sticky scroll y reveal animations.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ *   - gsap / ScrollTrigger
+ *   - useReveal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useEffect, useState } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'

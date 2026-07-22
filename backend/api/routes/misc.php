@@ -1,8 +1,44 @@
 <?php
+/**
+ * =============================================================================
+ * routes/misc.php — Utilidades, webhooks, notificaciones y búsquedas.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Agrupa endpoints auxiliares y transversales:
+ *   - POST /contacto             : formulario de contacto con rate limiting.
+ *   - GET/POST /notifications    : crear y listar notificaciones internas.
+ *   - POST /notifications/clear  : limpiar notificaciones del usuario.
+ *   - GET  /consultation/search  : buscar estudiantes por nombre/documento.
+ *   - POST /reports/preview      : previsualización de eventos biométricos.
+ *   - POST /webhooks/twilio/inbound : procesar mensajes entrantes de WhatsApp.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación, getRedisConnection.
+ *   - lib/twilio.php : normalizeWhatsAppPhone, sendTwilioDirect, logTwilioMessage.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Landing page (formulario de contacto) y frontend (notificaciones).
+ *   - Twilio (webhook inbound de WhatsApp).
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 require_once __DIR__ . '/../lib/twilio.php';
 
+/**
+ * Verifica la firma HMAC-SHA1 de un webhook entrante de Twilio.
+ *
+ * @return bool True si la firma es válida.
+ *
+ * Efectos secundarios: ninguno (solo lectura de superglobales y variables).
+ * Precondiciones: TWILIO_AUTH_TOKEN y TWILIO_WEBHOOK_URL_BASE deben estar configuradas.
+ * Postcondiciones: retorna false si falta configuración o la firma no coincide.
+ */
 function verifyTwilioSignature() {
     $authToken = getenv('TWILIO_AUTH_TOKEN') ?: '';
     $provided = $_SERVER['HTTP_X_TWILIO_SIGNATURE'] ?? '';
@@ -33,6 +69,7 @@ function verifyTwilioSignature() {
 }
 
 
+// POST /contacto — Formulario de contacto desde la landing page con rate limiting Redis.
 if ($cleanPath === '/contacto' && $method === 'POST') {
     $contactIp = md5(getRealClientIp());
     try {
@@ -90,7 +127,6 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         try {
             $redis = getRedisConnection();
             if ($redis) {
-                $redis->select((int)(getenv('REDIS_DB') ?: 0));
                 $cargoLabel = mb_convert_case($cargo, MB_CASE_TITLE, 'UTF-8');
                 $notifMsg = "📥 *NEXO — Nueva solicitud de contacto*\n\n"
                     . "Nombre: *{$nombre}* ({$cargoLabel})\n"
@@ -120,6 +156,7 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
     exit;
 }
 
+// GET /audit/logs — Endpoint legacy/placeholder; actualmente retorna array vacío.
 if ($cleanPath === '/audit/logs') {
     $authUser = requireAuth(['RECTOR']);
     echo json_encode([
@@ -131,6 +168,7 @@ if ($cleanPath === '/audit/logs') {
     ]);
     exit;
 }
+// GET/POST /notifications — Crear y listar notificaciones internas del usuario autenticado.
 if ($cleanPath === '/notifications') {
     $authUser = requireAuth();
 
@@ -214,6 +252,7 @@ if ($cleanPath === '/notifications') {
     exit;
 }
 
+// POST /notifications/clear — Elimina todas las notificaciones del usuario autenticado.
 if ($cleanPath === '/notifications/clear' && $method === 'POST') {
     $authUser = requireAuth();
     try {
@@ -229,6 +268,7 @@ if ($cleanPath === '/notifications/clear' && $method === 'POST') {
     exit;
 }
 
+// GET /consultation/search — Búsqueda de estudiantes por nombre o documento.
 if ($cleanPath === '/consultation/search') {
     $authUser = requireAuth();
     $term = trim((string)($_GET['q'] ?? ''));
@@ -267,6 +307,7 @@ if ($cleanPath === '/consultation/search') {
     exit;
 }
 
+// GET /reports/preview — Previsualización de eventos biométricos filtrados por fecha.
 if ($cleanPath === '/reports/preview') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     // BUG-05 FIX (backend): leer parámetros de fecha desde la query string
@@ -313,6 +354,7 @@ if ($cleanPath === '/reports/preview') {
     exit;
 }
 
+// POST /webhooks/twilio/inbound — Recibe mensajes entrantes de WhatsApp y genera notificación/interno.
 if ($cleanPath === '/webhooks/twilio/inbound') {
     header('Content-Type: text/xml; charset=utf-8');
     if ($method !== 'POST') {

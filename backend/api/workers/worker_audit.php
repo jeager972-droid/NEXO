@@ -1,23 +1,62 @@
 <?php
 /**
- * NEXO Audit Log Worker — Procesa logs de auditoría encolados en Redis
- * Ejecutar bajo supervisor o como servicio Docker: php worker_audit.php
+ * =============================================================================
+ * workers/worker_audit.php — Procesador de logs de auditoría encolados en Redis.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Consumir mensajes de la cola Redis `queue:audit_logs` e insertarlos en la
+ * tabla global_audit_logs manteniendo una cadena de hashes criptográfica por
+ * escuela. Esto desacopla la escritura de auditoría de la ruta HTTP crítica.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   Redis queue:audit_logs
+ *        │
+ *        ▼
+ *   blpop / lpop
+ *        │
+ *        ▼
+ *   insertBatch()
+ *        │
+ *   ├── Busca último hash de la escuela
+ *   ├── Calcula HMAC(prevHash|school|actor|event|details|ip|ts)
+ *   └── INSERT con log_id, prev_audit_id, chain_hash
+ *        │
+ *        ▼
+ *   heartbeat Redis + GC periódico
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - db.php : conexión PDO ($pdo).
+ *   - Redis : extensión php-redis; cola `queue:audit_logs`.
+ *   - Variables de entorno: REDISHOST, REDISPORT, REDIS_PASSWORD, APP_NEXO_HMAC_SECRET.
+ *
+ * Es utilizado por:
+ *   - Sistema: arrancado por supervisor/Docker. Producido por securityLog() de api.php.
  */
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../redis.php';
 
+/**
+ * Escribe un log del worker a stderr con timestamp.
+ *
+ * @param string $event Tipo de evento.
+ * @param string $details Detalles adicionales.
+ * @return void
+ */
 function logWorker($event, $details = '') {
     $msg = sprintf("[%s] [AUDIT_WORKER] [%s] %s\n", gmdate('Y-m-d H:i:s'), $event, $details);
     file_put_contents('php://stderr', $msg);
 }
 
-function connectRedis() {
-    $redis = new Redis();
-    // Timeout de 100ms para evitar bloqueos en workers de fondo
-    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
-    if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-    return $redis;
-}
-
+/**
+ * Genera un UUID v4 sin depender de extensión uuid-ossp.
+ *
+ * @return string UUID v4 canónico.
+ */
 function generateUuidV4() {
     $data = random_bytes(16);
     $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
@@ -25,6 +64,19 @@ function generateUuidV4() {
     return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
 }
 
+/**
+ * Calcula el HMAC-SHA256 que enlaza un log con el anterior en la cadena.
+ *
+ * @param string|null $prevHash Hash del registro previo.
+ * @param string|null $schoolId UUID de la escuela.
+ * @param string|null $actorId UUID del actor.
+ * @param string $eventType Tipo de evento.
+ * @param string $description Descripción.
+ * @param string $ipAddress Dirección IP.
+ * @param string $createdAt Timestamp.
+ * @param string $secret Secreto HMAC.
+ * @return string Hash HMAC-SHA256.
+ */
 function calculateAuditHash($prevHash, $schoolId, $actorId, $eventType, $description, $ipAddress, $createdAt, $secret) {
     $prevHash = $prevHash ?: 'GENESIS';
     $schoolId = $schoolId ?: 'NULL';
@@ -33,6 +85,16 @@ function calculateAuditHash($prevHash, $schoolId, $actorId, $eventType, $descrip
     return hash_hmac('sha256', $payload, $secret);
 }
 
+/**
+ * Inserta un lote de logs de auditoría en una transacción manteniendo la cadena de hashes.
+ *
+ * @param PDO $conn Conexión PDO.
+ * @param array $rows Filas decodificadas de Redis.
+ * @return void
+ *
+ * Efectos secundarios: inicia y confirma/ revierte una transacción; en error
+ * reencola las filas fallidas en `queue:audit_logs`.
+ */
 function insertBatch($conn, array $rows) {
     if (empty($rows)) return;
     
@@ -122,7 +184,10 @@ try {
     logWorker('ROLE_SET_SKIP', $e->getMessage());
 }
 try {
-    $redis = connectRedis();
+    $redis = getRedisConnection();
+    if (!$redis) {
+        throw new Exception('Redis unavailable on startup');
+    }
 } catch (Exception $e) {
     logWorker('FATAL', "Failed to connect to Redis on startup: " . $e->getMessage());
     exit(1);

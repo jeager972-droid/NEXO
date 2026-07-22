@@ -1,4 +1,5 @@
 {
+  "_comment": "WebApp package / NEXO Institucional. Responsabilidad: dependencias y scripts de la SPA React. Deps principales: React 18, Vite 5, Tailwind 3, Framer Motion, Axios, Tauri plugins. Scripts: dev, build, preview, lint y Tauri.",
   "name": "webapp-institucional",
   "private": true,
   "version": "1.0.0-rc.1",

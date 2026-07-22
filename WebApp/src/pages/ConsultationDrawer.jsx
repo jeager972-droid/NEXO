@@ -1,3 +1,9 @@
+/**
+ * ConsultationDrawer page component / NEXO Institucional
+ * Responsabilidad: Drawer detallado de consulta por módulo: filtros (grupo, estudiante,
+ * fechas), tabla de resultados dinámica y acceso a TrackingModal para iniciar seguimiento.
+ * Dependencias: React, framer-motion, studentsApi, TrackingModal, useAuth, formatters.
+ */
 import { useState, useEffect, useRef } from 'react';
 import {
   Search, Activity, X, Loader2, CalendarDays, Filter, Eye, AlertTriangle

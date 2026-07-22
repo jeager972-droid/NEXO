@@ -1,4 +1,29 @@
 <?php
+/**
+ * =============================================================================
+ * db.php — Inicialización de conexión PDO a PostgreSQL.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Lee configuración de base de datos desde variables de entorno (DATABASE_URL
+ * o PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD), crea un PDO con prepared
+ * statements nativos, errores como excepciones y timeout de 5s, y configura
+ * el parámetro `app.nexo_hmac_secret` si está disponible (usado por triggers
+ * o funciones SQL para firmar/verificar hashes internos).
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - Variables de entorno: DATABASE_URL, PGHOST, PGPORT, PGDATABASE, PGUSER,
+ *     PGPASSWORD, APP_NEXO_HMAC_SECRET, NEXO_HMAC_SECRET.
+ *   - Extensión pdo_pgsql.
+ *
+ * Es utilizado por:
+ *   - api.php (asigna $conn = $pdo).
+ *   - workers/worker_*.php (incluyen db.php directamente).
+ */
+
 $databaseUrl = getenv('DATABASE_URL');
 $host = getenv('PGHOST');
 $port = getenv('PGPORT');

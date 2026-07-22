@@ -1,3 +1,9 @@
+/**
+ * notifications API / NEXO Institucional
+ * Responsabilidad: Cliente para notificaciones del usuario: listar, crear y marcar
+ * todas como leídas.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const notificationsApi = {

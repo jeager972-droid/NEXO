@@ -1,3 +1,28 @@
+/**
+ * =============================================================================
+ * NexoCanvas.jsx — Canvas 3D React-Three-Fiber de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Renderiza escenas 3D de la landing: modelo del nodo (NexoModel) o red
+ *   institucional (InstitutionalNetwork). Gestiona iluminación 3-point,
+ *   environment desktop, optimizaciones mobile, drag orbital por overlay
+ *   personalizado y hint táctil.
+ *
+ * COMPONENTES INTERNOS:
+ *   - createAvatarTexture / createDotTexture: texturas Canvas 2D dinámicas.
+ *   - FloatingParticles: partículas animadas de fondo.
+ *   - InstitutionalNetwork: nodos y líneas de red.
+ *   - DragOverlay: captura drag sin bloquear scroll de página.
+ *
+ * PROPS:
+ *   - type: 'solo' | 'grid'
+ *   - scale, showShield, coldLight, interactive, scrollProgress
+ *
+ * DEPENDENCIAS:
+ *   - @react-three/fiber, @react-three/drei, three
+ * =============================================================================
+ */
+
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Environment } from '@react-three/drei'
 import { Suspense, useRef, useMemo, useState, useEffect, useCallback } from 'react'

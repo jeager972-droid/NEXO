@@ -1,3 +1,23 @@
+/**
+ * =============================================================================
+ * NexoModel.jsx — Modelo 3D del nodo NEXO para React-Three-Fiber.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Carga el modelo GLB `/assets/models/nodonuevo.glb`, lo clona, normaliza su
+ *   escala y centro por bounding box, y aplica rotación automática continua o
+ *   por drag (a través de dragDeltaRef). Opcionalmente muestra un escudo
+ *   distorsionado animado.
+ *
+ * PROPS:
+ *   - type, scale, showShield, scrollProgress, isUserDragging, dragDeltaRef,
+ *     dragSensitivity, isMobile
+ *
+ * DEPENDENCIAS:
+ *   - @react-three/fiber, @react-three/drei, three
+ *   - gsap / ScrollTrigger
+ * =============================================================================
+ */
+
 import { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, MeshDistortMaterial } from '@react-three/drei'

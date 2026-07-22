@@ -1,3 +1,10 @@
+/**
+ * WebApp Tailwind config / NEXO Institucional
+ * Responsabilidad: Tokens de diseño del sistema: paleta institucional (gov, bio,
+ * surface, alert), tipografía Inter, sombras suaves, animaciones pulse-bio/scan y
+ * espaciados extendidos. darkMode basado en clase.
+ * Dependencias: tailwindcss v3, postcss.config.js con autoprefixer.
+ */
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [

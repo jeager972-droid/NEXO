@@ -1,8 +1,22 @@
 -- =============================================================================
 -- SCHEMA MIGRATIONS BACKFILL
--- Registra migraciones ya ejecutadas en bases de datos existentes.
--- Ejecutar UNA VEZ en bases que ya tienen el esquema consolidado.
--- Idempotente: puede reejecutarse sin duplicar registros.
+-- =============================================================================
+-- RESPONSABILIDAD:
+--   Registra en schema_migrations los archivos de migración que ya fueron
+--   aplicados en bases de datos existentes antes de la consolidación. Evita
+--   que el sistema de migraciones intente reejecutar scripts cuyo contenido
+--   ya está en nexo_full_migration.sql o que son independientes/legacy.
+--
+-- EJECUTAR:
+--   psql $DATABASE_URL -f schema_migrations_backfill.sql
+--
+-- CATEGORÍAS:
+--   1. Pre-sistema: migraciones absorbidas por nexo_full_migration.sql.
+--   2. Post-sistema: archivos independientes que aún se ejecutan por separado.
+--   3. Legacy archivadas: marcadas como fallidas porque usan INTEGER en lugar
+--      de UUID; NO deben ejecutarse.
+--
+-- Idempotente: ON CONFLICT (filename) actualiza success y notes sin duplicar.
 -- =============================================================================
 
 -- Asegurar que la tabla de tracking existe (por si se ejecuta antes que nexo_full_migration.sql)

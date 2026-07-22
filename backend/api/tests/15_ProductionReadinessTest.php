@@ -1,7 +1,17 @@
 <?php
 /**
- * 15_ProductionReadinessTest.php
- * Verifica que el sistema esté listo para producción.
+ * =============================================================================
+ * 15_ProductionReadinessTest.php — Test de preparación para producción.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica características críticas para producción:
+ *   - No hay secretos ni contraseñas hardcodeadas en PHP.
+ *   - RLS habilitado en al menos 10 tablas sensibles.
+ *   - Más de 20 índices para rendimiento.
+ *   - Al menos 5 tablas particionadas para grandes volúmenes.
+ *   - Auditoría (global_audit_logs, trigger fn_audit_chain_trigger).
+ *   - Rate limiting (rate_limits), backup_email, email_verified,
+ *     phone_verified y soft delete (deleted_at).
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

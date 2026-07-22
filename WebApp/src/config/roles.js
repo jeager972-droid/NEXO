@@ -1,4 +1,11 @@
 /**
+ * Roles config / NEXO Institucional
+ * Responsabilidad: Fuente única de verdad para roles del sistema, navegación sidebar
+ * (SIDEBAR_ITEMS) y mapeo a etiquetas legibles (ROLE_DISPLAY/getRoleDisplay).
+ * Debe mantenerse sincronizada con los roles del backend.
+ * Dependencias: lucide-react (iconos de navegación).
+ */
+/**
  * FUENTE DE VERDAD ÚNICA PARA ROLES DEL SISTEMA
  * Estos valores deben coincidir exactamente entre Backend y Frontend.
  */

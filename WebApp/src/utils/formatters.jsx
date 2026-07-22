@@ -1,3 +1,12 @@
+/**
+ * Formatters / NEXO Institucional
+ * Responsabilidad: Funciones de presentación reutilizables: fechas cortas y 12h,
+ * etiquetas humanizadas de enums/columnas, formateo de celdas de tabla y listas de
+ * columnas excluidas (PII/sensibles) que no se muestran en la UI.
+ * Dependencias: React (para algunos badges JSX).
+ * Exports: fmtShortDateOnly, fmt12h, ENUM_LABELS, COLUMN_LABELS, EXCLUDE_COLS,
+ * humanizeColumn, formatCellValue.
+ */
 import React from 'react';
 
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];

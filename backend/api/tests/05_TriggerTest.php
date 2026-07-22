@@ -1,7 +1,15 @@
 <?php
 /**
- * 05_TriggerTest.php
- * Verifica triggers y funciones asociadas.
+ * =============================================================================
+ * 05_TriggerTest.php — Test de triggers y funciones SQL.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica en sql/nexo_full_migration.sql la existencia de:
+ *   - Trigger y función de normalización de teléfono (guardians).
+ *   - Trigger y funciones de cadena de auditoría (global_audit_logs).
+ *   - Las funciones asociadas estén definidas.
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

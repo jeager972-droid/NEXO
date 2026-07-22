@@ -1,3 +1,9 @@
+<!--
+  WebApp build instructions / NEXO Institucional
+  Responsabilidad: Guía rápida para compilar el cliente web con Tauri 2.0 en
+  Windows, macOS, Linux, Android e iOS.
+  Dependencias: npm install; Tauri CLI y SDK instalados.
+-->
 # Comandos de Compilación Nativa - NEXO (Tauri 2.0)
 
 ## Preparación

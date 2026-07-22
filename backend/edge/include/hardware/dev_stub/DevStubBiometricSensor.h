@@ -3,6 +3,15 @@
 #include "utils/NexoResult.h"
 #include <string>
 
+/**
+ * =============================================================================
+ * DevStubBiometricSensor.h — Implementación stub del sensor biométrico.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Simula un sensor biométrico para desarrollo/pruebas sin hardware real.
+ *   Inicialización inmediata, enrolamiento devuelve template dummy (256 bytes
+ *   0xAA), búsqueda devuelve coincidencia simulada 1 de cada 5 intentos.
+ */
 class DevStubBiometricSensor : public IBiometricSensor {
 public:
     NexoResult<void> initialize() override;

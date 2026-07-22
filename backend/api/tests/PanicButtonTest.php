@@ -1,5 +1,17 @@
 <?php
-// tests/PanicButtonTest.php
+/**
+ * =============================================================================
+ * tests/PanicButtonTest.php — Test del botón de pánico y revocación de JWT.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Simula el modo de emergencia (panic mode) con un MockRedis e injecta
+ *   variables de entorno de JWT. Verifica que:
+ *   - Un token emitido ANTES del panic sea rechazado por verifyJwtToken.
+ *   - Un token emitido DESPUÉS del panic sea aceptado.
+ *
+ * NOTA: requiere que _auth_middleware.php defina issueJwtToken, verifyJwtToken,
+ * b64url_encode/decode. Usa HS256 con JWT_SECRET.
+ */
 class MockRedis {
     private $store = [];
     public function connect($host, $port) { return true; }

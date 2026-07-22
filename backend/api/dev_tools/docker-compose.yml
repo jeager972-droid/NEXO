@@ -26,6 +26,11 @@ services:
       - PGUSER=nexo_user
       - PGPASSWORD=${DB_PASSWORD}
       - PORT=80
+      - REDIS_URL=${REDIS_URL:-}
+      - REDISHOST=redis
+      - REDISPORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
     depends_on:
       - db
       - pgbouncer
@@ -51,9 +56,11 @@ services:
       dockerfile: backend/api/Dockerfile
     command: php /var/www/html/worker_audit.php
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_URL=${REDIS_URL:-}
+      - REDISHOST=redis
+      - REDISPORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
       - PGHOST=pgbouncer
       - PGPORT=6432
       - PGDATABASE=nexo_db
@@ -73,9 +80,11 @@ services:
       dockerfile: backend/api/Dockerfile
     command: php /var/www/html/worker_biometric.php
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_URL=${REDIS_URL:-}
+      - REDISHOST=redis
+      - REDISPORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
       - PGHOST=pgbouncer
       - PGPORT=6432
       - PGDATABASE=nexo_db

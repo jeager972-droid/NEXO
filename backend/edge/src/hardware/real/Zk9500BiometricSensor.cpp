@@ -1,3 +1,23 @@
+/**
+ * =============================================================================
+ * Zk9500BiometricSensor.cpp — Implementación del sensor ZKTeco ZK9500.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Implementa IBiometricSensor para el lector de huellas ZKTeco ZK9500. Usa
+ *   libzkfp para inicializar el dispositivo, mantener una base de datos en RAM
+ *   (cache), enrolar/identificar/eliminar usuarios. El umbral de coincidencia
+ *   se lee de ConfigManager::getMatchThreshold().
+ *
+ * FLUJO:
+ *   initialize() -> ZKFPM_Init -> ZKFPM_OpenDevice -> ZKFPM_DBInit
+ *   enrollUser(userId, templateOut) -> ZKFPM_AcquireFingerprint -> ZKFPM_DBAdd
+ *   searchUser(...) -> ZKFPM_AcquireFingerprint -> ZKFPM_DBIdentify
+ *
+ * DEPENDENCIAS:
+ *   - libzkfp, libzkfptype
+ *   - utils/ConfigManager.h para threshold.
+ */
+
 #include "hal/IBiometricSensor.h"
 #include "utils/Logger.h"
 #include "utils/ConfigManager.h"

@@ -1,6 +1,29 @@
 #!/bin/bash
-# Install dependencies for NEXO Edge on Debian/Ubuntu (x86_64)
-# Run with: sudo bash scripts/install_deps_debian.sh
+# =============================================================================
+# install_deps_debian.sh — Instalador de dependencias para NEXO Edge en Debian/Ubuntu.
+# =============================================================================
+# RESPONSABILIDAD:
+#   Instala, mediante apt-get, las dependencias nativas necesarias para compilar
+#   el backend edge en Debian/Ubuntu x86_64. Algunos paquetes (libgpiod-dev)
+#   son específicos de ARM64/Raspberry Pi 4 pero se instalan de forma segura en
+#   x86_64 (simplemente no se usan en desarrollo).
+#
+# USO:
+#   sudo bash scripts/install_deps_debian.sh
+#
+# DEPENDENCIAS INSTALADAS:
+#   - build-essential, cmake, clang-format, clang-tidy, git
+#   - libsqlite3-dev
+#   - libssl-dev (OpenSSL)
+#   - libcurl4-openssl-dev
+#   - libgpiod-dev (GPIO ARM64)
+#   - libspdlog-dev
+#   - catch2 (falla silenciosa a header-only si no está en repos)
+#
+# NOTAS:
+#   - Ejecutar con privilegios de root (sudo).
+#   - `set -e` hace que el script falle ante el primer error.
+# =============================================================================
 
 set -e
 

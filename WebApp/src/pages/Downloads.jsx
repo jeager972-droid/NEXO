@@ -1,3 +1,10 @@
+/**
+ * Downloads page / NEXO Institucional
+ * Responsabilidad: Página pública de descarga de instaladores. Detecta el SO del navegador,
+ * permite seleccionar plataforma y descarga el APK Android; otras plataformas muestran
+ * estado "Próximamente".
+ * Dependencias: React, lucide-react.
+ */
 import { useState, useEffect } from 'react';
 import { Download, Monitor, Apple, Smartphone, Info } from 'lucide-react';
 

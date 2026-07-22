@@ -1,3 +1,16 @@
+# =============================================================================
+# .clang-tidy — Configuración de análisis estático C++ para NEXO Edge.
+# =============================================================================
+# RESPONSABILIDAD:
+#   Activa checks de bugprone, cppcoreguidelines, modernize, performance y
+#   readability, con exclusiones razonables para este proyecto (magic numbers,
+#   trailing return type, bounds pointer arithmetic). Sirve para mantener
+#   calidad y detectar problemas de seguridad/estilo antes del build.
+#
+# USO:
+#   clang-tidy src/*.cpp include/**/*.h -- -std=c++20
+# =============================================================================
+
 ---
 Checks: >
   -*,

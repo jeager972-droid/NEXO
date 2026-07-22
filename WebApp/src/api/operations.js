@@ -1,3 +1,9 @@
+/**
+ * operations API / NEXO Institucional
+ * Responsabilidad: Cliente para ejecutar comandos institucionales (SOS, citaciones,
+ * autorizaciones, permisos, etc.) y verificar estado de entrega de mensajes Twilio.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 const wrapCommand = (command, params) => ({

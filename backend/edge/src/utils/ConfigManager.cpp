@@ -1,3 +1,13 @@
+/**
+ * =============================================================================
+ * ConfigManager.cpp — Implementación del singleton de configuración JSON.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Carga config.json desde disco (con fallback a valores default) y provee
+ *   getters tipados (string, int, bool). Si el archivo no existe o es inválido
+ *   se devuelven defaults y se loguea advertencia.
+ */
+
 #include "utils/ConfigManager.h"
 #include "utils/Logger.h"
 #include <fstream>

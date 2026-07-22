@@ -1,8 +1,16 @@
 <?php
 /**
- * SchemaIntegrityTest.php
- * Tests exhaustivos de integridad del esquema SQL.
- * Parsea el SQL estáticamente (sin necesidad de PostgreSQL corriendo).
+ * =============================================================================
+ * SchemaIntegrityTest.php — Test exhaustivo de integridad del esquema SQL.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Parsea sql/nexo_full_migration.sql y nexo_seed.sql estáticamente para
+ *   validar integridad estructural sin necesidad de PostgreSQL corriendo.
+ *   Cubre: tablas, columnas, tipos, primary keys, unique/check constraints,
+ *   foreign keys, índices, triggers, funciones, roles, RLS policies,
+ *   particiones y columnas agregadas por ALTER TABLE.
+ *
+ * NOTA: PHPUnit test case con parseo regex manual del SQL.
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';

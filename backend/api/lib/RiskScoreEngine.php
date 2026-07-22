@@ -1,10 +1,48 @@
 <?php
 /**
- * RiskScoreEngine — Motor de cálculo de riesgo estudiantil.
+ * =============================================================================
+ * lib/RiskScoreEngine.php — Motor de cálculo de riesgo estudiantil.
+ * =============================================================================
  *
- * Centraliza TODA la lógica de negocio del cálculo de métricas.
- * Para ajustar el modelo de riesgo, solo modifica esta clase.
- * La base de datos únicamente almacena los resultados.
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Centraliza TODA la lógica de negocio del cálculo de métricas de riesgo
+ * estudiantil. La base de datos únicamente almacena los resultados.
+ *
+ * Pesos del modelo:
+ *   - WEIGHT_LATE     = 5.0  : puntos por llegada tarde.
+ *   - WEIGHT_ABSENCE  = 15.0 : puntos por inasistencia.
+ *   - WEIGHT_OVERFLOW = 0.5  : penalización por eventos adicionales > BASELINE_EVENTS.
+ *   - BASELINE_EVENTS = 20   : línea base de eventos sin penalización.
+ *   - MAX_SCORE       = 100.0: techo absoluto del puntaje.
+ *
+ * Umbrales de nivel:
+ *   - CRITICAL: score >= 80
+ *   - HIGH:     score >= 60
+ *   - MEDIUM:   score >= 30
+ *   - LOW:      score <  30
+ *
+ * Alertas:
+ *   - ALERT_THRESHOLD = 70
+ *   - ALERT_COOLDOWN_DAYS = 7 (mínimo entre alertas RISK_ALERT_ del mismo estudiante)
+ *
+ * Funciones:
+ *   - computeScore(int, int, int): float
+ *   - scoreToLevel(float): string
+ *   - shouldAlert(float): bool
+ *   - calculateAndStore(PDO, string, string, int): array
+ *   - recalculateSchool(PDO, string): int
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - Conexión PDO pasada a los métodos estáticos.
+ *   - Tablas: students, biometric_events, student_behavior_metrics, attendance_incidents.
+ *
+ * Es utilizado por:
+ *   - routes/admin.php : recálculo manual/escuela.
+ *   - routes/behavior.php : consulta de métricas HIGH/CRITICAL.
+ *   - Futuro: cron job o worker para recálculo automático.
  */
 class RiskScoreEngine
 {

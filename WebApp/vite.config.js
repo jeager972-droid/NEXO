@@ -1,3 +1,11 @@
+/**
+ * WebApp build config / NEXO Institucional
+ * Responsabilidad: Configurar Vite para la SPA con basename /app/, code-splitting
+ * manual (react, ui) y PWA con Workbox: cache de assets estáticos, API con NetworkFirst
+ * y cola backgroundSync para POST /v1.
+ * Dependencias: vite, @vitejs/plugin-react, vite-plugin-pwa.
+ * Nota: base '/app/' requiere que las reglas de reescritura del servidor apunten a dist/index.html.
+ */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'

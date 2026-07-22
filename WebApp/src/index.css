@@ -1,3 +1,9 @@
+/**
+ * WebApp global styles / NEXO Institucional
+ * Responsabilidad: Cargar directivas Tailwind y ajustes globales (fuente Inter Variable,
+ * safe-area insets, base 16px para inputs). Separa el aspecto visual de los componentes.
+ * Dependencias: Tailwind CSS v3, tokens definidos en tailwind.config.js.
+ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

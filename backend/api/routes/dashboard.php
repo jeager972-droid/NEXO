@@ -1,8 +1,36 @@
 <?php
-// routes/dashboard.php - Estadísticas del panel
+/**
+ * =============================================================================
+ * routes/dashboard.php — Estadísticas y eventos del panel principal.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone tres endpoints para el dashboard:
+ *   - GET /dashboard/stats              : conteos de presentes, ausentes, alertas
+ *                                           y permisos de la escuela/grupo. Usa
+ *                                           caché Redis agresiva (TTL 30s).
+ *   - GET /dashboard/teacher-group-detail : desglose de estudiantes por estado
+ *                                           dentro de los grupos del docente.
+ *   - GET /dashboard/events             : eventos recientes de user_commands
+ *                                           filtrados por rol.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación, roles, getRedisConnection.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: Dashboard.jsx y componentes de inicio.
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+// ============================================================================
+// GET /dashboard/stats — Conteos agregados para el dashboard con caché Redis.
+// ============================================================================
 if ($cleanPath === '/dashboard/stats') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];

@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * useCookieConsent.js — Hook de gestión de consentimiento de cookies.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Lee/escribe el consentimiento de cookies desde localStorage, muestra el
+ *   banner si no hay consentimiento previo y expone funciones para aceptar,
+ *   rechazar, personalizar y resetear. Define categorías de cookies.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks
+ * =============================================================================
+ */
+
 import { useState, useEffect } from 'react'
 
 const COOKIE_KEY = 'nexo_cookie_consent'

@@ -1,3 +1,10 @@
+/**
+ * nativeAuth / NEXO Institucional
+ * Responsabilidad: Abstraer autenticación biométrica y almacenamiento seguro del
+ * refresh token cuando la app corre como Tauri ( escritorio/móvil híbrido ).
+ * Dependencias: @tauri-apps/plugin-biometric, @tauri-apps/plugin-store.
+ * Nota: Solo se invoca en entornos con window.__TAURI__ disponible.
+ */
 import { checkBiometry, authenticate } from '@tauri-apps/plugin-biometric';
 import { Store } from '@tauri-apps/plugin-store';
 

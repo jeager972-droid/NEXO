@@ -1,7 +1,16 @@
 <?php
 /**
- * 06_RlsSecurityTest.php
- * Verifica RLS policies en tablas sensibles.
+ * =============================================================================
+ * 06_RlsSecurityTest.php — Test de Row-Level Security (RLS).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica en sql/nexo_full_migration.sql que:
+ *   - Tablas sensibles tengan ENABLE ROW LEVEL SECURITY.
+ *   - Las políticas filtren por school_id o get_current_school_id().
+ *   - No haya políticas abiertas (USING(true)) salvo jwt_blocklist.
+ *   - Exista la función get_current_school_id().
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

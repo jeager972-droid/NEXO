@@ -1,12 +1,50 @@
 <?php
 /**
- * worker_biometric.php — Reliable Queue Pattern (Zero-Data-Loss).
- * Usa LMOVE para mover atómicamente de ingest -> processing.
- * Solo elimina de processing tras commit() exitoso en PostgreSQL.
+ * =============================================================================
+ * workers/worker_biometric.php — Procesador de eventos biométricos (zero data loss).
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Consume trabajos de la cola `queue:biometric_ingest`, los mueve atómicamente a
+ * `queue:biometric_processing` mediante Lua, ejecuta la acción correspondiente
+ * (SYNC_ATTENDANCE, REGISTER_STUDENT, DELETE_STUDENT) y solo elimina el trabajo
+ * de `processing` tras commit exitoso. Incluye garbage collector de trabajos
+ * zombies y reintentos con DLQ.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   Redis queue:biometric_ingest
+ *        │
+ *        ▼
+ *   scriptReliablePop (LMOVE + timestamp)
+ *        │
+ *        ▼
+ *   processJob($job, $pdo)
+ *        │
+ *   ├── SYNC_ATTENDANCE  ──► INSERT biometric_events con fingerprint
+ *   ├── REGISTER_STUDENT ──► INSERT/UPDATE students + acudiente
+ *   └── DELETE_STUDENT   ──► UPDATE students SET active=FALSE
+ *        │
+ *        ▼
+ *   OK: lRem(processing); FAIL: requeue o DLQ
+ *        │
+ *   scriptGc cada 60s: reinserta zombies >300s
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - db.php : conexión PDO ($pdo).
+ *   - Redis : colas biometric_ingest, biometric_processing, biometric_dlq.
+ *   - pcntl : manejo de señales SIGTERM.
+ *
+ * Es utilizado por:
+ *   - api.php : encola trabajos desde /edge/ingest y /devices/poll fallback.
  */
 
 declare(ticks=1);
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../redis.php';
 
 // Configurar rol de sistema para workers (no bypass, usa school_id por contexto)
 try {
@@ -18,18 +56,23 @@ try {
 $shutdown = false;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
 
+/**
+ * Escribe un log del worker a error_log.
+ *
+ * @param string $e Evento.
+ * @param string $m Mensaje.
+ * @return void
+ */
 function logW(string $e, string $m): void {
     error_log("[BIOMETRIC_WORKER] {$e} | {$m}");
 }
 
-function getRedis() {
-    $r = new Redis();
-    // Timeout de 100ms para evitar bloqueos en workers de fondo
-    $r->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
-    if ($pass = getenv('REDIS_PASSWORD')) $r->auth($pass);
-    return $r;
-}
-
+/**
+ * Actualiza el heartbeat del worker en Redis.
+ *
+ * @param Redis $redis Conexión Redis.
+ * @return void
+ */
 function sendHeartbeat($redis) {
     try {
         $redis->set('worker:biometric:last_heartbeat', time());
@@ -38,6 +81,18 @@ function sendHeartbeat($redis) {
     }
 }
 
+/**
+ * Ejecuta la acción indicada en un trabajo biométrico.
+ *
+ * @param array $job Trabajo decodificado de Redis.
+ * @param PDO $conn Conexión PDO.
+ * @return bool True si se procesó correctamente; false para reencolar.
+ *
+ * Acciones:
+ *   - SYNC_ATTENDANCE: inserta evento biométrico con fingerprint (idempotente).
+ *   - REGISTER_STUDENT: upsert student + crea/actualiza acudiente.
+ *   - DELETE_STUDENT: desactiva estudiante y limpia biometric_hash.
+ */
 function processJob(array $job, PDO $conn): bool {
     $action = $job['action'] ?? 'UNKNOWN';
     $data   = $job['data'] ?? [];
@@ -227,7 +282,11 @@ LUA;
 $GC_MAX_AGE_SEC = (int)(getenv('BIOMETRIC_GC_MAX_AGE') ?: 300);
 
 logW('START', 'Biometric async worker started');
-$redis = getRedis();
+$redis = getRedisConnection();
+if (!$redis) {
+    logW('FATAL', 'Redis unavailable on startup');
+    exit(1);
+}
 $iterations = 0;
 $lastGc = 0;
 $lastHeartbeat = 0;

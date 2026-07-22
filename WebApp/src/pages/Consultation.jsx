@@ -1,3 +1,9 @@
+/**
+ * Consultation page / NEXO Institucional
+ * Responsabilidad: Catálogo de módulos de consulta filtrado por rol. Muestra análisis de
+ * riesgo (behaviorApi), datos dinámicos por módulo y abre ConsultationDrawer para detalles.
+ * Dependencias: React, react-router-dom, framer-motion, useAuth, behaviorApi, consultationsApi, studentsApi, ROLES.
+ */
 import { useState, useEffect } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';

@@ -1,3 +1,19 @@
+/**
+ * =============================================================================
+ * test_sqlite.cpp — Tests de SQLite con prepared statements (Catch2 v3).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica operaciones básicas de SQLite: apertura/creación de base de datos,
+ *   inserción y lectura con prepared statements, y correcta finalización de
+ *   recursos (sqlite3_finalize) incluso ante sentencias inválidas. Usa un
+ *   archivo temporal /tmp/nexo_test.db limpiado entre tests.
+ *
+ * DEPENDENCIAS:
+ *   - Catch2 v3
+ *   - SQLite3
+ *   - filesystem (C++17/20)
+ */
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_session.hpp>
 #include <sqlite3.h>

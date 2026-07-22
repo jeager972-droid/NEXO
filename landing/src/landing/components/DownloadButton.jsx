@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * DownloadButton.jsx — Botón de descarga animado para la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Renderiza un botón con efecto de rebote GSAP al hacer clic y abre el href
+ *   en una nueva pestaña. Usado actualmente para la tarjeta Android en la
+ *   sección de descargas. Implementado con forwardRef para exposición del DOM.
+ *
+ * DEPENDENCIAS:
+ *   - react (forwardRef, useRef, useImperativeHandle)
+ *   - gsap
+ * =============================================================================
+ */
+
 import { useRef, forwardRef, useImperativeHandle } from 'react'
 import gsap from 'gsap'
 

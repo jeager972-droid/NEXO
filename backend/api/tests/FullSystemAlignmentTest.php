@@ -1,7 +1,25 @@
 <?php
 /**
- * FullSystemAlignmentTest — Veredicto final de deploy
- * Verifica que TODO el backend PHP esté alineado con el SQL
+ * =============================================================================
+ * FullSystemAlignmentTest — Veredicto final de deploy.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Script autónomo (no PHPUnit) que compara el esquema SQL con TODO el código
+ *   PHP del backend (routes, workers, lib, api.php, etc.) y emite un veredicto
+ *   de si el sistema está listo para deploy. Verifica:
+ *   - Eliminación de SUPER_RECTOR e is_super_rector (SQL y PHP).
+ *   - Preservación de GUARDIAN, guardians y guardian_id en SQL/PHP/seed.
+ *   - Tablas referenciadas en PHP existen en SQL.
+ *   - Columnas en INSERTs PHP existen en SQL.
+ *   - Funciones SQL definidas.
+ *   - RLS en tablas críticas.
+ *   - Seed data alineada.
+ *   - Sintaxis PHP válida.
+ *   - Roles en español eliminados (fuera de normalizeRole).
+ *   - Permisos PHP existen en SQL.
+ *
+ * USO:
+ *   php tests/FullSystemAlignmentTest.php
  */
 
 class FullSystemAlignmentTest {

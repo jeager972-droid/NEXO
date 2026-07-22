@@ -1,3 +1,11 @@
+/**
+ * InstallPage / NEXO Institucional
+ * Responsabilidad: Guía de instalación PWA por plataforma. Detecta navegador/dispositivo,
+ * consume el prompt diferido de instalación, y muestra pasos manuales para iOS Safari o
+ * advertencias para Firefox. Redirige a /login si la plataforma no es válida.
+ * Dependencias: React, react-router-dom, lucide-react.
+ * Ruta: /install/:platform.
+ */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Download, CheckCircle, Globe, AlertCircle } from 'lucide-react'

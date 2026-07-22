@@ -1,7 +1,37 @@
 <?php
+/**
+ * =============================================================================
+ * routes/tracking.php — Gestión de seguimientos estudiantiles (casos).
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone endpoints CRUD para seguimientos de estudiantes:
+ *   - POST /tracking/start   : inicia un seguimiento, opcionalmente con motivo
+ *                              heredado de una notificación.
+ *   - POST /tracking/notes   : agrega nota y actualiza estado del seguimiento.
+ *   - GET  /tracking/details : detalle del seguimiento con notas.
+ *   - GET  /tracking/active  : lista de seguimientos con estado 'en proceso'.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación y roles.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: módulo de bienestar/psicoorientación.
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+/**
+ * Valida que un string sea un UUID v4 canónico.
+ *
+ * @param mixed $value Valor a validar.
+ * @return bool True si coincide con el patrón UUID v4.
+ */
 function isValidUUID($value) {
     return (bool) preg_match(
         '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',

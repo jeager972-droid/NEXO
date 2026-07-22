@@ -1,10 +1,39 @@
 <?php
-// routes/devices.php - Gestión de dispositivos EDGE
-// TODO: El endpoint POST /devices genera un token raw que el edge debería
-// usar para autenticarse (header X-Device-Signature o similar). Actualmente
-// el firmware edge no implementa esta autenticación; se asume confianza
-// por cifrado de payload. Implementar validación de token_hash en el
-// endpoint EDGE cuando se añada el soporte en el edge.
+/**
+ * =============================================================================
+ * routes/devices.php — Gestión de dispositivos EDGE (biométricos/M2M).
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone endpoints para administrar dispositivos edge, enviarles comandos y
+ * recibir heartbeats/polling:
+ *   - GET  /devices          : listar dispositivos de la escuela.
+ *   - POST /devices          : registrar dispositivo y generar token raw.
+ *   - DELETE /devices/{id}   : revocar dispositivo.
+ *   - POST /devices/command/{id} : enviar comando vía MQTT (fallback Redis).
+ *   - GET  /devices/commands : edge polling de comandos pendientes.
+ *   - POST /devices/ping     : heartbeat del edge.
+ *   - GET  /admin/devices    : health check global (RECTOR).
+ *
+ * NOTA IMPORTANTE
+ * ---------------
+ * El token raw generado en POST /devices se entrega al administrador para
+ * configurar el edge. El edge usa X-Device-Token para autenticar /devices/commands
+ * y /devices/ping. La validación se realiza con password_verify contra token_hash.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación, roles, getRedisConnection.
+ *   - mqtt_publisher.php (opcional) : publishDeviceCommand si existe.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: panel de dispositivos.
+ *   - Edge devices: endpoints /devices/commands y /devices/ping.
+ */
+
 global $cleanPath, $conn, $method, $input;
 require_once __DIR__ . '/_auth_middleware.php';
 

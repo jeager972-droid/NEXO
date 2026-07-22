@@ -3,6 +3,15 @@
 #include <string>
 #include <optional>
 
+/**
+ * =============================================================================
+ * NexoResult.h — Monada de resultado y enumeración de errores del edge.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Define NexoError (errores típicos del edge) y la plantilla NexoResult<T>
+ *   que encapsula un valor opcional, un código de error y un mensaje. Soporta
+ *   el especializado NexoResult<void> para operaciones sin retorno de dato.
+ */
 enum class NexoError {
     None,
     NotInitialized,

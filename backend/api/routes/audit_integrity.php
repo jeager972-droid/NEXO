@@ -1,12 +1,49 @@
 <?php
+/**
+ * =============================================================================
+ * routes/audit_integrity.php — Validación de integridad de cadena de auditoría.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone un endpoint GET para que RECTOR o COORDINATOR verifiquen que la cadena
+ * de hashes de auditoría de su escuela no ha sido alterada. Delega la validación
+ * criptográfica a la función PostgreSQL fn_validate_audit_chain.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   GET /audit/integrity
+ *        │
+ *        ▼
+ *   requireAuth(['RECTOR','COORDINATOR'])
+ *        │
+ *        ▼
+ *   SELECT fn_validate_audit_chain($schoolId)
+ *        │
+ *        ▼
+ *   Decodifica JSON de resultado
+ *        │
+ *   ├── status='ok'    ──► {integrity:'valid', total_records}
+ *   └── status!='ok'   ──► {integrity:'broken', broken_at_audit_id, ...}
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación y autorización.
+ *   - $conn : conexión PDO.
+ *   - Función PostgreSQL fn_validate_audit_chain.
+ *
+ * Es utilizado por:
+ *   - backend/api/api.php y frontend panel de auditoría.
+ */
+
 global $cleanPath, $conn, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
-/**
- * T4: Validación de Integridad de la Cadena de Auditoría
- * GET /audit/integrity
- * Requiere rol RECTOR o COORDINATOR
- */
+// ============================================================================
+// GET /audit/integrity — Verifica la cadena de hashes de global_audit_logs.
+// Requiere rol RECTOR o COORDINATOR.
+// ============================================================================
 if ($cleanPath === '/audit/integrity' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     

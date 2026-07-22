@@ -1,7 +1,16 @@
 <?php
 /**
- * 08_SeedDataTest.php
- * Verifica seed data completa y consistente.
+ * =============================================================================
+ * 08_SeedDataTest.php — Test de consistencia del seed data.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica en sql/nexo_seed.sql que:
+ *   - Existan todos los roles esperados y un usuario admin RECTOR.
+ *   - Existan guardians, relaciones, escuela, ubicación, mensajes Twilio.
+ *   - Las tablas referenciadas existan en nexo_full_migration.sql.
+ *   - Se usen uuid_generate_v4() y ON CONFLICT para idempotencia.
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

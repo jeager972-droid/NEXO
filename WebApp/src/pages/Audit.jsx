@@ -1,3 +1,11 @@
+/**
+ * Audit page / NEXO Institucional
+ * Responsabilidad: Panel de auditoría para SUPER_RECTOR/RECTOR. Muestra módulos de reporte,
+ * drawer con filtros (fechas, grupo, estudiante, personal), tabla de resultados y
+ * exportación manual a CSV/PDF por submódulo.
+ * Dependencias: React, react-router-dom, framer-motion, auditApi, AuthContext, formatters.
+ * Subcomponentes: AuditDrawer, SearchableSelect, ExportModalContent.
+ */
 import { useState, useEffect, useContext, useRef } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
 import {

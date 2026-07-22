@@ -1,8 +1,36 @@
 <?php
-// routes/consultations.php - Motor de consultas dinámicas unificado
+/**
+ * =============================================================================
+ * routes/consultations.php — Motor de consultas dinámicas unificado.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone POST /consultations/query, un endpoint genérico que retorna datos
+ * tabulados para distintos módulos del frontend según el parámetro `module`.
+ * Soporta módulos de asistencia, disciplina, mensajería, estudiantes,
+ * personal, métricas institucionales, auditoría, etc.
+ *
+ * Restricciones de rol:
+ *   - Los docentes/psicoorientadores deben tener el grupo asignado en schedules.
+ *   - Si no envían group_name, se fuerza a filtrar por sus grupos propios.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación y permisos.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: tablas dinámicas y reportes (ConsultationViewer, etc.).
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+// ============================================================================
+// POST /consultations/query — Motor de consultas por módulo.
+// ============================================================================
 if ($cleanPath === '/consultations/query') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];

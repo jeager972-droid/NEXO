@@ -1,3 +1,23 @@
+/**
+ * =============================================================================
+ * sqlite_manager.cpp — Implementación de la base de datos local SQLite.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Abre/crea la base de datos local del edge, maneja corrupción renombrando a
+ *   .bak, aplica pragmas WAL/synchronous/foreign_keys y crea tablas. Expone
+ *   CRUD de estudiantes, patrones de asistencia, inasistencias (legacy), y
+ *   audit_trail para sincronización con la nube. Los templates se cifran con
+ *   Encryption usando un IV aleatorio de 12 bytes.
+ *
+ * SECCIONES:
+ *   1. initialize/close/factoryReset/createTables
+ *   2. executeWithRetry() — manejo SQLITE_BUSY/LOCKED con backoff exponencial
+ *   3. Estudiantes (save, get, delete, nextHuellaID)
+ *   4. Patrones de asistencia
+ *   5. Auditoría pendiente (save, getPending, clear, attempts, error)
+ *   6. Funciones legacy/config (stubs)
+ */
+
 #include "base_de_datos/sqlite_manager.h"
 #include "base_de_datos/encryption.h"
 #include "utils/Logger.h"

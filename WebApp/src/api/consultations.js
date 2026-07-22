@@ -1,3 +1,9 @@
+/**
+ * consultations API / NEXO Institucional
+ * Responsabilidad: Cliente de consulta general de módulos institucionales y búsqueda
+ * de items individuales. Soporta cancelación por AbortSignal.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const consultationsApi = {

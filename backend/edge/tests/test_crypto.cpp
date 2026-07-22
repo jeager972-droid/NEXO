@@ -1,3 +1,20 @@
+/**
+ * =============================================================================
+ * test_crypto.cpp — Tests de criptografía AES-256-GCM con Catch2 v3.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica el correcto funcionamiento de cifrado/descifrado AES-256-GCM
+ *   usando OpenSSL directamente. Incluye helpers de base64 y tests para:
+ *   - cifrado/descifrado redondeado,
+ *   - IVs distintos producen cifrados distintos,
+ *   - clave/IV/tag incorrectos fallan autenticación,
+ *   - cadenas vacías y datos grandes (10 KB).
+ *
+ * DEPENDENCIAS:
+ *   - Catch2 v3
+ *   - OpenSSL (libcrypto)
+ */
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_session.hpp>
 #include <openssl/evp.h>

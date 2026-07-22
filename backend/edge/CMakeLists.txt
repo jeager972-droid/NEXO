@@ -1,3 +1,28 @@
+# =============================================================================
+# CMakeLists.txt — Configuración de build del backend edge NEXO.
+# =============================================================================
+# RESPONSABILIDAD:
+#   Define el ejecutable `nexo-edge`, sus fuentes, estándar C++20, directorios
+#   de salida, dependencias externas (OpenSSL, CURL, SQLite3, spdlog,
+#   nlohmann_json, mosquitto, gpiod opcional, ZKTeco opcional) y el target de
+#   tests `nexo-tests` con Catch2 v3.
+#
+# FLUJO DE BUILD:
+#   cmake --preset dev-x86      -> configura build/dev
+#   cmake --build build/dev     -> compila nexo-edge + nexo-tests
+#   ctest --test-dir build/dev  -> ejecuta tests Catch2
+#
+# DEPENDENCIAS OBLIGATORIAS:
+#   - OpenSSL, libcurl, SQLite3, spdlog, nlohmann_json, libmosquitto
+# DEPENDENCIAS OPCIONALES:
+#   - libgpiod (GPIO RPi4)
+#   - libzkfp/libzkfptype (sensor ZKTeco ZK9500)
+#
+# NOTAS:
+#   - nlohmann_json y Catch2 se descargan con FetchContent.
+#   - El ejecutable se genera en ${CMAKE_BINARY_DIR}/bin.
+# =============================================================================
+
 cmake_minimum_required(VERSION 3.20)
 project(nexo-edge VERSION 0.2.0 LANGUAGES CXX)
 

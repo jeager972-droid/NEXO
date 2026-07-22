@@ -1,3 +1,9 @@
+/**
+ * dashboard API / NEXO Institucional
+ * Responsabilidad: Cliente para estadísticas del dashboard, detalles por grupo/categoría
+ * y listado de eventos recientes.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const dashboardApi = {

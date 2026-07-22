@@ -1,6 +1,28 @@
 #!/bin/bash
-# Install dependencies for NEXO Edge on Fedora/RHEL/CentOS (x86_64)
-# Run with: sudo bash scripts/install_deps_fedora.sh
+# =============================================================================
+# install_deps_fedora.sh — Instalador de dependencias para NEXO Edge en Fedora/RHEL/CentOS.
+# =============================================================================
+# RESPONSABILIDAD:
+#   Instala, mediante dnf, las dependencias nativas necesarias para compilar el
+#   backend edge en distribuciones Fedora/RHEL/CentOS x86_64. Libgpiod es
+#   específico de ARM64/Raspberry Pi 4; en x86_64 se instala pero no se usa.
+#
+# USO:
+#   sudo bash scripts/install_deps_fedora.sh
+#
+# DEPENDENCIAS INSTALADAS:
+#   - gcc-c++, cmake, clang-tools-extra, git
+#   - sqlite-devel
+#   - openssl-devel
+#   - libcurl-devel
+#   - libgpiod-devel (GPIO ARM64)
+#   - spdlog-devel
+#   - catch2-devel (falla silenciosa a header-only si no está en repos)
+#
+# NOTAS:
+#   - Requiere privilegios de root.
+#   - `set -e` interrumpe la ejecución en el primer error.
+# =============================================================================
 
 set -e
 

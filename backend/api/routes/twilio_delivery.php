@@ -1,7 +1,32 @@
 <?php
+/**
+ * =============================================================================
+ * routes/twilio_delivery.php — Webhook de actualización de estado de Twilio.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Recibe callbacks de estado de Twilio (MessageStatus) para mensajes enviados.
+ * Valida la firma si verifyTwilioSignature() está disponible, luego actualiza
+ * delivery_status y metadata_json en twilio_messages. Al ser un proceso del
+ * sistema, bypassa RLS con app.current_role = 'SYSTEM_WORKER'.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - $conn : conexión PDO global.
+ *   - verifyTwilioSignature() (definida en routes/misc.php si está cargada).
+ *   - securityLog() para auditoría.
+ *
+ * Es utilizado por:
+ *   - Twilio: StatusCallback configurado en lib/twilio.php y workers.
+ */
+
 global $cleanPath, $conn, $method;
 
-// Health check endpoint para verificar que el webhook sea accesible
+// ============================================================================
+// GET  /webhooks/twilio/status — Health check del webhook.
+// ============================================================================
 if ($cleanPath === '/webhooks/twilio/status' && $method === 'GET') {
     http_response_code(200);
     echo json_encode(['status' => 'ok', 'message' => 'Webhook endpoint is accessible']);

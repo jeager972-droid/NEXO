@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * NodeSection.jsx — Sección "El nodo" de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra el modelo 3D del nodo NEXO con hotspots interactivos. Al tocar un
+ *   hotspot se actualiza el panel de especificaciones con datos de materiales,
+ *   batería, conectividad y encriptación. Usa NexoCanvas con type='solo'.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap / ScrollTrigger
+ *   - NexoCanvas, useReveal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useState, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'

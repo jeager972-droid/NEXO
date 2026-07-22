@@ -1,7 +1,23 @@
 -- =============================================================================
--- NEXO SEED DATA — Datos de simulación consolidados
--- Ejecutar: psql $DATABASE_URL -f nexo_seed.sql
--- Requiere: nexo_full_migration.sql ejecutado previamente
+-- NEXO SEED DATA — Datos de simulación/desarrollo consolidados
+-- =============================================================================
+-- RESPONSABILIDAD:
+--   Inserta datos mínimos de ejemplo para desarrollo y demo: departamento,
+--   municipio, escuela, roles, permisos, usuarios administrativos (todos con
+--   contraseña 'admin123'), aulas, grupos académicos, asignaturas, horarios,
+--   estudiantes, acudientes, dispositivos edge y eventos biométricos de prueba.
+--
+-- EJECUTAR:
+--   psql $DATABASE_URL -f nexo_seed.sql
+--
+-- REQUISITOS:
+--   - nexo_full_migration.sql ya aplicado.
+--   - PostgreSQL 15+ con uuid-ossp/pgcrypto.
+--
+-- ADVERTENCIAS:
+--   - Contraseñas en texto plano/hash bcrypt predecible: NO usar en producción.
+--   - Datos de estudiantes y eventos son ficticios.
+--   - ON CONFLICT DO NOTHING evita duplicados si se reejecuta.
 -- =============================================================================
 
 -- =============================================================================

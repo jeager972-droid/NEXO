@@ -1,3 +1,10 @@
+/**
+ * Seguimiento page / NEXO Institucional
+ * Responsabilidad: Listado de seguimientos estudiantiles activos, con búsqueda, inicio
+ * automático vía query params y apertura de TrackingModal para revisar cada proceso.
+ * Escucha evento nexo:tracking-refresh para recargar.
+ * Dependencias: React, react-router-dom, framer-motion, trackingApi, TrackingModal.
+ */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { trackingApi } from '../api/tracking';

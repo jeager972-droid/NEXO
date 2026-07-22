@@ -1,7 +1,16 @@
 <?php
 /**
- * 03_ConstraintTest.php
- * Verifica constraints CHECK, UNIQUE, NOT NULL, DEFAULT.
+ * =============================================================================
+ * 03_ConstraintTest.php — Test de constraints del esquema SQL.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Verifica en sql/nexo_full_migration.sql la existencia de:
+ *   - Constraints CHECK para enums (risk_level, platform, event_type, severity).
+ *   - Constraints UNIQUE requeridos (users, students, guardian_student, etc.).
+ *   - NOT NULL en columnas críticas (password_hash, document_number, etc.).
+ *   - DEFAULT NOW() para timestamps.
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

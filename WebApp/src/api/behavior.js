@@ -1,3 +1,8 @@
+/**
+ * behavior API / NEXO Institucional
+ * Responsabilidad: Cliente para análisis de riesgo conductual de estudiantes.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 export const behaviorApi = {

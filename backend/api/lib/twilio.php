@@ -1,13 +1,39 @@
 <?php
 /**
- * lib/twilio.php — Helpers compartidos de Twilio para NEXO
+ * =============================================================================
+ * lib/twilio.php — Helpers compartidos de Twilio para NEXO.
+ * =============================================================================
  *
- * Utilizado por:
- *   - routes/operations.php  (envíos síncronos en requests HTTP)
- *   - worker_twilio.php       (procesamiento asíncrono de la cola)
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Centraliza la lógica de normalización de números WhatsApp, construcción del
+ * URL de status callback, envío directo a la API de Twilio (con fallback a
+ * template fuera de ventana de 24h), HTTP POST interno y persistencia de
+ * mensajes en twilio_messages.
+ *
+ * Funciones exportadas:
+ *   - normalizeWhatsAppPhone(string $value): string
+ *   - getTwilioStatusCallbackUrl(): ?string
+ *   - sendTwilioDirect(string $to, string $body): array
+ *   - _twilioHttpPost(string $url, array $payload, string $sid, string $token): array
+ *   - logTwilioMessage(...): void
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - Variables de entorno: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
+ *     TWILIO_WHATSAPP_FROM, TWILIO_FROM_NUMBER, TWILIO_WEBHOOK_URL_BASE,
+ *     APP_URL, TWILIO_WHATSAPP_TEMPLATE_SID.
+ *   - securityLog() (definida en api.php u otros helpers).
+ *   - cURL para llamadas a la API de Twilio.
+ *
+ * Es utilizado por:
+ *   - routes/operations.php : envíos sincrónicos desde requests HTTP.
+ *   - workers/worker_twilio.php : procesamiento asíncrono de la cola.
+ *   - routes/users.php : envío de OTP por WhatsApp.
  *
  * NUNCA incluir esto directamente desde rutas públicas.
- * Requiere: $conn (PDO) en contexto global o pasado explícitamente.
+ * Requiere: $conn (PDO) en contexto global o pasado explícitamente para logTwilioMessage.
  */
 
 // ── Normalización de teléfono ─────────────────────────────────────────────────

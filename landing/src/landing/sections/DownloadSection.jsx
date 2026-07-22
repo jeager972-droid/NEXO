@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * DownloadSection.jsx — Sección de descarga de aplicaciones de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Presenta tarjetas de descarga para Android, iOS, Windows, Mac y Linux con
+ *   iconos SVG personalizados. Aplica efectos de hover/tilt GSAP en desktop y
+ *   responsive grid en móvil. Usa AnimatedDownloadButton para Android.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap
+ *   - useReveal, useStickyScroll, AnimatedDownloadButton
+ * =============================================================================
+ */
+
 import { useRef, useEffect } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'

@@ -1,9 +1,33 @@
 <?php
-// routes/behavior.php - Métricas de comportamiento y riesgo estudiantil
+/**
+ * =============================================================================
+ * routes/behavior.php — Métricas de comportamiento y riesgo estudiantil.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone GET /behavior/risk que retorna los estudiantes con nivel de riesgo
+ * HIGH o CRITICAL previamente calculados por RiskScoreEngine. Si aún no existen
+ * métricas para la escuela, informa al cliente y sugiere llamar /admin/recalc-risk.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación.
+ *   - lib/RiskScoreEngine.php : motor de riesgo (solo como referencia; no lo invoca).
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Panel de comportamiento / riesgo del frontend.
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 require_once __DIR__ . '/../lib/RiskScoreEngine.php';
 
+// ============================================================================
+// GET /behavior/risk — Lista de estudiantes con riesgo HIGH/CRITICAL.
+// ============================================================================
 if ($cleanPath === '/behavior/risk') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'] ?? null;

@@ -1,3 +1,10 @@
+/**
+ * TrackingModal / NEXO Institucional
+ * Responsabilidad: Modal de detalle de seguimiento estudiantil. Permite iniciar un
+ * seguimiento, agregar notas, mostrar score de riesgo y cerrar el proceso con motivo.
+ * Dependencias: React, framer-motion, lucide-react, trackingApi.
+ * Props: { trackingId?, studentId, studentName, metadata?, onClose, onRefresh }.
+ */
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Activity, UserCheck, Search, Info } from 'lucide-react';

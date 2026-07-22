@@ -1,3 +1,20 @@
+/**
+ * =============================================================================
+ * vite.config.js — Configuración de build para la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Configura Vite para desarrollo y producción: plugins de React, Tailwind v4,
+ *   compresión gzip/brotli, code-splitting manual por vendor, optimizaciones
+ *   Terser (drop_console, drop_debugger) y salida a `dist/`.
+ *
+ * DEPENDENCIAS:
+ *   - @vitejs/plugin-react
+ *   - @tailwindcss/vite
+ *   - vite-plugin-compression
+ *   - terser
+ * =============================================================================
+ */
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'

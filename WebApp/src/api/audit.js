@@ -1,3 +1,10 @@
+/**
+ * audit API / NEXO Institucional
+ * Responsabilidad: Cliente para consultas de auditoría: asistencia, disciplina,
+ * permisos, actividad docente, alertas SOS, histórico y reportes. Incluye helpers
+ * para grupos, estudiantes y personal.
+ * Dependencias: axios client.js.
+ */
 import client from './client';
 
 const get = async (path, params = {}) => {

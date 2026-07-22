@@ -1,3 +1,9 @@
+/**
+ * PwaInstallPrompt / NEXO Institucional
+ * Responsabilidad: Botón flotante que captura el evento beforeinstallprompt del navegador
+ * y permite instalar la PWA. Escucha appinstalled para ocultar el botón.
+ * Dependencias: React, navegador APIs (beforeinstallprompt, appinstalled).
+ */
 import { useEffect, useState } from 'react'
 
 function PwaInstallPrompt() {

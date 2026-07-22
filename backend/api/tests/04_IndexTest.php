@@ -1,7 +1,16 @@
 <?php
 /**
- * 04_IndexTest.php
- * Verifica índices exhaustivamente.
+ * =============================================================================
+ * 04_IndexTest.php — Test de índices del esquema SQL.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Parsea sql/nexo_full_migration.sql para verificar:
+ *   - No hay nombres de índice duplicados.
+ *   - Existen índices requeridos (users_school, students_school,
+ *     biometric_events_school_type_ts, telemetry, contact_leads, etc.).
+ *   - Al menos un índice GIN para JSONB y un índice parcial (WHERE).
+ *
+ * NOTA: test estático; no requiere PostgreSQL.
  */
 require_once __DIR__ . '/../vendor/autoload.php';
 

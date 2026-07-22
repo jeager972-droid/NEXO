@@ -1,5 +1,28 @@
+-- =============================================================================
 -- NEXO Full Migration | Idempotent | PostgreSQL 15+
--- Run: psql $DATABASE_URL -f nexo_full_migration.sql
+-- =============================================================================
+-- RESPONSABILIDAD:
+--   Crea el esquema de base de datos completo y autoritativo para NEXO:
+--   tablas base, índices, constraints, particiones por rango (event_timestamp,
+--   detected_at, sent_at, executed_at, emitted_at), funciones helper,
+--   triggers, Row-Level Security (RLS) y seed mínimo. También crea la tabla
+--   schema_migrations para tracking de cambios futuros.
+--
+-- EJECUTAR:
+--   psql $DATABASE_URL -f nexo_full_migration.sql
+--
+-- REQUISITOS:
+--   - PostgreSQL 15+ con extensiones uuid-ossp y pgcrypto.
+--   - Variables de entorno APP_NEXO_HMAC_SECRET / NEXO_HMAC_SECRET usadas por
+--     triggers y funciones de hash chain (configuradas luego en db.php).
+--
+-- NOTAS:
+--   - Idempotente: usa CREATE IF NOT EXISTS / ON CONFLICT.
+--   - Particiones: biometric_events, attendance_incidents, internal_messages,
+--     twilio_messages, user_commands, sos_alerts.
+--   - RLS: todas las tablas multi-tenant tienen ENABLE ROW LEVEL SECURITY y
+--     políticas basadas en app.current_school_id / app.current_role.
+-- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

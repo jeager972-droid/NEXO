@@ -1,3 +1,10 @@
+/**
+ * Layout / NEXO Institucional
+ * Responsabilidad: Esqueleto de la aplicación autenticada: sidebar, header con búsqueda
+ * global de módulos/comandos, notificaciones, menú de usuario y transiciones de página.
+ * Excluye de la búsqueda a SUPER_RECTOR/RECTOR. Polling de notificaciones cada 30s.
+ * Dependencias: react-router-dom, framer-motion, useAuth, useTheme, Sidebar, roles config, notificationsApi.
+ */
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';

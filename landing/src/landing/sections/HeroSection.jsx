@@ -1,3 +1,18 @@
+/**
+ * =============================================================================
+ * HeroSection.jsx — Sección hero de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Presenta el mensaje principal de NEXO: titular animado por líneas,
+ *   subtítulo, CTA que abre ContactModal e imagen/logo del nodo. Aplica
+ *   animación cinematográfica GSAP en desktop y layout alternativo en mobile.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap
+ *   - ContactModal, useStickyScroll, Link (react-router-dom)
+ * =============================================================================
+ */
+
 import { useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'

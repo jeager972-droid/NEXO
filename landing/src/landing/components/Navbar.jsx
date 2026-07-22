@@ -1,3 +1,16 @@
+/**
+ * =============================================================================
+ * Navbar.jsx — Barra de navegación flotante de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra el logo y enlaces de anclaje a las secciones principales de la
+ *   landing. Diseño limpio sin CTAs; estilos definidos en index.css.
+ *
+ * DEPENDENCIAS:
+ *   - Ninguna (componente puro)
+ * =============================================================================
+ */
+
 // CAMBIO 1: Navbar limpio — solo logo + links internos. Sin CTAs.
 export default function Navbar() {
   return (

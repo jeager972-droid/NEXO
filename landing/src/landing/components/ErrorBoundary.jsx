@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * ErrorBoundary.jsx — Límite de error React para la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Captura errores de renderizado en cualquier componente hijo y muestra una
+ *   pantalla de error estilizada en lugar de dejar la aplicación en blanco.
+ *   Loguea el error en consola para facilitar el debugging.
+ *
+ * DEPENDENCIAS:
+ *   - react
+ * =============================================================================
+ */
+
 import React from 'react'
 
 export default class ErrorBoundary extends React.Component {

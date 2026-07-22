@@ -1,9 +1,21 @@
 <?php
 /**
- * NEXO Integration Test — Etapa 5
- * Pruebas estáticas de consistencia SQL↔PHP sin necesidad de DB/Redis.
- * 
- * Uso: php tests/integration_test.php
+ * =============================================================================
+ * integration_test.php — Test de integración estático (Etapa 5).
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Ejecuta pruebas estáticas de consistencia SQL↔PHP sin necesidad de
+ *   PostgreSQL ni Redis corriendo. Verifica:
+ *   - Roles esperados en SQL.
+ *   - Permisos esperados en SQL.
+ *   - Tablas críticas en SQL.
+ *   - Funciones de migración y RLS.
+ *   - Sintaxis PHP válida en todo el backend (php -l).
+ *   - Roles canónicos en _auth_middleware.php y eliminación de roles en español.
+ *   - Uso de UUID para primary keys.
+ *
+ * USO:
+ *   php tests/integration_test.php
  */
 
 $passed = 0;

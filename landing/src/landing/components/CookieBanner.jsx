@@ -1,3 +1,20 @@
+/**
+ * =============================================================================
+ * CookieBanner.jsx — Banner de consentimiento de cookies.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Muestra un banner flotante con opciones para aceptar todas, rechazar
+ *   (solo necesarias) o abrir el gestor de cookies. Incluye animación de entrada
+ *   y estilos responsive.
+ *
+ * PROPS:
+ *   - onAcceptAll, onRejectAll, onManage
+ *
+ * DEPENDENCIAS:
+ *   - lucide-react (Cookie)
+ * =============================================================================
+ */
+
 import { Cookie } from 'lucide-react'
 
 const CookieBanner = ({ onAcceptAll, onRejectAll, onManage }) => {

@@ -1,3 +1,10 @@
+/**
+ * API client / NEXO Institucional
+ * Responsabilidad: Instancia global de Axios con baseURL, envío automático de cookies
+ * HttpOnly, CSRF header, timeout adaptativo para rutas lentas, interceptores de
+ * telemetría y manejo global de 401 (redirige a /login).
+ * Dependencias: axios.
+ */
 import axios from 'axios';
 
 

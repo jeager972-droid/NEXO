@@ -1,7 +1,33 @@
 <?php
+/**
+ * =============================================================================
+ * routes/groups.php — Gestión de grupos académicos.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Expone GET /groups para listar grupos académicos de una escuela. Soporta el
+ * parámetro teacher_only: cuando es verdadero y el usuario es TEACHER/COUNSELOR,
+ * devuelve solo los grupos asignados en schedules. De lo contrario devuelve
+ * todos los grupos con conteo de estudiantes.
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : autenticación.
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: selectores de grupo, dashboard, permisos y citaciones.
+ */
+
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
+// ============================================================================
+// GET /groups — Listado de grupos académicos.
+// Query: ?teacher_only=1 para filtrar por grupos asignados al docente.
+// ============================================================================
 if ($cleanPath === '/groups') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];

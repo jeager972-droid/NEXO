@@ -1,3 +1,9 @@
+/**
+ * tracking API / NEXO Institucional
+ * Responsabilidad: Cliente para gestión de seguimiento estudiantil: iniciar, listar
+ * activos, agregar notas y obtener detalles.
+ * Dependencias: axios client.js.
+ */
 import apiClient from './client';
 
 export const trackingApi = {

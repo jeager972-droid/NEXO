@@ -1,3 +1,20 @@
+/**
+ * =============================================================================
+ * encryption.cpp — Implementación de criptografía AES-256-GCM del edge.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Provee cifrado/descifrado AES-256-GCM usando OpenSSL, codificación base64,
+ *   y persistencia/lectura de clave y token API en SQLite. Usa mlock/munlock
+ *   para intentar evitar que la clave sea swappeada y OPENSSL_cleanse para
+ *   limpiar la memoria al destruir.
+ *
+ * SECCIONES:
+ *   1. Base64 helpers
+ *   2. Constructor/destructor y gestión segura de la clave
+ *   3. initialize/provision/isKeyProvisioned
+ *   4. encrypt/decrypt AES-256-GCM (IV 12 bytes + tag 16 bytes)
+ */
+
 #include "base_de_datos/encryption.h"
 #include "base_de_datos/sqlite_manager.h"
 #include "utils/Logger.h"

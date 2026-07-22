@@ -1,17 +1,68 @@
 <?php
 /**
- * NEXO Twilio Worker — Outbox Pattern
- * Ejecutar bajo supervisor: php worker_twilio.php
+ * =============================================================================
+ * workers/worker_twilio.php — Worker de envío de WhatsApp (Outbox Pattern).
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Consume trabajos de la cola `queue:twilio` y de la cola con score
+ * `queue:twilio:delayed`, envía mensajes WhatsApp a través de la API de Twilio,
+ * actualiza delivery_status en twilio_messages y maneja reintentos con backoff
+ * exponencial. Implementa deduplicación por 30s y leaky bucket rate limiter.
+ *
+ * FLUJO GENERAL
+ * -------------
+ *   Redis queue:twilio / queue:twilio:delayed
+ *        │
+ *        ▼
+ *   processJob($job, $conn, $redis, ...)
+ *        │
+ *   ├── dedup check
+ *   ├── rate limit sleep
+ *   ├── sendTwilioWhatsAppSmart()
+ *   │    ├── intenta texto libre
+ *   │    └── fallback a template si 63016/63015
+ *   └── UPDATE twilio_messages (SENT o FAILED_PERMANENT)
+ *        │
+ *   requeue con delay exponencial si falla
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - db.php : conexión PDO ($pdo).
+ *   - lib/twilio.php : normalizeWhatsAppPhone, getTwilioStatusCallbackUrl,
+ *                      sendTwilioDirect, logTwilioMessage.
+ *   - Redis : colas queue:twilio y queue:twilio:delayed.
+ *
+ * Es utilizado por:
+ *   - Rutas que llaman enqueueTwilioJob()/rPush('queue:twilio', ...).
  */
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../redis.php';
 require_once __DIR__ . '/../lib/twilio.php'; // normalizeWhatsAppPhone, getTwilioStatusCallbackUrl, sendTwilioDirect, logTwilioMessage
 
-// securityLog se mantiene local: en el worker escribe a stderr, no a DB
+/**
+ * Escribe un evento de seguridad del worker a stderr.
+ *
+ * @param string $event Tipo de evento.
+ * @param string $details Detalles.
+ * @return void
+ */
 function securityLog($event, $details = '') {
     $fallbackMsg = sprintf("[%s] [EVENT:%s] [DETAILS:%s]\n", gmdate('Y-m-d H:i:s'), $event, $details);
     file_put_contents('php://stderr', $fallbackMsg);
 }
 
+/**
+ * Construye el payload x-www-form-urlencoded para la API Messages de Twilio.
+ *
+ * @param string $to Número destino normalizado.
+ * @param string $body Cuerpo del mensaje.
+ * @param string|null $templateSid SID de template (fallback 24h window).
+ * @param array|null $templateVars Variables del template.
+ * @return array Payload listo para http_build_query.
+ */
 function buildTwilioPayload($to, $body, $templateSid = null, $templateVars = null) {
     $from = getenv('TWILIO_WHATSAPP_FROM') ?: getenv('TWILIO_FROM_NUMBER');
     $payload = [
@@ -38,6 +89,12 @@ function buildTwilioPayload($to, $body, $templateSid = null, $templateVars = nul
     return $payload;
 }
 
+/**
+ * Ejecuta POST a la API Messages de Twilio con cURL.
+ *
+ * @param array $payload Payload form-urlencoded.
+ * @return array {ok, error, sid, twilio_code?}.
+ */
 function sendTwilioWhatsAppRequest($payload) {
     $sid   = getenv('TWILIO_ACCOUNT_SID');
     $token = getenv('TWILIO_AUTH_TOKEN');
@@ -73,8 +130,13 @@ function sendTwilioWhatsAppRequest($payload) {
 }
 
 /**
- * Envía mensaje de WhatsApp. Intenta texto libre primero; si falla por 63016
- * (fuera de ventana de 24h), reintenta con template si está configurado.
+ * Envía mensaje WhatsApp intentando texto libre; si falla por 63016/63015
+ * (fuera de ventana de 24h o sandbox), reintenta con template configurado.
+ *
+ * @param string $to Número destino.
+ * @param string $body Cuerpo del mensaje.
+ * @param string $typeCode Código de tipo (no usado directamente, legacy).
+ * @return array Resultado del envío.
  */
 function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
     // 1) Intentar mensaje de sesión (texto libre)
@@ -104,20 +166,33 @@ function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
     return $send;
 }
 
-// Backwards compat
+/**
+ * Alias hacia atrás para compatibilidad.
+ *
+ * @param string $to Número destino.
+ * @param string $body Cuerpo del mensaje.
+ * @return array Resultado del envío.
+ */
 function sendTwilioWhatsAppDirect($to, $body) {
     return sendTwilioWhatsAppSmart($to, $body);
 }
 
-function connectRedis() {
-    $redis = new Redis();
-    // Timeout de 100ms para evitar bloqueos en workers de fondo
-    $redis->connect(getenv('REDISHOST') ?: '127.0.0.1', getenv('REDISPORT') ?: 6379, 0.1);
-    if ($pass = getenv('REDIS_PASSWORD')) $redis->auth($pass);
-    $redis->select((int)(getenv('REDIS_DB') ?: 0));
-    return $redis;
-}
-
+/**
+ * Procesa un trabajo de Twilio: envía mensaje, actualiza DB y maneja reintentos.
+ *
+ * @param array $job Trabajo decodificado de Redis.
+ * @param PDO $conn Conexión PDO.
+ * @param Redis $redis Conexión Redis.
+ * @param string $delayQueue Nombre de la cola ZSET para reintentos.
+ * @param float $lastSend Timestamp del último envío (por referencia).
+ * @param float $sendDelay Mínimo intervalo entre envíos (leaky bucket).
+ * @return void
+ *
+ * Efectos secundarios:
+ *   - Actualiza twilio_messages con SENT o FAILED_PERMANENT.
+ *   - Reencola en $delayQueue con backoff exponencial hasta 5 intentos.
+ *   - Setea clave dedup por 30s en Redis tras envío exitoso.
+ */
 function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     $to           = $job['to'] ?? '';
     $body         = $job['body'] ?? '';
@@ -216,7 +291,10 @@ try {
 }
 
 try {
-    $redis = connectRedis();
+    $redis = getRedisConnection();
+    if (!$redis) {
+        throw new Exception('Redis unavailable on startup');
+    }
 } catch (Exception $e) {
     securityLog('TWILIO_WORKER_FATAL', "Failed to connect to Redis on startup: " . $e->getMessage());
     exit(1);

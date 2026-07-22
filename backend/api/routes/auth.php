@@ -1,9 +1,56 @@
 <?php
-global $cleanPath, $conn, $input, $method;
+/**
+ * =============================================================================
+ * routes/auth.php — Autenticación de usuarios y gestión de sesiones JWT.
+ * =============================================================================
+ *
+ * RESPONSABILIDAD DEL ARCHIVO
+ * ----------------------------
+ * Gestiona el ciclo de vida de autenticación:
+ *   - POST /auth/login  : valida credenciales, emite JWT (o solicita 2FA).
+ *   - POST /auth/verify-2fa : valida código de doble factor y emite JWT.
+ *   - POST /auth/logout : revoca el JWT actual y limpia la cookie.
+ *   - GET  /auth/me     : retorna el usuario de la sesión activa.
+ *
+ * FLUJO GENERAL (login sin 2FA)
+ * -----------------------------
+ *   POST /auth/login
+ *        │
+ *        ▼
+ *   isLoginThrottled() ──► carga usuario ──► verifyUserPassword()
+ *        │
+ *        ▼
+ *   password_needs_rehash? ──► issueJwtToken() ──► setcookie('token')
+ *        │
+ *        ▼
+ *   {status:'ok', user:{...}}
+ *
+ * DEPENDENCIAS
+ * ------------
+ * Utiliza:
+ *   - _auth_middleware.php : issueJwtToken, verifyJwtToken, extractBearerToken,
+ *                            revokeJwt, normalizeRole, getRedisConnection.
+ *   - lib/twilio.php : sendTwilioDirect (fallback 2FA).
+ *   - $conn : conexión PDO.
+ *
+ * Es utilizado por:
+ *   - Frontend: Login.jsx, App.jsx para validación de sesión.
+ */
 
+global $cleanPath, $conn, $input, $method;
 
 require_once __DIR__ . '/_auth_middleware.php';
 
+/**
+ * Verifica si un intento de login debe ser bloqueado por exceso de intentos.
+ *
+ * @param string $email Correo del usuario que intenta iniciar sesión.
+ * @return bool True si se superaron los intentos permitidos en la ventana.
+ *
+ * Efectos secundarios: inserta/actualiza la fila correspondiente en rate_limits.
+ * Precondiciones: $conn debe estar disponible; si no, retorna false (fail-open).
+ * Postcondiciones: retorna true cuando hits > 8 en ventana de 900s.
+ */
 function isLoginThrottled($email) {
     global $conn;
     $ip = getRealClientIp();
@@ -42,12 +89,23 @@ function isLoginThrottled($email) {
     }
 }
 
+/**
+ * Verifica una contraseña contra un hash usando password_verify.
+ *
+ * @param string $password Contraseña en texto plano.
+ * @param string $hash Hash almacenado (bcrypt u otro soportado por PHP).
+ * @return bool True si la contraseña coincide.
+ */
 function verifyUserPassword($password, $hash) {
     $password = (string)$password;
     $hash = (string)$hash;
     return password_verify($password, $hash);
 }
 
+// ============================================================================
+// POST /auth/login (o action=LOGIN) — Autentica usuario y emite JWT.
+// Si LOGIN_2FA_ENABLED=true y el teléfono está verificado, solicita 2FA vía WhatsApp.
+// ============================================================================
 if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
     $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
     $password = $input['password'] ?? '';
@@ -130,7 +188,6 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 try {
                     $redis = getRedisConnection();
                     if ($redis) {
-                        $redis->select((int)(getenv('REDIS_DB') ?: 0));
                         $redis->rPush('queue:twilio', json_encode([
                             'to' => $userPhone,
                             'body' => "🔐 *NEXO — Código de verificación*\n\nTu código para *inicio de sesión* es:\n\n*{$code}*\n\nVálido por 5 minutos.",
@@ -212,6 +269,9 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
     exit;
 }
 
+// ============================================================================
+// POST /auth/verify-2fa — Valida código de doble factor y emite JWT.
+// ============================================================================
 if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
     try {
         $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
@@ -329,6 +389,9 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
     exit;
 }
 
+// ============================================================================
+// POST /auth/logout — Revoca el JWT actual y elimina la cookie HttpOnly.
+// ============================================================================
 if ($cleanPath === '/auth/logout' && $method === 'POST') {
     if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || 
         $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest') {
@@ -360,6 +423,9 @@ if ($cleanPath === '/auth/logout' && $method === 'POST') {
     exit;
 }
 
+// ============================================================================
+// GET /auth/me — Retorna datos del usuario autenticado (validación de sesión).
+// ============================================================================
 if ($cleanPath === '/auth/me') {
     securityLog('AUTH_ME_REQUEST', 'Validating session from JWT');
     $authUser = requireAuth();

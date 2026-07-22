@@ -1,3 +1,17 @@
+/**
+ * =============================================================================
+ * RealOledDisplay.cpp — Implementación de display OLED SSD1306 vía I2C.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Inicializa y controla una pantalla OLED SSD1306 de 128x64 píxeles en
+ *   /dev/i2c-1 (dirección 0x3C). Incluye una fuente 5x8 ASCII, comandos de
+ *   configuración del controlador, dibujo de texto en dos líneas y limpieza.
+ *
+ * DEPENDENCIAS:
+ *   - /dev/i2c-1 y permisos I2C.
+ *   - linux/i2c-dev.h
+ */
+
 #include "hal/IDisplay.h"
 #include "utils/Logger.h"
 #include <fcntl.h>

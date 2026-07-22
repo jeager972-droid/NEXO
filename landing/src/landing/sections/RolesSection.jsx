@@ -1,3 +1,19 @@
+/**
+ * =============================================================================
+ * RolesSection.jsx — Sección de roles y casos de uso de la landing NEXO.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Presenta 6 roles institucionales (rector, coordinador, profesor,
+ *   psicoorientador, secretaría, auxiliares) en una interfaz de pestañas.
+ *   Las transiciones de pestaña son animadas con GSAP y el panel se actualiza
+ *   sin conflictos de estado.
+ *
+ * DEPENDENCIAS:
+ *   - react hooks, gsap / ScrollTrigger
+ *   - useReveal, useStickyScroll
+ * =============================================================================
+ */
+
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useReveal } from '../components/useReveal'
 import { useStickyScroll } from '../components/useStickyScroll'

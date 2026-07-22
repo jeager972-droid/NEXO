@@ -1,3 +1,10 @@
+/**
+ * ThemeContext / NEXO Institucional
+ * Responsabilidad: Administrar el modo oscuro/claro de la aplicación mediante una
+ * clase 'dark' en <html> y persistencia en localStorage. Expone toggleDarkMode.
+ * Dependencias: React (createContext, useState, useEffect, useContext).
+ * Propiedades del contexto: { darkMode, toggleDarkMode }.
+ */
 import { createContext, useContext, useState, useEffect } from 'react';
 
 const ThemeContext = createContext();

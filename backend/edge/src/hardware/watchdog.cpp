@@ -1,3 +1,14 @@
+/**
+ * =============================================================================
+ * watchdog.cpp — Implementación del watchdog de hardware Linux.
+ * =============================================================================
+ * RESPONSABILIDAD:
+ *   Implementa HardwareWatchdog: abre /dev/watchdog, envía 'pat' (newline)
+ *   periódicamente y escribe 'V' (MAGIC_CLOSE) al salir para apagar el
+ *   watchdog de forma graceful. Si no se patea dentro del timeout del kernel,
+ *   la placa se reinicia.
+ */
+
 #include "hardware/watchdog.h"
 #include "utils/Logger.h"
 
