@@ -49,7 +49,10 @@ if (!$host || !$dbname) {
 try {
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
     $pdo = new PDO($dsn, $user, $pass, [
-        PDO::ATTR_EMULATE_PREPARES => false,
+        // Emulate prepares: PgBouncer/Supabase transaction-pool mode does not
+        // support server-side prepared statements across different backends.
+        // PDO still binds/escapes parameters, so SQL injection protection remains.
+        PDO::ATTR_EMULATE_PREPARES => true,
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_TIMEOUT => 5
     ]);
