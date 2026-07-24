@@ -75,8 +75,8 @@ INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last
 SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,role_id,'100000002','Coordinador','NEXO','coordinador@nexo.edu','3000000002','$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_coordinador',TRUE,NOW() FROM coord_role ON CONFLICT(email) DO NOTHING;
 
 WITH docente_role AS (SELECT role_id FROM roles WHERE role_name='TEACHER' LIMIT 1)
-INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)
-SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,role_id,'100000003','Docente','NEXO','docente@nexo.edu','3000000003','$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_docente',TRUE,NOW() FROM docente_role ON CONFLICT(email) DO NOTHING;
+INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, work_shift, active, created_at)
+SELECT gen_random_uuid(),'a3333333-3333-3333-3333-333333333333'::UUID,role_id,'100000003','Docente','NEXO','docente@nexo.edu','3000000003','$2y$12$aHJm3fmaavJpHwmTC0fq1OyaBla2Nj.Rvxc9uWnPuYy.SFTXiu9My','salt_docente','tarde',TRUE,NOW() FROM docente_role ON CONFLICT(email) DO NOTHING;
 
 WITH psico_role AS (SELECT role_id FROM roles WHERE role_name='COUNSELOR' LIMIT 1)
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, phone, password_hash, password_salt, active, created_at)

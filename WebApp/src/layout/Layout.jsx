@@ -2,7 +2,8 @@
  * Layout / NEXO Institucional
  * Responsabilidad: Esqueleto de la aplicación autenticada: sidebar, header con búsqueda
  * global de módulos/comandos, notificaciones, menú de usuario y transiciones de página.
- * Excluye de la búsqueda a RECTOR. Polling de notificaciones cada 30s.
+ * Excluye de la búsqueda a RECTOR. Polling de notificaciones cada 60s; se pausa
+ * cuando la pestaña no está visible para evitar requests innecesarios al backend.
  * Dependencias: react-router-dom, framer-motion, useAuth, useTheme, Sidebar, roles config, notificationsApi.
  */
 import { useState, useRef, useEffect } from 'react';
@@ -138,9 +139,30 @@ const Layout = () => {
         .catch(() => {});
     };
 
-    pollNotifs(); // Carga inicial
-    const interval = setInterval(pollNotifs, 30000); // Polling 30s
-    return () => clearInterval(interval);
+    let interval = null;
+    const start = () => {
+      pollNotifs(); // Carga inicial
+      interval = setInterval(pollNotifs, 60000); // Polling 60s
+    };
+    const stop = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        start();
+      }
+    };
+
+    start();
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   // Escuchar cuando Notifications vacía la lista o nuevas de operaciones locales

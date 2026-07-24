@@ -7,11 +7,20 @@
  * RESPONSABILIDAD DEL ARCHIVO
  * ----------------------------
  * Expone getRedisConnection(): una única función para conectar workers,
- * middleware y endpoints a Redis. Soporta:
+ * middleware y endpoints a Redis/Upstash. Soporta:
  *   - REDIS_URL (rediss://, redis://, tls://) con prioridad absoluta.
  *   - REDISHOST / REDISPORT / REDIS_PASSWORD / REDIS_USER / REDIS_DB.
  *   - Conexiones TLS a Upstash usando el prefijo tls:// y contexto SSL.
  *   - Fallback a Redis local en 127.0.0.1:6379.
+ *
+ * USO DE REDIS EN NEXO
+ * --------------------
+ * Redis es un broker de colas y caché de corta duración; NO es un paso
+ * obligatorio de cada petición. Se usa para:
+ *   - Colas de workers: queue:biometric_ingest, queue:twilio, device:{id}:commands.
+ *   - Cache de seguridad: jwt:blocklist:<jti>, panic:school:<id>, nonces EDGE.
+ *   - Rate limiting de métodos mutantes (POST/PUT/DELETE/PATCH).
+ *   - Caché de respuestas costosas (dashboard stats).
  *
  * Si no puede conectar, retorna null (fail-open para la API). Los workers
  * deben verificar el valor de retorno y salir si es null.

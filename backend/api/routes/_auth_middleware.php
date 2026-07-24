@@ -18,6 +18,16 @@
  *   7. Monitorizar la salud crítica de workers, colas, base de datos y eventos
  *      de seguridad (checkCriticalAlerts).
  *
+ * USO DE REDIS AQUÍ
+ * -----------------
+ * Redis se usa exclusivamente para:
+ *   - Verificar si un JTI está revocado (jwt:blocklist:<jti>).
+ *   - Verificar si una escuela activó modo pánico después de emitir el token
+ *     (panic:school:<school_id>).
+ * Ambas validaciones se resuelen en un único comando MGET (checkJwtAndPanicState)
+ * para reducir el tráfico a Upstash. Revocación y pánico mantienen fallback a
+ * PostgreSQL si Redis no está disponible.
+ *
  * Este archivo NO debe contener lógica de negocio; únicamente helpers de
  * seguridad y autenticación reutilizables.
  *
@@ -340,14 +350,14 @@ if (!function_exists('verifyJwtToken')) {
         if (!isset($payload['jti']) || !is_string($payload['jti'])) {
             throw new Exception('Token sin jti');
         }
-        if (isJwtRevoked($payload['jti'])) {
+        $schoolId = $payload['school_id'] ?? null;
+        $tokenIat = isset($payload['iat']) ? (int)$payload['iat'] : null;
+        $state = checkJwtAndPanicState($payload['jti'], $schoolId, $tokenIat);
+        if ($state['revoked']) {
             throw new Exception('Token revocado');
         }
-
-        if (isset($payload['school_id']) && isset($payload['iat'])) {
-            if (isSchoolInPanicMode($payload['school_id'], (int)$payload['iat'])) {
-                throw new Exception('Sesión invalidada por modo de emergencia');
-            }
+        if ($state['panic']) {
+            throw new Exception('Sesión invalidada por modo de emergencia');
         }
 
         return $payload;
@@ -486,6 +496,40 @@ if (!function_exists('isSchoolInPanicMode')) {
     }
 }
 
+if (!function_exists('checkJwtAndPanicState')) {
+    /**
+     * Verifica en una sola ronda Redis si el JWT está revocado y si la escuela
+     * activó modo pánico posterior a la emisión del token (MGET).
+     *
+     * @param string $jti Identificador único del JWT.
+     * @param string|null $schoolId UUID de la escuela.
+     * @param int|null $tokenIat Timestamp 'iat' del JWT.
+     * @return array{revoked: bool, panic: bool}
+     */
+    function checkJwtAndPanicState($jti, $schoolId = null, $tokenIat = null) {
+        $redis = getRedisConnection();
+        if (!$redis) {
+            return ['revoked' => false, 'panic' => false];
+        }
+        $keys = ["jwt:blocklist:" . (string)$jti];
+        if ($schoolId !== null) {
+            $keys[] = "panic:school:" . (string)$schoolId;
+        }
+        try {
+            $values = $redis->mGet($keys);
+            $revoked = !empty($values[0]);
+            $panic = false;
+            if ($schoolId !== null && $tokenIat !== null && isset($values[1]) && $values[1] !== false) {
+                $panic = (int)$values[1] > $tokenIat;
+            }
+            return ['revoked' => $revoked, 'panic' => $panic];
+        } catch (Exception $e) {
+            securityLog('JWT_PANIC_CHECK_REDIS_ERROR', $e->getMessage());
+            return ['revoked' => false, 'panic' => false];
+        }
+    }
+}
+
 if (!function_exists('extractBearerToken')) {
     /**
      * Extrae el token Bearer de la cabecera Authorization o de la cookie 'token'.
@@ -562,7 +606,6 @@ if (!function_exists('requireAuth')) {
             http_response_code(401);
             exit(json_encode(['status' => 'error', 'message' => 'Token no proporcionado']));
         }
-        securityLog('AUTH_HEADER_PRESENT', 'Authorization Bearer recibido');
 
         try {
             $claims = verifyJwtToken($token);

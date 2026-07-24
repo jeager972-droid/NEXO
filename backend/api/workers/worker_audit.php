@@ -1,14 +1,16 @@
 <?php
 /**
  * =============================================================================
- * workers/worker_audit.php — Procesador de logs de auditoría encolados en Redis.
+ * workers/worker_audit.php — Procesador opcional de logs de auditoría vía Redis.
  * =============================================================================
  *
  * RESPONSABILIDAD DEL ARCHIVO
  * ----------------------------
  * Consumir mensajes de la cola Redis `queue:audit_logs` e insertarlos en la
  * tabla global_audit_logs manteniendo una cadena de hashes criptográfica por
- * escuela. Esto desacopla la escritura de auditoría de la ruta HTTP crítica.
+ * escuela. Solo se ejecuta cuando AUDIT_WORKER_ENABLED=1; en el uso por defecto
+ * los logs de seguridad se escriben directamente a stderr y este worker no
+ * realiza polling ni consume comandos Redis.
  *
  * FLUJO GENERAL
  * -------------
@@ -32,7 +34,8 @@
  * Utiliza:
  *   - db.php : conexión PDO ($pdo).
  *   - Redis : extensión php-redis; cola `queue:audit_logs`.
- *   - Variables de entorno: REDISHOST, REDISPORT, REDIS_PASSWORD, APP_NEXO_HMAC_SECRET.
+ *   - Variables de entorno: AUDIT_WORKER_ENABLED, REDISHOST, REDISPORT,
+ *     REDIS_PASSWORD, APP_NEXO_HMAC_SECRET.
  *
  * Es utilizado por:
  *   - Sistema: arrancado por supervisor/Docker. Producido por securityLog() de api.php.
@@ -176,6 +179,13 @@ declare(ticks=1);
 $shutdown = false;
 $iterations = 0;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
+
+// Worker audit: si no está habilitado, salir sin conectar a Redis.
+$auditEnabled = getenv('AUDIT_WORKER_ENABLED') === '1';
+if (!$auditEnabled) {
+    logWorker('DISABLED', 'AUDIT_WORKER_ENABLED no está activo. No se consumirá Redis.');
+    exit(0);
+}
 
 $conn = $pdo;
 try {

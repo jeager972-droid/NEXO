@@ -31,6 +31,16 @@
  *        │
  *   scriptGc cada 60s: reinserta zombies >300s
  *
+ * USO DE REDIS AQUÍ
+ * -----------------
+ * Redis actúa como broker de la cola de eventos biométricos:
+ *   - queue:biometric_ingest      : trabajos pendientes enviados por la API EDGE.
+ *   - queue:biometric_processing  : trabajos en ejecución (patrón reliable queue).
+ *   - queue:biometric_dlq         : trabajos fallidos tras 3 reintentos.
+ *   - worker:biometric:last_heartbeat : señal de vida del worker.
+ * Cuando la cola está vacía el worker espera BIOMETRIC_EMPTY_QUEUE_SLEEP_US
+ * (default 1s) para no saturar Upstash con polls innecesarios.
+ *
  * DEPENDENCIAS
  * ------------
  * Utiliza:
@@ -280,6 +290,7 @@ return recovered
 LUA;
 
 $GC_MAX_AGE_SEC = (int)(getenv('BIOMETRIC_GC_MAX_AGE') ?: 300);
+$EMPTY_QUEUE_SLEEP_US = (int)(getenv('BIOMETRIC_EMPTY_QUEUE_SLEEP_US') ?: 1_000_000); // 1s por defecto (evita 20 polls/s en Upstash)
 
 logW('START', 'Biometric async worker started');
 $redis = getRedisConnection();
@@ -301,7 +312,7 @@ while (!$shutdown) {
 
         // FIX (SRE-2): Atomic Lua pop + timestamp injection.
         $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing', time()], 2);
-        if (!$item) { usleep(50000); continue; }
+        if (!$item) { usleep($EMPTY_QUEUE_SLEEP_US); continue; }
 
         $job = json_decode($item, true);
         if (!$job) {

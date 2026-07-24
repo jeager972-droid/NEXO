@@ -15,6 +15,13 @@
  *   - GET /dashboard/events             : eventos recientes de user_commands
  *                                           filtrados por rol.
  *
+ * USO DE REDIS AQUÍ
+ * -----------------
+ * Redis actúa como caché de corta duración (TTL 30s) para GET /dashboard/stats.
+ * La clave dashboard:stats:<schoolId>:<userRole>:<groupName> evita recalcular
+ * conteos complejos en cada petición, reduciendo carga en PostgreSQL. Si Redis
+ * falla, el endpoint calcula y responde directamente desde la base de datos.
+ *
  * DEPENDENCIAS
  * ------------
  * Utiliza:

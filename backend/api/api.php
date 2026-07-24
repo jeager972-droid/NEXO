@@ -8,14 +8,25 @@
  * ----------------------------
  * - Aplicar headers de seguridad y CORS.
  * - Validar variables críticas (boot_check.php) y conectar a BD (db.php).
- * - Instaurar rate limiting global vía Redis.
+ * - Instaurar rate limiting vía Redis solo en métodos mutantes (POST/PUT/DELETE/PATCH).
  * - Enrutar peticiones a los archivos correspondientes en routes/.
  * - Recibir y validar payloads cifrados de dispositivos EDGE (AES-256-GCM).
- * - Proveer endpoint /health para verificar BD, Redis, workers, colas y disco.
+ * - Proveer endpoint /health para verificar BD, Redis, workers y disco.
+ *
+ * USO DE REDIS EN NEXO
+ * --------------------
+ * Redis/Upstash actúa como broker de colas y caché de corta duración; NO es un
+ * paso obligatorio de cada petición. Se utiliza exclusivamente para:
+ *   - Colas de workers: queue:biometric_ingest, queue:twilio, device:{id}:commands.
+ *   - Cache de seguridad: jwt:blocklist:<jti>, panic:school:<id>, nonces EDGE.
+ *   - Rate limiting de operaciones de escritura (POST/PUT/DELETE/PATCH).
+ *   - Caché de respuestas costosas (dashboard stats).
+ * Los logs de auditoría ya no circulan por Redis de forma rutinaria; se escriben
+ * a stderr. Para reactivar la cola de auditoría: AUDIT_WORKER_ENABLED=1.
  *
  * FLUJO GENERAL
  * -------------
- *   security headers → boot_check → db.php → rate limit → parse URI/body
+ *   security headers → boot_check → db.php → rate limit (mutantes) → parse URI/body
  *        │
  *        ├── Si hay payload cifrado: descifrar, validar device token/nonce,
  *        │   encolar en queue:biometric_ingest y responder 202 Accepted.
@@ -59,7 +70,8 @@ $conn = $pdo;
 
 
 /**
- * Registra un evento de seguridad en stderr y en la cola Redis audit_logs.
+ * Registra un evento de seguridad en stderr. Solo encola en Redis cuando
+ * AUDIT_WORKER_ENABLED=1, evitando un LPUSH por evento en el uso por defecto.
  *
  * @param string $event Código del evento.
  * @param string $details Descripción adicional.
@@ -72,25 +84,28 @@ function securityLog($event, $details = '', $actorId = null, $schoolId = null, $
     $ip = getRealClientIp();
     $uri = $_SERVER['REQUEST_URI'] ?? 'N/A';
 
-
     $rid = $requestId ? " [REQ:$requestId]" : '';
     $fallbackMsg = sprintf("[%s] [EVENT:%s]%s [DETAILS:%s] [IP:%s]\n", gmdate('Y-m-d H:i:s'), $event, $rid, $details, $ip);
     file_put_contents('php://stderr', $fallbackMsg);
 
+    // Redis audit_logs solo si el worker de auditoría está activo.
+    if (getenv('AUDIT_WORKER_ENABLED') !== '1') {
+        return;
+    }
 
     try {
         $redis = getRedisConnection();
         if ($redis) {
             $redis->lPush('queue:audit_logs', json_encode([
-            'school_id' => $schoolId,
-            'actor_id' => $actorId,
-            'event_type' => substr($event, 0, 100),
-            'description' => $details,
-            'ip_address' => substr($ip, 0, 45),
-            'uri' => $uri,
-            'request_id' => $requestId,
-            'created_at' => gmdate('Y-m-d H:i:s')
-        ], JSON_UNESCAPED_UNICODE));
+                'school_id' => $schoolId,
+                'actor_id' => $actorId,
+                'event_type' => substr($event, 0, 100),
+                'description' => $details,
+                'ip_address' => substr($ip, 0, 45),
+                'uri' => $uri,
+                'request_id' => $requestId,
+                'created_at' => gmdate('Y-m-d H:i:s')
+            ], JSON_UNESCAPED_UNICODE));
         }
     } catch (Throwable $e) {
         file_put_contents('php://stderr', "AUDIT_REDIS_FAIL: " . $e->getMessage() . "\n");
@@ -114,7 +129,9 @@ function getRealClientIp() {
 }
 
 /**
- * Aplica rate limiting global con Redis (sliding window por IP o usuario).
+ * Aplica rate limiting con Redis solo para métodos mutantes (POST/PUT/DELETE/PATCH).
+ * Las lecturas (GET/HEAD/OPTIONS) no generan comandos Redis aquí, reduciendo el
+ * costo del polling y navegación sin afectar la protección contra abuso de escritura.
  *
  * @param string|null $userId UUID del usuario autenticado (opcional).
  * @param int $maxReqs Máximo de peticiones en la ventana.
@@ -122,6 +139,11 @@ function getRealClientIp() {
  * @return void
  */
 function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    if (in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
+        return;
+    }
+
     try {
         $redis = getRedisConnection();
         if (!$redis) return;
@@ -135,7 +157,6 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
             exit(json_encode(['status' => 'error', 'message' => 'Too many requests']));
         }
     } catch (Exception $e) {
-
         securityLog('RATE_LIMIT_REDIS_DOWN', 'Redis unavailable, allowing request without rate limit');
     }
 }
@@ -358,41 +379,35 @@ if ($cleanPath === '/health' || $cleanPath === '/health/workers') {
     }
 
     // 3. Worker heartbeats (only if Redis is up)
+    // Se usa MGET para leer todos los heartbeats en un solo comando Redis.
     if (isset($checks['redis']['status']) && $checks['redis']['status'] === 'healthy') {
         $workers = [
-            'audit_worker' => 'worker:audit:last_heartbeat',
             'twilio_worker' => 'worker:twilio:last_heartbeat',
             'biometric_worker' => 'worker:biometric:last_heartbeat',
         ];
-        foreach ($workers as $name => $key) {
-            $heartbeat = (int)$redisHealth->get($key);
-            $age = time() - $heartbeat;
-            $healthy = $heartbeat > 0 && $age <= 300;
-            $checks[$name] = [
-                'last_heartbeat' => $heartbeat,
-                'seconds_ago' => $age,
-                'healthy' => $healthy
-            ];
-            if (!$healthy) $allHealthy = false;
+        if (getenv('AUDIT_WORKER_ENABLED') === '1') {
+            $workers['audit_worker'] = 'worker:audit:last_heartbeat';
         }
-
-        // 4. Queue depths (alert thresholds)
-        $queues = [
-            'queue:biometric_ingest' => 1000,
-            'queue:twilio' => 500,
-            'queue:audit_logs' => 1000,
-        ];
-        foreach ($queues as $queue => $threshold) {
-            try {
-                $len = $redisHealth->lLen($queue);
-                $checks['queue_' . basename($queue)] = [
-                    'length' => (int)$len,
-                    'threshold' => $threshold,
-                    'healthy' => $len < $threshold
+        try {
+            $keys = array_values($workers);
+            $values = $redisHealth->mGet($keys);
+            $idx = 0;
+            foreach ($workers as $name => $key) {
+                $heartbeat = (int)($values[$idx] ?? 0);
+                $age = time() - $heartbeat;
+                $healthy = $heartbeat > 0 && $age <= 300;
+                $checks[$name] = [
+                    'last_heartbeat' => $heartbeat,
+                    'seconds_ago' => $age,
+                    'healthy' => $healthy
                 ];
-                if ($len >= $threshold) $allHealthy = false;
-            } catch (Exception $e) {
-                $checks['queue_' . basename($queue)] = ['status' => 'unknown', 'error' => $e->getMessage()];
+                if (!$healthy) $allHealthy = false;
+                $idx++;
+            }
+        } catch (Exception $e) {
+            foreach ($workers as $name => $key) {
+                $checks[$name] = ['status' => 'unknown', 'error' => $e->getMessage()];
+                $allHealthy = false;
             }
         }
     }

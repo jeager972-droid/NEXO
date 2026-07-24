@@ -8,8 +8,9 @@
  * ----------------------------
  * Expone GET /metrics en formato Prometheus exposition. Recopila métricas de:
  *   - Salud de PostgreSQL (up, conexiones activas/idle).
- *   - Heartbeats de workers (audit, twilio, biometric).
- *   - Longitud de colas Redis (biometric_ingest, twilio, audit_logs).
+ *   - Heartbeats de workers (twilio, biometric; audit solo si AUDIT_WORKER_ENABLED=1)
+ *     usando un único comando MGET.
+ *   - Longitud de colas Redis (biometric_ingest, twilio; audit_logs condicional).
  *   - Métricas de negocio (login attempts, eventos biométricos, Twilio, alertas
  *     de riesgo, eventos de pánico).
  *   - Uso de disco.
@@ -67,18 +68,24 @@ if ($cleanPath === '/metrics') {
     emit('nexo_db_connections_idle', 'gauge', 'Idle PostgreSQL connections', [(int)$idleConns]);
 
     // ── Workers ──
+    // Un solo MGET para todos los heartbeats, reduciendo comandos Redis.
     try {
         $redis = getRedisConnection();
         $workers = [
-            'audit' => 'worker:audit:last_heartbeat',
             'twilio' => 'worker:twilio:last_heartbeat',
             'biometric' => 'worker:biometric:last_heartbeat',
         ];
+        if (getenv('AUDIT_WORKER_ENABLED') === '1') {
+            $workers['audit'] = 'worker:audit:last_heartbeat';
+        }
+        $values = $redis->mGet(array_values($workers));
+        $idx = 0;
         foreach ($workers as $name => $key) {
-            $hb = (int)$redis->get($key);
+            $hb = (int)($values[$idx] ?? 0);
             $age = $hb > 0 ? $now - $hb : 99999;
             emit("nexo_worker_up", 'gauge', "Worker $name health", [['{worker="' . $name . '"}', $age <= 300 ? 1 : 0]]);
             emit("nexo_worker_heartbeat_age_seconds", 'gauge', "Seconds since last heartbeat", [['{worker="' . $name . '"}', $age]]);
+            $idx++;
         }
     } catch (Exception $e) {
         emit('nexo_worker_up', 'gauge', 'Worker health', [['{worker="all"}', 0]]);
@@ -90,8 +97,10 @@ if ($cleanPath === '/metrics') {
         $queues = [
             'biometric_ingest' => 'queue:biometric_ingest',
             'twilio' => 'queue:twilio',
-            'audit_logs' => 'queue:audit_logs',
         ];
+        if (getenv('AUDIT_WORKER_ENABLED') === '1') {
+            $queues['audit_logs'] = 'queue:audit_logs';
+        }
         foreach ($queues as $name => $key) {
             $len = (int)$redis->lLen($key);
             emit('nexo_queue_length', 'gauge', 'Redis queue length', [['{queue="' . $name . '"}', $len]]);

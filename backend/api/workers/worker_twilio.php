@@ -27,6 +27,16 @@
  *        │
  *   requeue con delay exponencial si falla
  *
+ * USO DE REDIS AQUÍ
+ * -----------------
+ * Redis actúa como broker y coordinador del worker Twilio:
+ *   - queue:twilio                : trabajos de mensajes pendientes.
+ *   - queue:twilio:delayed        : trabajos con reintento programado (sorted set).
+ *   - twilio:dedup:<hash>         : cache de deduplicación por 30s.
+ *   - worker:twilio:last_heartbeat : señal de vida del worker.
+ * El worker espera bloqueado (blPop) hasta 1s entre iteraciones; si hay trabajo,
+ * lo procesa y actualiza el estado en PostgreSQL.
+ *
  * DEPENDENCIAS
  * ------------
  * Utiliza:

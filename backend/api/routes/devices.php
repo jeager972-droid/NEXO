@@ -22,6 +22,14 @@
  * configurar el edge. El edge usa X-Device-Token para autenticar /devices/commands
  * y /devices/ping. La validación se realiza con password_verify contra token_hash.
  *
+ * USO DE REDIS AQUÍ
+ * -----------------
+ * Redis actúa como fallback para encolar comandos a dispositivos edge cuando
+ * MQTT no está disponible (device:{id}:commands). En el flujo normal el comando
+ * se envía por MQTT; solo si falla se encola en Redis para que el edge lo recoja
+ * mediante /devices/commands (rPop). Esto minimiza el uso de Redis al ser una
+ * vía de contingencia, no el camino principal.
+ *
  * DEPENDENCIAS
  * ------------
  * Utiliza:

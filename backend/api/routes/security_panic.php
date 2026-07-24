@@ -13,6 +13,13 @@
  *   3. Cachea el timestamp en Redis "panic:school:<id>" para verificación rápida.
  *   4. Notifica a Rectores y Coordinadores mediante la tabla notifications.
  *
+ * USO DE REDIS AQUÍ
+ * -----------------
+ * Redis almacena una clave de corta duración panic:school:<school_id> con el
+ * timestamp del último evento de pánico. verifyJwtToken() consulta esta clave
+ * junto con jwt:blocklist en un único MGET para invalidar tokens emitidos antes
+ * del pánico sin consultar PostgreSQL en cada request.
+ *
  * FLUJO GENERAL
  * -------------
  *   POST /security/panic
