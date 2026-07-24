@@ -142,7 +142,7 @@ Fixtures usan dataset ficticio coherente. Un test nominal no eleva a Nivel 1; ve
 
 ## 15. Observabilidad UX
 
-Eventos con `SCR/FLOW/CAP`, paso, resultado, duración, error categórico, conectividad y versión. Prohibidos PII, texto de notas/mensajes, teléfono, documento y términos de búsqueda sensibles. Correlación técnica usa request ID opaco. Dashboards observan abandono, retries, unknown outcomes, sync conflicts y accesibilidad.
+Eventos con `SCR/FLOW/CAP`, paso, resultado, duración, error categórico, conectividad y versión. Prohibidos PII, texto de notas/mensajes, teléfono, documento y términos de búsqueda sensibles. Correlación técnica usa request ID opaco. El personal institucional debe ser informado de forma transparente de que se recopila telemetría anónima de uso para mejorar el producto; la deshabilitación no limita sus tareas. Dashboards observan abandono, retries, unknown outcomes, sync conflicts y accesibilidad.
 
 ## 16. Secuencia de implementación
 

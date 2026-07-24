@@ -79,6 +79,22 @@ Perfil/sidebar → “Cerrar sesión” → invalidar servidor → limpiar conte
 
 FLOW-OPS-01 a 11 tienen soporte técnico variable N2; agenda es N4. La matriz de roles actual no coincide completamente con visión; prevalece objetivo y se marca brecha.
 
+### FLOW-OPS-07 SOS
+
+**Pantallas asociadas:** SCR-OPS-01, SCR-OPS-02, SCR-OPS-03.  
+**Capacidad:** CAP-OPS-03.
+
+1. Disparador desde `SCR-OPS-01`, atajo autorizado o notificación SOS recibida.
+2. Solicitar ubicación del navegador/dispositivo; el mensaje es opcional.
+3. Confirmar con verbo "Enviar SOS".
+4. Backend registra alerta crítica auditada y notifica a los destinatarios autorizados.
+
+**Estado "ubicación no disponible":** si el navegador o PWA deniega el permiso de geolocalización, el envío no se bloquea. El sistema aplica, en orden: (a) última ubicación conocida con hora; (b) grupo/aula reportada manualmente por el actor; (c) sede/institución asociada al usuario. Cada fallback se etiqueta como "ubicación aproximada" y se audita.
+
+**Errores:** permiso denegado → fallback de ubicación; sin red → informar que SOS requiere conexión confirmada; timeout → "resultado desconocido" con idempotencia; éxito → ID, hora y destinatarios alcanzados.
+
+**Notificación del receptor:** ver DEC-021; al recibir un SOS se permite sonido/vibración nativo del SO.
+
 ## 5. WhatsApp y acudiente externo
 
 ### FLOW-MSG-01 Entregar comunicación

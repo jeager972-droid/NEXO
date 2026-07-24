@@ -108,9 +108,9 @@ Toda capacidad usa IDs `CAP-*`; flujos `FLOW-*`; pantallas `SCR-*`; componentes 
 
 Sin ejecución real durante esta auditoría, no se asigna Nivel 1.
 
-## 9. Recomendaciones no aprobadas
+## 9. Recomendaciones
 
-- **REC-001:** sustituir la animación fija de login por carga real y saludo posterior no bloqueante. La fuente aprueba máximo 2 s, pero rendimiento y accesibilidad aconsejan no imponer espera.
+- **REC-001 (Aprobada):** sustituir la animación fija de login por carga real y saludo posterior no bloqueante. Aplicada en [UX_DESIGN.md](./UX_DESIGN.md) (Inicio de sesión) y [06_USER_FLOWS.md](./06_USER_FLOWS.md) (FLOW-AUTH-01). La espera ornamental queda eliminada; el login se adapta a la velocidad real del dispositivo.
 - **REC-002:** resolver la tensión “todas las acciones en tarjetas” usando tarjetas solo para iniciar operaciones; listas y tablas se admiten cuando mejoran comparación y escala.
 - **REC-003:** renombrar en implementación “Seguimiento” a “Casos Activos”, como dicta la fuente.
 - **REC-004:** validar con instituciones si “Portero” debe mostrarse como “Portero” para evitar personalización innecesaria del rol.

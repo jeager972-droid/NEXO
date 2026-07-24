@@ -8,7 +8,7 @@
 El título, primer bloque y acción primaria deben responder la misma pregunta. Prueba: al ocultar el contenido secundario, 4 de 5 participantes explican propósito y próximo paso en ≤5 s.
 
 ### DEC-011. Una acción primaria
-Solo un control por estado usa énfasis primario. Acciones secundarias son texto, tono neutro o menú. Excepción: elección binaria simétrica solo cuando ninguna opción es predeterminada.
+Solo un control por estado usa énfasis primario. Acciones secundarias son texto, tono neutro o menú. Excepción —modifica la regla "Nunca dos acciones principales" de [UX_DESIGN.md](./UX_DESIGN.md)—: elección binaria simétrica solo cuando ninguna opción es predeterminada. Prevalece porque ambas opciones son igualmente legítimas, no hay default impuesto por el sistema y la elección es reversible.
 
 ### DEC-012. Reconocimiento sobre recuerdo
 Grupo activo, filtros, destinatario, fecha y origen permanecen visibles o recuperables. Nunca pedir información ya disponible y vigente. Métrica: cero reingresos redundantes en un mismo flujo.
@@ -36,6 +36,9 @@ La vista inicial contiene el mínimo necesario. Revelar datos sensibles exige pe
 
 ### DEC-020. Accesibilidad como contrato
 WCAG 2.2 AA es criterio de salida. La equivalencia teclado/táctil/lector, zoom 400%, reflow, foco visible y reduced motion no son variantes opcionales.
+
+### DEC-021. Señalización de SOS recibido
+Un SOS recibido por un destinatario autorizado puede usar la notificación nativa del sistema operativo (sonido y/o vibración) para reducir el tiempo de respuesta en situaciones de vida o muerte. No se usa ningún beep, pulso ni parpadeo decorativo de NEXO. Esta excepción modifica la decisión "Sin sonidos" de [UX_DESIGN.md](./UX_DESIGN.md) y debe validarse con al menos una institución piloto antes de generalizarse. Véase [08_MICRO_INTERACTIONS.md](./08_MICRO_INTERACTIONS.md).
 
 ## 2. Presupuestos
 

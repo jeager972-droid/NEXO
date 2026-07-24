@@ -1,0 +1,2369 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+01_PRODUCT_DESIGN_PHILOSOPHY.md
+02_DESIGN_PRINCIPLES.md
+03_DESIGN_SYSTEM.md
+04_VISUAL_LANGUAGE.md
+05_INFORMATION_ARCHITECTURE.md
+06_USER_FLOWS.md
+07_SCREEN_SPECIFICATIONS.md
+08_MICRO_INTERACTIONS.md
+09_ACCESSIBILITY.md
+10_WIREFRAME_PLAN.md
+11_MOCKUP_MASTERPLAN.md
+12_FRONTEND_IMPLEMENTATION_GUIDE.md
+AUDITORIA_T6.md
+UX_DESIGN.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="01_PRODUCT_DESIGN_PHILOSOPHY.md">
+# 01. Filosofía de diseño de producto NEXO
+
+**Estado:** especificación objetivo 1.0  
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md) prevalece ante cualquier contradicción.  
+**Alcance:** WebApp institucional responsive y PWA; adaptadores futuros Tauri/Capacitor. El acudiente interactúa exclusivamente por WhatsApp.
+
+## 1. North Star
+
+> NEXO convierte señales institucionales dispersas en la siguiente acción comprensible, segura y oportuna.
+
+La medida final no es cuántos datos se muestran, sino si cada persona termina su tarea con menos esfuerzo, menos incertidumbre y plena comprensión de qué ocurrió. El usuario no “administra un sistema”: entra a su jornada y encuentra el contexto preparado.
+
+### Promesa de experiencia
+
+1. **Orientación inmediata:** en 5 segundos se entiende qué requiere atención.
+2. **Acción próxima:** en un clic se inicia la tarea prioritaria; “un clic” significa descubrir e iniciar, no omitir confirmaciones seguras.
+3. **Confianza explicable:** toda recomendación incluye qué se detectó, por qué importa, fuente/actualización y acción propuesta.
+4. **Continuidad:** grupo, filtros y punto de retorno persisten mientras sean válidos.
+5. **Cierre claro:** toda acción termina con resultado, alcance, estado de entrega y siguiente paso.
+
+**Métrica North Star:** porcentaje de jornadas en que las tres tareas prioritarias se completan sin ayuda externa, error irreversible ni pérdida de contexto. Objetivo inicial ≥85%; profesores 60+ ≥80% tras ≤10 minutos de familiarización.
+
+## 2. Escena de uso rectora
+
+Un docente de 62 años abre NEXO en un teléfono bajo luz intensa entre clases, con menos de dos minutos y conectividad irregular. Debe reconocer su grupo, detectar una ausencia, iniciar una citación y saber si se enviará por WhatsApp sin recordar rutas ni interpretar un tablero. Esta escena exige superficies claras, texto legible, objetivos únicos, controles táctiles grandes, estado de red explícito y cero ornamentación competitiva.
+
+La misma arquitectura escala a un rector en monitor de escritorio, con mayor densidad y comparación institucional, sin cambiar lenguaje ni modelo mental.
+
+## 3. Emociones y tono
+
+- **Calma operativa:** la urgencia se señala sin alarmismo, parpadeo ni miedo.
+- **Control:** cada automatización es reversible cuando sea posible y explicable siempre.
+- **Competencia:** lenguaje directo, institucional y humano, nunca condescendiente.
+- **Confianza:** se distingue dato confirmado, dato obsoleto, inferencia y recomendación.
+- **Alivio:** NEXO recuerda contexto, evita repetición y prepara decisiones.
+
+### Voz
+
+- “El acudiente confirmó la citación para mañana a las 8:00 a. m.”
+- “NEXO recomienda revisar el caso: las inasistencias aumentaron durante 3 semanas.”
+- “No se pudo enviar. Tu información está guardada; reintenta cuando vuelva la conexión.”
+
+Nunca: “¡Alerta crítica!!!”, “La IA decidió”, “Error 500”, “Procesando mágicamente”.
+
+## 4. Diferenciación
+
+NEXO no es un ERP escolar porque organiza el trabajo por situaciones y decisiones, no por entidades administrativas ni menús CRUD. Tampoco es un chatbot: la conversación NEXO es un flujo de mensajes institucionales de solo lectura con acciones contextuales. La inteligencia es silenciosa: clasifica y propone, pero no oculta evidencia, suplanta criterio profesional ni inventa certeza.
+
+### Anti-patrones
+
+- Inicio como mosaico financiero de KPIs y gráficos.
+- Tablas por defecto cuando la tarea es decidir sobre una persona o situación.
+- Perfil integral del estudiante expuesto fuera de necesidad contextual.
+- Múltiples banners, acciones primarias o llamadas de instalación.
+- Interfaces infantiles, gubernamentales, saturadas o “IA” decorativa.
+- Confirmación modal para toda acción; solo se reserva para consecuencias críticas.
+- Color como única señal, urgencia intermitente o sonido.
+
+## 5. Principios de confianza
+
+### DEC-001. Privacidad contextual
+Mostrar solo datos necesarios para la tarea, rol y momento. Ocultar documento, dirección, EPS y datos del acudiente salvo que una tarea autorizada los requiera. Registrar acceso sensible.
+
+### DEC-002. Inteligencia explicable
+Una recomendación presenta: señal, periodo, fuente, nivel/estado calculado por backend y acción sugerida. El frontend nunca calcula riesgo ni umbrales.
+
+### DEC-003. Autoridad humana
+NEXO recomienda; el personal autorizado decide. Acciones disciplinarias, psicológicas, salidas y comunicaciones requieren identidad del actor, confirmación proporcional y auditoría.
+
+### DEC-004. Serenidad proporcional
+Crítico significa consecuencia grave y próxima, no dato llamativo. Rojo ocupa el mínimo necesario y siempre se acompaña de icono, etiqueta y explicación.
+
+### DEC-005. Integridad visible
+Estados de envío, sincronización y actualización no se traducen falsamente a éxito. “Guardado en este dispositivo” no equivale a “registrado en la institución”.
+
+## 6. Tensiones resueltas
+
+| Tensión | Regla |
+|---|---|
+| Belleza vs. velocidad | Si una decisión visual añade latencia, movimiento o lectura sin mejorar tarea, desaparece. |
+| Inteligencia vs. explicabilidad | La recomendación nunca sustituye evidencia resumida ni fecha. |
+| Urgencia vs. serenidad | Prioridad por orden, texto y contraste; no por animación o volumen cromático. |
+| Densidad vs. comprensión | Vista resumida con divulgación progresiva; tablas solo para comparación/exportación. |
+| Automatización vs. control | Defaults y propuestas, nunca consecuencias ocultas. |
+| Consistencia vs. adaptación | Un sistema y vocabulario; cambia composición por ancho/capacidad, no arquitectura. |
+
+## 7. Objetos y vocabulario canónico
+
+- **Situación:** señal que merece interpretación.
+- **Acción operativa:** comando institucional acotado.
+- **Caso:** expediente vivo de seguimiento, con estado, responsable, indicadores y evolución.
+- **Indicador:** dato interpretado por backend con estado y tendencia.
+- **Notificación:** mensaje institucional de solo lectura que informa y puede proponer acción.
+- **Evento:** hecho registrado y fechado.
+- **Grupo activo:** contexto persistente seleccionado.
+- **Acudiente:** actor externo por WhatsApp; no usuario WebApp.
+- **Entrega:** ciclo del mensaje (en cola, enviado, entregado, leído si existe, fallido, respondido).
+
+## 8. Modelo de calidad
+
+Toda capacidad usa IDs `CAP-*`; flujos `FLOW-*`; pantallas `SCR-*`; componentes `CMP-*`; decisiones `DEC-*`. Estados técnicos permitidos:
+
+- `Implementado (Verificado)`: solo prueba manual end-to-end, evidencia Nivel 1.
+- `Implementado (Pendiente de validación funcional)`: evidencia técnica Nivel 2.
+- `Backend listo`: Nivel 3.
+- `Backend parcial`: soporte incompleto explicado.
+- `Planificado`: visión Nivel 4.
+
+Sin ejecución real durante esta auditoría, no se asigna Nivel 1.
+
+## 9. Recomendaciones
+
+- **REC-001 (Aprobada):** sustituir la animación fija de login por carga real y saludo posterior no bloqueante. Aplicada en [UX_DESIGN.md](./UX_DESIGN.md) (Inicio de sesión) y [06_USER_FLOWS.md](./06_USER_FLOWS.md) (FLOW-AUTH-01). La espera ornamental queda eliminada; el login se adapta a la velocidad real del dispositivo.
+- **REC-002:** resolver la tensión “todas las acciones en tarjetas” usando tarjetas solo para iniciar operaciones; listas y tablas se admiten cuando mejoran comparación y escala.
+- **REC-003:** renombrar en implementación “Seguimiento” a “Casos Activos”, como dicta la fuente.
+- **REC-004:** validar con instituciones si “Portero” debe mostrarse como “Portero” para evitar personalización innecesaria del rol.
+
+## 10. Criterios de aceptación
+
+- Cada pantalla responde una pregunta y presenta una sola acción primaria.
+- Ninguna recomendación aparece sin motivo, fecha y acción disponible.
+- Ningún estado depende solo del color.
+- El acudiente no recibe navegación WebApp.
+- Un profesor 60+ completa citación, permiso y consulta con ≥80% de éxito sin ayuda tras 10 minutos.
+- El sistema comunica offline, obsolescencia y sincronización sin afirmar éxito anticipado.
+
+## 11. Trazabilidad
+
+Esta filosofía gobierna [02_DESIGN_PRINCIPLES.md](./02_DESIGN_PRINCIPLES.md), [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md), [05_INFORMATION_ARCHITECTURE.md](./05_INFORMATION_ARCHITECTURE.md), [06_USER_FLOWS.md](./06_USER_FLOWS.md) y [12_FRONTEND_IMPLEMENTATION_GUIDE.md](./12_FRONTEND_IMPLEMENTATION_GUIDE.md).
+</file>
+
+<file path="02_DESIGN_PRINCIPLES.md">
+# 02. Principios de diseño verificables
+
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md). **Objetivo:** convertir la filosofía en leyes medibles del frontend.
+
+## 1. Leyes obligatorias
+
+### DEC-010. Una pantalla, una pregunta
+El título, primer bloque y acción primaria deben responder la misma pregunta. Prueba: al ocultar el contenido secundario, 4 de 5 participantes explican propósito y próximo paso en ≤5 s.
+
+### DEC-011. Una acción primaria
+Solo un control por estado usa énfasis primario. Acciones secundarias son texto, tono neutro o menú. Excepción —modifica la regla "Nunca dos acciones principales" de [UX_DESIGN.md](./UX_DESIGN.md)—: elección binaria simétrica solo cuando ninguna opción es predeterminada. Prevalece porque ambas opciones son igualmente legítimas, no hay default impuesto por el sistema y la elección es reversible.
+
+### DEC-012. Reconocimiento sobre recuerdo
+Grupo activo, filtros, destinatario, fecha y origen permanecen visibles o recuperables. Nunca pedir información ya disponible y vigente. Métrica: cero reingresos redundantes en un mismo flujo.
+
+### DEC-013. Prevención antes que error
+Usar opciones válidas, defaults explícitos, validación inmediata no intrusiva y resumen previo. Bloquear solo lo inválido. Preservar datos ante error.
+
+### DEC-014. Contexto persistente
+El grupo activo persiste entre Inicio, Operaciones y Consultas hasta cambio, pérdida de permiso, cierre de sesión o caducidad institucional. Un retorno desde detalle restaura posición, filtros y foco.
+
+### DEC-015. Divulgación progresiva
+Mostrar primero situación, impacto y acción; evidencia, historial y datos técnicos bajo expansión o superficie de detalle. Lo oculto nunca debe ser requisito para entender el riesgo.
+
+### DEC-016. Estado del sistema visible
+Toda operación >100 ms confirma recepción; >1 s muestra progreso/skeleton; >10 s ofrece continuar en segundo plano o reintentar. No usar progreso falso.
+
+### DEC-017. Control y recuperación
+Cancelar antes de enviar, deshacer acciones reversibles y confirmar acciones críticas. Errores dicen qué ocurrió, qué se preservó y qué hacer.
+
+### DEC-018. Consistencia semántica
+Mismo objeto, acción y estado conservan etiqueta, icono y comportamiento en todas las superficies. No usar “Seguimiento” y “Caso” como equivalentes de navegación: el módulo es **Casos Activos**.
+
+### DEC-019. Privacidad por defecto
+La vista inicial contiene el mínimo necesario. Revelar datos sensibles exige permiso y propósito; no se exportan por defecto.
+
+### DEC-020. Accesibilidad como contrato
+WCAG 2.2 AA es criterio de salida. La equivalencia teclado/táctil/lector, zoom 400%, reflow, foco visible y reduced motion no son variantes opcionales.
+
+### DEC-021. Señalización de SOS recibido
+Un SOS recibido por un destinatario autorizado puede usar la notificación nativa del sistema operativo (sonido y/o vibración) para reducir el tiempo de respuesta en situaciones de vida o muerte. No se usa ningún beep, pulso ni parpadeo decorativo de NEXO. Esta excepción modifica la decisión "Sin sonidos" de [UX_DESIGN.md](./UX_DESIGN.md) y debe validarse con al menos una institución piloto antes de generalizarse. Véase [08_MICRO_INTERACTIONS.md](./08_MICRO_INTERACTIONS.md).
+
+## 2. Presupuestos
+
+| Presupuesto | Límite | Validación |
+|---|---:|---|
+| Elementos prioritarios simultáneos | ≤5 | conteo de primer viewport |
+| Acción primaria | 1 | revisión automática/visual |
+| Profundidad para iniciar tarea frecuente | ≤1 selección desde módulo | prueba de recorrido |
+| Pasos de operación frecuente | 3–5 decisiones | analítica por `FLOW-*` |
+| Campos visibles por paso | ideal ≤5 | inventario de formulario |
+| Opciones sin agrupación | ≤7; si excede, buscar/agrupar | inspección |
+| Respuesta visual a entrada | ≤100 ms | medición RUM |
+| Transición | 150–250 ms; máximo 300 ms | tokens de motion |
+| Contenido textual | 65–75 caracteres por línea | visual regression |
+| Target táctil recomendado | 44×44 CSS px; mínimo WCAG 24×24 | auditoría |
+| Tareas críticas sin scroll móvil | no obligatorio; acción siempre alcanzable | prueba 360×640 |
+
+Los números son límites de diseño, no afirmaciones psicológicas universales. La ley de Miller no justifica mágicamente “7”; se valida por tarea y población.
+
+## 3. Pruebas de selección de patrón
+
+### Tabla
+Usarla si la tarea primaria es comparar ≥3 atributos entre ≥5 registros, ordenar o exportar. Debe tener encabezados, versión móvil por prioridades y alternativa de detalle. No usar para casos, notificaciones o acciones de una persona.
+
+### Card
+Usarla para iniciar una acción, resumir una entidad con destino claro o agrupar contenido autónomo. No envolver secciones arbitrarias ni anidar cards. Una lista uniforme supera a una cuadrícula de cards cuando hay >8 elementos.
+
+### Modal/dialog
+Solo para confirmación crítica, decisión breve que bloquea el flujo o resultado que requiere reconocimiento. No para formularios largos, navegación ni detalles. En móvil puede ser pantalla completa sin cambiar semántica.
+
+### Drawer/bottom sheet
+Drawer para contexto o edición secundaria manteniendo origen visible en ancho amplio. Bottom sheet para selección/acción breve en touch. Si contiene más de un objetivo, se convierte en página.
+
+### Gráfico
+Solo si una forma/tendencia responde más rápido que texto. Debe incluir resumen textual, unidades, periodo, tabla o lista accesible y no superar una visualización dominante por pantalla.
+
+## 4. Matriz de evidencia aplicada
+
+| ID | Problema humano | Principio/fuente | Regla medible | Métrica |
+|---|---|---|---|---|
+| DEC-012 | memoria de trabajo limitada | NN/g, reconocimiento sobre recuerdo | contexto y opciones visibles | reingresos redundantes = 0 |
+| DEC-016 | incertidumbre por latencia | heurística visibilidad de estado; Doherty como orientación | feedback ≤100 ms | p75 input feedback ≤100 ms |
+| DEC-010 | carga extrínseca | NN/g carga cognitiva; minimalismo | una pregunta y ≤5 prioridades | comprensión ≤5 s |
+| DEC-014 | pérdida de contexto | continuidad y Goal Gradient | retorno exacto y progreso visible | abandonos por retorno <5% |
+| DEC-013 | errores y ansiedad | heurísticas prevención/recuperación | preservar datos y explicar reparación | recuperación ≥90% |
+| DEC-011 | fatiga decisional/Hick | reducir elecciones concurrentes | 1 primaria, opciones agrupadas | selección correcta ≥95% |
+| DEC-020 | destreza/visión variable | WCAG 2.2; investigación adultos mayores | 44 px recomendado, foco 2 px | 0 fallos AA |
+| DEC-018 | expectativas aprendidas/Jakob | consistencia y estándares | vocabulario único | términos duplicados = 0 |
+| DEC-015 | atención selectiva/Gestalt | proximidad, jerarquía, progressive disclosure | resumen antes de detalle | dato clave encontrado ≤10 s |
+| DEC-017 | Peak-End | cierre explícito y recuperable | resultado + siguiente acción | confianza ≥5/7 |
+| DEC-030 | Fitts | tamaño/distancia proporcional | acción frecuente grande y próxima | errores de toque <2% |
+| DEC-031 | Von Restorff | singularidad controlada | acento reservado a estado/acción | primaria reconocida ≥90% |
+
+## 5. Fuentes y límites
+
+Consultadas el **2025-03-08**:
+
+- WCAG 2.2, W3C: https://www.w3.org/TR/WCAG22/
+- Novedades WCAG 2.2: https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
+- WAI-ARIA APG: https://www.w3.org/WAI/ARIA/apg/patterns/
+- Heurísticas NN/g: https://www.nngroup.com/articles/ten-usability-heuristics/
+- Carga cognitiva NN/g: https://www.nngroup.com/articles/minimize-cognitive-load/
+- Reconocimiento y recuerdo: https://www.nngroup.com/articles/recognition-and-recall/
+- Usabilidad para mayores: https://www.nngroup.com/articles/usability-for-senior-citizens/
+- Apple HIG Foundations: https://developer.apple.com/design/human-interface-guidelines/foundations
+- Material 3 breakpoints: https://m3.material.io/foundations/layout/breakpoints/overview
+- PWA checklist: https://web.dev/articles/pwa-checklist
+
+**Límites:** heurísticas y “leyes UX” orientan hipótesis, no sustituyen pruebas con roles reales. Apple/Material informan comportamiento nativo, pero NEXO mantiene identidad propia. WCAG AA no cubre todas las necesidades cognitivas; se añaden lenguaje claro y pruebas 60+.
+
+## 6. Excepciones
+
+Una excepción requiere registro `DEC-*`, problema concreto, alternativa descartada, duración y prueba. No son excepciones válidas: “se ve mejor”, “lo hace otra app”, “es más moderno” o limitación evitable del framework.
+
+## 7. Criterios de aceptación
+
+- Toda pantalla y flujo referencia al menos una ley.
+- Toda excepción queda registrada y medible.
+- Ningún patrón se elige por costumbre sin pasar su prueba.
+- Pruebas por rol reportan éxito, tiempo, error, ayuda, confianza y carga percibida.
+</file>
+
+<file path="03_DESIGN_SYSTEM.md">
+# 03. Sistema de diseño NEXO
+
+**Nombre:** NEXO Quiet Operations  
+**Versión:** 1.0 objetivo  
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md). Esta es una especificación tokenizable, no código.
+
+## 1. Fundamentos
+
+### 1.1 Color, estrategia restringida
+
+Los valores definitivos se validan en sRGB y P3. Se expresan en OKLCH para evolución consistente.
+
+| Token | Claro | Oscuro | Uso |
+|---|---|---|---|
+| `color.canvas` | `oklch(98% 0.006 245)` | `oklch(18% 0.008 245)` | fondo raíz |
+| `color.surface` | `oklch(99.3% 0.004 245)` | `oklch(22% 0.009 245)` | superficie principal |
+| `color.surface.subtle` | `oklch(96% 0.009 245)` | `oklch(26% 0.010 245)` | navegación/agrupación |
+| `color.text` | `oklch(23% 0.018 245)` | `oklch(94% 0.007 245)` | texto principal |
+| `color.text.muted` | `oklch(48% 0.018 245)` | `oklch(72% 0.012 245)` | secundario |
+| `color.border` | `oklch(88% 0.010 245)` | `oklch(35% 0.012 245)` | división |
+| `color.accent` | `oklch(48% 0.115 245)` | `oklch(72% 0.105 245)` | primaria/selección/info |
+| `color.success` | `oklch(52% 0.125 155)` | `oklch(72% 0.115 155)` | correcto |
+| `color.warning` | `oklch(62% 0.135 70)` | `oklch(78% 0.120 70)` | atención |
+| `color.danger` | `oklch(52% 0.175 25)` | `oklch(72% 0.145 25)` | crítico/destructivo |
+
+Cada semántico tiene `surface`, `text`, `border` y `strong`; combinaciones deben cumplir 4.5:1 texto normal, 3:1 texto grande/componentes. Datos nunca dependen solo de tono: usan etiqueta, icono/patrón y valor.
+
+### 1.2 Tipografía
+
+Familia: Inter Variable, fallback system-ui. Cifras tabulares para métricas, horas y tablas.
+
+| Token | Tamaño/alto | Peso | Uso |
+|---|---|---:|---|
+| `type.display` | 32/38 | 650 | título principal amplio |
+| `type.h1` | 28/34 | 650 | pantalla |
+| `type.h2` | 22/28 | 620 | sección |
+| `type.h3` | 18/24 | 620 | bloque |
+| `type.body` | 16/24 | 430 | texto/inputs |
+| `type.body.small` | 14/20 | 450 | apoyo |
+| `type.label` | 14/18 | 600 | control |
+| `type.caption` | 12/16 | 520 | metadato no crítico |
+
+No usar mayúsculas extensas ni tracking exagerado. Línea de prosa 45–72 caracteres; títulos comprensibles aislados. Zoom 200% sin pérdida y reflow 400%.
+
+### 1.3 Espaciado y forma
+
+Escala: 4, 8, 12, 16, 24, 32, 48, 64 px. Densidades: `comfortable` por defecto, `compact` solo tablas de escritorio y elección explícita. Radios: 8 controles, 12 superficies, 16 paneles; píldora solo chips/estado. Bordes 1 px. Sombras solo superposición: baja, media y diálogo; nunca como decoración.
+
+### 1.4 Grid y anchos
+
+| Clase | Ancho | Composición |
+|---|---|---|
+| `compact` | 0–599 | 4 columnas, margen 16, gap 12, navegación lateral como panel superpuesto |
+| `medium` | 600–1023 | 8 columnas, margen 24, gap 16, rail lateral colapsable |
+| `wide` | 1024–1439 | 12 columnas, sidebar 240, contenido 720–1120 |
+| `xwide` | ≥1440 | sidebar 256, contenido máx. 1280; no estirar lectura |
+
+Se decide también por `pointer`, teclado, hover, safe areas y ventana, no por modelo. Acción móvil importante respeta safe-area inferior. Orientación libre salvo captura biométrica externa justificada.
+
+### 1.5 Movimiento
+
+Tokens: `instant 0`, `fast 150 ms`, `standard 200 ms`, `deliberate 250 ms`, `max 300 ms`; curva salida `cubic-bezier(.22,1,.36,1)`. Solo `opacity` y `transform`. Reduced motion elimina desplazamiento/escala y conserva cambios instantáneos o fundidos ≤100 ms. Sin sonido, parpadeo, rebote ni secuencias de entrada.
+
+## 2. Contrato común de componentes
+
+Todo componente interactivo especifica: anatomía, tamaños, variantes cerradas, default, hover, focus-visible, pressed, selected, disabled, loading, error, offline; nombre accesible, teclado, touch, lector, responsive, contenido y uso incorrecto. Foco: perímetro sólido ≥2 px y contraste ≥3:1; nunca oculto. Targets: 44×44 recomendados, nunca menos de WCAG 24×24 ni sin separación.
+
+## 3. Primitivos y controles
+
+### CMP-001 Botón
+Anatomía: label verbal + icono opcional + progreso. Variantes: primary, secondary, quiet, danger. Tamaños 44 y 52 px. Un primary por estado. Loading conserva ancho y anuncia estado. Icon-only exige tooltip y nombre. No deshabilitar sin explicar motivo.
+
+### CMP-002 Campo de texto / CMP-003 Textarea
+Label persistente arriba, control, ayuda y error en flujo. Altura 48; textarea mínimo 3 líneas, crecimiento limitado. Placeholder es ejemplo, no label. Error junto al campo y resumen al enviar. `autocomplete` semántico.
+
+### CMP-004 Búsqueda
+Campo con label accesible, limpiar, estado y sugerencias. Resultados tras 2–3 caracteres o submit según costo. Escape cierra sugerencias; flechas recorren; Enter selecciona. Historial solo si aporta y respeta privacidad.
+
+### CMP-005 Select / CMP-006 Combobox
+Select nativo para listas cortas estables. Combobox para >7 opciones o búsqueda. Texto visible, no códigos. Soporta teclado APG, loading, vacío y error. En compact, lista puede ocupar sheet completa.
+
+### CMP-007 Fecha y hora
+Entrada editable + selector; formato visible local `es-CO`; no bloquear teclado. Indicar zona y restricciones. Rangos resumen inicio/fin. Errores como “La fecha debe ser posterior a hoy”.
+
+### CMP-008 Checkbox / radio / switch
+Checkbox para selección múltiple; radio para una opción; switch solo efecto inmediato reversible. Área 44 px; label activa. No usar switch para “guardar”.
+
+### CMP-009 Filtros
+Barra con filtros prioritarios, contador y “Limpiar”. Chips representan filtros activos, no acciones generales. En móvil abre sheet; aplicar puede ser inmediato si barato o botón único si consulta costosa.
+
+### CMP-010 Chip / CMP-011 Badge
+Chip es interactivo/seleccionable; badge es estado no interactivo. Máximo 2 por fila resumida. Estado siempre texto + semántica, no color solo.
+
+## 4. Contenedores de información
+
+### CMP-020 Card
+Solo resumen autónomo o inicio de acción. Anatomía: título, apoyo, estado, acción/destino. Variantes `action`, `summary`, `case`; sin card anidada. Grid máximo 5 prioritarias; después agrupar o listar.
+
+### CMP-021 Lista
+Patrón por defecto para notificaciones, eventos, estudiantes y casos. Filas 56–88 px, jerarquía consistente, destino completo, acciones secundarias al final. Virtualizar si >100 visibles sin romper accesibilidad.
+
+### CMP-022 Tabla
+HTML semántico; caption, encabezados, orden anunciado, paginación. Solo comparación. En compact: conservar 2–3 campos prioritarios en lista y detalle, no scroll horizontal como única solución. Acciones masivas separadas.
+
+### CMP-023 Calendario
+Agenda/lista es default móvil; mes solo para explorar fechas. Eventos con texto y estado. Teclado completo, “Hoy”, zona horaria. No comunicar categoría solo por color.
+
+### CMP-024 Timeline
+Orden cronológico con fecha absoluta + relativa, actor, evento, resultado y evidencia. No es decorativa. Agrupa por día; datos auditados se distinguen de notas.
+
+### CMP-025 Burbuja NEXO
+Mensaje de solo lectura: origen NEXO, tiempo, texto, evidencia resumida y CTA contextual. No imita chat bidireccional ni muestra caja de escritura.
+
+### CMP-026 Gráfico / CMP-027 Indicador
+Gráfico: título, resumen, periodo, ejes/unidad, leyenda directa, alternativa tabular. Indicador: nombre, estado textual, tendencia, periodo y explicación. Sin 3D, gauges ni gráficas enormes.
+
+## 5. Navegación y superficies
+
+### CMP-030 Sidebar
+Patrón rector. Logo, navegación filtrada, utilidad; abajo tema, perfil y cierre. Wide fijo; medium rail expandible; compact se abre desde botón “Menú” como panel lateral y conserva exactamente la misma jerarquía. `aria-current`, foco y Escape.
+
+### CMP-031 Topbar
+Título contextual, grupo activo cuando aplica, estado de red/sync y una acción. No duplica navegación.
+
+### CMP-032 Tabs
+Solo vistas hermanas del mismo objeto, máximo 5 visibles. Patrón APG; activación automática solo si instantánea. En compact, scroll con indicadores o select si excede.
+
+### CMP-033 Breadcrumbs
+Solo profundidad ≥2 en wide/medium. Compact usa “Volver a {origen}” preservando contexto.
+
+### CMP-034 Drawer / CMP-035 Bottom sheet
+Drawer para detalle secundario en wide; sheet para selección breve touch. Focus trap, Escape, retorno al disparador. Si el contenido es tarea larga, usar página.
+
+### CMP-036 Diálogo
+Confirmación crítica o decisión breve. Título describe consecuencia, cuerpo nombra alcance, primaria verbal específica. Foco inicial en opción segura; no cerrar accidentalmente durante envío.
+
+### CMP-037 Alert / CMP-038 Toast-snackbar
+Alert persiste junto al problema; toast confirma eventos no críticos y no contiene información única. Duración mínima legible, pausable; errores recuperables no desaparecen. Máximo uno visible.
+
+### CMP-039 Skeleton / CMP-040 Loading
+Skeleton replica estructura y se anima sutilmente o queda estático con reduced motion. Spinner solo dentro de control o proceso indeterminado compacto. No skeleton para datos en error/offline si existe caché.
+
+### CMP-041 Empty/error state
+Título factual, causa si se conoce, acción disponible y alternativa. Vacío inicial enseña; vacío filtrado ofrece limpiar; sin permiso no insinúa existencia de datos.
+
+## 6. Patrones NEXO
+
+### CMP-100 Selector de grupo
+Persistente, muestra grupo y jornada; lista solo asignaciones autorizadas. Cambio actualiza contexto con confirmación si hay formulario sucio. Estado “Todos” solo roles institucionales autorizados.
+
+### CMP-101 Acción operativa
+Card de inicio → formulario de 3–5 decisiones → resumen → resultado. Muestra destinatarios y alcance WhatsApp antes de confirmar. Estados offline no prometen envío.
+
+### CMP-102 Caso
+Encabezado de estudiante contextual (foto, nombre, grupo), riesgo textual, resumen NEXO, indicadores, timeline, responsable y acciones. Nunca ficha completa.
+
+### CMP-103 Indicador de riesgo
+Nivel + tendencia + evidencia + periodo + “cómo se determinó” suministrado por backend. No permite recalcular en frontend.
+
+### CMP-104 Conversación NEXO
+Feed cronológico de mensajes de solo lectura, filtros mínimos y acciones inline. No bandeja de correo, no composer.
+
+### CMP-105 Estado WhatsApp
+En cola, enviado, entregado, leído (solo si proveedor confirma), fallido, respondido. Incluye hora, destinatario enmascarado, reintento autorizado y última actualización.
+
+### CMP-106 Estudiante contextual
+Foto opcional, nombre, grupo, estado relevante y una acción. Variantes por permiso sin añadir datos personales innecesarios.
+
+### CMP-107 Confirmación crítica
+Consecuencia, alcance, actor, irreversibilidad y frase de acción. Para SOS, salida, cierre de caso y comunicaciones masivas.
+
+### CMP-108 Sincronización PWA
+Estado global discreto: En línea, Sin conexión, Guardando localmente, Sincronizando N, Conflicto, Actualizado. Detalle revela cola y recuperación sin datos sensibles.
+
+## 7. Contenido
+
+Botones en infinitivo: “Enviar citación”, “Guardar nota”. Estados en participio: “Entregado”. Títulos en sentence case. Fechas absolutas en decisiones críticas; relativas solo como apoyo. Números con unidad. No “Aceptar” cuando puede decir “Autorizar salida”.
+
+## 8. Visualización y estados completos
+
+Toda superficie contempla carga, vacío inicial, vacío filtrado, éxito, advertencia, error recuperable/terminal, sin permiso, offline, datos obsoletos y conflicto. Los datos cacheados llevan “Actualizado {hora}”.
+
+## 9. Gobierno
+
+Tokens y componentes tienen owner de Design System + frontend; versión semántica. Cambios breaking requieren migración, deprecación mínima de dos releases y pruebas visuales/a11y. No se crean variantes fuera del inventario sin `DEC-*`, caso repetido ≥3 y revisión de accesibilidad.
+
+## 10. Criterios de aceptación
+
+- Cobertura de todos los componentes solicitados y estados comunes.
+- Contraste validado en ambos temas.
+- Cero cards anidadas y cero color como única señal.
+- Responsive probado en 320, 360, 768, 1024, 1440 y zoom 400%.
+- Cada patrón enlaza pantallas en [07_SCREEN_SPECIFICATIONS.md](./07_SCREEN_SPECIFICATIONS.md).
+- Cada componente del inventario (`CMP-001–011`, `CMP-020–041` y `CMP-100–108`, con `CMP-012–019` y `CMP-028–029` reservados para extensiones futuras) tiene al menos un uso documentado en las matrices de 07 o en un patrón NEXO.
+</file>
+
+<file path="04_VISUAL_LANGUAGE.md">
+# 04. Lenguaje visual NEXO
+
+**Dirección:** precisión serena para una jornada institucional real.  
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md); tokens en [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md).
+
+## 1. Escena y tema
+
+NEXO se usa en pasillos luminosos, aulas cambiantes y oficinas de jornada completa. Por eso el modo claro es la base de trabajo diurno, no blanco puro sino un lienzo azul-gris cálido de bajo deslumbramiento. El modo oscuro existe para baja iluminación y preferencia, no como estética tecnológica obligatoria. Ambos conservan jerarquía y semántica.
+
+## 2. Moodboard verbal
+
+Papel técnico impecable, señalética institucional precisa, instrumentos médicos calmados, aluminio mate, tinta azul profunda y una única luz de estado. Superficies planas, bordes finos, ritmo amplio, cifras sobrias. La tecnología se percibe en la respuesta y la coherencia, no en efectos futuristas.
+
+### Personalidad
+
+- **Serena, no pasiva.**
+- **Institucional, no burocrática.**
+- **Premium, no lujosa.**
+- **Tecnológica, no futurista.**
+- **Humana, no infantil.**
+
+## 3. Gramática visual
+
+1. Un lienzo continuo domina; superficies adicionales aparecen por función, no para envolver todo.
+2. Jerarquía mediante escala, peso, posición y espacio antes que color.
+3. Bordes separan cuando la proximidad no basta; sombras solo para elevación real.
+4. El acento azul ocupa menos del 10% de la vista y significa acción, selección o información.
+5. Verde, naranja y rojo se reservan a estados semánticos y siempre tienen texto/icono.
+6. Radio moderado y consistente; píldoras únicamente para chips y badges.
+7. Iconos lineales uniformes, 1.75–2 px, nunca sustituyen labels críticos.
+8. Fotografía solo para reconocer personas autorizadas; sin imágenes decorativas de stock.
+9. Ilustración únicamente en onboarding/empty states y debe explicar una acción.
+
+## 4. Ritmo y composición
+
+La página se lee como una hoja de trabajo: encabezado breve, una zona de decisión dominante y apoyo subordinado. El espacio no es vacío ornamental, es separación de tareas. El ancho de lectura queda contenido aunque la pantalla sea grande. Las vistas densas crecen en filas/columnas, no en tarjetas repetidas.
+
+### Firma NEXO
+
+La firma visual es una **línea de situación**: frase principal de NEXO, tiempo/fuente discreta y acción contextual. No es banner ni chat decorativo. En Inicio puede decir “Hoy en Colegio Central: 2 solicitudes requieren respuesta”; al abrir, revela evidencia y próximos pasos.
+
+## 5. Referencias traducidas
+
+| Referencia | Aprender | No copiar |
+|---|---|---|
+| Apple Health | resumen humano, indicadores legibles, tendencias pequeñas | anillos, saturación o metáforas fitness |
+| Linear | jerarquía, velocidad, navegación consistente | densidad para desarrolladores, shortcuts ocultos como requisito |
+| Arc | continuidad espacial y panel lateral | gestos o chrome no estándar |
+| Raycast | reconocimiento, comandos eficientes para expertos | interfaz keyboard-first para novatos |
+| Notion | composición tranquila y bloques claros | lienzo genérico/editorial para tareas estructuradas |
+| Stripe | estados, tablas y explicación de sistemas complejos | estética financiera o dashboards métricos |
+| Tesla | acción directa y estado de sistema | iconografía críptica o controles sin label |
+| iOS Settings | agrupación familiar, labels claros y disclosure | listas interminables o navegación móvil separada |
+
+## 6. Anti-referencias
+
+- ERP con menú profundo, tablas grises y formularios de veinte campos.
+- Portal gubernamental con exceso de cajas, texto legal dominante y navegación duplicada.
+- Estética escolar infantil, colores primarios o ilustraciones de caricatura.
+- Dashboard financiero con KPIs gigantes, gauges y gráficos simultáneos.
+- Glassmorphism, fondos borrosos, neón, degradados decorativos o texto degradado.
+- SaaS genérico con cuadrícula de cards idénticas e icono en cada una.
+- “IA” con brillos, orbes, estrellas o mensajes antropomórficos.
+
+## 7. Tema claro
+
+- Lienzo de alta luminosidad tintado, nunca blanco puro.
+- Texto azul carbón, no negro puro.
+- Sidebar apenas más frío que contenido.
+- Superficies seleccionadas usan tinte de acento muy bajo y borde claro.
+- Estados críticos usan superficie tenue y texto fuerte; nunca bloque rojo completo salvo acción SOS confirmada.
+
+## 8. Tema oscuro
+
+- Lienzo azul carbón, no negro.
+- Elevación por luminosidad y borde, no sombras negras pesadas.
+- Acento y semánticos reducen cromaticidad a alta luminosidad para evitar vibración.
+- Fotografías conservan color natural; se puede añadir borde, no overlay decorativo.
+- No invertir jerarquías ni introducir más color que en claro.
+
+## 9. Iluminación y entorno
+
+| Escena | Ajuste |
+|---|---|
+| Pasillo exterior | contraste robusto, targets 52 px, sin información por hover |
+| Aula | foco en grupo y acción, brillo del tema del sistema |
+| Oficina | densidad cómoda, comparación y teclado disponibles |
+| Noche/baja luz | dark, superficies cercanas, rojo contenido |
+| Conectividad débil | estado de red persistente, caché fechada y acciones seguras |
+
+## 10. Movimiento visual
+
+El contenido no “entra en escena”. La continuidad usa fundidos y traslación ≤8 px cuando ayuda a entender origen/destino. Un cambio de estado puede interpolar icono y color, pero el texto se actualiza inmediatamente. No hay parallax, stagger de cards, rebote ni animación de números que retrase lectura.
+
+## 11. Premium silencioso
+
+Una superficie aprueba si:
+
+- Se entiende sin iconos decorativos.
+- Cada alineación pertenece a una retícula.
+- Hay una sola voz cromática dominante.
+- Los estados se reconocen sin dramatización.
+- El contenido real cabe sin truncamientos frágiles.
+- Teclado, touch y lector producen la misma tarea.
+- La respuesta percibida es inmediata.
+- No puede confundirse con un ERP, un dashboard financiero ni una demo de IA.
+
+## 12. Pruebas de coherencia
+
+1. **Desaturación:** al quitar color, jerarquía y estado siguen comprensibles.
+2. **Solo títulos:** la pantalla explica propósito y secuencia.
+3. **Blur test:** una zona domina; no compiten cinco cards.
+4. **Swap test:** si una pantalla puede pertenecer a cualquier SaaS cambiando logo, falta lenguaje NEXO.
+5. **Tema:** captura claro/oscuro conserva orden y contraste.
+6. **Contenido extremo:** nombres largos, 200% texto y estados simultáneos no rompen composición.
+7. **Rol:** cada vista muestra lo necesario, no toda capacidad disponible.
+
+## 13. Criterios de aceptación
+
+- Paleta restringida y semántica aplicada según [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md).
+- Cero efectos prohibidos y cero color decorativo.
+- Contraste AA documentado en ambos temas.
+- Validación visual en iluminación alta y baja con al menos un usuario 60+.
+- Toda desviación requiere decisión `DEC-*` y fecha de expiración.
+</file>
+
+<file path="05_INFORMATION_ARCHITECTURE.md">
+# 05. Arquitectura de información
+
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md). **Modelo:** una arquitectura responsive, filtrada por rol. El acudiente es actor externo por WhatsApp.
+
+## 1. Modelo mental
+
+NEXO se organiza por preguntas de trabajo, no por tablas de base de datos:
+
+1. **Inicio:** ¿qué necesita mi atención ahora?
+2. **Operaciones:** ¿qué acción quiero realizar?
+3. **Notificaciones:** ¿qué ocurrió mientras trabajaba?
+4. **Casos Activos:** ¿qué estudiantes requieren seguimiento?
+5. **Consultas:** ¿qué información necesito buscar?
+6. **Auditoría:** ¿qué ocurrió, quién actuó y es íntegro?
+7. **Informes:** ¿qué necesito compartir o exportar?
+8. **Enrolamiento:** ¿quién debe quedar habilitado en el sistema?
+9. **Perfil:** ¿cómo gestiono mi cuenta y preferencias?
+
+## 2. Objetos canónicos
+
+| Objeto | Identidad | Relaciones | Regla de exposición |
+|---|---|---|---|
+| Institución | sede/colegio | grupos, personal, agenda | contexto superior |
+| Grupo | grado, nombre, jornada | estudiantes, docente, eventos | contexto persistente |
+| Estudiante contextual | nombre, foto, grupo | eventos, operaciones, caso | sin ficha integral |
+| Situación | tipo, tiempo, severidad | evidencia, recomendación | inicia decisión |
+| Operación | tipo, actor, alcance, estado | estudiante/grupo, mensajes | flujo único |
+| Caso | estado, riesgo, responsable | estudiante, indicadores, notas | expediente vivo |
+| Indicador | tipo, nivel, tendencia, periodo | caso/estudiante | backend autoritativo |
+| Mensaje NEXO | evento, explicación, CTA | operación/caso/agenda | solo lectura |
+| Mensaje WhatsApp | destinatario, entrega, respuesta | acudiente, operación | PII enmascarada |
+| Evento auditado | actor, acción, tiempo, integridad | cualquier objeto | inmutable; sujeto a retención y archivado institucional acotados, especialmente para datos de menores, conforme a la política de datos sensibles (por definir) |
+| Informe | tipo, periodo, filtros | datos autorizados | preview antes de exportar |
+| Usuario institucional | rol, permisos, sede | tareas, sesión | perfil propio |
+
+### Retención de eventos auditados
+Los eventos auditados son inmutables mientras estén en custodia activa. Para eventos que involucren datos de menores, la institución debe definir un plazo máximo de retención; tras ese plazo se aplicará archivado cifrado o depuración con conservación de hash de integridad, coherente con la política de datos sensibles pendiente.
+
+## 3. Sitemap objetivo
+
+```text
+Autenticación
+├─ Iniciar sesión (SCR-AUTH-01)
+├─ Verificar 2FA (SCR-AUTH-02)
+└─ Recuperar acceso (SCR-AUTH-03, planificado)
+
+Shell institucional
+├─ Inicio (SCR-HOME-01)
+│  ├─ Hoy en el colegio (SCR-HOME-02)
+│  └─ Detalle de situación/métrica (SCR-HOME-03)
+├─ Operaciones (SCR-OPS-01)
+│  ├─ Flujo de operación (SCR-OPS-02)
+│  └─ Resultado y entrega (SCR-OPS-03)
+├─ Notificaciones (SCR-NOT-01)
+│  └─ Detalle contextual (SCR-NOT-02)
+├─ Casos Activos (SCR-CASE-01)
+│  ├─ Caso (SCR-CASE-02)
+│  └─ Nota/evolución/cierre (SCR-CASE-03)
+├─ Consultas (SCR-QRY-01)
+│  └─ Resultados/detalle (SCR-QRY-02)
+├─ Auditoría (SCR-AUD-01)
+│  └─ Integridad/evento (SCR-AUD-02)
+├─ Informes (SCR-REP-01)
+│  └─ Previsualización/exportación (SCR-REP-02)
+├─ Enrolamiento (SCR-ENR-01)
+│  └─ Alta/biometría (SCR-ENR-02)
+└─ Perfil (SCR-PRO-01)
+   ├─ Cuenta y seguridad (SCR-PRO-02)
+   └─ Apariencia, instalación y sync (SCR-PRO-03)
+```
+
+## 4. Navegación por rol
+
+| Módulo | Rector | Coordinador | Docente | Secretaría | Portero | Auxiliar | Psicoorientador |
+|---|---|---|---|---|---|---|---|
+| Inicio | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
+| Operaciones | todas | dirección | aula | solicitud | SOS/solicitud/daño | SOS/solicitud/daño | bienestar |
+| Notificaciones | Sí | Sí | grupos | sistema | órdenes | órdenes | seguimiento |
+| Casos Activos | total | total | no lista | no | no | no | gestión |
+| Consultas | ejecutivo | incidentes/permisos | mis clases | gestión | no | no | riesgo/seguimientos |
+| Auditoría | Sí | no | no | no | no | no | no |
+| Informes | Sí | no | no | no | no | no | no |
+| Enrolamiento | no | no | no | Sí | no | no | no |
+| Perfil | propio | propio | propio | propio | propio | propio | propio |
+
+Portero y Auxiliar comparten navegación, operaciones y notificaciones porque la distinción es organizacional/backend (nómina, turnos), no funcional.
+
+`SUPER_RECTOR` y `EDGE_NODE` son roles técnicos fuera del producto institucional objetivo. El acudiente no tiene sitemap WebApp.
+
+## 5. Tareas y permisos
+
+Cada capacidad incluye: estado técnico, nivel de evidencia (N1–N4), fecha de auditoría (2025-03-08), método (auditoría estática de UI, clientes API, rutas, workers y documentación), responsable (por asignar) y limitaciones conocidas (ver columna de estado). Ninguna capacidad es Nivel 1 sin prueba manual end-to-end.
+
+| ID | Tarea | Roles objetivo | Capacidad | Estado técnico, evidencia 2025-03-08 |
+|---|---|---|---|---|
+| CAP-AUTH-01 | login/sesión/logout | todos | `/auth/*`, cookie/JWT, RBAC/RLS | Implementado (Pendiente validación), N2 |
+| CAP-AUTH-02 | 2FA | todos según política | login + verify-2fa/OTP | Implementado (Pendiente validación), N2 |
+| CAP-HOME-01 | inicio por rol | todos | stats/events | Implementado (Pendiente validación), N2 |
+| CAP-HOME-02 | grupo persistente global | docente/contextuales | UI local parcial | Backend parcial; persistencia transversal no demostrada |
+| CAP-HOME-03 | Hoy en el colegio/agenda | roles | visión | Planificado, N4 |
+| CAP-OPS-01 | citar | rector/coordinador/docente/psico | operación + Twilio | Implementado (Pendiente validación), N2 |
+| CAP-OPS-02 | salida/permiso | autorizados | operación + persistencia | Implementado (Pendiente validación), N2 |
+| CAP-OPS-03 | SOS | todos institucionales | operación/panic según alcance | Implementado (Pendiente validación), N2 |
+| CAP-OPS-04 | incidente/daño/solicitud | según rol | operaciones | Implementado (Pendiente validación), N2 |
+| CAP-OPS-05 | agenda/reunión | rector/coordinador | visión | Planificado, N4 |
+| CAP-MSG-01 | WhatsApp outbound/entrega | institucional → acudiente | cola worker/webhook | Implementado (Pendiente validación), N2 |
+| CAP-MSG-02 | respuesta acudiente | acudiente externo | webhook inbound | Backend listo, N3; UI final no demostrada |
+| CAP-CASE-01 | casos/riesgo/notas/evolución | rector/coordinador/psico | tracking + behavior | Implementado (Pendiente validación), N2 |
+| CAP-QRY-01 | consultas por rol | cinco roles | motor query | Implementado (Pendiente validación), N2; módulos vacíos/legacy |
+| CAP-AUD-01 | auditoría/integridad | rector objetivo | audit routes/hash | Implementado (Pendiente validación), N2 |
+| CAP-REP-01 | preview/export CSV | rector | reports/audit | Implementado (Pendiente validación), N2 |
+| CAP-ENR-01 | estudiantes/biometría | secretaría | students + edge | Backend parcial; captura real requiere hardware |
+| CAP-PRO-01 | perfil/contacto/clave | todos | users | Implementado (Pendiente validación), N2 |
+| CAP-PWA-01 | instalar/cache/background sync | todos | manifest/workbox | Implementado (Pendiente validación), N2; cola debe validarse |
+| CAP-NATIVE-01 | Tauri/deep links | distribución futura | adaptador parcial | Backend parcial / integración parcial |
+| CAP-NATIVE-02 | Capacitor | distribución futura | visión | Planificado, N4 |
+
+**Método:** auditoría estática de UI, clientes API, rutas, workers, documentación y configuración. **Responsable:** equipo NEXO por asignar. **Limitación:** no hubo entorno end-to-end ni prueba manual; ninguna capacidad es Nivel 1.
+
+## 6. Arquitectura responsive
+
+La jerarquía lateral no cambia:
+
+- **Wide:** sidebar fija, topbar contextual, contenido y panel auxiliar opcional.
+- **Medium:** rail lateral colapsable; panel de detalle reemplaza columna secundaria cuando falta ancho.
+- **Compact:** botón “Menú” abre el mismo árbol en panel lateral; no se crea bottom-nav ni arquitectura híbrida. El título y grupo activo quedan en topbar. Detalles y formularios se presentan como rutas o sheets breves.
+
+El estado de navegación, grupo y retorno pertenece a la URL/estado de sesión cuando no expone PII. Deep links apuntan a objeto y acción, luego validan sesión/permiso.
+
+## 7. Búsqueda y comandos
+
+- Búsqueda global es objetivo futuro, disponible por botón y atajo solo si existe índice autorizado.
+- Resultados agrupados por objeto y limitados por rol; no revelar existencia de objetos sin permiso.
+- La paleta de comandos acelera acciones conocidas, nunca es única vía ni sustituye Operaciones.
+- Consulta mantiene filtros en URL cuando son no sensibles; estudiante se referencia por ID opaco.
+
+## 8. Retorno y rutas de escape
+
+Cada detalle recibe `origin`, filtros, scroll y foco. “Volver” regresa al origen real, no siempre al módulo raíz. Cancelar formulario conserva borrador solo con consentimiento/contexto seguro. Cierre de sesión borra contexto sensible. Errores 403 ofrecen volver a Inicio; 404 no revela PII.
+
+## 9. Registro de decisiones y discrepancias
+
+| DEC | Conflicto | Autoridad aplicada | Decisión / resolución | Impacto | Estado |
+|---|---|---|---|---|---|
+| DEC-IA-01 | Código llama `Seguimiento`; fuente exige `Casos Activos` | UX_DESIGN.md | El módulo se documenta como **Casos Activos**; la etiqueta/ruta `Seguimiento` de `roles.js` se alineará en fase de implementación sin cambiar backend | Consistencia de producto | Resuelto documentalmente |
+| DEC-IA-02 | Rector ausente de Consulta en ruta frontend actual | UX_DESIGN.md | Incluir rector en consultas objetivo; no afirmar implementación hasta prueba funcional | Brecha RBAC UI | Documentado |
+| DEC-IA-03 | Backend documenta auditoría para COORDINATOR; fuente la reserva a Rector | UX_DESIGN.md para navegación | No exponer UI de Auditoría a coordinador; backend puede conservar permiso técnico | Seguridad vs funcionalidad | Resuelto documentalmente |
+| DEC-IA-04 | Rector no tiene todas las operaciones en catálogo UI | UX_DESIGN.md | Completar objetivo de operaciones para rector; no afirmar implementación | Operaciones rector/coordinador | Documentado |
+| DEC-IA-05 | Tarjetas para toda acción vs evitar cards arbitrarias | UX_DESIGN.md + prueba de patrón | Cards solo iniciadores operativos; listas/tablas cuando mejoren comparación | Equilibrio filosofía/densidad | Resuelto documentalmente |
+| DEC-IA-06 | Manifest bloquea portrait | Responsive First | Recomendar orientación libre; `vite.config.js` debe ajustarse en implementación | PWA manifest vs responsive | Documentado |
+| DEC-IA-07 | Etiqueta del rol de control de acceso: canonical `Portero` | UX_DESIGN.md | Canonical `Portero`; unificado en todos los entregables | Nomenclatura | Resuelto documentalmente |
+| DEC-IA-08 | Etiqueta del rol de bienestar: canonical `Psicoorientador` | UX_DESIGN.md | Canonical `Psicoorientador`; unificado en todos los entregables | Nomenclatura | Resuelto documentalmente |
+## 10. Criterios de aceptación
+
+- Toda tarea pertenece a un rol, capacidad, flujo y pantalla.
+- El acudiente solo aparece en WhatsApp y flujos externos.
+- No existe navegación híbrida por breakpoint.
+- Permisos se validan en backend; ocultar UI no se considera seguridad.
+- Retorno restaura contexto y foco.
+- Discrepancias se conservan auditables, no se silencian.
+
+
+## 11. Trazabilidad consolidada
+
+La matriz de tareas y permisos (`CAP-*`) enlaza con los flujos de [06_USER_FLOWS.md](./06_USER_FLOWS.md) y las pantallas de [07_SCREEN_SPECIFICATIONS.md](./07_SCREEN_SPECIFICATIONS.md). Cada discrepancia queda registrada en `DEC-IA-*` y se resuelve a favor de `UX_DESIGN.md` o se documenta como dependencia de implementación.
+</file>
+
+<file path="06_USER_FLOWS.md">
+# 06. Flujos de usuario
+
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md). Todos los flujos contemplan carga, vacío, error, permiso, offline, timeout, cancelación y recuperación.
+
+## 1. Contrato narrativo
+
+Cada `FLOW-*` registra: actor, disparador, precondición, contexto, pasos, decisión, feedback, alternativas, resultado, siguiente acción, capacidad, pantallas asociadas (`SCR-*`) y estado técnico. La confirmación es proporcional al daño. El frontend no calcula reglas.
+
+## 2. Autenticación y sesión
+
+### FLOW-AUTH-01 Iniciar jornada
+**Pantallas asociadas:** SCR-AUTH-01, SCR-AUTH-02, SCR-HOME-01.
+**Capacidad:** CAP-AUTH-01.
+**Actores:** todos los roles institucionales. **Capacidad:** CAP-AUTH-01. **Estado:** Implementado (Pendiente validación), N2.
+
+1. Usuario abre NEXO; se muestra shell/skeleton sin espera ornamental.
+2. Si cookie válida, `/auth/me` restaura usuario, permisos y contexto seguro.
+3. Si no, `SCR-AUTH-01` solicita email y contraseña con autocompletado.
+4. Backend responde sesión o exige 2FA.
+5. Si 2FA, `SCR-AUTH-02` explica destino enmascarado, permite pegar código y reenviar con temporizador.
+6. Tras éxito, saludo breve y entrada automática a `SCR-HOME-01`.
+
+**Errores:** credenciales sin identificar cuál campo; 2FA expirado permite reenvío; red conserva email; bloqueo/panic explica contactar institución; sesión expirada guarda destino y vuelve tras login. **Accesibilidad:** sin CAPTCHA cognitivo; password managers y pegado permitidos.
+
+### FLOW-AUTH-02 Cerrar sesión
+**Pantallas asociadas:** SCR-PRO-01.
+**Capacidad:** CAP-AUTH-01.
+Perfil/sidebar → “Cerrar sesión” → invalidar servidor → limpiar contexto/caché sensible → login. Si red falla, limpiar acceso local y marcar revocación pendiente sin exponer datos.
+
+### FLOW-AUTH-03 Recuperar acceso
+**Pantallas asociadas:** SCR-AUTH-03.
+**Capacidad:** CAP-AUTH-01.
+**Planificado, N4.** Email/teléfono institucional → método accesible → verificación → nueva credencial → revocar sesiones. Nunca preguntas de memoria ni transcripción bloqueada.
+
+## 3. Inicio por rol
+
+### FLOW-HOME-01 Revisar jornada
+**Pantallas asociadas:** SCR-HOME-01, SCR-HOME-02, SCR-HOME-03.
+**Capacidad:** CAP-HOME-01.
+1. Entrar a Inicio.
+2. NEXO carga “Hoy en {colegio}”, prioridades y eventos.
+3. Docente reconoce/cambia grupo activo; otros roles ven alcance autorizado.
+4. Usuario abre una prioridad o métrica.
+5. Detalle explica situación y ofrece una acción primaria.
+6. Volver restaura grupo, scroll y foco.
+
+**Variantes:** rector/coordinador ven institución; docente grupo; secretaría eventos/tareas; psico casos; portero/auxiliar órdenes. **Offline:** mostrar caché fechada y bloquear decisiones que exigen actualidad. **Estado:** CAP-HOME-01 N2; “Hoy” y agenda N4.
+
+## 4. Operaciones
+
+### Plantilla FLOW-OPS-BASE
+**Pantallas asociadas:** SCR-OPS-01, SCR-OPS-02, SCR-OPS-03.
+**Capacidad:** CAP-OPS-01–05.
+1. Disparador desde `SCR-OPS-01`, Inicio, caso o notificación.
+2. Preseleccionar grupo/estudiante si el origen lo autoriza.
+3. Pedir solo decisiones requeridas.
+4. Validar inline y cargar opciones autorizadas.
+5. Mostrar resumen: acción, sujeto, fecha, alcance y comunicaciones.
+6. Confirmar con verbo específico.
+7. Backend registra operación y devuelve estado real.
+8. `SCR-OPS-03` muestra ID, auditoría, WhatsApp/sync y siguiente acción.
+
+**Concurrencia:** si cambió permiso/estado, no sobrescribir; explicar y recargar. **Timeout:** estado “resultado desconocido”, consultar por idempotency key antes de reintentar. **Offline:** solo encolar acciones explícitamente seguras; SOS, salidas y comunicaciones críticas requieren conexión confirmada.
+
+| Flujo | Actor objetivo | Decisiones mínimas | Resultado | Pantallas |
+|---|---|---|---|---|
+| FLOW-OPS-01 Citar acudiente | rector, coordinador, docente, psico | estudiante, fecha/hora, motivo | citación + estado WhatsApp | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-02 Inasistencia | docente/autorizado | grupo, estudiante, fecha/motivo | registro + comunicación según regla backend | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-03 Generar permiso | rector, coordinador, docente | estudiante, motivo, rango | permiso activo | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-04 Autorizar salida | rector, coordinador/portero según permiso | estudiante, motivo | autorización verificable | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-05 Salida pedagógica | rector/coordinador | grupo, fecha, motivo/alcance | operación masiva + mensajes | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-06 Cambio horario | rector/coordinador | grupo, hora, motivo | aviso masivo | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-07 SOS | todos | ubicación, mensaje opcional | alerta crítica auditada | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-08 Incidente | rector/docente/psico según fuente | estudiante, lugar, descripción, destinatarios | incidente/caso potencial | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-09 Daño | rector/portero/auxiliar | lugar, descripción | solicitud de atención | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-10 Solicitud | todos | destinatario por rol, mensaje | orden/solicitud | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-11 Solicitar caso | rector/coordinador | estudiante, razón | caso/solicitud a psico | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-12 Programar agenda | rector/coordinador | tipo, audiencia, fecha/hora, detalle | evento y recordatorios | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+
+FLOW-OPS-01 a 11 tienen soporte técnico variable N2; agenda es N4. La matriz de roles actual no coincide completamente con visión; prevalece objetivo y se marca brecha.
+
+### FLOW-OPS-07 SOS
+
+**Pantallas asociadas:** SCR-OPS-01, SCR-OPS-02, SCR-OPS-03.  
+**Capacidad:** CAP-OPS-03.
+
+1. Disparador desde `SCR-OPS-01`, atajo autorizado o notificación SOS recibida.
+2. Solicitar ubicación del navegador/dispositivo; el mensaje es opcional.
+3. Confirmar con verbo "Enviar SOS".
+4. Backend registra alerta crítica auditada y notifica a los destinatarios autorizados.
+
+**Estado "ubicación no disponible":** si el navegador o PWA deniega el permiso de geolocalización, el envío no se bloquea. El sistema aplica, en orden: (a) última ubicación conocida con hora; (b) grupo/aula reportada manualmente por el actor; (c) sede/institución asociada al usuario. Cada fallback se etiqueta como "ubicación aproximada" y se audita.
+
+**Errores:** permiso denegado → fallback de ubicación; sin red → informar que SOS requiere conexión confirmada; timeout → "resultado desconocido" con idempotencia; éxito → ID, hora y destinatarios alcanzados.
+
+**Notificación del receptor:** ver DEC-021; al recibir un SOS se permite sonido/vibración nativo del SO.
+
+## 5. WhatsApp y acudiente externo
+
+### FLOW-MSG-01 Entregar comunicación
+**Pantallas asociadas:** SCR-OPS-03, SCR-NOT-01.
+**Capacidad:** CAP-MSG-01.
+Operación confirmada → backend persiste y encola → worker envía → proveedor reporta enviado/entregado/fallido → NEXO actualiza `CMP-105`. Usuario institucional no espera bloqueado. Fallo ofrece reintento autorizado o canal alterno; nunca “entregado” sin callback.
+
+### FLOW-MSG-02 Respuesta del acudiente
+**Pantallas asociadas:** SCR-NOT-02.
+**Capacidad:** CAP-MSG-02.
+Acudiente recibe WhatsApp → responde según instrucción → webhook valida firma → respuesta se vincula a operación → usuario recibe mensaje NEXO → abre contexto y actúa. Respuesta ambigua se marca “requiere revisión”, no se interpreta con certeza. **Estado:** backend listo N3, UI objetivo pendiente.
+
+El acudiente no inicia sesión, no navega WebApp y no recibe links con PII sin protección.
+
+## 6. Casos Activos
+
+### FLOW-CASE-01 Abrir/iniciar caso
+**Pantallas asociadas:** SCR-CASE-01, SCR-CASE-02, SCR-CASE-03.
+**Capacidad:** CAP-CASE-01.
+Situación o solicitud → lista priorizada → abrir `SCR-CASE-02` → revisar resumen, riesgo e indicadores → elegir “Iniciar seguimiento” o psicológico → asignar responsable → confirmar → timeline auditado.
+
+### FLOW-CASE-02 Gestionar caso
+**Pantallas asociadas:** SCR-CASE-02, SCR-CASE-03.
+**Capacidad:** CAP-CASE-01.
+Psico acepta → registra nota/evolución → estado se actualiza → responsables reciben notificación. Nota conserva autor/fecha; fallo no pierde texto. Datos sensibles tienen visibilidad restringida y nunca aparecen en notificación preview.
+
+### FLOW-CASE-03 Cerrar/reabrir
+**Pantallas asociadas:** SCR-CASE-03.
+**Capacidad:** CAP-CASE-01.
+Revisar criterios de backend → resumen de cierre → confirmar alcance → caso cerrado sin borrar historia. Reapertura requiere motivo y permiso. **Estado:** implementación técnica N2, validación funcional pendiente.
+
+## 7. Consultas
+
+### FLOW-QRY-01 Consultar información
+**Pantallas asociadas:** SCR-QRY-01, SCR-QRY-02.
+**Capacidad:** CAP-QRY-01.
+Elegir módulo permitido → filtros con grupo persistente → ejecutar o auto-cargar si barato → resultados resumidos → abrir detalle contextual → volver conserva filtros. Vacío distingue “sin registros” de “filtros sin coincidencias”. Exportar solo si rol/capacidad lo permite.
+
+**Módulos:** docente (tardes, inasistencias, ausentes, fuera, permisos, citaciones); coordinador (incidentes, vulneraciones, alertas, seguimiento, permisos/salidas); secretaría (estudiantes, grupos, acudientes, matrículas, personal, mensajes, históricos, acceso); psico (riesgo, completados); rector (ejecutivo y consolidados). Rector es objetivo N4 en frontend actual aunque backend tenga datos. Algunos módulos de auditoría retornan vacío, por tanto `Backend parcial`.
+
+## 8. Auditoría e informes
+
+### FLOW-AUD-01 Investigar evento
+**Pantallas asociadas:** SCR-AUD-01, SCR-AUD-02.
+**Capacidad:** CAP-AUD-01.
+Rector elige dominio/periodo → resultados → evento → actor, acción, tiempo, objeto y evidencia → volver. Sin permisos retorna 403 sin datos. Integridad se presenta como verificación, no como garantía absoluta.
+
+### FLOW-AUD-02 Validar integridad
+**Pantallas asociadas:** SCR-AUD-02.
+**Capacidad:** CAP-AUD-01.
+Rector inicia verificación → progreso → resultado íntegro/no verificable/ruptura → explicación y escalamiento. Nunca ofrecer “reparar” desde UI.
+
+### FLOW-REP-01 Exportar informe
+**Pantallas asociadas:** SCR-REP-01, SCR-REP-02.
+**Capacidad:** CAP-REP-01.
+Tipo → periodo/filtros → preview y cantidad → confirmar exportación → generar → descargar accesiblemente. Grandes procesos continúan en segundo plano. CSV respeta locale y permisos; no incluye PII innecesaria. Estado N2 pendiente prueba.
+
+## 9. Enrolamiento
+
+### FLOW-ENR-01 Registrar estudiante
+**Pantallas asociadas:** SCR-ENR-01, SCR-ENR-02.
+**Capacidad:** CAP-ENR-01.
+Secretaría busca duplicado → datos básicos → identificación → grado/grupo → resumen → guardar estudiante → vincular biometría opcional/separada → resultado. Si lector no está disponible, estudiante queda “Biometría pendiente”, no falla el alta.
+
+### FLOW-ENR-02 Capturar biometría
+**Pantallas asociadas:** SCR-ENR-02.
+**Capacidad:** CAP-ENR-01.
+Seleccionar estudiante guardado → verificar dispositivo/consentimiento/política → capturas guiadas → calidad desde hardware/backend → vincular → auditar. Timeout permite reintentar sin duplicar. **Estado:** Backend parcial; flujo con hardware real no verificado.
+
+### FLOW-ENR-03 Activar/inactivar
+**Pantallas asociadas:** SCR-ENR-01.
+**Capacidad:** CAP-ENR-01.
+Abrir estudiante contextual → explicar consecuencia → confirmar → estado actualizado y sincronización edge. Nunca eliminación irreversible desde lista.
+
+## 10. Perfil, PWA y sincronización
+
+### FLOW-PRO-01 Actualizar perfil/seguridad
+**Pantallas asociadas:** SCR-PRO-01, SCR-PRO-02.
+**Capacidad:** CAP-PRO-01.
+Abrir perfil → editar un grupo de datos → verificar por OTP si aplica → éxito. Cambio de contraseña requiere actual y revoca sesiones según política. Subida de foto muestra límites y alternativa sin foto.
+
+### FLOW-PWA-01 Instalar
+**Pantallas asociadas:** SCR-PRO-03.
+**Capacidad:** CAP-PWA-01.
+Promoción no intrusiva tras intención/uso → explicar beneficio → prompt nativo si disponible o instrucciones iOS → confirmar instalación. Si no soporta, NEXO sigue funcional en web. N2 técnico.
+
+### FLOW-PWA-02 Trabajar con red degradada
+**Pantallas asociadas:** SCR-PRO-03, SCR-SYS-02, SCR-SYS-03.
+**Capacidad:** CAP-PWA-01.
+Detectar conexión → mantener shell y caché fechada → indicar qué funciona → acciones seguras guardadas localmente muestran “pendiente” → al volver red, sincronizar → resolver éxito/fallo/conflicto. Nunca aplicar optimistic feedback a SOS, salida, permisos críticos o envío masivo.
+
+### FLOW-NATIVE-01 Deep link
+**Pantallas asociadas:** SCR-PRO-03.
+**Capacidad:** CAP-NATIVE-01.
+Abrir `nexo://…` o enlace universal → validar sesión → validar permiso → abrir objeto; si no, login y retorno. Tauri parcial; Capacitor planificado.
+
+## 11. Matriz de estados obligatorios
+
+| Estado | Respuesta |
+|---|---|
+| Carga | skeleton estructural; conservar contexto previo |
+| Vacío | causa + próximo paso |
+| Error | mensaje, datos preservados, reintento/alternativa |
+| Sin permiso | no revelar contenido; volver |
+| Offline | caché fechada y capacidades limitadas |
+| Obsoleto | fecha + actualizar antes de decisión crítica |
+| Conflicto | comparar estado actual vs. intento; no sobrescribir |
+| Timeout | resultado desconocido; consultar antes de repetir |
+| Éxito | resultado, alcance, auditoría/entrega y siguiente acción |
+
+## 12. Criterios de aceptación
+
+- Cada operación usa FLOW-OPS-BASE y tiene confirmación proporcional.
+- No se pierde entrada ante error o navegación accidental.
+- Reintentos mutantes son idempotentes.
+- Todos los flujos tienen ruta offline/permiso/timeout.
+- El estado WhatsApp distingue cola, envío, entrega, fallo y respuesta.
+- Cada flujo enlaza una pantalla de [07_SCREEN_SPECIFICATIONS.md](./07_SCREEN_SPECIFICATIONS.md).
+
+
+## 13. Trazabilidad consolidada
+
+Matriz completa `FLOW-*` → `CAP-*` → `SCR-*`. Los `FLOW-OPS-*` comparten las pantallas `SCR-OPS-01/02/03`; `FLOW-AUTH-02` se accede desde `SCR-PRO-01`; `FLOW-PWA-02` alcanza `SCR-PRO-03`, `SCR-SYS-02` y `SCR-SYS-03`.
+
+| Flujo | Capacidad | Pantallas asociadas |
+|---|---|---|
+| FLOW-AUD-01 | CAP-AUD-01 | SCR-AUD-01, SCR-AUD-02 |
+| FLOW-AUD-02 | CAP-AUD-01 | SCR-AUD-02 |
+| FLOW-AUTH-01 | CAP-AUTH-01 | SCR-AUTH-01, SCR-AUTH-02, SCR-HOME-01 |
+| FLOW-AUTH-02 | CAP-AUTH-01 | SCR-PRO-01 |
+| FLOW-AUTH-03 | CAP-AUTH-01 | SCR-AUTH-03 |
+| FLOW-CASE-01 | CAP-CASE-01 | SCR-CASE-01, SCR-CASE-02, SCR-CASE-03 |
+| FLOW-CASE-02 | CAP-CASE-01 | SCR-CASE-02, SCR-CASE-03 |
+| FLOW-CASE-03 | CAP-CASE-01 | SCR-CASE-03 |
+| FLOW-ENR-01 | CAP-ENR-01 | SCR-ENR-01, SCR-ENR-02 |
+| FLOW-ENR-02 | CAP-ENR-01 | SCR-ENR-02 |
+| FLOW-ENR-03 | CAP-ENR-01 | SCR-ENR-01 |
+| FLOW-HOME-01 | CAP-HOME-01 | SCR-HOME-01, SCR-HOME-02, SCR-HOME-03 |
+| FLOW-MSG-01 | CAP-MSG-01 | SCR-OPS-03, SCR-NOT-01 |
+| FLOW-MSG-02 | CAP-MSG-02 | SCR-NOT-02 |
+| FLOW-NATIVE-01 | CAP-NATIVE-01 | SCR-PRO-03 |
+| FLOW-OPS-01 | CAP-OPS-01 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-02 | CAP-OPS-04 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-03 | CAP-OPS-02 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-04 | CAP-OPS-02 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-05 | CAP-OPS-02 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-06 | CAP-OPS-04 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-07 | CAP-OPS-03 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-08 | CAP-OPS-04 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-09 | CAP-OPS-04 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-10 | CAP-OPS-04 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-11 | CAP-OPS-04 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-12 | CAP-OPS-05 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-OPS-BASE | CAP-OPS-01–05 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 |
+| FLOW-PRO-01 | CAP-PRO-01 | SCR-PRO-01, SCR-PRO-02 |
+| FLOW-PWA-01 | CAP-PWA-01 | SCR-PRO-03 |
+| FLOW-PWA-02 | CAP-PWA-01 | SCR-PRO-03, SCR-SYS-02, SCR-SYS-03 |
+| FLOW-QRY-01 | CAP-QRY-01 | SCR-QRY-01, SCR-QRY-02 |
+| FLOW-REP-01 | CAP-REP-01 | SCR-REP-01, SCR-REP-02 |
+</file>
+
+<file path="07_SCREEN_SPECIFICATIONS.md">
+# 07. Especificaciones de pantallas
+
+**Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md). Catálogo completo de páginas y superficies transitorias del producto objetivo.
+
+## 1. Contrato de pantalla
+
+Cada `SCR-*` debe implementar: pregunta/objetivo, usuarios, precondición, jerarquía, primaria/secundarias, componentes, datos/permisos, estados, responsive, teclado/touch/lector, motion, transición, telemetría y aceptación. Reglas globales: [02_DESIGN_PRINCIPLES.md](./02_DESIGN_PRINCIPLES.md), componentes: [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md).
+
+## 2. Catálogo maestro
+
+| ID | Pantalla/superficie | Pregunta | Roles | Flujo/capacidad | Estado |
+|---|---|---|---|---|---|
+| SCR-AUTH-01 | Login | ¿Cómo entro a mi jornada? | todos | FLOW-AUTH-01, CAP-AUTH-01 | N2 |
+| SCR-AUTH-02 | 2FA | ¿Cómo confirmo que soy yo? | todos | FLOW-AUTH-01, CAP-AUTH-02 | N2 |
+| SCR-AUTH-03 | Recuperación | ¿Cómo recupero acceso? | todos | FLOW-AUTH-03 | N4 |
+| SCR-HOME-01 | Inicio contextual | ¿Qué requiere atención? | todos | FLOW-HOME-01, CAP-HOME-01, CAP-HOME-02 | N2 |
+| SCR-HOME-02 | Hoy en el colegio | ¿Qué compone mi jornada? | todos | CAP-HOME-03 | N4 |
+| SCR-HOME-03 | Detalle métrica/situación | ¿Qué significa y qué hago? | según dato | FLOW-HOME-01, CAP-HOME-01 | N2 parcial |
+| SCR-OPS-01 | Operaciones | ¿Qué acción quiero realizar? | todos filtrado | FLOW-OPS-01, FLOW-OPS-02, FLOW-OPS-03, FLOW-OPS-04, FLOW-OPS-05, FLOW-OPS-06, FLOW-OPS-07, FLOW-OPS-08, FLOW-OPS-09, FLOW-OPS-10, FLOW-OPS-11, FLOW-OPS-12, FLOW-OPS-BASE, CAP-OPS-01, CAP-OPS-02, CAP-OPS-03, CAP-OPS-04, CAP-OPS-05 | N2 |
+| SCR-OPS-02 | Formulario operación | ¿Qué falta para ejecutar? | según acción | FLOW-OPS-BASE, CAP-OPS-01, CAP-OPS-02, CAP-OPS-03, CAP-OPS-04 | N2 |
+| SCR-OPS-03 | Resultado/entrega | ¿Qué ocurrió después de confirmar? | actor | FLOW-MSG-01, CAP-OPS-01, CAP-OPS-02, CAP-OPS-03, CAP-OPS-04, CAP-MSG-01 | N2 |
+| SCR-NOT-01 | Conversación NEXO | ¿Qué ocurrió mientras trabajaba? | todos | FLOW-MSG-01, FLOW-MSG-02, CAP-MSG-01, CAP-MSG-02 | N2 |
+| SCR-NOT-02 | Detalle notificación | ¿Por qué importa y qué hago? | autorizado | FLOW-MSG-02, CAP-MSG-02 | N3/N4 UI |
+| SCR-CASE-01 | Casos Activos | ¿Quién requiere seguimiento? | rector, coord., psico | FLOW-CASE-01, FLOW-CASE-02, FLOW-CASE-03, CAP-CASE-01 | N2 |
+| SCR-CASE-02 | Caso | ¿Qué cambió y qué acción corresponde? | autorizados | FLOW-CASE-01, FLOW-CASE-02, CAP-CASE-01 | N2 |
+| SCR-CASE-03 | Nota/evolución/cierre | ¿Cómo registro la evolución? | psico/gestores | FLOW-CASE-02, FLOW-CASE-03, CAP-CASE-01 | N2 |
+| SCR-QRY-01 | Consultas | ¿Qué información busco? | rector, coord., docente, secret., psico | FLOW-QRY-01, CAP-QRY-01 | N2 con brechas |
+| SCR-QRY-02 | Resultados/detalle | ¿Qué muestran los registros? | autorizado | FLOW-QRY-01, CAP-QRY-01 | N2 con brechas |
+| SCR-AUD-01 | Auditoría | ¿Qué ocurrió y quién actuó? | rector | FLOW-AUD-01, CAP-AUD-01 | N2 |
+| SCR-AUD-02 | Integridad/evento | ¿Es verificable este historial? | rector | FLOW-AUD-02, CAP-AUD-01 | N2 |
+| SCR-REP-01 | Informes | ¿Qué necesito compartir? | rector | FLOW-REP-01, CAP-REP-01 | N2 |
+| SCR-REP-02 | Preview/exportación | ¿Qué contiene el archivo? | rector | FLOW-REP-01, CAP-REP-01 | N2 |
+| SCR-ENR-01 | Estudiantes/enrolamiento | ¿Quién falta por habilitar? | secretaría | FLOW-ENR-01, FLOW-ENR-02, FLOW-ENR-03, CAP-ENR-01 | N2/parcial |
+| SCR-ENR-02 | Alta/biometría | ¿Qué falta para completar el registro? | secretaría | FLOW-ENR-01, FLOW-ENR-02, CAP-ENR-01 | parcial |
+| SCR-PRO-01 | Perfil | ¿Qué dato de mi cuenta gestiono? | todos | FLOW-PRO-01, FLOW-AUTH-02, CAP-PRO-01 | N2 |
+| SCR-PRO-02 | Seguridad/verificación | ¿Cómo protejo o verifico mi cuenta? | todos | FLOW-PRO-01, CAP-PRO-01 | N2 |
+| SCR-PRO-03 | Apariencia/instalación/sync | ¿Cómo adapto NEXO a este dispositivo? | todos | FLOW-PRO-01, FLOW-PWA-01, FLOW-PWA-02, FLOW-NATIVE-01, CAP-PRO-01, CAP-PWA-01, CAP-NATIVE-01 | N2/parcial |
+| SCR-SYS-01 | Sin permiso | ¿Cómo vuelvo a una zona válida? | todos | transversal | N2 |
+| SCR-SYS-02 | Offline/no disponible | ¿Qué puedo hacer sin conexión? | todos | FLOW-PWA-02, CAP-PWA-01 | parcial |
+| SCR-SYS-03 | Conflicto/sync | ¿Cómo resuelvo un cambio concurrente? | actor | FLOW-PWA-02, CAP-PWA-01 | N4 UI |
+## 3. Especificaciones por familia
+
+### SCR-AUTH-01 Login
+- **Precondición/datos:** sin sesión; email, password; endpoint auth.
+- **Jerarquía:** marca, título “Inicia tu jornada”, campos, recuperar, primaria “Entrar”.
+- **Estados:** validación, enviando, credenciales, red, bloqueo, sesión expirada.
+- **Responsive:** panel único 320–520 px; no split hero en móvil ni animación bloqueante.
+- **Accesibilidad:** autocomplete, mostrar contraseña, Enter, foco al error, anuncio no intrusivo.
+- **Motion/transición:** fundido ≤150 ms hacia shell; reduced motion instantáneo.
+- **Telemetría:** `auth_attempt`, resultado categórico sin credenciales, duración.
+- **Aceptación:** 95% éxito de usuarios con credenciales; password manager funciona.
+
+### SCR-AUTH-02 2FA
+Destino enmascarado, seis dígitos en un solo campo semántico o grupo accesible, pegar permitido, reenviar y cambiar método si existe. Primaria “Verificar”. Error no borra código hasta corrección. Objetivo WCAG 3.3.8.
+
+### SCR-HOME-01 Inicio contextual
+- **Contenido:** topbar + `CMP-100`; línea “Hoy”; hasta 5 prioridades; eventos recientes.
+- **Variantes:** rector/coordinador institución; docente métricas de grupo; secretaría tareas; psico casos; servicio órdenes.
+- **Primaria:** la prioridad número uno, no una CTA genérica.
+- **Datos:** stats/events/tareas/casos; actualización visible.
+- **Estados:** skeleton; día tranquilo; parcial; offline cache; sin grupo.
+- **Responsive:** wide puede usar 2 columnas 2:1; compact secuencia prioridad → métricas → eventos.
+- **Telemetría:** prioridad abierta, tiempo hasta primera acción, cambio grupo.
+- **Aceptación:** propósito y prioridad reconocidos ≤5 s.
+
+### SCR-HOME-02 Hoy en el colegio
+Barra/resumen colapsado; al abrir, agenda, clases, solicitudes y anomalías con una sola siguiente acción. No banners múltiples ni chat abierto. Cierra con Escape y devuelve foco.
+
+### SCR-HOME-03 Detalle
+Título factual, periodo, lista contextual y explicación. Primaria depende de situación. El usuario vuelve al mismo estado de Inicio. No ficha integral del estudiante.
+
+### SCR-OPS-01 Operaciones
+- **Contenido:** acciones autorizadas agrupadas “Frecuentes”, “Comunicar”, “Seguridad/soporte”; máximo 5 prioritarias visibles.
+- **Componente:** `CMP-101` action cards; búsqueda/agrupación si crece.
+- **Primaria:** ninguna global; cada card es destino, no dos énfasis dentro.
+- **Estados:** catálogo loading, sin permisos, red; SOS siempre visible si autorizado.
+- **Aceptación:** acción frecuente encontrada ≤10 s; no aparecen acciones prohibidas.
+
+### SCR-OPS-02 Flujo de operación
+Encabezado con acción y contexto, progreso textual, ≤5 campos por paso, resumen antes de enviar. Sticky action en compact sin tapar contenido. Cancelar, volver y conservar borrador. `CMP-107` solo en consecuencia crítica. Telemetría por paso/error/abandono sin PII.
+
+### SCR-OPS-03 Resultado
+Icono + estado textual, frase de alcance, ID/hora, entrega WhatsApp y siguientes acciones “Ver estado”/“Volver”. Si timeout: “Aún no sabemos si se registró”, consulta idempotente; no botón duplicador.
+
+### SCR-NOT-01 Conversación NEXO
+- **Contenido:** lista cronológica `CMP-104`, no composer; filtros Todos, Requiere acción, Casos, Operaciones.
+- **Fila:** mensaje humano, tiempo, estado y CTA.
+- **Estados:** no novedades, sin coincidencias, error parcial, offline.
+- **Responsive:** lista + detalle en wide; navegación a detalle en compact.
+- **Aceptación:** usuario diferencia información de acción ≥90%.
+
+### SCR-NOT-02 Detalle
+Evento, evidencia, objeto mínimo, estado WhatsApp/respuesta y acción. Información psicológica sensible solo tras permiso. Retorno exacto.
+
+### SCR-CASE-01 Casos Activos
+Lista priorizada por backend, filtros estado/responsable/grupo, resumen textual. No ordenar riesgo en frontend salvo valor recibido. Vacío “No hay casos activos” con explicación. Wide lista+preview; compact lista→página.
+
+### SCR-CASE-02 Caso
+`CMP-102`: estudiante contextual, nivel y tendencia, resumen NEXO, indicadores, timeline y responsable. Primaria según estado: iniciar/aceptar/registrar evolución. Explicación de riesgo y fecha. Sin datos personales irrelevantes.
+
+### SCR-CASE-03 Nota/evolución/cierre
+Formulario enfocado. Nota sensible indica audiencia. Guardado preserva texto; cierre usa confirmación crítica. Timeline anuncia inserción. Cero edición silenciosa de registros auditados.
+
+### SCR-QRY-01 Consultas
+Catálogo filtrado por rol y búsqueda. Título/pregunta, módulos por tarea, grupo/periodo persistente. Rector debe incluir ejecutivo y consolidados en objetivo. Módulos técnicamente vacíos se muestran “No disponible” solo en entornos donde sea honesto, no como vacío de datos.
+
+### SCR-QRY-02 Resultados
+Resumen superior, filtros activos, conteo/actualización, lista por defecto; tabla si prueba de comparación. Drawer contextual wide, página compact. Loading no borra resultados previos. Error preserva filtros. Exportar solo autorizado.
+
+### SCR-AUD-01 Auditoría
+Dominios, periodo, actor/acción y resultados. Tabla semántica wide; lista priorizada compact. Integridad es acción secundaria visible. Paginación/cursor. No exponer payload técnico por defecto.
+
+### SCR-AUD-02 Integridad/evento
+Resumen verificable/no verificable/ruptura, alcance, fecha y método; detalle técnico bajo disclosure. Ruptura ofrece escalar/copiar referencia, no reparar. Evento muestra actor, acción, objeto y hash solo a quien corresponda.
+
+### SCR-REP-01 Informes
+Tipos de informe, periodo y filtros. Primaria “Previsualizar”, no descargar a ciegas. Historial de exportaciones solo si backend existe; si no, planificado.
+
+### SCR-REP-02 Preview/exportación
+Muestra columnas, muestra de filas, cantidad y PII incluida/excluida. “Exportar CSV” tras validación. Progreso real y descarga recuperable. Compact no intenta mostrar tabla completa; presenta esquema/resumen.
+
+### SCR-ENR-01 Enrolamiento
+Búsqueda primero para evitar duplicados, lista con estado activo/biometría, primaria “Registrar estudiante”. Scroll infinito debe anunciar carga y ofrecer alternativa paginada. Activar/inactivar contextual, no trash icon.
+
+### SCR-ENR-02 Alta/biometría
+Stepper 4 etapas: básicos, identificación, grupo, biometría opcional. Guardar estudiante antes de hardware; biometría fallida queda pendiente. Confirmar consentimiento/política; calidad no se decide visualmente sin dato de hardware.
+
+### SCR-PRO-01 Perfil
+Secciones Cuenta, Contacto, Seguridad, Apariencia y Dispositivo. Una primaria por sección editada. Foto opcional con límites. Verificación visible. No mezclar borradores de varias secciones.
+
+### SCR-PRO-02 Seguridad
+Cambiar contraseña, métodos verificados y sesiones si soporte. Mensajes claros y autenticación accesible. Acciones destructivas no se agrupan con edición cotidiana.
+
+### SCR-PRO-03 Apariencia/dispositivo
+Tema Sistema/Claro/Oscuro, contraste/reduced motion respetando OS, instalación contextual, versión y `CMP-108`. No pedir permisos nativos antes de una acción que los necesite.
+
+### SCR-SYS-01/02/03 Sistema
+- **Sin permiso:** título, explicación mínima, “Volver a Inicio”; no revela dato.
+- **Offline:** estado de red, última actualización, funciones disponibles/no disponibles y reintento.
+- **Conflicto:** versión actual, cambio intentado, opciones seguras recargar/copiar; nunca “forzar” sin permiso.
+
+## 4. Matriz pantalla × componente × endpoint
+
+| Pantallas | Componentes clave | Cliente/ruta técnica |
+|---|---|---|
+| AUTH | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-036, CMP-037, CMP-039, CMP-040, CMP-041 | auth API `/auth/*` |
+| HOME | CMP-020, CMP-021, CMP-027, CMP-100, CMP-011, CMP-023, CMP-026, CMP-031, CMP-039, CMP-041 | dashboard `/dashboard/stats`, `/events`, detail |
+| OPS | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-020, CMP-036, CMP-039, CMP-040, CMP-041, CMP-101, CMP-105, CMP-107 | operations `/operations/*` o execute |
+| NOT | CMP-021, CMP-025, CMP-104, CMP-105, CMP-011, CMP-034, CMP-035, CMP-039, CMP-041 | notifications, webhook inbound/status |
+| CASE | CMP-001, CMP-021, CMP-024, CMP-102, CMP-103, CMP-106, CMP-036, CMP-039, CMP-041, CMP-107 | tracking, behavior/risk |
+| QRY | CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-011, CMP-021, CMP-022, CMP-032, CMP-034, CMP-035, CMP-039, CMP-041 | `/consultations/query`, students/groups |
+| AUD | CMP-004, CMP-009, CMP-021, CMP-022, CMP-024, CMP-034, CMP-035, CMP-039, CMP-041 | `/audit/*`, `/audit/integrity` |
+| REP | CMP-001, CMP-007, CMP-009, CMP-022, CMP-026, CMP-036, CMP-039, CMP-040, CMP-041 | reports/preview/export |
+| ENR | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-011, CMP-021, CMP-106, CMP-036, CMP-039, CMP-040, CMP-041, CMP-107 | students/groups + edge biometría |
+| PRO | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-108, CMP-036, CMP-039, CMP-040, CMP-041 | `/users/me/*`, PWA/native adapters |
+| Transversal | CMP-011, CMP-023, CMP-026, CMP-030, CMP-031, CMP-032, CMP-033, CMP-034, CMP-035, CMP-037, CMP-038, CMP-040 | shell, layout y patrones compartidos entre múltiples familias |
+## 5. Telemetría ética
+
+Registrar ID de pantalla/flujo, resultado, duración, error categórico, breakpoint/capacidad y uso de ayuda. Nunca nombre, documento, notas, mensaje, teléfono ni contenido consultado. Retención y acceso definidos institucionalmente. El personal institucional debe ser informado de que se mide uso (pantallas, flujos, tiempos) sin identificar contenido ni PII. Telemetría deshabilitada no bloquea tareas.
+
+## 6. Criterios de aceptación
+
+- Toda pantalla pertenece al menos a un flujo y capacidad.
+- Cada una cubre todos los estados y retorno.
+- Variantes por rol cambian contenido/acción, no duplican estructura.
+- Teclado, touch y lector completan la misma tarea.
+- Ninguna pantalla expone más datos de estudiante que la tarea exige.
+
+
+## 7. Trazabilidad consolidada
+
+Cada `SCR-*` del catálogo enlaza flujos, capacidades y componentes de forma explícita en las tablas anteriores. Las superficies `SCR-SYS-01/02/03` son transversales al shell y se activan desde cualquier flujo ante 403, offline o conflicto.
+</file>
+
+<file path="08_MICRO_INTERACTIONS.md">
+# 08. Microinteracciones
+
+**Propósito:** hacer visible estado, causalidad y continuidad sin decorar ni retrasar. **Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md).
+
+## 1. Tokens
+
+| Token | Duración | Uso |
+|---|---:|---|
+| `motion.none` | 0 ms | reduced motion/cambio inmediato |
+| `motion.fast` | 150 ms | hover, focus, press, icono |
+| `motion.standard` | 200 ms | selección, reveal corto |
+| `motion.deliberate` | 250 ms | drawer/sheet/transición espacial |
+| `motion.max` | 300 ms | límite absoluto |
+
+Curva de entrada/salida: salida exponencial `(.22,1,.36,1)`; opacidad puede ser lineal corta. Solo `transform` y `opacity`; color/borde pueden transicionar ≤150 ms. Nunca animar layout, blur grande, sombras complejas ni números que retrasen lectura.
+
+## 2. Presupuesto
+
+- Feedback visual a input ≤100 ms.
+- Ninguna coreografía bloquea interacción.
+- Máximo un elemento en movimiento dominante.
+- Desplazamiento ≤12 px; escala de press 0.98 solo en targets grandes y nunca en texto/filas.
+- Animación total simultánea ≤300 ms.
+- 60 fps objetivo; degradar a cambio instantáneo si el dispositivo no sostiene fluidez.
+
+## 3. Estados de control
+
+| Estado | Respuesta |
+|---|---|
+| Hover | cambio tenue de superficie/borde; no revela función indispensable |
+| Focus-visible | outline 2 px, offset 2 px, contraste ≥3:1; sin transición que demore |
+| Press/tap | superficie más fuerte + opcional escala 0.98 durante contacto |
+| Selected | fondo/borde + icono/check + `aria-selected/checked` |
+| Disabled | contraste suficiente para label, razón visible/tooltip al elemento adyacente; no target engañoso |
+| Loading | label estable, progreso inline, `aria-busy`; bloquea doble envío |
+| Error | mensaje junto al control, icono y resumen; foco al primer error tras submit |
+| Success | confirmación textual; no depender de check animado |
+
+Touch y teclado producen el mismo cambio. `Enter/Space` no dispara dos veces. Drag futuro siempre tendrá botones alternativos mover arriba/abajo.
+
+## 4. Navegación y continuidad
+
+- Cambio de ruta: contenido nuevo aparece por opacidad 150 ms; no secuencia escalonada.
+- Drawer: traslación desde borde lógico 250 ms; fondo sin blur; foco entra tras montar y vuelve al disparador.
+- Bottom sheet: traslación vertical 250 ms; gesto de cerrar nunca es única vía.
+- Tabs: indicador se mueve 150 ms si la geometría está disponible; panel cambia sin desplazamiento.
+- Retorno: restaura scroll y foco instantáneamente; no reanima toda la página.
+- Skeleton a contenido: crossfade 150 ms sin salto de geometría.
+
+## 5. Guardado y operaciones
+
+### Guardado breve (<1 s)
+Press → estado “Guardando” inmediato → “Guardado” textual 2–4 s → estado estable. No toast si el resultado ya es visible junto al control.
+
+### Proceso lento
+A los 100 ms confirmar recepción; a 1 s progreso/skeleton; a 10 s explicar continuidad o segundo plano. Si porcentaje es real, mostrarlo; si no, progreso indeterminado. Cancelar solo si backend lo soporta.
+
+### Mutación crítica
+Tras confirmar, botón queda ocupado y el contenido no desaparece. Timeout muestra “resultado desconocido” y consulta estado antes de reintento. Éxito muestra alcance y auditoría. Error conserva entradas.
+
+### Eliminación/inactivación
+Preferir inactivar/deshacer. Fila no se desvanece antes de confirmación backend. Tras éxito, retirada 150 ms y anuncio live region. Si se deshace, vuelve a posición y foco.
+
+## 6. Operaciones específicas
+
+| Patrón | Secuencia |
+|---|---|
+| Cambio de grupo | seleccionar → topbar confirma → contenido skeleton estable → datos + fecha; formulario sucio pide decisión |
+| Citar acudiente | pasos sin animación ornamental → resumen → enviar → estado WhatsApp progresa por texto/icono |
+| SOS enviado | press → confirmación crítica breve → envío bloqueado → resultado inequívoco; sin pulso/parpadeo |
+| SOS recibido | notificación nativa del sistema operativo (sonido/vibración) permitida para reducir tiempo de respuesta; sin beep/pulso/parpadeo decorativo de NEXO. Ver DEC-021. |
+| Caso | iniciar → responsable/estado se actualiza → nueva entrada timeline resaltada una vez ≤2 s sin movimiento |
+| Nota | guardar local temporal si seguro → enviar → insertar timeline → foco a confirmación |
+| WhatsApp | en cola → enviado → entregado/fallido/respondido; cambios anunciados sin mover fila |
+| Sync PWA | badge discreto cambia; detalle muestra cola; éxito no lanza múltiples toasts |
+| Instalación | CTA solo tras elegibilidad; prompt nativo; retorno muestra “Instalado” |
+
+## 7. Error y recuperación
+
+- Error de campo: transición de borde ≤150 ms y mensaje inmediato; sin shake.
+- Error de sección: alert estática con foco programático solo tras submit.
+- Error global: superficie persistente y reintento; no toast efímero.
+- Red recuperada: “Conexión restablecida. Sincronizando N cambios”; luego resumen único.
+- Conflicto: no animar elección; comparar versiones y exigir decisión explícita.
+
+## 8. Reduced motion y sensibilidad
+
+Con `prefers-reduced-motion: reduce`: duración 0–100 ms, sin traslación, escala, parallax, auto-scroll suave ni contadores. El significado permanece mediante texto, icono y foco. No sonido. Ningún destello >3 por segundo; NEXO no utiliza destellos.
+
+## 9. Interrupción
+
+Toda animación responde a nueva entrada: si se invierte drawer, continúa desde posición actual; si cambia ruta, cancela transición previa. El estado lógico se actualiza antes que la animación. La pérdida de visibilidad pausa animación no esencial, no timers de seguridad del backend.
+
+## 10. Instrumentación
+
+Medir p75 input-to-feedback, duración de mutación, doble submit evitado, abandono por paso, reduced motion activo y errores de sync. No registrar contenido ni PII. Umbrales: feedback p75 ≤100 ms; transición p95 ≤300 ms; long tasks durante interacción <50 ms.
+
+## 11. Criterios de aceptación
+
+- Toda animación explica estado o continuidad.
+- Equivalencia teclado/touch y reduced motion comprobada.
+- No hay layout animation, rebote, parpadeo, sonido ni stagger.
+- Procesos lentos y timeouts comunican estado real.
+- Foco se conserva/restaura en todas las superficies transitorias.
+</file>
+
+<file path="09_ACCESSIBILITY.md">
+# 09. Accesibilidad
+
+**Objetivo:** WCAG 2.2 AA completo; AAA selectivo para foco, targets críticos, contraste y lenguaje cuando sea viable. La conformidad no reemplaza pruebas con personas.
+
+## 1. Personas y barreras
+
+NEXO contempla ceguera, baja visión, daltonismo, movilidad reducida, temblor, uso solo teclado/voz/switch, sordera, atención/memoria variables, ansiedad, dislexia y baja alfabetización digital. Profesores 60+ son población de prueba obligatoria, sin asumir incompetencia: se reducen barreras de visión, destreza, memoria y exploración.
+
+## 2. Reglas no negociables
+
+### Percepción
+- Texto normal ≥4.5:1; grande ≥3:1; componentes/foco ≥3:1.
+- 200% zoom sin pérdida; 400% reflow a 320 CSS px sin scroll bidimensional salvo tablas esenciales.
+- Texto no incrustado en imágenes; tema claro/oscuro y alto contraste robustos.
+- Estado nunca solo por color: texto + icono/patrón + semántica.
+- No audio ni video esencial. Si se añade, alternativas y controles.
+
+### Operación
+- Todo por teclado, orden lógico, sin trampas.
+- Foco visible 2 px y nunca oculto por sticky bars.
+- Targets recomendados 44×44; mínimo AA 24×24 o separación válida; acciones críticas 44×44 mínimo.
+- No dependencia de hover, drag, gesto complejo u orientación.
+- Skip link al contenido; landmarks y headings jerárquicos.
+
+### Comprensión
+- Labels persistentes, instrucciones antes del dato y errores reparables.
+- No pedir dos veces información disponible (WCAG 3.3.7).
+- Login permite password managers, pegar OTP y alternativas a pruebas cognitivas (3.3.8).
+- Ayuda consistente, lenguaje `es-CO`, verbos específicos y fechas inequívocas.
+- Confirmaciones nombran consecuencia; tiempo extendible cuando exista límite del cliente.
+
+### Robustez
+- HTML nativo primero; ARIA solo para completar patrón.
+- Nombre, rol, valor y estados programáticos correctos.
+- Live regions moderadas; no anunciar cada tick.
+- Compatibilidad objetivo: Chrome/Edge/Firefox/Safari actuales, NVDA, VoiceOver y TalkBack.
+
+## 3. Adultos mayores y baja experiencia digital
+
+- Body 16 px mínimo; controles 48 px por defecto; caption nunca contiene acción o dato crítico.
+- Evitar mayúsculas largas, texto tenue, icon-only y enlaces agrupados.
+- Mostrar ejemplos y defaults, no jerga técnica.
+- Una decisión por paso, contexto visible, deshacer y salida segura.
+- Pistas contextuales máximo tres veces según fuente, pero siempre recuperables desde ayuda.
+- No usar onboarding largo; aprendizaje dentro de tareas reales.
+- Mensajes de error no culpan: “No pudimos enviar” en lugar de “Ingresaste mal”.
+
+## 4. Patrones ARIA/teclado
+
+| Componente | Teclado/semántica |
+|---|---|
+| Sidebar/nav | `nav`, lista de links, `aria-current=page`; Escape cierra móvil |
+| Dialog | `dialog`, nombre, modal real, Tab contenido, Escape si seguro, retorno de foco |
+| Combobox | patrón APG; flechas, Enter, Escape; estado expandido y opción activa |
+| Tabs | tablist/tab/tabpanel; flechas, Home/End; activación manual si carga |
+| Tabla | HTML table/caption/th/scope; `aria-sort`; controles como tab stops normales |
+| Alert | `role=alert` solo urgente; mensajes informativos `status` |
+| Toast | `status`, pausa, contenido no único |
+| Stepper | lista ordenada, paso actual con `aria-current=step` |
+| Timeline | lista semántica; fecha `time`; cambios anunciados una vez |
+| Skeleton | contenedor `aria-busy`; skeleton oculto al árbol |
+| Grupo selector | combobox/select con label “Grupo activo” |
+
+Referencia: https://www.w3.org/WAI/ARIA/apg/patterns/ (consulta 2025-03-08).
+
+## 5. Casos NEXO
+
+### Riesgo e indicadores
+Nivel y tendencia son texto. Gráfico tiene resumen y tabla alternativa. “Crítico” no dispara animación. La explicación de backend es accesible antes de acciones.
+
+### WhatsApp
+Estado de entrega se anuncia al abrir detalle, no cada polling. Teléfono enmascarado. Respuestas del acudiente tienen origen y fecha explícitos.
+
+### Biometría
+Captura no depende de color/pantalla externa: instrucciones textuales, visuales y estado programático en WebApp. Existe vía para completar alta sin huella y registrar pendiente según política.
+
+### Offline/sync
+Estado global visible y anunciado solo en cambios significativos. “Guardado local” y “Sincronizado” son labels diferentes. Conflictos no se resuelven automáticamente.
+
+### SOS
+Control grande, label textual, confirmación proporcional, no activación por gesto accidental. Resultado se anuncia asertivamente una vez. No sonido/parpadeo.
+
+## 6. Tema, contraste y motion
+
+- Preferencias iniciales siguen SO; usuario puede elegir Sistema/Claro/Oscuro.
+- `forced-colors` conserva bordes, foco e iconos.
+- `prefers-reduced-motion` aplica [08_MICRO_INTERACTIONS.md](./08_MICRO_INTERACTIONS.md).
+- No impedir zoom ni selección de texto.
+- Modo oscuro se prueba por separado; no se obtiene invirtiendo colores.
+
+## 7. Matriz criterio × componente × pantalla
+
+| WCAG | Riesgo NEXO | Componentes | Pantallas críticas | Prueba |
+|---|---|---|---|---|
+| 1.3.1 Info/relaciones | formularios/tablas | CMP-002–008/022 | OPS, QRY, AUD, ENR | lector + DOM |
+| 1.4.3/1.4.11 | temas/estados | todos | todas | contraste automatizado/manual |
+| 1.4.10 Reflow | shell/table/drawer | 030/022/034 | todas | 320 px/400% |
+| 2.1.1 Teclado | controles compuestos | 005/032/036 | todas | recorrido teclado |
+| 2.4.3/2.4.7/2.4.11 | foco y sticky | navegación/dialog | todas | secuencia y visibilidad |
+| 2.5.8 Target | móvil/60+ | interactivos | OPS/ENR/SOS | medición 24/44 px |
+| 3.2.3 Consistencia | rol/rutas | shell | todas | auditoría comparativa |
+| 3.3.1–3.3.4 | errores/acciones críticas | forms/dialog | AUTH/OPS/CASE/ENR | error y recuperación |
+| 3.3.7 Redundancia | grupo/datos | CMP-100/forms | OPS/QRY | prueba flujo |
+| 3.3.8 Auth | login/OTP | auth controls | AUTH | password manager/pegado |
+| 4.1.2 Nombre/rol/valor | custom UI | todos | todas | axe + lector |
+
+## 8. Plan de pruebas
+
+### Automatizadas en cada PR
+Lint semántico, axe-core sobre estados, contraste de tokens, unit tests de teclado y nombres, visual regression a zoom/temas. Cero violaciones críticas/serias; automatización no declara conformidad.
+
+### Manual por release
+- Teclado completo y foco.
+- NVDA+Firefox/Chrome, VoiceOver+Safari, TalkBack+Chrome.
+- Zoom 200%, reflow 400%, texto grande, orientación, forced colors.
+- Touch coarse y switch de input.
+- Reduced motion, offline y errores.
+- Login/2FA, citación, SOS, caso, consulta, exportación y enrolamiento.
+
+### Con usuarios por hito
+Mínimo: 2 usuarios por rol crítico, 5 profesores 60+, participantes con baja visión/movilidad/lector cuando sea posible. Medir éxito, tiempo, errores, ayuda, confianza y carga. No usar solo empleados del proyecto.
+
+## 9. Defectos y severidad
+
+- **Bloqueante:** tarea imposible, fuga de datos, trampa de foco, acción crítica inaccesible.
+- **Alta:** criterio AA incumplido o error no recuperable.
+- **Media:** fricción significativa con alternativa.
+- **Baja:** mejora AAA/no normativa.
+
+Bloqueantes y altas impiden release. Excepción temporal requiere owner, alternativa, fecha ≤30 días y comunicación.
+
+## 10. Criterios de aceptación
+
+- 0 fallos WCAG 2.2 AA conocidos.
+- Tareas críticas completadas por teclado y lector.
+- 400% reflow y touch 44 px en acciones críticas.
+- Profesores 60+ logran ≥80% éxito tras ≤10 min.
+- Ninguna PII se anuncia o enfoca fuera del permiso/contexto.
+</file>
+
+<file path="10_WIREFRAME_PLAN.md">
+# 10. Plan de wireframes
+
+**Propósito:** validar arquitectura, jerarquía y estados antes de estilo. No contiene dibujos ni decisiones de implementación.
+
+## 1. Estrategia de cobertura
+
+Se diseña una página patrón por familia y variantes de contenido/estado, no una pantalla independiente por rol. Viewports de prueba: compact 360×800 y 320×640; medium 768×1024; wide 1280×800; xwide 1440×900. También 400% reflow y touch/teclado.
+
+## 2. Lotes
+
+### Lote A. Arquitectura y shell, fidelidad baja, P0
+
+| WF | Pantallas | Variantes |
+|---|---|---|
+| WF-A01 | SCR-HOME-01 | 7 roles, sidebar wide/rail/panel móvil, grupo/no grupo |
+| WF-A02 | shell | perfil/tema/sync, permisos, deep link y retorno |
+| WF-A03 | SCR-SYS-01, SCR-SYS-02, SCR-SYS-03 | 403, offline, obsoleto, conflicto |
+
+**Validar:** menú lateral único, título/primaria, foco, safe areas y persistencia.
+
+### Lote B. Tareas críticas, fidelidad media, P0
+
+| WF | Flujo | Estados/viewports |
+|---|---|---|
+| WF-B01 | FLOW-AUTH-01 | login, 2FA, error, sesión; compact/wide |
+| WF-B02 | FLOW-OPS-01 | citación completa + entrega; todos |
+| WF-B03 | FLOW-OPS-03/04 | permiso/salida + confirmación; compact/wide |
+| WF-B04 | FLOW-OPS-07 | SOS éxito/timeout/error; compact/wide |
+| WF-B05 | FLOW-CASE-01/02 | lista, caso, nota; medium/wide/compact |
+| WF-B06 | FLOW-ENR-01/02 | alta y biometría pendiente; wide/compact |
+
+**Contenido realista:** nombres colombianos plausibles, grupos 7A/10B, fechas `es-CO`, estados WhatsApp y mensajes claros; nunca lorem ipsum.
+
+### Lote C. Información y control, fidelidad media, P1
+
+- WF-C01 Conversación NEXO y respuesta de acudiente.
+- WF-C02 Consultas docente/coordinador/secretaría/psico/rector.
+- WF-C03 Resultados como lista, tabla justificada y detalle.
+- WF-C04 Auditoría, evento e integridad.
+- WF-C05 Informes, preview y exportación larga.
+- WF-C06 Perfil, seguridad, tema e instalación.
+
+### Lote D. Estados límite y responsive, fidelidad media, P0
+
+Cada patrón de A–C se prueba con:
+
+- loading estable, vacío inicial y filtrado;
+- error field/section/global;
+- 403 y datos parcialmente autorizados;
+- offline con caché, datos obsoletos, cola y conflicto;
+- timeout y resultado desconocido;
+- nombre 60 caracteres, texto 200%, 0/1/1000 registros;
+- teclado abierto, safe area, landscape y ventana angosta;
+- dark/high contrast/reduced motion anotados, no estilizados.
+
+### Lote E. Refinamiento, fidelidad alta estructural, P2
+
+Consolidar componentes, copy final, comportamiento de foco, transiciones, telemetría y handoff. No aplicar visual polish hasta aprobar arquitectura y tareas P0.
+
+## 3. Anatomía que debe anotarse
+
+Cada wireframe incluye:
+
+1. `SCR-*`, `FLOW-*`, rol y pregunta.
+2. Orden de lectura y landmarks.
+3. Contenido y datos necesarios.
+4. Acción primaria/secundarias y consecuencia.
+5. Componentes `CMP-*` y variantes.
+6. Permiso y privacidad.
+7. Estado de red/actualización.
+8. Teclado, foco inicial/retorno y touch.
+9. Cambio por clase de ancho/capacidad.
+10. Transición/origen/destino.
+11. Eventos de telemetría sin PII.
+12. Supuesto o pregunta abierta.
+
+## 4. Inventario mínimo por rol
+
+| Rol | Wireframes obligatorios |
+|---|---|
+| Rector | Home, todas operaciones objetivo, casos, consultas ejecutivo, auditoría, informes, agenda |
+| Coordinador | Home, operaciones dirección, casos, consultas incidentes/permisos, agenda |
+| Docente | Home con grupo, citación/permiso/incidente/SOS, consultas clases, notificaciones |
+| Secretaría | Home, solicitud, consultas gestión, enrolamiento/biometría, notificaciones |
+| Portero | Home órdenes, SOS, solicitud, daño, notificaciones |
+| Auxiliar | Home órdenes, SOS, solicitud, daño, notificaciones |
+| Psicoorientador | Home bienestar, citación/incidente/SOS, casos/notas, riesgo |
+| Acudiente | solo storyboard WhatsApp outbound/respuesta, sin pantalla WebApp |
+
+## 5. Matriz de cantidad controlada
+
+No multiplicar 28 pantallas × 7 roles × 4 anchos. Base esperada: 20–26 wireframes patrón, 35–45 variantes de estado y 10–14 adaptaciones responsive decisivas. Una variante solo existe si cambia jerarquía, permiso, contenido o interacción.
+
+## 6. Protocolo de revisión
+
+1. **Diseño:** pregunta, jerarquía, patrón y vocabulario.
+2. **Producto:** autoridad UX y alcance objetivo.
+3. **Ingeniería:** datos, permiso, estados técnicos y brechas.
+4. **Accesibilidad:** orden, foco, reflow, touch y lenguaje.
+5. **Usuario:** tarea sin explicación del facilitador.
+
+Cambios se registran con `DEC-*`; no se resuelven verbalmente sin trazabilidad.
+
+## 7. Checklist de aprobación
+
+- [ ] Una pregunta y una primaria.
+- [ ] ≤5 prioridades en primer viewport.
+- [ ] Datos realistas y privacidad contextual.
+- [ ] Flujo feliz, error, permiso, offline y recuperación.
+- [ ] Grupo/filtros/retorno persistentes.
+- [ ] Componentes existentes; sin card anidada.
+- [ ] Adaptación compact/medium/wide sin arquitectura híbrida.
+- [ ] Orden de lectura, foco y targets anotados.
+- [ ] Estado técnico/evidencia visible en handoff.
+- [ ] Prueba de tarea cumple umbral del lote.
+
+## 8. Criterios de salida
+
+P0: ≥85% éxito general y ≥80% profesores 60+, sin bloqueo a11y; P1 ≥80%; errores críticos 0. Solo entonces pasan a mockup. Las preguntas de backend no se “diseñan alrededor”: quedan como dependencia explícita.
+
+## 9. Criterios de aceptación
+
+- Cada wireframe se vincula a un `SCR-*`, `FLOW-*`, rol y pregunta de trabajo.
+- Se cubren los viewports compact (360×800 y 320×640), medium (768×1024), wide (1280×800) y xwide (1440×900), además de reflow 400%.
+- Cada lote incluye éxito, error, permiso, offline, vacío, timeout y recuperación según corresponda.
+- No se multiplican variantes equivalentes; cada variante justifica un cambio real de jerarquía, permiso, contenido o interacción.
+- Los datos son realistas, coherentes con el dataset institucional y nunca lorem ipsum.
+- Todos los componentes usados están en [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md).
+- Las preguntas abiertas y decisiones quedan registradas con `DEC-*`.
+</file>
+
+<file path="11_MOCKUP_MASTERPLAN.md">
+# 11. Masterplan de mockups
+
+**Propósito:** producir un sistema visual coherente y prototipos validables, no una colección de pantallas.
+
+## 1. Orden de producción
+
+1. **Foundations:** color, tipografía, espacio, grid, temas, foco y motion.
+2. **Primitives:** controles, labels, estados y contenido.
+3. **Shell:** sidebar/topbar, grupo, red/sync y responsive.
+4. **Páginas patrón:** Inicio, Operaciones, lista+detalle, formulario, consulta/tabla, perfil.
+5. **Patrones NEXO:** Hoy, Caso, indicador, conversación, WhatsApp, confirmación y sync.
+6. **Flujos P0:** auth, citación, permiso/salida, SOS, caso, enrolamiento.
+7. **Estados límite:** offline, timeout, conflicto, 403, vacío y error.
+8. **Roles/temas/viewports:** variantes mínimas trazables.
+9. **Prototipo y validación.**
+10. **Handoff versionado.**
+
+No avanzar un nivel si el anterior carece de contraste, estados o owner.
+
+## 2. Páginas patrón
+
+| Patrón | Pantallas derivadas | Qué debe fijar |
+|---|---|---|
+| P-01 Shell de jornada | todas autenticadas | navegación, título, contexto, red |
+| P-02 Prioridad + actividad | Home roles | jerarquía y densidad |
+| P-03 Centro de acciones | Operaciones | cards justificadas y agrupación |
+| P-04 Flujo guiado | operaciones/enrolamiento | formulario, resumen, resultado |
+| P-05 Lista + detalle | notificaciones/casos/consultas | responsive y retorno |
+| P-06 Registro comparativo | consultas/auditoría/report preview | tabla/lista/filtros |
+| P-07 Cuenta/settings | perfil/instalación | agrupación y guardado |
+| P-08 Estado del sistema | error/offline/conflicto | recuperación |
+
+Variantes se crean como propiedades de rol, ancho, tema y estado. No se desacoplan en archivos inconexos.
+
+## 3. Datos y contenido
+
+- Dataset compartido: Colegio Central, grupos 7A/10B, jornada, estudiantes ficticios consistentes, operaciones y casos conectados.
+- Fechas/hora `es-CO`; números y periodos reales.
+- Mensajes NEXO describen señal, periodo y acción; sin lorem ipsum.
+- Estados WhatsApp coherentes a través del flujo.
+- Riesgo siempre suministrado como dato backend simulado y marcado, no calculado en diseño.
+- PII ficticia y claramente no productiva.
+
+## 4. Matriz de temas y viewports
+
+Cada página patrón se crea en claro/wide y claro/compact. Dark se valida en shell, Home, formulario, caso, tabla, diálogo y estados semánticos; luego se propaga por tokens. Medium se produce cuando la composición cambia. High contrast/reduced motion se anotan y prototipan en controles críticos.
+
+Viewports de referencia no son dispositivos: 360×800, 768×1024, 1280×800, 1440×900, además 320 CSS px a reflow.
+
+## 5. Estados de prototipo
+
+- Default, hover/focus/press/disabled/loading/error para controles.
+- Loading, vacío, éxito, advertencia, error, 403, offline, obsoleto y conflicto para páginas.
+- Retorno contextual y foco.
+- Polling WhatsApp sin saltos.
+- Teclado móvil y safe areas.
+- Reduced motion sin coreografía.
+
+## 6. Puertas de validación
+
+### Gate 1. Sistema
+Design + frontend + accesibilidad aprueban tokens, contraste, estados y composición. Cero decisiones visuales sin token.
+
+### Gate 2. Arquitectura
+Usuarios encuentran módulos y vuelven al origen. Éxito ≥90%, first-click correcto ≥85%.
+
+### Gate 3. Tareas P0
+Por rol: auth, primera acción, operación propia y recuperación. General ≥85%; docentes 60+ ≥80%; error crítico 0.
+
+### Gate 4. Accesibilidad
+Teclado/lector/reflow/touch/contraste; 0 bloqueantes/altos.
+
+### Gate 5. Ingeniería
+Datos, permisos, idempotencia, offline y estados técnicos factibles; brechas no se ocultan.
+
+### Gate 6. Piloto institucional
+Jornada real o simulada con interrupciones y red degradada. Confianza ≥5/7, SUS/UMUX-Lite según protocolo, sin fuga de datos.
+
+## 7. Protocolos y métricas
+
+Tareas se formulan por objetivo, no instrucciones de UI. Facilitador no enseña. Registrar:
+
+- éxito completo/parcial/fallo;
+- tiempo y primer clic;
+- errores, retrocesos y ayuda;
+- confianza 1–7 y carga SEQ 1–7;
+- comprensión de estado/entrega;
+- recuerdo de contexto tras interrupción;
+- accesibilidad y estrategia usada.
+
+Muestra por iteración: 5 usuarios para detección cualitativa por segmento prioritario, no como garantía estadística; estudios cuantitativos requieren muestra calculada. Incluir profesores 60+ en cada gate de tareas.
+
+## 8. Handoff
+
+Cada mockup lleva `SCR-*`, versión, fecha, owner, `FLOW-*`, `CMP-*`, estado técnico, endpoint/capacidad, rol, viewport, tema, copy, estados y notas a11y. Assets exportables son mínimos; iconos provienen de biblioteca acordada. No entregar medidas sueltas fuera de tokens.
+
+## 9. Control de cambios
+
+- Fuente de decisión: registro `DEC-*` enlazado.
+- Semver del sistema: major rompe contratos; minor agrega patrón compatible; patch corrige.
+- Cambios post-validación incluyen motivo, pantallas afectadas, migración y nueva prueba.
+- Deprecación visible por mínimo dos ciclos; variantes huérfanas se eliminan solo tras inventario.
+- Design System owner decide forma; Producto alcance; Accesibilidad veto normativo; Ingeniería factibilidad, sin redefinir UX unilateralmente.
+
+## 10. Definition of Ready para implementación
+
+- Flujo y pantalla aprobados.
+- Datos/permiso/errores contratados.
+- Todos los estados y responsive diseñados.
+- Copy final y telemetría ética definidos.
+- Teclado/lector/touch especificados.
+- Estado técnico honesto y dependencias asignadas.
+
+## 11. Definition of Done de mockup
+
+- Usa solo tokens/componentes aprobados.
+- Pasa gates correspondientes.
+- No contiene PII real, lorem ipsum ni capacidades presentadas falsamente.
+- Tiene claro/dark y compact/wide suficientes.
+- Prototipo reproduce éxito, error, offline y retorno.
+- Decisiones y preguntas abiertas están registradas.
+
+## 12. Criterios de aceptación
+
+- Los mockups usan exclusivamente tokens y componentes aprobados en [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md).
+- Cada patrón cubre claro/oscuro, compact/wide y los estados límite definidos en el lote correspondiente.
+- El prototipo reproduce éxito, error, offline y retorno contextual.
+- No se presentan capacidades o estados como existentes si son N4 o carecen de backend.
+- El handoff incluye `SCR-*`, `FLOW-*`, `CMP-*`, endpoint/capacidad, rol, viewport, tema, estado técnico, owner, versión y notas a11y.
+- Decisiones y preguntas abiertas están registradas con `DEC-*`.
+</file>
+
+<file path="12_FRONTEND_IMPLEMENTATION_GUIDE.md">
+# 12. Guía de implementación frontend
+
+**Alcance:** arquitectura visual y de producto sin código. No traslada reglas de negocio al cliente. **Autoridad:** [UX_DESIGN.md](./UX_DESIGN.md).
+
+## 1. Arquitectura por capas
+
+1. **Foundations:** tokens de color, tipo, espacio, motion, breakpoints, locale y temas.
+2. **Primitives:** texto, icono, botón, campo, foco, superficie.
+3. **Components:** controles y contenedores genéricos `CMP-001–041`.
+4. **Patterns:** NEXO `CMP-100–108`, composición con semántica de producto.
+5. **Shells:** autenticación, institucional, lista+detalle, flujo guiado.
+6. **Features:** auth, home, operations, notifications, cases, queries, audit, reports, enrollment, profile, PWA.
+7. **Pages:** ensamblan features por ruta/rol; no contienen reglas de negocio ni estilos ad hoc.
+
+Dependencias apuntan hacia abajo. Feature no importa otra feature; comparte patrón o servicio tipado. Pages no duplican componentes.
+
+## 2. Ownership y límites
+
+| Capa | Owner | Puede decidir | No puede decidir |
+|---|---|---|---|
+| Foundations/System | Design System + FE | tokens, API visual | reglas de negocio |
+| Components | FE platform + a11y | estados/interacción | permisos/riesgo |
+| Patterns | squad + Product | composición NEXO | cálculo backend |
+| Features | squad dominio | orquestación/data mapping | variantes visuales arbitrarias |
+| Pages/Routes | app shell | acceso, layout, deep links | repetir RBAC autoritativo solo cliente |
+
+## 3. Contratos de estado visual
+
+Toda consulta se mapea a unión explícita: `idle`, `loading`, `success`, `empty`, `stale`, `offline`, `forbidden`, `error`. Toda mutación: `editing`, `validating`, `submitting`, `accepted`, `queued`, `succeeded`, `failed`, `unknown`, `conflict`.
+
+El cliente representa estado backend, no infiere éxito:
+
+| Backend/integración | UI |
+|---|---|
+| 200 + datos | success/empty según contrato |
+| 202/queued | En cola, no Completado |
+| delivery queued/sent/delivered/failed/replied | CMP-105 equivalente |
+| 401 | sesión expirada, login con retorno |
+| 403 | SCR-SYS-01 sin revelar datos |
+| 404 | no disponible o removido según contexto |
+| 409 | SCR-SYS-03 conflicto |
+| 422 | errores de campo/forma |
+| 429 | espera indicada por servidor |
+| 5xx/network | error recuperable; preservar entrada |
+| timeout mutante | unknown; consultar por idempotencia |
+| caché | stale con fecha |
+
+## 4. Datos y negocio
+
+- Backend es fuente de permisos, riesgo, tendencia, destinatarios efectivos, validación, auditoría y estado WhatsApp.
+- Frontend puede validar forma para feedback, nunca sustituir validación del servidor.
+- Modelos de vista reducen y etiquetan datos; no replican entidades DB completas.
+- Datos sensibles no se precargan “por si acaso”.
+- IDs opacos en URL; no PII en query params, logs o telemetría.
+- Fechas conservan zona/ISO en contrato y se presentan `es-CO`.
+
+## 5. RBAC y routing
+
+1. Sesión carga usuario, sede, rol y permisos desde backend.
+2. Menú se deriva de una matriz canónica, no de arrays duplicados.
+3. Route guard mejora UX; API siempre autoriza.
+4. Deep link valida sesión, permiso y existencia antes de render.
+5. 403 y 404 son estados distintos internamente, pero no filtran existencia sensible.
+6. Acudiente no existe como rol WebApp navegable.
+7. `SUPER_RECTOR`/`EDGE_NODE` no se mezclan con shell institucional objetivo.
+
+Resoluciones documentadas en `DEC-IA-*`: rector en Consultas (DEC-IA-02), nombre Casos Activos (DEC-IA-01), discrepancia coordinador/auditoría (DEC-IA-03), y nomenclatura Portero/Psicoorientador (DEC-IA-07/08). Quedan pendientes de implementación en frontend/backend.
+
+## 6. Contexto persistente
+
+`GrupoContext` conceptual contiene ID, label, alcance, fuente y fecha. Persistencia por sesión/usuario, no global entre cuentas. Antes de reutilizar, verificar permiso/asignación. Ruta puede declarar `groupId` opaco para deep link; cambio invalida queries dependientes. Formularios sucios interceptan cambio y ofrecen guardar/cancelar.
+
+Retorno guarda ruta origen, filtros serializables, scroll key y focus target. El historial del navegador sigue funcionando; no reemplazarlo con navegación interna paralela.
+
+## 7. Formularios
+
+- Esquema por operación suministrado/versionado; UI agrupa ≤5 decisiones por paso.
+- Validación en blur/submit, no error agresivo al primer carácter.
+- Resumen previo para comunicaciones, salidas y acciones masivas.
+- Borrador solo en dispositivo confiable y con caducidad; notas sensibles no van a almacenamiento inseguro.
+- Idempotency key por mutación crítica/reintentable.
+- Errores del servidor se mapean a campo o resumen; desconocidos incluyen referencia.
+
+## 8. Fetch, caché y offline
+
+- Queries cancelables y deduplicadas; respuestas tardías no sobrescriben contexto nuevo.
+- Cache keys incluyen sede, rol/permiso y grupo.
+- Invalidación por evento o mutación, con TTL como respaldo.
+- Datos cacheados muestran fecha; decisiones críticas fuerzan revalidación.
+- Background Sync solo para acciones clasificadas seguras. **No** SOS, salidas, permisos críticos, notas sensibles o mensajes masivos sin evaluación de seguridad/idempotencia.
+- Cola cifra/protege lo permitido, muestra conteo y permite inspección no sensible.
+- Actualización del service worker no interrumpe formulario: avisar y aplicar en punto seguro.
+
+La configuración actual de cache/POST demuestra infraestructura N2, no garantiza que cada mutación sea segura offline; requiere auditoría por endpoint.
+
+## 9. Feedback optimista/pesimista
+
+**Optimista permitido:** preferencia de tema, lectura local, reordenamiento no crítico reversible.  
+**Pesimista obligatorio:** SOS, autorización de salida, permiso, cierre de caso, enrolamiento, cambio de contraseña, WhatsApp y auditoría.  
+**Híbrido:** notas no sensibles pueden mostrar “guardando” local, pero no entrar al timeline auditado hasta confirmación.
+
+## 10. Responsive/PWA/native
+
+- Un DOM semántico cuando sea razonable; CSS cambia composición, no duplica contenido.
+- Clases compact/medium/wide de [03_DESIGN_SYSTEM.md](./03_DESIGN_SYSTEM.md), complementadas por pointer/hover/keyboard/safe area.
+- Sidebar sigue siendo árbol rector; móvil usa panel lateral, no bottom nav.
+- PWA: manifest, standalone, offline shell, página offline, instalación contextual y update seguro.
+- Tauri/Capacitor mediante puertos: secure storage, deep link, biometría del dispositivo, share, notifications y lifecycle. Web fallback obligatorio.
+- Pedir permisos nativos just-in-time con explicación y alternativa.
+
+## 11. Accesibilidad en arquitectura
+
+Primitivos encapsulan foco, nombre, errores y targets; patterns implementan APG; pages proporcionan landmarks/título/foco de ruta. CI ejecuta axe y tests de teclado; release ejecuta matriz manual de [09_ACCESSIBILITY.md](./09_ACCESSIBILITY.md). No permitir escape de estilos que quite outline.
+
+## 12. Rendimiento
+
+- Presupuesto inicial por ruta y lazy loading por feature, sin skeleton de pantalla completa repetido.
+- LCP objetivo ≤2.5 s p75, INP ≤200 ms, CLS ≤0.1 en equipos/redes objetivo.
+- Feedback local ≤100 ms; virtualizar listas grandes con alternativa accesible.
+- Imágenes de perfil responsivas y limitadas; iconos tree-shaken.
+- Motion solo transform/opacity y se elimina bajo presión.
+- Telemetría de Web Vitals y errores sin PII, muestreada y no bloqueante.
+
+## 13. Theming e i18n
+
+Tokens semánticos, no colores literales en features. Tema sistema/claro/oscuro; forced colors. Copy separado de componentes y preparado para expansión 30%. Primera locale `es-CO`; no concatenar frases, pluralizar correctamente y usar `Intl`. Zona horaria institucional explícita. No traducir nombres de roles técnicos en contratos API, sí labels de UI.
+
+## 14. Testing
+
+| Nivel | Cobertura |
+|---|---|
+| Unit | reducers/mappers, estados, validación de forma |
+| Component | variantes, teclado, lector, error/loading/offline |
+| Contract | esquemas API y mapeo de estados |
+| Integration | RBAC, contexto, cache, formularios, sync |
+| E2E | FLOW P0 por rol, timeout, 403, offline, retorno |
+| Visual | temas, anchos, zoom, contenido extremo |
+| A11y | axe + manual según matriz |
+| Resilience | red lenta, duplicados, respuesta tardía, conflicto |
+
+Fixtures usan dataset ficticio coherente. Un test nominal no eleva a Nivel 1; verificación requiere ejecución manual end-to-end registrada.
+
+## 15. Observabilidad UX
+
+Eventos con `SCR/FLOW/CAP`, paso, resultado, duración, error categórico, conectividad y versión. Prohibidos PII, texto de notas/mensajes, teléfono, documento y términos de búsqueda sensibles. Correlación técnica usa request ID opaco. El personal institucional debe ser informado de forma transparente de que se recopila telemetría anónima de uso para mejorar el producto; la deshabilitación no limita sus tareas. Dashboards observan abandono, retries, unknown outcomes, sync conflicts y accesibilidad.
+
+## 16. Secuencia de implementación
+
+1. Tokens, temas, a11y primitives y estados.
+2. Shell/RBAC/contexto/retorno.
+3. Auth y estados de sistema.
+4. Home y grupo persistente.
+5. Operaciones + idempotencia + WhatsApp.
+6. Notificaciones NEXO.
+7. Casos/riesgo.
+8. Consultas.
+9. Auditoría/informes.
+10. Enrolamiento/biometría.
+11. Perfil/PWA/offline.
+12. Adaptadores native tras estabilizar web contracts.
+
+No implementar agenda, recuperación, búsqueda global o Capacitor como existente hasta backend/contrato y estado técnico aprobados.
+
+## 17. Definition of Done
+
+- Trazabilidad `CAP → FLOW → SCR → CMP → endpoint` completa.
+- Todos los estados y permisos implementados; no solo happy path.
+- Claro/oscuro, compact/wide, teclado/touch/lector/reduced motion.
+- Contrato y errores probados; mutaciones críticas idempotentes.
+- Cero violaciones a11y altas, Web Vitals dentro de presupuesto.
+- Telemetría sin PII y soporte con request ID.
+- Documentación de brechas y decisión actualizada.
+- Validación funcional manual registrada antes de usar “Verificado”.
+
+## 18. Gobierno a diez años
+
+Semver, changelog, owners, ADR/`DEC-*`, deprecación de dos releases y pruebas de migración. Revisión trimestral de variantes, semestral de accesibilidad y anual de dependencias/compatibilidad. Nuevos componentes exigen tres usos legítimos o necesidad normativa. Las decisiones de producto permanecen en estos documentos, no ocultas en código.
+
+## 19. Matriz de trazabilidad técnica
+
+| Capacidad | Flujo(s) | Pantalla(s) | Componentes clave | Endpoint / ruta |
+|---|---|---|---|---|
+| CAP-AUTH-01 | FLOW-AUTH-01, FLOW-AUTH-02 | SCR-AUTH-01, SCR-PRO-01 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-036, CMP-037, CMP-039, CMP-040, CMP-041 | `/auth/*` |
+| CAP-AUTH-02 | FLOW-AUTH-01 | SCR-AUTH-02 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008 | `/auth/verify-2fa` |
+| CAP-HOME-01 | FLOW-HOME-01 | SCR-HOME-01, SCR-HOME-03 | CMP-020, CMP-021, CMP-027, CMP-100, CMP-031, CMP-039, CMP-041 | `/dashboard/stats`, `/events` |
+| CAP-HOME-02 | FLOW-HOME-01 | SCR-HOME-01 | CMP-100 | contexto persistente |
+| CAP-HOME-03 | — | SCR-HOME-02 | CMP-020, CMP-023, CMP-026 | agenda futura (N4) |
+| CAP-OPS-01 | FLOW-OPS-01 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-020, CMP-036, CMP-039, CMP-040, CMP-041, CMP-101, CMP-105, CMP-107 | `/operations/execute` |
+| CAP-OPS-02 | FLOW-OPS-03, FLOW-OPS-04, FLOW-OPS-05 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-020, CMP-036, CMP-039, CMP-040, CMP-041, CMP-101, CMP-105, CMP-107 | `/operations/execute` |
+| CAP-OPS-03 | FLOW-OPS-07 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-020, CMP-036, CMP-039, CMP-040, CMP-041, CMP-101, CMP-105, CMP-107 | `/operations/execute` |
+| CAP-OPS-04 | FLOW-OPS-02, FLOW-OPS-06, FLOW-OPS-08, FLOW-OPS-09, FLOW-OPS-10, FLOW-OPS-11 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-020, CMP-036, CMP-039, CMP-040, CMP-041, CMP-101, CMP-105, CMP-107 | `/operations/execute` |
+| CAP-OPS-05 | FLOW-OPS-12 | SCR-OPS-01, SCR-OPS-02, SCR-OPS-03 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-020, CMP-023, CMP-036, CMP-039, CMP-040, CMP-041, CMP-101, CMP-105, CMP-107 | `/operations/execute` |
+| CAP-MSG-01 | FLOW-MSG-01 | SCR-OPS-03, SCR-NOT-01 | CMP-105, CMP-104, CMP-021, CMP-025 | webhook status |
+| CAP-MSG-02 | FLOW-MSG-02 | SCR-NOT-02 | CMP-105, CMP-104, CMP-021, CMP-025 | webhook inbound |
+| CAP-CASE-01 | FLOW-CASE-01, FLOW-CASE-02, FLOW-CASE-03 | SCR-CASE-01, SCR-CASE-02, SCR-CASE-03 | CMP-001, CMP-021, CMP-024, CMP-102, CMP-103, CMP-106, CMP-036, CMP-039, CMP-041, CMP-107 | tracking, behavior/risk |
+| CAP-QRY-01 | FLOW-QRY-01 | SCR-QRY-01, SCR-QRY-02 | CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-009, CMP-010, CMP-011, CMP-021, CMP-022, CMP-032, CMP-034, CMP-035, CMP-039, CMP-041 | `/consultations/query` |
+| CAP-AUD-01 | FLOW-AUD-01, FLOW-AUD-02 | SCR-AUD-01, SCR-AUD-02 | CMP-004, CMP-009, CMP-021, CMP-022, CMP-024, CMP-034, CMP-035, CMP-039, CMP-041 | `/audit/*` |
+| CAP-REP-01 | FLOW-REP-01 | SCR-REP-01, SCR-REP-02 | CMP-001, CMP-007, CMP-009, CMP-022, CMP-026, CMP-036, CMP-039, CMP-040, CMP-041 | `/reports/*` |
+| CAP-ENR-01 | FLOW-ENR-01, FLOW-ENR-02, FLOW-ENR-03 | SCR-ENR-01, SCR-ENR-02 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-011, CMP-021, CMP-106, CMP-036, CMP-039, CMP-040, CMP-041, CMP-107 | students/groups + edge biometría |
+| CAP-PRO-01 | FLOW-PRO-01 | SCR-PRO-01, SCR-PRO-02, SCR-PRO-03 | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007, CMP-008, CMP-108, CMP-036, CMP-039, CMP-040, CMP-041 | `/users/me/*` |
+| CAP-PWA-01 | FLOW-PWA-01, FLOW-PWA-02 | SCR-PRO-03, SCR-SYS-02, SCR-SYS-03 | CMP-108, CMP-039, CMP-040, CMP-041 | manifest, workbox, background sync |
+| CAP-NATIVE-01 | FLOW-NATIVE-01 | SCR-PRO-03 | CMP-001, CMP-108, CMP-041 | deep links / Tauri |
+| CAP-NATIVE-02 | — | N4 | — | Capacitor adapter futuro |
+</file>
+
+<file path="AUDITORIA_T6.md">
+# AUDITORIA T6 — Validación y control de calidad del Plan Maestro de Diseño NEXO
+**Fecha:** 2026-07-24T01:13:24.661844
+**Rol:** Editor Técnico Principal — auditoría recalculada tras correcciones documentales. No se modificó `UX_DESIGN.md`, ni código frontend/backend.
+
+## 1. Resumen ejecutivo
+- **Documentos auditados:** 13 (sin `AUDITORIA_T6.md`)
+- **Enlaces internos:** 27 revisados; rotos/anclas perdidas: 0
+- **IDs únicos:** CAP=21, FLOW=34, SCR=28, CMP=40, DEC=27
+- **IDs duplicados como definición:** 0
+- **Pantallas sin referencia cruzada:** 0
+- **Flujos sin pantalla asociada:** 0
+- **Capacidades sin flujo/pantalla asociada fuera de 05:** 0
+- **Componentes definidos sin uso documentado fuera de 03:** 0
+- **Capacidades “Verificado” sin Nivel 1:** 0
+- **Bloques de código prohibidos en UI_UX_PLAN:** 0
+
+✅ **Trazabilidad, nomenclatura, cobertura y criterios de aceptación cumplen en la mayor medida posible.**
+
+## 2. Build / lint / pruebas técnicas
+- `node`: no disponible → `/bin/sh: line 1: node: command not found`
+- `npm`: no disponible → `/bin/sh: line 1: npm: command not found`
+- `php`: no disponible → `/bin/sh: line 1: php: command not found`
+- `npm run lint/build` y pruebas PHP no se ejecutaron por ausencia de Node/PHP en el entorno; deben correrse en runner adecuado.
+
+## 3. Enlaces internos y anclas
+✅ No se detectaron enlaces rotos ni anclas perdidas.
+
+## 4. IDs duplicados como definición
+✅ No se detectaron IDs duplicados como definición.
+
+## 5. Trazabilidad pantallas → flujos → capacidades → componentes
+✅ Todas las pantallas definidas aparecen referenciadas fuera de 07.
+✅ Todos los flujos definidos aparecen asociados a al menos una pantalla en 07.
+✅ Todas las capacidades definidas aparecen en flujos y/o pantallas.
+✅ Todos los componentes definidos en 03 tienen uso documentado en otra entregable.
+
+## 6. Estados de capacidades y niveles de evidencia
+✅ Ninguna capacidad está marcada como “Implementado (Verificado)” sin evidencia Nivel 1.
+
+## 7. Ausencia de código ejecutable y decisiones de negocio frontend
+✅ No se encontraron bloques de código jsx/js/ts/css/php/react/vue/html en UI_UX_PLAN.
+
+## 8. Nomenclatura, roles y contradicciones con UX_DESIGN.md
+- "Psicoorientador": 9 ocurrencias → UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:71, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:147, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:147, UI_UX_PLAN/10_WIREFRAME_PLAN.md:87, UI_UX_PLAN/12_FRONTEND_IMPLEMENTATION_GUIDE.md:67 (+4)
+- "Portero": 11 ocurrencias → UI_UX_PLAN/01_PRODUCT_DESIGN_PHILOSOPHY.md:116, UI_UX_PLAN/01_PRODUCT_DESIGN_PHILOSOPHY.md:116, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:71, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:146, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:146 (+6)
+- "Seguimiento": 24 ocurrencias → UI_UX_PLAN/01_PRODUCT_DESIGN_PHILOSOPHY.md:91, UI_UX_PLAN/01_PRODUCT_DESIGN_PHILOSOPHY.md:115, UI_UX_PLAN/02_DESIGN_PRINCIPLES.md:32, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:12, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:75 (+19)
+- "Casos Activos": 25 ocurrencias → UI_UX_PLAN/01_PRODUCT_DESIGN_PHILOSOPHY.md:115, UI_UX_PLAN/02_DESIGN_PRINCIPLES.md:32, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:12, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:53, UI_UX_PLAN/05_INFORMATION_ARCHITECTURE.md:76 (+20)
+
+### Decisiones registradas (DEC-IA)
+- `DEC-IA-01`: módulo **Casos Activos** unificado en documentación; implementación `roles.js` `/seguimiento` pendiente de fase de desarrollo.
+- `DEC-IA-02`: rector incluido en objetivo de Consultas; no afirmar implementación hasta prueba funcional.
+- `DEC-IA-03`: Auditoría reservada a Rector en UI; backend puede conservar permiso técnico.
+- `DEC-IA-04`: objetivo de operaciones para rector completado; no afirmar implementación.
+- `DEC-IA-05`: cards como iniciadores operativos; listas/tablas cuando mejoren comparación.
+- `DEC-IA-06`: orientación libre recomendada; `vite.config.js` a ajustar en implementación.
+- `DEC-IA-07`: rol canonical **Portero** unificado en entregables.
+- `DEC-IA-08`: rol canonical **Psicoorientador** unificado en entregables.
+
+## 9. Cobertura responsive, PWA, dark mode, teclado, touch, reduced motion, offline
+| Tema | Documentos |
+|---|---|
+| responsive | 01_PRODUCT_DESIGN_PHILOSOPHY.md, 02_DESIGN_PRINCIPLES.md, 03_DESIGN_SYSTEM.md, 05_INFORMATION_ARCHITECTURE.md, 07_SCREEN_SPECIFICATIONS.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md |
+| PWA | 01_PRODUCT_DESIGN_PHILOSOPHY.md, 02_DESIGN_PRINCIPLES.md, 03_DESIGN_SYSTEM.md, 05_INFORMATION_ARCHITECTURE.md, 06_USER_FLOWS.md, 07_SCREEN_SPECIFICATIONS.md, 08_MICRO_INTERACTIONS.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md |
+| dark mode | 01_PRODUCT_DESIGN_PHILOSOPHY.md, 02_DESIGN_PRINCIPLES.md, 03_DESIGN_SYSTEM.md, 04_VISUAL_LANGUAGE.md, 05_INFORMATION_ARCHITECTURE.md, 07_SCREEN_SPECIFICATIONS.md, 09_ACCESSIBILITY.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md, UX_DESIGN.md |
+| teclado | 01_PRODUCT_DESIGN_PHILOSOPHY.md, 02_DESIGN_PRINCIPLES.md, 03_DESIGN_SYSTEM.md, 04_VISUAL_LANGUAGE.md, 05_INFORMATION_ARCHITECTURE.md, 06_USER_FLOWS.md, 07_SCREEN_SPECIFICATIONS.md, 08_MICRO_INTERACTIONS.md, 09_ACCESSIBILITY.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md, UX_DESIGN.md |
+| touch | 02_DESIGN_PRINCIPLES.md, 03_DESIGN_SYSTEM.md, 04_VISUAL_LANGUAGE.md, 07_SCREEN_SPECIFICATIONS.md, 08_MICRO_INTERACTIONS.md, 09_ACCESSIBILITY.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md, UX_DESIGN.md |
+| reduced motion | 02_DESIGN_PRINCIPLES.md, 03_DESIGN_SYSTEM.md, 07_SCREEN_SPECIFICATIONS.md, 08_MICRO_INTERACTIONS.md, 09_ACCESSIBILITY.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md |
+| offline | 01_PRODUCT_DESIGN_PHILOSOPHY.md, 03_DESIGN_SYSTEM.md, 04_VISUAL_LANGUAGE.md, 05_INFORMATION_ARCHITECTURE.md, 06_USER_FLOWS.md, 07_SCREEN_SPECIFICATIONS.md, 08_MICRO_INTERACTIONS.md, 09_ACCESSIBILITY.md, 10_WIREFRAME_PLAN.md, 11_MOCKUP_MASTERPLAN.md, 12_FRONTEND_IMPLEMENTATION_GUIDE.md |
+
+## 10. Tres pasadas editoriales
+### Pasada 1 — Cobertura y trazabilidad
+- [x] Enlaces internos válidos (0 rotos).
+- [x] IDs duplicados resueltos (0).
+- [x] Toda pantalla pertenece a flujo/wireframe/guía (0 pendientes).
+- [x] Todo flujo asociado a pantalla (0 pendientes).
+- [x] Toda capacidad asociada a flujo/pantalla (0 pendientes).
+- [x] Todo componente asociado a pantalla/flujo (0 pendientes).
+
+### Pasada 2 — Coherencia sistémica
+- [x] Nomenclatura de roles unificada (Portero, Psicoorientador, Casos Activos).
+- [x] Estados límite cubiertos explícitamente en flujos y pantallas.
+- [x] Capacidades N2 no etiquetadas como Verificadas.
+- [x] Decisiones registradas en `DEC-IA-*` con resolución o dependencia.
+
+### Pasada 3 — Durabilidad y gobernanza
+- [x] Semver, changelog y owners en 03, 11 y 12.
+- [x] Reglas de deprecación de dos releases presentes.
+- [x] ADR/DEC-* enlazados a decisiones relevantes.
+- [x] Trazabilidad técnica `CAP → FLOW → SCR → CMP → endpoint` en 07 y 12.
+
+## 11. Criterios de aceptación del plan maestro
+| Criterio | Estado | Evidencia / nota |
+|---|---|---|
+| Fuente y 12 entregables en UI_UX_PLAN | ✅ Cumple | Verificado |
+| Filosofía original intacta | ✅ Cumple | UX_DESIGN.md sin modificar; entregables referencian su autoridad |
+| Roles institucionales con arquitectura/tareas/flujos/pantallas; acudiente solo WhatsApp | ✅ Cumple | 05, 06, 07 y 12 contienen roles, capacidades, flujos y pantallas |
+| Catálogo cubre producto objetivo y diferencia presente/brechas/futuro | ✅ Cumple | 21 capacidades con estados N1-N4 |
+| Decisiones importantes con justificación conductual/evidencia/métrica | ✅ Cumple | 02 incluye matriz de evidencia con principio/fuente/regla medible |
+| Design System: anatomía, estados, responsive, a11y y uso de componentes | ✅ Cumple | 03 define componentes, estados y 07/12 contienen matrices de uso |
+| Flujos incluyen éxito, error, permiso, carga, vacío, offline, reintento y recuperación | ✅ Cumple | 06 incluye matriz de estados obligatorios |
+| Pantallas incluyen campos solicitados y trazabilidad técnica | ✅ Cumple | 07 catálogo incluye flujo/capacidad y matriz componente×endpoint |
+| Guía final permite implementar sin re-decidir navegación/jerarquía/estados/a11y/reutilización | ✅ Cumple | 12 incluye arquitectura, DoD y matriz CAP→FLOW→SCR→CMP→endpoint |
+| Inconsistencias resueltas en registro auditable con decisión/justificación | ✅ Cumple | 05 registro de decisiones incluye DEC-IA-01..08 con resolución |
+| Gobierno, ownership, versionado, deprecación y evolución a 10 años | ✅ Cumple | 03, 11 y 12 contienen gobierno/versionado |
+| No se produce ni modifica código de aplicación en UI_UX_PLAN | ✅ Cumple | 0 bloques de código prohibidos |
+
+## 12. Conclusiones y siguiente paso
+### ¿Quedó resuelto?
+Sí, en la documentación del plan maestro. Los doce entregables + `UX_DESIGN.md` están coherentes, trazables y listos para wireframes y mockups. Las inconsistencias documentales (nomenclatura, matrices, decisiones, gobernanza) se cerraron; las dependencias de implementación (`roles.js`, `vite.config.js`, build/tests) quedan registradas como trabajo de la fase de desarrollo.
+
+### ¿Qué sigue?
+1. Validar por el arquitecto de producto las decisiones `DEC-IA-*` con impacto en implementación (`DEC-IA-01`, `DEC-IA-02`, `DEC-IA-06`).
+2. Ejecutar `npm run lint/build` y pruebas PHP en un entorno con Node/PHP; adjuntar resultados fechados.
+3. Alinear `WebApp/src/config/roles.js` con la nomenclatura canonical (`Casos Activos`, `Portero`, `Psicoorientador`) en la fase de implementación frontend.
+4. Proceder a la **producción de wireframes y mockups** (10 y 11) usando los patrones, componentes y trazabilidad validados.
+5. Una vez aprobados wireframes/mockups, implementar siguiendo `12_FRONTEND_IMPLEMENTATION_GUIDE.md` sin reabrir decisiones UX aprobadas.
+6. Definir/validar la política de retención y archivado de eventos auditados que involucren datos de menores, coherente con la política de datos sensibles pendiente.
+
+---
+*Informe generado tras edición documental. No se modificó código de aplicación.*
+</file>
+
+<file path="UX_DESIGN.md">
+# NEXO — Visión del Frontend 
+
+## Objetivo
+NEXO no es una aplicación de asistencia escolar.
+
+NEXO es un Sistema Inteligente de Gestión Escolar. Usa biometría, automatización, auditoría e inteligencia de comportamiento para reducir el trabajo operativo de toda una institución educativa. El backend ya implementa prácticamente toda la lógica; el objetivo del nuevo frontend no es agregar funciones, sino construir una interfaz que permita usar todo el potencial del sistema con la menor fricción posible. Prioridad absoluta: experiencia de usuario.
+
+## Filosofía
+> NEXO no muestra datos. NEXO detecta situaciones y propone acciones.
+
+> NEXO no debería sentirse como abrir una aplicación. Debería sentirse como entrar a tu jornada de trabajo.
+
+El usuario no abre software; entra a trabajar.
+
+## Principios de diseño
+1. **Todo a un clic:** acciones importantes visibles inmediatamente.
+2. **Cero fricción:** un profesor de 60+ años aprende NEXO en menos de 10 min.
+3. **Belleza sin exceso:** no buscamos dashboards llenos de gráficos; buscamos espacio, tipografía, jerarquía visual impecable, componentes grandes y mínima carga cognitiva.
+4. **Inteligencia silenciosa:** el backend piensa; el usuario recibe qué, por qué y qué hacer.
+5. **Sensación premium:** debe sentirse como un producto construido por una startup multimillonaria; no parece software escolar, no parece un ERP. Compite visualmente con Apple Health, Linear, Arc, Raycast, Notion, Stripe Dashboard, Tesla App, iOS Settings. Inspirarse, no copiar.
+
+## Identidad visual
+Transmitir: tranquilidad, orden, confianza, rapidez, profesionalismo, tecnología, institucionalidad.  
+Nunca: infantil, gubernamental, antiguo, saturado.
+
+## Estilo visual
+Minimalista, mucho espacio, componentes grandes, pocas líneas, poco ruido, animaciones suaves, transiciones rápidas. Modo claro y oscuro desde el inicio.
+
+## Rendimiento
+Las animaciones no afectan el rendimiento. Si comprometen velocidad, desaparecen. Todo debe sentirse instantáneo.
+
+## Reglas de interfaz
+
+### Espaciado
+- Nunca más de 5 elementos importantes visibles.
+- Muchísimo espacio negativo.
+- Nada de interfaces comprimidas.
+
+### Tipografía
+- Toda pantalla debe poder entenderse leyendo únicamente los títulos.
+
+### Jerarquía
+- Cada pantalla tiene:
+  - Un título.
+  - Un objetivo.
+  - Una acción principal.
+- Nunca dos acciones principales.
+
+### Colores
+- El color nunca será decorativo.
+- Cada color comunica algo.
+- Verde: estado correcto.
+- Azul: información.
+- Rojo: acción crítica.
+- Naranja: atención.
+
+### Animaciones
+- Todas duran entre 150 y 300 ms.
+- Nunca bloquean.
+- Nunca retrasan.
+- Nunca distraen.
+
+### Tarjetas
+- Todas las acciones importantes viven en tarjetas.
+- Nunca listas enormes.
+
+### Inputs
+- Siempre grandes.
+- Nunca pequeños.
+- Pensados para dedos.
+- No mouse.
+
+### Gráficos
+- Inspiración: Apple Health.
+- Pero mucho más minimalista.
+- Nunca gráficos 3D.
+- Nunca dashboards financieros.
+
+### Componentes
+- Todo debe poder reutilizarse.
+- No diseñar pantallas.
+- Diseñar componentes.
+
+## Arquitectura por rol
+
+Cada rol tiene una experiencia distinta. El menú lateral se filtra automáticamente según el rol.
+
+### Rector
+
+- **Navegación:** Inicio → Operaciones → Notificaciones → Casos Activos → Consultas → Auditoría → Informes.
+- **Inicio:** Panel Ejecutivo — Estadísticas del Día (Presentes, Inasistentes, Alertas) de toda la institución + Eventos Recientes; tocar una estadística abre el detalle institucional.
+- **Operaciones:** todas — Citar acudiente, Autorizar salida, SOS, Generar permiso, Mandar solicitud, Solicitar seguimiento/Caso, Salida pedagógica, Cambio de horario, Reportar incidente, Reportar daño.
+- **Consultas:** Ejecutivo Institucional (Métricas Globales, Asistencia Institucional, Estadísticas Históricas, Indicadores Críticos) y Reportes Consolidados (Consolidados, Históricos, Exportaciones).
+- **Casos Activos:** acceso total; revisar e iniciar casos.
+- **Auditoría:** Asistencia, Disciplina, Permisos y Salidas, Actividad Docente, Alertas.
+- **Informes:** previsualizar y exportar CSV de asistencia/biométrica.
+- **Agenda Institucional:** crea reuniones, capacitaciones, comités, entrega de informes y eventos institucionales.
+- **Notificaciones:** alertas, permisos, citaciones, solicitudes de seguimiento, SOS.
+
+### Coordinador
+
+- **Navegación:** Inicio → Operaciones → Notificaciones → Casos Activos → Consultas.
+- **Inicio:** Panel de Dirección — Estadísticas del Día (Presentes, Inasistentes, Alertas) + Eventos Recientes (igual que rector).
+- **Operaciones:** Citar acudiente, Autorizar salida, SOS, Generar permiso, Mandar solicitud, Solicitar seguimiento/Caso, Salida pedagógica, Cambio de horario.
+- **Consultas:** Incidentes (Spam Biométrico, Vulneraciones, Alertas, Seguimiento Estudiantil) y Permisos (Permisos Emitidos, Salidas permitidas, Salidas Pedagógicas).
+- **Casos Activos:** sí.
+- **Auditoría e Informes:** no. Exclusivos del rector.
+- **Agenda Institucional:** crea reuniones, capacitaciones, comités, entrega de informes y eventos institucionales.
+- **Notificaciones:** alertas, permisos, citaciones, solicitudes.
+
+### Docente
+
+- **Navegación:** Inicio → Operaciones → Notificaciones → Consultas.
+- **Inicio:** Panel Docente — selector de grupo + 4 tarjetas (Presentes, Inasistentes, Alertas, Permisos) + Eventos Recientes; tocar una tarjeta abre el detalle del grupo seleccionado.
+- **Operaciones:** Citar acudiente, Generar permiso, Reportar incidente, Mandar solicitud, SOS.
+- **Consultas:** Mis Clases — Llegadas Tarde, Inasistencias, Estudiantes Ausentes, Estudiantes fuera del salón, Estudiantes con Permiso, Citaciones.
+- **Casos Activos:** no gestiona la lista; puede ser notificado.
+- **Notificaciones:** alertas de sus grupos, citaciones, respuestas.
+
+### Secretaría
+
+- **Navegación:** Inicio → Operaciones → Notificaciones → Consultas → Enrolamiento.
+- **Inicio:** Panel Secretaría — Eventos recientes.
+- **Operaciones:** Enviar solicitud.
+- **Consultas:** Gestión Estudiantil (Estudiantes, Grupos, Acudientes, Matrículas, Cambios Registro), Personal, Mensajería, Históricos, Control de Acceso.
+- **Enrolamiento:** registro de estudiantes, listado con búsqueda, vinculación de huella, activar/inactivar.
+- **Casos Activos:** no.
+- **Notificaciones:** mensajes del sistema.
+
+### Psicoorientador
+
+- **Navegación:** Inicio → Operaciones → Notificaciones → Casos Activos → Consultas.
+- **Inicio:** Panel de Bienestar — eventos recientes y casos activos.
+- **Operaciones:** Citar acudiente, Reportar incidente, SOS; además gestiona casos: iniciar seguimiento psicológico, agregar notas, registrar evolución.
+- **Consultas:** Análisis de Riesgo y Seguimientos completados.
+- **Casos Activos:** sí; recibe solicitudes, gestiona casos, notas y evolución auditada.
+- **Notificaciones:** solicitudes de seguimiento.
+
+### Portero y Auxiliar
+
+- **Navegación:** Inicio → Operaciones → Notificaciones.
+- **Inicio:** Panel de Servicio — Eventos recientes.
+- **Operaciones:** SOS, Mandar solicitud, Reportar daño.
+- **Notificaciones:** Centro de Órdenes (instrucciones directas de directivos).
+- **Casos, Consultas, Auditoría, Informes, Enrolamiento:** no.
+
+## Inicio de sesión
+Experiencia de 3 pasos:
+1. Shell/skeleton inicial sin espera ornamental; el login no impone una animación fija.
+2. Saludo personalizado: "Buenos días, Profesor hon Pérez. Martes 22 de julio".
+3. Ingreso automático al Home.
+
+## Home
+Responde: **¿Qué necesita mi atención ahora?** El contenido cambia según el rol; el desglose completo está en Arquitectura por rol.
+- Primero selecciona el grupo.
+- Luego aparecen métricas importantes: Presentes, Ausentes, Permisos activos, Alertas activas.
+- Tarjetas tipo grid/botones; al entrar, muestran los datos correspondientes.
+
+## Tarjeta "Hoy en (nombre del colegio)"
+Tarjeta inteligente desplegable en la parte superior.
+- Ejemplo: 5 clases (ver clases), reunión a las 2:30 PM, 2 solicitudes pendientes, ninguna citación pendiente.
+- Si hay urgencia: "Se detectó comportamiento anómalo" o "El acudiente respondió la citación".
+- Solo aparece la barra; al hacer clic, abre la conversación NEXO para explicar el contexto.
+- Nunca múltiples banners ni ruido visual.
+
+## Navegación
+
+Menú lateral, no híbrido. Los ítems se filtran automáticamente según el rol:
+
+- Inicio
+- Operaciones
+- Notificaciones
+- Casos Activos (Coordinador, Rector, Psicoorientador)
+- Consultas (Coordinador, Secretaría, Docente, Psicoorientador, Rector)
+- Auditoría (Rector)
+- Informes (Rector)
+- Enrolamiento (Secretaría)
+
+El modo oscuro y la tarjeta de usuario con cierre de sesión quedan en el panel inferior.
+
+## Operaciones
+Centro de acciones, no información:
+- Citar acudiente
+- Generar permiso
+- Reportar incidente
+- Solicitar apoyo
+- Enviar solicitud
+- Programar reunión
+
+## Agenda Institucional
+El rector o coordinador crea:
+- Reuniones generales, por departamentos, por profesores.
+- Capacitaciones, comités, entrega de informes, eventos institucionales.
+
+El profesor no administra calendarios; NEXO recuerda cada evento.
+
+## Notificaciones
+No es una bandeja; es una conversación con NEXO. El usuario no escribe, solo recibe:
+- "El acudiente aceptó la citación. Ver detalles."
+- "Se detectó comportamiento anómalo. Revisar caso."
+- "Reunión institucional hoy a las 2:30 PM. Ver información."
+
+## Consultas
+Replanteadas: tablas tradicionales desaparecen. Experiencia visual cómoda y rápida.
+
+## Perfil del estudiante
+Desaparece. El profesor rara vez necesita ficha completa. Las acciones ocurren desde Operaciones.
+
+## Caso
+Cuando hay una anomalía no se abre perfil; se abre un Caso:
+- Fotografía
+- Nombre
+- Grupo
+- Nivel de riesgo
+- Resumen automático
+- Indicadores
+- Análisis de NEXO
+- Acciones disponibles
+
+## Indicadores de comportamiento
+Inspirados en Apple Health, más simples. Sin gráficas enormes. Ejemplo:
+- Asistencia 🟢 Normal
+- Baños 🟠 Alto
+- Evasiones 🔴 Crítico
+- Llegadas tarde 🟡 Medio
+
+Interpretación inmediata.
+
+## Acciones del caso
+- Iniciar seguimiento
+- Iniciar seguimiento psicológico
+
+## Seguimiento psicológico
+Al iniciar, el psicoorientador recibe notificación, acepta, comienza seguimiento, agrega notas, registra evolución. Todo auditado.
+
+## Casos activos
+El módulo se llama oficialmente **Casos Activos** porque comunica prioridad.
+
+## Filosofía de pantallas
+Cada pantalla responde una sola pregunta:
+- **Inicio:** ¿Qué necesita mi atención ahora?
+- **Operaciones:** ¿Qué acción quiero realizar?
+- **Notificaciones:** ¿Qué ocurrió mientras trabajaba?
+- **Casos activos:** ¿Qué estudiantes requieren seguimiento?
+- **Consultas:** ¿Qué información necesito buscar?
+
+## Decisiones UX aprobadas
+- Menú lateral.
+- Operaciones mediante tarjetas grid.
+- Notificaciones tipo conversación con NEXO.
+- Skeleton loading.
+- Errores resaltados en el componente.
+- Modo oscuro.
+- Sin sonidos (con excepción para SOS recibido: notificación nativa del SO según DEC-021; sujeto a validación piloto).
+- Pistas contextuales solo las primeras tres veces.
+- Balance animaciones/rendimiento.
+- Estética premium tecnológica.
+
+## Filosofías adicionales
+
+1. **No software escolar.** No queremos que el usuario piense: *"Estoy usando el sistema del colegio"*. Queremos que piense: *"Estoy usando una herramienta premium de trabajo"*. Eso cambia todo.
+2. **No castigar con información.** No mostrar edad, documento, dirección, EPS o datos del acudiente. Solo lo que ayude al trabajo actual.
+3. **Menos es más.** 15 botones = mal diseño. 3 botones enormes = probablemente bien diseñado.
+4. **La app propone acciones.** No "Juan tiene muchas salidas al baño". Sí: "NEXO recomienda iniciar seguimiento".
+5. **Colores no comunican solos.** Rojo, amarillo y verde siempre acompañados de ícono, texto y estado (accesibilidad/daltonismo).
+6. **Sin miedo.** Nada rojo urgente parpadeante. Tranquilo, ordenado, controlado.
+7. **Una acción = un flujo.** "Citar acudiente" = elegir estudiante, elegir fecha, confirmar. No veinte campos.
+8. **Componentes reutilizables.** La tarjeta de estudiante sirve para profesor, secretaría, coordinación y psicología con pequeñas variaciones.
+9. **El backend manda.** El frontend no calcula reglas, riesgos ni umbrales; solo representa.
+10. **El profesor no administra.** Enseña; la administración desaparece.
+11. **El coordinador sí administra.** Necesita contexto y prioridades, no tablas infinitas.
+12. **Los casos tienen vida.** Nacen, evolucionan, empeoran, cierran; expediente vivo.
+13. **Indicadores vivos.** Tendencias, estado, evolución: Normal, Subiendo, Bajando, Crítico.
+14. **Nunca pregunta dos veces.** Si escoge Grupo 7A, toda la app asume 7A hasta que cambie.
+15. **Recuerda contexto.** Al volver tras una notificación, regresa exactamente donde estaba.
+16. **Animaciones con propósito.** Cambio de estado, carga, confirmación, éxito. Nada más.
+17. **Home es escritorio de trabajo.** Nunca un dashboard.
+18. **Chat de NEXO.** Asistente institucional. No conversa ni responde preguntas; informa, guía, propone.
+19. **IA invisible.** Sin botones "IA", "GPT" o "Asistente Inteligente". Solo "NEXO detectó...", "NEXO recomienda...", "NEXO organizó...".
+20. **Sensación final.** Cerrar la app y pensar: *"Qué cómodo fue trabajar"*. Belleza es consecuencia; comodidad es objetivo.
+</file>
+
+</files>

@@ -156,7 +156,7 @@ Tema Sistema/Claro/Oscuro, contraste/reduced motion respetando OS, instalación 
 | Transversal | CMP-011, CMP-023, CMP-026, CMP-030, CMP-031, CMP-032, CMP-033, CMP-034, CMP-035, CMP-037, CMP-038, CMP-040 | shell, layout y patrones compartidos entre múltiples familias |
 ## 5. Telemetría ética
 
-Registrar ID de pantalla/flujo, resultado, duración, error categórico, breakpoint/capacidad y uso de ayuda. Nunca nombre, documento, notas, mensaje, teléfono ni contenido consultado. Retención y acceso definidos institucionalmente. Telemetría deshabilitada no bloquea tareas.
+Registrar ID de pantalla/flujo, resultado, duración, error categórico, breakpoint/capacidad y uso de ayuda. Nunca nombre, documento, notas, mensaje, teléfono ni contenido consultado. Retención y acceso definidos institucionalmente. El personal institucional debe ser informado de que se mide uso (pantallas, flujos, tiempos) sin identificar contenido ni PII. Telemetría deshabilitada no bloquea tareas.
 
 ## 6. Criterios de aceptación
 

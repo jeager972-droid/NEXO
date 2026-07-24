@@ -29,9 +29,12 @@ NEXO se organiza por preguntas de trabajo, no por tablas de base de datos:
 | Indicador | tipo, nivel, tendencia, periodo | caso/estudiante | backend autoritativo |
 | Mensaje NEXO | evento, explicación, CTA | operación/caso/agenda | solo lectura |
 | Mensaje WhatsApp | destinatario, entrega, respuesta | acudiente, operación | PII enmascarada |
-| Evento auditado | actor, acción, tiempo, integridad | cualquier objeto | inmutable |
+| Evento auditado | actor, acción, tiempo, integridad | cualquier objeto | inmutable; sujeto a retención y archivado institucional acotados, especialmente para datos de menores, conforme a la política de datos sensibles (por definir) |
 | Informe | tipo, periodo, filtros | datos autorizados | preview antes de exportar |
 | Usuario institucional | rol, permisos, sede | tareas, sesión | perfil propio |
+
+### Retención de eventos auditados
+Los eventos auditados son inmutables mientras estén en custodia activa. Para eventos que involucren datos de menores, la institución debe definir un plazo máximo de retención; tras ese plazo se aplicará archivado cifrado o depuración con conservación de hash de integridad, coherente con la política de datos sensibles pendiente.
 
 ## 3. Sitemap objetivo
 
@@ -79,6 +82,8 @@ Shell institucional
 | Informes | Sí | no | no | no | no | no | no |
 | Enrolamiento | no | no | no | Sí | no | no | no |
 | Perfil | propio | propio | propio | propio | propio | propio | propio |
+
+Portero y Auxiliar comparten navegación, operaciones y notificaciones porque la distinción es organizacional/backend (nómina, turnos), no funcional.
 
 `SUPER_RECTOR` y `EDGE_NODE` son roles técnicos fuera del producto institucional objetivo. El acudiente no tiene sitemap WebApp.
 

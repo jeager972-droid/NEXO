@@ -67,7 +67,8 @@ Preferir inactivar/deshacer. Fila no se desvanece antes de confirmación backend
 |---|---|
 | Cambio de grupo | seleccionar → topbar confirma → contenido skeleton estable → datos + fecha; formulario sucio pide decisión |
 | Citar acudiente | pasos sin animación ornamental → resumen → enviar → estado WhatsApp progresa por texto/icono |
-| SOS | press → confirmación crítica breve → envío bloqueado → resultado inequívoco; sin pulso/parpadeo |
+| SOS enviado | press → confirmación crítica breve → envío bloqueado → resultado inequívoco; sin pulso/parpadeo |
+| SOS recibido | notificación nativa del sistema operativo (sonido/vibración) permitida para reducir tiempo de respuesta; sin beep/pulso/parpadeo decorativo de NEXO. Ver DEC-021. |
 | Caso | iniciar → responsable/estado se actualiza → nueva entrada timeline resaltada una vez ≤2 s sin movimiento |
 | Nota | guardar local temporal si seguro → enviar → insertar timeline → foco a confirmación |
 | WhatsApp | en cola → enviado → entregado/fallido/respondido; cambios anunciados sin mover fila |

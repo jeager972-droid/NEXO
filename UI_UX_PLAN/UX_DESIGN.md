@@ -146,7 +146,7 @@ Cada rol tiene una experiencia distinta. El menú lateral se filtra automáticam
 
 ## Inicio de sesión
 Experiencia de 3 pasos:
-1. Animación del logo (máx. 2 s, sin botón "Continuar").
+1. Shell/skeleton inicial sin espera ornamental; el login no impone una animación fija.
 2. Saludo personalizado: "Buenos días, Profesor hon Pérez. Martes 22 de julio".
 3. Ingreso automático al Home.
 
@@ -160,7 +160,7 @@ Responde: **¿Qué necesita mi atención ahora?** El contenido cambia según el 
 Tarjeta inteligente desplegable en la parte superior.
 - Ejemplo: 5 clases (ver clases), reunión a las 2:30 PM, 2 solicitudes pendientes, ninguna citación pendiente.
 - Si hay urgencia: "Se detectó comportamiento anómalo" o "El acudiente respondió la citación".
-- Solo aparece la barra; al hacer clic, abre el chatbot de NEXO para explicar el contexto.
+- Solo aparece la barra; al hacer clic, abre la conversación NEXO para explicar el contexto.
 - Nunca múltiples banners ni ruido visual.
 
 ## Navegación
@@ -251,7 +251,7 @@ Cada pantalla responde una sola pregunta:
 - Skeleton loading.
 - Errores resaltados en el componente.
 - Modo oscuro.
-- Sin sonidos.
+- Sin sonidos (con excepción para SOS recibido: notificación nativa del SO según DEC-021; sujeto a validación piloto).
 - Pistas contextuales solo las primeras tres veces.
 - Balance animaciones/rendimiento.
 - Estética premium tecnológica.

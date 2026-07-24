@@ -114,6 +114,7 @@ Sí, en la documentación del plan maestro. Los doce entregables + `UX_DESIGN.md
 3. Alinear `WebApp/src/config/roles.js` con la nomenclatura canonical (`Casos Activos`, `Portero`, `Psicoorientador`) en la fase de implementación frontend.
 4. Proceder a la **producción de wireframes y mockups** (10 y 11) usando los patrones, componentes y trazabilidad validados.
 5. Una vez aprobados wireframes/mockups, implementar siguiendo `12_FRONTEND_IMPLEMENTATION_GUIDE.md` sin reabrir decisiones UX aprobadas.
+6. Definir/validar la política de retención y archivado de eventos auditados que involucren datos de menores, coherente con la política de datos sensibles pendiente.
 
 ---
 *Informe generado tras edición documental. No se modificó código de aplicación.*
