@@ -1,102 +1,75 @@
 /**
- * Profile page / NEXO Institucional
- * Responsabilidad: Gestión de la cuenta institional: información personal, cambio de foto
- * (compresión previa), cambio de contraseña, y contacto con verificación OTP por WhatsApp
- * (correo, teléfono, correo de respaldo) con guardado/eliminación.
- * Dependencias: React, useAuth, usersApi, lucide-react, framer-motion.
- * Subcomponentes: SectionCard, TextField, InlineToast, OtpBlock.
+ * SCR-PRF-01 Profile
+ * Perfil de usuario: foto, datos de contacto, verificación OTP y cambio de contraseña.
  */
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';
-import {
-  Camera, Loader2, CheckCircle2, AlertTriangle,
-  Lock, Save, Send, Eye, EyeOff, Trash2
-} from 'lucide-react';
+import { Camera, Mail, Phone, ShieldCheck, Key, CheckCircle2, AlertCircle, Trash2, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Section, Surface } from '../components/ui/Surface';
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Skeleton } from '../components/ui/Skeleton';
 
-/* ─── Section wrapper ─── */
-const SectionCard = ({ title, subtitle, children }) => (
-  <div className="bg-white dark:bg-slate-900 p-5 space-y-4" style={{ border: '1.5px solid var(--nx-border)' }}>
-    <div>
-      <p className="text-xs font-black uppercase tracking-tight" style={{ color: 'var(--nx-text)' }}>{title}</p>
-      <p className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: 'var(--nx-text-muted)' }}>{subtitle}</p>
-    </div>
-    {children}
-  </div>
-);
+const compressImage = (file, maxWidth = 800, quality = 0.85) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo comprimir'))), 'image/jpeg', quality);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
-/* ─── Text input ─── */
-const TextField = ({ label, value, onChange, type = 'text', placeholder, disabled, rightElement }) => (
-  <div>
-    <label style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>{label}</label>
-    <div className="relative">
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        placeholder={placeholder}
-        className="w-full px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-white bg-slate-50 dark:bg-slate-800 outline-none disabled:opacity-50"
-        style={{ border: '1.5px solid var(--nx-border)', fontSize: '13px' }}
-      />
-      {rightElement && <div className="absolute right-2 top-1/2 -translate-y-1/2">{rightElement}</div>}
-    </div>
-  </div>
-);
-
-/* ─── Toast ─── */
-const InlineToast = ({ toast }) => {
+const Toast = ({ toast }) => {
   if (!toast) return null;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      className={`px-4 py-2.5 text-xs font-semibold flex items-center gap-2 ${
-        toast.type === 'success'
-          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-          : toast.type === 'info'
-          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-          : 'bg-red-50 text-red-700 border border-red-200'
-      }`}
-    >
-      {toast.type === 'success' ? <CheckCircle2 size={14} /> : toast.type === 'info' ? <Send size={14} /> : <AlertTriangle size={14} />}
-      {toast.message}
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-3 flex items-center gap-2 text-body-sm">
+      {toast.type === 'success' ? <CheckCircle2 size={16} className="text-[var(--nx-success)]" /> : <AlertCircle size={16} className="text-[var(--nx-danger)]" />}
+      <span className={toast.type === 'success' ? 'text-[var(--nx-success)]' : 'text-[var(--nx-danger)]'}>{toast.message}</span>
     </motion.div>
   );
 };
 
-/* ─── OTP Verification Block ─── */
 const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
   const [code, setCode] = useState('');
-  const [step, setStep] = useState('idle'); // idle | sent | verifying | verified
+  const [step, setStep] = useState('idle');
   const [toast, setToast] = useState(null);
   const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
     if (countdown <= 0) return;
-    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
 
   const sendCode = async () => {
-    if (!target || countdown > 0) return;
     setStep('sent');
     setToast({ type: 'info', message: 'Enviando código por WhatsApp…' });
     try {
       const res = await usersApi.sendVerificationCode(purpose, target);
       if (res.status === 'ok') {
-        setToast({ type: 'success', message: `Código enviado a tu WhatsApp. Válido 10 min.` });
+        setToast({ type: 'success', message: 'Código enviado. Válido 10 min.' });
         setCountdown(60);
       } else {
-        setToast({ type: 'error', message: res.message || 'Error enviando código' });
-        setStep('idle');
+        setToast({ type: 'error', message: res.message || 'No se pudo enviar' });
       }
-    } catch (err) {
-      const backendMsg = err?.response?.data?.message;
-      setToast({ type: 'error', message: backendMsg || 'Error de red al enviar código' });
-      setStep('idle');
+    } catch (e) {
+      setToast({ type: 'error', message: e.message || 'Error de red' });
     }
   };
 
@@ -107,109 +80,50 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
       const res = await usersApi.verifyCode(purpose, code);
       if (res.status === 'ok') {
         setStep('verified');
-        setToast({ type: 'success', message: 'Código verificado correctamente' });
+        setToast({ type: 'success', message: 'Código verificado' });
         onVerified?.();
-        // Auto-hide after 3 seconds
-        setTimeout(() => {
-          setStep('idle');
-          setCode('');
-          setToast(null);
-        }, 3000);
       } else {
-        setToast({ type: 'error', message: res.message || 'Código incorrecto' });
         setStep('sent');
+        setToast({ type: 'error', message: res.message || 'Código inválido' });
       }
-    } catch (err) {
-      setToast({ type: 'error', message: 'Error verificando código' });
+    } catch (e) {
       setStep('sent');
+      setToast({ type: 'error', message: e.message || 'Error de red' });
     }
   };
 
   return (
     <div className="space-y-2">
       {step === 'idle' && (
-        <button
-          onClick={sendCode}
-          disabled={disabled || !target || countdown > 0}
-          className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--nx-accent)] hover:text-[var(--nx-accent)] disabled:opacity-40 transition-colors"
-        >
-          <Send size={12} />
-          {countdown > 0 ? `Reenviar en ${countdown}s` : 'Verificar vía WhatsApp'}
-        </button>
+        <Button variant="secondary" size="sm" onClick={sendCode} disabled={disabled} leftIcon={<ShieldCheck size={14} />}>
+          Verificar {label}
+        </Button>
       )}
-
       {(step === 'sent' || step === 'verifying') && (
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            maxLength={6}
+        <div className="flex items-end gap-2">
+          <Input
+            label={`Código de 6 dígitos`}
             value={code}
-            onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="000000"
-            className="w-24 px-2 py-1.5 text-sm font-bold text-center tracking-widest bg-slate-50 dark:bg-slate-800 outline-none"
-            style={{ border: '1.5px solid var(--nx-border)' }}
+            disabled={step === 'verifying'}
           />
-          <button
-            onClick={verifyCode}
-            disabled={code.length !== 6 || step === 'verifying'}
-            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[var(--nx-accent)] text-white hover:bg-[var(--nx-accent)] disabled:opacity-50 transition-colors"
-          >
-            {step === 'verifying' ? <Loader2 size={12} className="animate-spin" /> : 'Confirmar'}
-          </button>
-          <button
-            onClick={sendCode}
-            disabled={countdown > 0}
-            className="text-[10px] font-bold text-slate-400 hover:text-slate-600 disabled:opacity-40"
-          >
-            {countdown > 0 ? `${countdown}s` : 'Reenviar'}
-          </button>
+          <Button size="sm" loading={step === 'verifying'} onClick={verifyCode}>Verificar</Button>
         </div>
       )}
-
-      {step === 'verified' && (
-        <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-          <CheckCircle2 size={12} /> Verificado
-        </div>
-      )}
-
-      <InlineToast toast={toast} />
+      {step === 'verified' && <Badge scheme="success" dot>Verificado</Badge>}
+      {countdown > 0 && <p className="text-caption text-[var(--nx-text-muted)]">Reenviar en {countdown}s</p>}
+      <Toast toast={toast} />
     </div>
   );
 };
 
-/* ─── Colombian phone helpers ─── */
-function formatColPhone(raw) {
-  const digits = (raw || '').replace(/\D/g, '');
-  // Remove leading 57 if present
-  const body = digits.startsWith('57') && digits.length >= 12 ? digits.slice(2) : digits;
-  if (body.length !== 10) return raw || '';
-  return `+57 ${body.slice(0, 3)} ${body.slice(3, 6)} ${body.slice(6)}`;
-}
-function stripToDigits(v) {
-  return v.replace(/\D/g, '');
-}
-function handlePhoneInput(v, prev = '') {
-  const digits = stripToDigits(v);
-  if (digits === '') return '';
-  // Colombian mobile numbers: 10 digits starting with 3
-  if (digits.length <= 10) {
-    if (digits[0] !== '3' && digits.length > 1) return prev; // reject non-mobile
-    return digits;
-  }
-  // If already has 57 prefix
-  if (digits.startsWith('57') && digits.length <= 12) return digits;
-  return prev;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
 const Profile = () => {
   const { user, setUser } = useAuth();
   const fileRef = useRef(null);
 
-  /* ─── Local state ─── */
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
-
   const [uploading, setUploading] = useState(false);
   const [photoToast, setPhotoToast] = useState(null);
 
@@ -229,53 +143,22 @@ const Profile = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  /* ─── Load extended profile ─── */
   useEffect(() => {
-    usersApi.getExtendedProfile().then(res => {
+    usersApi.getExtendedProfile().then((res) => {
       if (res.status === 'ok' && res.data) {
         setProfile(res.data);
         setEmail(res.data.email || '');
         setPhone(res.data.phone || '');
         setBackupEmail(res.data.backup_email || '');
+        setVerified({
+          email: !!res.data.email_verified,
+          phone: !!res.data.phone_verified,
+          backup: !!res.data.backup_email_verified,
+        });
       }
       setLoadingProfile(false);
     }).catch(() => setLoadingProfile(false));
   }, []);
-
-  /* ─── Photo upload ─── */
-  // FIX: comprimir/redimensionar en navegador antes de enviar (evita límite de tamaño)
-  const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.8) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > maxWidth || height > maxHeight) {
-            const ratio = Math.min(maxWidth / width, maxHeight / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => {
-            if (blob) {
-              resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
-            } else {
-              reject(new Error('No se pudo comprimir la imagen'));
-            }
-          }, 'image/jpeg', quality);
-        };
-        img.onerror = () => reject(new Error('No se pudo leer la imagen'));
-        img.src = event.target.result;
-      };
-      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
-      reader.readAsDataURL(file);
-    });
-  };
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -287,46 +170,37 @@ const Profile = () => {
       const res = await usersApi.uploadPhoto(compressed);
       if (res.status === 'ok') {
         setPhotoToast({ type: 'success', message: 'Foto de perfil actualizada' });
-        setProfile(p => p ? { ...p, profile_photo_url: res.photo_url } : p);
-        setUser(u => u ? { ...u, profile_photo_url: res.photo_url } : u);
+        setProfile((p) => (p ? { ...p, profile_photo_url: res.photo_url } : p));
+        setUser((u) => (u ? { ...u, profile_photo_url: res.photo_url } : u));
       } else {
         setPhotoToast({ type: 'error', message: res.message || 'Error al subir foto' });
       }
-    } catch (err) {
-      const backendMsg = err?.response?.data?.message;
-      const status = err?.response?.status;
-      let msg = backendMsg || err.message || 'Error de red al subir foto';
-      if (status === 413) msg = 'La imagen es demasiado grande. Máximo permitido: 10MB';
-      else if (status === 400 && !backendMsg) msg = 'Formato o tamaño de imagen no válido';
-      setPhotoToast({ type: 'error', message: msg });
+    } catch (e) {
+      setPhotoToast({ type: 'error', message: e.message || 'Error al subir foto' });
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
-  /* ─── Update contact field ─── */
-  const updateField = async (purpose, value) => {
+  const updateContact = async (purpose, value) => {
+    if (!value.trim()) return;
     setActionLoading(true);
     setContactToast(null);
     try {
       const res = await usersApi.updateProfile(purpose, value);
       if (res.status === 'ok') {
         setContactToast({ type: 'success', message: 'Dato actualizado correctamente' });
-        setProfile(p => p ? { ...p, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup_email']: value } : p);
+        setProfile((p) => (p ? { ...p, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup_email']: value } : p));
+        setVerified((v) => ({ ...v, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup']: false }));
       } else {
         setContactToast({ type: 'error', message: res.message || 'Error al actualizar' });
       }
-    } catch (err) {
-      setContactToast({ type: 'error', message: 'Error de red' });
+    } catch (e) {
+      setContactToast({ type: 'error', message: e.message || 'Error de red' });
     } finally {
       setActionLoading(false);
     }
   };
-
-  /* ─── Delete contact field ─── */
-  const confirmDelete = (field) => setDeleteConfirm(field);
-  const cancelDelete = () => setDeleteConfirm(null);
 
   const deleteField = async (field) => {
     setActionLoading(true);
@@ -335,41 +209,30 @@ const Profile = () => {
       const res = await usersApi.deleteField(field);
       if (res.status === 'ok') {
         setContactToast({ type: 'success', message: res.message || 'Eliminado correctamente' });
-        setProfile(p => {
-          if (!p) return p;
-          const next = { ...p };
-          if (field === 'phone') { next.phone = ''; next.phone_verified = false; }
-          if (field === 'email') { next.email = ''; next.email_verified = false; }
-          if (field === 'backup_email') next.backup_email = '';
-          return next;
-        });
-        if (field === 'phone') setPhone('');
-        if (field === 'email') setEmail('');
-        if (field === 'backup_email') setBackupEmail('');
+        setProfile((p) => (p ? { ...p, [field]: null } : p));
       } else {
         setContactToast({ type: 'error', message: res.message || 'Error al eliminar' });
       }
-    } catch (err) {
-      setContactToast({ type: 'error', message: 'Error de red' });
+    } catch (e) {
+      setContactToast({ type: 'error', message: e.message || 'Error de red' });
     } finally {
       setActionLoading(false);
       setDeleteConfirm(null);
     }
   };
 
-  /* ─── Change password ─── */
   const changePassword = async (e) => {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      setActionToast({ type: 'error', message: 'Mínimo 8 caracteres para la nueva contraseña' });
-      return;
-    }
+    setActionToast(null);
     if (newPassword !== confirmPassword) {
       setActionToast({ type: 'error', message: 'Las contraseñas nuevas no coinciden' });
       return;
     }
+    if (newPassword.length < 8) {
+      setActionToast({ type: 'error', message: 'La contraseña debe tener al menos 8 caracteres' });
+      return;
+    }
     setActionLoading(true);
-    setActionToast(null);
     try {
       const res = await usersApi.changePassword(currentPassword, newPassword);
       if (res.status === 'ok') {
@@ -380,8 +243,8 @@ const Profile = () => {
       } else {
         setActionToast({ type: 'error', message: res.message || 'Error al cambiar contraseña' });
       }
-    } catch (err) {
-      setActionToast({ type: 'error', message: 'Error de red o contraseña incorrecta' });
+    } catch (e) {
+      setActionToast({ type: 'error', message: e.message || 'Error de red' });
     } finally {
       setActionLoading(false);
     }
@@ -391,301 +254,110 @@ const Profile = () => {
 
   if (loadingProfile) {
     return (
-      <div className="space-y-5">
-        <div className="h-6 w-32 bg-slate-200 dark:bg-slate-800 animate-pulse" />
-        <div className="h-40 bg-slate-100 dark:bg-slate-800 animate-pulse" style={{ border: '1.5px solid var(--nx-border)' }} />
+      <div className="space-y-6 max-w-3xl">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      {/* Header */}
-      <div>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Perfil</p>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
-          Gestión de cuenta institucional
-        </p>
-      </div>
+    <div className="space-y-8 max-w-3xl">
+      <Section title="Perfil" subtitle="Administra tu cuenta y seguridad" />
 
-      {/* ─── Sección 1: Información Personal ─── */}
-      <SectionCard title="Información Personal" subtitle="Datos básicos de tu cuenta">
-        <div className="flex items-center gap-5">
-          <div
-            className="relative flex items-center justify-center w-20 h-20 text-2xl font-black text-white overflow-hidden cursor-pointer group shrink-0"
-            style={{ backgroundColor: 'var(--nx-accent)' }}
-            onClick={() => fileRef.current?.click()}
-          >
-            {profile?.profile_photo_url ? (
-              <img src={profile.profile_photo_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              initial
-            )}
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera size={20} className="text-white" />
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{user?.nombre}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{user?.role}</p>
-            <p className="text-[10px] text-slate-400 mt-1 truncate">{user?.school_name}</p>
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white rounded transition-colors disabled:opacity-60"
-            >
-              {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-              Cambiar foto
-            </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <InfoRow label="Institución" value={user?.school_name || '—'} />
-          <InfoRow label="Rol" value={user?.role || '—'} />
-          <InfoRow label="Jornada" value={profile?.work_shift ? capitalize(profile.work_shift) : '—'} />
-        </div>
-
-        <InlineToast toast={photoToast} />
-      </SectionCard>
-
-      {/* ─── Sección 2: Seguridad ─── */}
-      <SectionCard title="Seguridad" subtitle="Contraseña de acceso">
-        <form onSubmit={changePassword} className="space-y-4">
-          <TextField
-            label="Contraseña actual"
-            type={showCurrent ? 'text' : 'password'}
-            value={currentPassword}
-            onChange={e => setCurrentPassword(e.target.value)}
-            placeholder="••••••••"
-            rightElement={
-              <button type="button" onClick={() => setShowCurrent(v => !v)} className="text-slate-400 hover:text-slate-600">
-                {showCurrent ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            }
-          />
-          <TextField
-            label="Nueva contraseña (mín. 8 caracteres)"
-            type={showNew ? 'text' : 'password'}
-            value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
-            placeholder="••••••••"
-            rightElement={
-              <button type="button" onClick={() => setShowNew(v => !v)} className="text-slate-400 hover:text-slate-600">
-                {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            }
-          />
-          <TextField
-            label="Confirmar nueva contraseña"
-            type={showConfirm ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
-            placeholder="••••••••"
-            rightElement={
-              <button type="button" onClick={() => setShowConfirm(v => !v)} className="text-slate-400 hover:text-slate-600">
-                {showConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            }
-          />
-          <button
-            type="submit"
-            disabled={actionLoading || !currentPassword || newPassword.length < 8 || !confirmPassword}
-            className="flex items-center gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white transition-colors disabled:opacity-50"
-          >
-            {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
-            Actualizar contraseña
-          </button>
-        </form>
-        <InlineToast toast={actionToast} />
-      </SectionCard>
-
-      {/* ─── Sección 3: Contacto ─── */}
-      <SectionCard title="Contacto" subtitle="Correo, teléfono y verificación por WhatsApp">
-        {/* Email */}
-        <div className="space-y-3">
-          <TextField
-            label="Correo electrónico"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="usuario@institucion.edu.co"
-          />
-          <div className="flex items-center justify-between">
-            <OtpBlock
-              purpose="email_change"
-              target={email}
-              label="correo electrónico"
-              disabled={!email || email === profile?.email}
-              onVerified={() => setVerified(v => ({ ...v, email: true }))}
-            />
-            <div className="flex items-center gap-2">
-              {verified.email && (
-                <button
-                  onClick={() => updateField('email_change', email)}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-                >
-                  <Save size={12} /> Guardar
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ height: '1px', backgroundColor: 'var(--nx-surface-subtle)' }} />
-
-        {/* Phone */}
-        <div className="space-y-3">
-          {profile?.phone && profile?.phone_verified ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-slate-800 dark:text-white">{formatColPhone(profile.phone)}</span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-                  <CheckCircle2 size={12} /> Verificado
-                </span>
-              </div>
-              <button
-                onClick={() => confirmDelete('phone')}
-                disabled={actionLoading}
-                className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
-                title="Eliminar teléfono"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
+      <Card className="flex items-center gap-5 p-5">
+        <div className="relative">
+          {profile?.profile_photo_url ? (
+            <img src={profile.profile_photo_url} alt="Foto" className="h-20 w-20 rounded-full object-cover" />
           ) : (
-            <>
-              <TextField
-                label="Teléfono (WhatsApp)"
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(handlePhoneInput(e.target.value, phone))}
-                placeholder="300 123 4567"
-              />
-              {phone && (
-                <p className="text-[10px] font-semibold text-slate-500">
-                  Se enviará a: {formatColPhone(phone)}
-                </p>
-              )}
-              <div className="flex items-center justify-between">
-                <OtpBlock
-                  purpose="phone_change"
-                  target={phone}
-                  label="teléfono"
-                  disabled={!phone || phone === profile?.phone}
-                  onVerified={() => setVerified(v => ({ ...v, phone: true }))}
-                />
-                <div className="flex items-center gap-2">
-                  {verified.phone && (
-                    <button
-                      onClick={() => updateField('phone_change', phone)}
-                      disabled={actionLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-                    >
-                      <Save size={12} /> Guardar
-                    </button>
-                  )}
-                </div>
-              </div>
-            </>
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-h1">{initial}</div>
           )}
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--nx-surface)] border border-[var(--nx-border)] text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]"
+          >
+            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
         </div>
+        <div>
+          <p className="text-h2 text-[var(--nx-text)]">{user?.nombre || 'Usuario'}</p>
+          <p className="text-body text-[var(--nx-text-muted)]">{user?.role}</p>
+          <Toast toast={photoToast} />
+        </div>
+      </Card>
 
-        <div style={{ height: '1px', backgroundColor: 'var(--nx-surface-subtle)' }} />
-
-        {/* Backup email */}
-        <div className="space-y-3">
-          <TextField
-            label="Correo de respaldo"
-            type="email"
-            value={backupEmail}
-            onChange={e => setBackupEmail(e.target.value)}
-            placeholder="personal@gmail.com"
-          />
-          <div className="flex items-center justify-between">
-            <OtpBlock
-              purpose="backup_email"
-              target={backupEmail}
-              label="correo de respaldo"
-              disabled={!backupEmail || backupEmail === profile?.backup_email}
-              onVerified={() => setVerified(v => ({ ...v, backup: true }))}
-            />
-            <div className="flex items-center gap-2">
-              {verified.backup && (
-                <button
-                  onClick={() => updateField('backup_email', backupEmail)}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50"
-                >
-                  <Save size={12} /> Guardar
-                </button>
-              )}
-              {profile?.backup_email && (
-                <button
-                  onClick={() => confirmDelete('backup_email')}
-                  disabled={actionLoading}
-                  className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
-                  title="Eliminar correo de respaldo"
-                >
-                  <Trash2 size={12} />
-                </button>
-              )}
+      <Card className="space-y-5 p-5">
+        <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2"><Mail size={18} className="text-[var(--nx-accent)]" /> Contacto</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Input label="Correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <div className="flex gap-2">
+              <Button size="sm" loading={actionLoading} onClick={() => updateContact('email_change', email)}>Guardar</Button>
+              <Button size="sm" variant="quiet" onClick={() => setDeleteConfirm('email')}>Eliminar</Button>
             </div>
+            <OtpBlock purpose="email" target={email} label="correo" onVerified={() => setVerified((v) => ({ ...v, email: true }))} disabled={!email || verified.email} />
+            {verified.email && <Badge scheme="success" dot>Verificado</Badge>}
+          </div>
+          <div className="space-y-2">
+            <Input label="Teléfono" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <div className="flex gap-2">
+              <Button size="sm" loading={actionLoading} onClick={() => updateContact('phone_change', phone)}>Guardar</Button>
+              <Button size="sm" variant="quiet" onClick={() => setDeleteConfirm('phone')}>Eliminar</Button>
+            </div>
+            <OtpBlock purpose="phone" target={phone} label="teléfono" onVerified={() => setVerified((v) => ({ ...v, phone: true }))} disabled={!phone || verified.phone} />
+            {verified.phone && <Badge scheme="success" dot>Verificado</Badge>}
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Input label="Correo de respaldo" type="email" value={backupEmail} onChange={(e) => setBackupEmail(e.target.value)} />
+            <div className="flex gap-2">
+              <Button size="sm" loading={actionLoading} onClick={() => updateContact('backup_email_change', backupEmail)}>Guardar</Button>
+              <Button size="sm" variant="quiet" onClick={() => setDeleteConfirm('backup_email')}>Eliminar</Button>
+            </div>
+            <OtpBlock purpose="backup_email" target={backupEmail} label="correo de respaldo" onVerified={() => setVerified((v) => ({ ...v, backup: true }))} disabled={!backupEmail || verified.backup} />
+            {verified.backup && <Badge scheme="success" dot>Verificado</Badge>}
           </div>
         </div>
-        <InlineToast toast={contactToast} />
-      </SectionCard>
+        <Toast toast={contactToast} />
+      </Card>
 
-      {/* Delete confirmation modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(2,6,23,0.45)', backdropFilter: 'blur(2px)' }}>
-          <div className="bg-white dark:bg-slate-900 p-6 w-full max-w-sm" style={{ border: '1.5px solid var(--nx-border)' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 flex items-center justify-center" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-danger) 8%, transparent)', border: '1px solid color-mix(in oklch, var(--nx-danger) 25%, transparent)' }}>
-                <AlertTriangle size={16} className="text-red-500" />
+      <Card className="space-y-5 p-5">
+        <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2"><Key size={18} className="text-[var(--nx-accent)]" /> Cambiar contraseña</p>
+        <form onSubmit={changePassword} className="space-y-4">
+          <div className="relative">
+            <Input label="Contraseña actual" type={showCurrent ? 'text' : 'password'} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            <button type="button" onClick={() => setShowCurrent((s) => !s)} className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] text-xs">{showCurrent ? 'Ocultar' : 'Mostrar'}</button>
+          </div>
+          <div className="relative">
+            <Input label="Nueva contraseña" type={showNew ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <button type="button" onClick={() => setShowNew((s) => !s)} className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] text-xs">{showNew ? 'Ocultar' : 'Mostrar'}</button>
+          </div>
+          <div className="relative">
+            <Input label="Confirmar nueva contraseña" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            <button type="button" onClick={() => setShowConfirm((s) => !s)} className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] text-xs">{showConfirm ? 'Ocultar' : 'Mostrar'}</button>
+          </div>
+          <Button type="submit" loading={actionLoading}>Actualizar contraseña</Button>
+          <Toast toast={actionToast} />
+        </form>
+      </Card>
+
+      <AnimatePresence>
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)]">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-sm rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 shadow-high">
+              <p className="text-h3 text-[var(--nx-text)]">¿Eliminar dato?</p>
+              <p className="text-body text-[var(--nx-text-muted)] mt-2">Se eliminará el contacto seleccionado de tu perfil.</p>
+              <div className="mt-6 flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
+                <Button variant="danger" className="flex-1" loading={actionLoading} onClick={() => deleteField(deleteConfirm)} leftIcon={<Trash2 size={16} />}>Eliminar</Button>
               </div>
-              <p className="text-xs font-black uppercase tracking-tight text-slate-800 dark:text-white">Confirmar eliminación</p>
-            </div>
-            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-              ¿Eliminar {deleteConfirm === 'phone' ? 'el número de teléfono' : deleteConfirm === 'email' ? 'el correo electrónico' : 'el correo de respaldo'}? Esta acción no se puede deshacer.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={cancelDelete}
-                className="flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 transition-colors"
-                style={{ border: '1.5px solid var(--nx-border)' }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => deleteField(deleteConfirm)}
-                disabled={actionLoading}
-                className="flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {actionLoading ? <Loader2 size={12} className="animate-spin mx-auto" /> : 'Eliminar'}
-              </button>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };
-
-function InfoRow({ label, value }) {
-  return (
-    <div className="px-4 py-3" style={{ backgroundColor: 'var(--nx-surface-subtle)', border: '1px solid var(--nx-surface-subtle)' }}>
-      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--nx-text-muted)' }}>{label}</p>
-      <p className="text-xs font-semibold" style={{ color: 'var(--nx-text)' }}>{value}</p>
-    </div>
-  );
-}
-
-function capitalize(s) {
-  if (!s) return '';
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
 export default Profile;

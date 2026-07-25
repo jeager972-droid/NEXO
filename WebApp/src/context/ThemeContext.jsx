@@ -1,9 +1,6 @@
 /**
  * ThemeContext / NEXO Institucional
- * Responsabilidad: Administrar el modo oscuro/claro de la aplicación mediante una
- * clase 'dark' en <html> y persistencia en localStorage. Expone toggleDarkMode.
- * Dependencias: React (createContext, useState, useEffect, useContext).
- * Propiedades del contexto: { darkMode, toggleDarkMode }.
+ * Modo oscuro/claro con clase 'dark' en <html> y persistencia en localStorage.
  */
 import { createContext, useContext, useState, useEffect } from 'react';
 
@@ -15,21 +12,17 @@ export const ThemeProvider = ({ children }) => {
       const saved = localStorage.getItem('darkMode');
       return saved ? JSON.parse(saved) : false;
     } catch (e) {
-      console.error("Error al parsear darkMode", e);
+      console.error('Error al parsear darkMode', e);
       return false;
     }
   });
 
   useEffect(() => {
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
-  const toggleDarkMode = () => setDarkMode(!darkMode);
+  const toggleDarkMode = () => setDarkMode((v) => !v);
 
   return (
     <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
@@ -40,8 +33,6 @@ export const ThemeProvider = ({ children }) => {
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme debe ser usado dentro de un ThemeProvider');
-  }
+  if (!context) throw new Error('useTheme debe ser usado dentro de un ThemeProvider');
   return context;
 };

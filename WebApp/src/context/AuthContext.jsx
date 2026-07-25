@@ -1,9 +1,6 @@
 /**
  * AuthContext / NEXO Institucional
- * Responsabilidad: Proveer estado global de autenticación (user, loading, login, logout).
- * La fuente de verdad es authApi.getMe() (cookie HttpOnly); no confía en localStorage.
- * Soporta flujo interrumpido de 2FA y redirige a /login cuando la sesión es inválida.
- * Dependencias: React, react-router-dom, authApi, userStore.
+ * Estado global de autenticación: fuente de verdad authApi.getMe(), flujo 2FA, logout.
  */
 import { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -27,18 +24,14 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       const publicPaths = ['/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
-      const isPublic = publicPaths.some(p => currentPath.includes(p));
-      if (!isPublic) {
-        navigate('/login');
-      }
+      const isPublic = publicPaths.some((p) => currentPath.includes(p));
+      if (!isPublic) navigate('/login');
     } finally {
       setLoading(false);
     }
   }, [navigate]);
 
   useEffect(() => {
-    // FIX: No confiar en localStorage para la fuente de verdad del usuario.
-    // Solo authApi.getMe() (cookie HttpOnly) determina el estado real.
     fetchUser();
   }, [fetchUser]);
 
@@ -46,21 +39,12 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const data = await authApi.login(email, password);
-
-      // Interceptar flujo 2FA: devolver señal sin lanzar error
-      if (data.status === '2fa_required' || data.requires_2fa) {
-        return data;
-      }
-
-      if (!data.user) {
-        throw new Error('La API no retornó el objeto de usuario esperado');
-      }
-
+      if (data.status === '2fa_required' || data.requires_2fa) return data;
+      if (!data.user) throw new Error('La API no retornó el objeto de usuario esperado');
       userStore.set(data.user);
       setUser(data.user);
       return data;
     } catch (error) {
-      // BUG-15 FIX: lanzar Error object, no string desnudo (err.message disponible en todos los consumers)
       throw new Error(error.response?.data?.message || error.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
@@ -79,14 +63,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [navigate]);
 
-  const value = {
-    user,
-    setUser,
-    login,
-    logout,
-    loading,
-    isAuthenticated: !!user
-  };
+  const value = { user, setUser, login, logout, loading, isAuthenticated: !!user };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

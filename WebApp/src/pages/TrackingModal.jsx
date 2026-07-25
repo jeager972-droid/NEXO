@@ -1,31 +1,36 @@
 /**
  * TrackingModal / NEXO Institucional
- * Responsabilidad: Modal de detalle de seguimiento estudiantil. Permite iniciar un
- * seguimiento, agregar notas, mostrar score de riesgo y cerrar el proceso con motivo.
- * Dependencias: React, framer-motion, lucide-react, trackingApi.
- * Props: { trackingId?, studentId, studentName, metadata?, onClose, onRefresh }.
+ * Modal de seguimiento estudiantil: inicio, notas, cierre y riesgo.
  */
 import { useState, useEffect } from 'react';
+import { X, Send, Activity, UserCheck, CalendarDays } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Activity, UserCheck, Search, Info } from 'lucide-react';
 import { trackingApi } from '../api/tracking';
+import { Surface } from '../components/ui/Surface';
+import { Button } from '../components/ui/Button';
+import { Input, Textarea } from '../components/ui/Input';
+import { Badge } from '../components/ui/Badge';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Skeleton } from '../components/ui/Skeleton';
 
 export const TrackingModal = ({ trackingId, studentId, studentName, metadata, onClose, onRefresh }) => {
   const [details, setDetails] = useState(null);
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [noteText, setNoteText] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTrackingId, setActiveTrackingId] = useState(trackingId);
+  const [noteText, setNoteText] = useState('');
   const [resolveReason, setResolveReason] = useState('');
-  const [showResolvePrompt, setShowResolvePrompt] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showResolve, setShowResolve] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null);
 
   useEffect(() => {
     const fetchDetails = async () => {
       setLoading(true);
       try {
         if (!activeTrackingId && studentId) {
-          // If we don't have a tracking ID yet but we want to start one, wait.
+          setDetails(null);
+          setNotes([]);
           setLoading(false);
           return;
         }
@@ -36,8 +41,8 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
             setNotes(res.notes || []);
           }
         }
-      } catch (err) {
-        console.error(err);
+      } catch (e) {
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -49,16 +54,18 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
     setIsSubmitting(true);
     try {
       let reason = '';
-      if (metadata && metadata.risk_score) {
-        reason = `Análisis de Riesgo - Score: ${metadata.risk_score}/100, Inasistencias: ${metadata.absence_count || 0}, Llegadas tarde: ${metadata.late_count || 0}`;
+      if (metadata?.risk_score) {
+        reason = `Análisis de riesgo - Score: ${metadata.risk_score}/100`;
       }
       const res = await trackingApi.startTracking(studentId, reason);
       if (res.status === 'ok') {
         setActiveTrackingId(res.tracking_id);
         if (onRefresh) onRefresh();
+      } else {
+        setSubmitStatus({ type: 'error', message: res.message || 'No se pudo iniciar el seguimiento' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      setSubmitStatus({ type: 'error', message: e.message || 'Error de red' });
     } finally {
       setIsSubmitting(false);
     }
@@ -75,21 +82,16 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
         setDetails(res.tracking);
         setNotes(res.notes || []);
       }
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleResolve = async () => {
-    setShowResolvePrompt(true);
-  };
-
   const confirmResolve = async () => {
     if (!resolveReason.trim()) {
-      alert('Por favor escribe el motivo de cierre del seguimiento.');
+      setSubmitStatus({ type: 'error', message: 'Escribe el motivo de cierre.' });
       return;
     }
     setIsSubmitting(true);
@@ -97,183 +99,111 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
       const res = await trackingApi.addNote(activeTrackingId, `Motivo de cierre: ${resolveReason}`, 'resuelto');
       if (res?.status === 'ok') {
         if (onRefresh) onRefresh();
-        setShowResolvePrompt(false);
-        setResolveReason('');
         onClose();
       } else {
-        alert('No se pudo resolver el seguimiento: ' + (res?.message || 'Error del servidor'));
+        setSubmitStatus({ type: 'error', message: res.message || 'No se pudo cerrar' });
       }
-    } catch (err) {
-      console.error('Error resolviendo seguimiento:', err);
-      alert('Error al resolver el seguimiento: ' + (err.message || 'Error de red'));
+    } catch (e) {
+      setSubmitStatus({ type: 'error', message: e.message || 'Error de red' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const riskScheme = metadata?.risk_score >= 70 ? 'danger' : metadata?.risk_score >= 40 ? 'warning' : 'success';
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)]">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        transition={{ duration: 0.2 }}
-        className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-lg shadow-2xl flex flex-col overflow-hidden"
-        style={{ border: '1px solid var(--nx-border)', maxHeight: '90vh' }}
+        exit={{ opacity: 0, scale: 0.97, y: 8 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-high"
       >
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <p className="text-sm font-black uppercase text-slate-800 dark:text-white" style={{ letterSpacing: '0.05em' }}>
-              Perfil de Seguimiento
-            </p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-              {studentName}
-            </p>
+        <div className="flex items-center justify-between border-b border-[var(--nx-border)] px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]">
+              <Activity size={18} className="text-[var(--nx-accent)]" />
+            </div>
+            <div>
+              <p className="text-h3 text-[var(--nx-text)]">{studentName || 'Seguimiento'}</p>
+              {metadata?.risk_score && <Badge scheme={riskScheme}>Riesgo {metadata.risk_score}/100</Badge>}
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
-            <X size={18} strokeWidth={2} />
+          <button onClick={onClose} className="p-2 rounded-control hover:bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">
+            <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {metadata && metadata.risk_score && (
-            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-lg border border-amber-200 dark:border-amber-800/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity size={16} className="text-amber-600 dark:text-amber-500" />
-                <h4 className="text-xs font-bold uppercase tracking-widest text-amber-800 dark:text-amber-500">Análisis Inteligente</h4>
-              </div>
-              <p className="text-sm text-amber-700 dark:text-amber-600 font-medium">Nivel de Riesgo Detectado: <span className="font-black">{metadata.risk_score} / 100</span></p>
-              <ul className="mt-2 space-y-1 text-xs text-amber-600/80 dark:text-amber-700 font-medium">
-                <li>• Inasistencias recientes: {metadata.absence_count}</li>
-                <li>• Llegadas tarde: {metadata.late_count}</li>
-              </ul>
-            </div>
-          )}
-
+        <div className="p-6 space-y-6">
           {!activeTrackingId ? (
-            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
-                <Search size={28} className="text-slate-300" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Este estudiante no tiene un seguimiento activo.</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Inicia un seguimiento para registrar notas, incidentes y el proceso de acompañamiento.</p>
-              </div>
-              <button 
-                onClick={handleStartTracking}
-                disabled={isSubmitting}
-                className="mt-4 px-6 py-2.5 bg-[var(--nx-accent)] text-white text-xs font-bold uppercase tracking-widest rounded shadow-md hover:bg-[var(--nx-accent)] transition-colors disabled:opacity-50"
-              >
-                {isSubmitting ? 'Iniciando...' : 'Empezar Seguimiento'}
-              </button>
-            </div>
+            <EmptyState
+              icon={<UserCheck size={32} className="text-[var(--nx-accent)]" />}
+              title="Iniciar seguimiento"
+              description="Este estudiante aún no tiene un caso activo. Inicia uno para registrar intervenciones."
+              action={<Button onClick={handleStartTracking} loading={isSubmitting}>Iniciar caso</Button>}
+            />
           ) : loading ? (
-            <div className="flex justify-center py-10"><Activity className="animate-spin text-slate-400" /></div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Historial de Notas</h4>
-                {details?.status === 'en proceso' && (
-                  <button onClick={handleResolve} className="text-[10px] font-bold uppercase tracking-widest text-[var(--nx-success)] hover:underline">
-                    Marcar como Resuelto
-                  </button>
-                )}
-              </div>
-              
-              <div className="space-y-3">
-                {notes.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No hay notas registradas.</p>
-                ) : (
-                  notes.map((note) => (
-                    <div key={note.note_id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded border border-slate-100 dark:border-slate-800">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{note.first_name} {note.last_name} ({note.role_name})</span>
-                        <span className="text-[9px] text-slate-400 uppercase tracking-widest">{new Date(note.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{note.note_text}</p>
-                    </div>
-                  ))
-                )}
-              </div>
+            <div className="space-y-3">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
             </div>
+          ) : (
+            <>
+              <Surface className="p-4 space-y-2">
+                <p className="text-label text-[var(--nx-text-muted)] uppercase">Estado</p>
+                <p className="text-body text-[var(--nx-text)]">{details?.status === 'active' ? 'Activo' : details?.status || 'Activo'}</p>
+                {details?.created_at && <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1"><CalendarDays size={12} /> Iniciado {new Date(details.created_at).toLocaleDateString('es-CO')}</p>}
+              </Surface>
+
+              <div className="space-y-3">
+                <p className="text-label text-[var(--nx-text)]">Notas</p>
+                {notes.length === 0 ? (
+                  <p className="text-body-sm text-[var(--nx-text-muted)]">Aún no hay notas.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {notes.map((n, i) => (
+                      <Surface key={i} className="p-3">
+                        <p className="text-body-sm text-[var(--nx-text)]">{n.note}</p>
+                        <p className="text-caption text-[var(--nx-text-muted)] mt-1">{n.created_at && new Date(n.created_at).toLocaleString('es-CO')}</p>
+                      </Surface>
+                    ))}
+                  </div>
+                )}
+                <Textarea
+                  label="Agregar nota"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Escribe una observación..."
+                  rows={2}
+                />
+                <div className="flex justify-end">
+                  <Button onClick={handleAddNote} loading={isSubmitting} leftIcon={<Send size={16} />}>Guardar nota</Button>
+                </div>
+              </div>
+
+              {!showResolve ? (
+                <Button variant="secondary" className="w-full" onClick={() => setShowResolve(true)}>Cerrar seguimiento</Button>
+              ) : (
+                <Surface className="p-4 space-y-3">
+                  <Input
+                    label="Motivo de cierre"
+                    value={resolveReason}
+                    onChange={(e) => setResolveReason(e.target.value)}
+                    placeholder="Motivo por el que se cierra el caso"
+                  />
+                  {submitStatus && <p className="text-caption text-[var(--nx-danger)]">{submitStatus.message}</p>}
+                  <div className="flex gap-3">
+                    <Button variant="quiet" className="flex-1" onClick={() => setShowResolve(false)}>Cancelar</Button>
+                    <Button variant="danger" className="flex-1" loading={isSubmitting} onClick={confirmResolve}>Confirmar cierre</Button>
+                  </div>
+                </Surface>
+              )}
+            </>
           )}
         </div>
-
-        {activeTrackingId && details?.status === 'en proceso' && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-2">
-            <textarea 
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Escribe una nota sobre el proceso..."
-              className="flex-1 text-xs p-2 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[var(--nx-accent)]"
-              rows={2}
-            />
-            <button
-              onClick={handleAddNote}
-              disabled={!noteText.trim() || isSubmitting}
-              className="px-4 bg-[var(--nx-accent)] text-white rounded hover:bg-[var(--nx-accent)] disabled:opacity-50 transition-colors flex items-center justify-center"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-        )}
-        
-        {activeTrackingId && details?.status !== 'en proceso' && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/10 text-center">
-            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2">
-              <UserCheck size={14} /> Seguimiento Resuelto
-            </p>
-          </div>
-        )}
       </motion.div>
-
-      <AnimatePresence>
-        {showResolvePrompt && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-lg shadow-2xl p-6"
-            >
-              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-800 dark:text-white mb-4">
-                Motivo de Cierre
-              </h3>
-              <textarea
-                value={resolveReason}
-                onChange={(e) => setResolveReason(e.target.value)}
-                placeholder="Describe el motivo por el cual se cierra el seguimiento..."
-                className="w-full text-xs p-3 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[var(--nx-accent)]"
-                rows={4}
-                autoFocus
-              />
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={() => {
-                    setShowResolvePrompt(false);
-                    setResolveReason('');
-                  }}
-                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 border border-slate-300 rounded hover:bg-slate-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmResolve}
-                  disabled={isSubmitting || !resolveReason.trim()}
-                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[var(--nx-accent)] rounded hover:bg-[var(--nx-accent)] transition-colors disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Cerrando...' : 'Cerrar Seguimiento'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

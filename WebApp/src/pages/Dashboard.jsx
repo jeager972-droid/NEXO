@@ -1,22 +1,25 @@
 /**
- * Dashboard page / NEXO Institucional
- * Responsabilidad: Vista de inicio dinámica según el rol: RECTOR ve
- * KPIs globales, TEACHER/COORDINATOR su grupo y SECRETARY/COUNSELOR tareas clave.
- * Incluye drill-down de métricas por grupo/categoría y apertura de TrackingModal.
- * Dependencias: React, react-router-dom, framer-motion, dashboardApi, trackingApi, ROLES, useAuth.
+ * SCR-HOME-01 Dashboard / Inicio por rol
+ * Nueva generación: KPIs, grupo activo, eventos, riesgo y acciones propias por rol.
  */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Activity, AlertTriangle, UserMinus,
-  ChevronRight, LogOut, Bell, FileText, Search,
-  X, Loader2, CalendarDays, CheckCircle2
+  Users, Activity, AlertTriangle, UserMinus, ChevronRight,
+  Search, X, Loader2, CalendarDays, CheckCircle2, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
-import { ROLES } from '../config/roles';
 import { trackingApi } from '../api/tracking';
+import { ROLES } from '../config/roles';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Section, Surface } from '../components/ui/Surface';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 
 const EMPTY_STATS = {
   presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
@@ -24,98 +27,58 @@ const EMPTY_STATS = {
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, outside: 0 },
 };
 
-// ── Skeleton primitives ───────────────────────────────────────────────────────
+const fmtTime = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
 
-const Pulse = ({ className = '' }) => (
-  <div className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded-sm ${className}`} />
-);
-
-const KpiSkeleton = () => (
-  <div className="p-6 space-y-3 bg-white dark:bg-slate-900">
-    <Pulse className="h-2 w-20" />
-    <Pulse className="h-10 w-16" />
-    <Pulse className="h-2 w-28" />
-  </div>
-);
-
-const StreamSkeleton = () => (
-  <div className="space-y-0">
-    {[1, 2, 3, 4, 5].map(i => (
-      <div key={i} className="flex items-center gap-3 py-3" style={{ borderBottom: '1px solid var(--nx-border)' }}>
-        <Pulse className="h-1.5 w-1.5 rounded-full shrink-0" />
-        <Pulse className="h-2 flex-1" />
-        <Pulse className="h-2 w-12" />
-      </div>
-    ))}
-  </div>
-);
-
-// ── Shared UI primitives ──────────────────────────────────────────────────────
-
-const SectionLabel = ({ title, sub }) => (
-  <div className="mb-3">
-    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none' }}>
-      {title}
-    </p>
-    {sub && (
-      <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', marginTop: '2px', letterSpacing: '-0.01em' }}
-         className="dark:text-slate-200">
-        {sub}
-      </p>
-    )}
-  </div>
-);
-
-const KpiCard = ({ label, value, icon: Icon, sub, accent = 'var(--nx-accent)', delay = 0, onClick }) => {
-  const Component = onClick ? motion.button : motion.div;
-  return (
-  <Component
+const StreamItem = ({ ev, onClick, showIssuer }) => (
+  <button
     onClick={onClick}
-    className="bg-white dark:bg-slate-900 p-6 space-y-3 w-full text-left"
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.28, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+    className="flex w-full items-center gap-3 rounded-control px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
   >
-    <div className="flex items-center justify-between">
-      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-        {label}
-      </span>
-      <Icon size={15} strokeWidth={2} style={{ color: accent }} />
-    </div>
-    <p className="dark:text-slate-100"
-       style={{ fontSize: '44px', fontWeight: 900, color: 'var(--nx-text)', lineHeight: 1, letterSpacing: '-0.02em' }}>
-      {value}
-    </p>
-    <p style={{ fontSize: '10px', color: 'var(--nx-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-      {sub}
-    </p>
-  </Component>
-  );
-};
+    <span
+      className="h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }}
+    />
+    <span className="flex-1 truncate text-body text-[var(--nx-text)]">{ev.label}</span>
+    {showIssuer && ev.issuer && <span className="hidden sm:block text-caption text-[var(--nx-text-muted)]">{ev.issuer}</span>}
+    <span className="shrink-0 text-caption text-[var(--nx-text-muted)]">{ev.time}</span>
+    <ChevronRight size={14} className="shrink-0 text-[var(--nx-text-muted)]" />
+  </button>
+);
 
-const StreamRow = ({ label, time, type = 'default', index }) => {
-  const dot = type === 'alert' ? 'var(--nx-danger)' : type === 'bio' ? 'var(--nx-success)' : 'var(--nx-accent)';
+const StreamList = ({ events, loading, emptyTitle, showIssuer, onItemClick }) => {
+  if (loading) {
+    return (
+      <Surface className="p-5 space-y-3">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </Surface>
+    );
+  }
+  if (!events.length) {
+    return (
+      <Surface>
+        <EmptyState title={emptyTitle} description="Aún no hay novedades para mostrar." />
+      </Surface>
+    );
+  }
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -4 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.045, duration: 0.2 }}
-      className="flex items-center gap-3 py-2.5"
-      style={{ borderBottom: '1px solid var(--nx-border)' }}
-    >
-      <span className="shrink-0 block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
-      <span className="flex-1 text-xs font-medium text-slate-600 dark:text-slate-400 truncate">{label}</span>
-      <span style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 600 }}>{time}</span>
-    </motion.div>
+    <Surface className="divide-y divide-[var(--nx-border)]">
+      {events.map((ev, i) => (
+        <StreamItem key={i} ev={ev} showIssuer={showIssuer} onClick={() => onItemClick?.(ev)} />
+      ))}
+    </Surface>
   );
 };
-
-// ── Dashboard router ──────────────────────────────────────────────────────────
 
 const Dashboard = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [stats,   setStats]   = useState(EMPTY_STATS);
+  const { user } = useAuth();
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -130,7 +93,7 @@ const Dashboard = () => {
   switch (user?.role) {
     case ROLES.RECTOR:
     case ROLES.COORDINADOR:
-      return <AdminDashboard stats={stats} loading={loading} navigate={navigate} />;
+      return <AdminDashboard stats={stats} loading={loading} />;
     case ROLES.SECRETARIA:
     case ROLES.PSICORIENTADOR:
       return <SecretaryDashboard tasks={stats.pendingTasks || []} loading={loading} />;
@@ -141,19 +104,22 @@ const Dashboard = () => {
       return <StaffDashboard />;
     default:
       return (
-        <p className="text-center py-20 text-slate-400 dark:text-slate-600 text-xs uppercase tracking-widest">
-          Rol no autorizado: {user?.role ?? 'ninguno'}
-        </p>
+        <EmptyState
+          title="Rol no autorizado"
+          description={user?.role ?? 'No se detectó rol'}
+        />
       );
   }
 };
 
 // ── Command Center — Admin / Rector / Coordinador ─────────────────────────────
 
-const AdminDashboard = ({ stats, loading, navigate }) => {
+const todayLabel = () =>
+  new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+const AdminDashboard = ({ stats, loading }) => {
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
-
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -169,8 +135,7 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
     setActiveCategory(category);
     setDetailLoading(true);
     try {
-      const today = localDateStr();
-      const res = await dashboardApi.getTeacherGroupDetail('', category, today, today);
+      const res = await dashboardApi.getTeacherGroupDetail('', category, localDateStr(), localDateStr());
       if (res?.status === 'ok') setDetailData(res.data || []);
       else setDetailData([]);
     } catch (e) {
@@ -182,20 +147,16 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
   };
 
   const kpis = [
-    { key: 'present', label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: 'var(--nx-accent)', delay: 0    },
-    { key: 'absent',  label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: 'var(--nx-accent)', delay: 0.06 },
-    { key: 'alert',   label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: 'var(--nx-danger)', delay: 0.12 },
+    { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: 'var(--nx-accent)' },
+    { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: 'var(--nx-accent)' },
+    { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: 'var(--nx-danger)' },
   ];
 
   useEffect(() => {
     const loadEvents = async () => {
       try {
         const res = await dashboardApi.getEvents();
-        if (res?.status === 'ok') {
-          setEvents(res.data || []);
-        } else {
-          setEvents([]);
-        }
+        setEvents(res?.status === 'ok' ? res.data || [] : []);
       } catch (e) {
         console.error(e);
         setEvents([]);
@@ -206,50 +167,35 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
     loadEvents();
   }, []);
 
-  const stream = events.slice(0, 8).map((ev, i) => ({
-    label: ev.label,
-    time: ev.time,
-    type: ev.type,
-    index: i,
-  }));
+  const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
 
   return (
-    <div className="space-y-6">
-      {/* ── Estadísticas del Día ── */}
-      <section>
-        <SectionLabel title="Estadísticas del Día" sub="Datos de la institución en tiempo real" />
-        <div className="grid grid-cols-1 md:grid-cols-3" style={{ border: '1.5px solid var(--nx-border)' }}>
-          {loading
-            ? [1, 2, 3].map(i => <KpiSkeleton key={i} />)
-            : kpis.map((k, i) => (
-                <div key={i} style={{ borderRight: i < 2 ? '1.5px solid var(--nx-border)' : 'none' }}>
-                  <KpiCard {...k} onClick={() => openDetail(k.key)} />
-                </div>
-              ))
-          }
+    <div className="space-y-8">
+      <Section title="Visión de la jornada" subtitle={todayLabel()} />
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
         </div>
-      </section>
-
-      {/* ── Eventos Recientes ── */}
-      <section>
-        <SectionLabel title="Eventos Recientes" sub="Últimas novedades institucionales" />
-        <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid var(--nx-border)', minHeight: '200px' }}>
-          {eventsLoading
-            ? <StreamSkeleton />
-            : stream.length > 0
-              ? stream.map((ev, i) => <StreamRow key={i} {...ev} index={i} />)
-              : (
-                <div className="flex items-center justify-center h-40">
-                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-                    Sin eventos recientes
-                  </p>
-                </div>
-              )
-          }
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {kpis.map((k) => (
+            <Card key={k.key} asAction onClick={() => openDetail(k.key)}>
+              <div className="flex items-start justify-between">
+                <span className="text-label text-[var(--nx-text-muted)] uppercase">{k.label}</span>
+                <k.icon size={18} strokeWidth={1.75} style={{ color: k.accent }} />
+              </div>
+              <p className="mt-4 text-display text-[var(--nx-text)]" style={{ color: k.key === 'alert' ? 'var(--nx-danger)' : undefined }}>
+                {k.value ?? 0}
+              </p>
+              <p className="text-caption text-[var(--nx-text-muted)] mt-1">{k.sub}</p>
+            </Card>
+          ))}
         </div>
-      </section>
+      )}
 
-      {/* ── Detail Drawer ── */}
+      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales" />
+      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+
       <AnimatePresence>
         {activeCategory && (
           <TeacherDetailDrawer
@@ -266,9 +212,9 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
   );
 };
 
-// ── Secretaria ────────────────────────────────────────────────────────────────
+// ── Secretaria / Psicoorientador ──────────────────────────────────────────────
 
-const SecretaryDashboard = () => {
+const SecretaryDashboard = ({ tasks = [], loading }) => {
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -276,11 +222,7 @@ const SecretaryDashboard = () => {
     const loadEvents = async () => {
       try {
         const res = await dashboardApi.getEvents();
-        if (res?.status === 'ok') {
-          setEvents(res.data || []);
-        } else {
-          setEvents([]);
-        }
+        setEvents(res?.status === 'ok' ? res.data || [] : []);
       } catch (e) {
         console.error(e);
         setEvents([]);
@@ -291,41 +233,30 @@ const SecretaryDashboard = () => {
     loadEvents();
   }, []);
 
-  const stream = events.slice(0, 8).map((ev, i) => ({
-    label: ev.label,
-    time: ev.time,
-    type: ev.type,
-    index: i,
-  }));
+  const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
 
   return (
-    <div className="space-y-5">
-      <SectionLabel title="Panel Secretaría" sub="Eventos recientes" />
-      <div style={{ border: '1.5px solid var(--nx-border)' }} className="bg-white dark:bg-slate-900">
-        {eventsLoading
-          ? <div className="p-6"><StreamSkeleton /></div>
-          : stream.length > 0
-            ? stream.map((ev, i) => (
-                <div key={i}
-                     className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid var(--nx-surface-subtle)' : 'none' }}>
-                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
-                    <p style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
-                  </div>
-                  <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
-                </div>
-              ))
-            : (
-              <div className="flex items-center justify-center py-16">
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-                  Sin eventos recientes
-                </p>
-              </div>
-            )
-        }
-      </div>
+    <div className="space-y-8">
+      <Section title="Tareas del día" subtitle="Seguimiento y novedades" />
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+      ) : (
+        tasks.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {tasks.slice(0, 6).map((t, i) => (
+              <Card key={i}>
+                <p className="text-body text-[var(--nx-text)] truncate">{t.label}</p>
+                <p className="text-caption text-[var(--nx-text-muted)] mt-1">{t.time}</p>
+              </Card>
+            ))}
+          </div>
+        )
+      )}
+
+      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales" />
+      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
     </div>
   );
 };
@@ -338,6 +269,16 @@ const CATEGORY_LABELS = {
   alert:    { label: 'Alertas',      accent: 'var(--nx-danger)', icon: AlertTriangle },
   permiso:  { label: 'Permisos',     accent: 'var(--nx-success)', icon: Activity },
 };
+
+const DetailBadge = ({ scheme, children }) => (
+  <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-caption font-medium border ${
+    scheme === 'danger' ? 'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)] text-[var(--nx-danger)] border-[color-mix(in_oklch,var(--nx-danger)_25%,transparent)]' :
+    scheme === 'success' ? 'bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)] text-[var(--nx-success)] border-[color-mix(in_oklch,var(--nx-success)_25%,transparent)]' :
+    'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)] border-[color-mix(in_oklch,var(--nx-accent)_25%,transparent)]'
+  }`}>
+    {children}
+  </span>
+);
 
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
 const localDateStr = (date = new Date()) => {
@@ -446,32 +387,28 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
 
   return (
-    <div className="space-y-5">
-      <SectionLabel title="Panel Docente" sub="Control de asistencia por grupo — Hoy" />
+    <div className="space-y-8">
+      <Section title="Panel docente" subtitle="Control de asistencia por grupo — Hoy" />
 
       {parentLoading ? (
-        <div style={{ border: '1.5px solid var(--nx-border)' }} className="p-6 space-y-3 bg-white dark:bg-slate-900">
-          {[1, 2].map(i => <Pulse key={i} className="h-10 w-full" />)}
-        </div>
+        <Surface className="p-6 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </Surface>
       ) : (
         <>
-          {/* Group selector — searchable dropdown */}
-          <div style={{ border: '1.5px solid var(--nx-border)', position: 'relative' }} className="bg-white dark:bg-slate-900">
+          <Surface className="relative">
             <button
-              onClick={() => setGroupOpen(v => !v)}
-              className="w-full flex items-center justify-between px-5 py-3.5 text-left"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setGroupOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
               <div>
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>Grupo seleccionado</p>
-                <p className="text-sm font-black dark:text-white" style={{ color: selectedGroup ? 'var(--nx-accent)' : 'var(--nx-text-muted)', marginTop: '2px' }}>
-                  {selectedGroup || '— Elegir grupo —'}
-                </p>
+                <p className="text-caption uppercase text-[var(--nx-text-muted)]">Grupo seleccionado</p>
+                <p className="text-h3 text-[var(--nx-accent)] mt-0.5">{selectedGroup || '— Elegir grupo —'}</p>
               </div>
-              <Search size={15} strokeWidth={2} className="text-slate-300 shrink-0" />
+              <Search size={18} className="text-[var(--nx-text-muted)]" />
             </button>
 
-            {/* Dropdown panel */}
             <AnimatePresence>
               {groupOpen && (
                 <motion.div
@@ -479,34 +416,27 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute left-0 right-0 z-30 bg-white dark:bg-slate-900 shadow-xl"
-                  style={{ top: '100%', border: '1.5px solid var(--nx-border)', borderTop: 'none', maxHeight: '260px', overflowY: 'auto' }}
+                  className="absolute left-0 right-0 top-full z-30 overflow-hidden border-t border-[var(--nx-border)] bg-[var(--nx-surface)]"
+                  style={{ maxHeight: '260px', overflowY: 'auto' }}
                 >
-                  {/* Search input */}
-                  <div className="sticky top-0 bg-white dark:bg-slate-900 px-3 py-2" style={{ borderBottom: '1px solid var(--nx-border)' }}>
-                    <div className="relative">
-                      <Search size={13} strokeWidth={2} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
-                      <input
-                        autoFocus
-                        type="text"
-                        placeholder="Buscar grupo…"
-                        value={groupQuery}
-                        onChange={e => setGroupQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-xs outline-none dark:bg-slate-900 dark:text-white"
-                        style={{ border: '1.5px solid var(--nx-border)', backgroundColor: 'var(--nx-surface-subtle)', fontWeight: 600, color: 'var(--nx-text)' }}
-                      />
-                    </div>
+                  <div className="sticky top-0 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] p-3">
+                    <Input
+                      autoFocus
+                      placeholder="Buscar grupo…"
+                      value={groupQuery}
+                      onChange={(e) => setGroupQuery(e.target.value)}
+                      leftIcon={<Search size={14} className="text-[var(--nx-text-muted)]" />}
+                    />
                   </div>
-
                   {filteredGroups.length === 0 ? (
-                    <p className="px-4 py-3 text-xs text-slate-400 text-center">Sin resultados</p>
+                    <p className="px-4 py-3 text-center text-body-sm text-[var(--nx-text-muted)]">Sin resultados</p>
                   ) : (
-                    filteredGroups.map(g => (
+                    filteredGroups.map((g) => (
                       <button
                         key={g}
                         onClick={() => { setSelectedGroup(g); setGroupOpen(false); setGroupQuery(''); }}
-                        className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                        style={{ color: g === selectedGroup ? 'var(--nx-accent)' : 'var(--nx-text)', background: g === selectedGroup ? 'color-mix(in oklch, var(--nx-accent) 4%, transparent)' : 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--nx-surface-subtle)' }}
+                        className="w-full border-b border-[var(--nx-border)] px-4 py-3 text-left text-body text-[var(--nx-text)] transition-colors last:border-0 hover:bg-[var(--nx-surface-subtle)]"
+                        style={{ color: g === selectedGroup ? 'var(--nx-accent)' : undefined }}
                       >
                         {g}
                       </button>
@@ -515,101 +445,60 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </Surface>
 
           {groupNames.length === 0 && (
-            <p className="text-xs text-amber-600 font-semibold">No se encontraron grupos asignados. Verifique su asignación en horarios.</p>
-          )}
-
-          {/* Warning: group selected but no activity today */}
-          {selectedGroup && !groupLoading && groupStats && !hasActivity && (
-            <div className="flex items-center gap-3 p-5 bg-white dark:bg-slate-900" style={{ border: '1.5px solid var(--nx-border)' }}>
-              <AlertTriangle size={20} strokeWidth={1.5} className="text-amber-400 shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                  El grupo <span className="text-[var(--nx-accent)]">{selectedGroup}</span> no tiene registros de ingreso hoy
-                </p>
-                <p style={{ fontSize: '11px', color: 'var(--nx-text-muted)' }}>Verifique que el nodo de control esté operativo o que los estudiantes hayan ingresado</p>
-              </div>
+            <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_10%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-warning)]">
+              No se encontraron grupos asignados. Verifique su asignación en horarios.
             </div>
           )}
 
-          {/* 4 Stat cards — always clickable even with 0 values */}
+          {selectedGroup && !groupLoading && groupStats && !hasActivity && (
+            <Surface className="flex items-start gap-3 p-4">
+              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-[var(--nx-warning)]" />
+              <div>
+                <p className="text-body text-[var(--nx-text)]">
+                  El grupo <span className="font-medium text-[var(--nx-accent)]">{selectedGroup}</span> no tiene registros de ingreso hoy.
+                </p>
+                <p className="text-body-sm text-[var(--nx-text-muted)]">Verifique que el nodo de control esté operativo.</p>
+              </div>
+            </Surface>
+          )}
+
           {selectedGroup && (
-            <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid var(--nx-border)' }}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {groupLoading ? (
-                [1,2,3,4].map(i => (
-                  <div key={i} className="bg-white dark:bg-slate-900 text-center py-5 px-4" style={{ borderRight: i < 4 ? '1.5px solid var(--nx-border)' : 'none' }}>
-                    <Pulse className="h-10 w-16 mx-auto" />
-                  </div>
-                ))
+                [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)
               ) : (
-                cards.map((s, i) => (
-                  <button
-                    key={s.key}
-                    onClick={() => openDetail(s.key)}
-                    className="bg-white dark:bg-slate-900 text-center py-5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                    style={{ borderRight: i < 3 ? '1.5px solid var(--nx-border)' : 'none' }}
-                  >
-                    <p style={{ fontSize: '40px', fontWeight: 900, color: s.accent, lineHeight: 1 }}>{s.value}</p>
-                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', marginTop: '6px' }}>
-                      {s.label}
+                cards.map((s) => (
+                  <Card key={s.key} asAction onClick={() => openDetail(s.key)}>
+                    <p className="text-display" style={{ color: s.key === 'alert' ? 'var(--nx-danger)' : s.key === 'permiso' ? 'var(--nx-success)' : 'var(--nx-text)' }}>
+                      {s.value}
                     </p>
-                  </button>
+                    <p className="text-caption text-[var(--nx-text-muted)] mt-1 uppercase">{s.label}</p>
+                  </Card>
                 ))
               )}
             </div>
           )}
 
-          {/* ── Eventos Recientes ── */}
-          <section>
-            <SectionLabel title="Eventos Recientes" sub="Últimas novedades de tus grupos" />
-            <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid var(--nx-border)', minHeight: '200px' }}>
-              {eventsLoading
-                ? <StreamSkeleton />
-                : events.length > 0
-                  ? events.map((ev, i) => (
-                      <div key={i}
-                           className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                           style={{ borderBottom: i < events.length - 1 ? '1.5px solid var(--nx-surface-subtle)' : 'none' }}>
-                        <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
-                          <p style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
-                        </div>
-                        {ev.issuer && (
-                          <p style={{ fontSize: '10px', color: 'var(--nx-text-muted)', fontWeight: 600 }}>
-                            {ev.issuer}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  : (
-                    <div className="flex items-center justify-center h-40">
-                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-                        Sin eventos recientes
-                      </p>
-                    </div>
-                  )
-              }
-            </div>
-          </section>
+          <Section title="Eventos recientes" subtitle="Últimas novedades de tus grupos" />
+          <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+
+          <AnimatePresence>
+            {activeCategory && (
+              <TeacherDetailDrawer
+                category={activeCategory}
+                groupName={selectedGroup}
+                data={detailData}
+                loading={detailLoading}
+                emptyWarning={selectedGroup && !hasActivity}
+                onClose={() => setActiveCategory(null)}
+              />
+            )}
+          </AnimatePresence>
         </>
       )}
-
-      {/* ── Detail Drawer ── */}
-      <AnimatePresence>
-        {activeCategory && (
-          <TeacherDetailDrawer
-            category={activeCategory}
-            groupName={selectedGroup}
-            data={detailData}
-            loading={detailLoading}
-            emptyWarning={selectedGroup && !hasActivity}
-            onClose={() => setActiveCategory(null)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 };
@@ -774,76 +663,75 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
   return (
     <>
-      <motion.div key="t-ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }} className="fixed z-40"
-        style={{ top: '52px', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.45)' }}
-        onClick={onClose} />
-      <motion.div key="t-dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+      <motion.div
+        key="t-ov"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_40%,transparent)]"
+      />
+      <motion.div
+        key="t-dw"
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-        className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid var(--nx-border)' }}
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[640px] flex-col overflow-hidden border-l border-[var(--nx-border)] bg-[var(--nx-surface)]"
       >
-        {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--nx-border)] px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 8%, transparent)' }}>
-              <Icon size={16} strokeWidth={2} style={{ color: config?.accent || 'var(--nx-accent)' }} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]">
+              <Icon size={18} strokeWidth={1.75} style={{ color: config?.accent || 'var(--nx-accent)' }} />
             </div>
             <div>
-              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: 'var(--nx-text)' }}>
-                {config?.label} — {groupName}
-              </p>
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
+              <p className="text-h3 text-[var(--nx-text)]">{config?.label} — {groupName}</p>
+              <p className="text-caption text-[var(--nx-text-muted)] uppercase">
                 {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
-            <X size={18} strokeWidth={2} />
+          <button onClick={onClose} className="p-2 text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] rounded-control hover:bg-[var(--nx-surface-subtle)] transition-colors">
+            <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Search bar */}
-          <div className="mb-4 relative">
-            <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar..."
+          <div className="mb-4">
+            <Input
+              placeholder="Buscar estudiante..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"
-              style={{ border: '1.5px solid var(--nx-border)', backgroundColor: 'var(--nx-surface-subtle)', fontSize: '13px', fontWeight: 500, color: 'var(--nx-text)' }}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
             />
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
-              <Loader2 size={32} className="animate-spin text-[var(--nx-accent)] dark:text-slate-400" />
-              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-                Cargando datos...
-              </p>
+            <div className="flex flex-col items-center justify-center gap-4 py-20">
+              <Loader2 size={32} className="animate-spin text-[var(--nx-accent)]" />
+              <p className="text-body-sm text-[var(--nx-text-muted)] uppercase">Cargando datos...</p>
             </div>
           ) : filteredData.length > 0 ? (
-            <div className="overflow-x-auto" style={{ border: '1.5px solid var(--nx-border)' }}>
+            <Surface className="overflow-x-auto">
               <table className="w-full min-w-[440px]">
                 <thead>
-                  <tr style={{ backgroundColor: 'var(--nx-surface-subtle)', borderBottom: '1.5px solid var(--nx-border)' }}>
-                    {columns.map(col => (
-                      <th key={col.key} className={col.key === '_action' ? "px-4 py-3 text-right" : "px-4 py-3 text-left"}
-                        style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
+                  <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                    {columns.map((col) => (
+                      <th
+                        key={col.key}
+                        className={`px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)] ${col.key === '_action' ? 'text-right' : ''}`}
+                      >
                         {col.label}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-slate-900">
+                <tbody className="divide-y divide-[var(--nx-border)]">
                   {filteredData.map((row, i) => (
-                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                      style={{ borderBottom: i < filteredData.length - 1 ? '1px solid var(--nx-border)' : 'none' }}>
-                      {columns.map(col => (
-                        <td key={col.key} className={col.key === '_action' ? "px-4 py-3 text-right" : "px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap"}>
+                    <tr key={i} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
+                      {columns.map((col) => (
+                        <td key={col.key} className={`px-4 py-3 text-body text-[var(--nx-text)] whitespace-nowrap ${col.key === '_action' ? 'text-right' : ''}`}>
                           {renderCell(col, row)}
                         </td>
                       ))}
@@ -851,26 +739,24 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                   ))}
                 </tbody>
               </table>
-              <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border-t border-slate-200">
-                <p className="text-[10px] text-slate-400 font-medium">{filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}</p>
+              <div className="border-t border-[var(--nx-border)] px-4 py-2">
+                <p className="text-caption text-[var(--nx-text-muted)]">
+                  {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}
+                </p>
               </div>
-            </div>
+            </Surface>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
-              <CalendarDays size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
-              <div className="text-center space-y-1">
-                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-                  {searchQuery ? 'Sin coincidencias' : 'Sin registros hoy'}
-                </p>
-                <p style={{ fontSize: '11px', color: 'var(--nx-text-muted)' }} className="max-w-xs">
-                  {searchQuery
-                    ? 'Ningún estudiante coincide con tu búsqueda.'
-                    : emptyWarning
-                      ? 'Este grupo no tiene registros de ingreso para el día de hoy. Verifique que el nodo de control esté operativo.'
-                      : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'}
-                </p>
-              </div>
-            </div>
+            <EmptyState
+              icon={<CalendarDays size={32} className="text-[var(--nx-border)]" />}
+              title={searchQuery ? 'Sin coincidencias' : 'Sin registros hoy'}
+              description={
+                searchQuery
+                  ? 'Ningún estudiante coincide con tu búsqueda.'
+                  : emptyWarning
+                    ? 'Este grupo no tiene registros de ingreso para el día de hoy. Verifique que el nodo de control esté operativo.'
+                    : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'
+              }
+            />
           )}
         </div>
       </motion.div>
@@ -881,27 +767,24 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed z-[60] bottom-6 right-6 bg-white dark:bg-slate-800 shadow-2xl rounded-lg border border-slate-200 dark:border-slate-700 p-4 max-w-sm flex flex-col gap-3"
+            className="fixed bottom-6 right-6 z-[60] w-full max-w-sm rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4 shadow-high"
           >
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-[var(--nx-success)]/10 flex items-center justify-center text-[var(--nx-success)] shrink-0 mt-0.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)] text-[var(--nx-success)]">
                 <CheckCircle2 size={18} strokeWidth={2.5} />
               </div>
-              <div>
-                <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">En Seguimiento</p>
-                <p className="text-xs text-slate-500 mt-0.5"><span className="font-bold">{successModal.studentName}</span> ha sido agregado al módulo de seguimiento exitosamente.</p>
+              <div className="flex-1">
+                <p className="text-label text-[var(--nx-text)]">En Seguimiento</p>
+                <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">
+                  <span className="font-medium text-[var(--nx-text)]">{successModal.studentName}</span> ha sido agregado al módulo de seguimiento.
+                </p>
               </div>
-              <button onClick={() => setSuccessModal(null)} className="p-1 text-slate-400 hover:text-slate-700 transition-colors shrink-0">
-                <X size={14} />
+              <button onClick={() => setSuccessModal(null)} className="p-1 text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">
+                <X size={16} />
               </button>
             </div>
-            <div className="flex justify-end mt-1">
-              <button 
-                onClick={() => navigate('/casos')}
-                className="text-[10px] font-bold uppercase tracking-widest bg-[var(--nx-accent)] text-white px-4 py-2 rounded shadow-sm hover:bg-[var(--nx-accent)] transition-colors"
-              >
-                Ir a Casos Activos
-              </button>
+            <div className="mt-4 flex justify-end">
+              <Button size="sm" onClick={() => navigate('/casos')}>Ir a Casos Activos</Button>
             </div>
           </motion.div>
         )}
@@ -944,33 +827,9 @@ const StaffDashboard = () => {
   }));
 
   return (
-    <div className="space-y-5">
-      <SectionLabel title="Panel de Servicio" sub="Eventos recientes" />
-      <div style={{ border: '1.5px solid var(--nx-border)' }} className="bg-white dark:bg-slate-900">
-        {eventsLoading
-          ? <div className="p-6"><StreamSkeleton /></div>
-          : stream.length > 0
-            ? stream.map((ev, i) => (
-                <div key={i}
-                     className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid var(--nx-surface-subtle)' : 'none' }}>
-                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
-                    <p style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
-                  </div>
-                  <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
-                </div>
-              ))
-            : (
-              <div className="flex items-center justify-center py-16">
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
-                  Sin eventos recientes
-                </p>
-              </div>
-            )
-        }
-      </div>
+    <div className="space-y-8">
+      <Section title="Panel de servicio" subtitle="Eventos recientes" />
+      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
     </div>
   );
 };

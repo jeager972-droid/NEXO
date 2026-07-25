@@ -1,162 +1,106 @@
 /**
  * Sidebar / NEXO Institucional
- * Navegación lateral — CMP-030. Filtrada por rol, 240px en wide, panel en compact.
- * Diseño: NEXO Quiet Operations — OKLCH tokens, sin glassmorphism.
+ * Navegación lateral CMP-030. 240 px en escritorio, panel deslizante en compact.
+ * Filtrada por rol, con tema y perfil en la base.
  */
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../context/ThemeContext';
 import { SIDEBAR_ITEMS, getRoleDisplay } from '../config/roles';
 import { LogOut, Sun, Moon, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
-import { useTheme } from '../context/ThemeContext';
 
-const SectionLabel = ({ children }) => (
-  <p
-    className="px-4 mb-1 mt-5 first:mt-0 select-none"
-    style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', color: 'var(--nx-text-muted)' }}
-  >
-    {children}
-  </p>
-);
-
-const NavItem = ({ item, onNavigate }) => (
-  <NavLink to={item.path} end={item.path === '/'} onClick={onNavigate} className="block group">
-    {({ isActive }) => (
-      <span
-        className="flex items-center gap-3 py-2.5 pr-4 text-sm font-medium transition-colors duration-200"
-        style={{
-          paddingLeft: '12px',
-          borderLeft: isActive ? '3px solid var(--nx-accent)' : '3px solid transparent',
-          color: isActive ? 'var(--nx-accent)' : undefined,
-          backgroundColor: isActive ? 'color-mix(in oklch, var(--nx-accent) 8%, transparent)' : undefined,
-        }}
-      >
-        <item.icon
-          size={20}
-          strokeWidth={isActive ? 2.25 : 1.75}
-          style={{ color: isActive ? 'var(--nx-accent)' : undefined }}
-          className={!isActive ? 'text-[var(--nx-text-muted)] group-hover:text-[var(--nx-text)] transition-colors' : ''}
-        />
-        <span className={isActive ? '' : 'text-[var(--nx-text-muted)] group-hover:text-[var(--nx-text)] transition-colors'}>
-          {item.title}
-        </span>
-      </span>
-    )}
-  </NavLink>
-);
+const NavItem = ({ item, onClick }) => {
+  const Icon = item.icon;
+  return (
+    <NavLink
+      to={item.path}
+      end={item.path === '/'}
+      onClick={onClick}
+      className={({ isActive }) =>
+        `group flex items-center gap-3 px-4 py-3 mx-3 rounded-control text-body font-medium transition-all duration-fast ` +
+        (isActive
+          ? 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]'
+          : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]')
+      }
+    >
+      <Icon size={20} strokeWidth={1.75} className="shrink-0" />
+      <span className="truncate">{item.title}</span>
+    </NavLink>
+  );
+};
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
+  const location = useLocation();
+  const items = SIDEBAR_ITEMS.filter((i) => i.roles.includes(user?.role));
+  const roleDisplay = getRoleDisplay(user?.role);
+  const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
 
-  const filteredItems = SIDEBAR_ITEMS.filter(item => item.roles.includes(user?.role));
-  const roleDisplay   = getRoleDisplay(user?.role);
-  const initial       = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
-  const closeOnMobile = () => { if (window.innerWidth < 1024) toggleSidebar(); };
+  const closeMobile = () => { if (window.innerWidth < 1024) toggleSidebar(); };
 
   return (
     <>
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            key="overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 lg:hidden"
-            style={{ backgroundColor: 'color-mix(in oklch, var(--nx-text) 45%, transparent)' }}
             onClick={toggleSidebar}
+            className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)] lg:hidden"
           />
         )}
       </AnimatePresence>
 
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 flex flex-col
-          transform transition-transform duration-200 ease-out
-          lg:relative lg:translate-x-0
+          fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--nx-surface)] border-r border-[var(--nx-border)]
+          transition-transform duration-200 ease-out lg:relative lg:translate-x-0
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
-        style={{
-          width: '240px',
-          backgroundColor: 'var(--nx-surface)',
-          borderRight: '1px solid var(--nx-border)',
-        }}
+        style={{ width: '260px' }}
       >
-        {/* Logo strip — 56px synced with header */}
-        <div
-          className="flex items-center justify-between px-4 shrink-0"
-          style={{ height: '56px', borderBottom: '1px solid var(--nx-border)' }}
-        >
-          <LogoNexo className="h-7" />
-          <button
-            onClick={toggleSidebar}
-            className="lg:hidden transition-colors p-1"
-            style={{ color: 'var(--nx-text-muted)' }}
-            aria-label="Cerrar menú"
-          >
-            <X size={17} strokeWidth={2} />
+        {/* Logo */}
+        <div className="flex items-center justify-between h-16 px-5 border-b border-[var(--nx-border)]">
+          <LogoNexo className="h-8" />
+          <button onClick={toggleSidebar} className="lg:hidden p-1 text-[var(--nx-text-muted)]" aria-label="Cerrar menú">
+            <X size={20} />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-3" style={{ scrollbarWidth: 'none' }}>
-          <SectionLabel>Módulos</SectionLabel>
-          {filteredItems.map(item => (
-            <NavItem key={item.path} item={item} onNavigate={closeOnMobile} />
+        <nav className="flex-1 overflow-y-auto py-4 space-y-1" aria-label="Módulos principales">
+          {items.map((item) => (
+            <NavItem key={item.path} item={item} onClick={closeMobile} />
           ))}
         </nav>
 
-        {/* Bottom panel — tema + perfil */}
-        <div className="shrink-0 p-3 space-y-1" style={{ borderTop: '1px solid var(--nx-border)' }}>
+        {/* Footer: theme + user */}
+        <div className="p-4 border-t border-[var(--nx-border)] space-y-3">
           <button
             onClick={toggleDarkMode}
-            className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--nx-surface-subtle)]"
-            style={{ color: 'var(--nx-text-muted)' }}
+            className="flex items-center gap-3 w-full px-4 py-2.5 rounded-control text-body text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors duration-fast"
           >
-            {darkMode ? <Sun size={16} strokeWidth={1.75} /> : <Moon size={16} strokeWidth={1.75} />}
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             <span>{darkMode ? 'Modo claro' : 'Modo oscuro'}</span>
           </button>
 
-          {/* User identity card */}
-          <div
-            className="flex items-center gap-2.5 px-3 py-2.5 mt-1"
-            style={{
-              backgroundColor: 'color-mix(in oklch, var(--nx-accent) 4%, transparent)',
-              border: '1px solid var(--nx-border)',
-              borderRadius: 'var(--nx-radius-control)',
-            }}
-          >
-            <div
-              className="shrink-0 flex items-center justify-center w-8 h-8 text-xs font-bold"
-              style={{ backgroundColor: 'var(--nx-accent)', color: 'var(--nx-accent-text)', borderRadius: 'var(--nx-radius-control)' }}
-            >
-              {user?.profile_photo_url ? (
-                <img src={user.profile_photo_url} alt="" className="w-full h-full object-cover" style={{ borderRadius: 'var(--nx-radius-control)' }} />
-              ) : (
-                initial
-              )}
+          <div className="flex items-center gap-3 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-sm font-bold shrink-0">
+              {user?.profile_photo_url ? <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" /> : initial}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold truncate leading-none" style={{ color: 'var(--nx-text)' }}>
-                {user?.nombre}
-              </p>
-              <p
-                className="mt-0.5 truncate leading-none"
-                style={{ fontSize: '11px', fontWeight: 500, color: 'var(--nx-success)' }}
-              >
-                {roleDisplay}
-              </p>
+            <div className="min-w-0 flex-1">
+              <p className="text-body-sm font-medium text-[var(--nx-text)] truncate">{user?.nombre}</p>
+              <p className="text-caption text-[var(--nx-success)] truncate">{roleDisplay}</p>
             </div>
             <button
               onClick={logout}
               title="Cerrar sesión"
-              className="shrink-0 p-1 transition-colors"
-              style={{ color: 'var(--nx-text-muted)' }}
+              className="p-2 text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)] rounded-control hover:bg-[var(--nx-surface)] transition-colors duration-fast"
             >
-              <LogOut size={14} strokeWidth={1.75} />
+              <LogOut size={18} />
             </button>
           </div>
         </div>

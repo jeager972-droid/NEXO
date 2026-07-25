@@ -1,15 +1,8 @@
 /**
- * Formatters / NEXO Institucional
- * Responsabilidad: Funciones de presentación reutilizables: fechas cortas y 12h,
- * etiquetas humanizadas de enums/columnas, formateo de celdas de tabla y listas de
- * columnas excluidas (PII/sensibles) que no se muestran en la UI.
- * Dependencias: React (para algunos badges JSX).
- * Exports: fmtShortDateOnly, fmt12h, ENUM_LABELS, COLUMN_LABELS, EXCLUDE_COLS,
- * humanizeColumn, formatCellValue.
+ * formatters / NEXO Institucional
+ * Funciones de presentación reutilizables: fechas, etiquetas y formateo de celdas.
  */
-import React from 'react';
-
-const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 export function fmtShortDateOnly(iso) {
   const d = new Date(iso);
@@ -24,13 +17,13 @@ export function fmt12h(iso) {
   if (!iso) return '—';
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(iso))) {
     const [y, m, d] = String(iso).split('-');
-    return `${parseInt(d)} ${MONTHS_ES[parseInt(m)-1]} ${y}`;
+    return `${parseInt(d)} ${MONTHS_ES[parseInt(m) - 1]} ${y}`;
   }
   const d = new Date(iso);
   if (isNaN(d)) return String(iso);
   return d.toLocaleString('es-CO', {
     day: 'numeric', month: 'short', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true
+    hour: 'numeric', minute: '2-digit', hour12: true,
   });
 }
 
@@ -57,13 +50,8 @@ export const ENUM_LABELS = {
   NOTIFY_ROLE: 'Notificación interna',
   class: 'Salida de clase', school: 'Salida del colegio', trip: 'Salida pedagógica',
   INBOUND: 'Entrante', OUTBOUND: 'Saliente',
-  RECTOR: 'Rector', COORDINATOR: 'Coordinador',
-  TEACHER: 'Docente', SECRETARY: 'Secretaria', SECURITY: 'Portero',
-  AUXILIARY: 'Auxiliar', COUNSELOR: 'Psicorientador',
   CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo',
   TRUE: 'Sí', FALSE: 'No',
-  COMPORTAMIENTO: 'Comportamiento', ACADEMICO: 'Académico', SALUD: 'Salud',
-  DISCIPLINA: 'Disciplina', OTRO: 'Otro',
 };
 
 export const COLUMN_LABELS = {
@@ -85,27 +73,25 @@ export const COLUMN_LABELS = {
 };
 
 export const EXCLUDE_COLS = [
-  'school_id','student_id','guardian_id','incident_id','alert_id','metadata_json','command_payload',
-  'sync_hash','event_signature','biometric_hash','device_id','event_id','log_id','audit_id',
-  'assignment_id','schedule_id','classroom_id','report_export_id','command_id','twilio_message_id',
-  'relationship_id','staff_record_id','previous_data','new_data',
+  'school_id', 'student_id', 'guardian_id', 'incident_id', 'alert_id', 'metadata_json', 'command_payload',
+  'sync_hash', 'event_signature', 'biometric_hash', 'device_id', 'event_id', 'log_id', 'audit_id',
+  'assignment_id', 'schedule_id', 'classroom_id', 'report_export_id', 'command_id', 'twilio_message_id',
+  'relationship_id', 'staff_record_id', 'previous_data', 'new_data',
   'authorization_id', 'authorized_by_user_id', 'exit_authorization_id',
   'trip_authorization_id', 'tracking_id', 'provider_message_sid', 'metadata',
   'guardian_user_phone', 'sender_user_id', 'deactivated_at', 'created_at_raw', 'updated_at',
 ];
 
 export function humanizeColumn(key) {
-  return COLUMN_LABELS[key] || String(key).replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+  return COLUMN_LABELS[key] || String(key).replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
 export function formatCellValue(key, value) {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
   const sk = String(key).toLowerCase();
-  
-  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') ||
-      sk.includes('detected') || sk.includes('emitted') || sk.includes('created') ||
-      sk.includes('departure') || sk.includes('return')) {
+
+  if (sk.includes('timestamp') || sk.includes('_at') || sk.includes('time') || sk.includes('detected') || sk.includes('emitted') || sk.includes('created') || sk.includes('departure') || sk.includes('return')) {
     const d = new Date(value);
     if (!isNaN(d)) return fmt12h(value);
   }
@@ -114,11 +100,11 @@ export function formatCellValue(key, value) {
     if (!isNaN(d)) return fmtShortDateOnly(value);
   }
   const sv = String(value).trim();
-  if (sv === 'en proceso') return <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 border border-amber-200">En Proceso</span>;
-  if (sv === 'resuelto') return <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200">Resuelto</span>;
-  
+  if (sv === 'en proceso') return <span className="inline-flex items-center rounded-full border border-[var(--nx-warning)] bg-[color-mix(in_oklch,var(--nx-warning)_10%,transparent)] px-2 py-0.5 text-caption font-medium text-[var(--nx-warning)]">En Proceso</span>;
+  if (sv === 'resuelto') return <span className="inline-flex items-center rounded-full border border-[var(--nx-success)] bg-[color-mix(in_oklch,var(--nx-success)_10%,transparent)] px-2 py-0.5 text-caption font-medium text-[var(--nx-success)]">Resuelto</span>;
+
   if (ENUM_LABELS[sv]) return ENUM_LABELS[sv];
   if (ENUM_LABELS[sv.toUpperCase()]) return ENUM_LABELS[sv.toUpperCase()];
-  if (sv.length > 120) return sv.slice(0, 120) + '…';
+  if (sv.length > 120) return `${sv.slice(0, 120)}…`;
   return sv;
 }

@@ -1,46 +1,41 @@
 /**
  * ErrorBoundary / NEXO Institucional
- * Responsabilidad: Capturar errores de renderizado en React y mostrar una interfaz de
- * error con recarga, evitando que toda la SPA se quede en blanco. Registra errores en consola.
- * Tipo: React Class Component (componentDidCatch).
- * Dependencias: React Component.
- * Propiedades: { children }.
+ * Captura errores de renderizado y muestra una interfaz de recuperación.
  */
-import { Component } from 'react'
+import { Component } from 'react';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { Surface } from './ui/Surface';
+import { Button } from './ui/Button';
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
-    super(props)
-    this.state = { hasError: false }
+    super(props);
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, info) {
-    console.error('ErrorBoundary caught:', error, info)
+    console.error('ErrorBoundary caught:', error, info);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-slate-900 p-8">
-          <div className="text-center space-y-6">
-            <h2 className="text-3xl font-black text-red-600 uppercase tracking-tight">Error de carga</h2>
-            <p className="text-gray-400 dark:text-slate-500 font-bold max-w-md">
-              Hubo un problema al cargar este módulo. Por favor, reintenta recargando la página.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-institutional-900 hover:bg-institutional-800 text-white font-black py-4 px-10 rounded-2xl uppercase tracking-widest transition-all"
-            >
-              Reintentar
-            </button>
-          </div>
+        <div className="flex min-h-[50vh] items-center justify-center p-6">
+          <Surface className="max-w-md p-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)] text-[var(--nx-danger)]">
+              <AlertTriangle size={28} />
+            </div>
+            <h2 className="mt-5 text-h2 text-[var(--nx-text)]">Algo salió mal</h2>
+            <p className="mt-2 text-body text-[var(--nx-text-muted)]">Se produjo un error inesperado. Puedes recargar la aplicación para continuar.</p>
+            <Button className="mt-6" onClick={() => window.location.reload()} leftIcon={<RotateCcw size={18} />}>Recargar aplicación</Button>
+          </Surface>
         </div>
-      )
+      );
     }
-    return this.props.children
+    return this.props.children;
   }
 }

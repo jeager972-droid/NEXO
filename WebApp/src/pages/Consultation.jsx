@@ -1,8 +1,7 @@
 /**
- * Consultation page / NEXO Institucional
- * Responsabilidad: Catálogo de módulos de consulta filtrado por rol. Muestra análisis de
- * riesgo (behaviorApi), datos dinámicos por módulo y abre ConsultationDrawer para detalles.
- * Dependencias: React, react-router-dom, framer-motion, useAuth, behaviorApi, consultationsApi, studentsApi, ROLES.
+ * SCR-CON-01 Consultation
+ * Catálogo de módulos de consulta filtrado por rol. Muestra análisis de riesgo,
+ * datos dinámicos por módulo y abre ConsultationDrawer para detalles.
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
@@ -10,66 +9,52 @@ import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
-import {
-  Search, Users, ShieldAlert, MessageSquare,
-  Activity, ChevronRight, BookOpen, Database,
-  UserCheck, FileText
-} from 'lucide-react';
+import { Search, ChevronRight, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
+import { Section, Surface } from '../components/ui/Surface';
+import { Input } from '../components/ui/Input';
+import { Card } from '../components/ui/Card';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
+const localDateStr = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 const Consultation = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState(null);
   const [riskStudents, setRiskStudents] = useState([]);
   const [dynamicData, setDynamicData] = useState([]);
   const [dynamicColumns, setDynamicColumns] = useState({});
   const [loadingData, setLoadingData] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Query params for teacher modules
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
-  // Helper: fecha local YYYY-MM-DD (evita desfase UTC de toISOString)
-  const localDateStr = (date = new Date()) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7);
-    return localDateStr(d);
-  });
+  const [fromDate, setFromDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return localDateStr(d); });
   const [toDate, setToDate] = useState(() => localDateStr());
   const [hasQueried, setHasQueried] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState('');
 
-  // BUG-08 FIX: separar en dos effects — grupos solo se recarga cuando cambia el rol,
-  // no en cada cambio de searchParams
   useEffect(() => {
     const isTeacherRole = user?.role === ROLES.DOCENTE || user?.role === ROLES.PSICORIENTADOR;
     studentsApi.getGroups(isTeacherRole)
-      .then(data => setGroups(Array.isArray(data) ? data : []))
-      .catch(err => console.error('Error loading groups', err));
+      .then((data) => setGroups(Array.isArray(data) ? data : []))
+      .catch((err) => console.error('Error loading groups', err));
   }, [user?.role]);
 
-  const [initialModHandled, setInitialModHandled] = useState(false);
-
   useEffect(() => {
-    if (!initialModHandled) {
-      const mod = searchParams.get('mod');
-      if (mod) {
-        setActiveItem(mod);
-      }
-    }
-  }, [initialModHandled, searchParams]);
+    const mod = searchParams.get('mod');
+    if (mod) setActiveItem(mod);
+  }, [searchParams]);
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
 
@@ -83,7 +68,7 @@ const Consultation = () => {
       setDynamicData(res.data || []);
       setDynamicColumns(res.columns || {});
     } catch (err) {
-      console.error('Error fetching module data', err);
+      console.error(err);
       setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
       setDynamicData([]);
       setDynamicColumns({});
@@ -94,8 +79,6 @@ const Consultation = () => {
 
   useEffect(() => {
     if (!activeItem) return;
-
-    // Teacher modules: require manual query via form
     if (isTeacherModule) {
       setHasQueried(false);
       setQueryError(null);
@@ -105,50 +88,36 @@ const Consultation = () => {
       setLoadingData(false);
       return;
     }
-
-    // Non-teacher modules: auto-fetch
-    setLoadingData(true);
     const abortController = new AbortController();
+    setLoadingData(true);
 
     if (activeItem === 'Análisis de Riesgo') {
-      behaviorApi.getRiskAnalysis()
-        .then(res => {
+      behaviorApi.getRiskAnalysis('', '', abortController.signal)
+        .then((res) => {
           if (!abortController.signal.aborted) {
-            if (res.status === 'ok') setRiskStudents(res.data || []);
-            else setQueryError(res.message || 'Error al cargar análisis de riesgo');
-          }
-        })
-        .catch(err => {
-          if (!abortController.signal.aborted) {
-            console.error('Error fetching risk analysis', err);
-            setQueryError(err?.response?.data?.message || err.message || 'Error de red');
-          }
-        })
-        .finally(() => {
-          if (!abortController.signal.aborted) setLoadingData(false);
-        });
-    } else {
-      consultationsApi.queryModule(activeItem, '', '', '', '', abortController.signal)
-        .then(res => {
-          if (!abortController.signal.aborted) {
-            setDynamicData(res.data || []);
+            setRiskStudents(res.students || res.data || []);
+            setDynamicData(res.students || res.data || []);
             setDynamicColumns(res.columns || {});
           }
         })
-        .catch(err => {
+        .catch((err) => { if (!abortController.signal.aborted) setQueryError(err?.response?.data?.message || err.message || 'Error de red'); })
+        .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
+    } else {
+      consultationsApi.queryModule(activeItem, '', '', '', '', abortController.signal)
+        .then((res) => {
+          if (!abortController.signal.aborted) { setDynamicData(res.data || []); setDynamicColumns(res.columns || {}); }
+        })
+        .catch((err) => {
           if (!abortController.signal.aborted) {
-            console.error('Error fetching module data', err);
             setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
             setDynamicData([]);
             setDynamicColumns({});
           }
         })
-        .finally(() => {
-          if (!abortController.signal.aborted) setLoadingData(false);
-        });
+        .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
     }
     return () => abortController.abort();
-  }, [activeItem]);
+  }, [activeItem, isTeacherModule]);
 
   const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
   if (!allowedForConsulta.includes(user?.role)) {
@@ -235,69 +204,56 @@ const Consultation = () => {
     items: m.items.filter(it => it.toLowerCase().includes(searchTerm.toLowerCase())),
   })).filter(m => m.items.length > 0 || !searchTerm);
 
+  const openModule = (item) => {
+    setActiveItem(item);
+    setDynamicData([]);
+    setDynamicColumns({});
+    setHasQueried(false);
+    setQueryError(null);
+  };
+
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none' }}>Panel de Consulta</p>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', marginTop: '2px' }} className="dark:text-slate-200">Acceso rápido a información por módulo</p>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
-        <input type="text" placeholder="Filtrar módulos y submódulos…" value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"
-          style={{ border: '1.5px solid var(--nx-border)', backgroundColor: 'var(--nx-surface-subtle)', fontSize: '13px', fontWeight: 500, color: 'var(--nx-text)' }}
-          onFocus={e => { e.target.style.borderColor = 'var(--nx-accent)'; }}
-          onBlur={e => { e.target.style.borderColor = 'var(--nx-border)'; }} />
-      </div>
-
-      {/* Module grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filtered.map((mod, idx) => (
-          <motion.div key={idx}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: idx * 0.04 }}
-            className="bg-white dark:bg-slate-900"
-            style={{ border: '1.5px solid var(--nx-border)' }}
-          >
-            {/* Module header */}
-            <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
-              <div className="flex items-center justify-center w-8 h-8 shrink-0"
-                style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 7%, transparent)', color: 'var(--nx-accent)' }}>
-                <mod.icon size={16} strokeWidth={2} />
-              </div>
-              <p className="text-xs font-black uppercase dark:text-white" style={{ letterSpacing: '0.1em', color: 'var(--nx-text)' }}>
-                {mod.title}
-              </p>
-            </div>
-            {/* Items */}
-            <div>
-              {mod.items.map((item, i) => (
-                <button key={i} onClick={() => {
-                  setActiveItem(item);
-                  setDynamicData([]);
-                  setDynamicColumns({});
-                  setHasQueried(false);
-                  setQueryError(null);
-                }}
-                  className="group flex items-center justify-between w-full px-5 py-3 text-left bg-white dark:bg-slate-900 hover:bg-[var(--nx-accent)] transition-colors duration-150"
-                  style={{ borderBottom: i < mod.items.length - 1 ? '1px solid var(--nx-surface-subtle)' : 'none' }}>
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-white transition-colors"
-                        style={{ letterSpacing: '0.05em' }}>{item}</span>
-                  <ChevronRight size={12} strokeWidth={2} className="text-slate-300 group-hover:text-white/60 transition-colors shrink-0" />
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Consultation Drawer */}
-      <AnimatePresence>
-        {activeItem && (
+    <div className="space-y-6">
+      {!activeItem ? (
+        <>
+          <Section title="Panel de consulta" subtitle="Acceso rápido a información por módulo" />
+          <Input
+            placeholder="Filtrar módulos y submódulos…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filtered.map((mod, idx) => (
+              <Card key={idx} className="p-0 overflow-hidden">
+                <div className="flex items-center gap-3 border-b border-[var(--nx-border)] px-5 py-3.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]">
+                    <mod.icon size={16} strokeWidth={2} />
+                  </div>
+                  <p className="text-label uppercase text-[var(--nx-text)]">{mod.title}</p>
+                </div>
+                <div>
+                  {mod.items.map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => openModule(item)}
+                      className="group flex w-full items-center justify-between border-b border-[var(--nx-border)] px-5 py-3 text-left text-body text-[var(--nx-text)] transition-colors last:border-0 hover:bg-[var(--nx-surface-subtle)]"
+                    >
+                      <span>{item}</span>
+                      <ChevronRight size={14} className="text-[var(--nx-text-muted)] group-hover:text-[var(--nx-accent)]" />
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setActiveItem(null)} className="text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">← Volver</button>
+            <Section title={activeItem} subtitle={isTeacherModule ? 'Configura filtros y consulta' : 'Resultados del módulo'} />
+          </div>
           <ConsultationDrawer
             item={activeItem}
             riskStudents={riskStudents}
@@ -319,8 +275,8 @@ const Consultation = () => {
             onClose={() => setActiveItem(null)}
             error={queryError}
           />
-        )}
-      </AnimatePresence>
+        </>
+      )}
     </div>
   );
 };
