@@ -398,6 +398,31 @@ FROM academic_groups ag CROSS JOIN subjects s CROSS JOIN classrooms c, generate_
 WHERE ag.school_id='a3333333-3333-3333-3333-333333333333'::UUID LIMIT 30;
 
 -- =============================================================================
+-- ASIGNACIÓN DE GRUPOS A DOCENTE DE PRUEBA
+-- =============================================================================
+WITH t AS (
+  SELECT user_id, school_id
+  FROM users
+  WHERE email = 'docente@nexo.edu'
+  LIMIT 1
+)
+INSERT INTO schedules (
+  schedule_id, group_id, subject_id, classroom_id, teacher_user_id,
+  day_of_week, block_number, start_time, end_time
+)
+SELECT
+  gen_random_uuid(),
+  ag.group_id,
+  (SELECT subject_id FROM subjects ORDER BY subject_name LIMIT 1),
+  (SELECT classroom_id FROM classrooms WHERE school_id = t.school_id ORDER BY classroom_name LIMIT 1),
+  t.user_id,
+  1, 1,
+  '08:00'::TIME,
+  '09:30'::TIME
+FROM t
+JOIN academic_groups ag ON ag.school_id = t.school_id;
+
+-- =============================================================================
 -- 18. AUTORIZACIONES DE SALIDA
 -- =============================================================================
 

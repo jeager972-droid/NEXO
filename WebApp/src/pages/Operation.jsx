@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
 import { usersApi } from '../api/users';
-import { ROLES } from '../config/roles';
+import { ROLES, getRoleDisplay } from '../config/roles';
 import { Section, Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
@@ -29,7 +29,7 @@ const COMMANDS_CATALOG = [
   { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'] },
   { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'], isUrgent: true },
   { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'] },
-  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'message'] },
+  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'] },
   { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'] },
   { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason'] },
   { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.' },
@@ -189,9 +189,21 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     try {
       const payload = { ...form };
       if (command.fields.includes('student')) payload.student_id = form.student;
-      if (command.fields.includes('group')) payload.group_name = form.group;
+      if (command.fields.includes('group')) {
+        payload.group = form.group;
+        payload.group_name = form.group;
+      }
       if (command.fields.includes('targets')) payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
-      if (command.fields.includes('timeRange')) payload.time_range = form.timeRange;
+      if (command.fields.includes('timeRange')) {
+        const tr = (form.timeRange || '').split('-').map((s) => s.trim());
+        payload.timeStart = tr[0] || null;
+        payload.timeEnd = tr[1] || null;
+      }
+
+      if (command.id === 'solicitud' && form.targets) {
+        const ids = form.targets.split(',').filter(Boolean);
+        payload.recipient_id = ids[0] || null;
+      }
 
       let result;
       switch (command.id) {
@@ -221,7 +233,8 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
 
   const renderField = (field) => {
     if (field === 'group') {
-      const options = [{ value: '', label: '— Seleccionar grupo —' }, ...groups.map((g) => ({ value: g, label: g }))];
+      const groupLabel = (g) => g?.name || g?.group_name || g;
+      const options = [{ value: '', label: '— Seleccionar grupo —' }, ...groups.map((g) => ({ value: groupLabel(g), label: groupLabel(g) }))];
       return <Select key={field} label={FIELD_LABELS[field]} options={options} value={form.group || ''} onChange={(e) => updateField('group', e.target.value)} />;
     }
     if (field === 'student') {
@@ -229,12 +242,24 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
       return <Select key={field} label={FIELD_LABELS[field]} options={options} value={form.student || ''} onChange={(e) => updateField('student', e.target.value)} />;
     }
     if (field === 'targetRole') {
-      const roles = Object.entries(ROLES).map(([k, v]) => ({ value: v, label: k }));
+      const roles = Object.entries(ROLES).map(([k, v]) => ({ value: v, label: getRoleDisplay(v) || k }));
       return <Select key={field} label={FIELD_LABELS[field]} options={[{ value: '', label: '— Seleccionar rol —' }, ...roles]} value={form.targetRole || ''} onChange={(e) => updateField('targetRole', e.target.value)} />;
     }
     if (field === 'targets') {
-      if (loadingUsers) return <Skeleton className="h-20 w-full" />;
-      const options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: u.nombre || u.email || u.user_id }));
+      const isIncident = command.id === 'incidente';
+      const incidentOptions = [
+        { value: 'padre', label: 'Acudiente' },
+        { value: 'rector', label: 'Rectoría' },
+        { value: 'coordinacion', label: 'Coordinación' },
+      ];
+      let options;
+      if (isIncident) {
+        options = incidentOptions;
+      } else {
+        if (loadingUsers) return <Skeleton className="h-20 w-full" />;
+        if (!form.targetRole) return <p className="text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</p>;
+        options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id }));
+      }
       return (
         <div key={field} className="space-y-1.5">
           <label className="block text-label text-[var(--nx-text)]">{FIELD_LABELS[field]}</label>

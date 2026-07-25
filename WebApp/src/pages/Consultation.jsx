@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, BookOpen } from 'lucide-react';
+import { Search, ChevronRight, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
@@ -18,6 +18,44 @@ import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
+
+const MODULE_SLUGS = {
+  'Llegadas Tarde': 'late_arrivals',
+  'Inasistencias': 'absences',
+  'Estudiantes Ausentes': 'absences',
+  'Estudiantes fuera del salón': 'incidents',
+  'Estudiantes con Permiso': 'active_permissions',
+  'Citaciones': 'sent_messages',
+  'Análisis de Riesgo': null,
+  'Seguimientos completados': 'student_tracking_completed',
+  'Spam Biométrico': 'biometric_spam',
+  'Vulneraciones': 'incidents',
+  'Alertas': 'incidents',
+  'Seguimiento Estudiantil': 'student_tracking_active',
+  'Permisos Emitidos': 'issued_permissions',
+  'Salidas del colegio permitidas': 'school_exits',
+  'Salidas Pedagógicas': 'pedagogical_trips',
+  'Métricas Globales': 'institutional_metrics',
+  'Asistencia Institucional': 'attendance_history',
+  'Estadísticas Históricas': 'attendance_history',
+  'Indicadores Críticos': 'incidents',
+  'TODOS los Consolidados': 'reports',
+  'Históricos Completos': 'attendance_history',
+  'Exportaciones Institucionales': 'reports',
+  'Estudiantes': 'all_students',
+  'Grupos': 'all_groups',
+  'Acudientes': 'all_guardians',
+  'Matrículas': 'all_students',
+  'Cambios Registro': 'audit_logs',
+  'Profesores': 'all_teachers',
+  'Auxiliares': 'staff_auxiliary',
+  'Portería': 'staff_security',
+  'Personal Institucional': 'staff',
+  'Mensajes Enviados': 'sent_messages',
+  'Reportes': 'reports',
+  'Auditoría Local': 'audit_logs',
+  'Permisos Activos Hoy': 'active_permissions',
+};
 
 const localDateStr = (date = new Date()) => {
   const y = date.getFullYear();
@@ -63,8 +101,16 @@ const Consultation = () => {
     setLoadingData(true);
     setHasQueried(true);
     setQueryError(null);
+    const moduleSlug = MODULE_SLUGS[activeItem];
+    if (!moduleSlug) {
+      setQueryError('Módulo no soportado');
+      setDynamicData([]);
+      setDynamicColumns({});
+      setLoadingData(false);
+      return;
+    }
     try {
-      const res = await consultationsApi.queryModule(activeItem, selectedGroup, fromDate, toDate, selectedStudent);
+      const res = await consultationsApi.queryModule(moduleSlug, selectedGroup, fromDate, toDate, selectedStudent);
       setDynamicData(res.data || []);
       setDynamicColumns(res.columns || {});
     } catch (err) {
@@ -91,6 +137,15 @@ const Consultation = () => {
     const abortController = new AbortController();
     setLoadingData(true);
 
+    const moduleSlug = activeItem === 'Análisis de Riesgo' ? null : MODULE_SLUGS[activeItem];
+    if (activeItem !== 'Análisis de Riesgo' && !moduleSlug) {
+      if (!abortController.signal.aborted) {
+        setQueryError('Módulo no soportado');
+        setLoadingData(false);
+      }
+      return () => abortController.abort();
+    }
+
     if (activeItem === 'Análisis de Riesgo') {
       behaviorApi.getRiskAnalysis('', '', abortController.signal)
         .then((res) => {
@@ -103,7 +158,7 @@ const Consultation = () => {
         .catch((err) => { if (!abortController.signal.aborted) setQueryError(err?.response?.data?.message || err.message || 'Error de red'); })
         .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
     } else {
-      consultationsApi.queryModule(activeItem, '', '', '', '', abortController.signal)
+      consultationsApi.queryModule(moduleSlug, '', '', '', '', abortController.signal)
         .then((res) => {
           if (!abortController.signal.aborted) { setDynamicData(res.data || []); setDynamicColumns(res.columns || {}); }
         })
@@ -119,7 +174,7 @@ const Consultation = () => {
     return () => abortController.abort();
   }, [activeItem, isTeacherModule]);
 
-  const allowedForConsulta = [ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
+  const allowedForConsulta = [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
   if (!allowedForConsulta.includes(user?.role)) {
     return <Navigate to="/" replace />;
   }
