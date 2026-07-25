@@ -20,6 +20,9 @@ class MockRedis {
     public function get($key) { return $this->store[$key] ?? false; }
     public function exists($key) { return isset($this->store[$key]); }
     public function del($key) { unset($this->store[$key]); return 1; }
+    public function mGet($keys) {
+        return array_map(function($k) { return $this->store[$k] ?? false; }, $keys);
+    }
 }
 
 if (!function_exists('getRedisConnection')) {
