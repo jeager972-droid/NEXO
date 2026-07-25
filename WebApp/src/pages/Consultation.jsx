@@ -239,8 +239,8 @@ const Consultation = () => {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>Panel de Consulta</p>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px' }} className="dark:text-slate-200">Acceso rápido a información por módulo</p>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none' }}>Panel de Consulta</p>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', marginTop: '2px' }} className="dark:text-slate-200">Acceso rápido a información por módulo</p>
       </div>
 
       {/* Search */}
@@ -249,9 +249,9 @@ const Consultation = () => {
         <input type="text" placeholder="Filtrar módulos y submódulos…" value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"
-          style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '13px', fontWeight: 500, color: '#0F172A' }}
-          onFocus={e => { e.target.style.borderColor = '#003366'; }}
-          onBlur={e => { e.target.style.borderColor = '#E2E8F0'; }} />
+          style={{ border: '1.5px solid var(--nx-border)', backgroundColor: 'var(--nx-surface-subtle)', fontSize: '13px', fontWeight: 500, color: 'var(--nx-text)' }}
+          onFocus={e => { e.target.style.borderColor = 'var(--nx-accent)'; }}
+          onBlur={e => { e.target.style.borderColor = 'var(--nx-border)'; }} />
       </div>
 
       {/* Module grid */}
@@ -261,15 +261,15 @@ const Consultation = () => {
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: idx * 0.04 }}
             className="bg-white dark:bg-slate-900"
-            style={{ border: '1.5px solid #E2E8F0' }}
+            style={{ border: '1.5px solid var(--nx-border)' }}
           >
             {/* Module header */}
-            <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+            <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
               <div className="flex items-center justify-center w-8 h-8 shrink-0"
-                style={{ backgroundColor: 'rgba(0,51,102,0.07)', color: '#003366' }}>
+                style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 7%, transparent)', color: 'var(--nx-accent)' }}>
                 <mod.icon size={16} strokeWidth={2} />
               </div>
-              <p className="text-xs font-black uppercase dark:text-white" style={{ letterSpacing: '0.1em', color: '#1E293B' }}>
+              <p className="text-xs font-black uppercase dark:text-white" style={{ letterSpacing: '0.1em', color: 'var(--nx-text)' }}>
                 {mod.title}
               </p>
             </div>
@@ -283,8 +283,8 @@ const Consultation = () => {
                   setHasQueried(false);
                   setQueryError(null);
                 }}
-                  className="group flex items-center justify-between w-full px-5 py-3 text-left bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-150"
-                  style={{ borderBottom: i < mod.items.length - 1 ? '1px solid #F8FAFC' : 'none' }}>
+                  className="group flex items-center justify-between w-full px-5 py-3 text-left bg-white dark:bg-slate-900 hover:bg-[var(--nx-accent)] transition-colors duration-150"
+                  style={{ borderBottom: i < mod.items.length - 1 ? '1px solid var(--nx-surface-subtle)' : 'none' }}>
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-white transition-colors"
                         style={{ letterSpacing: '0.05em' }}>{item}</span>
                   <ChevronRight size={12} strokeWidth={2} className="text-slate-300 group-hover:text-white/60 transition-colors shrink-0" />

@@ -41,7 +41,7 @@ const KpiSkeleton = () => (
 const StreamSkeleton = () => (
   <div className="space-y-0">
     {[1, 2, 3, 4, 5].map(i => (
-      <div key={i} className="flex items-center gap-3 py-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
+      <div key={i} className="flex items-center gap-3 py-3" style={{ borderBottom: '1px solid var(--nx-border)' }}>
         <Pulse className="h-1.5 w-1.5 rounded-full shrink-0" />
         <Pulse className="h-2 flex-1" />
         <Pulse className="h-2 w-12" />
@@ -54,11 +54,11 @@ const StreamSkeleton = () => (
 
 const SectionLabel = ({ title, sub }) => (
   <div className="mb-3">
-    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
+    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none' }}>
       {title}
     </p>
     {sub && (
-      <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px', letterSpacing: '-0.01em' }}
+      <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', marginTop: '2px', letterSpacing: '-0.01em' }}
          className="dark:text-slate-200">
         {sub}
       </p>
@@ -66,7 +66,7 @@ const SectionLabel = ({ title, sub }) => (
   </div>
 );
 
-const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0, onClick }) => {
+const KpiCard = ({ label, value, icon: Icon, sub, accent = 'var(--nx-accent)', delay = 0, onClick }) => {
   const Component = onClick ? motion.button : motion.div;
   return (
   <Component
@@ -77,16 +77,16 @@ const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0,
     transition={{ duration: 0.28, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
   >
     <div className="flex items-center justify-between">
-      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
         {label}
       </span>
       <Icon size={15} strokeWidth={2} style={{ color: accent }} />
     </div>
     <p className="dark:text-slate-100"
-       style={{ fontSize: '44px', fontWeight: 900, color: '#0F172A', lineHeight: 1, letterSpacing: '-0.02em' }}>
+       style={{ fontSize: '44px', fontWeight: 900, color: 'var(--nx-text)', lineHeight: 1, letterSpacing: '-0.02em' }}>
       {value}
     </p>
-    <p style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+    <p style={{ fontSize: '10px', color: 'var(--nx-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
       {sub}
     </p>
   </Component>
@@ -94,18 +94,18 @@ const KpiCard = ({ label, value, icon: Icon, sub, accent = '#003366', delay = 0,
 };
 
 const StreamRow = ({ label, time, type = 'default', index }) => {
-  const dot = type === 'alert' ? '#EF4444' : type === 'bio' ? '#00A67E' : '#003366';
+  const dot = type === 'alert' ? 'var(--nx-danger)' : type === 'bio' ? 'var(--nx-success)' : 'var(--nx-accent)';
   return (
     <motion.div
       initial={{ opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.045, duration: 0.2 }}
       className="flex items-center gap-3 py-2.5"
-      style={{ borderBottom: '1px solid #F1F5F9' }}
+      style={{ borderBottom: '1px solid var(--nx-border)' }}
     >
       <span className="shrink-0 block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
       <span className="flex-1 text-xs font-medium text-slate-600 dark:text-slate-400 truncate">{label}</span>
-      <span style={{ fontSize: '9px', color: '#CBD5E1', fontWeight: 600 }}>{time}</span>
+      <span style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 600 }}>{time}</span>
     </motion.div>
   );
 };
@@ -182,9 +182,9 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
   };
 
   const kpis = [
-    { key: 'present', label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: '#003366', delay: 0    },
-    { key: 'absent',  label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: '#0D4080', delay: 0.06 },
-    { key: 'alert',   label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: '#DC2626', delay: 0.12 },
+    { key: 'present', label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: 'var(--nx-accent)', delay: 0    },
+    { key: 'absent',  label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: 'var(--nx-accent)', delay: 0.06 },
+    { key: 'alert',   label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: 'var(--nx-danger)', delay: 0.12 },
   ];
 
   useEffect(() => {
@@ -218,11 +218,11 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
       {/* ── Estadísticas del Día ── */}
       <section>
         <SectionLabel title="Estadísticas del Día" sub="Datos de la institución en tiempo real" />
-        <div className="grid grid-cols-1 md:grid-cols-3" style={{ border: '1.5px solid #E2E8F0' }}>
+        <div className="grid grid-cols-1 md:grid-cols-3" style={{ border: '1.5px solid var(--nx-border)' }}>
           {loading
             ? [1, 2, 3].map(i => <KpiSkeleton key={i} />)
             : kpis.map((k, i) => (
-                <div key={i} style={{ borderRight: i < 2 ? '1.5px solid #E2E8F0' : 'none' }}>
+                <div key={i} style={{ borderRight: i < 2 ? '1.5px solid var(--nx-border)' : 'none' }}>
                   <KpiCard {...k} onClick={() => openDetail(k.key)} />
                 </div>
               ))
@@ -233,14 +233,14 @@ const AdminDashboard = ({ stats, loading, navigate }) => {
       {/* ── Eventos Recientes ── */}
       <section>
         <SectionLabel title="Eventos Recientes" sub="Últimas novedades institucionales" />
-        <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
+        <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid var(--nx-border)', minHeight: '200px' }}>
           {eventsLoading
             ? <StreamSkeleton />
             : stream.length > 0
               ? stream.map((ev, i) => <StreamRow key={i} {...ev} index={i} />)
               : (
                 <div className="flex items-center justify-center h-40">
-                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                     Sin eventos recientes
                   </p>
                 </div>
@@ -301,25 +301,25 @@ const SecretaryDashboard = () => {
   return (
     <div className="space-y-5">
       <SectionLabel title="Panel Secretaría" sub="Eventos recientes" />
-      <div style={{ border: '1.5px solid #E2E8F0' }} className="bg-white dark:bg-slate-900">
+      <div style={{ border: '1.5px solid var(--nx-border)' }} className="bg-white dark:bg-slate-900">
         {eventsLoading
           ? <div className="p-6"><StreamSkeleton /></div>
           : stream.length > 0
             ? stream.map((ev, i) => (
                 <div key={i}
                      className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
-                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? '#DC2626' : '#00A67E' }} />
+                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid var(--nx-surface-subtle)' : 'none' }}>
+                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
-                    <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
+                    <p style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
                   </div>
                   <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
                 </div>
               ))
             : (
               <div className="flex items-center justify-center py-16">
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                   Sin eventos recientes
                 </p>
               </div>
@@ -333,10 +333,10 @@ const SecretaryDashboard = () => {
 // ── Docente / Psicorientador ──────────────────────────────────────────────────
 
 const CATEGORY_LABELS = {
-  present:  { label: 'Presentes',    accent: '#003366', icon: Users },
-  absent:   { label: 'Inasistentes', accent: '#0D4080', icon: UserMinus },
-  alert:    { label: 'Alertas',      accent: '#DC2626', icon: AlertTriangle },
-  permiso:  { label: 'Permisos',     accent: '#00A67E', icon: Activity },
+  present:  { label: 'Presentes',    accent: 'var(--nx-accent)', icon: Users },
+  absent:   { label: 'Inasistentes', accent: 'var(--nx-accent)', icon: UserMinus },
+  alert:    { label: 'Alertas',      accent: 'var(--nx-danger)', icon: AlertTriangle },
+  permiso:  { label: 'Permisos',     accent: 'var(--nx-success)', icon: Activity },
 };
 
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
@@ -437,10 +437,10 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   };
 
   const cards = [
-    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, accent: '#003366' },
-    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, accent: '#0D4080' },
-    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, accent: '#DC2626' },
-    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, accent: '#00A67E' },
+    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, accent: 'var(--nx-accent)' },
+    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, accent: 'var(--nx-accent)' },
+    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, accent: 'var(--nx-danger)' },
+    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, accent: 'var(--nx-success)' },
   ];
 
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
@@ -450,21 +450,21 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
       <SectionLabel title="Panel Docente" sub="Control de asistencia por grupo — Hoy" />
 
       {parentLoading ? (
-        <div style={{ border: '1.5px solid #E2E8F0' }} className="p-6 space-y-3 bg-white dark:bg-slate-900">
+        <div style={{ border: '1.5px solid var(--nx-border)' }} className="p-6 space-y-3 bg-white dark:bg-slate-900">
           {[1, 2].map(i => <Pulse key={i} className="h-10 w-full" />)}
         </div>
       ) : (
         <>
           {/* Group selector — searchable dropdown */}
-          <div style={{ border: '1.5px solid #E2E8F0', position: 'relative' }} className="bg-white dark:bg-slate-900">
+          <div style={{ border: '1.5px solid var(--nx-border)', position: 'relative' }} className="bg-white dark:bg-slate-900">
             <button
               onClick={() => setGroupOpen(v => !v)}
               className="w-full flex items-center justify-between px-5 py-3.5 text-left"
               style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             >
               <div>
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>Grupo seleccionado</p>
-                <p className="text-sm font-black dark:text-white" style={{ color: selectedGroup ? '#003366' : '#CBD5E1', marginTop: '2px' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>Grupo seleccionado</p>
+                <p className="text-sm font-black dark:text-white" style={{ color: selectedGroup ? 'var(--nx-accent)' : 'var(--nx-text-muted)', marginTop: '2px' }}>
                   {selectedGroup || '— Elegir grupo —'}
                 </p>
               </div>
@@ -480,10 +480,10 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.15 }}
                   className="absolute left-0 right-0 z-30 bg-white dark:bg-slate-900 shadow-xl"
-                  style={{ top: '100%', border: '1.5px solid #E2E8F0', borderTop: 'none', maxHeight: '260px', overflowY: 'auto' }}
+                  style={{ top: '100%', border: '1.5px solid var(--nx-border)', borderTop: 'none', maxHeight: '260px', overflowY: 'auto' }}
                 >
                   {/* Search input */}
-                  <div className="sticky top-0 bg-white dark:bg-slate-900 px-3 py-2" style={{ borderBottom: '1px solid #F1F5F9' }}>
+                  <div className="sticky top-0 bg-white dark:bg-slate-900 px-3 py-2" style={{ borderBottom: '1px solid var(--nx-border)' }}>
                     <div className="relative">
                       <Search size={13} strokeWidth={2} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
                       <input
@@ -493,7 +493,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                         value={groupQuery}
                         onChange={e => setGroupQuery(e.target.value)}
                         className="w-full pl-8 pr-3 py-2 text-xs outline-none dark:bg-slate-900 dark:text-white"
-                        style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', fontWeight: 600, color: '#0F172A' }}
+                        style={{ border: '1.5px solid var(--nx-border)', backgroundColor: 'var(--nx-surface-subtle)', fontWeight: 600, color: 'var(--nx-text)' }}
                       />
                     </div>
                   </div>
@@ -506,7 +506,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                         key={g}
                         onClick={() => { setSelectedGroup(g); setGroupOpen(false); setGroupQuery(''); }}
                         className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                        style={{ color: g === selectedGroup ? '#003366' : '#334155', background: g === selectedGroup ? 'rgba(0,51,102,0.04)' : 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid #F8FAFC' }}
+                        style={{ color: g === selectedGroup ? 'var(--nx-accent)' : 'var(--nx-text)', background: g === selectedGroup ? 'color-mix(in oklch, var(--nx-accent) 4%, transparent)' : 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--nx-surface-subtle)' }}
                       >
                         {g}
                       </button>
@@ -523,23 +523,23 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
           {/* Warning: group selected but no activity today */}
           {selectedGroup && !groupLoading && groupStats && !hasActivity && (
-            <div className="flex items-center gap-3 p-5 bg-white dark:bg-slate-900" style={{ border: '1.5px solid #E2E8F0' }}>
+            <div className="flex items-center gap-3 p-5 bg-white dark:bg-slate-900" style={{ border: '1.5px solid var(--nx-border)' }}>
               <AlertTriangle size={20} strokeWidth={1.5} className="text-amber-400 shrink-0" />
               <div>
                 <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                  El grupo <span className="text-[#003366]">{selectedGroup}</span> no tiene registros de ingreso hoy
+                  El grupo <span className="text-[var(--nx-accent)]">{selectedGroup}</span> no tiene registros de ingreso hoy
                 </p>
-                <p style={{ fontSize: '11px', color: '#94A3B8' }}>Verifique que el nodo de control esté operativo o que los estudiantes hayan ingresado</p>
+                <p style={{ fontSize: '11px', color: 'var(--nx-text-muted)' }}>Verifique que el nodo de control esté operativo o que los estudiantes hayan ingresado</p>
               </div>
             </div>
           )}
 
           {/* 4 Stat cards — always clickable even with 0 values */}
           {selectedGroup && (
-            <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid #E2E8F0' }}>
+            <div className="grid grid-cols-2 md:grid-cols-4" style={{ border: '1.5px solid var(--nx-border)' }}>
               {groupLoading ? (
                 [1,2,3,4].map(i => (
-                  <div key={i} className="bg-white dark:bg-slate-900 text-center py-5 px-4" style={{ borderRight: i < 4 ? '1.5px solid #E2E8F0' : 'none' }}>
+                  <div key={i} className="bg-white dark:bg-slate-900 text-center py-5 px-4" style={{ borderRight: i < 4 ? '1.5px solid var(--nx-border)' : 'none' }}>
                     <Pulse className="h-10 w-16 mx-auto" />
                   </div>
                 ))
@@ -549,10 +549,10 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                     key={s.key}
                     onClick={() => openDetail(s.key)}
                     className="bg-white dark:bg-slate-900 text-center py-5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                    style={{ borderRight: i < 3 ? '1.5px solid #E2E8F0' : 'none' }}
+                    style={{ borderRight: i < 3 ? '1.5px solid var(--nx-border)' : 'none' }}
                   >
                     <p style={{ fontSize: '40px', fontWeight: 900, color: s.accent, lineHeight: 1 }}>{s.value}</p>
-                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase', marginTop: '6px' }}>
+                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', marginTop: '6px' }}>
                       {s.label}
                     </p>
                   </button>
@@ -564,21 +564,21 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           {/* ── Eventos Recientes ── */}
           <section>
             <SectionLabel title="Eventos Recientes" sub="Últimas novedades de tus grupos" />
-            <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid #E2E8F0', minHeight: '200px' }}>
+            <div className="bg-white dark:bg-slate-900 px-5 py-2" style={{ border: '1.5px solid var(--nx-border)', minHeight: '200px' }}>
               {eventsLoading
                 ? <StreamSkeleton />
                 : events.length > 0
                   ? events.map((ev, i) => (
                       <div key={i}
                            className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                           style={{ borderBottom: i < events.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
-                        <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? '#DC2626' : '#00A67E' }} />
+                           style={{ borderBottom: i < events.length - 1 ? '1.5px solid var(--nx-surface-subtle)' : 'none' }}>
+                        <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
-                          <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
+                          <p style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
                         </div>
                         {ev.issuer && (
-                          <p style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                          <p style={{ fontSize: '10px', color: 'var(--nx-text-muted)', fontWeight: 600 }}>
                             {ev.issuer}
                           </p>
                         )}
@@ -586,7 +586,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                     ))
                   : (
                     <div className="flex items-center justify-center h-40">
-                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                         Sin eventos recientes
                       </p>
                     </div>
@@ -752,8 +752,8 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
           disabled={isTracked}
           className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors flex items-center justify-end gap-1 w-full ${
             isTracked
-              ? "text-[#00A67E] bg-[#00A67E]/10"
-              : "text-[#003366] hover:bg-[#003366]/10"
+              ? "text-[var(--nx-success)] bg-[var(--nx-success)]/10"
+              : "text-[var(--nx-accent)] hover:bg-[var(--nx-accent)]/10"
           }`}
         >
           {isTracked ? (
@@ -781,19 +781,19 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       <motion.div key="t-dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
         className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
+        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid var(--nx-border)' }}
       >
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'rgba(0,51,102,0.08)' }}>
-              <Icon size={16} strokeWidth={2} style={{ color: config?.accent || '#003366' }} />
+            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 8%, transparent)' }}>
+              <Icon size={16} strokeWidth={2} style={{ color: config?.accent || 'var(--nx-accent)' }} />
             </div>
             <div>
-              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>
+              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: 'var(--nx-text)' }}>
                 {config?.label} — {groupName}
               </p>
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                 {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -814,25 +814,25 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 outline-none dark:bg-slate-900 dark:text-white"
-              style={{ border: '1.5px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '13px', fontWeight: 500, color: '#0F172A' }}
+              style={{ border: '1.5px solid var(--nx-border)', backgroundColor: 'var(--nx-surface-subtle)', fontSize: '13px', fontWeight: 500, color: 'var(--nx-text)' }}
             />
           </div>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
-              <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
-              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase' }}>
+              <Loader2 size={32} className="animate-spin text-[var(--nx-accent)] dark:text-slate-400" />
+              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                 Cargando datos...
               </p>
             </div>
           ) : filteredData.length > 0 ? (
-            <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
+            <div className="overflow-x-auto" style={{ border: '1.5px solid var(--nx-border)' }}>
               <table className="w-full min-w-[440px]">
                 <thead>
-                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                  <tr style={{ backgroundColor: 'var(--nx-surface-subtle)', borderBottom: '1.5px solid var(--nx-border)' }}>
                     {columns.map(col => (
                       <th key={col.key} className={col.key === '_action' ? "px-4 py-3 text-right" : "px-4 py-3 text-left"}
-                        style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                        style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                         {col.label}
                       </th>
                     ))}
@@ -841,7 +841,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                 <tbody className="bg-white dark:bg-slate-900">
                   {filteredData.map((row, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                      style={{ borderBottom: i < filteredData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      style={{ borderBottom: i < filteredData.length - 1 ? '1px solid var(--nx-border)' : 'none' }}>
                       {columns.map(col => (
                         <td key={col.key} className={col.key === '_action' ? "px-4 py-3 text-right" : "px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap"}>
                           {renderCell(col, row)}
@@ -859,10 +859,10 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
               <CalendarDays size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
               <div className="text-center space-y-1">
-                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                   {searchQuery ? 'Sin coincidencias' : 'Sin registros hoy'}
                 </p>
-                <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">
+                <p style={{ fontSize: '11px', color: 'var(--nx-text-muted)' }} className="max-w-xs">
                   {searchQuery
                     ? 'Ningún estudiante coincide con tu búsqueda.'
                     : emptyWarning
@@ -884,7 +884,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             className="fixed z-[60] bottom-6 right-6 bg-white dark:bg-slate-800 shadow-2xl rounded-lg border border-slate-200 dark:border-slate-700 p-4 max-w-sm flex flex-col gap-3"
           >
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#00A67E]/10 flex items-center justify-center text-[#00A67E] shrink-0 mt-0.5">
+              <div className="w-8 h-8 rounded-full bg-[var(--nx-success)]/10 flex items-center justify-center text-[var(--nx-success)] shrink-0 mt-0.5">
                 <CheckCircle2 size={18} strokeWidth={2.5} />
               </div>
               <div>
@@ -897,10 +897,10 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             </div>
             <div className="flex justify-end mt-1">
               <button 
-                onClick={() => navigate('/seguimiento')}
-                className="text-[10px] font-bold uppercase tracking-widest bg-[#003366] text-white px-4 py-2 rounded shadow-sm hover:bg-[#002244] transition-colors"
+                onClick={() => navigate('/casos')}
+                className="text-[10px] font-bold uppercase tracking-widest bg-[var(--nx-accent)] text-white px-4 py-2 rounded shadow-sm hover:bg-[var(--nx-accent)] transition-colors"
               >
-                Ir a Seguimiento
+                Ir a Casos Activos
               </button>
             </div>
           </motion.div>
@@ -946,25 +946,25 @@ const StaffDashboard = () => {
   return (
     <div className="space-y-5">
       <SectionLabel title="Panel de Servicio" sub="Eventos recientes" />
-      <div style={{ border: '1.5px solid #E2E8F0' }} className="bg-white dark:bg-slate-900">
+      <div style={{ border: '1.5px solid var(--nx-border)' }} className="bg-white dark:bg-slate-900">
         {eventsLoading
           ? <div className="p-6"><StreamSkeleton /></div>
           : stream.length > 0
             ? stream.map((ev, i) => (
                 <div key={i}
                      className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid #F1F5F9' : 'none' }}>
-                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? '#DC2626' : '#00A67E' }} />
+                     style={{ borderBottom: i < stream.length - 1 ? '1.5px solid var(--nx-surface-subtle)' : 'none' }}>
+                  <span className="shrink-0 h-1.5 w-1.5 rounded-full block" style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{ev.label}</p>
-                    <p style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
+                    <p style={{ fontSize: '9px', color: 'var(--nx-text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{ev.time}</p>
                   </div>
                   <ChevronRight size={14} strokeWidth={2} className="text-slate-300 shrink-0" />
                 </div>
               ))
             : (
               <div className="flex items-center justify-center py-16">
-                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                   Sin eventos recientes
                 </p>
               </div>

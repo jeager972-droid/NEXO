@@ -17,10 +17,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 /* ─── Section wrapper ─── */
 const SectionCard = ({ title, subtitle, children }) => (
-  <div className="bg-white dark:bg-slate-900 p-5 space-y-4" style={{ border: '1.5px solid #E2E8F0' }}>
+  <div className="bg-white dark:bg-slate-900 p-5 space-y-4" style={{ border: '1.5px solid var(--nx-border)' }}>
     <div>
-      <p className="text-xs font-black uppercase tracking-tight text-slate-800 dark:text-white">{title}</p>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">{subtitle}</p>
+      <p className="text-xs font-black uppercase tracking-tight" style={{ color: 'var(--nx-text)' }}>{title}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: 'var(--nx-text-muted)' }}>{subtitle}</p>
     </div>
     {children}
   </div>
@@ -29,7 +29,7 @@ const SectionCard = ({ title, subtitle, children }) => (
 /* ─── Text input ─── */
 const TextField = ({ label, value, onChange, type = 'text', placeholder, disabled, rightElement }) => (
   <div>
-    <label style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>{label}</label>
+    <label style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>{label}</label>
     <div className="relative">
       <input
         type={type}
@@ -38,7 +38,7 @@ const TextField = ({ label, value, onChange, type = 'text', placeholder, disable
         disabled={disabled}
         placeholder={placeholder}
         className="w-full px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-white bg-slate-50 dark:bg-slate-800 outline-none disabled:opacity-50"
-        style={{ border: '1.5px solid #E2E8F0', fontSize: '13px' }}
+        style={{ border: '1.5px solid var(--nx-border)', fontSize: '13px' }}
       />
       {rightElement && <div className="absolute right-2 top-1/2 -translate-y-1/2">{rightElement}</div>}
     </div>
@@ -131,7 +131,7 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
         <button
           onClick={sendCode}
           disabled={disabled || !target || countdown > 0}
-          className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#003366] hover:text-[#002855] disabled:opacity-40 transition-colors"
+          className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--nx-accent)] hover:text-[var(--nx-accent)] disabled:opacity-40 transition-colors"
         >
           <Send size={12} />
           {countdown > 0 ? `Reenviar en ${countdown}s` : 'Verificar vía WhatsApp'}
@@ -147,12 +147,12 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
             placeholder="000000"
             className="w-24 px-2 py-1.5 text-sm font-bold text-center tracking-widest bg-slate-50 dark:bg-slate-800 outline-none"
-            style={{ border: '1.5px solid #E2E8F0' }}
+            style={{ border: '1.5px solid var(--nx-border)' }}
           />
           <button
             onClick={verifyCode}
             disabled={code.length !== 6 || step === 'verifying'}
-            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#003366] text-white hover:bg-[#002855] disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[var(--nx-accent)] text-white hover:bg-[var(--nx-accent)] disabled:opacity-50 transition-colors"
           >
             {step === 'verifying' ? <Loader2 size={12} className="animate-spin" /> : 'Confirmar'}
           </button>
@@ -393,7 +393,7 @@ const Profile = () => {
     return (
       <div className="space-y-5">
         <div className="h-6 w-32 bg-slate-200 dark:bg-slate-800 animate-pulse" />
-        <div className="h-40 bg-slate-100 dark:bg-slate-800 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
+        <div className="h-40 bg-slate-100 dark:bg-slate-800 animate-pulse" style={{ border: '1.5px solid var(--nx-border)' }} />
       </div>
     );
   }
@@ -402,8 +402,8 @@ const Profile = () => {
     <div className="space-y-5 max-w-3xl">
       {/* Header */}
       <div>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Perfil</p>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Perfil</p>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
           Gestión de cuenta institucional
         </p>
       </div>
@@ -413,7 +413,7 @@ const Profile = () => {
         <div className="flex items-center gap-5">
           <div
             className="relative flex items-center justify-center w-20 h-20 text-2xl font-black text-white overflow-hidden cursor-pointer group shrink-0"
-            style={{ backgroundColor: '#003366' }}
+            style={{ backgroundColor: 'var(--nx-accent)' }}
             onClick={() => fileRef.current?.click()}
           >
             {profile?.profile_photo_url ? (
@@ -432,7 +432,7 @@ const Profile = () => {
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#003366] hover:bg-[#002855] text-white rounded transition-colors disabled:opacity-60"
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white rounded transition-colors disabled:opacity-60"
             >
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
               Cambiar foto
@@ -492,7 +492,7 @@ const Profile = () => {
           <button
             type="submit"
             disabled={actionLoading || !currentPassword || newPassword.length < 8 || !confirmPassword}
-            className="flex items-center gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider bg-[#003366] hover:bg-[#002855] text-white transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white transition-colors disabled:opacity-50"
           >
             {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
             Actualizar contraseña
@@ -534,7 +534,7 @@ const Profile = () => {
           </div>
         </div>
 
-        <div style={{ height: '1px', backgroundColor: '#F1F5F9' }} />
+        <div style={{ height: '1px', backgroundColor: 'var(--nx-surface-subtle)' }} />
 
         {/* Phone */}
         <div className="space-y-3">
@@ -593,7 +593,7 @@ const Profile = () => {
           )}
         </div>
 
-        <div style={{ height: '1px', backgroundColor: '#F1F5F9' }} />
+        <div style={{ height: '1px', backgroundColor: 'var(--nx-surface-subtle)' }} />
 
         {/* Backup email */}
         <div className="space-y-3">
@@ -641,9 +641,9 @@ const Profile = () => {
       {/* Delete confirmation modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(2,6,23,0.45)', backdropFilter: 'blur(2px)' }}>
-          <div className="bg-white dark:bg-slate-900 p-6 w-full max-w-sm" style={{ border: '1.5px solid #E2E8F0' }}>
+          <div className="bg-white dark:bg-slate-900 p-6 w-full max-w-sm" style={{ border: '1.5px solid var(--nx-border)' }}>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 flex items-center justify-center bg-red-50" style={{ border: '1px solid #FECACA' }}>
+              <div className="w-8 h-8 flex items-center justify-center" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-danger) 8%, transparent)', border: '1px solid color-mix(in oklch, var(--nx-danger) 25%, transparent)' }}>
                 <AlertTriangle size={16} className="text-red-500" />
               </div>
               <p className="text-xs font-black uppercase tracking-tight text-slate-800 dark:text-white">Confirmar eliminación</p>
@@ -655,7 +655,7 @@ const Profile = () => {
               <button
                 onClick={cancelDelete}
                 className="flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 transition-colors"
-                style={{ border: '1.5px solid #E2E8F0' }}
+                style={{ border: '1.5px solid var(--nx-border)' }}
               >
                 Cancelar
               </button>
@@ -676,9 +676,9 @@ const Profile = () => {
 
 function InfoRow({ label, value }) {
   return (
-    <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50" style={{ border: '1px solid #F1F5F9' }}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">{label}</p>
-      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{value}</p>
+    <div className="px-4 py-3" style={{ backgroundColor: 'var(--nx-surface-subtle)', border: '1px solid var(--nx-surface-subtle)' }}>
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--nx-text-muted)' }}>{label}</p>
+      <p className="text-xs font-semibold" style={{ color: 'var(--nx-text)' }}>{value}</p>
     </div>
   );
 }

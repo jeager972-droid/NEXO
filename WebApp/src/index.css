@@ -1,14 +1,46 @@
 /**
  * WebApp global styles / NEXO Institucional
- * Responsabilidad: Cargar directivas Tailwind y ajustes globales (fuente Inter Variable,
- * safe-area insets, base 16px para inputs). Separa el aspecto visual de los componentes.
- * Dependencias: Tailwind CSS v3, tokens definidos en tailwind.config.js.
+ * NEXO Quiet Operations — Design tokens from 03_DESIGN_SYSTEM.md
+ * Dependencias: Tailwind CSS v3, Inter Variable.
  */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens — Light theme (default) ── */
 :root {
+  /* Color */
+  --nx-canvas:        oklch(98% 0.006 245);
+  --nx-surface:       oklch(99.3% 0.004 245);
+  --nx-surface-subtle: oklch(96% 0.009 245);
+  --nx-text:          oklch(23% 0.018 245);
+  --nx-text-muted:    oklch(48% 0.018 245);
+  --nx-border:        oklch(88% 0.010 245);
+  --nx-accent:        oklch(48% 0.115 245);
+  --nx-accent-text:   oklch(99% 0.005 245);
+  --nx-success:       oklch(52% 0.125 155);
+  --nx-warning:       oklch(62% 0.135 70);
+  --nx-danger:        oklch(52% 0.175 25);
+
+  /* Radii */
+  --nx-radius-control: 8px;
+  --nx-radius-surface: 12px;
+  --nx-radius-panel:   16px;
+
+  /* Shadows */
+  --nx-shadow-low:    0 1px 2px 0 oklch(23% 0.018 245 / 0.04);
+  --nx-shadow-medium: 0 2px 8px -1px oklch(23% 0.018 245 / 0.06), 0 1px 3px -1px oklch(23% 0.018 245 / 0.04);
+  --nx-shadow-high:   0 8px 24px -4px oklch(23% 0.018 245 / 0.08), 0 4px 12px -4px oklch(23% 0.018 245 / 0.05);
+  --nx-shadow-dialog: 0 12px 40px -8px oklch(23% 0.018 245 / 0.12), 0 4px 16px -4px oklch(23% 0.018 245 / 0.06);
+
+  /* Motion */
+  --nx-ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --nx-fast:        150ms;
+  --nx-standard:    200ms;
+  --nx-deliberate:  250ms;
+  --nx-max:         300ms;
+
+  /* Typography */
   font-family: 'Inter Variable', Inter, system-ui, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   font-variation-settings: 'wght' 400;
@@ -17,11 +49,26 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Dark theme overrides ── */
+.dark {
+  --nx-canvas:        oklch(18% 0.008 245);
+  --nx-surface:       oklch(22% 0.009 245);
+  --nx-surface-subtle: oklch(26% 0.010 245);
+  --nx-text:          oklch(94% 0.007 245);
+  --nx-text-muted:    oklch(72% 0.012 245);
+  --nx-border:        oklch(35% 0.012 245);
+  --nx-accent:        oklch(72% 0.105 245);
+  --nx-success:       oklch(72% 0.115 155);
+  --nx-warning:       oklch(78% 0.120 70);
+  --nx-danger:        oklch(72% 0.145 25);
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #F8FAFC;
+  background-color: var(--nx-canvas);
+  color: var(--nx-text);
   padding-top: env(safe-area-inset-top);
   padding-right: env(safe-area-inset-right);
   padding-bottom: env(safe-area-inset-bottom);
@@ -37,4 +84,47 @@ input,
 select,
 textarea {
   font-size: 16px;
+}
+
+/* ── Reduced motion — 03_DESIGN_SYSTEM.md §1.5 ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Scrollbar — minimal, matches design system ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--nx-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nx-text-muted);
+}
+
+/* ── Focus visible — 03_DESIGN_SYSTEM.md §2: perímetro sólido ≥2px ── */
+*:focus-visible {
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+}
+
+/* ── Skeleton shimmer ── */
+.nx-skeleton {
+  background: var(--nx-surface-subtle);
+  animation: nx-shimmer 1.8s ease-in-out infinite;
+}
+@keyframes nx-shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }

@@ -72,17 +72,17 @@ const Notifications = () => {
 
   const getIcon = (type) => {
     switch (type) {
-      case 'SOS':     return { icon: AlertTriangle, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' };
-      case 'INFO':    return { icon: Info,          color: '#003366', bg: '#F0F5FF', border: '#BFDBFE' };
-      case 'SUCCESS': return { icon: CheckCircle2,  color: '#00A67E', bg: '#ECFDF5', border: '#A7F3D0' };
-      default:        return { icon: Bell,           color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' };
+      case 'SOS':     return { icon: AlertTriangle, color: 'var(--nx-danger)', bg: 'color-mix(in oklch, var(--nx-danger) 8%, transparent)', border: 'color-mix(in oklch, var(--nx-danger) 20%, transparent)' };
+      case 'INFO':    return { icon: Info,          color: 'var(--nx-accent)', bg: 'color-mix(in oklch, var(--nx-accent) 8%, transparent)', border: 'color-mix(in oklch, var(--nx-accent) 20%, transparent)' };
+      case 'SUCCESS': return { icon: CheckCircle2,  color: 'var(--nx-success)', bg: 'color-mix(in oklch, var(--nx-success) 8%, transparent)', border: 'color-mix(in oklch, var(--nx-success) 20%, transparent)' };
+      default:        return { icon: Bell,           color: 'var(--nx-text-muted)', bg: 'var(--nx-surface-subtle)', border: 'var(--nx-border)' };
     }
   };
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
+        <Loader2 size={28} strokeWidth={1.5} className="text-[var(--nx-accent)] animate-spin" />
         <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Cargando…</p>
       </div>
     );
@@ -92,11 +92,11 @@ const Notifications = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">
+        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', letterSpacing: '-0.01em' }} className="dark:text-slate-200">
           {isStaff ? 'Centro de Órdenes' : 'Notificaciones'}
         </p>
         <div className="flex items-center gap-4 mt-1">
-          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
+          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none' }}>
             {isStaff ? 'Instrucciones directas de directivos' : 'Alertas y mensajes del sistema institucional'}
           </p>
           {/* Botón vaciar — inline junto al subtítulo */}
@@ -107,7 +107,7 @@ const Notifications = () => {
               className="flex items-center gap-1 shrink-0 transition-colors"
               style={{
                 fontSize: '9px', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
-                color: clearing ? '#CBD5E1' : '#94A3B8',
+                color: clearing ? 'var(--nx-text-muted)' : 'var(--nx-text-muted)',
                 cursor: clearing ? 'not-allowed' : 'pointer',
                 background: 'none', border: 'none', padding: '0',
               }}
@@ -123,7 +123,7 @@ const Notifications = () => {
       </div>
 
       {/* Card */}
-      <div className="bg-white dark:bg-slate-900" style={{ border: '1.5px solid #E2E8F0' }}>
+      <div className="bg-white dark:bg-slate-900" style={{ border: '1.5px solid var(--nx-border)' }}>
         <AnimatePresence>
           {notifications.length > 0 ? (
             <div>
@@ -137,7 +137,7 @@ const Notifications = () => {
                     exit={{ opacity: 0, x: -8 }}
                     transition={{ duration: 0.2, delay: i * 0.04 }}
                     className="flex items-start gap-4 px-5 py-4 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
-                    style={{ borderBottom: i < notifications.length - 1 ? '1px solid #F1F5F9' : 'none' }}
+                    style={{ borderBottom: i < notifications.length - 1 ? '1px solid var(--nx-surface-subtle)' : 'none' }}
                   >
                     {/* Icon */}
                     <div
@@ -165,7 +165,7 @@ const Notifications = () => {
                           <button
                             onClick={() => setDetailNotif(notif)}
                             className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                              notif.type === 'SOS' ? 'text-red-600 hover:text-red-700' : 'text-[#003366] hover:text-[#002855]'
+                              notif.type === 'SOS' ? 'text-red-600 hover:text-red-700' : 'text-[var(--nx-accent)] hover:text-[var(--nx-accent)]'
                             }`}
                           >
                             <Eye size={12} /> Ver detalles
@@ -174,7 +174,7 @@ const Notifications = () => {
                       )}
                       {notif.sender && (
                         <div className="mt-2 flex items-center gap-2">
-                          <div className="w-5 h-5 flex items-center justify-center bg-slate-100 dark:bg-slate-800" style={{ border: '1px solid #E2E8F0' }}>
+                          <div className="w-5 h-5 flex items-center justify-center bg-slate-100 dark:bg-slate-800" style={{ border: '1px solid var(--nx-border)' }}>
                             <User size={10} className="text-slate-400" />
                           </div>
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Origen: {notif.sender}</span>
@@ -218,14 +218,14 @@ const Notifications = () => {
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
               className="fixed right-0 z-50 bg-white dark:bg-slate-900 w-full overflow-y-auto"
-              style={{ top: '56px', bottom: 0, maxWidth: '420px', borderLeft: '1.5px solid #E2E8F0' }}
+              style={{ top: '56px', bottom: 0, maxWidth: '420px', borderLeft: '1.5px solid var(--nx-border)' }}
             >
-              <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+              <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
                 <div>
-                  <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>
+                  <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: 'var(--nx-text)' }}>
                     {detailNotif.title}
                   </p>
-                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                  <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                     Detalles de la notificación
                   </p>
                 </div>
@@ -253,7 +253,7 @@ const Notifications = () => {
                   ].filter(Boolean);
                   return fields.map((f, i) => (
                     <div key={i}>
-                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }} className="mb-1">{f.label}</p>
+                      <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }} className="mb-1">{f.label}</p>
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{f.value}</p>
                     </div>
                   ));
@@ -264,14 +264,14 @@ const Notifications = () => {
                   const meta = parseMeta(detailNotif.metadata_json);
                   if (meta?.action === 'iniciar_seguimiento' && meta?.student_id) {
                     return (
-                      <div className="pt-4 mt-2" style={{ borderTop: '1.5px solid #F1F5F9' }}>
+                      <div className="pt-4 mt-2" style={{ borderTop: '1.5px solid var(--nx-surface-subtle)' }}>
                         <button
                           onClick={async () => {
                             try {
                               const data = await trackingApi.startTracking(meta.student_id);
                               if (data.status === 'ok') {
                                 setDetailNotif(null);
-                                navigate('/seguimiento');
+                                navigate('/casos');
                                 // Refrescar notificaciones
                                 window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count: -1 } }));
                               } else {
@@ -283,7 +283,7 @@ const Notifications = () => {
                             }
                           }}
                           className="w-full py-3 text-xs font-bold uppercase text-white transition-colors"
-                          style={{ backgroundColor: '#003366', letterSpacing: '0.15em' }}
+                          style={{ backgroundColor: 'var(--nx-accent)', letterSpacing: '0.15em' }}
                         >
                           Empezar Seguimiento
                         </button>

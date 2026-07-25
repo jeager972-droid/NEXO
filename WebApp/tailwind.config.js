@@ -15,62 +15,61 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter Variable', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
-        // Azul Institucional profundo — identidad gubernamental
-        gov: {
-          50:  '#E8EEF5',
-          100: '#C5D4E8',
-          200: '#9BB5D5',
-          300: '#6E95C2',
-          400: '#4D7DB4',
-          500: '#2B65A5',
-          600: '#1A4F8A',
-          700: '#0D3A70',
-          800: '#052955',
-          900: '#003366', // Primary — Azul Institucional
-          950: '#001F40',
+        // NEXO Quiet Operations — OKLCH semantic tokens (03_DESIGN_SYSTEM.md)
+        canvas: {
+          DEFAULT: 'oklch(98% 0.006 245)',
+          dark:    'oklch(18% 0.008 245)',
         },
-        // Verde Esmeralda biométrico — estado activo / verificado
-        bio: {
-          50:  '#E6F7F3',
-          100: '#C0EDE3',
-          200: '#85DACC',
-          300: '#3EC4AF',
-          400: '#00B28E',
-          500: '#00A67E', // Primary — Biometric active
-          600: '#008F6B',
-          700: '#007558',
-          800: '#005C44',
-          900: '#003D2D',
-          950: '#001F17',
-        },
-        // Blancos quirúrgicos y grises slate para superficies
         surface: {
-          0:   '#FFFFFF',
-          50:  '#F8FAFC',
-          100: '#F1F5F9',
-          200: '#E8EDF3',
-          300: '#CBD5E1',
+          DEFAULT:     'oklch(99.3% 0.004 245)',
+          dark:        'oklch(22% 0.009 245)',
+          subtle:      'oklch(96% 0.009 245)',
+          'subtle-dark': 'oklch(26% 0.010 245)',
         },
-        // Borde estándar: Slate-200
-        border: {
-          DEFAULT: '#E2E8F0',
-          strong:  '#CBD5E1',
-          subtle:  '#F1F5F9',
+        // Semantic text colors
+        ink: {
+          DEFAULT: 'oklch(23% 0.018 245)',
+          dark:    'oklch(94% 0.007 245)',
+          muted:   'oklch(48% 0.018 245)',
+          'muted-dark': 'oklch(72% 0.012 245)',
         },
-        // Estado de alerta / error
-        alert: {
-          50:  '#FEF2F2',
-          100: '#FEE2E2',
-          500: '#EF4444',
-          600: '#DC2626',
-          900: '#7F1D1D',
+        // Borders
+        line: {
+          DEFAULT: 'oklch(88% 0.010 245)',
+          dark:    'oklch(35% 0.012 245)',
+        },
+        // Accent — Azul institucional
+        accent: {
+          DEFAULT: 'oklch(48% 0.115 245)',
+          dark:    'oklch(72% 0.105 245)',
+          text:    'oklch(99% 0.005 245)',
+          surface: 'oklch(from oklch(48% 0.115 245) l c h / 0.08)',
+        },
+        // Success — Verde
+        success: {
+          DEFAULT: 'oklch(52% 0.125 155)',
+          dark:    'oklch(72% 0.115 155)',
+          surface: 'oklch(from oklch(52% 0.125 155) l c h / 0.10)',
+        },
+        // Warning — Naranja
+        warning: {
+          DEFAULT: 'oklch(62% 0.135 70)',
+          dark:    'oklch(78% 0.120 70)',
+          surface: 'oklch(from oklch(62% 0.135 70) l c h / 0.10)',
+        },
+        // Danger — Rojo
+        danger: {
+          DEFAULT: 'oklch(52% 0.175 25)',
+          dark:    'oklch(72% 0.145 25)',
+          surface: 'oklch(from oklch(52% 0.175 25) l c h / 0.10)',
         },
       },
       spacing: {
+        // NEXO scale: 4, 8, 12, 16, 24, 32, 48, 64
         '4.5': '1.125rem',
         '13':  '3.25rem',
         '15':  '3.75rem',
@@ -80,6 +79,10 @@ export default {
         '30':  '7.5rem',
       },
       borderRadius: {
+        // 03_DESIGN_SYSTEM.md: 8 controls, 12 surfaces, 16 panels
+        'control': '8px',
+        'surface': '12px',
+        'panel':   '16px',
         'xs':  '0.25rem',
         'sm':  '0.375rem',
         '2xl': '1rem',
@@ -90,33 +93,49 @@ export default {
         '1.5': '1.5px',
       },
       boxShadow: {
-        // Sombras "soft-inner" — profundidad sin dramatismo
-        'soft':       '0 2px 8px -1px rgba(0,51,102,0.06), 0 1px 3px -1px rgba(0,51,102,0.04)',
-        'soft-md':    '0 4px 16px -2px rgba(0,51,102,0.08), 0 2px 6px -2px rgba(0,51,102,0.05)',
-        'soft-lg':    '0 8px 32px -4px rgba(0,51,102,0.10), 0 4px 12px -4px rgba(0,51,102,0.06)',
-        'inner-soft': 'inset 0 1px 3px 0 rgba(0,51,102,0.06)',
-        'gov':        '0 4px 24px -4px rgba(0,51,102,0.18)',
-        'bio':        '0 4px 20px -4px rgba(0,166,126,0.30)',
-        'none':       'none',
+        // 03_DESIGN_SYSTEM.md: sombras solo para superposición, nunca decoración
+        'low':    '0 1px 2px 0 oklch(23% 0.018 245 / 0.04)',
+        'medium': '0 2px 8px -1px oklch(23% 0.018 245 / 0.06), 0 1px 3px -1px oklch(23% 0.018 245 / 0.04)',
+        'high':   '0 8px 24px -4px oklch(23% 0.018 245 / 0.08), 0 4px 12px -4px oklch(23% 0.018 245 / 0.05)',
+        'dialog': '0 12px 40px -8px oklch(23% 0.018 245 / 0.12), 0 4px 16px -4px oklch(23% 0.018 245 / 0.06)',
+        'none':   'none',
       },
       fontSize: {
-        '2xs': ['0.625rem', { lineHeight: '0.875rem', letterSpacing: '0.08em' }],
-        'xs':  ['0.75rem',  { lineHeight: '1rem',     letterSpacing: '0.04em' }],
+        // 03_DESIGN_SYSTEM.md typography tokens
+        'display':  ['2rem',    { lineHeight: '2.375rem', fontWeight: '650' }],
+        'h1':       ['1.75rem', { lineHeight: '2.125rem', fontWeight: '650' }],
+        'h2':       ['1.375rem',{ lineHeight: '1.75rem',  fontWeight: '620' }],
+        'h3':       ['1.125rem',{ lineHeight: '1.5rem',   fontWeight: '620' }],
+        'body':     ['1rem',    { lineHeight: '1.5rem',   fontWeight: '430' }],
+        'body-sm':  ['0.875rem',{ lineHeight: '1.25rem',  fontWeight: '450' }],
+        'label':    ['0.875rem',{ lineHeight: '1.125rem', fontWeight: '600' }],
+        'caption':  ['0.75rem', { lineHeight: '1rem',     fontWeight: '520' }],
+        '2xs':      ['0.625rem',{ lineHeight: '0.875rem', letterSpacing: '0.08em' }],
+        'xs':       ['0.75rem', { lineHeight: '1rem',     letterSpacing: '0.04em' }],
       },
       letterSpacing: {
         'widest-2': '0.2em',
         'widest-3': '0.3em',
       },
       transitionTimingFunction: {
+        // 03_DESIGN_SYSTEM.md: cubic-bezier(.22,1,.36,1)
+        'out': 'cubic-bezier(0.22, 1, 0.36, 1)',
         'gov': 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       },
       transitionDuration: {
+        // 03_DESIGN_SYSTEM.md: instant 0, fast 150, standard 200, deliberate 250, max 300
+        'instant': '0ms',
+        'fast':    '150ms',
+        'standard':'200ms',
+        'deliberate': '250ms',
+        'max':     '300ms',
         '250': '250ms',
         '400': '400ms',
       },
       animation: {
         'pulse-bio': 'pulse-bio 2.4s cubic-bezier(0.4,0,0.6,1) infinite',
         'scan':      'scan 1.8s ease-in-out infinite',
+        'skeleton':  'skeleton 1.8s ease-in-out infinite',
       },
       keyframes: {
         'pulse-bio': {
@@ -128,6 +147,10 @@ export default {
           '20%':  { opacity: '1' },
           '80%':  { opacity: '1' },
           '100%': { transform: 'translateY(100%)', opacity: '0' },
+        },
+        'skeleton': {
+          '0%, 100%': { opacity: '1' },
+          '50%':      { opacity: '0.5' },
         },
       },
     },

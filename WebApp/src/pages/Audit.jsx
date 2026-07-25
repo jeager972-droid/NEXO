@@ -95,15 +95,15 @@ const Audit = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Consulta</p>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
+        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', letterSpacing: '-0.01em' }} className="dark:text-slate-200">Consulta</p>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none', marginTop: '4px' }}>
           Panel de control de registros de la institución educativa {user?.school_name || ''}
         </p>
       </div>
 
       {/* ── Module grid ── */}
       <section>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '12px', userSelect: 'none' }}>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', marginBottom: '12px', userSelect: 'none' }}>
           Módulos de Reporte
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -112,21 +112,21 @@ const Audit = () => {
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: idx * 0.03 }}
               className="bg-white dark:bg-slate-900"
-              style={{ border: '1.5px solid #E2E8F0' }}
+              style={{ border: '1.5px solid var(--nx-border)' }}
             >
               {/* Module header */}
-              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
                 <div className="flex items-center gap-2.5">
-                  <div className="flex items-center justify-center w-7 h-7" style={{ backgroundColor: 'rgba(0,51,102,0.07)', color: '#003366' }}>
+                  <div className="flex items-center justify-center w-7 h-7" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 7%, transparent)', color: 'var(--nx-accent)' }}>
                     <mod.icon size={14} strokeWidth={2} />
                   </div>
-                  <p className="text-xs font-black uppercase dark:text-white" style={{ letterSpacing: '0.08em', color: '#1E293B' }}>{mod.title}</p>
+                  <p className="text-xs font-black uppercase dark:text-white" style={{ letterSpacing: '0.08em', color: 'var(--nx-text)' }}>{mod.title}</p>
                 </div>
                 {/* Export buttons */}
                 <div className="flex items-center gap-1">
                   {mod.exports.map((exp, i) => (
                     <button key={i} onClick={() => setExportModal({ module: mod, format: exp })}
-                      className="flex items-center gap-1 px-2 py-1 text-slate-400 hover:text-[#003366] hover:bg-[#003366]/5 dark:hover:bg-[#003366]/10 transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 text-slate-400 hover:text-[var(--nx-accent)] hover:bg-[var(--nx-accent)]/5 dark:hover:bg-[var(--nx-accent)]/10 transition-colors"
                       title={`Descargar ${exp}`}>
                       {exp === 'Excel' ? <FileSpreadsheet size={12} strokeWidth={2} />
                         : exp === 'PDF' ? <FilePdf size={12} strokeWidth={2} />
@@ -139,8 +139,8 @@ const Audit = () => {
               <div>
                 {mod.subdivisions.map((sub, i) => (
                   <button key={i} onClick={() => setActiveSub(sub)}
-                    className="group flex items-center justify-between w-full px-4 py-2.5 text-left bg-white dark:bg-slate-900 hover:bg-gov-900 dark:hover:bg-gov-900 transition-colors duration-150"
-                    style={{ borderBottom: i < mod.subdivisions.length - 1 ? '1px solid #F8FAFC' : 'none' }}>
+                    className="group flex items-center justify-between w-full px-4 py-2.5 text-left bg-white dark:bg-slate-900 hover:bg-[var(--nx-accent)] transition-colors duration-150"
+                    style={{ borderBottom: i < mod.subdivisions.length - 1 ? '1px solid var(--nx-surface-subtle)' : 'none' }}>
                     <span className="text-xs font-medium text-slate-600 dark:text-slate-400 group-hover:text-white transition-colors truncate"
                           style={{ letterSpacing: '0.04em' }}>{sub}</span>
                     <ChevronRight size={11} strokeWidth={2} className="text-slate-300 group-hover:text-white/60 transition-colors shrink-0 ml-2" />
@@ -163,16 +163,16 @@ const Audit = () => {
             <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
               className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-              style={{ top: '56px', bottom: 0, borderLeft: '1.5px solid #E2E8F0' }}
+              style={{ top: '56px', bottom: 0, borderLeft: '1.5px solid var(--nx-border)' }}
             >
-              <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+              <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'rgba(0,51,102,0.08)' }}>
-                    <Activity size={16} strokeWidth={2} style={{ color: '#003366' }} />
+                  <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 8%, transparent)' }}>
+                    <Activity size={16} strokeWidth={2} style={{ color: 'var(--nx-accent)' }} />
                   </div>
                   <div>
-                    <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>{activeSub}</p>
-                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>Módulo de Auditoría</p>
+                    <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: 'var(--nx-text)' }}>{activeSub}</p>
+                    <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>Módulo de Auditoría</p>
                   </div>
                 </div>
                 <button onClick={() => setActiveSub(null)} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
@@ -336,7 +336,7 @@ function AuditDrawer({ activeSub, onClose }) {
                 <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="date" value={filters.from}
                   onChange={e => setFilters(p => ({ ...p, from: e.target.value }))}
-                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--nx-accent)]/30 focus:border-[var(--nx-accent)]"
                 />
               </div>
             </div>
@@ -346,7 +346,7 @@ function AuditDrawer({ activeSub, onClose }) {
                 <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="date" value={filters.to}
                   onChange={e => setFilters(p => ({ ...p, to: e.target.value }))}
-                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]"
+                  className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--nx-accent)]/30 focus:border-[var(--nx-accent)]"
                 />
               </div>
             </div>
@@ -400,7 +400,7 @@ function AuditDrawer({ activeSub, onClose }) {
         <button
           onClick={handleSearch}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#003366] hover:bg-[#002855] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
           Consultar
@@ -411,7 +411,7 @@ function AuditDrawer({ activeSub, onClose }) {
       <div className="flex-1 overflow-auto">
         {loading && (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
-            <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
+            <Loader2 size={28} strokeWidth={1.5} className="text-[var(--nx-accent)] animate-spin" />
             <p className="text-xs text-slate-400 font-medium">Consultando registros…</p>
           </div>
         )}
@@ -446,7 +446,7 @@ function AuditDrawer({ activeSub, onClose }) {
                 {Object.entries(stats).map(([k, v]) => (
                   <div key={k} className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 dark:bg-slate-800/50 dark:border-slate-700">
                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">{humanizeColumn(k)}</p>
-                    <p className="text-lg font-black text-[#003366] dark:text-slate-100">{v ?? 0}</p>
+                    <p className="text-lg font-black text-[var(--nx-accent)] dark:text-slate-100">{v ?? 0}</p>
                   </div>
                 ))}
               </div>
@@ -531,7 +531,7 @@ function SearchableSelect({ label, options, value, onChange, placeholder, loadin
                 value={q}
                 onChange={e => setQ(e.target.value)}
                 placeholder="Buscar…"
-                className="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-[#003366]"
+                className="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-[var(--nx-accent)]"
                 onClick={e => e.stopPropagation()}
               />
             </div>
@@ -543,7 +543,7 @@ function SearchableSelect({ label, options, value, onChange, placeholder, loadin
             <div
               key={o.id}
               onClick={() => { onChange(o.id); setOpen(false); setQ(''); }}
-              className={`px-3 py-2 text-xs cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-slate-700 ${o.id === value ? 'bg-[#003366]/5 text-[#003366] font-semibold' : 'text-slate-700 dark:text-slate-200'}`}
+              className={`px-3 py-2 text-xs cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-slate-700 ${o.id === value ? 'bg-[var(--nx-accent)]/5 text-[var(--nx-accent)] font-semibold' : 'text-slate-700 dark:text-slate-200'}`}
             >
               {o.name}
             </div>
@@ -629,13 +629,13 @@ function ExportModalContent({ module, format, onClose }) {
     const html = `
       <html><head><meta charset="utf-8">
       <style>
-        body{font-family:sans-serif;margin:40px;color:#1E293B}
-        h1{font-size:16px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.06em}
-        h2{font-size:11px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.2em;margin-top:4px}
+        body{font-family:sans-serif;margin:40px;color:var(--nx-text)}
+        h1{font-size:16px;font-weight:800;color:var(--nx-accent);text-transform:uppercase;letter-spacing:0.06em}
+        h2{font-size:11px;color:var(--nx-text-muted);text-transform:uppercase;letter-spacing:0.2em;margin-top:4px}
         table{width:100%;border-collapse:collapse;margin-top:24px;font-size:10px}
-        th{background:#F1F5F9;border-bottom:2px solid #003366;padding:8px;text-align:left;text-transform:uppercase;letter-spacing:0.1em;font-size:9px;color:#64748B}
-        td{border-bottom:1px solid #E2E8F0;padding:8px}
-        .meta{color:#94A3B8;font-size:9px;margin-top:16px}
+        th{background:var(--nx-surface-subtle);border-bottom:2px solid var(--nx-accent);padding:8px;text-align:left;text-transform:uppercase;letter-spacing:0.1em;font-size:9px;color:var(--nx-text-muted)}
+        td{border-bottom:1px solid var(--nx-border);padding:8px}
+        .meta{color:var(--nx-text-muted);font-size:9px;margin-top:16px}
       </style></head><body>
       <h1>${module.title} — ${sub}</h1>
       <h2>Periodo: ${from} a ${to}</h2>
@@ -687,7 +687,7 @@ function ExportModalContent({ module, format, onClose }) {
         <div className="space-y-1 max-h-40 overflow-auto pr-1">
           {module.subdivisions.map(s => (
             <button key={s} onClick={() => setSub(s)}
-              className={`w-full text-left px-3 py-2 text-xs rounded transition-colors ${sub === s ? 'bg-[#003366] text-white font-semibold' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+              className={`w-full text-left px-3 py-2 text-xs rounded transition-colors ${sub === s ? 'bg-[var(--nx-accent)] text-white font-semibold' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
               {s}
             </button>
           ))}
@@ -698,17 +698,17 @@ function ExportModalContent({ module, format, onClose }) {
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Desde</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30" />
+            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--nx-accent)]/30" />
         </div>
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Hasta</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30" />
+            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--nx-accent)]/30" />
         </div>
       </div>
 
       <button onClick={handleDownload} disabled={!sub || loading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#003366] hover:bg-[#002855] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60">
         {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
         Descargar {format}
       </button>

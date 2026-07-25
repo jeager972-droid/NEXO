@@ -39,10 +39,13 @@
     --nx-space-8: 8px;
     --nx-space-12: 12px;
     --nx-space-16: 16px;
+    --nx-space-20: 20px;
     --nx-space-24: 24px;
     --nx-space-32: 32px;
+    --nx-space-40: 40px;
     --nx-space-48: 48px;
     --nx-space-64: 64px;
+    --nx-space-80: 80px;
   }
   .nexo-ds {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -50,92 +53,153 @@
     color: var(--nx-text);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    padding: var(--nx-space-48);
-    max-width: 1200px;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
+    padding: var(--nx-space-64) var(--nx-space-48);
+    max-width: 1280px;
     margin: 0 auto;
+    position: relative;
+  }
+  .nexo-ds::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--nx-accent), oklch(52% 0.125 245), var(--nx-accent));
+    border-radius: 0 0 2px 2px;
   }
   .nexo-ds h1, .nexo-ds h2, .nexo-ds h3, .nexo-ds h4 { margin: 0; font-weight: 650; letter-spacing: -0.02em; }
   .nexo-ds p { margin: 0; }
-  .nx-header { display: flex; align-items: center; gap: var(--nx-space-16); margin-bottom: var(--nx-space-48); padding-bottom: var(--nx-space-32); border-bottom: 1px solid var(--nx-border); }
-  .nx-logo { width: 48px; height: 48px; background: var(--nx-accent); border-radius: var(--nx-radius-control); display: grid; place-items: center; color: var(--nx-accent-text); font-weight: 700; font-size: 20px; flex-shrink: 0; }
+  .nx-header { display: flex; align-items: center; gap: var(--nx-space-20); margin-bottom: var(--nx-space-64); padding-bottom: var(--nx-space-40); border-bottom: 1px solid var(--nx-border); }
+  .nx-logo { width: 52px; height: 52px; background: var(--nx-accent); border-radius: var(--nx-radius-control); display: grid; place-items: center; color: var(--nx-accent-text); font-weight: 700; font-size: 22px; flex-shrink: 0; box-shadow: 0 2px 8px -2px oklch(48% 0.115 245 / 0.30); }
+  .nx-header-text { flex: 1; }
   .nx-header-text h1 { font-size: 32px; line-height: 38px; font-weight: 650; }
   .nx-header-text p { font-size: 14px; line-height: 20px; font-weight: 450; color: var(--nx-text-muted); margin-top: var(--nx-space-4); }
-  .nx-section { margin-bottom: var(--nx-space-64); }
-  .nx-section-title { font-size: 22px; line-height: 28px; font-weight: 620; margin-bottom: var(--nx-space-24); color: var(--nx-text); }
-  .nx-section-subtitle { font-size: 14px; line-height: 20px; font-weight: 450; color: var(--nx-text-muted); margin-bottom: var(--nx-space-24); max-width: 720px; }
-  .nx-philosophy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--nx-space-16); }
-  .nx-philosophy-card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); }
-  .nx-philosophy-card h3 { font-size: 18px; line-height: 24px; font-weight: 620; margin-bottom: var(--nx-space-8); }
-  .nx-philosophy-card p { font-size: 14px; line-height: 20px; font-weight: 430; color: var(--nx-text-muted); }
-  .nx-philosophy-card .nx-antipattern { display: block; margin-top: var(--nx-space-12); font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); font-style: italic; }
-  .nx-color-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--nx-space-24); }
-  .nx-color-family { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); }
-  .nx-color-family h3 { font-size: 14px; line-height: 18px; font-weight: 600; margin-bottom: var(--nx-space-16); color: var(--nx-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  .nx-swatch-row { display: flex; flex-direction: column; gap: var(--nx-space-12); }
-  .nx-swatch { display: flex; align-items: center; gap: var(--nx-space-12); padding: var(--nx-space-12); border-radius: var(--nx-radius-control); border: 1px solid var(--nx-border); }
-  .nx-swatch-color { width: 40px; height: 40px; border-radius: var(--nx-radius-control); border: 1px solid var(--nx-border); flex-shrink: 0; }
-  .nx-swatch-info { display: flex; flex-direction: column; gap: 2px; }
+  .nx-header-badge { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--nx-space-12); border-radius: var(--nx-radius-pill); background: oklch(from var(--nx-accent) l c h / 0.08); border: 1px solid oklch(from var(--nx-accent) l c h / 0.15); font-size: 12px; font-weight: 600; color: var(--nx-accent); flex-shrink: 0; }
+  .nx-header-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--nx-accent); }
+  .nx-section { margin-bottom: var(--nx-space-80); }
+  .nx-section-header { display: flex; align-items: baseline; gap: var(--nx-space-16); margin-bottom: var(--nx-space-12); }
+  .nx-section-num { font-size: 13px; line-height: 18px; font-weight: 700; color: var(--nx-accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; flex-shrink: 0; }
+  .nx-section-title { font-size: 22px; line-height: 28px; font-weight: 620; color: var(--nx-text); }
+  .nx-section-subtitle { font-size: 14px; line-height: 22px; font-weight: 450; color: var(--nx-text-muted); margin-bottom: var(--nx-space-32); max-width: 760px; }
+  .nx-philosophy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--nx-space-20); }
+  .nx-philosophy-card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); transition: box-shadow var(--nx-motion-standard) var(--nx-ease-out), transform var(--nx-motion-standard) var(--nx-ease-out), border-color var(--nx-motion-standard) var(--nx-ease-out); position: relative; overflow: hidden; }
+  .nx-philosophy-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--nx-accent); transform: scaleX(0); transform-origin: left; transition: transform var(--nx-motion-standard) var(--nx-ease-out); }
+  .nx-philosophy-card:hover { box-shadow: var(--nx-shadow-medium); transform: translateY(-2px); border-color: oklch(82% 0.012 245); }
+  .nx-philosophy-card:hover::before { transform: scaleX(1); }
+  .nx-philosophy-card h3 { font-size: 18px; line-height: 24px; font-weight: 620; margin-bottom: var(--nx-space-12); display: flex; align-items: center; gap: var(--nx-space-8); }
+  .nx-philosophy-icon { width: 20px; height: 20px; color: var(--nx-accent); flex-shrink: 0; }
+  .nx-philosophy-card p { font-size: 14px; line-height: 22px; font-weight: 430; color: var(--nx-text-muted); }
+  .nx-philosophy-card .nx-antipattern { display: flex; align-items: flex-start; gap: 6px; margin-top: var(--nx-space-20); font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); font-style: italic; }
+  .nx-philosophy-card .nx-antipattern::before { content: '✕'; font-style: normal; font-size: 10px; color: var(--nx-danger); flex-shrink: 0; margin-top: 2px; }
+  .nx-color-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--nx-space-32); }
+  .nx-color-family { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); transition: box-shadow var(--nx-motion-standard) var(--nx-ease-out); }
+  .nx-color-family:hover { box-shadow: var(--nx-shadow-low); }
+  .nx-color-family h3 { font-size: 14px; line-height: 18px; font-weight: 600; margin-bottom: var(--nx-space-20); color: var(--nx-text-muted); text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: var(--nx-space-8); }
+  .nx-color-family h3::after { content: ''; flex: 1; height: 1px; background: var(--nx-border); }
+  .nx-swatch-row { display: flex; flex-direction: column; gap: var(--nx-space-8); }
+  .nx-swatch { display: flex; align-items: center; gap: var(--nx-space-16); padding: var(--nx-space-12) var(--nx-space-16); border-radius: var(--nx-radius-control); border: 1px solid var(--nx-border); transition: border-color var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-swatch:hover { border-color: oklch(82% 0.012 245); }
+  .nx-swatch-color { width: 44px; height: 44px; border-radius: var(--nx-radius-control); border: 1px solid var(--nx-border); flex-shrink: 0; box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.06); }
+  .nx-swatch-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
   .nx-swatch-name { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--nx-text); }
   .nx-swatch-value { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .nx-type-specimen { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); }
-  .nx-type-row { display: flex; align-items: baseline; justify-content: space-between; padding: var(--nx-space-16) 0; border-bottom: 1px solid var(--nx-border); }
+  .nx-swatch-pct { font-size: 11px; line-height: 14px; font-weight: 600; color: var(--nx-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; flex-shrink: 0; padding: 2px 8px; border-radius: var(--nx-radius-pill); background: var(--nx-surface-subtle); }
+  .nx-type-specimen { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-40); position: relative; }
+  .nx-type-specimen::before { content: 'Aa'; position: absolute; top: var(--nx-space-20); right: var(--nx-space-32); font-size: 48px; line-height: 1; font-weight: 650; color: oklch(from var(--nx-accent) l c h / 0.06); pointer-events: none; }
+  .nx-type-row { display: flex; align-items: baseline; justify-content: space-between; padding: var(--nx-space-20) 0; border-bottom: 1px solid var(--nx-border); transition: padding-left var(--nx-motion-fast) var(--nx-ease-out); }
   .nx-type-row:last-child { border-bottom: none; }
+  .nx-type-row:hover { padding-left: var(--nx-space-8); }
   .nx-type-sample { color: var(--nx-text); }
   .nx-type-meta { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; white-space: nowrap; margin-left: var(--nx-space-16); }
-  .nx-spacing-grid { display: flex; flex-wrap: wrap; gap: var(--nx-space-24); align-items: flex-end; }
+  .nx-spacing-grid { display: flex; flex-wrap: wrap; gap: var(--nx-space-32); align-items: flex-end; }
   .nx-spacing-item { display: flex; flex-direction: column; align-items: center; gap: var(--nx-space-8); }
-  .nx-spacing-block { background: var(--nx-accent); border-radius: var(--nx-radius-control); opacity: 0.8; }
+  .nx-spacing-block { background: var(--nx-accent); border-radius: var(--nx-radius-control); opacity: 0.7; transition: opacity var(--nx-motion-fast) var(--nx-ease-out), transform var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-spacing-item:hover .nx-spacing-block { opacity: 1; transform: scale(1.1); }
   .nx-spacing-label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--nx-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .nx-shape-grid { display: flex; gap: var(--nx-space-24); align-items: center; margin-top: var(--nx-space-24); }
-  .nx-shape-item { width: 80px; height: 48px; background: var(--nx-surface-subtle); border: 1px solid var(--nx-border); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--nx-text-muted); }
-  .nx-elevation-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--nx-space-24); }
-  .nx-elevation-card { background: var(--nx-surface); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); text-align: center; font-size: 14px; font-weight: 600; color: var(--nx-text-muted); border: 1px solid var(--nx-border); }
+  .nx-shape-grid { display: flex; gap: var(--nx-space-24); align-items: center; margin-top: var(--nx-space-32); }
+  .nx-shape-item { width: 80px; height: 48px; background: var(--nx-surface-subtle); border: 1px solid var(--nx-border); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--nx-text-muted); transition: border-color var(--nx-motion-fast) var(--nx-ease-out), color var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-shape-item:hover { border-color: var(--nx-accent); color: var(--nx-accent); }
+  .nx-elevation-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--nx-space-32); }
+  .nx-elevation-card { background: var(--nx-surface); border-radius: var(--nx-radius-surface); padding: var(--nx-space-40); text-align: center; font-size: 14px; font-weight: 600; color: var(--nx-text-muted); border: 1px solid var(--nx-border); transition: transform var(--nx-motion-standard) var(--nx-ease-out); position: relative; }
+  .nx-elevation-card:hover { transform: translateY(-4px); }
+  .nx-elevation-card::after { content: attr(data-level); position: absolute; top: var(--nx-space-16); left: var(--nx-space-20); font-size: 11px; font-weight: 700; color: var(--nx-accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .nx-elevation-low { box-shadow: var(--nx-shadow-low); }
   .nx-elevation-medium { box-shadow: var(--nx-shadow-medium); }
   .nx-elevation-dialog { box-shadow: var(--nx-shadow-dialog); }
-  .nx-motion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--nx-space-16); }
-  .nx-motion-card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); text-align: center; }
+  .nx-motion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--nx-space-20); }
+  .nx-motion-card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); text-align: center; transition: border-color var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-motion-card:hover { border-color: oklch(82% 0.012 245); }
+  .nx-motion-card:hover .nx-motion-demo { animation: nxMotionPulse 1.5s var(--nx-ease-out) infinite; }
   .nx-motion-card h4 { font-size: 14px; font-weight: 600; margin-bottom: var(--nx-space-8); }
   .nx-motion-card p { font-size: 12px; color: var(--nx-text-muted); margin-bottom: var(--nx-space-16); }
-  .nx-motion-demo { width: 32px; height: 32px; background: var(--nx-accent); border-radius: var(--nx-radius-control); margin: 0 auto; }
-  .nx-components-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--nx-space-24); }
-  .nx-component-panel { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); }
-  .nx-component-panel h3 { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--nx-text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--nx-space-24); }
-  .nx-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--nx-space-8); border: none; outline: none; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 14px; line-height: 18px; border-radius: var(--nx-radius-control); transition: all var(--nx-motion-fast) var(--nx-ease-out); position: relative; }
+  .nx-motion-demo { width: 32px; height: 32px; background: var(--nx-accent); border-radius: var(--nx-radius-control); margin: 0 auto; transition: transform var(--nx-motion-standard) var(--nx-ease-out); }
+  @keyframes nxMotionPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.15); opacity: 0.7; } }
+  .nx-components-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--nx-space-32); }
+  .nx-component-panel { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); transition: box-shadow var(--nx-motion-standard) var(--nx-ease-out), border-color var(--nx-motion-standard) var(--nx-ease-out); }
+  .nx-component-panel:hover { box-shadow: var(--nx-shadow-low); border-color: oklch(85% 0.010 245); }
+  .nx-component-panel h3 { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--nx-text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--nx-space-32); padding-bottom: var(--nx-space-20); border-bottom: 1px solid var(--nx-border); display: flex; align-items: center; justify-content: space-between; }
+  .nx-component-panel h3 .nx-cmp-id { font-size: 11px; font-weight: 520; color: var(--nx-accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
+  .nx-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--nx-space-8); border: none; outline: none; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 14px; line-height: 18px; border-radius: var(--nx-radius-control); transition: background var(--nx-motion-fast) var(--nx-ease-out), box-shadow var(--nx-motion-fast) var(--nx-ease-out), transform var(--nx-motion-fast) var(--nx-ease-out), color var(--nx-motion-fast) var(--nx-ease-out), border-color var(--nx-motion-fast) var(--nx-ease-out); position: relative; white-space: nowrap; -webkit-font-smoothing: antialiased; }
   .nx-btn:focus-visible { outline: 2px solid var(--nx-accent); outline-offset: 2px; }
   .nx-btn:active { transform: scale(0.98); }
   .nx-btn--44 { height: 44px; padding: 0 var(--nx-space-16); }
-  .nx-btn--52 { height: 52px; padding: 0 var(--nx-space-24); font-size: 16px; }
-  .nx-btn--primary { background: var(--nx-accent); color: var(--nx-accent-text); }
-  .nx-btn--primary:hover { background: var(--nx-accent-strong); }
-  .nx-btn--secondary { background: var(--nx-surface-subtle); color: var(--nx-text); border: 1px solid var(--nx-border); }
-  .nx-btn--secondary:hover { background: var(--nx-border); }
+  .nx-btn--52 { height: 52px; padding: 0 var(--nx-space-24); font-size: 16px; line-height: 22px; }
+  .nx-btn--primary { background: var(--nx-accent); color: var(--nx-accent-text); box-shadow: 0 1px 2px 0 oklch(48% 0.115 245 / 0.16), 0 1px 3px 0 oklch(48% 0.115 245 / 0.08); }
+  .nx-btn--primary:hover { background: var(--nx-accent-strong); box-shadow: 0 2px 5px 0 oklch(48% 0.115 245 / 0.22), 0 3px 8px 0 oklch(48% 0.115 245 / 0.10); transform: translateY(-1px); }
+  .nx-btn--primary:active { transform: scale(0.98) translateY(0); box-shadow: 0 1px 2px 0 oklch(48% 0.115 245 / 0.16); }
+  .nx-btn--secondary { background: var(--nx-surface); color: var(--nx-text); border: 1px solid var(--nx-border); }
+  .nx-btn--secondary:hover { background: var(--nx-surface-subtle); border-color: oklch(78% 0.012 245); }
   .nx-btn--quiet { background: transparent; color: var(--nx-accent); }
   .nx-btn--quiet:hover { background: oklch(from var(--nx-accent) l c h / 0.08); }
-  .nx-btn--danger { background: var(--nx-danger); color: var(--nx-danger-text); }
-  .nx-btn--danger:hover { background: var(--nx-danger-strong); }
-  .nx-btn--disabled { opacity: 0.5; cursor: not-allowed; }
+  .nx-btn--danger { background: var(--nx-danger); color: var(--nx-danger-text); box-shadow: 0 1px 2px 0 oklch(52% 0.175 25 / 0.16), 0 1px 3px 0 oklch(52% 0.175 25 / 0.08); }
+  .nx-btn--danger:hover { background: var(--nx-danger-strong); box-shadow: 0 2px 5px 0 oklch(52% 0.175 25 / 0.22), 0 3px 8px 0 oklch(52% 0.175 25 / 0.10); transform: translateY(-1px); }
+  .nx-btn--danger:active { transform: scale(0.98) translateY(0); box-shadow: 0 1px 2px 0 oklch(52% 0.175 25 / 0.16); }
+  .nx-btn--disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
   .nx-btn--disabled:active { transform: none; }
   .nx-btn--loading { cursor: wait; }
+  .nx-btn--full { width: 100%; }
+  .nx-btn-icon { width: 16px; height: 16px; flex-shrink: 0; }
+  .nx-btn-icon--lg { width: 20px; height: 20px; flex-shrink: 0; }
+  .nx-btn-label { font-size: 11px; line-height: 14px; font-weight: 520; color: var(--nx-text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
   .nx-btn-row { display: flex; flex-wrap: wrap; gap: var(--nx-space-12); margin-bottom: var(--nx-space-16); align-items: center; }
   .nx-btn-row:last-child { margin-bottom: 0; }
-  .nx-spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-bottom-color: transparent; border-radius: 50%; animation: nxSpin 1s linear infinite; }
+  .nx-btn-group { margin-bottom: var(--nx-space-20); }
+  .nx-btn-group:last-child { margin-bottom: 0; }
+  .nx-spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-bottom-color: transparent; border-radius: 50%; animation: nxSpin 0.8s linear infinite; }
   @keyframes nxSpin { to { transform: rotate(360deg); } }
-  .nx-field { margin-bottom: var(--nx-space-16); }
+  .nx-field { margin-bottom: var(--nx-space-20); }
+  .nx-field:last-child { margin-bottom: 0; }
   .nx-field-label { display: block; font-size: 14px; line-height: 18px; font-weight: 600; color: var(--nx-text); margin-bottom: var(--nx-space-8); }
-  .nx-input { width: 100%; height: 48px; background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-control); padding: 0 var(--nx-space-16); font-family: inherit; font-size: 16px; line-height: 24px; font-weight: 430; color: var(--nx-text); outline: none; transition: border-color var(--nx-motion-fast) var(--nx-ease-out), box-shadow var(--nx-motion-fast) var(--nx-ease-out); box-sizing: border-box; }
-  .nx-input::placeholder { color: var(--nx-text-muted); opacity: 0.7; }
-  .nx-input:focus { border-color: var(--nx-accent); box-shadow: 0 0 0 3px oklch(from var(--nx-accent) l c h / 0.15); }
+  .nx-input-group { position: relative; display: flex; align-items: center; }
+  .nx-input-icon { position: absolute; left: var(--nx-space-16); width: 18px; height: 18px; color: var(--nx-text-muted); pointer-events: none; transition: color var(--nx-motion-fast) var(--nx-ease-out); flex-shrink: 0; }
+  .nx-input { width: 100%; height: 48px; background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-control); padding: 0 var(--nx-space-16); font-family: inherit; font-size: 16px; line-height: 24px; font-weight: 430; color: var(--nx-text); outline: none; transition: border-color var(--nx-motion-fast) var(--nx-ease-out), box-shadow var(--nx-motion-fast) var(--nx-ease-out), background var(--nx-motion-fast) var(--nx-ease-out); box-sizing: border-box; }
+  .nx-input--with-icon { padding-left: 44px; }
+  .nx-input--with-toggle { padding-right: 48px; }
+  .nx-input::placeholder { color: var(--nx-text-muted); opacity: 0.55; }
+  .nx-input:hover { border-color: oklch(78% 0.012 245); }
+  .nx-input:focus { border-color: var(--nx-accent); box-shadow: 0 0 0 3px oklch(from var(--nx-accent) l c h / 0.12); }
+  .nx-input-group:focus-within .nx-input-icon { color: var(--nx-accent); }
   .nx-input--error { border-color: var(--nx-danger); }
-  .nx-input--error:focus { box-shadow: 0 0 0 3px oklch(from var(--nx-danger) l c h / 0.15); }
-  .nx-field-help { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); margin-top: var(--nx-space-8); }
+  .nx-input--error:focus { box-shadow: 0 0 0 3px oklch(from var(--nx-danger) l c h / 0.12); }
+  .nx-input-group:has(.nx-input--error) .nx-input-icon { color: var(--nx-danger); }
+  .nx-input-toggle { position: absolute; right: 10px; width: 32px; height: 32px; display: grid; place-items: center; background: transparent; border: none; cursor: pointer; color: var(--nx-text-muted); border-radius: 6px; transition: color var(--nx-motion-fast) var(--nx-ease-out), background var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-input-toggle:hover { color: var(--nx-text); background: var(--nx-surface-subtle); }
+  .nx-input-toggle:focus-visible { outline: 2px solid var(--nx-accent); outline-offset: 1px; }
+  .nx-field-help { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); margin-top: var(--nx-space-8); display: flex; align-items: center; gap: 6px; }
   .nx-field-error { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-danger); margin-top: var(--nx-space-8); display: flex; align-items: center; gap: var(--nx-space-4); }
-  .nx-card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); transition: box-shadow var(--nx-motion-fast) var(--nx-ease-out), transform var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-field-link { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--nx-accent); text-decoration: none; transition: color var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-field-link:hover { color: var(--nx-accent-strong); text-decoration: underline; }
+  .nx-field-row { display: flex; align-items: center; justify-content: space-between; }
+  .nx-checkbox-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .nx-checkbox { width: 18px; height: 18px; accent-color: var(--nx-accent); cursor: pointer; }
+  .nx-checkbox-label { font-size: 13px; line-height: 18px; font-weight: 520; color: var(--nx-text); cursor: pointer; }
+  .nx-login-divider { height: 1px; background: var(--nx-border); margin: var(--nx-space-24) 0; }
+  .nx-card { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-32); transition: box-shadow var(--nx-motion-fast) var(--nx-ease-out), transform var(--nx-motion-fast) var(--nx-ease-out); }
   .nx-card--action:hover { box-shadow: var(--nx-shadow-medium); transform: translateY(-1px); cursor: pointer; }
   .nx-card--action:active { transform: scale(0.995); }
-  .nx-card h4 { font-size: 16px; line-height: 24px; font-weight: 620; margin-bottom: var(--nx-space-8); }
-  .nx-card p { font-size: 14px; line-height: 20px; font-weight: 430; color: var(--nx-text-muted); }
-  .nx-card-meta { display: flex; align-items: center; gap: var(--nx-space-8); margin-top: var(--nx-space-16); }
+  .nx-card h4 { font-size: 16px; line-height: 24px; font-weight: 620; margin-bottom: var(--nx-space-12); }
+  .nx-card p { font-size: 14px; line-height: 22px; font-weight: 430; color: var(--nx-text-muted); }
+  .nx-card-meta { display: flex; align-items: center; gap: var(--nx-space-8); margin-top: var(--nx-space-20); }
   .nx-badge { display: inline-flex; align-items: center; height: 24px; padding: 0 var(--nx-space-12); border-radius: var(--nx-radius-pill); font-size: 12px; line-height: 16px; font-weight: 600; }
   .nx-badge--success { background: oklch(from var(--nx-success) l c h / 0.12); color: var(--nx-success); }
   .nx-badge--warning { background: oklch(from var(--nx-warning) l c h / 0.12); color: var(--nx-warning); }
@@ -147,46 +211,68 @@
   .nx-skeleton { background: var(--nx-surface-subtle); border-radius: var(--nx-radius-control); position: relative; overflow: hidden; }
   .nx-skeleton::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, oklch(from var(--nx-text) l c h / 0.04), transparent); animation: nxShimmer 2s infinite; }
   @keyframes nxShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-  .nx-state { text-align: center; padding: var(--nx-space-48) var(--nx-space-24); }
-  .nx-state-icon { width: 48px; height: 48px; margin: 0 auto var(--nx-space-16); display: grid; place-items: center; border-radius: var(--nx-radius-surface); font-size: 24px; }
-  .nx-state h4 { font-size: 18px; line-height: 24px; font-weight: 620; margin-bottom: var(--nx-space-8); }
-  .nx-state p { font-size: 14px; line-height: 20px; font-weight: 430; color: var(--nx-text-muted); max-width: 320px; margin: 0 auto var(--nx-space-24); }
-  .nx-signature-line { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); display: flex; align-items: center; gap: var(--nx-space-16); }
-  .nx-signature-avatar { width: 40px; height: 40px; border-radius: var(--nx-radius-pill); background: var(--nx-surface-subtle); border: 1px solid var(--nx-border); display: grid; place-items: center; flex-shrink: 0; }
-  .nx-signature-content { flex: 1; }
-  .nx-signature-title { font-size: 16px; line-height: 24px; font-weight: 620; color: var(--nx-text); margin-bottom: var(--nx-space-4); }
-  .nx-signature-meta { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); }
+  .nx-state { text-align: center; padding: var(--nx-space-48) var(--nx-space-32); }
+  .nx-state-icon { width: 52px; height: 52px; margin: 0 auto var(--nx-space-20); display: grid; place-items: center; border-radius: var(--nx-radius-surface); font-size: 24px; }
+  .nx-state h4 { font-size: 18px; line-height: 24px; font-weight: 620; margin-bottom: var(--nx-space-12); }
+  .nx-state p { font-size: 14px; line-height: 22px; font-weight: 430; color: var(--nx-text-muted); max-width: 320px; margin: 0 auto var(--nx-space-32); }
+  .nx-signature-line { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-20) var(--nx-space-24); display: flex; align-items: center; gap: var(--nx-space-12); transition: border-color var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-signature-line:hover { border-color: oklch(82% 0.012 245); }
+  .nx-signature-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nx-accent); flex-shrink: 0; box-shadow: 0 0 0 3px oklch(from var(--nx-accent) l c h / 0.12); }
+  .nx-signature-text { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--nx-text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nx-signature-time { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
   .nx-signature-action { flex-shrink: 0; }
-  .nx-risk-indicator { background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); }
-  .nx-risk-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--nx-space-16); }
-  .nx-risk-title { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--nx-text-muted); }
-  .nx-risk-value { font-size: 28px; line-height: 34px; font-weight: 650; color: var(--nx-danger); display: flex; align-items: center; gap: var(--nx-space-8); }
-  .nx-risk-trend { font-size: 14px; font-weight: 600; color: var(--nx-danger); }
-  .nx-risk-bar { height: 6px; background: var(--nx-surface-subtle); border-radius: var(--nx-radius-pill); overflow: hidden; margin-bottom: var(--nx-space-12); }
-  .nx-risk-bar-fill { height: 100%; width: 78%; background: var(--nx-danger); border-radius: var(--nx-radius-pill); }
-  .nx-risk-evidence { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); }
+  .nx-risk-indicator { background: var(--nx-surface); border: 1px solid var(--nx-border); border-left: 3px solid var(--nx-danger); border-radius: var(--nx-radius-surface); padding: var(--nx-space-24); display: flex; align-items: center; gap: var(--nx-space-20); transition: box-shadow var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-risk-indicator:hover { box-shadow: var(--nx-shadow-low); }
+  .nx-risk-number { font-size: 32px; line-height: 36px; font-weight: 650; color: var(--nx-danger); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .nx-risk-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nx-risk-label { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--nx-text); }
+  .nx-risk-period { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-text-muted); }
+  .nx-risk-chevron { width: 20px; height: 20px; color: var(--nx-text-muted); flex-shrink: 0; }
   .nx-whatsapp-track { display: flex; align-items: center; gap: var(--nx-space-12); font-size: 14px; font-weight: 520; color: var(--nx-text-muted); }
   .nx-whatsapp-step { display: flex; align-items: center; gap: var(--nx-space-8); }
   .nx-whatsapp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nx-border); }
   .nx-whatsapp-dot--active { background: var(--nx-success); }
   .nx-whatsapp-dot--failed { background: var(--nx-danger); }
   .nx-whatsapp-line { width: 16px; height: 1px; background: var(--nx-border); }
-  .nx-bubble { background: var(--nx-surface-subtle); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); padding: var(--nx-space-16); max-width: 480px; }
-  .nx-bubble-header { display: flex; align-items: center; gap: var(--nx-space-8); margin-bottom: var(--nx-space-12); }
-  .nx-bubble-avatar { width: 28px; height: 28px; border-radius: var(--nx-radius-pill); background: var(--nx-accent); display: grid; place-items: center; color: var(--nx-accent-text); font-size: 12px; font-weight: 700; }
-  .nx-bubble-name { font-size: 14px; font-weight: 600; color: var(--nx-text); }
-  .nx-bubble-time { font-size: 12px; color: var(--nx-text-muted); margin-left: auto; }
-  .nx-bubble-text { font-size: 14px; line-height: 20px; font-weight: 430; color: var(--nx-text); margin-bottom: var(--nx-space-12); }
-  .nx-bubble-cta { display: inline-flex; font-size: 14px; font-weight: 600; color: var(--nx-accent); }
-  .nx-a11y-row { display: flex; align-items: center; gap: var(--nx-space-16); padding: var(--nx-space-12) 0; border-bottom: 1px solid var(--nx-border); }
+  .nx-chat { background: var(--nx-surface-subtle); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-surface); overflow: hidden; max-width: 100%; }
+  .nx-chat-header { display: flex; align-items: center; gap: var(--nx-space-12); padding: var(--nx-space-16) var(--nx-space-20); border-bottom: 1px solid var(--nx-border); background: var(--nx-surface); }
+  .nx-chat-avatar { width: 32px; height: 32px; border-radius: var(--nx-radius-pill); background: var(--nx-accent); display: grid; place-items: center; color: var(--nx-accent-text); font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .nx-chat-name { font-size: 14px; font-weight: 600; color: var(--nx-text); }
+  .nx-chat-status { font-size: 12px; line-height: 16px; font-weight: 520; color: var(--nx-success); display: flex; align-items: center; gap: 5px; margin-left: auto; }
+  .nx-chat-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--nx-success); }
+  .nx-chat-body { padding: var(--nx-space-20); display: flex; flex-direction: column; gap: var(--nx-space-16); }
+  .nx-chat-msg { display: flex; gap: var(--nx-space-12); align-items: flex-start; }
+  .nx-chat-msg--user { flex-direction: row-reverse; }
+  .nx-chat-msg-avatar { width: 28px; height: 28px; border-radius: var(--nx-radius-pill); background: var(--nx-surface); border: 1px solid var(--nx-border); display: grid; place-items: center; flex-shrink: 0; margin-top: 2px; }
+  .nx-chat-msg-avatar--nexo { background: var(--nx-accent); border: none; color: var(--nx-accent-text); font-size: 11px; font-weight: 700; }
+  .nx-chat-msg-avatar--user { color: var(--nx-text-muted); }
+  .nx-chat-msg-content { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
+  .nx-chat-msg--user .nx-chat-msg-content { align-items: flex-end; }
+  .nx-chat-msg-bubble { font-size: 14px; line-height: 22px; font-weight: 430; padding: var(--nx-space-12) var(--nx-space-16); border-radius: 12px 12px 12px 4px; background: var(--nx-surface); border: 1px solid var(--nx-border); color: var(--nx-text); }
+  .nx-chat-msg--user .nx-chat-msg-bubble { border-radius: 12px 12px 4px 12px; background: var(--nx-accent); color: var(--nx-accent-text); border: none; font-weight: 450; }
+  .nx-chat-msg-time { font-size: 11px; line-height: 14px; font-weight: 520; color: var(--nx-text-muted); font-variant-numeric: tabular-nums; }
+  .nx-chat-typing { display: flex; align-items: center; gap: 4px; padding: var(--nx-space-12) var(--nx-space-16); background: var(--nx-surface); border: 1px solid var(--nx-border); border-radius: 12px 12px 12px 4px; width: fit-content; }
+  .nx-chat-typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nx-text-muted); animation: nxTyping 1.4s infinite ease-in-out; }
+  .nx-chat-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .nx-chat-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes nxTyping { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+  .nx-chat-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nx-accent); margin-top: 2px; cursor: pointer; transition: gap var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-chat-cta:hover { gap: 10px; }
+  .nx-chat-input { display: flex; align-items: center; gap: var(--nx-space-8); padding: var(--nx-space-12) var(--nx-space-16); border-top: 1px solid var(--nx-border); background: var(--nx-surface); }
+  .nx-chat-input-icon { width: 18px; height: 18px; color: var(--nx-text-muted); flex-shrink: 0; }
+  .nx-chat-input-text { font-size: 13px; font-weight: 450; color: var(--nx-text-muted); flex: 1; }
+  .nx-chat-input-send { width: 32px; height: 32px; border-radius: var(--nx-radius-control); background: var(--nx-accent); display: grid; place-items: center; color: var(--nx-accent-text); flex-shrink: 0; }
+  .nx-a11y-row { display: flex; align-items: center; gap: var(--nx-space-16); padding: var(--nx-space-20) 0; border-bottom: 1px solid var(--nx-border); }
   .nx-a11y-row:last-child { border-bottom: none; }
   .nx-a11y-label { font-size: 14px; font-weight: 600; color: var(--nx-text); width: 160px; flex-shrink: 0; }
   .nx-a11y-value { font-size: 14px; font-weight: 430; color: var(--nx-text-muted); }
   .nx-target-demo { width: 44px; height: 44px; background: var(--nx-surface-subtle); border: 1px solid var(--nx-border); border-radius: var(--nx-radius-control); display: grid; place-items: center; font-size: 10px; font-weight: 600; color: var(--nx-text-muted); }
-  .nx-grid-demo { background: var(--nx-surface-subtle); border-radius: var(--nx-radius-panel); padding: var(--nx-space-24); display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--nx-space-12); }
-  .nx-grid-col { height: 80px; background: oklch(from var(--nx-accent) l c h / 0.08); border-radius: var(--nx-radius-control); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--nx-accent); }
-  footer { text-align: center; padding-top: var(--nx-space-48); border-top: 1px solid var(--nx-border); margin-top: var(--nx-space-64); }
-  footer p { font-size: 12px; color: var(--nx-text-muted); font-weight: 520; }
+  .nx-grid-demo { background: var(--nx-surface-subtle); border-radius: var(--nx-radius-panel); padding: var(--nx-space-32); display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--nx-space-12); }
+  .nx-grid-col { height: 80px; background: oklch(from var(--nx-accent) l c h / 0.08); border-radius: var(--nx-radius-control); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--nx-accent); transition: background var(--nx-motion-fast) var(--nx-ease-out); }
+  .nx-grid-col:hover { background: oklch(from var(--nx-accent) l c h / 0.15); }
+  footer { text-align: center; padding-top: var(--nx-space-64); border-top: 1px solid var(--nx-border); margin-top: var(--nx-space-80); }
+  footer p { font-size: 12px; color: var(--nx-text-muted); font-weight: 520; line-height: 20px; }
+  footer p:first-child { font-size: 13px; font-weight: 600; color: var(--nx-text); margin-bottom: var(--nx-space-4); }
   @media print {
     .nexo-ds { padding: 24px; }
     .nx-philosophy-grid { grid-template-columns: repeat(2, 1fr); }
@@ -204,34 +290,35 @@
       <h1>NEXO</h1>
       <p>Quiet Operations — Design System v1.0 · Identidad Visual</p>
     </div>
+    <span class="nx-header-badge">Auditado T6</span>
   </header>
 
   <section class="nx-section" id="philosophy">
-    <h2 class="nx-section-title">Filosofía Visual</h2>
+    <div class="nx-section-header"><span class="nx-section-num">01</span><h2 class="nx-section-title">Filosofía Visual</h2></div>
     <p class="nx-section-subtitle">Precisión serena para una jornada institucional real. La tecnología se percibe en la respuesta y la coherencia, no en efectos futuristas.</p>
     <div class="nx-philosophy-grid">
       <div class="nx-philosophy-card">
-        <h3>Serena, no pasiva</h3>
+        <h3><svg class="nx-philosophy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Serena, no pasiva</h3>
         <p>La urgencia se señala sin alarmismo. Prioridad por orden, texto y contraste.</p>
         <span class="nx-antipattern">Anti-patrón: banners múltiples, rojo parpadeante</span>
       </div>
       <div class="nx-philosophy-card">
-        <h3>Institucional, no burocrática</h3>
+        <h3><svg class="nx-philosophy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Institucional, no burocrática</h3>
         <p>Lenguaje directo, humano y profesional. Nunca condescendiente.</p>
         <span class="nx-antipattern">Anti-patrón: portales gubernamentales, texto legal dominante</span>
       </div>
       <div class="nx-philosophy-card">
-        <h3>Premium, no lujosa</h3>
+        <h3><svg class="nx-philosophy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Premium, no lujosa</h3>
         <p>Aluminio mate, tinta azul profunda, papel técnico impecable.</p>
         <span class="nx-antipattern">Anti-patrón: glassmorphism, neón, degradados decorativos</span>
       </div>
       <div class="nx-philosophy-card">
-        <h3>Tecnológica, no futurista</h3>
+        <h3><svg class="nx-philosophy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Tecnológica, no futurista</h3>
         <p>Inteligencia silenciosa. Sin botones "IA" ni orbes. Solo "NEXO detectó…"</p>
         <span class="nx-antipattern">Anti-patrón: chatbots antropomórficos, demos de IA</span>
       </div>
       <div class="nx-philosophy-card">
-        <h3>Humana, no infantil</h3>
+        <h3><svg class="nx-philosophy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Humana, no infantil</h3>
         <p>Diseñada para un docente de 62 años bajo luz intensa. Targets grandes, texto legible.</p>
         <span class="nx-antipattern">Anti-patrón: interfaces escolares infantiles, colores primarios</span>
       </div>
@@ -239,39 +326,39 @@
   </section>
 
   <section class="nx-section" id="color">
-    <h2 class="nx-section-title">Color</h2>
+    <div class="nx-section-header"><span class="nx-section-num">02</span><h2 class="nx-section-title">Color</h2></div>
     <p class="nx-section-subtitle">Estrategia restringida en OKLCH. El acento azul ocupa &lt;10% de la vista. Los estados semánticos siempre incluyen texto e icono.</p>
     <div class="nx-color-grid">
       <div class="nx-color-family">
         <h3>Superficies</h3>
         <div class="nx-swatch-row">
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-canvas);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Canvas</span><span class="nx-swatch-value">oklch(98% 0.006 245)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-surface);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Surface</span><span class="nx-swatch-value">oklch(99.3% 0.004 245)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-surface-subtle);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Surface Subtle</span><span class="nx-swatch-value">oklch(96% 0.009 245)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-border);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Border</span><span class="nx-swatch-value">oklch(88% 0.010 245)</span></div></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-canvas);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Canvas</span><span class="nx-swatch-value">oklch(98% 0.006 245)</span></div><span class="nx-swatch-pct">62%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-surface);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Surface</span><span class="nx-swatch-value">oklch(99.3% 0.004 245)</span></div><span class="nx-swatch-pct">20%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-surface-subtle);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Surface Subtle</span><span class="nx-swatch-value">oklch(96% 0.009 245)</span></div><span class="nx-swatch-pct">8%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-border);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Border</span><span class="nx-swatch-value">oklch(88% 0.010 245)</span></div><span class="nx-swatch-pct">2%</span></div>
         </div>
       </div>
       <div class="nx-color-family">
         <h3>Texto</h3>
         <div class="nx-swatch-row">
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-text);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Text</span><span class="nx-swatch-value">oklch(23% 0.018 245)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-text-muted);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Text Muted</span><span class="nx-swatch-value">oklch(48% 0.018 245)</span></div></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-text);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Text</span><span class="nx-swatch-value">oklch(23% 0.018 245)</span></div><span class="nx-swatch-pct">5%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-text-muted);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Text Muted</span><span class="nx-swatch-value">oklch(48% 0.018 245)</span></div><span class="nx-swatch-pct">3%</span></div>
         </div>
       </div>
       <div class="nx-color-family">
-        <h3>Acción & Semántica</h3>
+        <h3>Acción &amp; Semántica</h3>
         <div class="nx-swatch-row">
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-accent);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Accent</span><span class="nx-swatch-value">oklch(48% 0.115 245)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-success);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Success</span><span class="nx-swatch-value">oklch(52% 0.125 155)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-warning);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Warning</span><span class="nx-swatch-value">oklch(62% 0.135 70)</span></div></div>
-          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-danger);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Danger</span><span class="nx-swatch-value">oklch(52% 0.175 25)</span></div></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-accent);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Accent</span><span class="nx-swatch-value">oklch(48% 0.115 245)</span></div><span class="nx-swatch-pct">&lt;10%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-success);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Success</span><span class="nx-swatch-value">oklch(52% 0.125 155)</span></div><span class="nx-swatch-pct">&lt;1%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-warning);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Warning</span><span class="nx-swatch-value">oklch(62% 0.135 70)</span></div><span class="nx-swatch-pct">&lt;1%</span></div>
+          <div class="nx-swatch"><div class="nx-swatch-color" style="background: var(--nx-danger);"></div><div class="nx-swatch-info"><span class="nx-swatch-name">Danger</span><span class="nx-swatch-value">oklch(52% 0.175 25)</span></div><span class="nx-swatch-pct">&lt;1%</span></div>
         </div>
       </div>
     </div>
   </section>
 
   <section class="nx-section" id="typography">
-    <h2 class="nx-section-title">Tipografía</h2>
+    <div class="nx-section-header"><span class="nx-section-num">03</span><h2 class="nx-section-title">Tipografía</h2></div>
     <p class="nx-section-subtitle">Inter Variable, fallback system-ui. Cifras tabulares para métricas. Sin mayúsculas extensas. Línea de prosa 45–72 caracteres.</p>
     <div class="nx-type-specimen">
       <div class="nx-type-row"><div class="nx-type-sample" style="font-size:32px; line-height:38px; font-weight:650;">Display 32/38</div><div class="nx-type-meta">32px / 38px / 650</div></div>
@@ -286,7 +373,7 @@
   </section>
 
   <section class="nx-section" id="spacing">
-    <h2 class="nx-section-title">Espaciado & Forma</h2>
+    <div class="nx-section-header"><span class="nx-section-num">04</span><h2 class="nx-section-title">Espaciado &amp; Forma</h2></div>
     <p class="nx-section-subtitle">Escala 4-8-12-16-24-32-48-64. Densidad comfortable por defecto. Radios moderados y consistentes. Bordes 1px.</p>
     <div class="nx-spacing-grid">
       <div class="nx-spacing-item"><div class="nx-spacing-block" style="width:4px;height:4px;"></div><span class="nx-spacing-label">4</span></div>
@@ -307,7 +394,7 @@
   </section>
 
   <section class="nx-section" id="grid">
-    <h2 class="nx-section-title">Grid & Breakpoints</h2>
+    <div class="nx-section-header"><span class="nx-section-num">05</span><h2 class="nx-section-title">Grid &amp; Breakpoints</h2></div>
     <p class="nx-section-subtitle">Wide: 12 columnas, sidebar 240px. Compact: 4 columnas, margen 16px. No se estira lectura más allá de 1280px.</p>
     <div class="nx-grid-demo">
       <div class="nx-grid-col">1</div><div class="nx-grid-col">2</div><div class="nx-grid-col">3</div><div class="nx-grid-col">4</div>
@@ -317,17 +404,17 @@
   </section>
 
   <section class="nx-section" id="elevation">
-    <h2 class="nx-section-title">Elevación</h2>
+    <div class="nx-section-header"><span class="nx-section-num">06</span><h2 class="nx-section-title">Elevación</h2></div>
     <p class="nx-section-subtitle">Sombras solo para superposición real. Nunca como decoración.</p>
     <div class="nx-elevation-grid">
-      <div class="nx-elevation-card nx-elevation-low">Baja<br><span style="font-size:12px;font-weight:520;opacity:0.7;">Superficies base</span></div>
-      <div class="nx-elevation-card nx-elevation-medium">Media<br><span style="font-size:12px;font-weight:520;opacity:0.7;">Cards hover</span></div>
-      <div class="nx-elevation-card nx-elevation-dialog">Diálogo<br><span style="font-size:12px;font-weight:520;opacity:0.7;">Modales, sheets</span></div>
+      <div class="nx-elevation-card nx-elevation-low" data-level="z01">Baja<br><span style="font-size:12px;font-weight:520;opacity:0.7;">Superficies base</span></div>
+      <div class="nx-elevation-card nx-elevation-medium" data-level="z02">Media<br><span style="font-size:12px;font-weight:520;opacity:0.7;">Cards hover</span></div>
+      <div class="nx-elevation-card nx-elevation-dialog" data-level="z03">Diálogo<br><span style="font-size:12px;font-weight:520;opacity:0.7;">Modales, sheets</span></div>
     </div>
   </section>
 
   <section class="nx-section" id="motion">
-    <h2 class="nx-section-title">Movimiento</h2>
+    <div class="nx-section-header"><span class="nx-section-num">07</span><h2 class="nx-section-title">Movimiento</h2></div>
     <p class="nx-section-subtitle">Solo opacity y transform. Curva de salida exponencial. Reduced motion: instantáneo o fundido ≤100ms.</p>
     <div class="nx-motion-grid">
       <div class="nx-motion-card"><h4>Fast</h4><p>150 ms</p><div class="nx-motion-demo" style="animation:none;"></div><span style="font-size:11px;color:var(--nx-text-muted);margin-top:8px;display:block;">Hover, focus, press</span></div>
@@ -335,64 +422,117 @@
       <div class="nx-motion-card"><h4>Deliberate</h4><p>250 ms</p><div class="nx-motion-demo" style="animation:none;"></div><span style="font-size:11px;color:var(--nx-text-muted);margin-top:8px;display:block;">Drawer, sheet</span></div>
       <div class="nx-motion-card"><h4>Max</h4><p>300 ms</p><div class="nx-motion-demo" style="animation:none;"></div><span style="font-size:11px;color:var(--nx-text-muted);margin-top:8px;display:block;">Límite absoluto</span></div>
     </div>
-    <div style="margin-top:24px; background:var(--nx-surface); border:1px solid var(--nx-border); border-radius:12px; padding:24px; text-align:center;">
+    <div style="margin-top:32px; background:var(--nx-surface); border:1px solid var(--nx-border); border-radius:12px; padding:32px; text-align:center;">
       <code style="font-size:14px; color:var(--nx-text-muted); font-family:ui-monospace,monospace;">cubic-bezier(0.22, 1, 0.36, 1)</code>
       <p style="font-size:12px; color:var(--nx-text-muted); margin-top:8px;">Curva de salida exponencial · Solo transform y opacity</p>
     </div>
   </section>
 
   <section class="nx-section" id="components">
-    <h2 class="nx-section-title">Componentes Principales</h2>
+    <div class="nx-section-header"><span class="nx-section-num">08</span><h2 class="nx-section-title">Componentes Principales</h2></div>
     <p class="nx-section-subtitle">Anatomía, variantes cerradas, estados completos. Targets mínimos 44×44 px. Foco visible 2px.</p>
     <div class="nx-components-grid">
       <div class="nx-component-panel" id="buttons">
-        <h3>Botones · CMP-001</h3>
-        <div class="nx-btn-row">
-          <button class="nx-btn nx-btn--44 nx-btn--primary">Primaria</button>
-          <button class="nx-btn nx-btn--44 nx-btn--secondary">Secundaria</button>
-          <button class="nx-btn nx-btn--44 nx-btn--quiet">Quiet</button>
-          <button class="nx-btn nx-btn--44 nx-btn--danger">Peligro</button>
+        <h3>Botones <span class="nx-cmp-id">CMP-001</span></h3>
+        <div class="nx-btn-group">
+          <div class="nx-btn-label">Variantes</div>
+          <div class="nx-btn-row">
+            <button class="nx-btn nx-btn--44 nx-btn--primary">Primaria</button>
+            <button class="nx-btn nx-btn--44 nx-btn--secondary">Secundaria</button>
+            <button class="nx-btn nx-btn--44 nx-btn--quiet">Quiet</button>
+            <button class="nx-btn nx-btn--44 nx-btn--danger">Peligro</button>
+          </div>
         </div>
-        <div class="nx-btn-row">
-          <button class="nx-btn nx-btn--52 nx-btn--primary">Primaria 52px</button>
-          <button class="nx-btn nx-btn--52 nx-btn--secondary">Secundaria 52px</button>
+        <div class="nx-btn-group">
+          <div class="nx-btn-label">Con icono · 52px</div>
+          <div class="nx-btn-row">
+            <button class="nx-btn nx-btn--52 nx-btn--primary">
+              <svg class="nx-btn-icon--lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              Ingresar
+            </button>
+            <button class="nx-btn nx-btn--52 nx-btn--secondary">
+              <svg class="nx-btn-icon--lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Contactar
+            </button>
+          </div>
         </div>
-        <div class="nx-btn-row">
-          <button class="nx-btn nx-btn--44 nx-btn--primary nx-btn--disabled" disabled>Deshabilitado</button>
-          <button class="nx-btn nx-btn--44 nx-btn--primary nx-btn--loading"><span class="nx-spinner" style="border-color:#fff; border-bottom-color:transparent;"></span> Guardando…</button>
+        <div class="nx-btn-group">
+          <div class="nx-btn-label">Estados</div>
+          <div class="nx-btn-row">
+            <button class="nx-btn nx-btn--44 nx-btn--primary nx-btn--disabled" disabled>Deshabilitado</button>
+            <button class="nx-btn nx-btn--44 nx-btn--primary nx-btn--loading"><span class="nx-spinner" style="border-color:#fff; border-bottom-color:transparent;"></span> Guardando…</button>
+            <button class="nx-btn nx-btn--44 nx-btn--secondary nx-btn--disabled" disabled>Secundaria</button>
+          </div>
+        </div>
+        <div class="nx-btn-group">
+          <div class="nx-btn-label">Ancho completo</div>
+          <button class="nx-btn nx-btn--52 nx-btn--primary nx-btn--full">
+            <svg class="nx-btn-icon--lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Iniciar sesión
+          </button>
         </div>
       </div>
 
       <div class="nx-component-panel" id="inputs">
-        <h3>Inputs · CMP-002</h3>
+        <h3>Inputs <span class="nx-cmp-id">CMP-002</span></h3>
         <div class="nx-field">
           <label class="nx-field-label">Correo institucional</label>
-          <input class="nx-input" type="text" placeholder="profesor@colegio.edu.co">
-          <span class="nx-field-help">Usa tu correo asignado por la institución.</span>
+          <div class="nx-input-group">
+            <svg class="nx-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <input class="nx-input nx-input--with-icon" type="text" placeholder="profesor@colegio.edu.co">
+          </div>
+          <span class="nx-field-help">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Usa tu correo asignado por la institución.
+          </span>
         </div>
         <div class="nx-field">
           <label class="nx-field-label">Contraseña</label>
-          <input class="nx-input nx-input--error" type="password" value="12345">
+          <div class="nx-input-group">
+            <svg class="nx-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input class="nx-input nx-input--with-icon nx-input--with-toggle" type="password" value="nexo2026">
+            <button class="nx-input-toggle" type="button" aria-label="Mostrar contraseña">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="nx-field">
+          <label class="nx-field-label">Confirmar contraseña</label>
+          <div class="nx-input-group">
+            <svg class="nx-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input class="nx-input nx-input--with-icon nx-input--error" type="password" value="12345">
+          </div>
           <span class="nx-field-error">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             La contraseña debe tener al menos 8 caracteres.
           </span>
         </div>
+        <div class="nx-field-row" style="margin-bottom: var(--nx-space-20);">
+          <label class="nx-checkbox-wrap">
+            <input class="nx-checkbox" type="checkbox">
+            <span class="nx-checkbox-label">Mantener sesión</span>
+          </label>
+          <a href="#" class="nx-field-link">¿Olvidaste tu contraseña?</a>
+        </div>
+        <button class="nx-btn nx-btn--52 nx-btn--primary nx-btn--full">
+          <svg class="nx-btn-icon--lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Iniciar sesión
+        </button>
       </div>
 
       <div class="nx-component-panel" id="cards">
-        <h3>Cards · CMP-020</h3>
-        <div class="nx-card nx-card--action" style="margin-bottom:16px;">
+        <h3>Cards <span class="nx-cmp-id">CMP-020</span></h3>
+        <div class="nx-card nx-card--action" style="margin-bottom:20px;">
           <h4>Citar acudiente</h4>
           <p>Programa una reunión con el acudiente del estudiante seleccionado.</p>
           <div class="nx-card-meta"><span class="nx-badge nx-badge--info">Operación</span></div>
         </div>
-        <div class="nx-card" style="margin-bottom:16px;">
+        <div class="nx-card" style="margin-bottom:20px;">
           <h4>Resumen de caso</h4>
           <p>Inasistencias aumentaron durante 3 semanas. NEXO recomienda revisar.</p>
           <div class="nx-card-meta"><span class="nx-badge nx-badge--danger">Crítico</span><span class="nx-badge nx-badge--warning">En progreso</span></div>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
           <span class="nx-chip">7A</span>
           <span class="nx-chip nx-chip--active">Mañana</span>
           <span class="nx-chip">Inasistencias</span>
@@ -400,12 +540,12 @@
       </div>
 
       <div class="nx-component-panel" id="skeleton">
-        <h3>Skeleton · CMP-039</h3>
-        <div style="display:flex; flex-direction:column; gap:12px;">
+        <h3>Skeleton <span class="nx-cmp-id">CMP-039</span></h3>
+        <div style="display:flex; flex-direction:column; gap:16px;">
           <div class="nx-skeleton" style="height:24px; width:60%; border-radius:8px;"></div>
           <div class="nx-skeleton" style="height:16px; width:90%; border-radius:8px;"></div>
           <div class="nx-skeleton" style="height:16px; width:75%; border-radius:8px;"></div>
-          <div style="display:flex; gap:12px; margin-top:8px;">
+          <div style="display:flex; gap:16px; margin-top:4px;">
             <div class="nx-skeleton" style="height:80px; width:100%; border-radius:12px;"></div>
             <div class="nx-skeleton" style="height:80px; width:100%; border-radius:12px;"></div>
           </div>
@@ -413,8 +553,8 @@
       </div>
 
       <div class="nx-component-panel" id="states">
-        <h3>Estados · CMP-041</h3>
-        <div class="nx-state" style="padding:24px;">
+        <h3>Estados <span class="nx-cmp-id">CMP-041</span></h3>
+        <div class="nx-state" style="padding:32px;">
           <div class="nx-state-icon" style="background: oklch(from var(--nx-success) l c h / 0.12); color: var(--nx-success);">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
@@ -422,8 +562,8 @@
           <p>El acudiente recibirá la notificación por WhatsApp.</p>
           <button class="nx-btn nx-btn--44 nx-btn--secondary">Ver estado</button>
         </div>
-        <div style="height:1px; background:var(--nx-border); margin:16px 0;"></div>
-        <div class="nx-state" style="padding:24px;">
+        <div style="height:1px; background:var(--nx-border); margin:20px 0;"></div>
+        <div class="nx-state" style="padding:32px;">
           <div class="nx-state-icon" style="background: oklch(from var(--nx-danger) l c h / 0.12); color: var(--nx-danger);">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
@@ -431,8 +571,8 @@
           <p>Tu información está guardada. Reintenta cuando vuelva la conexión.</p>
           <button class="nx-btn nx-btn--44 nx-btn--primary">Reintentar</button>
         </div>
-        <div style="height:1px; background:var(--nx-border); margin:16px 0;"></div>
-        <div class="nx-state" style="padding:24px;">
+        <div style="height:1px; background:var(--nx-border); margin:20px 0;"></div>
+        <div class="nx-state" style="padding:32px;">
           <div class="nx-state-icon" style="background: var(--nx-surface-subtle); color: var(--nx-text-muted);">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
           </div>
@@ -444,39 +584,34 @@
   </section>
 
   <section class="nx-section" id="patterns">
-    <h2 class="nx-section-title">Patrones NEXO</h2>
+    <div class="nx-section-header"><span class="nx-section-num">09</span><h2 class="nx-section-title">Patrones NEXO</h2></div>
     <p class="nx-section-subtitle">Firma visual, indicadores de riesgo, entregas WhatsApp y conversación institucional.</p>
     <div class="nx-components-grid">
       <div class="nx-component-panel" id="signature">
-        <h3>Línea de Situación · Firma NEXO</h3>
+        <h3>Línea de Situación <span class="nx-cmp-id">Firma NEXO</span></h3>
         <div class="nx-signature-line">
-          <div class="nx-signature-avatar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--nx-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div class="nx-signature-content">
-            <div class="nx-signature-title">Hoy en Colegio Central: 2 solicitudes requieren respuesta</div>
-            <div class="nx-signature-meta">Actualizado hace 5 min · Fuente: sistema de operaciones</div>
-          </div>
+          <span class="nx-signature-dot"></span>
+          <span class="nx-signature-text">2 solicitudes requieren respuesta</span>
+          <span class="nx-signature-time">hace 5 min</span>
           <div class="nx-signature-action"><button class="nx-btn nx-btn--44 nx-btn--quiet">Revisar</button></div>
         </div>
       </div>
 
       <div class="nx-component-panel" id="risk">
-        <h3>Indicador de Riesgo · CMP-103</h3>
+        <h3>Indicador de Riesgo <span class="nx-cmp-id">CMP-103</span></h3>
         <div class="nx-risk-indicator">
-          <div class="nx-risk-header">
-            <span class="nx-risk-title">Evasiones</span>
-            <span class="nx-badge nx-badge--danger">Crítico</span>
+          <span class="nx-risk-number">8</span>
+          <div class="nx-risk-info">
+            <span class="nx-risk-label">Evasiones · 3 semanas</span>
+            <span class="nx-risk-period">Patrón fuera de umbral</span>
           </div>
-          <div class="nx-risk-value">8 eventos<span class="nx-risk-trend">↑ Subiendo</span></div>
-          <div class="nx-risk-bar"><div class="nx-risk-bar-fill"></div></div>
-          <div class="nx-risk-evidence">Periodo: 3 semanas · NEXO detectó patrón fuera de umbral institucional.</div>
+          <svg class="nx-risk-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
 
       <div class="nx-component-panel" id="whatsapp">
-        <h3>Estado WhatsApp · CMP-105</h3>
-        <div style="background:var(--nx-surface-subtle); border-radius:12px; padding:20px;">
+        <h3>Estado WhatsApp <span class="nx-cmp-id">CMP-105</span></h3>
+        <div style="background:var(--nx-surface-subtle); border-radius:12px; padding:24px;">
           <div class="nx-whatsapp-track">
             <div class="nx-whatsapp-step"><div class="nx-whatsapp-dot nx-whatsapp-dot--active"></div><span>Enviado</span></div>
             <div class="nx-whatsapp-line"></div>
@@ -486,7 +621,7 @@
             <div class="nx-whatsapp-line" style="background:var(--nx-border);"></div>
             <div class="nx-whatsapp-step"><div class="nx-whatsapp-dot" style="background:var(--nx-border);"></div><span>Respondido</span></div>
           </div>
-          <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--nx-border);">
+          <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--nx-border);">
             <div class="nx-whatsapp-track">
               <div class="nx-whatsapp-step"><div class="nx-whatsapp-dot nx-whatsapp-dot--active"></div><span>Enviado</span></div>
               <div class="nx-whatsapp-line"></div>
@@ -497,22 +632,36 @@
       </div>
 
       <div class="nx-component-panel" id="bubble">
-        <h3>Burbuja NEXO · CMP-025</h3>
-        <div class="nx-bubble">
-          <div class="nx-bubble-header">
-            <div class="nx-bubble-avatar">N</div>
-            <span class="nx-bubble-name">NEXO</span>
-            <span class="nx-bubble-time">Hace 10 min</span>
+        <h3>Conversación NEXO <span class="nx-cmp-id">CMP-025</span></h3>
+        <div class="nx-chat">
+          <div class="nx-chat-header">
+            <div class="nx-chat-avatar">N</div>
+            <span class="nx-chat-name">NEXO</span>
+            <span class="nx-chat-status">Activo</span>
           </div>
-          <div class="nx-bubble-text">El acudiente confirmó la citación para mañana a las 8:00 a. m. Puedes revisar los detalles o enviar un recordatorio.</div>
-          <div class="nx-bubble-cta">Ver detalles →</div>
+          <div class="nx-chat-body">
+            <div class="nx-chat-msg">
+              <div class="nx-chat-msg-avatar nx-chat-msg-avatar--nexo">N</div>
+              <div class="nx-chat-msg-content">
+                <div class="nx-chat-msg-bubble">El acudiente confirmó la citación para mañana a las 8:00 a. m.</div>
+                <span class="nx-chat-msg-time">10:32</span>
+              </div>
+            </div>
+            <div class="nx-chat-msg">
+              <div class="nx-chat-msg-avatar nx-chat-msg-avatar--nexo">N</div>
+              <div class="nx-chat-msg-content">
+                <div class="nx-chat-msg-bubble">Recordatorio enviado. Te aviso cuando respondan.</div>
+                <span class="nx-chat-cta">Ver detalles <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
   <section class="nx-section" id="a11y">
-    <h2 class="nx-section-title">Accesibilidad</h2>
+    <div class="nx-section-header"><span class="nx-section-num">10</span><h2 class="nx-section-title">Accesibilidad</h2></div>
     <p class="nx-section-subtitle">WCAG 2.2 AA como contrato de salida. Equivalencia teclado/táctil/lector. Zoom 400% y reflow.</p>
     <div class="nx-component-panel">
       <div class="nx-a11y-row"><span class="nx-a11y-label">Contraste texto</span><span class="nx-a11y-value">≥ 4.5:1 (normal) · ≥ 3:1 (grande/componentes)</span></div>
@@ -522,7 +671,7 @@
       <div class="nx-a11y-row"><span class="nx-a11y-label">Señalización</span><span class="nx-a11y-value">Estado nunca solo por color: texto + icono + semántica</span></div>
       <div class="nx-a11y-row"><span class="nx-a11y-label">Reduced motion</span><span class="nx-a11y-value">0–100ms · sin traslación/escala · fundido permitido</span></div>
     </div>
-    <div style="display:flex; gap:16px; margin-top:24px; flex-wrap:wrap;">
+    <div style="display:flex; gap:16px; margin-top:32px; flex-wrap:wrap;">
       <div class="nx-target-demo">44px</div>
       <div style="width:24px; height:24px; background:var(--nx-surface-subtle); border:1px solid var(--nx-border); border-radius:4px; display:grid; place-items:center; font-size:9px; font-weight:600; color:var(--nx-text-muted);">24</div>
       <div style="font-size:14px; color:var(--nx-text-muted); align-self:center;">Targets mínimos visualizados</div>

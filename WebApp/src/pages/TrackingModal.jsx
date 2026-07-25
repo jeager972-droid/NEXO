@@ -119,7 +119,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.2 }}
         className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-lg shadow-2xl flex flex-col overflow-hidden"
-        style={{ border: '1px solid #E2E8F0', maxHeight: '90vh' }}
+        style={{ border: '1px solid var(--nx-border)', maxHeight: '90vh' }}
       >
         <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
           <div>
@@ -162,7 +162,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               <button 
                 onClick={handleStartTracking}
                 disabled={isSubmitting}
-                className="mt-4 px-6 py-2.5 bg-[#003366] text-white text-xs font-bold uppercase tracking-widest rounded shadow-md hover:bg-[#002244] transition-colors disabled:opacity-50"
+                className="mt-4 px-6 py-2.5 bg-[var(--nx-accent)] text-white text-xs font-bold uppercase tracking-widest rounded shadow-md hover:bg-[var(--nx-accent)] transition-colors disabled:opacity-50"
               >
                 {isSubmitting ? 'Iniciando...' : 'Empezar Seguimiento'}
               </button>
@@ -174,7 +174,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Historial de Notas</h4>
                 {details?.status === 'en proceso' && (
-                  <button onClick={handleResolve} className="text-[10px] font-bold uppercase tracking-widest text-[#00A67E] hover:underline">
+                  <button onClick={handleResolve} className="text-[10px] font-bold uppercase tracking-widest text-[var(--nx-success)] hover:underline">
                     Marcar como Resuelto
                   </button>
                 )}
@@ -205,13 +205,13 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="Escribe una nota sobre el proceso..."
-              className="flex-1 text-xs p-2 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[#003366]"
+              className="flex-1 text-xs p-2 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[var(--nx-accent)]"
               rows={2}
             />
-            <button 
+            <button
               onClick={handleAddNote}
               disabled={!noteText.trim() || isSubmitting}
-              className="px-4 bg-[#003366] text-white rounded hover:bg-[#002244] disabled:opacity-50 transition-colors flex items-center justify-center"
+              className="px-4 bg-[var(--nx-accent)] text-white rounded hover:bg-[var(--nx-accent)] disabled:opacity-50 transition-colors flex items-center justify-center"
             >
               <Send size={16} />
             </button>
@@ -248,7 +248,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
                 value={resolveReason}
                 onChange={(e) => setResolveReason(e.target.value)}
                 placeholder="Describe el motivo por el cual se cierra el seguimiento..."
-                className="w-full text-xs p-3 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[#003366]"
+                className="w-full text-xs p-3 rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white resize-none outline-none focus:border-[var(--nx-accent)]"
                 rows={4}
                 autoFocus
               />
@@ -265,7 +265,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
                 <button
                   onClick={confirmResolve}
                   disabled={isSubmitting || !resolveReason.trim()}
-                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#003366] rounded hover:bg-[#002244] transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[var(--nx-accent)] rounded hover:bg-[var(--nx-accent)] transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? 'Cerrando...' : 'Cerrar Seguimiento'}
                 </button>

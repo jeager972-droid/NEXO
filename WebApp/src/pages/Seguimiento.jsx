@@ -1,9 +1,8 @@
 /**
- * Seguimiento page / NEXO Institucional
- * Responsabilidad: Listado de seguimientos estudiantiles activos, con búsqueda, inicio
- * automático vía query params y apertura de TrackingModal para revisar cada proceso.
+ * Casos Activos page / NEXO Institucional
+ * Listado de seguimientos estudiantiles activos, con búsqueda, inicio
+ * automático vía query params y apertura de TrackingModal.
  * Escucha evento nexo:tracking-refresh para recargar.
- * Dependencias: React, react-router-dom, framer-motion, trackingApi, TrackingModal.
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -14,12 +13,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const SectionLabel = ({ title, sub }) => (
   <div className="mb-6">
-    <h1 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-wider">{title}</h1>
-    {sub && <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{sub}</p>}
+    <h1 className="text-xl font-semibold" style={{ color: 'var(--nx-text)' }}>{title}</h1>
+    {sub && <p className="text-xs font-medium mt-1" style={{ color: 'var(--nx-text-muted)' }}>{sub}</p>}
   </div>
 );
 
-export default function Seguimiento() {
+export default function Casos() {
   const [searchParams] = useSearchParams();
   const [trackings, setTrackings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,33 +85,34 @@ export default function Seguimiento() {
 
   return (
     <div className="max-w-6xl mx-auto pb-10">
-      <SectionLabel title="Seguimiento Estudiantil" sub="Gestión de estudiantes en proceso de intervención" />
+      <SectionLabel title="Casos Activos" sub="Gestión de estudiantes en proceso de intervención" />
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+      <div className="flex flex-col" style={{ backgroundColor: 'var(--nx-surface)', border: '1px solid var(--nx-border)' }}>
         {/* Header & Search */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: '1px solid var(--nx-border)' }}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex items-center justify-center bg-[#003366]/10 text-[#003366] dark:bg-[#00A67E]/10 dark:text-[#00A67E]">
+            <div className="w-10 h-10 flex items-center justify-center" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 10%, transparent)', color: 'var(--nx-accent)' }}>
               <Activity size={20} strokeWidth={2} />
             </div>
             <div>
-              <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">
+              <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--nx-text)' }}>
                 En Proceso
               </p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              <p className="text-[10px] font-medium mt-0.5" style={{ color: 'var(--nx-text-muted)' }}>
                 {filteredTrackings.length} estudiante{filteredTrackings.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
 
           <div className="relative w-full md:w-72">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--nx-text-muted)' }} />
             <input 
               type="text" 
               placeholder="Buscar estudiante..." 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 text-xs font-semibold bg-slate-50 dark:bg-slate-900 dark:text-white outline-none border border-slate-200 dark:border-slate-700 focus:border-[#003366] dark:focus:border-[#00A67E] transition-colors"
+              className="w-full pl-9 pr-4 py-2.5 text-xs font-medium outline-none transition-colors"
+              style={{ backgroundColor: 'var(--nx-surface-subtle)', border: '1px solid var(--nx-border)', color: 'var(--nx-text)' }}
             />
           </div>
         </div>
@@ -121,38 +121,39 @@ export default function Seguimiento() {
         <div className="p-0">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <Loader2 size={32} className="animate-spin text-[#003366] dark:text-[#00A67E]" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cargando procesos...</p>
+              <Loader2 size={32} className="animate-spin" style={{ color: 'var(--nx-accent)' }} />
+              <p className="text-[10px] font-medium" style={{ color: 'var(--nx-text-muted)' }}>Cargando procesos...</p>
             </div>
           ) : filteredTrackings.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estudiante</th>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grupo</th>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Última Actividad</th>
-                    <th className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acción</th>
+                  <tr style={{ backgroundColor: 'var(--nx-surface-subtle)', borderBottom: '1px solid var(--nx-border)' }}>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--nx-text-muted)' }}>Estudiante</th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--nx-text-muted)' }}>Grupo</th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--nx-text-muted)' }}>Última Actividad</th>
+                    <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-right" style={{ color: 'var(--nx-text-muted)' }}>Acción</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                <tbody className="divide-y" style={{ borderColor: 'var(--nx-border)' }}>
                   {filteredTrackings.map((t) => (
-                    <tr key={t.tracking_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                    <tr key={t.tracking_id} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
                       <td className="px-5 py-4">
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{t.last_name} {t.first_name}</p>
+                        <p className="text-sm font-semibold" style={{ color: 'var(--nx-text)' }}>{t.last_name} {t.first_name}</p>
                       </td>
                       <td className="px-5 py-4">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{t.group_name || '—'}</p>
+                        <p className="text-xs font-medium" style={{ color: 'var(--nx-text-muted)' }}>{t.group_name || '—'}</p>
                       </td>
                       <td className="px-5 py-4">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                        <p className="text-xs font-medium" style={{ color: 'var(--nx-text-muted)' }}>
                           {new Date(t.updated_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button 
                           onClick={() => openTracking(t.tracking_id, `${t.last_name} ${t.first_name}`, t.student_id)}
-                          className="inline-flex items-center justify-center px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-white bg-[#003366] hover:bg-[#002244] dark:bg-[#00A67E] dark:hover:bg-[#008F6B] transition-colors shadow-sm"
+                          className="inline-flex items-center justify-center px-4 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors"
+                          style={{ backgroundColor: 'var(--nx-accent)', color: 'var(--nx-accent-text)' }}
                         >
                           Revisar Proceso
                         </button>
@@ -164,10 +165,10 @@ export default function Seguimiento() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <CalendarDays size={32} strokeWidth={1.5} className="text-slate-300 dark:text-slate-600" />
+              <CalendarDays size={32} strokeWidth={1.5} style={{ color: 'var(--nx-text-muted)' }} />
               <div className="text-center">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No hay procesos activos</p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--nx-text-muted)' }}>No hay procesos activos</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--nx-text-muted)' }}>
                   {searchQuery ? 'Ningún estudiante coincide con la búsqueda.' : 'Actualmente no hay estudiantes en seguimiento.'}
                 </p>
               </div>

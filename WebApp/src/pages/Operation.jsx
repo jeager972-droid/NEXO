@@ -175,7 +175,7 @@ const Operation = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1,2,3,4,5,6].map(i => (
-            <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
+            <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid var(--nx-border)' }} />
           ))}
         </div>
       </div>
@@ -191,7 +191,7 @@ const Operation = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1,2,3,4,5,6].map(i => (
-            <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid #E2E8F0' }} />
+            <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800/50 animate-pulse" style={{ border: '1.5px solid var(--nx-border)' }} />
           ))}
         </div>
       </div>
@@ -202,10 +202,10 @@ const Operation = () => {
   return (
     <div className="space-y-5">
       <div>
-        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: '#94A3B8', textTransform: 'uppercase', userSelect: 'none' }}>
+        <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.25em', color: 'var(--nx-text-muted)', textTransform: 'uppercase', userSelect: 'none' }}>
           Operación Institucional
         </p>
-        <p style={{ fontSize: '13px', fontWeight: 800, color: '#003366', marginTop: '2px', letterSpacing: '-0.01em' }}
+        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--nx-accent)', marginTop: '2px', letterSpacing: '-0.01em' }}
            className="dark:text-slate-200">
           Comandos de control y acción
         </p>
@@ -272,15 +272,15 @@ const ActionCard = ({ cmd, index, onClick }) => {
       whileTap={{ scale: 0.985 }}
       className="relative overflow-hidden flex items-center gap-4 w-full text-left p-5 transition-colors duration-200 group"
       style={{
-        border:          isSOS ? '1.5px solid #7F1D1D' : '1.5px solid #E2E8F0',
-        backgroundColor: isSOS ? '#1A0606'             : '#FFFFFF',
+        border:          isSOS ? '1.5px solid var(--nx-danger)' : '1.5px solid var(--nx-border)',
+        backgroundColor: isSOS ? 'color-mix(in oklch, var(--nx-danger) 12%, var(--nx-surface))'             : 'var(--nx-surface)',
       }}
     >
       {/* SOS sonar pulse ring */}
       {isSOS && (
         <motion.div
           className="absolute inset-0 pointer-events-none"
-          style={{ border: '2px solid rgba(153,27,27,0.35)' }}
+          style={{ border: '2px solid color-mix(in oklch, var(--nx-danger) 35%, transparent)' }}
           animate={{ scale: [1, 1.07], opacity: [0.6, 0] }}
           transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut' }}
         />
@@ -290,8 +290,8 @@ const ActionCard = ({ cmd, index, onClick }) => {
       <div
         className="shrink-0 flex items-center justify-center w-10 h-10"
         style={{
-          backgroundColor: isSOS ? '#7F1D1D' : 'rgba(0,51,102,0.06)',
-          color:           isSOS ? '#FFFFFF' : '#003366',
+          backgroundColor: isSOS ? 'var(--nx-danger)' : 'color-mix(in oklch, var(--nx-accent) 6%, transparent)',
+          color:           isSOS ? 'var(--nx-surface)' : 'var(--nx-accent)',
         }}
       >
         <cmd.icon size={20} strokeWidth={isSOS ? 2.5 : 2} />
@@ -301,13 +301,13 @@ const ActionCard = ({ cmd, index, onClick }) => {
       <div className="flex-1 min-w-0">
         <p
           className="text-sm font-bold uppercase truncate"
-          style={{ letterSpacing: '0.08em', color: isSOS ? '#FCA5A5' : '#1E293B' }}
+          style={{ letterSpacing: '0.08em', color: isSOS ? 'var(--nx-danger)' : 'var(--nx-text)' }}
         >
           {cmd.title}
         </p>
         <p
           className="mt-0.5 truncate"
-          style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', color: isSOS ? 'rgba(252,165,165,0.55)' : '#94A3B8', textTransform: 'uppercase' }}
+          style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', color: isSOS ? 'color-mix(in oklch, var(--nx-danger) 55%, transparent)' : 'var(--nx-text-muted)', textTransform: 'uppercase' }}
         >
           {cmd.warning ? 'Notificación global' : isSOS ? 'Protocolo de emergencia' : 'Comando de sistema'}
         </p>
@@ -315,14 +315,14 @@ const ActionCard = ({ cmd, index, onClick }) => {
 
       <ChevronRight
         size={14} strokeWidth={2}
-        style={{ color: isSOS ? 'rgba(252,165,165,0.4)' : '#CBD5E1' }}
+        style={{ color: isSOS ? 'color-mix(in oklch, var(--nx-danger) 40%, transparent)' : 'var(--nx-text-muted)' }}
         className="shrink-0 group-hover:translate-x-0.5 transition-transform"
       />
 
       {/* Non-SOS hover overlay */}
       {!isSOS && (
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none"
-             style={{ backgroundColor: 'rgba(0,51,102,0.03)' }} />
+             style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 3%, transparent)' }} />
       )}
     </motion.button>
   );
@@ -332,15 +332,15 @@ const ActionCard = ({ cmd, index, onClick }) => {
 
 const FIELD_LABEL_STYLE = {
   fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em',
-  color: '#94A3B8', textTransform: 'uppercase', display: 'block', marginBottom: '6px',
+  color: 'var(--nx-text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '6px',
 };
 const INPUT_BASE = {
   width: '100%', padding: '10px 12px', outline: 'none', fontSize: '13px',
-  fontWeight: 500, color: '#0F172A', backgroundColor: '#F8FAFC',
-  border: '1.5px solid #E2E8F0', transition: 'border-color 0.2s',
+  fontWeight: 500, color: 'var(--nx-text)', backgroundColor: 'var(--nx-surface-subtle)',
+  border: '1.5px solid var(--nx-border)', transition: 'border-color 0.2s',
 };
-const focusBorder  = e => { e.target.style.borderColor = '#003366'; };
-const blurBorder   = e => { e.target.style.borderColor = '#E2E8F0'; };
+const focusBorder  = e => { e.target.style.borderColor = 'var(--nx-accent)'; };
+const blurBorder   = e => { e.target.style.borderColor = 'var(--nx-border)'; };
 
 const FormField = ({ label, children }) => (
   <div>
@@ -394,7 +394,7 @@ const Combobox = ({ label, value, onChange, options, placeholder, emptyText, req
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.15 }}
             className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 shadow-lg max-h-48 overflow-y-auto"
-            style={{ border: '1.5px solid #E2E8F0' }}
+            style={{ border: '1.5px solid var(--nx-border)' }}
           >
             {filtered.length === 0 ? (
               <div className="px-4 py-3 text-xs text-slate-500 font-medium">
@@ -409,7 +409,7 @@ const Combobox = ({ label, value, onChange, options, placeholder, emptyText, req
                     onChange(opt.value);
                     setIsOpen(false);
                   }}
-                  className="px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[#003366] hover:text-white cursor-pointer transition-colors"
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[var(--nx-accent)] hover:text-white cursor-pointer transition-colors"
                 >
                   {opt.label}
                 </div>
@@ -553,9 +553,9 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
       })
     : (groups || []);
   const isSOS = command.isUrgent;
-  const accentColor = isSOS ? '#7F1D1D' : '#003366';
-  const submitBg    = isSOS ? '#7F1D1D' : '#003366';
-  const submitHover = isSOS ? '#991B1B' : '#052955';
+  const accentColor = isSOS ? 'var(--nx-danger)' : 'var(--nx-accent)';
+  const submitBg    = isSOS ? 'var(--nx-danger)' : 'var(--nx-accent)';
+  const submitHover = isSOS ? 'var(--nx-danger)' : 'var(--nx-accent)';
 
   return (
     <>
@@ -579,25 +579,25 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
         className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ top: '56px', bottom: 0, maxWidth: '440px', borderLeft: '1.5px solid #E2E8F0' }}
+        style={{ top: '56px', bottom: 0, maxWidth: '440px', borderLeft: '1.5px solid var(--nx-border)' }}
       >
         {/* Drawer header */}
         <div
           className="shrink-0 flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: '1.5px solid #F1F5F9' }}
+          style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}
         >
           <div className="flex items-center gap-3">
             <div
               className="flex items-center justify-center w-9 h-9 shrink-0"
-              style={{ backgroundColor: isSOS ? '#7F1D1D' : 'rgba(0,51,102,0.08)', color: isSOS ? '#FCA5A5' : '#003366' }}
+              style={{ backgroundColor: isSOS ? 'var(--nx-danger)' : 'color-mix(in oklch, var(--nx-accent) 8%, transparent)', color: isSOS ? 'var(--nx-danger)' : 'var(--nx-accent)' }}
             >
               <command.icon size={18} strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>
+              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: 'var(--nx-text)' }}>
                 {command.title}
               </p>
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                 Configuración de Comando
               </p>
             </div>
@@ -648,7 +648,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
             <div className="space-y-6 py-4">
               <div
                 className="flex items-start gap-3 p-4"
-                style={{ border: '1.5px solid #FEF3C7', backgroundColor: '#FFFBEB' }}
+                style={{ border: '1.5px solid color-mix(in oklch, var(--nx-warning) 20%, transparent)', backgroundColor: 'color-mix(in oklch, var(--nx-warning) 8%, transparent)' }}
               >
                 <Clock size={16} strokeWidth={2} className="text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-sm font-semibold text-amber-700 leading-snug">{command.warning}</p>
@@ -657,7 +657,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                 <button
                   onClick={onClose}
                   className="flex-1 py-3 text-xs font-bold uppercase text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
-                  style={{ border: '1.5px solid #E2E8F0', letterSpacing: '0.15em' }}
+                  style={{ border: '1.5px solid var(--nx-border)', letterSpacing: '0.15em' }}
                 >
                   Cancelar
                 </button>
@@ -720,11 +720,11 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                             onClick={() => setFormData(p => ({ ...p, targetUser: u.user_id }))}
                             className={`w-full flex items-center gap-3 px-3 py-2 text-left text-xs transition-colors ${
                               formData.targetUser === u.user_id
-                                ? 'bg-[#003366] text-white'
+                                ? 'bg-[var(--nx-accent)] text-white'
                                 : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
                             }`}
-                            style={{ border: '1.5px solid #E2E8F0' }}>
-                            <div className="shrink-0 w-7 h-7 flex items-center justify-center text-[10px] font-black text-white overflow-hidden" style={{ backgroundColor: formData.targetUser === u.user_id ? 'rgba(255,255,255,0.2)' : '#003366' }}>
+                            style={{ border: '1.5px solid var(--nx-border)' }}>
+                            <div className="shrink-0 w-7 h-7 flex items-center justify-center text-[10px] font-black text-white overflow-hidden" style={{ backgroundColor: formData.targetUser === u.user_id ? 'color-mix(in oklch, var(--nx-surface) 20%, transparent)' : 'var(--nx-accent)' }}>
                               {u.profile_photo_url ? (
                                 <img src={u.profile_photo_url} alt="" className="w-full h-full object-cover" />
                               ) : (
@@ -744,7 +744,7 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                     </FormField>
                   )}
                   {formData.targetRole && !loadingUsers && targetUsers.length === 0 && (
-                    <div className="px-3 py-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800" style={{ border: '1.5px solid #E2E8F0' }}>
+                    <div className="px-3 py-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800" style={{ border: '1.5px solid var(--nx-border)' }}>
                       No hay personal de {formData.targetRole} en tu misma jornada.
                     </div>
                   )}
@@ -818,9 +818,9 @@ const CommandDrawer = ({ command, onClose, groups, students }) => {
                         style={{
                           letterSpacing: '0.12em',
                           border: '1.5px solid',
-                          borderColor:     formData.targets.includes(t.id) ? '#003366' : '#E2E8F0',
-                          backgroundColor: formData.targets.includes(t.id) ? '#003366' : 'transparent',
-                          color:           formData.targets.includes(t.id) ? '#FFFFFF' : '#94A3B8',
+                          borderColor:     formData.targets.includes(t.id) ? 'var(--nx-accent)' : 'var(--nx-border)',
+                          backgroundColor: formData.targets.includes(t.id) ? 'var(--nx-accent)' : 'transparent',
+                          color:           formData.targets.includes(t.id) ? 'var(--nx-surface)' : 'var(--nx-text-muted)',
                         }}>
                         {t.label}
                       </button>

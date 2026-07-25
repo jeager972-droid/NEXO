@@ -1,10 +1,7 @@
 /**
  * Layout / NEXO Institucional
- * Responsabilidad: Esqueleto de la aplicación autenticada: sidebar, header con búsqueda
- * global de módulos/comandos, notificaciones, menú de usuario y transiciones de página.
- * Excluye de la búsqueda a RECTOR. Polling de notificaciones cada 60s; se pausa
- * cuando la pestaña no está visible para evitar requests innecesarios al backend.
- * Dependencias: react-router-dom, framer-motion, useAuth, useTheme, Sidebar, roles config, notificationsApi.
+ * Shell autenticado: sidebar + topbar (CMP-031) + contenido + status bar.
+ * Sin glassmorphism. Tokens OKLCH. Búsqueda global para todos los roles.
  */
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -13,27 +10,14 @@ import Sidebar from './Sidebar';
 import { Menu, Bell, LogOut, Settings, ChevronDown, Search, X, Command } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { getRoleDisplay, SIDEBAR_ITEMS, ROLES } from '../config/roles';
+import { getRoleDisplay, SIDEBAR_ITEMS, ROLES, OPERATION_COMMANDS } from '../config/roles';
 import { notificationsApi } from '../api/notifications';
 import {
   Calendar, ShieldCheck, AlertOctagon, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert,
-  Users, Activity, FileText, UserPlus, LayoutDashboard
+  Users, Activity, FileText,
 } from 'lucide-react';
 
-/* ── Searchable items: sidebar + operation commands + audit subdivisions ── */
-const OPERATION_COMMANDS = [
-  { title: 'Citar acudiente', path: '/operacion', icon: Calendar, roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
-  { title: 'Autorizar salida', path: '/operacion', icon: ShieldCheck, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-  { title: 'SOS', path: '/operacion', icon: AlertOctagon, roles: Object.values(ROLES) },
-  { title: 'Reportar daño', path: '/operacion', icon: Wrench, roles: [ROLES.AUXILIAR, ROLES.PORTERO] },
-  { title: 'Mandar solicitud', path: '/operacion', icon: Send, roles: Object.values(ROLES) },
-  { title: 'Salida pedagógica', path: '/operacion', icon: Bus, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-  { title: 'Cambio de horario', path: '/operacion', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-  { title: 'Generar permiso', path: '/operacion', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR] },
-  { title: 'Reportar incidente', path: '/operacion', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
-  { title: 'Solicitar seguimiento', path: '/operacion', icon: FileText, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-];
-
+/* ── Audit subdivisions for search catalog ── */
 const AUDIT_SUBDIVISIONS = [
   { title: 'Inasistencias', path: '/auditoria', icon: Users, roles: [ROLES.RECTOR], keywords: ['asistencia','inasistencia','falta'] },
   { title: 'Llegadas tarde', path: '/auditoria', icon: Clock, roles: [ROLES.RECTOR], keywords: ['asistencia','tarde','retardo'] },
@@ -48,7 +32,6 @@ const AUDIT_SUBDIVISIONS = [
   { title: 'Historial permisos', path: '/auditoria', icon: FileText, roles: [ROLES.RECTOR], keywords: ['permisos','historial'] },
   { title: 'Permisos emitidos', path: '/auditoria', icon: UserCheck, roles: [ROLES.RECTOR], keywords: ['docente','permisos','emitidos'] },
   { title: 'Alertas SOS emitidas', path: '/auditoria', icon: AlertOctagon, roles: [ROLES.RECTOR], keywords: ['sos','alerta','emergencia'] },
-  { title: 'Evasiones internas', path: '/auditoria', icon: ShieldAlert, roles: [ROLES.RECTOR], keywords: ['asistencia','evasion'] },
 ];
 
 const PARENT_MODULES = [
@@ -64,8 +47,8 @@ const SEARCH_CATALOG = [...SIDEBAR_ITEMS, ...OPERATION_COMMANDS, ...AUDIT_SUBDIV
 const GlobalSearchResults = ({ query, userRole, onSelect }) => {
   if (!query.trim()) {
     return (
-      <div className="px-3 py-4 text-xs text-slate-400 text-center">
-        Escribe el nombre de un módulo, comando o sección (ej: <span className="font-semibold text-slate-500">Asistencia</span>, <span className="font-semibold text-slate-500">Citar acudiente</span>)
+      <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--nx-text-muted)' }}>
+        Escribe el nombre de un módulo, comando o sección (ej: <span className="font-semibold" style={{ color: 'var(--nx-text)' }}>Asistencia</span>, <span className="font-semibold" style={{ color: 'var(--nx-text)' }}>Citar acudiente</span>)
       </div>
     );
   }
@@ -78,7 +61,7 @@ const GlobalSearchResults = ({ query, userRole, onSelect }) => {
     return text.includes(q) || path.includes(q) || kw.includes(q);
   });
   if (results.length === 0) {
-    return <div className="px-3 py-4 text-xs text-slate-400 text-center">Sin resultados</div>;
+    return <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--nx-text-muted)' }}>Sin resultados</div>;
   }
   return (
     <div className="max-h-60 overflow-auto">
@@ -86,11 +69,11 @@ const GlobalSearchResults = ({ query, userRole, onSelect }) => {
         <button
           key={`${item.path}-${item.title}-${i}`}
           onClick={() => onSelect(item)}
-          className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
         >
-          <item.icon size={16} strokeWidth={2} className="text-slate-400 shrink-0" />
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{item.title}</span>
-          <span className="ml-auto text-[10px] text-slate-400 font-mono">{item.path}</span>
+          <item.icon size={16} strokeWidth={1.75} className="shrink-0" style={{ color: 'var(--nx-text-muted)' }} />
+          <span className="text-sm font-medium" style={{ color: 'var(--nx-text)' }}>{item.title}</span>
+          <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--nx-text-muted)' }}>{item.path}</span>
         </button>
       ))}
     </div>
@@ -101,13 +84,13 @@ const PAGE_VARIANTS = {
   initial:    { opacity: 0, y: 6 },
   animate:    { opacity: 1, y: 0 },
   exit:       { opacity: 0 },
-  transition: { duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] },
+  transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
 };
 
 const Divider = () => (
   <span
     className="shrink-0"
-    style={{ display: 'block', width: '1px', height: '20px', backgroundColor: 'rgba(226,232,240,0.7)' }}
+    style={{ display: 'block', width: '1px', height: '20px', backgroundColor: 'var(--nx-border)' }}
   />
 );
 
@@ -118,13 +101,11 @@ const Layout = () => {
   const [searchQuery, setSearchQuery]     = useState('');
   const [notifCount, setNotifCount]       = useState(0);
   const { user, logout }                  = useAuth();
-  const { darkMode }                      = useTheme();
   const navigate                          = useNavigate();
   const location                          = useLocation();
   const profileRef                        = useRef(null);
   const searchRef                         = useRef(null);
 
-  // Polling y carga inicial de notificaciones
   useEffect(() => {
     const pollNotifs = () => {
       notificationsApi.getAll()
@@ -141,8 +122,8 @@ const Layout = () => {
 
     let interval = null;
     const start = () => {
-      pollNotifs(); // Carga inicial
-      interval = setInterval(pollNotifs, 60000); // Polling 60s
+      pollNotifs();
+      interval = setInterval(pollNotifs, 60000);
     };
     const stop = () => {
       if (interval) clearInterval(interval);
@@ -150,11 +131,7 @@ const Layout = () => {
     };
 
     const handleVisibility = () => {
-      if (document.hidden) {
-        stop();
-      } else {
-        start();
-      }
+      if (document.hidden) { stop(); } else { start(); }
     };
 
     start();
@@ -165,7 +142,6 @@ const Layout = () => {
     };
   }, []);
 
-  // Escuchar cuando Notifications vacía la lista o nuevas de operaciones locales
   useEffect(() => {
     const handler = (e) => {
       const count = e.detail?.count ?? 0;
@@ -189,12 +165,9 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const canSearch = user?.role !== ROLES.RECTOR;
-
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        if (!canSearch) return;
         e.preventDefault();
         setSearchOpen(v => !v);
       }
@@ -202,129 +175,129 @@ const Layout = () => {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [canSearch]);
-
-  const headerBg     = darkMode ? 'rgba(2,6,23,0.90)'      : 'rgba(250,250,249,0.90)';
-  const headerBorder = darkMode ? 'rgba(30,41,59,0.8)'     : 'rgba(226,232,240,0.85)';
-  const bodyBg       = darkMode ? '#020617'                : '#FAFAF9';
-  const footerBg     = darkMode ? '#070D1B'                : '#FFFFFF';
-  const footerBorder = darkMode ? 'rgba(15,23,42,0.8)'     : '#F1F5F9';
+  }, []);
 
   return (
-    <div
-      className="flex min-h-screen w-full transition-colors duration-300"
-      style={{ backgroundColor: bodyBg }}
-    >
+    <div className="flex min-h-screen w-full transition-colors duration-200" style={{ backgroundColor: 'var(--nx-canvas)' }}>
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
 
       <div className="flex-1 flex flex-col min-w-0">
 
-        {/* ── Header — Glassmorphism ── */}
+        {/* ── Header — CMP-031 Topbar, sin glassmorphism ── */}
         <header
           className="sticky top-0 z-30 flex items-center justify-between px-5 lg:px-8 shrink-0"
           style={{
-            height:              '56px',
-            backdropFilter:      'blur(8px)',
-            WebkitBackdropFilter:'blur(8px)',
-            backgroundColor:     headerBg,
-            borderBottom:        `1.5px solid ${headerBorder}`,
+            height: '56px',
+            backgroundColor: 'var(--nx-surface)',
+            borderBottom: '1px solid var(--nx-border)',
           }}
         >
           {/* Left — hamburger + institution identity */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={toggleSidebar}
-              className="lg:hidden shrink-0 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+              className="lg:hidden shrink-0 p-1.5 transition-colors"
+              style={{ color: 'var(--nx-text-muted)' }}
+              aria-label="Abrir menú"
             >
-              <Menu size={20} strokeWidth={2} />
+              <Menu size={20} strokeWidth={1.75} />
             </button>
 
             <div className="min-w-0">
               <p
-                className="font-black uppercase truncate leading-none"
-                style={{ fontSize: '11px', letterSpacing: '0.02em', color: darkMode ? '#F1F5F9' : '#003366' }}
+                className="font-semibold truncate leading-none"
+                style={{ fontSize: '14px', color: 'var(--nx-text)' }}
               >
                 {user?.school_name ?? 'Sistema NEXO'}
               </p>
               <p
                 className="mt-1 leading-none select-none truncate"
-                style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.22em', color: '#00A67E', textTransform: 'uppercase' }}
+                style={{ fontSize: '11px', fontWeight: 500, color: 'var(--nx-success)' }}
               >
                 {roleDisplay}
               </p>
             </div>
           </div>
 
-          {/* Center — global search (oculto para RECTOR) */}
-          {canSearch && (
-            <div className="hidden md:flex flex-1 justify-center px-4 max-w-md" ref={searchRef}>
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                style={{ border: '1.5px solid #E2E8F0' }}
-              >
-                <Search size={13} strokeWidth={2} />
-                <span className="flex-1 text-left">Buscar módulo…</span>
-                <span className="hidden lg:inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-300">
-                  <Command size={10} strokeWidth={2} />K
-                </span>
-              </button>
+          {/* Center — global search */}
+          <div className="hidden md:flex flex-1 justify-center px-4 max-w-md" ref={searchRef}>
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors"
+              style={{
+                color: 'var(--nx-text-muted)',
+                backgroundColor: 'var(--nx-surface-subtle)',
+                border: '1px solid var(--nx-border)',
+                borderRadius: 'var(--nx-radius-control)',
+              }}
+            >
+              <Search size={13} strokeWidth={1.75} />
+              <span className="flex-1 text-left">Buscar módulo…</span>
+              <span className="hidden lg:inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: 'var(--nx-text-muted)' }}>
+                <Command size={10} strokeWidth={2} />K
+              </span>
+            </button>
 
-              <AnimatePresence>
-                {searchOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-full max-w-md bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden"
-                    style={{ border: '1.5px solid #E2E8F0' }}
-                  >
-                    <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
-                      <Search size={14} className="text-slate-400" />
-                      <input
-                        autoFocus
-                        type="text"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Escribe nombre del módulo o función…"
-                        className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
-                      />
-                      {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <GlobalSearchResults
-                      query={searchQuery}
-                      userRole={user?.role}
-                      onSelect={(item) => {
-                        setSearchOpen(false);
-                        setSearchQuery('');
-                        if (item.path === '/auditoria' && AUDIT_SUBDIVISIONS.some(s => s.title === item.title)) {
-                          navigate(`/auditoria?sub=${encodeURIComponent(item.title)}`);
-                        } else if (item.path === '/operacion' && OPERATION_COMMANDS.some(c => c.title === item.title)) {
-                          navigate(`/operacion?cmd=${encodeURIComponent(item.title)}`);
-                        } else {
-                          navigate(item.path);
-                        }
-                      }}
+            <AnimatePresence>
+              {searchOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-full max-w-md z-50 overflow-hidden"
+                  style={{
+                    backgroundColor: 'var(--nx-surface)',
+                    border: '1px solid var(--nx-border)',
+                    borderRadius: 'var(--nx-radius-surface)',
+                    boxShadow: 'var(--nx-shadow-high)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--nx-border)' }}>
+                    <Search size={14} style={{ color: 'var(--nx-text-muted)' }} />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Escribe nombre del módulo o función…"
+                      className="flex-1 text-sm bg-transparent outline-none placeholder:text-[var(--nx-text-muted)]"
+                      style={{ color: 'var(--nx-text)' }}
                     />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery('')} style={{ color: 'var(--nx-text-muted)' }}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <GlobalSearchResults
+                    query={searchQuery}
+                    userRole={user?.role}
+                    onSelect={(item) => {
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                      if (item.path === '/auditoria' && AUDIT_SUBDIVISIONS.some(s => s.title === item.title)) {
+                        navigate(`/auditoria?sub=${encodeURIComponent(item.title)}`);
+                      } else if (item.path === '/operacion' && OPERATION_COMMANDS.some(c => c.title === item.title)) {
+                        navigate(`/operacion?cmd=${encodeURIComponent(item.title)}`);
+                      } else {
+                        navigate(item.path);
+                      }
+                    }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* Right — live status + bell + user */}
           <div className="flex items-center gap-3 shrink-0">
 
-            {/* Biometric live status */}
+            {/* Online status */}
             <div className="hidden sm:flex items-center gap-1.5 select-none">
-              <span className="block h-1.5 w-1.5 rounded-full animate-pulse-bio" style={{ backgroundColor: '#00A67E' }} />
+              <span className="block h-1.5 w-1.5 rounded-full animate-pulse-bio" style={{ backgroundColor: 'var(--nx-success)' }} />
               <span
-                style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#00A67E', textTransform: 'uppercase' }}
+                style={{ fontSize: '11px', fontWeight: 500, color: 'var(--nx-success)' }}
               >
                 En línea
               </span>
@@ -335,14 +308,15 @@ const Layout = () => {
             {/* Notifications */}
             <button
               onClick={() => navigate('/notificaciones')}
-              className="relative p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              className="relative p-1.5 transition-colors"
+              style={{ color: 'var(--nx-text-muted)' }}
               title="Notificaciones"
             >
-              <Bell size={18} strokeWidth={2} />
+              <Bell size={18} strokeWidth={1.75} />
               {notifCount > 0 && (
                 <span
                   className="absolute top-1 right-1 block h-2 w-2 rounded-full"
-                  style={{ backgroundColor: '#00A67E', boxShadow: '0 0 0 2px ' + (darkMode ? '#020617' : '#FAFAF9') }}
+                  style={{ backgroundColor: 'var(--nx-success)', boxShadow: '0 0 0 2px var(--nx-surface)' }}
                 />
               )}
             </button>
@@ -357,21 +331,21 @@ const Layout = () => {
               >
                 <div className="hidden sm:block text-right">
                   <p
-                    className="font-bold leading-none truncate max-w-[120px]"
-                    style={{ fontSize: '12px', color: darkMode ? '#F1F5F9' : '#1E293B' }}
+                    className="font-medium leading-none truncate max-w-[120px]"
+                    style={{ fontSize: '12px', color: 'var(--nx-text)' }}
                   >
                     {user?.nombre}
                   </p>
                   <p
                     className="mt-0.5 leading-none select-none"
-                    style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#94A3B8', textTransform: 'uppercase' }}
+                    style={{ fontSize: '11px', fontWeight: 500, color: 'var(--nx-text-muted)' }}
                   >
                     {roleDisplay}
                   </p>
                 </div>
                 <div
-                  className="flex items-center justify-center w-8 h-8 shrink-0 text-xs font-black text-white overflow-hidden"
-                  style={{ backgroundColor: '#003366' }}
+                  className="flex items-center justify-center w-8 h-8 shrink-0 text-xs font-semibold overflow-hidden"
+                  style={{ backgroundColor: 'var(--nx-accent)', color: 'var(--nx-accent-text)', borderRadius: 'var(--nx-radius-control)' }}
                 >
                   {user?.profile_photo_url ? (
                     <img src={user.profile_photo_url} alt="" className="w-full h-full object-cover" />
@@ -379,7 +353,7 @@ const Layout = () => {
                     initial
                   )}
                 </div>
-                <ChevronDown size={12} className="text-slate-400 hidden sm:block" />
+                <ChevronDown size={12} className="hidden sm:block" style={{ color: 'var(--nx-text-muted)' }} />
               </button>
 
               {/* Profile dropdown */}
@@ -389,22 +363,30 @@ const Layout = () => {
                     initial={{ opacity: 0, y: -4, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden z-50"
+                    transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute right-0 top-full mt-2 w-48 overflow-hidden z-50"
+                    style={{
+                      backgroundColor: 'var(--nx-surface)',
+                      border: '1px solid var(--nx-border)',
+                      borderRadius: 'var(--nx-radius-surface)',
+                      boxShadow: 'var(--nx-shadow-high)',
+                    }}
                   >
                     <button
                       onClick={() => { setProfileOpen(false); navigate('/perfil'); }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium transition-colors hover:bg-[var(--nx-surface-subtle)]"
+                      style={{ color: 'var(--nx-text)' }}
                     >
-                      <Settings size={14} strokeWidth={2} />
+                      <Settings size={14} strokeWidth={1.75} />
                       Editar perfil
                     </button>
-                    <div className="border-t border-slate-100 dark:border-slate-800" />
+                    <div style={{ borderTop: '1px solid var(--nx-border)' }} />
                     <button
                       onClick={() => { setProfileOpen(false); logout(); }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs font-medium transition-colors hover:bg-[var(--nx-surface-subtle)]"
+                      style={{ color: 'var(--nx-danger)' }}
                     >
-                      <LogOut size={14} strokeWidth={2} />
+                      <LogOut size={14} strokeWidth={1.75} />
                       Cerrar sesión
                     </button>
                   </motion.div>
@@ -434,12 +416,12 @@ const Layout = () => {
         {/* ── Status bar footer ── */}
         <footer
           className="shrink-0 flex items-center justify-between px-8 py-2"
-          style={{ borderTop: `1.5px solid ${footerBorder}`, backgroundColor: footerBg }}
+          style={{ borderTop: '1px solid var(--nx-border)', backgroundColor: 'var(--nx-surface)' }}
         >
-          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase', userSelect: 'none' }}>
+          <p style={{ fontSize: '11px', fontWeight: 500, color: 'var(--nx-text-muted)', userSelect: 'none' }}>
             NEXO · Sistema de custodia estudiantil en tiempo real
           </p>
-          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#CBD5E1', textTransform: 'uppercase', userSelect: 'none' }}>
+          <p style={{ fontSize: '11px', fontWeight: 500, color: 'var(--nx-text-muted)', userSelect: 'none' }}>
             © {new Date().getFullYear()} · Uso Restringido
           </p>
         </footer>

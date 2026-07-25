@@ -27,7 +27,7 @@ const Consultation = lazy(() => import('./pages/Consultation'))
 const Enrollment = lazy(() => import('./pages/Enrollment'))
 const Unauthorized = lazy(() => import('./pages/Unauthorized'))
 const Audit = lazy(() => import('./pages/Audit'))
-const Seguimiento = lazy(() => import('./pages/Seguimiento'))
+const Casos = lazy(() => import('./pages/Seguimiento'))
 const Downloads  = lazy(() => import('./pages/Downloads'))
 const InstallPage = lazy(() => import('./pages/InstallPage'))
 const Profile = lazy(() => import('./pages/Profile'))
@@ -122,16 +122,16 @@ function App() {
 
                 <Route
                   path="/consulta"
-                  element={<ProtectedRoute allowedRoles={[ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}
+                  element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}
                 >
                   <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
                 </Route>
 
                 <Route
-                  path="/seguimiento"
-                  element={<ProtectedRoute allowedRoles={[ROLES.COORDINADOR, ROLES.RECTOR, ROLES.PSICORIENTADOR]} />}
+                  path="/casos"
+                  element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR]} />}
                 >
-                  <Route index element={<ErrorBoundary><Seguimiento /></ErrorBoundary>} />
+                  <Route index element={<ErrorBoundary><Casos /></ErrorBoundary>} />
                 </Route>
 
                 <Route

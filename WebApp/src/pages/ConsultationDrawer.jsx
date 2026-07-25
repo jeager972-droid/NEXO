@@ -18,8 +18,8 @@ import { fmt12h, formatCellValue, humanizeColumn, EXCLUDE_COLS } from '../utils/
 
 const RiskBadge = ({ level }) => {
   const [color, border, bg] = level === 'CRITICAL'
-    ? ['#DC2626', '#DC2626', 'rgba(220,38,38,0.07)']
-    : ['#D97706', '#D97706', 'rgba(217,119,6,0.07)'];
+    ? ['var(--nx-danger)', 'var(--nx-danger)', 'color-mix(in oklch, var(--nx-danger) 7%, transparent)']
+    : ['var(--nx-warning)', 'var(--nx-warning)', 'color-mix(in oklch, var(--nx-warning) 7%, transparent)'];
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
       borderRadius: '999px', border: `1px solid ${border}`, backgroundColor: bg, color,
@@ -72,7 +72,7 @@ function SearchableSelect({ label, options, value, onChange, placeholder, loadin
                 value={q}
                 onChange={e => setQ(e.target.value)}
                 placeholder="Buscar…"
-                className="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-[#003366]"
+                className="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-[var(--nx-accent)]"
                 onClick={e => e.stopPropagation()}
               />
             </div>
@@ -84,7 +84,7 @@ function SearchableSelect({ label, options, value, onChange, placeholder, loadin
             <div
               key={o.id}
               onClick={() => { onChange(o.id); setOpen(false); setQ(''); }}
-              className={`px-3 py-2 text-xs cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-slate-700 ${o.id === value ? 'bg-[#003366]/5 text-[#003366] font-semibold' : 'text-slate-700 dark:text-slate-200'}`}
+              className={`px-3 py-2 text-xs cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-slate-700 ${o.id === value ? 'bg-[var(--nx-accent)]/5 text-[var(--nx-accent)] font-semibold' : 'text-slate-700 dark:text-slate-200'}`}
             >
               {o.name}
             </div>
@@ -171,7 +171,7 @@ const TeacherQueryPanel = ({
             <div className="relative">
               <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]" />
+                className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--nx-accent)]/30 focus:border-[var(--nx-accent)]" />
             </div>
           </div>
           <div>
@@ -179,7 +179,7 @@ const TeacherQueryPanel = ({
             <div className="relative">
               <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#003366]/30 focus:border-[#003366]" />
+                className="w-full pl-8 pr-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--nx-accent)]/30 focus:border-[var(--nx-accent)]" />
             </div>
           </div>
         </div>
@@ -187,7 +187,7 @@ const TeacherQueryPanel = ({
         <button
           onClick={onQuery}
           disabled={!selectedGroup || loadingData}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#003366] hover:bg-[#002855] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--nx-accent)] hover:bg-[var(--nx-accent)] text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-60"
         >
           {loadingData ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
           Consultar
@@ -224,7 +224,7 @@ const TeacherQueryPanel = ({
 
         {!error && loadingData && (!hasQueried || rows.length === 0) && (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
-            <Loader2 size={28} strokeWidth={1.5} className="text-[#003366] animate-spin" />
+            <Loader2 size={28} strokeWidth={1.5} className="text-[var(--nx-accent)] animate-spin" />
             <p className="text-xs text-slate-400 font-medium">Consultando registros…</p>
           </div>
         )}
@@ -247,7 +247,7 @@ const TeacherQueryPanel = ({
           <div className="p-5 space-y-5 relative">
             {loadingData && (
               <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 flex items-center justify-center z-10 backdrop-blur-sm rounded-lg">
-                <Loader2 size={32} strokeWidth={2} className="text-[#003366] animate-spin" />
+                <Loader2 size={32} strokeWidth={2} className="text-[var(--nx-accent)] animate-spin" />
               </div>
             )}
             <div className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-opacity duration-200 ${loadingData ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
@@ -317,17 +317,17 @@ export const ConsultationDrawer = ({
       <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
         className="fixed right-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-full overflow-hidden"
-        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid #E2E8F0' }}
+        style={{ top: '56px', bottom: 0, maxWidth: '640px', borderLeft: '1.5px solid var(--nx-border)' }}
       >
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid #F1F5F9' }}>
+        <div className="shrink-0 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1.5px solid var(--nx-surface-subtle)' }}>
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'rgba(0,51,102,0.08)' }}>
-              <Search size={16} strokeWidth={2} style={{ color: '#003366' }} />
+            <div className="flex items-center justify-center w-9 h-9" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) 8%, transparent)' }}>
+              <Search size={16} strokeWidth={2} style={{ color: 'var(--nx-accent)' }} />
             </div>
             <div>
-              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: '#1E293B' }}>{item}</p>
-              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+              <p className="text-sm font-black uppercase dark:text-white" style={{ letterSpacing: '0.06em', color: 'var(--nx-text)' }}>{item}</p>
+              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                 {isTeacherModule ? 'Consulta histórica por grupo' : 'Consulta de Datos Institucionales'}
               </p>
             </div>
@@ -355,29 +355,29 @@ export const ConsultationDrawer = ({
                 </div>
                 <div className="text-center space-y-2 max-w-xs px-4">
                   <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em',
-                              color: '#EF4444', textTransform: 'uppercase' }}>
+                              color: 'var(--nx-danger)', textTransform: 'uppercase' }}>
                     Error de consulta
                   </p>
-                  <p style={{ fontSize: '11px', color: '#94A3B8', lineHeight: 1.6 }}>
+                  <p style={{ fontSize: '11px', color: 'var(--nx-text-muted)', lineHeight: 1.6 }}>
                     {error}
                   </p>
                 </div>
               </div>
             ) : loadingData ? (
               <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
-                <Loader2 size={32} className="animate-spin text-[#003366] dark:text-slate-400" />
-                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                <Loader2 size={32} className="animate-spin text-[var(--nx-accent)] dark:text-slate-400" />
+                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                   Cargando datos...
                 </p>
               </div>
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
-              <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
+              <div className="overflow-x-auto" style={{ border: '1.5px solid var(--nx-border)' }}>
                 <table className="w-full min-w-[440px]">
                   <thead>
-                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                    <tr style={{ backgroundColor: 'var(--nx-surface-subtle)', borderBottom: '1.5px solid var(--nx-border)' }}>
                       {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map(h => (
                         <th key={h} className="px-4 py-3 text-left"
-                          style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>
+                          style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -391,11 +391,11 @@ export const ConsultationDrawer = ({
                       })
                       .map((s, i, arr) => (
                       <tr key={s.student_id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                        style={{ borderBottom: i < arr.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--nx-surface-subtle)' : 'none' }}>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 shrink-0 flex items-center justify-center text-xs font-black text-white"
-                                 style={{ backgroundColor: '#003366' }}>
+                                 style={{ backgroundColor: 'var(--nx-accent)' }}>
                               {(s.last_name || s.first_name || '?').charAt(0)}
                             </div>
                             <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.last_name} {s.first_name}</span>
@@ -403,7 +403,7 @@ export const ConsultationDrawer = ({
                         </td>
                         <td className="px-4 py-4"><span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{s.group_name}</span></td>
                         <td className="px-4 py-4">
-                          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', fontWeight: 700, color: s.risk_score >= 85 ? '#DC2626' : '#D97706' }}>
+                          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '13px', fontWeight: 700, color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>
                             {s.risk_score}
                           </span>
                         </td>
@@ -416,7 +416,7 @@ export const ConsultationDrawer = ({
                               late_count: s.late_count,
                               risk_level: s.risk_level
                             })}
-                            className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:underline"
+                            className="text-[10px] font-bold uppercase tracking-widest text-[var(--nx-accent)] hover:underline"
                           >
                             Empezar Seguimiento
                           </button>
@@ -427,18 +427,18 @@ export const ConsultationDrawer = ({
                 </table>
               </div>
             ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
-              <div className="overflow-x-auto" style={{ border: '1.5px solid #E2E8F0' }}>
+              <div className="overflow-x-auto" style={{ border: '1.5px solid var(--nx-border)' }}>
                 <table className="w-full min-w-[500px]">
                   <thead>
-                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                    <tr style={{ backgroundColor: 'var(--nx-surface-subtle)', borderBottom: '1.5px solid var(--nx-border)' }}>
                       {keys.map(k => (
                         <th key={k} className="px-4 py-3 text-left"
-                          style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                          style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                           {dynamicColumns[k]}
                         </th>
                       ))}
                       {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== ROLES.DOCENTE && (
-                        <th className="px-4 py-3 text-right" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: '#94A3B8', textTransform: 'uppercase' }}>
+                        <th className="px-4 py-3 text-right" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.2em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>
                           Acción
                         </th>
                       )}
@@ -447,7 +447,7 @@ export const ConsultationDrawer = ({
                   <tbody className="bg-white dark:bg-slate-900">
                     {dynamicData.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                        style={{ borderBottom: i < dynamicData.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        style={{ borderBottom: i < dynamicData.length - 1 ? '1px solid var(--nx-surface-subtle)' : 'none' }}>
                         {keys.map(k => (
                           <td key={k} className="px-4 py-3 text-[11px] text-slate-700 dark:text-slate-300 whitespace-nowrap max-w-[200px] truncate">
                             {formatCellValue(k, row[k])}
@@ -465,7 +465,7 @@ export const ConsultationDrawer = ({
                                 }
                                 openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, meta)
                               }}
-                              className="text-[10px] font-bold uppercase tracking-widest text-[#003366] hover:bg-[#003366]/10 px-2 py-1 rounded transition-colors"
+                              className="text-[10px] font-bold uppercase tracking-widest text-[var(--nx-accent)] hover:bg-[var(--nx-accent)]/10 px-2 py-1 rounded transition-colors"
                             >
                               Ver
                             </button>
@@ -480,8 +480,8 @@ export const ConsultationDrawer = ({
               <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
                 <Activity size={32} strokeWidth={1} className="text-slate-200 dark:text-slate-700" />
                 <div className="text-center space-y-1">
-                  <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: '#CBD5E1', textTransform: 'uppercase' }}>Sin datos disponibles</p>
-                  <p style={{ fontSize: '11px', color: '#CBD5E1' }} className="max-w-xs">No se encontraron registros para este módulo.</p>
+                  <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--nx-text-muted)', textTransform: 'uppercase' }}>Sin datos disponibles</p>
+                  <p style={{ fontSize: '11px', color: 'var(--nx-text-muted)' }} className="max-w-xs">No se encontraron registros para este módulo.</p>
                 </div>
               </div>
             )}
