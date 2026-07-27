@@ -61,7 +61,6 @@ add_executable(nexo-edge
     src/interoperabilidad/audit_trail.cpp
     src/mqtt/mqtt_command_worker.cpp
     src/hardware/watchdog.cpp
-    src/hardware/real/UareU5300BiometricSensor.cpp
 )
 
 target_include_directories(nexo-edge PRIVATE ${EDGE_INCLUDE_DIR})
@@ -136,6 +135,7 @@ set(UAREU_SDK_LIBS
 )
 if(EXISTS ${UAREU_SDK_LIB_DIR}/libdpfpdd.so AND EXISTS ${UAREU_SDK_LIB_DIR}/libdpfj.so)
     message(STATUS "U.are.U SDK found for ${UAREU_ARCH}")
+    target_sources(nexo-edge PRIVATE src/hardware/real/UareU5300BiometricSensor.cpp)
     target_include_directories(nexo-edge PRIVATE ${UAREU_SDK_ROOT}/Include)
     target_link_libraries(nexo-edge PRIVATE ${UAREU_SDK_LIBS} ${CMAKE_DL_LIBS})
     get_filename_component(UAREU_SDK_LIB_DIR_ABS "${UAREU_SDK_LIB_DIR}" ABSOLUTE)
