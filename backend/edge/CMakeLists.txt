@@ -75,6 +75,12 @@ if(NOT CURL_FOUND)
     message(FATAL_ERROR "curl/curl.h no encontrado.\n${FEDORA_DEPS_MSG}")
 endif()
 find_package(SQLite3 REQUIRED)
+if(NOT TARGET SQLite3::SQLite3)
+    add_library(SQLite3::SQLite3 UNKNOWN IMPORTED)
+    set_target_properties(SQLite3::SQLite3 PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${SQLite3_INCLUDE_DIRS}"
+        IMPORTED_LOCATION "${SQLite3_LIBRARIES}")
+endif()
 find_package(spdlog)
 if(NOT spdlog_FOUND)
     message(FATAL_ERROR "spdlog no encontrado.\n${FEDORA_DEPS_MSG}")
