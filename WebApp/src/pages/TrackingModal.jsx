@@ -149,7 +149,10 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               </Surface>
 
               <div className="space-y-3">
-                <p className="text-label text-[var(--nx-text)]">Notas</p>
+                <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-2">
+                  <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                  <p className="text-label text-[var(--nx-text)]">Notas</p>
+                </div>
                 {notes.length === 0 ? (
                   <p className="text-body-sm text-[var(--nx-text-muted)]">Aún no hay notas.</p>
                 ) : (

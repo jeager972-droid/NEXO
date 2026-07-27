@@ -29,28 +29,33 @@ Surface.displayName = 'Surface';
 /**
  * Encabezado de pantalla. `eyebrow` da contexto temporal o de alcance;
  * `meta` admite estado de datos (última actualización, caché, alcance).
+ * Encapsulado en Surface con barra accent superior (moodboard `.nexo-ds::before`).
  */
 export const PageHeader = ({ eyebrow, title, subtitle, meta, actions, className }) => (
-  <header className={cn('flex flex-col gap-5 md:flex-row md:items-start md:justify-between', className)}>
-    <div className="min-w-0 max-w-reading">
-      {eyebrow && (
-        <p className="mb-2 flex items-center gap-2 text-eyebrow uppercase text-[var(--nx-text-muted)]">
-          {eyebrow}
-        </p>
-      )}
-      <h1 className="text-h1 tracking-[-0.02em] text-[var(--nx-text)]">{title}</h1>
-      {subtitle && <p className="mt-2 text-body text-[var(--nx-text-muted)]">{subtitle}</p>}
-      {meta && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">{meta}</div>}
+  <header className={cn('relative overflow-hidden rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)]', className)}>
+    <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[var(--nx-accent)] via-[oklch(52%_0.125_245)] to-[var(--nx-accent)]" />
+    <div className="flex flex-col gap-4 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+      <div className="min-w-0 max-w-reading">
+        {eyebrow && (
+          <p className="mb-2 flex items-center gap-1.5 text-eyebrow uppercase text-[var(--nx-text-muted)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--nx-accent)]" />
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-h1 tracking-[-0.02em] text-[var(--nx-text)]">{title}</h1>
+        {subtitle && <p className="mt-2 text-body text-[var(--nx-text-muted)]">{subtitle}</p>}
+        {meta && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">{meta}</div>}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
-    {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
   </header>
 );
 
 export const Section = ({ title, subtitle, children, action, className }) => (
   <section className={cn('space-y-4', className)}>
     {(title || subtitle || action) && (
-      <div className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
+      <div className="flex items-end justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
+        <div className="min-w-0 border-l-2 border-[var(--nx-accent)] pl-3">
           {title && <h2 className="text-h2 tracking-[-0.02em] text-[var(--nx-text)]">{title}</h2>}
           {subtitle && <p className="mt-1 text-body-sm text-[var(--nx-text-muted)]">{subtitle}</p>}
         </div>

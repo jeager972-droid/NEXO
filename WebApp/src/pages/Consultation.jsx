@@ -136,6 +136,7 @@ const Consultation = () => {
     }
     const abortController = new AbortController();
     setLoadingData(true);
+    setHasQueried(true);
 
     const moduleSlug = activeItem === 'Análisis de Riesgo' ? null : MODULE_SLUGS[activeItem];
     if (activeItem !== 'Análisis de Riesgo' && !moduleSlug) {

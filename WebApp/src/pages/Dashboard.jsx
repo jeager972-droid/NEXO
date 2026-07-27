@@ -13,10 +13,13 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { trackingApi } from '../api/tracking';
+import { auditApi } from '../api/audit';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Section, Surface, PageHeader } from '../components/ui/Surface';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Drawer } from '../components/ui/Overlay';
@@ -119,6 +122,8 @@ const AdminDashboard = ({ stats, loading }) => {
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [activePerms, setActivePerms] = useState([]);
+  const [permsLoading, setPermsLoading] = useState(true);
 
   const localDateStr = (date = new Date()) => {
     const y = date.getFullYear();
@@ -190,6 +195,38 @@ const AdminDashboard = ({ stats, loading }) => {
           ))}
         </div>
       )}
+
+      <Section title="Permisos activos" subtitle="Salidas y permisos vigentes en la institución">
+        {permsLoading ? (
+          <Surface className="p-5 space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </Surface>
+        ) : activePerms.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activePerms.slice(0, 6).map((p, i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-body text-[var(--nx-text)] truncate font-medium">{p.student_name || `${p.last_name || ''} ${p.first_name || ''}`.trim() || 'Estudiante'}</p>
+                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">{p.group_name || 'Sin grupo'}</p>
+                  </div>
+                  <Badge scheme="success" dot>Activo</Badge>
+                </div>
+                <div className="mt-3 flex items-center gap-3 text-caption text-[var(--nx-text-muted)]">
+                  {p.permiso_type && <span>{p.permiso_type}</span>}
+                  {p.time_start && <span>· {p.time_start}{p.time_end ? `–${p.time_end}` : ''}</span>}
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Surface>
+            <EmptyState icon={<FileText size={32} className="text-[var(--nx-border)]" />} title="Sin permisos activos" description="No hay permisos vigentes para hoy." />
+          </Surface>
+        )}
+      </Section>
 
       <Section title="Eventos recientes" subtitle="Últimas novedades institucionales">
         <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />

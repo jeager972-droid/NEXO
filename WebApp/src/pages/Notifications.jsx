@@ -18,7 +18,6 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
-import LogoNexo from '../components/LogoNexo';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
 const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
@@ -54,30 +53,31 @@ const GROUP_ORDER = ['NEXO · Inteligencia', 'Operaciones', 'WhatsApp'];
 const NotifItem = ({ notif, onClick }) => {
   const meta = typeMeta(notif.type);
   const Icon = meta.icon;
+  const isNexo = notif.type === 'ALERT' || notif.type === 'INFO';
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
+      className="group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
     >
       <div
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
-        style={{ backgroundColor: `color-mix(in oklch, var(--nx-${meta.scheme}) 12%, transparent)`, color: `var(--nx-${meta.scheme})` }}
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-caption font-bold ${isNexo ? 'bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : ''}`}
+        style={!isNexo ? { backgroundColor: `color-mix(in oklch, var(--nx-${meta.scheme}) 12%, transparent)`, color: `var(--nx-${meta.scheme})` } : undefined}
       >
-        {notif.type === 'ALERT' || notif.type === 'INFO' ? (
-          <LogoNexo className="h-4" showText={false} />
-        ) : (
-          <Icon size={16} />
-        )}
+        {isNexo ? 'N' : <Icon size={14} />}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-body text-[var(--nx-text)] truncate">{notif.title || notif.message}</p>
-          {!notif.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nx-accent)] nx-blink" />}
+        <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <p className="text-body text-[var(--nx-text)] truncate font-medium">{notif.title || notif.message}</p>
+            {!notif.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nx-accent)] nx-blink" />}
+          </div>
+          <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5 line-clamp-2">{notif.message}</p>
         </div>
-        <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5 line-clamp-1">{notif.message}</p>
-        <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">{relTime(notif.created_at)}</p>
+        <div className="flex items-center gap-2 mt-1 px-1">
+          <p className="text-caption text-[var(--nx-text-muted)] font-medium tabular-nums">{relTime(notif.created_at)}</p>
+          <span className="text-caption text-[var(--nx-accent)] font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-fast">Ver <ChevronRight size={10} /></span>
+        </div>
       </div>
-      <ChevronRight size={14} className="shrink-0 text-[var(--nx-text-muted)]" />
     </button>
   );
 };
@@ -230,26 +230,22 @@ const Notifications = () => {
             onClose={() => setDetail(null)}
             size="sm"
           >
-            <div className="p-6 space-y-4">
+            <div className="p-5 space-y-3">
               <div className="flex items-center gap-3">
                 <div
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
-                  style={{ backgroundColor: `color-mix(in oklch, var(--nx-${typeMeta(detail.type).scheme}) 12%, transparent)`, color: `var(--nx-${typeMeta(detail.type).scheme})` }}
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full font-bold text-body ${detail.type === 'ALERT' || detail.type === 'INFO' ? 'bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : ''}`}
+                  style={!(detail.type === 'ALERT' || detail.type === 'INFO') ? { backgroundColor: `color-mix(in oklch, var(--nx-${typeMeta(detail.type).scheme}) 12%, transparent)`, color: `var(--nx-${typeMeta(detail.type).scheme})` } : undefined}
                 >
-                  {detail.type === 'ALERT' || detail.type === 'INFO' ? (
-                    <LogoNexo className="h-5" showText={false} />
-                  ) : (
-                    (() => { const I = typeMeta(detail.type).icon; return <I size={18} />; })()
-                  )}
+                  {detail.type === 'ALERT' || detail.type === 'INFO' ? 'N' : (() => { const I = typeMeta(detail.type).icon; return <I size={18} />; })()}
                 </div>
                 <div>
                   <Badge scheme={typeMeta(detail.type).scheme} dot>{typeMeta(detail.type).label}</Badge>
-                  <p className="text-caption text-[var(--nx-text-muted)] mt-1">{relTime(detail.created_at)}</p>
+                  <p className="text-caption text-[var(--nx-text-muted)] mt-1 tabular-nums">{relTime(detail.created_at)}</p>
                 </div>
               </div>
-              <Surface className="p-4">
+              <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3">
                 <p className="text-body text-[var(--nx-text)] leading-relaxed">{detail.message}</p>
-              </Surface>
+              </div>
               {(() => {
                 const meta = parseMeta(detail.metadata_json);
                 if (meta?.action === 'iniciar_seguimiento' && meta.student_id && !isStaff) {

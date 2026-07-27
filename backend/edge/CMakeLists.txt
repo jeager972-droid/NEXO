@@ -146,6 +146,7 @@ if(EXISTS ${UAREU_SDK_LIB_DIR}/libdpfpdd.so AND EXISTS ${UAREU_SDK_LIB_DIR}/libd
     set_property(TARGET nexo-edge APPEND PROPERTY INSTALL_RPATH "$ORIGIN/${UAREU_RPATH_REL}")
 else()
     message(WARNING "U.are.U SDK no encontrado en ${UAREU_SDK_LIB_DIR}. El sensor UareU5300 no compilará.")
+    target_sources(nexo-edge PRIVATE src/hardware/real/UareU5300BiometricSensor_stub.cpp)
 endif()
 
 target_link_libraries(nexo-edge PRIVATE
