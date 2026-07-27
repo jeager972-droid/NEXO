@@ -25,7 +25,7 @@ const FieldShell = ({ id, label, error, help, hint, required, children, classNam
       <div className="flex items-baseline justify-between gap-3">
         <label htmlFor={id} className="block text-label text-[var(--nx-text)]">
           {label}
-          {required && <span className="ml-1 text-[var(--nx-danger)]" aria-hidden>*</span>}
+          {required && <span className="ml-0.5 text-[var(--nx-text-muted)]" aria-hidden>*</span>}
         </label>
         {hint && <span className="text-caption text-[var(--nx-text-muted)]">{hint}</span>}
       </div>

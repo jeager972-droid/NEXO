@@ -56,7 +56,7 @@ export const OperationResult = ({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: EASE }}
-      className="mx-auto max-w-lg space-y-6"
+      className="mx-auto max-w-lg py-8 space-y-6"
     >
       <div className="flex flex-col items-center text-center">
         <div className={cn('grid h-16 w-16 place-items-center rounded-full', v.ring, v.animate)}>

@@ -69,7 +69,7 @@ export const studentsApi = {
     const deduped = [];
     const seen = new Set();
     for (const g of rows) {
-      const norm = (g.name || g.group_name || '').replace(/[\s\-]/g, '').toUpperCase();
+      const norm = (g.name || g.group_name || '').replace(/[\s-]/g, '').toUpperCase();
       if (!norm) continue;
       if (!seen.has(norm)) {
         seen.add(norm);

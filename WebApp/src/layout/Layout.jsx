@@ -107,7 +107,7 @@ const Layout = () => {
             >
               <Bell size={20} />
               {notifCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-[var(--nx-accent)] border-2 border-[var(--nx-surface)]" />
+                <span className="nx-blink absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-[var(--nx-accent)] border-2 border-[var(--nx-surface)]" />
               )}
             </button>
 

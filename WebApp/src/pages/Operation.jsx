@@ -21,7 +21,8 @@ import { Input, Textarea } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Select } from '../components/ui/Select';
-import { SkeletonMetrics } from '../components/ui/Skeleton';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { SkeletonCards } from '../components/ui/Skeleton';
 import { Stepper } from '../components/ui/Stepper';
 import { OperationResult } from '../components/patterns/OperationResult';
 import { humanizeError } from '../utils/messages';
@@ -29,7 +30,7 @@ import { humanizeError } from '../utils/messages';
 const COMMANDS_CATALOG = [
   { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'date', 'time', 'message'] },
   { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'] },
-  { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'], isUrgent: true },
+  { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'] },
   { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'] },
   { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'] },
   { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'] },
@@ -81,7 +82,13 @@ const Operation = () => {
   }, [fetchData]);
 
   const userRole = user?.role;
-  const filteredCommands = useMemo(() => COMMANDS_CATALOG.filter((cmd) => userRole && cmd.roles.includes(userRole)), [userRole]);
+  const filteredCommands = useMemo(() => COMMANDS_CATALOG
+    .filter((cmd) => userRole && cmd.roles.includes(userRole))
+    .sort((a, b) => {
+      if (a.id === 'sos') return 1;
+      if (b.id === 'sos') return -1;
+      return 0;
+    }), [userRole]);
 
   useEffect(() => {
     const cmdTitle = searchParams.get('cmd');
@@ -93,10 +100,11 @@ const Operation = () => {
   }, [searchParams, setSearchParams, filteredCommands]);
 
   if (loading) {
+    const skeletonCount = filteredCommands.length > 0 ? filteredCommands.length : 6;
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Comandos institucionales" title="Operaciones" />
-        <SkeletonMetrics count={6} className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3" />
+        <PageHeader eyebrow="Comandos institucionales" title="Operaciones" subtitle="Selecciona un comando institucional" />
+        <SkeletonCards count={skeletonCount} />
       </div>
     );
   }
@@ -114,13 +122,12 @@ const Operation = () => {
           {filteredCommands.map((cmd) => (
             <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className="p-5">
               <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-control" style={{ backgroundColor: cmd.isUrgent ? 'color-mix(in_oklch,var(--nx-danger)_12%,transparent)' : 'color-mix(in_oklch,var(--nx-accent)_12%,transparent)' }}>
-                  <cmd.icon size={20} style={{ color: cmd.isUrgent ? 'var(--nx-danger)' : 'var(--nx-accent)' }} />
+                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_12%,transparent)]">
+                  <cmd.icon size={20} className="text-[var(--nx-accent)]" />
                 </div>
                 <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
               </div>
               <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
-              {cmd.isUrgent && <Badge scheme="danger" className="mt-2">Urgente</Badge>}
             </Card>
           ))}
         </div>
@@ -236,17 +243,17 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     }
   };
 
-  const accent = command.isUrgent ? 'var(--nx-danger)' : 'var(--nx-accent)';
+  const accent = 'var(--nx-accent)';
 
   const renderField = (field) => {
     if (field === 'group') {
       const groupLabel = (g) => g?.name || g?.group_name || g;
-      const options = [{ value: '', label: '— Seleccionar grupo —' }, ...groups.map((g) => ({ value: groupLabel(g), label: groupLabel(g) }))];
-      return <Select key={field} label={FIELD_LABELS[field]} options={options} value={form.group || ''} onChange={(e) => updateField('group', e.target.value)} />;
+      const options = groups.map((g) => ({ value: groupLabel(g), label: groupLabel(g) }));
+      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.group || ''} onChange={(v) => updateField('group', v)} placeholder="— Seleccionar grupo —" searchPlaceholder="Buscar grupo…" clearable />;
     }
     if (field === 'student') {
-      const options = [{ value: '', label: '— Seleccionar estudiante —' }, ...filteredStudents.map((s) => ({ value: s.student_id || s.id, label: `${s.last_name || ''} ${s.first_name || ''}`.trim() || s.student_id }))];
-      return <Select key={field} label={FIELD_LABELS[field]} options={options} value={form.student || ''} onChange={(e) => updateField('student', e.target.value)} />;
+      const options = filteredStudents.map((s) => ({ value: s.student_id || s.id, label: `${s.last_name || ''} ${s.first_name || ''}`.trim() || s.student_id }));
+      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.student || ''} onChange={(v) => updateField('student', v)} placeholder="— Seleccionar estudiante —" searchPlaceholder="Buscar estudiante…" clearable />;
     }
     if (field === 'targetRole') {
       const roles = Object.entries(ROLES).map(([k, v]) => ({ value: v, label: getRoleDisplay(v) || k }));
@@ -264,7 +271,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         options = incidentOptions;
       } else {
         if (loadingUsers) return <div className="h-20 w-full nx-skeleton rounded-control" aria-hidden />;
-        if (!form.targetRole) return <p className="text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</p>;
+        if (!form.targetRole) return <div className="rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</div>;
         options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id }));
       }
       return (
@@ -303,7 +310,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       <Stepper steps={steps} current={currentStep} />
 
       {result ? (
@@ -326,21 +333,36 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
             </div>
             <div>
               <p className="text-h2 text-[var(--nx-text)]">{command.title}</p>
-              {command.warning && <p className="text-body-sm text-[var(--nx-warning)] mt-1">{command.warning}</p>}
+              {command.warning && (
+                <div className="mt-2 flex items-center gap-2 rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_10%,transparent)] px-3 py-2">
+                  <AlertOctagon size={14} className="shrink-0 text-[var(--nx-warning)]" />
+                  <p className="text-body-sm text-[var(--nx-warning)]">{command.warning}</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {fetchError && <p className="mb-4 rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">{fetchError}</p>}
+          {fetchError && (
+            <div className="mb-4 flex items-center gap-3 rounded-control border border-[color-mix(in_oklch,var(--nx-danger)_30%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3" role="alert">
+              <AlertOctagon size={18} className="shrink-0 text-[var(--nx-danger)]" />
+              <p className="text-body-sm text-[var(--nx-danger)]">{fetchError}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {command.fields.map((field) => renderField(field))}
 
-            {deliveryStatus && <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {deliveryStatus}</p>}
+            {deliveryStatus && (
+              <div className="flex items-center gap-2 rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3">
+                <Loader2 size={14} className="animate-spin text-[var(--nx-accent)]" />
+                <p className="text-body-sm text-[var(--nx-text-muted)]">{deliveryStatus}</p>
+              </div>
+            )}
 
-            <div className="flex gap-3 pt-2">
-              <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" loading={isSubmitting} variant={command.isUrgent ? 'danger' : 'primary'}>
-                {command.isUrgent ? 'Enviar alerta' : 'Ejecutar'}
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+              <Button variant="secondary" type="button" onClick={onClose} className="w-full sm:w-auto">Cancelar</Button>
+              <Button type="submit" loading={isSubmitting} variant="primary" className="w-full sm:w-auto">
+                {command.id === 'sos' ? 'Enviar alerta' : 'Ejecutar'}
               </Button>
             </div>
           </form>

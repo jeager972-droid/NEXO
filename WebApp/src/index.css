@@ -219,3 +219,15 @@ textarea {
 body[data-nx-lock='true'] {
   overflow: hidden;
 }
+
+/* ── Indicador de notificación: parpadeo azul discreto ── */
+@keyframes nx-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.nx-blink {
+  animation: nx-blink 1.8s var(--nx-ease-out) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-blink { animation: none; opacity: 1; }
+}

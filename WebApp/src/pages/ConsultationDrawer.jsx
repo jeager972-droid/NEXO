@@ -17,6 +17,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
 import { RiskBadge } from '../components/patterns/RiskBadge';
+import { SearchableSelect as GlobalSearchableSelect } from '../components/ui/SearchableSelect';
 
 const EXCLUDE_COLS = ['student_id', 'id', 'metadata', 'metadata_json', 'raw'];
 
@@ -34,40 +35,16 @@ const formatCellValue = (k, v) => {
 const riskLevelMap = { CRITICAL: 'critico', MEDIUM: 'medio', LOW: 'bajo', HIGH: 'alto' };
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder, loading }) => {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState('');
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function handleClickOutside(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filtered = q.trim() === '' ? options : options.filter((o) => String(o.name || '').toLowerCase().includes(q.toLowerCase()));
-  const selected = options.find((o) => o.id === value);
-
+  const opts = options.map((o) => ({ value: o.id, label: o.name }));
   return (
-    <div className="relative" ref={ref}>
-      {label && <label className="block text-label text-[var(--nx-text)] mb-1.5">{label}</label>}
-      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center justify-between rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3 py-2.5 text-left text-body text-[var(--nx-text)] hover:border-[var(--nx-text-muted)]">
-        <span className="truncate">{selected ? selected.name : loading ? 'Cargando…' : placeholder}</span>
-        <Search size={14} className="text-[var(--nx-text-muted)] shrink-0 ml-2" />
-      </button>
-      {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-high max-h-60 overflow-auto">
-          <div className="sticky top-0 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] p-2">
-            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" leftIcon={<Search size={14} className="text-[var(--nx-text-muted)]" />} />
-          </div>
-          {filtered.length === 0 && <div className="px-3 py-2 text-body-sm text-[var(--nx-text-muted)]">Sin coincidencias</div>}
-          {filtered.map((o) => (
-            <button key={o.id} onClick={() => { onChange(o.id); setOpen(false); setQ(''); }} className={`w-full px-3 py-2 text-left text-body-sm truncate transition-colors ${o.id === value ? 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)] font-medium' : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'}`}>
-              {o.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <GlobalSearchableSelect
+      label={label}
+      options={opts}
+      value={value || ''}
+      onChange={onChange}
+      placeholder={loading ? 'Cargando…' : placeholder}
+      clearable
+    />
   );
 };
 
@@ -87,6 +64,7 @@ const TeacherQueryPanel = ({
       .then((res) => setStudents(res.students || []))
       .catch(() => setStudents([]))
       .finally(() => setStudentsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroup]);
 
   const groupOptions = groups.map((g) => ({ id: g.name || g.group_name || g, name: `${g.name || g.group_name || g}${g.grade_level ? ` (${g.grade_level})` : ''}` }));
@@ -139,6 +117,42 @@ const TeacherQueryPanel = ({
   );
 };
 
+const AdminFilterPanel = ({
+  groups, selectedGroup, setSelectedGroup, selectedStudent, setSelectedStudent,
+  fromDate, setFromDate, toDate, setToDate, onQuery, loadingData,
+}) => {
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedGroup) { setStudents([]); setSelectedStudent(''); return; }
+    setStudentsLoading(true);
+    studentsApi.getAll({ limit: 100, group_name: selectedGroup })
+      .then((res) => setStudents(res.students || []))
+      .catch(() => setStudents([]))
+      .finally(() => setStudentsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup]);
+
+  const groupOptions = groups.map((g) => ({ id: g.name || g.group_name || g, name: g.name || g.group_name || g }));
+  const studentOptions = [...students].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => ({ id: String(s.id || s.student_id), name: `${s.last_name || ''} ${s.first_name || ''}`.trim() }));
+
+  return (
+    <Surface className="border-b border-[var(--nx-border)] p-5 space-y-4 rounded-none">
+      <div className="flex items-center gap-2 text-label text-[var(--nx-text-muted)] uppercase">
+        <Filter size={14} /> Filtros de consulta
+      </div>
+      <SearchableSelect label="Grupo" placeholder="Todos los grupos" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
+      <SearchableSelect label="Estudiante (opcional)" placeholder="Todos los estudiantes" options={studentOptions} value={selectedStudent} onChange={(v) => setSelectedStudent(v)} loading={studentsLoading} />
+      <div className="grid grid-cols-2 gap-3">
+        <Input type="date" label="Desde" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <Input type="date" label="Hasta" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+      </div>
+      <Button onClick={onQuery} loading={loadingData} leftIcon={<Eye size={16} />}>Consultar</Button>
+    </Surface>
+  );
+};
+
 export const ConsultationDrawer = ({
   item, riskStudents, dynamicData, dynamicColumns, loadingData,
   isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
@@ -150,6 +164,9 @@ export const ConsultationDrawer = ({
   const [trackingModalOpen, setTrackingModalOpen] = useState(false);
   const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
 
+  const isAdminRole = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
+  const showFilters = isTeacherModule || isAdminRole;
+
   const openTracking = (studentId, studentName, trackingId = null, metadata = null) => {
     setSelectedTrackingTarget({ studentId, studentName, trackingId, metadata });
     setTrackingModalOpen(true);
@@ -159,7 +176,7 @@ export const ConsultationDrawer = ({
     <>
       <Drawer
         title={item}
-        context={isTeacherModule ? 'Consulta histórica por grupo' : 'Consulta de datos institucionales'}
+        context={showFilters ? 'Consulta con filtros' : 'Consulta de datos institucionales'}
         onClose={onClose}
         size="lg"
       >
@@ -170,6 +187,47 @@ export const ConsultationDrawer = ({
             fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
             onQuery={onQuery} loadingData={loadingData} hasQueried={hasQueried} dynamicData={dynamicData} error={error}
           />
+        ) : isAdminRole ? (
+          <div className="flex flex-col">
+            <AdminFilterPanel
+              groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
+              selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
+              fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
+              onQuery={onQuery} loadingData={loadingData}
+            />
+            <div className="p-5">
+              {error && !loadingData ? (
+                <EmptyState icon={<AlertTriangle size={32} className="text-[var(--nx-danger)]" />} title="Error de consulta" description={error} />
+              ) : loadingData ? (
+                <SkeletonRows count={4} />
+              ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
+              <Surface className="overflow-x-auto">
+                <table className="w-full min-w-[440px]">
+                  <thead>
+                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                      {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map((h) => <th key={h} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--nx-border)]">
+                    {[...riskStudents].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => (
+                      <tr key={s.student_id} className="hover:bg-[var(--nx-surface-subtle)]">
+                        <td className="px-4 py-3 text-body text-[var(--nx-text)]">{s.last_name} {s.first_name}</td>
+                        <td className="px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">{s.group_name}</td>
+                        <td className="px-4 py-3 text-body font-mono" style={{ color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>{s.risk_score}</td>
+                        <td className="px-4 py-3"><RiskBadge level={riskLevelMap[s.risk_level] || 'bajo'} /></td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Surface>
+            ) : (
+              <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin datos disponibles" description="No se encontraron registros para este módulo." />
+            )}
+            </div>
+          </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-6">
             {error && !loadingData ? (

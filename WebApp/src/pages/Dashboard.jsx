@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2
+  Search, X, CalendarDays, CheckCircle2, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -146,6 +146,7 @@ const AdminDashboard = ({ stats, loading }) => {
     { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Ingresos hoy' },
     { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: 'Sin registro de entrada' },
     { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: 'Requieren atención' },
+    { key: 'permiso',  label: 'Permisos',     value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: 'Permisos activos hoy' },
   ];
 
   useEffect(() => {
@@ -173,9 +174,9 @@ const AdminDashboard = ({ stats, loading }) => {
         subtitle={todayLabel()}
       />
       {loading ? (
-        <SkeletonMetrics count={3} className="grid-cols-1 md:grid-cols-3" />
+        <SkeletonMetrics count={4} className="grid-cols-2 md:grid-cols-4" />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {kpis.map((k) => (
             <StatCard
               key={k.key}
@@ -238,11 +239,16 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
       <PageHeader
         eyebrow="Seguimiento y novedades"
         title="Tareas del día"
+        subtitle={todayLabel()}
       />
-      {loading ? (
-        <SkeletonMetrics count={3} className="grid-cols-1 md:grid-cols-3" />
-      ) : (
-        tasks.length > 0 && (
+      <Section title="Tareas pendientes" subtitle="Acciones que requieren tu atención">
+        {loading ? (
+          <Surface className="p-5 space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </Surface>
+        ) : tasks.length > 0 ? (
           <div className="space-y-3">
             {tasks.slice(0, 6).map((t, i) => (
               <SituationLine
@@ -255,8 +261,16 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
               />
             ))}
           </div>
-        )
-      )}
+        ) : (
+          <Surface>
+            <EmptyState
+              icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
+              title="Sin tareas pendientes"
+              description="No tienes tareas asignadas para hoy. Revisa los eventos recientes para estar al tanto."
+            />
+          </Surface>
+        )}
+      </Section>
 
       <Section title="Eventos recientes" subtitle="Últimas novedades institucionales">
         <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
@@ -299,7 +313,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const [groupQuery, setGroupQuery] = useState('');
 
   // Normalizar nombre de grupo: quitar guiones, espacios y convertir a minúsculas para comparar
-  const normalizeGroup = g => String(g || '').replace(/[\s\-]/g, '').toLowerCase();
+  const normalizeGroup = g => String(g || '').replace(/[\s-]/g, '').toLowerCase();
   const todayStr = localDateStr();
   const rawGroups = (stats?.teacherGroups?.length > 0)
     ? stats.teacherGroups
@@ -445,9 +459,13 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           </Surface>
 
           {groupNames.length === 0 && (
-            <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_10%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-warning)]">
-              No se encontraron grupos asignados. Verifique su asignación en horarios.
-            </div>
+            <SituationLine
+              icon={<AlertTriangle size={18} />}
+              label="Atención"
+              value="No se encontraron grupos asignados"
+              detail="Verifique su asignación en horarios"
+              scheme="warning"
+            />
           )}
 
           {selectedGroup && !groupLoading && groupStats && !hasActivity && (
@@ -668,7 +686,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
         <div className="p-6">
           <div className="mb-4">
             <Input
-              placeholder="Buscar estudiante..."
+              placeholder="Buscar estudiante…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
@@ -812,6 +830,7 @@ const StaffDashboard = () => {
     label: ev.label,
     time: ev.time,
     type: ev.type,
+    issuer: ev.issuer,
     index: i,
   }));
 
@@ -820,9 +839,11 @@ const StaffDashboard = () => {
       <PageHeader
         eyebrow="Servicio"
         title="Panel de servicio"
-        subtitle="Eventos recientes"
+        subtitle={todayLabel()}
       />
-      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      <Section title="Eventos recientes" subtitle="Novedades del día">
+        <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      </Section>
     </div>
   );
 };

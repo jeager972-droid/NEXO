@@ -9,12 +9,13 @@ import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { PageHeader } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { humanizeError } from '../utils/messages';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
@@ -309,7 +310,9 @@ const Consultation = () => {
       ) : (
         <>
           <div className="flex items-center gap-3">
-            <button onClick={() => setActiveItem(null)} className="text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">← Volver</button>
+            <Button variant="secondary" size="sm" onClick={() => setActiveItem(null)} leftIcon={<ChevronLeft size={16} />}>
+              Volver
+            </Button>
             <PageHeader
               eyebrow="Consulta"
               title={activeItem}

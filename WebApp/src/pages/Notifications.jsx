@@ -1,12 +1,13 @@
 /**
  * SCR-NOT-01 Notifications
  * DEC-FE-07: Drawer unificado para detalle contextual.
- * Usa PageHeader, SkeletonRows, Drawer de Overlay.jsx.
+ * Moodboard: mensajes llegados de NEXO — barras desplegables agrupadas,
+ * icono NEXO en cada item, timestamp relativo, acción contextual.
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle2, Info, AlertTriangle, Eye, Trash2 } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
+import { Bell, CheckCircle2, Info, AlertTriangle, Trash2, ChevronRight } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
 import { trackingApi } from '../api/tracking';
@@ -17,21 +18,112 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
+import LogoNexo from '../components/LogoNexo';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
 const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
 
 const typeMeta = (type) => {
   switch (type) {
-    case 'SOS': return { icon: AlertTriangle, scheme: 'danger', label: 'SOS' };
-    case 'ALERT': return { icon: AlertTriangle, scheme: 'warning', label: 'Alerta' };
-    case 'SUCCESS': return { icon: CheckCircle2, scheme: 'success', label: 'Éxito' };
-    default: return { icon: Info, scheme: 'info', label: 'Info' };
+    case 'SOS': return { icon: AlertTriangle, scheme: 'danger', label: 'SOS', group: 'Operaciones' };
+    case 'ALERT': return { icon: AlertTriangle, scheme: 'warning', label: 'Alerta', group: 'NEXO · Inteligencia' };
+    case 'SUCCESS': return { icon: CheckCircle2, scheme: 'success', label: 'Éxito', group: 'Operaciones' };
+    case 'WHATSAPP': return { icon: CheckCircle2, scheme: 'success', label: 'WhatsApp', group: 'WhatsApp' };
+    default: return { icon: Info, scheme: 'info', label: 'Info', group: 'NEXO · Inteligencia' };
   }
 };
 
 const parseMeta = (json) => {
   try { return json ? JSON.parse(json) : null; } catch { return null; }
+};
+
+const relTime = (iso) => {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return `hace ${d} d`;
+};
+
+const GROUP_ORDER = ['NEXO · Inteligencia', 'Operaciones', 'WhatsApp'];
+
+const NotifItem = ({ notif, onClick }) => {
+  const meta = typeMeta(notif.type);
+  const Icon = meta.icon;
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
+    >
+      <div
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
+        style={{ backgroundColor: `color-mix(in oklch, var(--nx-${meta.scheme}) 12%, transparent)`, color: `var(--nx-${meta.scheme})` }}
+      >
+        {notif.type === 'ALERT' || notif.type === 'INFO' ? (
+          <LogoNexo className="h-4" showText={false} />
+        ) : (
+          <Icon size={16} />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-body text-[var(--nx-text)] truncate">{notif.title || notif.message}</p>
+          {!notif.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nx-accent)] nx-blink" />}
+        </div>
+        <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5 line-clamp-1">{notif.message}</p>
+        <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">{relTime(notif.created_at)}</p>
+      </div>
+      <ChevronRight size={14} className="shrink-0 text-[var(--nx-text-muted)]" />
+    </button>
+  );
+};
+
+const NotifGroup = ({ title, items, onOpen }) => {
+  const [open, setOpen] = useState(true);
+  return (
+    <Surface className="overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-5 py-3.5 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-label text-[var(--nx-text)]">{title}</span>
+          <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[var(--nx-surface-subtle)] px-1.5 text-caption font-medium text-[var(--nx-text-muted)]">
+            {items.length}
+          </span>
+        </div>
+        <ChevronRight
+          size={16}
+          className={`text-[var(--nx-text-muted)] transition-transform duration-fast ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-[var(--nx-border)] border-t border-[var(--nx-border)]">
+              {items.map((notif, i) => (
+                <NotifItem
+                  key={notif.id ?? notif.notification_id ?? i}
+                  notif={notif}
+                  onClick={() => onOpen(notif)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Surface>
+  );
 };
 
 const Notifications = () => {
@@ -90,6 +182,13 @@ const Notifications = () => {
     }
   };
 
+  const grouped = notifications.reduce((acc, n) => {
+    const g = typeMeta(n.type).group;
+    if (!acc[g]) acc[g] = [];
+    acc[g].push(n);
+    return acc;
+  }, {});
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -116,47 +215,40 @@ const Notifications = () => {
           <EmptyState icon={<Bell size={32} className="text-[var(--nx-border)]" />} title="Sin notificaciones" description="No tienes novedades pendientes." />
         </Surface>
       ) : (
-        <Surface className="divide-y divide-[var(--nx-border)]">
-          {notifications.map((notif, i) => {
-            const meta = typeMeta(notif.type);
-            const Icon = meta.icon;
-            return (
-              <button
-                key={notif.id ?? notif.notification_id ?? i}
-                onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
-                className="flex w-full items-start gap-4 px-5 py-4 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
-              >
-                <div className="mt-1">
-                  <Icon size={20} style={{ color: `var(--nx-${meta.scheme})` }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-body text-[var(--nx-text)] truncate">{notif.title || notif.message}</p>
-                    {!notif.read && <Badge scheme={meta.scheme} dot>{meta.label}</Badge>}
-                  </div>
-                  <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5 line-clamp-2">{notif.message}</p>
-                  <p className="text-caption text-[var(--nx-text-muted)] mt-1">{notif.created_at && new Date(notif.created_at).toLocaleString('es-CO')}</p>
-                </div>
-                <Eye size={16} className="mt-1 text-[var(--nx-text-muted)]" />
-              </button>
-            );
-          })}
-        </Surface>
+        <div className="space-y-4">
+          {GROUP_ORDER.filter((g) => grouped[g]?.length).map((g) => (
+            <NotifGroup key={g} title={g} items={grouped[g]} onOpen={(n) => { setDetail(n); if (!n.read) markRead(n.id ?? n.notification_id); }} />
+          ))}
+        </div>
       )}
 
       <AnimatePresence>
         {detail && (
           <Drawer
-            title="Detalle de la notificación"
+            title={detail.title || 'Notificación'}
             context={detail.created_at ? new Date(detail.created_at).toLocaleString('es-CO') : undefined}
             onClose={() => setDetail(null)}
             size="sm"
           >
-            <div className="p-6 space-y-6">
-              <Surface className="p-4 space-y-2">
-                <p className="text-label text-[var(--nx-text-muted)] uppercase">Mensaje</p>
-                <p className="text-body text-[var(--nx-text)]">{detail.message}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">{detail.created_at && new Date(detail.created_at).toLocaleString('es-CO')}</p>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+                  style={{ backgroundColor: `color-mix(in oklch, var(--nx-${typeMeta(detail.type).scheme}) 12%, transparent)`, color: `var(--nx-${typeMeta(detail.type).scheme})` }}
+                >
+                  {detail.type === 'ALERT' || detail.type === 'INFO' ? (
+                    <LogoNexo className="h-5" showText={false} />
+                  ) : (
+                    (() => { const I = typeMeta(detail.type).icon; return <I size={18} />; })()
+                  )}
+                </div>
+                <div>
+                  <Badge scheme={typeMeta(detail.type).scheme} dot>{typeMeta(detail.type).label}</Badge>
+                  <p className="text-caption text-[var(--nx-text-muted)] mt-1">{relTime(detail.created_at)}</p>
+                </div>
+              </div>
+              <Surface className="p-4">
+                <p className="text-body text-[var(--nx-text)] leading-relaxed">{detail.message}</p>
               </Surface>
               {(() => {
                 const meta = parseMeta(detail.metadata_json);

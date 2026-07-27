@@ -70,7 +70,7 @@ export default function Casos() {
       />
 
       <Input
-        placeholder="Buscar estudiante..."
+        placeholder="Buscar estudiante…"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
@@ -95,7 +95,7 @@ export default function Casos() {
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)]">{row.group_name || 'Sin grupo'}</p>
                 </div>
-                <RiskBadge score={row.risk_score} />
+                <RiskBadge level={row.risk_level || row.risk_score} />
               </div>
               <div className="mt-4 flex items-center gap-4 text-caption text-[var(--nx-text-muted)]">
                 <span className="flex items-center gap-1"><Activity size={12} /> {row.status || 'Activo'}</span>

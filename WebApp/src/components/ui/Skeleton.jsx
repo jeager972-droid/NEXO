@@ -51,3 +51,22 @@ export const SkeletonRows = ({ count = 4, className }) => (
     ))}
   </div>
 );
+
+/** Rejilla de tarjetas de acción en carga: icono + título + badge. */
+export const SkeletonCards = ({ count = 6, className }) => (
+  <div className={cn('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4', className)}>
+    {Array.from({ length: count }).map((_, i) => (
+      <div
+        key={i}
+        className="rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5"
+      >
+        <div className="flex items-start justify-between">
+          <Skeleton className="h-10 w-10 rounded-control" />
+          <Skeleton className="h-4 w-4 rounded-control" />
+        </div>
+        <Skeleton className="mt-4 h-5 w-2/3" />
+        <Skeleton className="mt-2 h-5 w-16 rounded-full" />
+      </div>
+    ))}
+  </div>
+);

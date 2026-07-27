@@ -1,25 +1,29 @@
 /**
  * SCR-ENR-01 Enrollment · SCR-ENR-02 Alta/Biometría
  * A-06: tarjetas accionables. B-13: Drawer unificado.
- * Usa PageHeader, Stepper, Drawer de Overlay.jsx, Select, humanizeError.
+ * Filtros jornada/grupo/estudiante, tarjetas con foto, perfil al click.
+ * Usa PageHeader, Stepper, Drawer, SearchableSelect, humanizeError.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint } from 'lucide-react';
+import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Surface, PageHeader } from '../components/ui/Surface';
+import { Surface, PageHeader, Section } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
+import { Skeleton, SkeletonRows, SkeletonCards } from '../components/ui/Skeleton';
 import { Select } from '../components/ui/Select';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { Stepper } from '../components/ui/Stepper';
 import { Drawer } from '../components/ui/Overlay';
 import { humanizeError } from '../utils/messages';
+
+const EASE = [0.22, 1, 0.36, 1];
 
 const STEPS = ['Datos básicos', 'Documento', 'Grupo'];
 
@@ -98,12 +102,13 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             )}
             {step === 2 && <Input label="Número de documento" value={form.documento} onChange={set('documento')} placeholder="12345678" />}
             {step === 3 && (
-              <Select
+              <SearchableSelect
                 label="Grado institucional"
-                options={[{ value: '', label: '— Seleccionar grado —' }, ...groups.map((g) => ({ value: g.name || g, label: g.name || g }))]
-                }
+                options={groups.map((g) => ({ value: g.name || g, label: g.name || g }))}
                 value={form.grado}
-                onChange={(e) => set('grado')(e)}
+                onChange={(v) => setForm((p) => ({ ...p, grado: v }))}
+                placeholder="— Seleccionar grado —"
+                searchPlaceholder="Buscar grado…"
               />
             )}
             {step === 4 && (
@@ -129,6 +134,72 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   );
 };
 
+const StudentAvatar = ({ student, size = 'md' }) => {
+  const initials = `${(student.first_name || '')[0] || ''}${(student.last_name || '')[0] || ''}`.toUpperCase();
+  const sizes = { sm: 'h-9 w-9 text-body-sm', md: 'h-12 w-12 text-h3', lg: 'h-16 w-16 text-h2' };
+  return (
+    <div className={`grid shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)] font-semibold ${sizes[size]}`}>
+      {initials || <User size={size === 'lg' ? 28 : 18} />}
+    </div>
+  );
+};
+
+const StudentProfileDrawer = ({ student, onClose }) => {
+  if (!student) return null;
+  return (
+    <Drawer
+      title={`${student.last_name} ${student.first_name}`}
+      context={student.group_name || student.grade || 'Sin grupo'}
+      onClose={onClose}
+      size="md"
+    >
+      <div className="p-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <StudentAvatar student={student} size="lg" />
+          <div>
+            <p className="text-h2 text-[var(--nx-text)]">{student.last_name} {student.first_name}</p>
+            <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{student.group_name || student.grade || 'Sin grupo'}</p>
+            {student.status && <Badge scheme={student.status === 'active' ? 'success' : 'warning'} dot className="mt-2">{student.status === 'active' ? 'Activo' : 'Inactivo'}</Badge>}
+          </div>
+        </div>
+
+        <Section title="Datos del estudiante">
+          <Surface className="divide-y divide-[var(--nx-border)]">
+            {[
+              { icon: Hash, label: 'Documento', value: student.document || student.documento || '—' },
+              { icon: GraduationCap, label: 'Grupo', value: student.group_name || student.grade || '—' },
+              { icon: FileText, label: 'ID', value: student.student_id || student.id || '—' },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
+                <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
+                <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
+                <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
+              </div>
+            ))}
+          </Surface>
+        </Section>
+
+        {student.guardian_name && (
+          <Section title="Acudiente">
+            <Surface className="divide-y divide-[var(--nx-border)]">
+              {[
+                { icon: User, label: 'Nombre', value: student.guardian_name },
+                { icon: Phone, label: 'Teléfono', value: student.guardian_phone || '—' },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
+                  <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
+                  <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
+                  <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
+                </div>
+              ))}
+            </Surface>
+          </Section>
+        )}
+      </div>
+    </Drawer>
+  );
+};
+
 const Enrollment = () => {
   const { user } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -139,6 +210,14 @@ const Enrollment = () => {
   const [hasMore, setHasMore] = useState(true);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const fetchingRef = useRef(false);
+
+  const [allGroups, setAllGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [selectedProfile, setSelectedProfile] = useState(null);
+
+  useEffect(() => {
+    studentsApi.getGroups().then(setAllGroups).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(searchTerm); setLastId(0); setStudents([]); setHasMore(true); }, 400);
@@ -151,7 +230,7 @@ const Enrollment = () => {
     setLoading(true);
     try {
       const cursor = reset ? 0 : lastId;
-      const result = await studentsApi.getAll({ last_id: cursor, limit: 50, search: debouncedSearch });
+      const result = await studentsApi.getAll({ last_id: cursor, limit: 50, search: debouncedSearch, group_name: selectedGroup });
       setStudents((prev) => (reset ? result.students : [...prev, ...result.students]));
       setLastId(result.lastId);
       setHasMore(result.students.length === 50 && !!result.lastId);
@@ -161,9 +240,15 @@ const Enrollment = () => {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [debouncedSearch, lastId]);
+  }, [debouncedSearch, lastId, selectedGroup]);
 
-  useEffect(() => { fetchStudents(true); }, [debouncedSearch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchStudents(true); }, [debouncedSearch, selectedGroup]);
+
+  const groupOptions = useMemo(() =>
+    allGroups.map((g) => ({ value: g.name || g.group_name || g, label: g.name || g.group_name || g })),
+    [allGroups]
+  );
 
   if (user?.role !== ROLES.SECRETARIA) {
     return (
@@ -184,23 +269,51 @@ const Enrollment = () => {
         title="Matrícula"
         actions={<Button onClick={() => setIsDrawerOpen(true)} leftIcon={<UserPlus size={18} />}>Nuevo estudiante</Button>}
       />
-      <Input placeholder="Buscar estudiante…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />} />
+
+      <Surface className="p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Input placeholder="Buscar estudiante…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />} />
+          <SearchableSelect
+            options={groupOptions}
+            value={selectedGroup}
+            onChange={(v) => { setSelectedGroup(v); setLastId(0); setStudents([]); setHasMore(true); }}
+            placeholder="Todos los grupos"
+            searchPlaceholder="Buscar grupo…"
+            clearable
+          />
+        </div>
+      </Surface>
+
       {loading && students.length === 0 ? (
-        <Surface><SkeletonRows count={4} /></Surface>
+        <SkeletonCards count={6} />
       ) : students.length === 0 ? (
-        <Surface><EmptyState icon={<UserPlus size={32} className="text-[var(--nx-border)]" />} title="Sin estudiantes" description="No se encontraron estudiantes." /></Surface>
+        <Surface>
+          <EmptyState icon={<UserPlus size={32} className="text-[var(--nx-border)]" />} title="Sin estudiantes" description="No se encontraron estudiantes con los filtros actuales." />
+        </Surface>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {students.map((s) => (
-              <Card key={s.student_id || s.id} className="p-4">
-                <p className="text-h3 text-[var(--nx-text)]">{s.last_name} {s.first_name}</p>
-                <p className="text-body-sm text-[var(--nx-text-muted)]">{s.group_name || s.grade || 'Sin grupo'}</p>
-                <div className="mt-3 flex items-center gap-2 text-caption text-[var(--nx-text-muted)]">
-                  {s.document && <Badge scheme="info">Doc: {s.document}</Badge>}
-                  {s.status && <Badge scheme={s.status === 'active' ? 'success' : 'warning'}>{s.status}</Badge>}
-                </div>
-              </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {students.map((s, i) => (
+              <motion.div
+                key={s.student_id || s.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: EASE, delay: Math.min(i * 0.03, 0.15) }}
+              >
+                <Card asAction onClick={() => setSelectedProfile(s)} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <StudentAvatar student={s} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-h3 text-[var(--nx-text)] truncate">{s.last_name} {s.first_name}</p>
+                      <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{s.group_name || s.grade || 'Sin grupo'}</p>
+                      {s.document && (
+                        <p className="text-caption text-[var(--nx-text-muted)] mt-1.5">Doc: {s.document}</p>
+                      )}
+                    </div>
+                    {s.status && <Badge scheme={s.status === 'active' ? 'success' : 'warning'} dot>{s.status === 'active' ? 'Activo' : 'Inactivo'}</Badge>}
+                  </div>
+                </Card>
+              </motion.div>
             ))}
           </div>
           {hasMore && (
@@ -210,8 +323,13 @@ const Enrollment = () => {
           )}
         </>
       )}
+
       <AnimatePresence>
         {isDrawerOpen && <EnrollmentDrawer onClose={() => setIsDrawerOpen(false)} onRefresh={() => fetchStudents(true)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedProfile && <StudentProfileDrawer student={selectedProfile} onClose={() => setSelectedProfile(null)} />}
       </AnimatePresence>
     </div>
   );

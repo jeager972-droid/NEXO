@@ -9,17 +9,18 @@ import {
   FileText, Users, ShieldAlert, MessageSquare, Activity,
   Search, X, Download, CalendarDays, Filter, ChevronRight
 } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { auditApi } from '../api/audit';
 import { ROLES } from '../config/roles';
-import { Surface, PageHeader } from '../components/ui/Surface';
+import { Surface, PageHeader, Section } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
-import { SkeletonRows } from '../components/ui/Skeleton';
+import { SkeletonRows, Skeleton } from '../components/ui/Skeleton';
 import { Drawer, Dialog } from '../components/ui/Overlay';
+import { SearchableSelect as GlobalSearchableSelect } from '../components/ui/SearchableSelect';
 import { visibleColumns, humanizeKey, EXPORT_FORMATS } from '../utils/exporters';
 import { humanizeError } from '../utils/messages';
 
@@ -29,8 +30,7 @@ const MODULES = [
   { title: 'Asistencia', icon: Users, subdivisions: ['Inasistencias', 'Llegadas tarde', 'Evasión interna'] },
   { title: 'Disciplina', icon: ShieldAlert, subdivisions: ['Intentos salón incorrecto', 'Spam biométrico', 'Reporte disciplinario'] },
   { title: 'Permisos', icon: FileText, subdivisions: ['Salidas clase', 'Salidas colegio', 'Salidas pedagógicas', 'Retornos pendientes', 'Historial permisos'] },
-  { title: 'SOS y seguridad', icon: MessageSquare, subdivisions: ['Alertas SOS emitidas', 'Evasiones internas'] },
-  { title: 'Operaciones', icon: Activity, subdivisions: ['Permisos emitidos'] },
+  { title: 'Seguridad', icon: ShieldAlert, subdivisions: ['Alertas SOS emitidas', 'Evasiones internas'] },
 ];
 
 const DRAWER_CONFIG = {
@@ -50,43 +50,22 @@ const DRAWER_CONFIG = {
   'Evasiones internas':       { api: auditApi.getAttendanceEvasion,         needsDates: true, needsGroup: true, needsStudent: true },
 };
 
+const EASE = [0.22, 1, 0.36, 1];
 const EXCLUDE_COLS = ['student_id', 'id', 'metadata', 'raw'];
 const humanize = (k) => humanizeKey(k);
 const fmtValue = (v) => v === null || v === undefined ? '—' : String(v);
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder, loading }) => {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState('');
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filtered = q.trim() === '' ? options : options.filter((o) => String(o.name || '').toLowerCase().includes(q.toLowerCase()));
-  const selected = options.find((o) => o.id === value);
-
+  const opts = options.map((o) => ({ value: o.id, label: o.name }));
   return (
-    <div className="relative" ref={ref}>
-      {label && <label className="block text-label text-[var(--nx-text)] mb-1.5">{label}</label>}
-      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center justify-between rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3 py-2.5 text-left text-body text-[var(--nx-text)] hover:border-[var(--nx-text-muted)]">
-        <span className="truncate">{selected ? selected.name : loading ? 'Cargando…' : placeholder}</span>
-        <Search size={14} className="text-[var(--nx-text-muted)]" />
-      </button>
-      {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-high max-h-60 overflow-auto">
-          <div className="sticky top-0 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] p-2">
-            <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" leftIcon={<Search size={14} className="text-[var(--nx-text-muted)]" />} />
-          </div>
-          {filtered.length === 0 && <div className="px-3 py-2 text-body-sm text-[var(--nx-text-muted)]">Sin coincidencias</div>}
-          {filtered.map((o) => (
-            <button key={o.id} onClick={() => { onChange(o.id); setOpen(false); setQ(''); }} className={`w-full px-3 py-2 text-left text-body-sm truncate transition-colors ${o.id === value ? 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]' : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'}`}>{o.name}</button>
-          ))}
-        </div>
-      )}
-    </div>
+    <GlobalSearchableSelect
+      label={label}
+      options={opts}
+      value={value || ''}
+      onChange={onChange}
+      placeholder={loading ? 'Cargando…' : placeholder}
+      clearable
+    />
   );
 };
 
@@ -288,24 +267,39 @@ const Reports = () => {
         actions={<Button variant="secondary" onClick={() => setExportModal(true)} leftIcon={<Download size={16} />}>Exportar consolidado</Button>}
       />
       <Input placeholder="Buscar submódulo…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />} />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map((mod, idx) => (
-          <Card key={idx} className="p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]">
-                <mod.icon size={20} />
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: EASE, delay: Math.min(idx * 0.06, 0.18) }}
+          >
+            <Card className="p-5 h-full flex flex-col">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]">
+                  <mod.icon size={20} />
+                </div>
+                <p className="text-h3 text-[var(--nx-text)]">{mod.title}</p>
               </div>
-              <p className="text-h3 text-[var(--nx-text)]">{mod.title}</p>
-            </div>
-            <div className="space-y-2">
-              {mod.subdivisions.map((sub) => (
-                <button key={sub} onClick={() => setActiveSub(sub)} className="group flex w-full items-center justify-between rounded-control px-3 py-2 text-left text-body text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]">
-                  <span>{sub}</span>
-                  <ChevronRight size={14} className="text-[var(--nx-text-muted)] group-hover:text-[var(--nx-accent)]" />
-                </button>
-              ))}
-            </div>
-          </Card>
+              <div className="flex-1 space-y-1">
+                {mod.subdivisions.map((sub) => (
+                  <button key={sub} onClick={() => setActiveSub(sub)} className="group flex w-full items-center justify-between rounded-control px-3 py-2 text-left text-body text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)] transition-colors duration-fast">
+                    <span>{sub}</span>
+                    <ChevronRight size={14} className="text-[var(--nx-text-muted)] group-hover:text-[var(--nx-accent)] transition-colors duration-fast" />
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex gap-2 border-t border-[var(--nx-border)] pt-4">
+                <Button variant="secondary" size="sm" className="flex-1" leftIcon={<Download size={14} />} onClick={() => { setActiveSub(mod.subdivisions[0]); }}>
+                  Excel
+                </Button>
+                <Button variant="secondary" size="sm" className="flex-1" leftIcon={<Download size={14} />} onClick={() => setExportModal(true)}>
+                  PDF
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
