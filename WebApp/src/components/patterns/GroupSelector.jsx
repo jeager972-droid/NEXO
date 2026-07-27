@@ -2,10 +2,9 @@
  * CMP-100 Selector de grupo
  * Persistente. Muestra grupo y jornada.
  */
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { clsx } from 'clsx';
 import { ChevronDown, Users } from 'lucide-react';
-import { IconButton } from '../ui/IconButton';
 
 export const GroupSelector = ({ value, options = [], onChange, loading, disabled }) => {
   const [open, setOpen] = useState(false);

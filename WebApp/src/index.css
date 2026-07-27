@@ -17,10 +17,21 @@
   --nx-text-muted:    oklch(48% 0.018 245);
   --nx-border:        oklch(88% 0.010 245);
   --nx-accent:        oklch(48% 0.115 245);
+  --nx-accent-strong: oklch(42% 0.120 245);
   --nx-accent-text:   oklch(99% 0.005 245);
   --nx-success:       oklch(52% 0.125 155);
   --nx-warning:       oklch(62% 0.135 70);
   --nx-danger:        oklch(52% 0.175 25);
+  --nx-danger-strong: oklch(46% 0.180 25);
+  --nx-on-solid:      oklch(99% 0.005 245);
+
+  /* Ring de foco de campo — moodboard: 3px al 12% */
+  --nx-ring:          0 0 0 3px color-mix(in oklch, var(--nx-accent) 14%, transparent);
+  --nx-ring-danger:   0 0 0 3px color-mix(in oklch, var(--nx-danger) 14%, transparent);
+
+  /* Shell */
+  --nx-sidebar:       264px;
+  --nx-topbar:        64px;
 
   /* Radii */
   --nx-radius-control: 8px;
@@ -58,9 +69,19 @@
   --nx-text-muted:    oklch(72% 0.012 245);
   --nx-border:        oklch(35% 0.012 245);
   --nx-accent:        oklch(72% 0.105 245);
+  --nx-accent-strong: oklch(78% 0.100 245);
+  --nx-accent-text:   oklch(18% 0.008 245);
   --nx-success:       oklch(72% 0.115 155);
   --nx-warning:       oklch(78% 0.120 70);
   --nx-danger:        oklch(72% 0.145 25);
+  --nx-danger-strong: oklch(78% 0.140 25);
+  --nx-on-solid:      oklch(18% 0.008 245);
+
+  /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
+  --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.20);
+  --nx-shadow-medium: 0 2px 8px -1px oklch(0% 0 0 / 0.28);
+  --nx-shadow-high:   0 8px 24px -4px oklch(0% 0 0 / 0.34);
+  --nx-shadow-dialog: 0 12px 40px -8px oklch(0% 0 0 / 0.44);
 }
 
 body {
@@ -119,12 +140,82 @@ textarea {
   outline-offset: 2px;
 }
 
-/* ── Skeleton shimmer ── */
+/* ── Skeleton: barrido, no parpadeo (nexo_screens.html §skeleton) ── */
 .nx-skeleton {
+  position: relative;
+  overflow: hidden;
   background: var(--nx-surface-subtle);
-  animation: nx-shimmer 1.8s ease-in-out infinite;
 }
-@keyframes nx-shimmer {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+.nx-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--nx-text) 5%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: nx-sweep 1.8s var(--nx-ease-out) infinite;
+}
+@keyframes nx-sweep {
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-skeleton::after { display: none; }
+}
+
+/* ── Cifras tabulares para métricas, horas y tablas (03 §1.2) ── */
+.nx-tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'cv02', 'cv03', 'cv04', 'cv11';
+  letter-spacing: -0.015em;
+}
+
+/* ── Selección ── */
+::selection {
+  background: color-mix(in oklch, var(--nx-accent) 22%, transparent);
+  color: var(--nx-text);
+}
+
+/* ── Campo enfocado: borde + halo suave, sin desplazamiento ── */
+.nx-focus-ring:focus-visible,
+.nx-field:focus {
+  outline: none;
+  border-color: var(--nx-accent);
+  box-shadow: var(--nx-ring);
+}
+
+/* ── Superficie interactiva: hover/press con transform, nunca layout ── */
+.nx-pressable {
+  transition:
+    transform var(--nx-fast) var(--nx-ease-out),
+    box-shadow var(--nx-standard) var(--nx-ease-out),
+    border-color var(--nx-fast) var(--nx-ease-out),
+    background-color var(--nx-fast) var(--nx-ease-out);
+  will-change: transform;
+}
+.nx-pressable:active {
+  transform: translateY(0) scale(0.994);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .nx-pressable:hover { transform: translateY(-1px); }
+}
+
+/* ── Entrada de contenido: fundido corto, sin stagger (08 §4) ── */
+@keyframes nx-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.nx-enter {
+  animation: nx-enter var(--nx-standard) var(--nx-ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-enter { animation: none; }
+}
+
+/* ── Bloqueo de scroll del cuerpo con superficies transitorias abiertas ── */
+body[data-nx-lock='true'] {
+  overflow: hidden;
 }

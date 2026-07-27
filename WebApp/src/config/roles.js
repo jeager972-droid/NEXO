@@ -68,12 +68,6 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
   },
   {
-    title: 'Auditoría',
-    path: '/auditoria',
-    icon: ShieldCheck,
-    roles: [ROLES.RECTOR],
-  },
-  {
     title: 'Informes',
     path: '/informes',
     icon: BarChart2,

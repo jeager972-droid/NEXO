@@ -1,10 +1,11 @@
 /**
- * ConsultationDrawer / NEXO Institucional
+ * ConsultationDrawer / NEXO Institucional — B-13 Drawer unificado
  * Drawer detallado de consulta por módulo: filtros, tabla dinámica y seguimiento.
+ * Usa Drawer de Overlay.jsx, RiskBadge pattern, SkeletonRows, humanizeError.
  */
 import { useState, useEffect, useRef } from 'react';
-import { Search, Activity, X, Loader2, CalendarDays, Filter, Eye, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Activity, Filter, Eye, AlertTriangle } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
 import { useAuth } from '../hooks/useAuth';
@@ -12,10 +13,10 @@ import { ROLES } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Select';
-import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton } from '../components/ui/Skeleton';
+import { SkeletonRows } from '../components/ui/Skeleton';
+import { Drawer } from '../components/ui/Overlay';
+import { RiskBadge } from '../components/patterns/RiskBadge';
 
 const EXCLUDE_COLS = ['student_id', 'id', 'metadata', 'metadata_json', 'raw'];
 
@@ -30,10 +31,7 @@ const formatCellValue = (k, v) => {
   return String(v);
 };
 
-const RiskBadge = ({ level }) => {
-  const scheme = level === 'CRITICAL' ? 'danger' : level === 'MEDIUM' ? 'warning' : 'success';
-  return <Badge scheme={scheme}>{level || 'LOW'}</Badge>;
-};
+const riskLevelMap = { CRITICAL: 'critico', MEDIUM: 'medio', LOW: 'bajo', HIGH: 'alto' };
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder, loading }) => {
   const [open, setOpen] = useState(false);
@@ -95,8 +93,8 @@ const TeacherQueryPanel = ({
   const studentOptions = [...students].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => ({ id: String(s.id || s.student_id), name: `${s.last_name || ''} ${s.first_name || ''}`.trim() }));
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <Surface className="shrink-0 border-b border-[var(--nx-border)] p-5 space-y-4 rounded-none">
+    <div className="flex flex-col">
+      <Surface className="border-b border-[var(--nx-border)] p-5 space-y-4 rounded-none">
         <div className="flex items-center gap-2 text-label text-[var(--nx-text-muted)] uppercase">
           <Filter size={14} /> Filtros de consulta
         </div>
@@ -109,13 +107,13 @@ const TeacherQueryPanel = ({
         <Button onClick={onQuery} loading={loadingData} disabled={!selectedGroup} leftIcon={<Eye size={16} />}>Consultar</Button>
       </Surface>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="p-5">
         {error ? (
           <EmptyState icon={<AlertTriangle size={32} className="text-[var(--nx-danger)]" />} title="Error de consulta" description={error} />
         ) : !hasQueried && !loadingData ? (
           <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin registros" description="Seleccione un grupo y un rango de fechas, luego presione Consultar." />
         ) : loadingData && rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20"><Loader2 size={28} className="animate-spin text-[var(--nx-accent)]" /><p className="text-body-sm text-[var(--nx-text-muted)]">Consultando…</p></div>
+          <SkeletonRows count={4} />
         ) : rows.length === 0 ? (
           <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin registros" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
@@ -159,23 +157,12 @@ export const ConsultationDrawer = ({
 
   return (
     <>
-      <motion.div key="ov" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={onClose} className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)]" />
-      <motion.div key="dw" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[640px] flex-col overflow-hidden border-l border-[var(--nx-border)] bg-[var(--nx-surface)]"
+      <Drawer
+        title={item}
+        context={isTeacherModule ? 'Consulta histórica por grupo' : 'Consulta de datos institucionales'}
+        onClose={onClose}
+        size="lg"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[var(--nx-border)] px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]">
-              <Search size={18} />
-            </div>
-            <div>
-              <p className="text-h3 text-[var(--nx-text)]">{item}</p>
-              <p className="text-caption text-[var(--nx-text-muted)] uppercase">{isTeacherModule ? 'Consulta histórica por grupo' : 'Consulta de datos institucionales'}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-control hover:bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]"><X size={20} /></button>
-        </div>
-
         {isTeacherModule ? (
           <TeacherQueryPanel
             item={item} groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
@@ -188,7 +175,7 @@ export const ConsultationDrawer = ({
             {error && !loadingData ? (
               <EmptyState icon={<AlertTriangle size={32} className="text-[var(--nx-danger)]" />} title="Error de consulta" description={error} />
             ) : loadingData ? (
-              <div className="flex flex-col items-center justify-center gap-4 py-20"><Loader2 size={32} className="animate-spin text-[var(--nx-accent)]" /><p className="text-body-sm text-[var(--nx-text-muted)] uppercase">Cargando datos…</p></div>
+              <SkeletonRows count={4} />
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <Surface className="overflow-x-auto">
                 <table className="w-full min-w-[440px]">
@@ -203,7 +190,7 @@ export const ConsultationDrawer = ({
                         <td className="px-4 py-3 text-body text-[var(--nx-text)]">{s.last_name} {s.first_name}</td>
                         <td className="px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">{s.group_name}</td>
                         <td className="px-4 py-3 text-body font-mono" style={{ color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>{s.risk_score}</td>
-                        <td className="px-4 py-3"><RiskBadge level={s.risk_level} /></td>
+                        <td className="px-4 py-3"><RiskBadge level={riskLevelMap[s.risk_level] || 'bajo'} /></td>
                         <td className="px-4 py-3 text-right">
                           <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
                         </td>
@@ -240,7 +227,7 @@ export const ConsultationDrawer = ({
             )}
           </div>
         )}
-      </motion.div>
+      </Drawer>
 
       <AnimatePresence>
         {trackingModalOpen && selectedTrackingTarget && (

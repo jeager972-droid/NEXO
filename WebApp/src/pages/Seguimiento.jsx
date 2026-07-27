@@ -1,21 +1,20 @@
 /**
- * SCR-CAS-01 Casos Activos (Seguimiento)
- * Lista de estudiantes en seguimiento con búsqueda y apertura de TrackingModal.
+ * SCR-CAS-01 Casos Activos (Seguimiento) — DEC-IA-01
+ * Lista de estudiantes en seguimiento con búsqueda y apertura de TrackingDrawer.
+ * Usa PageHeader, RiskBadge, SkeletonRows, Drawer unificado.
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Search, Activity, CalendarDays, UserCheck } from 'lucide-react';
+import { FileText, Search, Activity, CalendarDays } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
 import { TrackingModal } from './TrackingModal';
-import { Section, Surface } from '../components/ui/Surface';
+import { Surface, PageHeader } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton } from '../components/ui/Skeleton';
-
-const riskScheme = (score) => (score >= 70 ? 'danger' : score >= 40 ? 'warning' : 'success');
+import { SkeletonRows } from '../components/ui/Skeleton';
+import { RiskBadge } from '../components/patterns/RiskBadge';
 
 export default function Casos() {
   const [searchParams] = useSearchParams();
@@ -44,7 +43,6 @@ export default function Casos() {
     window.addEventListener('nexo:tracking-refresh', handler);
 
     const studentId = searchParams.get('student_id');
-    const studentName = searchParams.get('student_name');
     if (studentId) {
       trackingApi.startTracking(studentId)
         .then((res) => { if (res.status === 'ok') fetchTrackings(); })
@@ -65,7 +63,11 @@ export default function Casos() {
 
   return (
     <div className="space-y-8">
-      <Section title="Casos activos" subtitle="Estudiantes en proceso de intervención" />
+      <PageHeader
+        eyebrow="Intervención estudiantil"
+        title="Casos Activos"
+        subtitle="Estudiantes en proceso de intervención"
+      />
 
       <Input
         placeholder="Buscar estudiante..."
@@ -75,9 +77,7 @@ export default function Casos() {
       />
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
-        </div>
+        <Surface><SkeletonRows count={4} /></Surface>
       ) : filtered.length === 0 ? (
         <Surface>
           <EmptyState
@@ -95,7 +95,7 @@ export default function Casos() {
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)]">{row.group_name || 'Sin grupo'}</p>
                 </div>
-                <Badge scheme={riskScheme(row.risk_score)}>{row.risk_score ?? '—'}</Badge>
+                <RiskBadge score={row.risk_score} />
               </div>
               <div className="mt-4 flex items-center gap-4 text-caption text-[var(--nx-text-muted)]">
                 <span className="flex items-center gap-1"><Activity size={12} /> {row.status || 'Activo'}</span>

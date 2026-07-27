@@ -279,5 +279,56 @@ bool SqliteManager::markAuditError(int id) {
 bool SqliteManager::checkInasistencia(const std::string& /*doc*/) { return false; }
 bool SqliteManager::deleteInasistencia(const std::string& /*doc*/) { return true; }
 bool SqliteManager::savePAE(const std::string& /*doc*/, bool /*r*/) { return true; }
-bool SqliteManager::setConfig(const std::string& /*k*/, const std::string& /*v*/) { return true; }
-std::string SqliteManager::getConfig(const std::string& /*k*/, const std::string& d) { return d; }
+
+bool SqliteManager::setConfig(const std::string& key, const std::string& value) {
+    const char* sql = "INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, value.c_str(), -1, SQLITE_TRANSIENT);
+    bool ok = (executeWithRetry(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+std::string SqliteManager::getConfig(const std::string& key, const std::string& defaultVal) {
+    const char* sql = "SELECT value FROM config WHERE key = ?;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return defaultVal;
+    sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
+    std::string result = defaultVal;
+    if (executeWithRetry(stmt) == SQLITE_ROW) {
+        const char* val = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (val) result = val;
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+bool SqliteManager::getAllEstudiantesConTemplate(std::vector<Estudiante>& estudiantes) {
+    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella FROM estudiantes WHERE template_huella IS NOT NULL AND length(template_huella) > 0;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
+    while (executeWithRetry(stmt) == SQLITE_ROW) {
+        Estudiante est;
+        est.documento = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        est.nombre = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        const char* tel = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        est.telefono_acudiente = tel ? tel : "";
+        const char* nom = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        est.nombre_acudiente = nom ? nom : "";
+        est.huella_id = static_cast<uint32_t>(sqlite3_column_int(stmt, 4));
+        const char* encryptedTemplate = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        if (encryptedTemplate) {
+            std::string decrypted = Encryption::getInstance().decrypt(encryptedTemplate);
+            if (!decrypted.empty()) {
+                est.template_huella.assign(decrypted.begin(), decrypted.end());
+            }
+        }
+        if (!est.template_huella.empty()) {
+            estudiantes.push_back(std::move(est));
+        }
+    }
+    sqlite3_finalize(stmt);
+    return true;
+}

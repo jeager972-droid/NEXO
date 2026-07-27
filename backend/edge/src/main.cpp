@@ -65,6 +65,8 @@
 #include "mqtt/mqtt_command_worker.h"
 #include "hardware/watchdog.h"
 #include "hardware/dev_stub/DevStubBiometricSensor.h"
+#include "hardware/real/Zk9500BiometricSensor.h"
+#include "hardware/real/UareU5300BiometricSensor.h"
 #include "hardware/dev_stub/DevStubDisplay.h"
 #include "hardware/dev_stub/DevStubNotification.h"
 #include "interoperabilidad/audit_trail.h"
@@ -77,6 +79,7 @@
 //                      en ese caso se bloquean las lecturas biométricas.
 std::atomic<bool> g_shutdownRequested(false);
 std::atomic<bool> g_clockValid(true);
+std::atomic<IBiometricSensor*> g_activeSensor{nullptr};
 
 // =============================================================================
 // Signal handler
@@ -84,6 +87,8 @@ std::atomic<bool> g_clockValid(true);
 // Captura SIGINT y SIGTERM para levantar g_shutdownRequested.
 void signalHandler(int signal) {
     g_shutdownRequested.store(true, std::memory_order_release);
+    auto* sensor = g_activeSensor.load(std::memory_order_acquire);
+    if (sensor) sensor->cancelCapture();
     (void)signal;
 }
 
@@ -225,7 +230,7 @@ private:
             j["event"] = record.event; // <-- ACTUALIZADO
             j["parent_tel"] = est.telefono_acudiente;
             j["captured_at"] = record.timestamp; // <-- ¡LA MAGIA OCURRE AQUÍ!
-            j["device_token"] = ConfigManager::getInstance().getDeviceToken();
+            j["device_token"] = Encryption::getInstance().getToken();
             j["device_id"] = ConfigManager::getInstance().getDeviceId();
             uint64_t micro = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
@@ -367,8 +372,6 @@ struct LocalTime {
 LocalTime getLocalTimeBogota() {
     time_t now = time(nullptr);
     struct tm tm_buf{};
-    setenv("TZ", "UTC", 1);
-    tzset();
     localtime_r(&now, &tm_buf);
     return {tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, true};
 }
@@ -393,7 +396,8 @@ std::string checkLateStatus() {
 bool checkNtpSync() {
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("ntpdate -q pool.ntp.org 2>/dev/null | grep -oP 'offset \\K[-\\d.]+'", "r"), pclose);
+    auto pclose_deleter = [](FILE* f) { if (f) pclose(f); };
+    std::unique_ptr<FILE, decltype(pclose_deleter)> pipe(popen("ntpdate -q pool.ntp.org 2>/dev/null | grep -oP 'offset \\K[-\\d.]+'", "r"), pclose_deleter);
     if (!pipe) {
         LOG_WARN("Could not run ntpdate command");
         return true;
@@ -718,11 +722,26 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             auto res = sensor->enrollUser(huellaId, tpl);
             if (res) {
                 Estudiante est{doc, nombre, tel, "", huellaId, tpl.empty() ? std::vector<uint8_t>(256, 0) : tpl};
+                // Enrolamiento atómico: SQLite primero, cache del sensor después.
+                // La transacción explícita permite rollback completo si el cache del sensor falla.
+                sqlite3_exec(db.getDB(), "BEGIN;", nullptr, nullptr, nullptr);
                 if (db.saveEstudiante(est)) {
-                    LOG_INFO("Student enrolled: {} ({})", nombre, doc);
-                    std::cout << "Estudiante enrolado exitosamente.\n";
+                    auto cacheRes = sensor->addTemplate(huellaId, est.template_huella);
+                    if (cacheRes) {
+                        sqlite3_exec(db.getDB(), "COMMIT;", nullptr, nullptr, nullptr);
+                        LOG_INFO("Student enrolled: {} ({})", nombre, doc);
+                        std::cout << "Estudiante enrolado exitosamente.\n";
+                    } else {
+                        sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);
+                        sensor->deleteUser(huellaId); // cache sanity cleanup
+                        LOG_ERROR("Sensor cache add failed for {}. SQLite rolled back: {}", doc, cacheRes.message);
+                        std::cout << "Error: no se pudo registrar en cache del sensor.\n";
+                    }
                 } else {
-                    LOG_ERROR("DB save failed for {}", doc);
+                    sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);
+                    sensor->deleteUser(huellaId); // rollback cache (no-op si no se añadió)
+                    LOG_ERROR("DB save failed for {}. Sensor cache rolled back.", doc);
+                    std::cout << "Error: no se pudo guardar en base de datos.\n";
                 }
             } else {
                 LOG_ERROR("Enroll failed: {} - {}", toString(res.error), res.message);
@@ -733,9 +752,12 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             if (!readLineNonBlocking(doc)) break;
             Estudiante est;
             if (db.getEstudianteByDocumento(doc, est)) {
-                sensor->deleteUser(est.huella_id);
-                db.deleteEstudiante(doc);
-                LOG_INFO("Student deleted: {}", doc);
+                if (db.deleteEstudiante(doc)) {
+                    sensor->deleteUser(est.huella_id);
+                    LOG_INFO("Student deleted: {}", doc);
+                } else {
+                    LOG_ERROR("DB delete failed for {}", doc);
+                }
             } else {
                 std::cout << "Estudiante no encontrado.\n";
             }
@@ -785,7 +807,12 @@ int main() {
         return 1;
     }
 
+    // TZ se configura una sola vez antes de que cualquier hilo use localtime_r
+    setenv("TZ", "America/Bogota", 1);
+    tzset();
+
     LOG_INFO("Initializing Encryption...");
+    Encryption::getInstance().setKeyFile(ConfigManager::getInstance().getString("aes_key_file", "nexo_edge.key"));
     if (!Encryption::getInstance().initialize()) {
         LOG_WARN("Cryptographic keys not provisioned");
         if (!runSecurityProvisioning()) {
@@ -795,7 +822,20 @@ int main() {
         }
     }
 
-    auto biometricSensor = std::make_unique<DevStubBiometricSensor>();
+    std::unique_ptr<IBiometricSensor> biometricSensor;
+    std::string sensorType = ConfigManager::getInstance().getString("biometric_sensor", "dev_stub");
+    if (sensorType == "zk9500") {
+        biometricSensor = createZk9500BiometricSensor();
+        if (biometricSensor) LOG_INFO("Using ZKTeco ZK9500 biometric sensor");
+    } else if (sensorType == "uareu5300") {
+        biometricSensor = createUareU5300BiometricSensor();
+        LOG_INFO("Using DigitalPersona U.are.U 5300 biometric sensor");
+    }
+    if (!biometricSensor) {
+        biometricSensor = std::make_unique<DevStubBiometricSensor>();
+        LOG_WARN("Requested sensor '{}' unavailable, falling back to DevStub", sensorType);
+    }
+    g_activeSensor.store(biometricSensor.get(), std::memory_order_release);
     auto initResult = biometricSensor->initialize();
     if (!initResult) {
         LOG_CRITICAL("Biometric sensor init failed: {} - {}", toString(initResult.error), initResult.message);

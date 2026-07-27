@@ -72,10 +72,10 @@ const Layout = () => {
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
 
   return (
-    <div className="flex min-h-screen w-full bg-[var(--nx-canvas)]">
+    <div className="min-h-screen bg-[var(--nx-canvas)]">
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
 
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-col min-w-0 lg:pl-[var(--nx-sidebar)]">
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 lg:px-8">
           <div className="flex items-center gap-3 min-w-0">
@@ -160,7 +160,7 @@ const Layout = () => {
 
         {/* Main */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-content">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={location.pathname}

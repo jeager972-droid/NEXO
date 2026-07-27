@@ -27,25 +27,42 @@
 #include <openssl/crypto.h>
 #include <sys/mman.h>
 #include <cerrno>
+#include <fstream>
+#include <sys/stat.h>
+#include <unistd.h>
 
 // Base64 helpers
 static std::string base64Encode(const std::vector<uint8_t>& data) {
     BIO* bio = BIO_new(BIO_s_mem());
     BIO* b64 = BIO_new(BIO_f_base64());
+    if (!bio || !b64) {
+        if (bio) BIO_free(bio);
+        if (b64) BIO_free(b64);
+        return "";
+    }
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     bio = BIO_push(b64, bio);
-    BIO_write(bio, data.data(), static_cast<int>(data.size()));
-    BIO_flush(bio);
-    BUF_MEM* buf;
+    if (BIO_write(bio, data.data(), static_cast<int>(data.size())) <= 0 ||
+        BIO_flush(bio) <= 0) {
+        BIO_free_all(bio);
+        return "";
+    }
+    BUF_MEM* buf = nullptr;
     BIO_get_mem_ptr(bio, &buf);
-    std::string result(buf->data, buf->length);
+    std::string result(buf ? buf->data : "", buf ? buf->length : 0);
     BIO_free_all(bio);
     return result;
 }
 
 static std::vector<uint8_t> base64Decode(const std::string& encoded) {
+    if (encoded.empty()) return {};
     BIO* bio = BIO_new_mem_buf(encoded.data(), static_cast<int>(encoded.size()));
     BIO* b64 = BIO_new(BIO_f_base64());
+    if (!bio || !b64) {
+        if (bio) BIO_free(bio);
+        if (b64) BIO_free(b64);
+        return {};
+    }
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     bio = BIO_push(b64, bio);
     std::vector<uint8_t> decoded(encoded.size());
@@ -63,18 +80,58 @@ Encryption::~Encryption() {
     }
 }
 
+void Encryption::setKeyFile(const std::string& path) {
+    m_keyFile = path;
+}
+
 bool Encryption::initialize() {
     auto& db = SqliteManager::getInstance();
-    std::string storedKey = db.getConfig("nexo_aes_key_b64");
-    std::string storedToken = db.getConfig("nexo_api_token");
-    if (!storedKey.empty()) {
+    std::string storedKey;
+    if (loadKeyFromFile(storedKey)) {
         m_aesKey.assign(storedKey.begin(), storedKey.end());
         if (mlock(m_aesKey.data(), m_aesKey.size()) != 0) {
             LOG_WARN("mlock failed for AES key (errno={})", errno);
         }
     }
+    std::string storedToken = db.getConfig("nexo_api_token");
     if (!storedToken.empty()) m_apiToken = storedToken;
     return isKeyProvisioned() && isTokenProvisioned();
+}
+
+bool Encryption::saveKeyToFile(const std::string& key) {
+    if (key.size() != 32) return false;
+    // Escritura atómica: temp -> chmod -> rename, para evitar archivo truncado por apagón.
+    std::string tmpPath = m_keyFile + ".tmp";
+    {
+        std::ofstream ofs(tmpPath, std::ios::binary | std::ios::trunc);
+        if (!ofs) {
+            LOG_ERROR("Cannot open AES key file for writing: {}", tmpPath);
+            return false;
+        }
+        ofs.write(key.data(), static_cast<std::streamsize>(key.size()));
+        if (!ofs) return false;
+        ofs.close();
+    }
+    chmod(tmpPath.c_str(), S_IRUSR | S_IWUSR);
+    if (std::rename(tmpPath.c_str(), m_keyFile.c_str()) != 0) {
+        LOG_ERROR("Failed to rename AES key file: {} -> {}", tmpPath, m_keyFile);
+        return false;
+    }
+    return true;
+}
+
+bool Encryption::loadKeyFromFile(std::string& key) {
+    std::ifstream ifs(m_keyFile, std::ios::binary | std::ios::ate);
+    if (!ifs) return false;
+    auto size = static_cast<std::streamoff>(ifs.tellg());
+    if (size != 32) {
+        LOG_ERROR("AES key file {} has invalid size {}", m_keyFile, size);
+        return false;
+    }
+    ifs.seekg(0, std::ios::beg);
+    key.resize(32);
+    ifs.read(key.data(), 32);
+    return ifs.good();
 }
 
 bool Encryption::isKeyProvisioned() const { return m_aesKey.size() == 32; }
@@ -90,7 +147,10 @@ bool Encryption::provisionKey(const std::string& key) {
     if (mlock(m_aesKey.data(), m_aesKey.size()) != 0) {
         LOG_WARN("mlock failed for AES key (errno={})", errno);
     }
-    SqliteManager::getInstance().setConfig("nexo_aes_key_b64", key);
+    if (!saveKeyToFile(key)) {
+        LOG_ERROR("Failed to persist AES key to file");
+        return false;
+    }
     LOG_INFO("AES-256 key provisioned");
     return true;
 }
@@ -111,18 +171,30 @@ std::string Encryption::encrypt(const std::string& plaintext, const std::vector<
     if (!ctx) return "";
     std::vector<uint8_t> ciphertext(plaintext.size() + 16);
     int len = 0, cipherLen = 0;
-    EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr);
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr);
-    EVP_EncryptInit_ex(ctx, nullptr, nullptr,
-                       reinterpret_cast<const uint8_t*>(m_aesKey.data()), iv.data());
-    EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
-                      reinterpret_cast<const uint8_t*>(plaintext.data()),
-                      static_cast<int>(plaintext.size()));
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) != 1 ||
+        EVP_EncryptInit_ex(ctx, nullptr, nullptr,
+                           reinterpret_cast<const uint8_t*>(m_aesKey.data()), iv.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
+                          reinterpret_cast<const uint8_t*>(plaintext.data()),
+                          static_cast<int>(plaintext.size())) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
     cipherLen = len;
-    EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len);
+    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
     cipherLen += len;
     std::vector<uint8_t> tag(16);
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data());
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
     EVP_CIPHER_CTX_free(ctx);
     ciphertext.resize(static_cast<size_t>(cipherLen));
     std::vector<uint8_t> packed;
@@ -139,36 +211,7 @@ std::string Encryption::encrypt(const std::string& plaintext) {
     std::vector<uint8_t> iv(12);
     if (RAND_bytes(iv.data(), 12) != 1) return "";
 
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) return "";
-
-    std::vector<uint8_t> ciphertext(plaintext.size() + 16);
-    int len = 0, cipherLen = 0;
-
-    EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr);
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr);
-    EVP_EncryptInit_ex(ctx, nullptr, nullptr,
-                       reinterpret_cast<const uint8_t*>(m_aesKey.data()), iv.data());
-    EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
-                      reinterpret_cast<const uint8_t*>(plaintext.data()),
-                      static_cast<int>(plaintext.size()));
-    cipherLen = len;
-    EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len);
-    cipherLen += len;
-
-    std::vector<uint8_t> tag(16);
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data());
-    EVP_CIPHER_CTX_free(ctx);
-
-    ciphertext.resize(static_cast<size_t>(cipherLen));
-
-    // Pack: IV(12) + ciphertext + tag(16)
-    std::vector<uint8_t> packed;
-    packed.insert(packed.end(), iv.begin(), iv.end());
-    packed.insert(packed.end(), ciphertext.begin(), ciphertext.end());
-    packed.insert(packed.end(), tag.begin(), tag.end());
-
-    return base64Encode(packed);
+    return encrypt(plaintext, iv);
 }
 
 std::string Encryption::decrypt(const std::string& b64Ciphertext) {
@@ -187,14 +230,25 @@ std::string Encryption::decrypt(const std::string& b64Ciphertext) {
     std::vector<uint8_t> plaintext(ciphertext.size());
     int len = 0, plainLen = 0;
 
-    EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr);
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr);
-    EVP_DecryptInit_ex(ctx, nullptr, nullptr,
-                       reinterpret_cast<const uint8_t*>(m_aesKey.data()), iv.data());
-    EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
-                      static_cast<int>(ciphertext.size()));
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) != 1 ||
+        EVP_DecryptInit_ex(ctx, nullptr, nullptr,
+                           reinterpret_cast<const uint8_t*>(m_aesKey.data()), iv.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+
+    if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
+                          static_cast<int>(ciphertext.size())) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
     plainLen = len;
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag.data());
+
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
 
     int ret = EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len);
     EVP_CIPHER_CTX_free(ctx);

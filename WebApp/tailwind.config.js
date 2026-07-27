@@ -110,12 +110,21 @@ export default {
         'body-sm':  ['0.875rem',{ lineHeight: '1.25rem',  fontWeight: '450' }],
         'label':    ['0.875rem',{ lineHeight: '1.125rem', fontWeight: '600' }],
         'caption':  ['0.75rem', { lineHeight: '1rem',     fontWeight: '520' }],
+        // Cifras de métrica (moodboard .nx-stat-num) y eyebrow de sección
+        'metric':   ['1.75rem', { lineHeight: '2rem',     fontWeight: '650' }],
+        'metric-lg':['2.25rem', { lineHeight: '2.5rem',   fontWeight: '650' }],
+        'eyebrow':  ['0.6875rem', { lineHeight: '1rem',   fontWeight: '620', letterSpacing: '0.08em' }],
         '2xs':      ['0.625rem',{ lineHeight: '0.875rem', letterSpacing: '0.08em' }],
         'xs':       ['0.75rem', { lineHeight: '1rem',     letterSpacing: '0.04em' }],
       },
       letterSpacing: {
         'widest-2': '0.2em',
         'widest-3': '0.3em',
+      },
+      maxWidth: {
+        // 05 §6: no se estira la lectura más allá de 1280px
+        'content': '1280px',
+        'reading': '68ch',
       },
       transitionTimingFunction: {
         // 03_DESIGN_SYSTEM.md: cubic-bezier(.22,1,.36,1)
@@ -136,6 +145,9 @@ export default {
         'pulse-bio': 'pulse-bio 2.4s cubic-bezier(0.4,0,0.6,1) infinite',
         'scan':      'scan 1.8s ease-in-out infinite',
         'skeleton':  'skeleton 1.8s ease-in-out infinite',
+        // 08 §2: confirmación de éxito, una sola vez, ≤300ms
+        'seal':      'seal 260ms cubic-bezier(0.22,1,0.36,1) both',
+        'halo':      'halo 900ms cubic-bezier(0.22,1,0.36,1) both',
       },
       keyframes: {
         'pulse-bio': {
@@ -151,6 +163,14 @@ export default {
         'skeleton': {
           '0%, 100%': { opacity: '1' },
           '50%':      { opacity: '0.5' },
+        },
+        'seal': {
+          '0%':   { opacity: '0', transform: 'scale(0.82)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'halo': {
+          '0%':   { opacity: '0.5', transform: 'scale(0.9)' },
+          '100%': { opacity: '0',   transform: 'scale(1.7)' },
         },
       },
     },

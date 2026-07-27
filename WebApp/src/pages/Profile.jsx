@@ -1,18 +1,21 @@
 /**
- * SCR-PRF-01 Profile
- * Perfil de usuario: foto, datos de contacto, verificación OTP y cambio de contraseña.
+ * SCR-PRO-01 Profile
+ * B-09: una sola acción primaria por sección.
+ * Usa PageHeader, PasswordInput, ConfirmDialog, humanizeError.
  */
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, ShieldCheck, Key, CheckCircle2, AlertCircle, Trash2, Loader2, X } from 'lucide-react';
+import { Camera, Mail, ShieldCheck, Key, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Section, Surface } from '../components/ui/Surface';
+import { PageHeader } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
+import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
+import { ConfirmDialog } from '../components/ui/Overlay';
+import { humanizeError } from '../utils/messages';
 
 const compressImage = (file, maxWidth = 800, quality = 0.85) =>
   new Promise((resolve, reject) => {
@@ -133,9 +136,6 @@ const Profile = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
   const [actionToast, setActionToast] = useState(null);
@@ -176,7 +176,7 @@ const Profile = () => {
         setPhotoToast({ type: 'error', message: res.message || 'Error al subir foto' });
       }
     } catch (e) {
-      setPhotoToast({ type: 'error', message: e.message || 'Error al subir foto' });
+      setPhotoToast({ type: 'error', message: humanizeError(e, 'Error al subir foto') });
     } finally {
       setUploading(false);
     }
@@ -196,7 +196,7 @@ const Profile = () => {
         setContactToast({ type: 'error', message: res.message || 'Error al actualizar' });
       }
     } catch (e) {
-      setContactToast({ type: 'error', message: e.message || 'Error de red' });
+      setContactToast({ type: 'error', message: humanizeError(e, 'Error al actualizar') });
     } finally {
       setActionLoading(false);
     }
@@ -214,7 +214,7 @@ const Profile = () => {
         setContactToast({ type: 'error', message: res.message || 'Error al eliminar' });
       }
     } catch (e) {
-      setContactToast({ type: 'error', message: e.message || 'Error de red' });
+      setContactToast({ type: 'error', message: humanizeError(e, 'Error al eliminar') });
     } finally {
       setActionLoading(false);
       setDeleteConfirm(null);
@@ -244,7 +244,7 @@ const Profile = () => {
         setActionToast({ type: 'error', message: res.message || 'Error al cambiar contraseña' });
       }
     } catch (e) {
-      setActionToast({ type: 'error', message: e.message || 'Error de red' });
+      setActionToast({ type: 'error', message: humanizeError(e, 'Error al cambiar contraseña') });
     } finally {
       setActionLoading(false);
     }
@@ -255,6 +255,7 @@ const Profile = () => {
   if (loadingProfile) {
     return (
       <div className="space-y-6 max-w-3xl">
+        <PageHeader eyebrow="Cuenta y seguridad" title="Perfil" />
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -263,7 +264,7 @@ const Profile = () => {
 
   return (
     <div className="space-y-8 max-w-3xl">
-      <Section title="Perfil" subtitle="Administra tu cuenta y seguridad" />
+      <PageHeader eyebrow="Cuenta y seguridad" title="Perfil" subtitle="Administra tu cuenta y seguridad" />
 
       <Card className="flex items-center gap-5 p-5">
         <div className="relative">
@@ -325,18 +326,9 @@ const Profile = () => {
       <Card className="space-y-5 p-5">
         <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2"><Key size={18} className="text-[var(--nx-accent)]" /> Cambiar contraseña</p>
         <form onSubmit={changePassword} className="space-y-4">
-          <div className="relative">
-            <Input label="Contraseña actual" type={showCurrent ? 'text' : 'password'} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-            <button type="button" onClick={() => setShowCurrent((s) => !s)} className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] text-xs">{showCurrent ? 'Ocultar' : 'Mostrar'}</button>
-          </div>
-          <div className="relative">
-            <Input label="Nueva contraseña" type={showNew ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-            <button type="button" onClick={() => setShowNew((s) => !s)} className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] text-xs">{showNew ? 'Ocultar' : 'Mostrar'}</button>
-          </div>
-          <div className="relative">
-            <Input label="Confirmar nueva contraseña" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-            <button type="button" onClick={() => setShowConfirm((s) => !s)} className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] text-xs">{showConfirm ? 'Ocultar' : 'Mostrar'}</button>
-          </div>
+          <PasswordInput label="Contraseña actual" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          <PasswordInput label="Nueva contraseña" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <PasswordInput label="Confirmar nueva contraseña" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
           <Button type="submit" loading={actionLoading}>Actualizar contraseña</Button>
           <Toast toast={actionToast} />
         </form>
@@ -344,16 +336,15 @@ const Profile = () => {
 
       <AnimatePresence>
         {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)]">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-sm rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 shadow-high">
-              <p className="text-h3 text-[var(--nx-text)]">¿Eliminar dato?</p>
-              <p className="text-body text-[var(--nx-text-muted)] mt-2">Se eliminará el contacto seleccionado de tu perfil.</p>
-              <div className="mt-6 flex gap-3">
-                <Button variant="secondary" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
-                <Button variant="danger" className="flex-1" loading={actionLoading} onClick={() => deleteField(deleteConfirm)} leftIcon={<Trash2 size={16} />}>Eliminar</Button>
-              </div>
-            </motion.div>
-          </div>
+          <ConfirmDialog
+            title="¿Eliminar dato de contacto?"
+            description="Se eliminará el contacto seleccionado de tu perfil. Esta acción no se puede deshacer."
+            confirmLabel="Eliminar"
+            destructive
+            loading={actionLoading}
+            onConfirm={() => deleteField(deleteConfirm)}
+            onClose={() => setDeleteConfirm(null)}
+          />
         )}
       </AnimatePresence>
     </div>

@@ -1,28 +1,23 @@
 /**
- * SCR-AUTH-01 Login
- * Entrada a la jornada. Sin espera ornamental; saludo contextual.
+ * SCR-AUTH-01 Login · SCR-AUTH-02 Verificación 2FA
+ * DEC-FE-03: sin saludo pre-auth; el login responde «cómo entro», no «qué hora es».
+ * DEC-FE-02: humanizeError normaliza todo mensaje de servidor.
+ * CMP-004: PasswordInput con toggle integrado (no posicionamiento absoluto).
  */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, ShieldCheck, ArrowRight } from 'lucide-react';
+import { ShieldCheck, ArrowRight } from 'lucide-react';
 import { authApi } from '../api/auth';
 import LogoNexo from '../components/LogoNexo';
-import { Input } from '../components/ui/Input';
+import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-
-const greeting = () => {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Buenos días';
-  if (hour < 18) return 'Buenas tardes';
-  return 'Buenas noches';
-};
+import { humanizeError } from '../utils/messages';
 
 const Login = () => {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [show2FA, setShow2FA]   = useState(false);
@@ -52,8 +47,7 @@ const Login = () => {
       }
       navigate('/');
     } catch (err) {
-      console.error('Error detallado de login:', err);
-      setError(err instanceof Error ? err.message : typeof err === 'string' ? err : 'Credenciales inválidas.');
+      setError(humanizeError(err, 'Correo o contraseña no coinciden. Verifica ambos campos.'));
     } finally {
       setLoading(false);
     }
@@ -69,29 +63,29 @@ const Login = () => {
         if (setUser) setUser(data.user);
         navigate('/');
       } else {
-        setError('Error al verificar el código OTP.');
+        setError('No pudimos verificar el código. Revisa e inténtalo de nuevo.');
       }
     } catch (err) {
-      setError(typeof err === 'string' ? err : err.response?.data?.message || 'Código OTP inválido.');
+      setError(humanizeError(err, 'El código no es válido o ya expiró.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[var(--nx-canvas)]">
+    <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-[var(--nx-canvas)]">
       <motion.div
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[420px] space-y-8"
       >
-        <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex flex-col items-center gap-3 text-center">
           <div className="h-14 w-14 rounded-surface bg-[var(--nx-accent)] text-[var(--nx-accent-text)] flex items-center justify-center">
-            <LogoNexo className="h-8" />
+            <LogoNexo className="h-8" showText={false} />
           </div>
           <div>
-            <h1 className="text-h1 text-[var(--nx-text)]">{greeting()}</h1>
-            <p className="text-body text-[var(--nx-text-muted)] mt-1">Inicia tu jornada en NEXO</p>
+            <h1 className="text-h1 text-[var(--nx-text)]">NEXO</h1>
+            <p className="text-body text-[var(--nx-text-muted)] mt-0.5">Quiet Operations</p>
           </div>
         </div>
 
@@ -112,33 +106,22 @@ const Login = () => {
                   placeholder="tu@colegio.edu"
                   required
                 />
-                <div className="relative">
-                  <Input
-                    label="Contraseña"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-[30px] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]"
-                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                <PasswordInput
+                  label="Contraseña"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
 
                 {error && (
-                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
+                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
                     {error}
                   </div>
                 )}
 
-                <Button type="submit" size="lg" className="w-full" loading={loading} rightIcon={<ArrowRight size={18} />}>
+                <Button type="submit" size="lg" block loading={loading} rightIcon={<ArrowRight size={18} />}>
                   Entrar
                 </Button>
               </motion.form>
@@ -166,11 +149,11 @@ const Login = () => {
                   required
                 />
                 {error && (
-                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
+                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
                     {error}
                   </div>
                 )}
-                <Button type="submit" size="lg" className="w-full" loading={loading}>
+                <Button type="submit" size="lg" block loading={loading}>
                   Verificar
                 </Button>
                 <button

@@ -1,17 +1,22 @@
 /**
- * TrackingModal / NEXO Institucional
+ * TrackingModal / NEXO Institucional — B-13 Drawer unificado
  * Modal de seguimiento estudiantil: inicio, notas, cierre y riesgo.
+ * Usa Drawer de Overlay.jsx, ConfirmDialog, humanizeError.
  */
 import { useState, useEffect } from 'react';
-import { X, Send, Activity, UserCheck, CalendarDays } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Send, UserCheck, CalendarDays } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
 import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Input, Textarea } from '../components/ui/Input';
-import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton } from '../components/ui/Skeleton';
+import { SkeletonRows } from '../components/ui/Skeleton';
+import { Drawer, ConfirmDialog } from '../components/ui/Overlay';
+import { RiskBadge } from '../components/patterns/RiskBadge';
+import { humanizeError } from '../utils/messages';
+
+const scoreToLevel = (s) => s >= 70 ? 'critico' : s >= 40 ? 'medio' : 'bajo';
 
 export const TrackingModal = ({ trackingId, studentId, studentName, metadata, onClose, onRefresh }) => {
   const [details, setDetails] = useState(null);
@@ -22,6 +27,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
   const [resolveReason, setResolveReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResolve, setShowResolve] = useState(false);
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
 
   useEffect(() => {
@@ -65,7 +71,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
         setSubmitStatus({ type: 'error', message: res.message || 'No se pudo iniciar el seguimiento' });
       }
     } catch (e) {
-      setSubmitStatus({ type: 'error', message: e.message || 'Error de red' });
+      setSubmitStatus({ type: 'error', message: humanizeError(e, 'No se pudo iniciar el seguimiento') });
     } finally {
       setIsSubmitting(false);
     }
@@ -104,39 +110,27 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
         setSubmitStatus({ type: 'error', message: res.message || 'No se pudo cerrar' });
       }
     } catch (e) {
-      setSubmitStatus({ type: 'error', message: e.message || 'Error de red' });
+      setSubmitStatus({ type: 'error', message: humanizeError(e, 'No se pudo cerrar') });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const riskScheme = metadata?.risk_score >= 70 ? 'danger' : metadata?.risk_score >= 40 ? 'warning' : 'success';
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)]">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, y: 8 }}
-        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-high"
+    <>
+      <Drawer
+        title={studentName || 'Seguimiento'}
+        context={metadata?.risk_score ? `Riesgo ${metadata.risk_score}/100` : undefined}
+        onClose={onClose}
+        size="md"
       >
-        <div className="flex items-center justify-between border-b border-[var(--nx-border)] px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]">
-              <Activity size={18} className="text-[var(--nx-accent)]" />
-            </div>
-            <div>
-              <p className="text-h3 text-[var(--nx-text)]">{studentName || 'Seguimiento'}</p>
-              {metadata?.risk_score && <Badge scheme={riskScheme}>Riesgo {metadata.risk_score}/100</Badge>}
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-control hover:bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">
-            <X size={20} />
-          </button>
-        </div>
-
         <div className="p-6 space-y-6">
+          {metadata?.risk_score && (
+            <div className="flex items-center gap-3">
+              <RiskBadge level={scoreToLevel(metadata.risk_score)} />
+            </div>
+          )}
+
           {!activeTrackingId ? (
             <EmptyState
               icon={<UserCheck size={32} className="text-[var(--nx-accent)]" />}
@@ -145,10 +139,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               action={<Button onClick={handleStartTracking} loading={isSubmitting}>Iniciar caso</Button>}
             />
           ) : loading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
+            <SkeletonRows count={3} />
           ) : (
             <>
               <Surface className="p-4 space-y-2">
@@ -193,17 +184,31 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
                     onChange={(e) => setResolveReason(e.target.value)}
                     placeholder="Motivo por el que se cierra el caso"
                   />
-                  {submitStatus && <p className="text-caption text-[var(--nx-danger)]">{submitStatus.message}</p>}
+                  {submitStatus && <p className="text-caption text-[var(--nx-danger)]" role="alert">{submitStatus.message}</p>}
                   <div className="flex gap-3">
                     <Button variant="quiet" className="flex-1" onClick={() => setShowResolve(false)}>Cancelar</Button>
-                    <Button variant="danger" className="flex-1" loading={isSubmitting} onClick={confirmResolve}>Confirmar cierre</Button>
+                    <Button variant="danger" className="flex-1" onClick={() => setShowConfirmClose(true)}>Confirmar cierre</Button>
                   </div>
                 </Surface>
               )}
             </>
           )}
         </div>
-      </motion.div>
-    </div>
+      </Drawer>
+
+      <AnimatePresence>
+        {showConfirmClose && (
+          <ConfirmDialog
+            title="Cerrar caso de seguimiento"
+            description={`¿Confirmas el cierre del caso de ${studentName}? Esta acción es irreversible.`}
+            confirmLabel="Sí, cerrar caso"
+            cancelLabel="No, mantener"
+            destructive
+            onConfirm={() => { setShowConfirmClose(false); confirmResolve(); }}
+            onClose={() => setShowConfirmClose(false)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 };

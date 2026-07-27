@@ -81,6 +81,9 @@ public:
     bool incrementAuditAttempt(int id);
     bool markAuditError(int id);
 
+    // Bulk load for biometric cache
+    bool getAllEstudiantesConTemplate(std::vector<Estudiante>& estudiantes);
+
     // Config KV store
     bool setConfig(const std::string& key, const std::string& value);
     std::string getConfig(const std::string& key, const std::string& defaultVal = "");

@@ -1,20 +1,22 @@
 /**
  * SCR-NOT-01 Notifications
- * Centro de notificaciones: lista, detalle, acciones y conteo.
+ * DEC-FE-07: Drawer unificado para detalle contextual.
+ * Usa PageHeader, SkeletonRows, Drawer de Overlay.jsx.
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle2, Info, AlertTriangle, Eye, X, Trash2, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Bell, CheckCircle2, Info, AlertTriangle, Eye, Trash2 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
 import { trackingApi } from '../api/tracking';
 import { ROLES } from '../config/roles';
-import { Section, Surface } from '../components/ui/Surface';
+import { Surface, PageHeader } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton } from '../components/ui/Skeleton';
+import { SkeletonRows } from '../components/ui/Skeleton';
+import { Drawer } from '../components/ui/Overlay';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
 const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
@@ -91,24 +93,23 @@ const Notifications = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Section title="Notificaciones" subtitle="Centro de novedades" />
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
-        </div>
+        <PageHeader eyebrow="Centro de novedades" title="Notificaciones" />
+        <Surface><SkeletonRows count={4} /></Surface>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <Section title="Notificaciones" subtitle="Centro de novedades institucionales" />
-        {notifications.length > 0 && (
+      <PageHeader
+        eyebrow="Centro de novedades"
+        title="Notificaciones"
+        actions={notifications.length > 0 ? (
           <Button variant="secondary" loading={clearing} onClick={handleClear} leftIcon={<Trash2 size={16} />}>
             Vaciar
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {notifications.length === 0 ? (
         <Surface>
@@ -122,7 +123,7 @@ const Notifications = () => {
             return (
               <button
                 key={notif.id ?? notif.notification_id ?? i}
-                onClick={() => setDetail(notif)}
+                onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
                 className="flex w-full items-start gap-4 px-5 py-4 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
               >
                 <div className="mt-1">
@@ -145,47 +146,31 @@ const Notifications = () => {
 
       <AnimatePresence>
         {detail && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setDetail(null)}
-              className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)]"
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[480px] flex-col overflow-hidden border-l border-[var(--nx-border)] bg-[var(--nx-surface)]"
-            >
-              <div className="flex items-center justify-between border-b border-[var(--nx-border)] px-6 py-4">
-                <p className="text-h3 text-[var(--nx-text)]">Detalles de la notificación</p>
-                <button onClick={() => setDetail(null)} className="p-2 rounded-control hover:bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                <Surface className="p-4 space-y-2">
-                  <p className="text-label text-[var(--nx-text-muted)] uppercase">Mensaje</p>
-                  <p className="text-body text-[var(--nx-text)]">{detail.message}</p>
-                  <p className="text-caption text-[var(--nx-text-muted)]">{detail.created_at && new Date(detail.created_at).toLocaleString('es-CO')}</p>
-                </Surface>
-                {(() => {
-                  const meta = parseMeta(detail.metadata_json);
-                  if (meta?.action === 'iniciar_seguimiento' && meta.student_id && !isStaff) {
-                    return (
-                      <Button className="w-full" onClick={() => startTrackingFromNotif(meta.student_id)}>
-                        Iniciar seguimiento
-                      </Button>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-            </motion.div>
-          </>
+          <Drawer
+            title="Detalle de la notificación"
+            context={detail.created_at ? new Date(detail.created_at).toLocaleString('es-CO') : undefined}
+            onClose={() => setDetail(null)}
+            size="sm"
+          >
+            <div className="p-6 space-y-6">
+              <Surface className="p-4 space-y-2">
+                <p className="text-label text-[var(--nx-text-muted)] uppercase">Mensaje</p>
+                <p className="text-body text-[var(--nx-text)]">{detail.message}</p>
+                <p className="text-caption text-[var(--nx-text-muted)]">{detail.created_at && new Date(detail.created_at).toLocaleString('es-CO')}</p>
+              </Surface>
+              {(() => {
+                const meta = parseMeta(detail.metadata_json);
+                if (meta?.action === 'iniciar_seguimiento' && meta.student_id && !isStaff) {
+                  return (
+                    <Button className="w-full" onClick={() => startTrackingFromNotif(meta.student_id)}>
+                      Iniciar seguimiento
+                    </Button>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          </Drawer>
         )}
       </AnimatePresence>
     </div>

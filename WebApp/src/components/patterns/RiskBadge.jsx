@@ -2,7 +2,6 @@
  * CMP-103 Indicador de riesgo
  * Nivel + tendencia + evidencia + periodo.
  */
-import React from 'react';
 import { clsx } from 'clsx';
 import { Badge } from '../ui/Badge';
 

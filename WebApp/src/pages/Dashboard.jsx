@@ -1,37 +1,33 @@
 /**
  * SCR-HOME-01 Dashboard / Inicio por rol
- * Nueva generación: KPIs, grupo activo, eventos, riesgo y acciones propias por rol.
+ * DEC-FE-05: contenido por rol. A-07: tarjetas accionables.
+ * Usa PageHeader, StatCard, SituationLine, Drawer unificado.
  */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, Loader2, CalendarDays, CheckCircle2, FileText
+  Search, X, CalendarDays, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { trackingApi } from '../api/tracking';
 import { ROLES } from '../config/roles';
-import { Card, CardHeader } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
+import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Section, Surface } from '../components/ui/Surface';
+import { Section, Surface, PageHeader } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Drawer } from '../components/ui/Overlay';
+import { StatCard } from '../components/patterns/StatCard';
+import { SituationLine } from '../components/patterns/SituationLine';
+import { humanizeError } from '../utils/messages';
 
 const EMPTY_STATS = {
   presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
   pendingTasks: [], studentsByGroup: {}, teacherGroups: [],
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, outside: 0 },
-};
-
-const fmtTime = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d)) return String(iso);
-  return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 const StreamItem = ({ ev, onClick, showIssuer }) => (
@@ -147,9 +143,9 @@ const AdminDashboard = ({ stats, loading }) => {
   };
 
   const kpis = [
-    { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: Users,         sub: 'Ingresos hoy',            accent: 'var(--nx-accent)' },
-    { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: UserMinus,     sub: 'Sin registro de entrada', accent: 'var(--nx-accent)' },
-    { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: AlertTriangle, sub: 'Requieren atención',      accent: 'var(--nx-danger)' },
+    { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Ingresos hoy' },
+    { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: 'Sin registro de entrada' },
+    { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: 'Requieren atención' },
   ];
 
   useEffect(() => {
@@ -171,30 +167,32 @@ const AdminDashboard = ({ stats, loading }) => {
 
   return (
     <div className="space-y-8">
-      <Section title="Visión de la jornada" subtitle={todayLabel()} />
+      <PageHeader
+        eyebrow="Visión de la jornada"
+        title="Hoy en el colegio"
+        subtitle={todayLabel()}
+      />
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
-        </div>
+        <SkeletonMetrics count={3} className="grid-cols-1 md:grid-cols-3" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {kpis.map((k) => (
-            <Card key={k.key} asAction onClick={() => openDetail(k.key)}>
-              <div className="flex items-start justify-between">
-                <span className="text-label text-[var(--nx-text-muted)] uppercase">{k.label}</span>
-                <k.icon size={18} strokeWidth={1.75} style={{ color: k.accent }} />
-              </div>
-              <p className="mt-4 text-display text-[var(--nx-text)]" style={{ color: k.key === 'alert' ? 'var(--nx-danger)' : undefined }}>
-                {k.value ?? 0}
-              </p>
-              <p className="text-caption text-[var(--nx-text-muted)] mt-1">{k.sub}</p>
-            </Card>
+            <StatCard
+              key={k.key}
+              icon={k.icon}
+              label={k.label}
+              value={k.value}
+              tone={k.tone}
+              statusText={k.statusText}
+              onClick={() => openDetail(k.key)}
+            />
           ))}
         </div>
       )}
 
-      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales" />
-      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales">
+        <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      </Section>
 
       <AnimatePresence>
         {activeCategory && (
@@ -237,26 +235,32 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
 
   return (
     <div className="space-y-8">
-      <Section title="Tareas del día" subtitle="Seguimiento y novedades" />
+      <PageHeader
+        eyebrow="Seguimiento y novedades"
+        title="Tareas del día"
+      />
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
-        </div>
+        <SkeletonMetrics count={3} className="grid-cols-1 md:grid-cols-3" />
       ) : (
         tasks.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-3">
             {tasks.slice(0, 6).map((t, i) => (
-              <Card key={i}>
-                <p className="text-body text-[var(--nx-text)] truncate">{t.label}</p>
-                <p className="text-caption text-[var(--nx-text-muted)] mt-1">{t.time}</p>
-              </Card>
+              <SituationLine
+                key={i}
+                icon={<CheckCircle2 size={18} />}
+                label="Tarea"
+                value={t.label}
+                detail={t.time}
+                scheme="accent"
+              />
             ))}
           </div>
         )
       )}
 
-      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales" />
-      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales">
+        <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      </Section>
     </div>
   );
 };
@@ -270,16 +274,6 @@ const CATEGORY_LABELS = {
   permiso:  { label: 'Permisos',     accent: 'var(--nx-success)', icon: Activity },
 };
 
-const DetailBadge = ({ scheme, children }) => (
-  <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-caption font-medium border ${
-    scheme === 'danger' ? 'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)] text-[var(--nx-danger)] border-[color-mix(in_oklch,var(--nx-danger)_25%,transparent)]' :
-    scheme === 'success' ? 'bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)] text-[var(--nx-success)] border-[color-mix(in_oklch,var(--nx-success)_25%,transparent)]' :
-    'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)] border-[color-mix(in_oklch,var(--nx-accent)_25%,transparent)]'
-  }`}>
-    {children}
-  </span>
-);
-
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
 const localDateStr = (date = new Date()) => {
   const y = date.getFullYear();
@@ -289,7 +283,6 @@ const localDateStr = (date = new Date()) => {
 };
 
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
-  const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState('');
   const [groupStats, setGroupStats]       = useState(null);
   const [groupLoading, setGroupLoading]   = useState(false);
@@ -378,17 +371,21 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   };
 
   const cards = [
-    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, accent: 'var(--nx-accent)' },
-    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, accent: 'var(--nx-accent)' },
-    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, accent: 'var(--nx-danger)' },
-    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, accent: 'var(--nx-success)' },
+    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent'  },
+    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning' },
+    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger'  },
+    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'success' },
   ];
 
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
 
   return (
     <div className="space-y-8">
-      <Section title="Panel docente" subtitle="Control de asistencia por grupo — Hoy" />
+      <PageHeader
+        eyebrow="Control de asistencia"
+        title="Panel docente"
+        subtitle="Selecciona un grupo para ver el detalle de hoy"
+      />
 
       {parentLoading ? (
         <Surface className="p-6 space-y-3">
@@ -454,36 +451,37 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           )}
 
           {selectedGroup && !groupLoading && groupStats && !hasActivity && (
-            <Surface className="flex items-start gap-3 p-4">
-              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-[var(--nx-warning)]" />
-              <div>
-                <p className="text-body text-[var(--nx-text)]">
-                  El grupo <span className="font-medium text-[var(--nx-accent)]">{selectedGroup}</span> no tiene registros de ingreso hoy.
-                </p>
-                <p className="text-body-sm text-[var(--nx-text-muted)]">Verifique que el nodo de control esté operativo.</p>
-              </div>
-            </Surface>
+            <SituationLine
+              icon={<AlertTriangle size={18} />}
+              label="Atención"
+              value={`El grupo ${selectedGroup} no tiene registros de ingreso hoy`}
+              detail="Verifica que el nodo de control esté operativo"
+              scheme="warning"
+            />
           )}
 
           {selectedGroup && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {groupLoading ? (
-                [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)
+                <SkeletonMetrics count={4} className="grid-cols-2 md:grid-cols-4" />
               ) : (
                 cards.map((s) => (
-                  <Card key={s.key} asAction onClick={() => openDetail(s.key)}>
-                    <p className="text-display" style={{ color: s.key === 'alert' ? 'var(--nx-danger)' : s.key === 'permiso' ? 'var(--nx-success)' : 'var(--nx-text)' }}>
-                      {s.value}
-                    </p>
-                    <p className="text-caption text-[var(--nx-text-muted)] mt-1 uppercase">{s.label}</p>
-                  </Card>
+                  <StatCard
+                    key={s.key}
+                    icon={s.icon}
+                    label={s.label}
+                    value={s.value}
+                    tone={s.tone}
+                    onClick={() => openDetail(s.key)}
+                  />
                 ))
               )}
             </div>
           )}
 
-          <Section title="Eventos recientes" subtitle="Últimas novedades de tus grupos" />
-          <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+          <Section title="Eventos recientes" subtitle="Últimas novedades de tus grupos">
+            <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+          </Section>
 
           <AnimatePresence>
             {activeCategory && (
@@ -538,7 +536,6 @@ function humanizeDetailVal(v) {
 const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning, onClose }) => {
   const { user } = useAuth();
   const config = CATEGORY_LABELS[category];
-  const Icon = config?.icon || Users;
   const [searchQuery, setSearchQuery] = useState('');
   const [localData, setLocalData] = useState([]);
   const navigate = useNavigate();
@@ -588,6 +585,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
   const [trackedStudents, setTrackedStudents] = useState(new Set());
   const [successModal, setSuccessModal] = useState(null); // { studentName }
+  const [submitError, setSubmitError] = useState(null);
 
   const handleStartTracking = async (studentId, studentName) => {
     setTrackedStudents(prev => new Set(prev).add(studentId));
@@ -603,8 +601,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
         // Notificar a la página de Seguimiento que debe refrescar
         window.dispatchEvent(new CustomEvent('nexo:tracking-refresh'));
       } else {
-        alert("Error al iniciar seguimiento: " + (res.message || "Error del servidor"));
-        // Revert on error
+        setSubmitError(humanizeError(res, 'No se pudo iniciar el seguimiento'));
         setTrackedStudents(prev => {
           const next = new Set(prev);
           next.delete(studentId);
@@ -613,8 +610,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       }
     } catch (e) {
       console.error(e);
-      const backendError = e.response?.data?.detail || e.response?.data?.message || e.message;
-      alert(`Error al iniciar el seguimiento: ${backendError}`);
+      setSubmitError(humanizeError(e, 'Error al iniciar el seguimiento'));
       setTrackedStudents(prev => {
         const next = new Set(prev);
         next.delete(studentId);
@@ -663,41 +659,13 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
   return (
     <>
-      <motion.div
-        key="t-ov"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        onClick={onClose}
-        className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_40%,transparent)]"
-      />
-      <motion.div
-        key="t-dw"
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[640px] flex-col overflow-hidden border-l border-[var(--nx-border)] bg-[var(--nx-surface)]"
+      <Drawer
+        title={`${config?.label} — ${groupName}`}
+        context={`${filteredData.length} estudiante${filteredData.length !== 1 ? 's' : ''}`}
+        onClose={onClose}
+        size="lg"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[var(--nx-border)] px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]">
-              <Icon size={18} strokeWidth={1.75} style={{ color: config?.accent || 'var(--nx-accent)' }} />
-            </div>
-            <div>
-              <p className="text-h3 text-[var(--nx-text)]">{config?.label} — {groupName}</p>
-              <p className="text-caption text-[var(--nx-text-muted)] uppercase">
-                {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] rounded-control hover:bg-[var(--nx-surface-subtle)] transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="p-6">
           <div className="mb-4">
             <Input
               placeholder="Buscar estudiante..."
@@ -708,10 +676,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-20">
-              <Loader2 size={32} className="animate-spin text-[var(--nx-accent)]" />
-              <p className="text-body-sm text-[var(--nx-text-muted)] uppercase">Cargando datos...</p>
-            </div>
+            <SkeletonRows count={5} />
           ) : filteredData.length > 0 ? (
             <Surface className="overflow-x-auto">
               <table className="w-full min-w-[440px]">
@@ -753,13 +718,13 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                 searchQuery
                   ? 'Ningún estudiante coincide con tu búsqueda.'
                   : emptyWarning
-                    ? 'Este grupo no tiene registros de ingreso para el día de hoy. Verifique que el nodo de control esté operativo.'
+                    ? 'Este grupo no tiene registros de ingreso para el día de hoy. Verifica que el nodo de control esté operativo.'
                     : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'
               }
             />
           )}
         </div>
-      </motion.div>
+      </Drawer>
 
       <AnimatePresence>
         {successModal && (
@@ -785,6 +750,30 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             </div>
             <div className="mt-4 flex justify-end">
               <Button size="sm" onClick={() => navigate('/casos')}>Ir a Casos Activos</Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {submitError && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-[60] w-full max-w-sm rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface)] p-4 shadow-high"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)] text-[var(--nx-danger)]">
+                <AlertTriangle size={18} strokeWidth={2.5} />
+              </div>
+              <div className="flex-1">
+                <p className="text-label text-[var(--nx-text)]">Error</p>
+                <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{submitError}</p>
+              </div>
+              <button onClick={() => setSubmitError(null)} className="p-1 text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">
+                <X size={16} />
+              </button>
             </div>
           </motion.div>
         )}
@@ -828,7 +817,11 @@ const StaffDashboard = () => {
 
   return (
     <div className="space-y-8">
-      <Section title="Panel de servicio" subtitle="Eventos recientes" />
+      <PageHeader
+        eyebrow="Servicio"
+        title="Panel de servicio"
+        subtitle="Eventos recientes"
+      />
       <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
     </div>
   );

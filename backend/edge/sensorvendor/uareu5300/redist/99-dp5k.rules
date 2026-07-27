@@ -1,0 +1,3 @@
+# DigitalPersona 5xxx readers
+ACTION=="add", ATTRS{idVendor}=="05ba", ATTRS{idProduct}=="000[bcde]", MODE="0666"
+ACTION=="add", ENV{DRIVER}=="uvcvideo", ENV{PRODUCT}=="5ba/[bcde]/*", RUN="/bin/sh -c 'echo $devpath | /bin/grep -oE [^/]+$ > /sys/bus/usb/drivers/uvcvideo/unbind'"

@@ -1,0 +1,2 @@
+# Make the event device node associated with the CM touch chip readers accessible by everyone
+DRIVERS=="usb", ATTRS{idVendor}=="147e", ATTRS{idProduct}=="2016",  MODE="0666"

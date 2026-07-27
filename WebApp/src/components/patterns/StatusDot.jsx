@@ -1,7 +1,6 @@
 /**
  * CMP-011 variante dot
  */
-import React from 'react';
 import { clsx } from 'clsx';
 
 const schemeColor = {

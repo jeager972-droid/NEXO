@@ -2,8 +2,7 @@
  * CMP-011 Badge — estado no interactivo.
  * Siempre texto + semántica; nunca solo color.
  */
-import React from 'react';
-import { clsx } from 'clsx';
+import { cn } from '../../utils/cn';
 
 const schemes = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] border-[var(--nx-border)]',
@@ -13,15 +12,25 @@ const schemes = {
   danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)] text-[var(--nx-danger)] border-[color-mix(in_oklch,var(--nx-danger)_25%,transparent)]',
 };
 
-export const Badge = ({ children, scheme = 'neutral', dot, className }) => (
+const dots = {
+  neutral: 'bg-[var(--nx-text-muted)]',
+  accent:  'bg-[var(--nx-accent)]',
+  success: 'bg-[var(--nx-success)]',
+  warning: 'bg-[var(--nx-warning)]',
+  danger:  'bg-[var(--nx-danger)]',
+};
+
+export const Badge = ({ children, scheme = 'neutral', dot, icon, className }) => (
   <span
-    className={clsx(
-      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-caption font-medium',
-      schemes[scheme],
+    className={cn(
+      'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1',
+      'text-caption font-semibold',
+      schemes[scheme] ?? schemes.neutral,
       className
     )}
   >
-    {dot && <span className={clsx('h-1.5 w-1.5 rounded-full', scheme === 'success' ? 'bg-[var(--nx-success)]' : scheme === 'warning' ? 'bg-[var(--nx-warning)]' : scheme === 'danger' ? 'bg-[var(--nx-danger)]' : 'bg-[var(--nx-accent)]')} />}
+    {dot && <span aria-hidden className={cn('h-1.5 w-1.5 rounded-full', dots[scheme] ?? dots.neutral)} />}
+    {icon}
     {children}
   </span>
 );

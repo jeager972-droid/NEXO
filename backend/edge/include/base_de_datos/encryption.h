@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -8,9 +9,10 @@
  * =============================================================================
  * RESPONSABILIDAD:
  *   Provee operaciones AES-256-GCM y gestión de clave/token API en un singleton.
- *   Al inicializarse, recupera la clave AES y el token API de SQLite; al
- *   provisionarlas, las persiste en la base de datos local. La clave se mantiene
- *   en memoria con mlock() cuando es posible y se limpia con OPENSSL_cleanse.
+ *   Al inicializarse, recupera la clave AES de un archivo protegido (no de la
+ *   base de datos local) y el token API de SQLite; al provisionarlas, las persiste
+ *   en esos mismos lugares. La clave se mantiene en memoria con mlock() cuando
+ *   es posible y se limpia con OPENSSL_cleanse.
  *
  * FLUJO DE CIFRADO:
  *   plaintext + IV(12 aleatorio)
@@ -33,6 +35,7 @@ public:
     }
 
     bool initialize();
+    void setKeyFile(const std::string& path);
 
     // Key provisioning
     bool isKeyProvisioned() const;
@@ -53,4 +56,8 @@ private:
     ~Encryption();
     std::vector<char> m_aesKey;
     std::string m_apiToken;
+    std::string m_keyFile = "nexo_edge.key";
+
+    bool saveKeyToFile(const std::string& key);
+    bool loadKeyFromFile(std::string& key);
 };

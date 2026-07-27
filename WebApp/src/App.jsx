@@ -20,7 +20,6 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Consultation = lazy(() => import('./pages/Consultation'));
 const Enrollment = lazy(() => import('./pages/Enrollment'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
-const Audit = lazy(() => import('./pages/Audit'));
 const Casos = lazy(() => import('./pages/Seguimiento'));
 const Downloads = lazy(() => import('./pages/Downloads'));
 const InstallPage = lazy(() => import('./pages/InstallPage'));
@@ -93,9 +92,6 @@ function App() {
                 <Route path="/casos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR]} />}>
                   <Route index element={<ErrorBoundary><Casos /></ErrorBoundary>} />
                 </Route>
-                <Route path="/auditoria" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR]} />}>
-                  <Route index element={<ErrorBoundary><Audit /></ErrorBoundary>} />
-                </Route>
                 <Route path="/informes" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR]} />}>
                   <Route index element={<ErrorBoundary><Reports /></ErrorBoundary>} />
                 </Route>
@@ -107,6 +103,7 @@ function App() {
 
             <Route path="/descargas" element={<Downloads />} />
             <Route path="/instalar/:platform" element={<InstallPage />} />
+            <Route path="/auditoria" element={<Navigate to="/informes" replace />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </motion.div>

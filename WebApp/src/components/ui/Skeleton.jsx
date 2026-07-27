@@ -1,20 +1,53 @@
 /**
  * CMP-039 Skeleton
- * Estructura de la UI que se va a cargar.
+ * Autoridad: 06_USER_FLOWS.md §11 · 08_MICRO_INTERACTIONS §5.
+ * Reproduce la estructura que llega, con barrido lateral en vez de parpadeo:
+ * la espera informa, no reclama atención.
  */
-import React from 'react';
-import { clsx } from 'clsx';
+import { cn } from '../../utils/cn';
 
 export const Skeleton = ({ className, children }) => (
-  <div className={clsx('animate-skeleton rounded-control bg-[var(--nx-surface-subtle)]', className)}>
+  <div aria-hidden className={cn('nx-skeleton rounded-control', className)}>
     {children}
   </div>
 );
 
 export const SkeletonText = ({ lines = 1, className }) => (
-  <div className={clsx('space-y-2', className)}>
+  <div className={cn('space-y-2', className)}>
     {Array.from({ length: lines }).map((_, i) => (
-      <Skeleton key={i} className="h-4 w-full" />
+      <Skeleton key={i} className={cn('h-4', i === lines - 1 && lines > 1 ? 'w-3/5' : 'w-full')} />
+    ))}
+  </div>
+);
+
+/** Rejilla de métricas en carga: conserva el layout final para evitar salto. */
+export const SkeletonMetrics = ({ count = 4, className }) => (
+  <div className={cn('grid grid-cols-2 gap-4 lg:grid-cols-4', className)}>
+    {Array.from({ length: count }).map((_, i) => (
+      <div
+        key={i}
+        className="rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5"
+      >
+        <Skeleton className="h-8 w-8 rounded-control" />
+        <Skeleton className="mt-4 h-7 w-14" />
+        <Skeleton className="mt-2.5 h-3 w-20" />
+      </div>
+    ))}
+  </div>
+);
+
+/** Lista en carga dentro de una superficie ya existente. */
+export const SkeletonRows = ({ count = 4, className }) => (
+  <div className={cn('divide-y divide-[var(--nx-border)]', className)}>
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="flex items-center gap-4 px-5 py-4">
+        <Skeleton className="h-9 w-9 shrink-0 rounded-control" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-3.5 w-2/5" />
+          <Skeleton className="h-3 w-1/4" />
+        </div>
+        <Skeleton className="h-6 w-16 shrink-0 rounded-full" />
+      </div>
     ))}
   </div>
 );

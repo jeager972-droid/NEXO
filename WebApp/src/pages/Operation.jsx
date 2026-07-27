@@ -1,28 +1,30 @@
 /**
- * SCR-OPS-01 Operation
- * Centro de comandos institucionales: citar, autorizar, SOS, permisos, etc.
+ * SCR-OPS-01 Operation · SCR-OPS-02 Flujo · SCR-OPS-03 Resultado
+ * DEC-FE-08: flujo guiado de 3 pasos con Stepper.
+ * Usa PageHeader, Stepper, OperationResult, humanizeError.
  */
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
-  AlertOctagon, ShieldCheck, ShieldAlert, AlertTriangle,
-  MapPin, Clock, Bus, Calendar, Wrench, Send, UserCheck,
-  ChevronRight, CheckCircle2, Loader2, FileText, X, Search
+  AlertOctagon, ShieldCheck, ShieldAlert,
+  Clock, Bus, Calendar, Wrench, Send, UserCheck,
+  ChevronRight, Loader2, FileText
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
 import { usersApi } from '../api/users';
 import { ROLES, getRoleDisplay } from '../config/roles';
-import { Section, Surface } from '../components/ui/Surface';
+import { PageHeader } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Select } from '../components/ui/Select';
-import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton } from '../components/ui/Skeleton';
+import { SkeletonMetrics } from '../components/ui/Skeleton';
+import { Stepper } from '../components/ui/Stepper';
+import { OperationResult } from '../components/patterns/OperationResult';
+import { humanizeError } from '../utils/messages';
 
 const COMMANDS_CATALOG = [
   { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'date', 'time', 'message'] },
@@ -93,21 +95,23 @@ const Operation = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Section title="Operaciones" subtitle="Comandos institucionales" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-28" />)}
-        </div>
+        <PageHeader eyebrow="Comandos institucionales" title="Operaciones" />
+        <SkeletonMetrics count={6} className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Section title="Operaciones" subtitle={activeCommand ? activeCommand.title : 'Selecciona un comando institucional'} />
+      <PageHeader
+        eyebrow="Comandos institucionales"
+        title="Operaciones"
+        subtitle={activeCommand ? activeCommand.title : 'Selecciona un comando institucional'}
+      />
 
       {!activeCommand ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCommands.map((cmd, i) => (
+          {filteredCommands.map((cmd) => (
             <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className="p-5">
               <div className="flex items-start justify-between">
                 <div className="flex h-10 w-10 items-center justify-center rounded-control" style={{ backgroundColor: cmd.isUrgent ? 'color-mix(in_oklch,var(--nx-danger)_12%,transparent)' : 'color-mix(in_oklch,var(--nx-accent)_12%,transparent)' }}>
@@ -138,8 +142,11 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   const [targetUsers, setTargetUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState(null);
+  const [result, setResult] = useState(null);
   const [deliveryStatus, setDeliveryStatus] = useState(null);
+
+  const steps = ['Comando', 'Detalles', 'Resultado'];
+  const currentStep = result ? 2 : 1;
 
   const updateField = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -184,7 +191,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setSubmitStatus(null);
+    setResult(null);
     setDeliveryStatus(null);
     try {
       const payload = { ...form };
@@ -220,10 +227,10 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         default: throw new Error('Comando no soportado');
       }
 
-      setSubmitStatus({ type: 'success', message: result?.message || 'Operación exitosa' });
+      setResult({ variant: 'success', message: result?.message || 'Operación exitosa' });
       if (result?.message_ids?.length) pollTwilio(result.message_ids);
     } catch (error) {
-      setSubmitStatus({ type: 'error', message: error.message || 'Error al ejecutar el comando' });
+      setResult({ variant: 'danger', message: humanizeError(error, 'Error al ejecutar el comando') });
     } finally {
       setIsSubmitting(false);
     }
@@ -256,7 +263,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
       if (isIncident) {
         options = incidentOptions;
       } else {
-        if (loadingUsers) return <Skeleton className="h-20 w-full" />;
+        if (loadingUsers) return <div className="h-20 w-full nx-skeleton rounded-control" aria-hidden />;
         if (!form.targetRole) return <p className="text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</p>;
         options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id }));
       }
@@ -296,38 +303,49 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   };
 
   return (
-    <div className="max-w-3xl">
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-control" style={{ backgroundColor: `color-mix(in oklch, ${accent} 12%, transparent)` }}>
-            <command.icon size={20} style={{ color: accent }} />
-          </div>
-          <div>
-            <p className="text-h2 text-[var(--nx-text)]">{command.title}</p>
-            {command.warning && <p className="text-body-sm text-[var(--nx-warning)] mt-1">{command.warning}</p>}
-          </div>
-        </div>
+    <div className="max-w-3xl space-y-6">
+      <Stepper steps={steps} current={currentStep} />
 
-        {fetchError && <p className="mb-4 rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">{fetchError}</p>}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {command.fields.map((field) => renderField(field))}
-
-          {submitStatus && (
-            <div className={`rounded-control px-4 py-3 text-body-sm ${submitStatus.type === 'success' ? 'bg-[color-mix(in_oklch,var(--nx-success)_10%,transparent)] text-[var(--nx-success)]' : 'bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] text-[var(--nx-danger)]'}`}>
-              {submitStatus.message}
+      {result ? (
+        <OperationResult
+          variant={result.variant}
+          title={result.variant === 'success' ? 'Operación completada' : 'No se pudo completar'}
+          message={result.message}
+          deliveryStatus={deliveryStatus}
+          recipients={result.recipients}
+          onPrimary={() => { setResult(null); setForm({}); setDeliveryStatus(null); }}
+          primaryLabel="Nueva operación"
+          onSecondary={onClose}
+          secondaryLabel="Volver al inicio"
+        />
+      ) : (
+        <Card className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex h-10 w-10 items-center justify-center rounded-control" style={{ backgroundColor: `color-mix(in oklch, ${accent} 12%, transparent)` }}>
+              <command.icon size={20} style={{ color: accent }} />
             </div>
-          )}
-          {deliveryStatus && <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {deliveryStatus}</p>}
-
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" loading={isSubmitting} variant={command.isUrgent ? 'danger' : 'primary'}>
-              {command.isUrgent ? 'Enviar alerta' : 'Ejecutar'}
-            </Button>
+            <div>
+              <p className="text-h2 text-[var(--nx-text)]">{command.title}</p>
+              {command.warning && <p className="text-body-sm text-[var(--nx-warning)] mt-1">{command.warning}</p>}
+            </div>
           </div>
-        </form>
-      </Card>
+
+          {fetchError && <p className="mb-4 rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">{fetchError}</p>}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {command.fields.map((field) => renderField(field))}
+
+            {deliveryStatus && <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {deliveryStatus}</p>}
+
+            <div className="flex gap-3 pt-2">
+              <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+              <Button type="submit" loading={isSubmitting} variant={command.isUrgent ? 'danger' : 'primary'}>
+                {command.isUrgent ? 'Enviar alerta' : 'Ejecutar'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
     </div>
   );
 };

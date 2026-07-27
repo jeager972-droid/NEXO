@@ -61,24 +61,29 @@ add_executable(nexo-edge
     src/interoperabilidad/audit_trail.cpp
     src/mqtt/mqtt_command_worker.cpp
     src/hardware/watchdog.cpp
+    src/hardware/real/UareU5300BiometricSensor.cpp
 )
 
 target_include_directories(nexo-edge PRIVATE ${EDGE_INCLUDE_DIR})
 
 # Dependencies
-find_package(OpenSSL REQUIRED)
-find_package(CURL REQUIRED)
-find_package(SQLite3 REQUIRED)
-find_package(spdlog REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MOSQUITTO REQUIRED libmosquitto)
-if(NOT MOSQUITTO_FOUND)
-    find_library(MOSQUITTO_LIB NAMES mosquitto)
-    if(NOT MOSQUITTO_LIB)
-        message(FATAL_ERROR "libmosquitto no encontrado. Instala: apt-get install libmosquitto-dev")
-    endif()
-endif()
+set(FEDORA_DEPS_MSG "En Fedora instala las dependencias con:\n   sudo dnf install -y libcurl-devel spdlog-devel mosquitto-devel sqlite-devel openssl-devel")
 
+find_package(OpenSSL REQUIRED)
+find_package(CURL)
+if(NOT CURL_FOUND)
+    message(FATAL_ERROR "curl/curl.h no encontrado.\n${FEDORA_DEPS_MSG}")
+endif()
+find_package(SQLite3 REQUIRED)
+find_package(spdlog)
+if(NOT spdlog_FOUND)
+    message(FATAL_ERROR "spdlog no encontrado.\n${FEDORA_DEPS_MSG}")
+endif()
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MOSQUITTO libmosquitto)
+if(NOT MOSQUITTO_FOUND)
+    message(FATAL_ERROR "libmosquitto no encontrado.\n${FEDORA_DEPS_MSG}")
+endif()
 # nlohmann/json
 include(FetchContent)
 FetchContent_Declare(
@@ -89,24 +94,63 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 # FIX: Buscar y enlazar librería de ZKTeco
-find_library(ZKFP_LIB NAMES zkfp zkfptype)
-if(NOT ZKFP_LIB)
-    message(WARNING "Librería ZKTeco no encontrada. El build puede fallar.")
+find_library(ZKFP_LIB NAMES zkfp zkfptype PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib /usr/local/lib /usr/lib)
+find_path(ZKFP_INCLUDE_DIR NAMES libzkfp.h libzkfptype.h PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib ${CMAKE_CURRENT_SOURCE_DIR}/include)
+if(ZKFP_LIB AND ZKFP_INCLUDE_DIR)
+    message(STATUS "ZKTeco SDK found: lib=${ZKFP_LIB} include=${ZKFP_INCLUDE_DIR}")
+    target_sources(nexo-edge PRIVATE src/hardware/real/Zk9500BiometricSensor.cpp)
+    target_include_directories(nexo-edge PRIVATE ${ZKFP_INCLUDE_DIR})
+    target_link_libraries(nexo-edge PRIVATE ${ZKFP_LIB})
+else()
+    message(WARNING "ZKTeco SDK no encontrado. Se usa stub para createZk9500BiometricSensor.")
+    target_sources(nexo-edge PRIVATE src/hardware/real/Zk9500BiometricSensor_stub.cpp)
+endif()
+
+# U.are.U SDK (bundled inside edge/sensorvendor)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    set(UAREU_ARCH "arm64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+    set(UAREU_ARCH "arm")
+else()
+    set(UAREU_ARCH "x64")
+endif()
+set(UAREU_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/sensorvendor/uareu5300")
+set(UAREU_SDK_LIB_DIR "${UAREU_SDK_ROOT}/Linux/lib/${UAREU_ARCH}")
+set(UAREU_SDK_LIBS
+    ${UAREU_SDK_LIB_DIR}/libdpfpdd.so
+    ${UAREU_SDK_LIB_DIR}/libdpfj.so
+    ${UAREU_SDK_LIB_DIR}/libdpfpdd5000.so
+    ${UAREU_SDK_LIB_DIR}/libdpfpdd_4k.so
+    ${UAREU_SDK_LIB_DIR}/libdpfpdd7k.so
+    ${UAREU_SDK_LIB_DIR}/libdpfpdd_ptapi.so
+    ${UAREU_SDK_LIB_DIR}/libdpfr6.so
+    ${UAREU_SDK_LIB_DIR}/libdpfr7.so
+    ${UAREU_SDK_LIB_DIR}/libnex_sdk.so
+    ${UAREU_SDK_LIB_DIR}/libtfm.so
+)
+if(EXISTS ${UAREU_SDK_LIB_DIR}/libdpfpdd.so AND EXISTS ${UAREU_SDK_LIB_DIR}/libdpfj.so)
+    message(STATUS "U.are.U SDK found for ${UAREU_ARCH}")
+    target_include_directories(nexo-edge PRIVATE ${UAREU_SDK_ROOT}/Include)
+    target_link_libraries(nexo-edge PRIVATE ${UAREU_SDK_LIBS} ${CMAKE_DL_LIBS})
+    get_filename_component(UAREU_SDK_LIB_DIR_ABS "${UAREU_SDK_LIB_DIR}" ABSOLUTE)
+    file(RELATIVE_PATH UAREU_RPATH_REL
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        "${UAREU_SDK_LIB_DIR_ABS}")
+    set_property(TARGET nexo-edge APPEND PROPERTY BUILD_RPATH   "$ORIGIN/${UAREU_RPATH_REL}")
+    set_property(TARGET nexo-edge APPEND PROPERTY INSTALL_RPATH "$ORIGIN/${UAREU_RPATH_REL}")
+else()
+    message(WARNING "U.are.U SDK no encontrado en ${UAREU_SDK_LIB_DIR}. El sensor UareU5300 no compilará.")
 endif()
 
 target_link_libraries(nexo-edge PRIVATE
     OpenSSL::SSL OpenSSL::Crypto
     CURL::libcurl
-    SQLite::SQLite3
+    SQLite3::SQLite3
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     ${MOSQUITTO_LIBRARIES}
-    ${MOSQUITTO_LIB}
 )
 
-if(ZKFP_LIB)
-    target_link_libraries(nexo-edge PRIVATE ${ZKFP_LIB})
-endif()
 
 target_include_directories(nexo-edge PRIVATE ${MOSQUITTO_INCLUDE_DIRS})
 
@@ -148,7 +192,7 @@ if(BUILD_TESTING)
     target_link_libraries(nexo-tests PRIVATE
         Catch2::Catch2WithMain
         OpenSSL::SSL OpenSSL::Crypto
-        SQLite::SQLite3
+        SQLite3::SQLite3
         spdlog::spdlog
         nlohmann_json::nlohmann_json
     )

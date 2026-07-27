@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <mutex>
 #include <nlohmann/json.hpp>
 
 /**
@@ -41,5 +42,6 @@ public:
 
 private:
     ConfigManager() = default;
+    mutable std::mutex m_mutex;
     nlohmann::json m_config;
 };

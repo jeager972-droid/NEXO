@@ -1,0 +1,4 @@
+# Crossmatch 7xxx readers
+ACTION=="add", ATTRS{idVendor}=="080b", ATTRS{idProduct}=="010[9abc]", MODE="0666"
+ACTION=="add", ENV{DRIVER}=="uvcvideo", ENV{PRODUCT}=="80b/10[9abc]/*", RUN="/bin/sh -c 'echo $devpath | /bin/grep -oE [^/]+$ > /sys/bus/usb/drivers/uvcvideo/unbind'"
+

@@ -2,7 +2,6 @@
  * CMP-106 Estudiante contextual
  * Foto opcional, nombre, grupo, estado relevante y una acción.
  */
-import React from 'react';
 import { clsx } from 'clsx';
 import { User } from 'lucide-react';
 

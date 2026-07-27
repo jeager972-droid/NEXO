@@ -10,12 +10,12 @@ import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
 import { Search, ChevronRight, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
-import { Section, Surface } from '../components/ui/Surface';
+import { PageHeader } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
+import { humanizeError } from '../utils/messages';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
@@ -66,7 +66,7 @@ const localDateStr = (date = new Date()) => {
 
 const Consultation = () => {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState(null);
   const [riskStudents, setRiskStudents] = useState([]);
@@ -114,8 +114,7 @@ const Consultation = () => {
       setDynamicData(res.data || []);
       setDynamicColumns(res.columns || {});
     } catch (err) {
-      console.error(err);
-      setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
+      setQueryError(humanizeError(err, 'Error de red al consultar'));
       setDynamicData([]);
       setDynamicColumns({});
     } finally {
@@ -155,7 +154,7 @@ const Consultation = () => {
             setDynamicColumns(res.columns || {});
           }
         })
-        .catch((err) => { if (!abortController.signal.aborted) setQueryError(err?.response?.data?.message || err.message || 'Error de red'); })
+        .catch((err) => { if (!abortController.signal.aborted) setQueryError(humanizeError(err, 'Error de red')); })
         .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
     } else {
       consultationsApi.queryModule(moduleSlug, '', '', '', '', abortController.signal)
@@ -164,7 +163,7 @@ const Consultation = () => {
         })
         .catch((err) => {
           if (!abortController.signal.aborted) {
-            setQueryError(err?.response?.data?.message || err.message || 'Error de red al consultar');
+            setQueryError(humanizeError(err, 'Error de red al consultar'));
             setDynamicData([]);
             setDynamicColumns({});
           }
@@ -271,7 +270,11 @@ const Consultation = () => {
     <div className="space-y-6">
       {!activeItem ? (
         <>
-          <Section title="Panel de consulta" subtitle="Acceso rápido a información por módulo" />
+          <PageHeader
+            eyebrow="Consulta institucional"
+            title="Panel de consulta"
+            subtitle="Acceso rápido a información por módulo"
+          />
           <Input
             placeholder="Filtrar módulos y submódulos…"
             value={searchTerm}
@@ -307,7 +310,11 @@ const Consultation = () => {
         <>
           <div className="flex items-center gap-3">
             <button onClick={() => setActiveItem(null)} className="text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]">← Volver</button>
-            <Section title={activeItem} subtitle={isTeacherModule ? 'Configura filtros y consulta' : 'Resultados del módulo'} />
+            <PageHeader
+              eyebrow="Consulta"
+              title={activeItem}
+              subtitle={isTeacherModule ? 'Configura filtros y consulta' : 'Resultados del módulo'}
+            />
           </div>
           <ConsultationDrawer
             item={activeItem}

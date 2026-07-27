@@ -3,7 +3,7 @@
  * Navegación lateral CMP-030. 240 px en escritorio, panel deslizante en compact.
  * Filtrada por rol, con tema y perfil en la base.
  */
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { SIDEBAR_ITEMS, getRoleDisplay } from '../config/roles';
@@ -34,7 +34,6 @@ const NavItem = ({ item, onClick }) => {
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
-  const location = useLocation();
   const items = SIDEBAR_ITEMS.filter((i) => i.roles.includes(user?.role));
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
@@ -57,10 +56,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--nx-surface)] border-r border-[var(--nx-border)]
-          transition-transform duration-200 ease-out lg:relative lg:translate-x-0
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          transition-transform duration-200 ease-out
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
         `}
-        style={{ width: '260px' }}
+        style={{ width: 'var(--nx-sidebar)' }}
+        aria-label="Navegación principal"
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5 border-b border-[var(--nx-border)]">

@@ -2,7 +2,6 @@
  * CMP-025 Burbuja NEXO
  * Mensaje de solo lectura: origen, tiempo, texto, evidencia resumida y CTA contextual.
  */
-import React from 'react';
 import { clsx } from 'clsx';
 import { Sparkles } from 'lucide-react';
 import { Button } from '../ui/Button';
