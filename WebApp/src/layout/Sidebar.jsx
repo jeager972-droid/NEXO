@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { SIDEBAR_ITEMS, getRoleDisplay } from '../config/roles';
+import { getRoleDisplay, getSecondaryActions } from '../config/roles';
 import { LogOut, Sun, Moon, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
@@ -39,7 +39,7 @@ const NavItem = ({ item, onClick, showNotifDot }) => {
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
-  const items = SIDEBAR_ITEMS.filter((i) => i.roles.includes(user?.role));
+  const items = getSecondaryActions(user?.role);
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
   const [notifCount, setNotifCount] = useState(0);

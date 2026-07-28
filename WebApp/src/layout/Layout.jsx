@@ -6,19 +6,20 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, Bell, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { Menu, Settings, LogOut, ChevronDown } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { SIDEBAR_ITEMS, getRoleDisplay } from '../config/roles';
+import { getRoleDisplay, getPrimaryActions } from '../config/roles';
 import { notificationsApi } from '../api/notifications';
 import { StatusDot } from '../components/patterns/StatusDot';
+import { NavLink } from 'react-router-dom';
 
-const pageTitle = (pathname) => {
-  const item = SIDEBAR_ITEMS.find((i) => pathname === i.path || pathname.startsWith(i.path + '/'));
-  if (item) return item.title;
-  if (pathname.startsWith('/casos')) return 'Casos Activos';
-  return 'NEXO';
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 18) return 'Buenas tardes';
+  return 'Buenas noches';
 };
 
 const Layout = () => {
@@ -67,9 +68,11 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const title = useMemo(() => pageTitle(location.pathname), [location.pathname]);
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
+  const greeting = useMemo(() => getGreeting(), []);
+  const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
+  const firstName = user?.nombre?.split(' ')[0] || 'directivo';
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)]">
@@ -87,8 +90,8 @@ const Layout = () => {
               <Menu size={20} />
             </button>
             <div className="min-w-0">
-              <h1 className="text-h3 text-[var(--nx-text)] truncate">{title}</h1>
-              <p className="text-caption text-[var(--nx-text-muted)] truncate">{user?.school_name ?? 'Sistema NEXO'} · {roleDisplay}</p>
+              <h1 className="text-h2 text-[var(--nx-text)] truncate" style={{ fontWeight: '650' }}>{greeting}, {firstName}</h1>
+              <p className="text-caption text-[var(--nx-text-muted)] truncate">{roleDisplay} · {user?.school_name ?? 'NEXO'}</p>
             </div>
           </div>
 
@@ -98,18 +101,6 @@ const Layout = () => {
               <StatusDot scheme={online ? 'success' : 'warning'} pulse={online} />
               <span className="text-caption text-[var(--nx-text-muted)]">{online ? 'En línea' : 'Sin conexión'}</span>
             </div>
-
-            {/* Notificaciones */}
-            <button
-              onClick={() => navigate('/notificaciones')}
-              className="relative p-2.5 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)] transition-colors"
-              aria-label="Notificaciones"
-            >
-              <Bell size={20} />
-              {notifCount > 0 && (
-                <span className="nx-blink absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-[var(--nx-accent)] border-2 border-[var(--nx-surface)]" />
-              )}
-            </button>
 
             {/* Perfil */}
             <div ref={profileRef} className="relative">
@@ -159,7 +150,7 @@ const Layout = () => {
         </header>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8 pb-24">
           <div className="mx-auto max-w-content">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
@@ -174,6 +165,35 @@ const Layout = () => {
             </AnimatePresence>
           </div>
         </main>
+
+        {/* Bottom action bar */}
+        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--nx-border)] bg-[var(--nx-surface)] lg:left-[var(--nx-sidebar)]" aria-label="Acciones principales">
+          <div className="flex items-center justify-around px-2 py-2 max-w-content mx-auto">
+            {primaryActions.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+              const showDot = item.path === '/notificaciones' && notifCount > 0;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.path === '/'}
+                  className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-control transition-colors duration-fast ${
+                    isActive
+                      ? 'text-[var(--nx-accent)]'
+                      : 'text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]'
+                  }`}
+                >
+                  <div className="relative">
+                    <Icon size={22} strokeWidth={1.75} />
+                    {showDot && <span className="nx-blink absolute -top-1 -right-1 h-2 w-2 rounded-full bg-[var(--nx-accent)]" />}
+                  </div>
+                  <span className="text-caption font-medium" style={{ fontSize: '0.5625rem' }}>{item.title}</span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </div>
   );

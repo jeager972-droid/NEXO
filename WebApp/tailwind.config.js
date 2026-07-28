@@ -21,51 +21,51 @@ export default {
       colors: {
         // NEXO Quiet Operations — OKLCH semantic tokens (03_DESIGN_SYSTEM.md)
         canvas: {
-          DEFAULT: 'oklch(98% 0.006 245)',
-          dark:    'oklch(18% 0.008 245)',
+          DEFAULT: 'oklch(94% 0.025 165)',
+          dark:    'oklch(16% 0.020 165)',
         },
         surface: {
-          DEFAULT:     'oklch(99.3% 0.004 245)',
-          dark:        'oklch(22% 0.009 245)',
-          subtle:      'oklch(96% 0.009 245)',
-          'subtle-dark': 'oklch(26% 0.010 245)',
+          DEFAULT:     'oklch(99% 0.010 80)',
+          dark:        'oklch(21% 0.012 80)',
+          subtle:      'oklch(96% 0.016 80)',
+          'subtle-dark': 'oklch(25% 0.014 80)',
         },
         // Semantic text colors
         ink: {
-          DEFAULT: 'oklch(23% 0.018 245)',
-          dark:    'oklch(94% 0.007 245)',
-          muted:   'oklch(48% 0.018 245)',
-          'muted-dark': 'oklch(72% 0.012 245)',
+          DEFAULT: 'oklch(22% 0.030 260)',
+          dark:    'oklch(94% 0.010 260)',
+          muted:   'oklch(52% 0.025 260)',
+          'muted-dark': 'oklch(72% 0.018 260)',
         },
         // Borders
         line: {
-          DEFAULT: 'oklch(88% 0.010 245)',
-          dark:    'oklch(35% 0.012 245)',
+          DEFAULT: 'oklch(89% 0.014 80)',
+          dark:    'oklch(35% 0.016 80)',
         },
-        // Accent — Azul institucional
+        // Accent — Azul indigo institucional
         accent: {
-          DEFAULT: 'oklch(48% 0.115 245)',
-          dark:    'oklch(72% 0.105 245)',
-          text:    'oklch(99% 0.005 245)',
-          surface: 'oklch(from oklch(48% 0.115 245) l c h / 0.08)',
+          DEFAULT: 'oklch(46% 0.130 255)',
+          dark:    'oklch(72% 0.115 255)',
+          text:    'oklch(99% 0.005 255)',
+          surface: 'oklch(from oklch(46% 0.130 255) l c h / 0.08)',
         },
-        // Success — Verde
+        // Success — Verde esmeralda
         success: {
-          DEFAULT: 'oklch(52% 0.125 155)',
-          dark:    'oklch(72% 0.115 155)',
-          surface: 'oklch(from oklch(52% 0.125 155) l c h / 0.10)',
+          DEFAULT: 'oklch(52% 0.130 155)',
+          dark:    'oklch(72% 0.120 155)',
+          surface: 'oklch(from oklch(52% 0.130 155) l c h / 0.10)',
         },
-        // Warning — Naranja
+        // Warning — Naranja cálido
         warning: {
-          DEFAULT: 'oklch(62% 0.135 70)',
-          dark:    'oklch(78% 0.120 70)',
-          surface: 'oklch(from oklch(62% 0.135 70) l c h / 0.10)',
+          DEFAULT: 'oklch(62% 0.140 70)',
+          dark:    'oklch(78% 0.125 70)',
+          surface: 'oklch(from oklch(62% 0.140 70) l c h / 0.10)',
         },
-        // Danger — Rojo
+        // Danger — Rojo coral
         danger: {
-          DEFAULT: 'oklch(52% 0.175 25)',
-          dark:    'oklch(72% 0.145 25)',
-          surface: 'oklch(from oklch(52% 0.175 25) l c h / 0.10)',
+          DEFAULT: 'oklch(52% 0.180 25)',
+          dark:    'oklch(72% 0.150 25)',
+          surface: 'oklch(from oklch(52% 0.180 25) l c h / 0.10)',
         },
       },
       spacing: {

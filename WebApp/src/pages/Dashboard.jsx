@@ -116,7 +116,15 @@ const Dashboard = () => {
 const todayLabel = () =>
   new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 18) return 'Buenas tardes';
+  return 'Buenas noches';
+};
+
 const AdminDashboard = ({ stats, loading }) => {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
@@ -171,11 +179,14 @@ const AdminDashboard = ({ stats, loading }) => {
 
   const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
 
+  const greeting = getGreeting();
+  const firstName = user?.nombre?.split(' ')[0] || 'directivo';
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Visión de la jornada"
-        title="Hoy en el colegio"
+        title={`${greeting}, ${firstName}`}
         subtitle={todayLabel()}
       />
       {loading ? (
@@ -251,6 +262,7 @@ const AdminDashboard = ({ stats, loading }) => {
 // ── Secretaria / Psicoorientador ──────────────────────────────────────────────
 
 const SecretaryDashboard = ({ tasks = [], loading }) => {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -271,11 +283,14 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
 
   const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
 
+  const greeting = getGreeting();
+  const firstName = user?.nombre?.split(' ')[0] || 'directivo';
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Seguimiento y novedades"
-        title="Tareas del día"
+        title={`${greeting}, ${firstName}`}
         subtitle={todayLabel()}
       />
       <Section title="Tareas pendientes" subtitle="Acciones que requieren tu atención">
@@ -334,6 +349,7 @@ const localDateStr = (date = new Date()) => {
 };
 
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
+  const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState('');
   const [groupStats, setGroupStats]       = useState(null);
   const [groupLoading, setGroupLoading]   = useState(false);
@@ -430,12 +446,15 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
 
+  const greeting = getGreeting();
+  const firstName = user?.nombre?.split(' ')[0] || 'docente';
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Control de asistencia"
-        title="Panel docente"
-        subtitle="Selecciona un grupo para ver el detalle de hoy"
+        title={`${greeting}, ${firstName}`}
+        subtitle="Selecciona un grupo para el control diario"
       />
 
       {parentLoading ? (
@@ -445,16 +464,16 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
         </Surface>
       ) : (
         <>
-          <Surface className="relative">
+          <Surface className="relative" style={{ backgroundColor: 'oklch(95% 0.035 70)', borderColor: 'oklch(88% 0.040 70)' }}>
             <button
               onClick={() => setGroupOpen((v) => !v)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
               <div>
-                <p className="text-caption uppercase text-[var(--nx-text-muted)]">Grupo seleccionado</p>
-                <p className="text-h3 text-[var(--nx-accent)] mt-0.5">{selectedGroup || '— Elegir grupo —'}</p>
+                <p className="text-caption uppercase" style={{ color: 'oklch(55% 0.030 70)' }}>Seleccionar grupo</p>
+                <p className="text-h3 mt-0.5" style={{ color: 'oklch(45% 0.045 70)', fontWeight: '650' }}>{selectedGroup || '— Elegir grupo —'}</p>
               </div>
-              <Search size={18} className="text-[var(--nx-text-muted)]" />
+              <Search size={18} style={{ color: 'oklch(55% 0.030 70)' }} />
             </button>
 
             <AnimatePresence>
@@ -464,8 +483,8 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute left-0 right-0 top-full z-30 overflow-hidden border-t border-[var(--nx-border)] bg-[var(--nx-surface)]"
-                  style={{ maxHeight: '260px', overflowY: 'auto' }}
+                  className="absolute left-0 right-0 top-full z-30 overflow-hidden border-t bg-[var(--nx-surface)]"
+                  style={{ maxHeight: '260px', overflowY: 'auto', borderColor: 'oklch(88% 0.040 70)' }}
                 >
                   <div className="sticky top-0 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] p-3">
                     <Input
@@ -841,6 +860,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
 const StaffDashboard = () => {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -875,7 +895,7 @@ const StaffDashboard = () => {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Servicio"
-        title="Panel de servicio"
+        title={`${getGreeting()}, ${user?.nombre?.split(' ')[0] || 'colegui'}`}
         subtitle={todayLabel()}
       />
       <Section title="Eventos recientes" subtitle="Novedades del día">

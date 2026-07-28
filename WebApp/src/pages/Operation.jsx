@@ -15,7 +15,7 @@ import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
 import { usersApi } from '../api/users';
 import { ROLES, getRoleDisplay } from '../config/roles';
-import { PageHeader } from '../components/ui/Surface';
+import { PageHeader, Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -118,19 +118,25 @@ const Operation = () => {
       />
 
       {!activeCommand ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCommands.map((cmd) => (
-            <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_12%,transparent)]">
-                  <cmd.icon size={20} className="text-[var(--nx-accent)]" />
+        <Surface className="p-5 md:p-6 shadow-medium">
+          <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <p className="text-label text-[var(--nx-text)]">Comandos disponibles</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCommands.map((cmd) => (
+              <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className="p-5 shadow-low hover:shadow-medium transition-shadow duration-fast">
+                <div className="flex items-start justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_12%,transparent)]">
+                    <cmd.icon size={20} className="text-[var(--nx-accent)]" />
+                  </div>
+                  <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                 </div>
-                <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
-              </div>
-              <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
-            </Card>
-          ))}
-        </div>
+                <p className="mt-4 text-h3 text-[var(--nx-text)]" style={{ color: 'oklch(35% 0.035 260)' }}>{cmd.title}</p>
+              </Card>
+            ))}
+          </div>
+        </Surface>
       ) : (
         <CommandForm
           command={activeCommand}

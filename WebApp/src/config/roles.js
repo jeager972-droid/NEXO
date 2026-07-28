@@ -136,3 +136,27 @@ export const ROLE_DISPLAY = {
 };
 
 export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
+
+/**
+ * PRIMARY_ACTIONS — 4 acciones más importantes/usadas por rol para la barra inferior.
+ * Las demás quedan en el sidebar vertical.
+ */
+export const PRIMARY_ACTIONS = {
+  [ROLES.RECTOR]:         ['/', '/operacion', '/consulta', '/informes'],
+  [ROLES.COORDINADOR]:    ['/', '/operacion', '/consulta', '/casos'],
+  [ROLES.DOCENTE]:        ['/', '/operacion', '/consulta', '/notificaciones'],
+  [ROLES.SECRETARIA]:     ['/', '/operacion', '/enrolamiento', '/notificaciones'],
+  [ROLES.PORTERO]:        ['/', '/operacion', '/notificaciones', '/perfil'],
+  [ROLES.AUXILIAR]:       ['/', '/operacion', '/notificaciones', '/perfil'],
+  [ROLES.PSICORIENTADOR]: ['/', '/operacion', '/casos', '/notificaciones'],
+};
+
+export const getPrimaryActions = (role) => {
+  const paths = PRIMARY_ACTIONS[role] || ['/', '/operacion', '/notificaciones', '/perfil'];
+  return paths.map((p) => SIDEBAR_ITEMS.find((i) => i.path === p)).filter(Boolean);
+};
+
+export const getSecondaryActions = (role) => {
+  const primaryPaths = PRIMARY_ACTIONS[role] || [];
+  return SIDEBAR_ITEMS.filter((i) => i.roles.includes(role) && !primaryPaths.includes(i.path));
+};
