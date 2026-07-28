@@ -4,7 +4,6 @@
  */
 import { useState, useEffect } from 'react';
 import { Monitor, Apple, Smartphone, Info } from 'lucide-react';
-import { PageHeader } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 
@@ -38,12 +37,6 @@ const Downloads = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <PageHeader
-        eyebrow="Aplicaciones nativas"
-        title="Descargas"
-        subtitle="Aplicaciones nativas de NEXO por plataforma"
-      />
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {Object.values(platforms).map((p) => (
           <button

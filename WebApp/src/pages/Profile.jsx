@@ -8,7 +8,6 @@ import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';
 import { Camera, Mail, ShieldCheck, Key, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PageHeader } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -255,7 +254,6 @@ const Profile = () => {
   if (loadingProfile) {
     return (
       <div className="space-y-6 max-w-3xl">
-        <PageHeader eyebrow="Cuenta y seguridad" title="Perfil" />
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -264,8 +262,6 @@ const Profile = () => {
 
   return (
     <div className="space-y-8 max-w-3xl">
-      <PageHeader eyebrow="Cuenta y seguridad" title="Perfil" subtitle="Administra tu cuenta y seguridad" />
-
       <Card className="flex items-center gap-5 p-5">
         <div className="relative">
           {profile?.profile_photo_url ? (

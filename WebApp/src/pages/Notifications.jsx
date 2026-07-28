@@ -6,16 +6,15 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle2, Info, AlertTriangle, Trash2, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Info, AlertTriangle, Trash2, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
 import { trackingApi } from '../api/tracking';
 import { ROLES } from '../config/roles';
-import { Surface, PageHeader } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
 
@@ -192,7 +191,6 @@ const Notifications = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Centro de novedades" title="Notificaciones" />
         <Surface><SkeletonRows count={4} /></Surface>
       </div>
     );
@@ -200,19 +198,25 @@ const Notifications = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Centro de novedades"
-        title="Notificaciones"
-        actions={notifications.length > 0 ? (
-          <Button variant="secondary" loading={clearing} onClick={handleClear} leftIcon={<Trash2 size={16} />}>
+      {notifications.length > 0 && (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" loading={clearing} onClick={handleClear} leftIcon={<Trash2 size={14} />}>
             Vaciar
           </Button>
-        ) : undefined}
-      />
+        </div>
+      )}
 
       {notifications.length === 0 ? (
-        <Surface>
-          <EmptyState icon={<Bell size={32} className="text-[var(--nx-border)]" />} title="Sin notificaciones" description="No tienes novedades pendientes." />
+        <Surface className="p-6">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] font-bold text-body">N</div>
+            <div className="flex-1">
+              <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                <p className="text-body text-[var(--nx-text)] leading-relaxed">¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí.</p>
+              </div>
+              <p className="text-caption text-[var(--nx-text-muted)] mt-1 px-1">NEXO · Ahora</p>
+            </div>
+          </div>
         </Surface>
       ) : (
         <div className="space-y-4">
@@ -246,6 +250,14 @@ const Notifications = () => {
               <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3">
                 <p className="text-body text-[var(--nx-text)] leading-relaxed">{detail.message}</p>
               </div>
+              {(!detail.message || detail.message.trim() === '') && (
+                <div className="flex items-start gap-2">
+                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] font-bold text-caption">N</div>
+                  <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-3 py-2">
+                    <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">No se agregaron detalles en el mensaje.</p>
+                  </div>
+                </div>
+              )}
               {(() => {
                 const meta = parseMeta(detail.metadata_json);
                 if (meta?.action === 'iniciar_seguimiento' && meta.student_id && !isStaff) {

@@ -13,11 +13,10 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { trackingApi } from '../api/tracking';
-import { auditApi } from '../api/audit';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Section, Surface, PageHeader } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -94,13 +93,14 @@ const Dashboard = () => {
     case ROLES.COORDINADOR:
       return <AdminDashboard stats={stats} loading={loading} />;
     case ROLES.SECRETARIA:
-    case ROLES.PSICORIENTADOR:
       return <SecretaryDashboard tasks={stats.pendingTasks || []} loading={loading} />;
+    case ROLES.PSICORIENTADOR:
+      return <CounselorDashboard tasks={stats.pendingTasks || []} loading={loading} />;
     case ROLES.DOCENTE:
       return <TeacherDashboard stats={stats} loading={loading} />;
     case ROLES.PORTERO:
     case ROLES.AUXILIAR:
-      return <StaffDashboard />;
+      return <StaffDashboard tasks={stats.pendingTasks || []} loading={loading} />;
     default:
       return (
         <EmptyState
@@ -125,6 +125,7 @@ const getGreeting = () => {
 
 const AdminDashboard = ({ stats, loading }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
@@ -179,16 +180,8 @@ const AdminDashboard = ({ stats, loading }) => {
 
   const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
 
-  const greeting = getGreeting();
-  const firstName = user?.nombre?.split(' ')[0] || 'directivo';
-
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Visión de la jornada"
-        title={`${greeting}, ${firstName}`}
-        subtitle={todayLabel()}
-      />
       {loading ? (
         <SkeletonMetrics count={4} className="grid-cols-2 md:grid-cols-4" />
       ) : (
@@ -207,8 +200,15 @@ const AdminDashboard = ({ stats, loading }) => {
         </div>
       )}
 
-      <Section title="Permisos activos" subtitle="Salidas y permisos vigentes en la institución">
-        {permsLoading ? (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 border-l-2 border-[var(--nx-accent)] pl-3">
+          <h2 className="text-h2 tracking-[-0.02em] text-[var(--nx-text)]">Permisos activos</h2>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/consulta')}>
+          Ver todos
+        </Button>
+      </div>
+      {permsLoading ? (
           <Surface className="p-5 space-y-3">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
@@ -237,11 +237,8 @@ const AdminDashboard = ({ stats, loading }) => {
             <EmptyState icon={<FileText size={32} className="text-[var(--nx-border)]" />} title="Sin permisos activos" description="No hay permisos vigentes para hoy." />
           </Surface>
         )}
-      </Section>
 
-      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales">
-        <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
-      </Section>
+      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
 
       <AnimatePresence>
         {activeCategory && (
@@ -262,71 +259,73 @@ const AdminDashboard = ({ stats, loading }) => {
 // ── Secretaria / Psicoorientador ──────────────────────────────────────────────
 
 const SecretaryDashboard = ({ tasks = [], loading }) => {
-  const { user } = useAuth();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        setEvents(res?.status === 'ok' ? res.data || [] : []);
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
-
-  const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
-
-  const greeting = getGreeting();
-  const firstName = user?.nombre?.split(' ')[0] || 'directivo';
-
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Seguimiento y novedades"
-        title={`${greeting}, ${firstName}`}
-        subtitle={todayLabel()}
-      />
-      <Section title="Tareas pendientes" subtitle="Acciones que requieren tu atención">
-        {loading ? (
-          <Surface className="p-5 space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </Surface>
-        ) : tasks.length > 0 ? (
-          <div className="space-y-3">
-            {tasks.slice(0, 6).map((t, i) => (
-              <SituationLine
-                key={i}
-                icon={<CheckCircle2 size={18} />}
-                label="Tarea"
-                value={t.label}
-                detail={t.time}
-                scheme="accent"
-              />
-            ))}
-          </div>
-        ) : (
-          <Surface>
-            <EmptyState
-              icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
-              title="Sin tareas pendientes"
-              description="No tienes tareas asignadas para hoy. Revisa los eventos recientes para estar al tanto."
+      {loading ? (
+        <Surface className="p-5 space-y-3">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </Surface>
+      ) : tasks.length > 0 ? (
+        <div className="space-y-3">
+          {tasks.slice(0, 6).map((t, i) => (
+            <SituationLine
+              key={i}
+              icon={<CheckCircle2 size={18} />}
+              label="Tarea"
+              value={t.label}
+              detail={t.time}
+              scheme="accent"
             />
-          </Surface>
-        )}
-      </Section>
+          ))}
+        </div>
+      ) : (
+        <Surface>
+          <EmptyState
+            icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
+            title="Sin tareas pendientes"
+            description="No tienes tareas asignadas para hoy."
+          />
+        </Surface>
+      )}
+    </div>
+  );
+};
 
-      <Section title="Eventos recientes" subtitle="Últimas novedades institucionales">
-        <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
-      </Section>
+// ── Psicorientador ────────────────────────────────────────────────────────────
+
+const CounselorDashboard = ({ tasks = [], loading }) => {
+  return (
+    <div className="space-y-8">
+      {loading ? (
+        <Surface className="p-5 space-y-3">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </Surface>
+      ) : tasks.length > 0 ? (
+        <div className="space-y-3">
+          {tasks.slice(0, 6).map((t, i) => (
+            <SituationLine
+              key={i}
+              icon={<CheckCircle2 size={18} />}
+              label="Solicitud"
+              value={t.label}
+              detail={t.time}
+              scheme="accent"
+            />
+          ))}
+        </div>
+      ) : (
+        <Surface>
+          <EmptyState
+            icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
+            title="Sin solicitudes pendientes"
+            description="No tienes solicitudes asignadas."
+          />
+        </Surface>
+      )}
     </div>
   );
 };
@@ -349,7 +348,6 @@ const localDateStr = (date = new Date()) => {
 };
 
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
-  const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState('');
   const [groupStats, setGroupStats]       = useState(null);
   const [groupLoading, setGroupLoading]   = useState(false);
@@ -446,17 +444,8 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
 
-  const greeting = getGreeting();
-  const firstName = user?.nombre?.split(' ')[0] || 'docente';
-
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Control de asistencia"
-        title={`${greeting}, ${firstName}`}
-        subtitle="Selecciona un grupo para el control diario"
-      />
-
       {parentLoading ? (
         <Surface className="p-6 space-y-3">
           <Skeleton className="h-10 w-full" />
@@ -464,16 +453,16 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
         </Surface>
       ) : (
         <>
-          <Surface className="relative" style={{ backgroundColor: 'oklch(95% 0.035 70)', borderColor: 'oklch(88% 0.040 70)' }}>
+          <Surface className="relative">
             <button
               onClick={() => setGroupOpen((v) => !v)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
               <div>
-                <p className="text-caption uppercase" style={{ color: 'oklch(55% 0.030 70)' }}>Seleccionar grupo</p>
-                <p className="text-h3 mt-0.5" style={{ color: 'oklch(45% 0.045 70)', fontWeight: '650' }}>{selectedGroup || '— Elegir grupo —'}</p>
+                <p className="text-caption uppercase text-[var(--nx-text-muted)]">Seleccionar grupo</p>
+                <p className="text-h3 text-[var(--nx-accent)] mt-0.5">{selectedGroup || '— Elegir grupo —'}</p>
               </div>
-              <Search size={18} style={{ color: 'oklch(55% 0.030 70)' }} />
+              <Search size={18} className="text-[var(--nx-text-muted)]" />
             </button>
 
             <AnimatePresence>
@@ -483,8 +472,8 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute left-0 right-0 top-full z-30 overflow-hidden border-t bg-[var(--nx-surface)]"
-                  style={{ maxHeight: '260px', overflowY: 'auto', borderColor: 'oklch(88% 0.040 70)' }}
+                  className="absolute left-0 right-0 top-full z-30 overflow-hidden border-t border-[var(--nx-border)] bg-[var(--nx-surface)]"
+                  style={{ maxHeight: '260px', overflowY: 'auto' }}
                 >
                   <div className="sticky top-0 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] p-3">
                     <Input
@@ -553,9 +542,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             </div>
           )}
 
-          <Section title="Eventos recientes" subtitle="Últimas novedades de tus grupos">
-            <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
-          </Section>
+          <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
 
           <AnimatePresence>
             {activeCategory && (
@@ -859,48 +846,37 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
-const StaffDashboard = () => {
-  const { user } = useAuth();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        if (res?.status === 'ok') {
-          setEvents(res.data || []);
-        } else {
-          setEvents([]);
-        }
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
-
-  const stream = events.slice(0, 8).map((ev, i) => ({
-    label: ev.label,
-    time: ev.time,
-    type: ev.type,
-    issuer: ev.issuer,
-    index: i,
-  }));
-
+const StaffDashboard = ({ tasks = [], loading }) => {
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Servicio"
-        title={`${getGreeting()}, ${user?.nombre?.split(' ')[0] || 'colegui'}`}
-        subtitle={todayLabel()}
-      />
-      <Section title="Eventos recientes" subtitle="Novedades del día">
-        <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
-      </Section>
+      {loading ? (
+        <Surface className="p-5 space-y-3">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </Surface>
+      ) : tasks.length > 0 ? (
+        <div className="space-y-3">
+          {tasks.slice(0, 6).map((t, i) => (
+            <SituationLine
+              key={i}
+              icon={<CheckCircle2 size={18} />}
+              label="Solicitud"
+              value={t.label}
+              detail={t.time}
+              scheme="accent"
+            />
+          ))}
+        </div>
+      ) : (
+        <Surface>
+          <EmptyState
+            icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
+            title="Sin solicitudes pendientes"
+            description="No tienes solicitudes asignadas para hoy."
+          />
+        </Surface>
+      )}
     </div>
   );
 };

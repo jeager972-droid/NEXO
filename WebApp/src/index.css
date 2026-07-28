@@ -10,18 +10,18 @@
 /* ── Design tokens — Light theme (default) ── */
 :root {
   /* Color */
-  --nx-canvas:        oklch(94% 0.025 165);
-  --nx-surface:       oklch(99% 0.010 80);
-  --nx-surface-subtle: oklch(96% 0.016 80);
-  --nx-text:          oklch(22% 0.030 260);
-  --nx-text-muted:    oklch(52% 0.025 260);
-  --nx-border:        oklch(89% 0.014 80);
-  --nx-accent:        oklch(46% 0.130 255);
-  --nx-accent-strong: oklch(40% 0.135 255);
-  --nx-accent-text:   oklch(99% 0.005 255);
-  --nx-success:       oklch(52% 0.130 155);
-  --nx-warning:       oklch(62% 0.140 70);
-  --nx-danger:        oklch(52% 0.180 25);
+  --nx-canvas:        oklch(97% 0.008 80);
+  --nx-surface:       oklch(99.3% 0.004 245);
+  --nx-surface-subtle: oklch(96% 0.009 245);
+  --nx-text:          oklch(23% 0.018 245);
+  --nx-text-muted:    oklch(48% 0.018 245);
+  --nx-border:        oklch(88% 0.010 245);
+  --nx-accent:        oklch(48% 0.115 245);
+  --nx-accent-strong: oklch(42% 0.120 245);
+  --nx-accent-text:   oklch(99% 0.005 245);
+  --nx-success:       oklch(52% 0.125 155);
+  --nx-warning:       oklch(62% 0.135 70);
+  --nx-danger:        oklch(52% 0.175 25);
   --nx-danger-strong: oklch(46% 0.180 25);
   --nx-on-solid:      oklch(99% 0.005 245);
 
@@ -62,18 +62,18 @@
 
 /* ── Dark theme overrides ── */
 .dark {
-  --nx-canvas:        oklch(16% 0.020 165);
-  --nx-surface:       oklch(21% 0.012 80);
-  --nx-surface-subtle: oklch(25% 0.014 80);
-  --nx-text:          oklch(94% 0.010 260);
-  --nx-text-muted:    oklch(72% 0.018 260);
-  --nx-border:        oklch(35% 0.016 80);
-  --nx-accent:        oklch(72% 0.115 255);
-  --nx-accent-strong: oklch(78% 0.110 255);
-  --nx-accent-text:   oklch(16% 0.020 260);
-  --nx-success:       oklch(72% 0.120 155);
-  --nx-warning:       oklch(78% 0.125 70);
-  --nx-danger:        oklch(72% 0.150 25);
+  --nx-canvas:        oklch(18% 0.008 245);
+  --nx-surface:       oklch(22% 0.009 245);
+  --nx-surface-subtle: oklch(26% 0.010 245);
+  --nx-text:          oklch(94% 0.007 245);
+  --nx-text-muted:    oklch(72% 0.012 245);
+  --nx-border:        oklch(35% 0.012 245);
+  --nx-accent:        oklch(72% 0.105 245);
+  --nx-accent-strong: oklch(78% 0.100 245);
+  --nx-accent-text:   oklch(18% 0.008 245);
+  --nx-success:       oklch(72% 0.115 155);
+  --nx-warning:       oklch(78% 0.120 70);
+  --nx-danger:        oklch(72% 0.145 25);
   --nx-danger-strong: oklch(78% 0.140 25);
   --nx-on-solid:      oklch(18% 0.008 245);
 

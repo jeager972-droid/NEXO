@@ -143,12 +143,12 @@ export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
  */
 export const PRIMARY_ACTIONS = {
   [ROLES.RECTOR]:         ['/', '/operacion', '/consulta', '/informes'],
-  [ROLES.COORDINADOR]:    ['/', '/operacion', '/consulta', '/casos'],
+  [ROLES.COORDINADOR]:    ['/', '/operacion', '/notificaciones', '/casos'],
   [ROLES.DOCENTE]:        ['/', '/operacion', '/consulta', '/notificaciones'],
-  [ROLES.SECRETARIA]:     ['/', '/operacion', '/enrolamiento', '/notificaciones'],
+  [ROLES.SECRETARIA]:     ['/', '/consulta', '/enrolamiento', '/notificaciones'],
   [ROLES.PORTERO]:        ['/', '/operacion', '/notificaciones', '/perfil'],
   [ROLES.AUXILIAR]:       ['/', '/operacion', '/notificaciones', '/perfil'],
-  [ROLES.PSICORIENTADOR]: ['/', '/operacion', '/casos', '/notificaciones'],
+  [ROLES.PSICORIENTADOR]: ['/', '/consulta', '/casos', '/notificaciones'],
 };
 
 export const getPrimaryActions = (role) => {

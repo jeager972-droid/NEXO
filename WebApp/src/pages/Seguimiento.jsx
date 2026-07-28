@@ -9,7 +9,7 @@ import { FileText, Search, Activity, CalendarDays } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
 import { TrackingModal } from './TrackingModal';
-import { Surface, PageHeader } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -63,12 +63,6 @@ export default function Casos() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Intervención estudiantil"
-        title="Casos Activos"
-        subtitle="Estudiantes en proceso de intervención"
-      />
-
       <Input
         placeholder="Buscar estudiante…"
         value={searchQuery}

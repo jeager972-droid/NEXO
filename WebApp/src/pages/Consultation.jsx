@@ -12,7 +12,6 @@ import { studentsApi } from '../api/students';
 import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
-import { PageHeader } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -272,11 +271,6 @@ const Consultation = () => {
     <div className="space-y-6">
       {!activeItem ? (
         <>
-          <PageHeader
-            eyebrow="Consulta institucional"
-            title="Panel de consulta"
-            subtitle="Acceso rápido a información por módulo"
-          />
           <Input
             placeholder="Filtrar módulos y submódulos…"
             value={searchTerm}
@@ -314,11 +308,7 @@ const Consultation = () => {
             <Button variant="secondary" size="sm" onClick={() => setActiveItem(null)} leftIcon={<ChevronLeft size={16} />}>
               Volver
             </Button>
-            <PageHeader
-              eyebrow="Consulta"
-              title={activeItem}
-              subtitle={isTeacherModule ? 'Configura filtros y consulta' : 'Resultados del módulo'}
-            />
+            <h2 className="text-h2 text-[var(--nx-text)]">{activeItem}</h2>
           </div>
           <ConsultationDrawer
             item={activeItem}

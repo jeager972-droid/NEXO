@@ -6,11 +6,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { Menu, Settings, LogOut, ChevronDown, Sun, Moon } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { getRoleDisplay, getPrimaryActions } from '../config/roles';
+import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { notificationsApi } from '../api/notifications';
 import { StatusDot } from '../components/patterns/StatusDot';
 import { NavLink } from 'react-router-dom';
@@ -27,6 +27,7 @@ const Layout = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
@@ -63,6 +64,12 @@ const Layout = () => {
   }, []);
 
   useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
     const onClick = (e) => { if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false); };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
@@ -73,24 +80,30 @@ const Layout = () => {
   const greeting = useMemo(() => getGreeting(), []);
   const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
+  const isTeacher = user?.role === ROLES.DOCENTE;
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)]">
-      <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
+      {/* Sidebar: hidden on mobile for teacher, always visible on desktop */}
+      {(!isTeacher || isDesktop) && (
+        <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
+      )}
 
       <div className="flex flex-col min-w-0 lg:pl-[var(--nx-sidebar)]">
         {/* Topbar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 lg:px-8">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 lg:px-8" style={{ height: '72px' }}>
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => setSidebarOpen((v) => !v)}
-              className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
-              aria-label="Abrir menú"
-            >
-              <Menu size={20} />
-            </button>
+            {(!isTeacher) && (
+              <button
+                onClick={() => setSidebarOpen((v) => !v)}
+                className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
+                aria-label="Abrir menú"
+              >
+                <Menu size={20} />
+              </button>
+            )}
             <div className="min-w-0">
-              <h1 className="text-h2 text-[var(--nx-text)] truncate" style={{ fontWeight: '650' }}>{greeting}, {firstName}</h1>
+              <h1 className="text-body text-[var(--nx-text)] truncate" style={{ fontWeight: '650', fontSize: '0.9rem' }}>{greeting}, {firstName}</h1>
               <p className="text-caption text-[var(--nx-text-muted)] truncate">{roleDisplay} · {user?.school_name ?? 'NEXO'}</p>
             </div>
           </div>
@@ -133,7 +146,7 @@ const Layout = () => {
                       onClick={() => { setProfileOpen(false); toggleDarkMode(); }}
                       className="flex w-full items-center gap-3 px-4 py-3 text-body text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
                     >
-                      {darkMode ? 'Modo claro' : 'Modo oscuro'}
+                      {darkMode ? <Sun size={16} /> : <Moon size={16} />} {darkMode ? 'Modo claro' : 'Modo oscuro'}
                     </button>
                     <div className="border-t border-[var(--nx-border)]" />
                     <button
@@ -166,8 +179,8 @@ const Layout = () => {
           </div>
         </main>
 
-        {/* Bottom action bar */}
-        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--nx-border)] bg-[var(--nx-surface)] lg:left-[var(--nx-sidebar)]" aria-label="Acciones principales">
+        {/* Bottom action bar — mobile only */}
+        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--nx-border)] bg-[var(--nx-surface)] lg:hidden" aria-label="Acciones principales">
           <div className="flex items-center justify-around px-2 py-2 max-w-content mx-auto">
             {primaryActions.map((item) => {
               const Icon = item.icon;

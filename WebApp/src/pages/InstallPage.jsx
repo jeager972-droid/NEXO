@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Download, CheckCircle, Globe, Monitor, Apple, Smartphone } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { PageHeader, Surface } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 
 const PLATFORMS = {
@@ -61,12 +61,6 @@ export default function InstallPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 py-6">
-      <PageHeader
-        eyebrow="Instalación PWA"
-        title={`Instalar NEXO en ${config.title}`}
-        subtitle="Sigue los pasos o usa el botón de instalación"
-      />
-
       {installed ? (
         <Surface className="flex items-center gap-3 p-5 border border-[var(--nx-success)]">
           <CheckCircle size={24} className="text-[var(--nx-success)]" />

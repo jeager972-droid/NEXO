@@ -10,7 +10,7 @@ import { studentsApi } from '../api/students';
 import { ROLES } from '../config/roles';
 import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Surface, PageHeader, Section } from '../components/ui/Surface';
+import { Surface, Section } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -264,11 +264,9 @@ const Enrollment = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Gestión de estudiantes"
-        title="Matrícula"
-        actions={<Button onClick={() => setIsDrawerOpen(true)} leftIcon={<UserPlus size={18} />}>Nuevo estudiante</Button>}
-      />
+      <div className="flex items-center justify-between">
+        <Button onClick={() => setIsDrawerOpen(true)} leftIcon={<UserPlus size={18} />}>Nuevo estudiante</Button>
+      </div>
 
       <Surface className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

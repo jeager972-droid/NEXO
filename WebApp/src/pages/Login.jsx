@@ -83,10 +83,6 @@ const Login = () => {
           <div className="h-14 w-14 rounded-surface bg-[var(--nx-accent)] text-[var(--nx-accent-text)] flex items-center justify-center">
             <LogoNexo className="h-8" showText={false} />
           </div>
-          <div>
-            <h1 className="text-h1 text-[var(--nx-text)]">NEXO</h1>
-            <p className="text-body text-[var(--nx-text-muted)] mt-0.5">Quiet Operations</p>
-          </div>
         </div>
 
         <div className="rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 lg:p-8 shadow-medium">
@@ -104,7 +100,6 @@ const Login = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@colegio.edu"
-                  required
                 />
                 <PasswordInput
                   label="Contraseña"
@@ -112,7 +107,6 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  required
                 />
 
                 {error && (
@@ -146,7 +140,6 @@ const Login = () => {
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
-                  required
                 />
                 {error && (
                   <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">

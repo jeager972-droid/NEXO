@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { auditApi } from '../api/audit';
 import { ROLES } from '../config/roles';
-import { Surface, PageHeader, Section } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -260,12 +260,9 @@ const Reports = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Reportes institucionales"
-        title="Informes"
-        subtitle="Consulta y exporta datos institucionales"
-        actions={<Button variant="secondary" onClick={() => setExportModal(true)} leftIcon={<Download size={16} />}>Exportar consolidado</Button>}
-      />
+      <div className="flex items-center justify-end">
+        <Button variant="secondary" onClick={() => setExportModal(true)} leftIcon={<Download size={16} />}>Exportar consolidado</Button>
+      </div>
       <Input placeholder="Buscar submódulo…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filtered.map((mod, idx) => (
