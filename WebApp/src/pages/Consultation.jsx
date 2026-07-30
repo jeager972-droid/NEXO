@@ -58,10 +58,10 @@ const MODULE_SLUGS = {
 };
 
 const TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_8%,transparent)]', text: 'text-[var(--nx-accent)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-accent)_40%,var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_8%,transparent)]', text: 'text-[var(--nx-success)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-success)_40%,var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_9%,transparent)]', text: 'text-[var(--nx-warning)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-warning)_40%,var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)]', text: 'text-[var(--nx-danger)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-danger)_40%,var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]', text: 'text-[var(--nx-accent)]', icon: 'text-[color-mix(in_oklch,var(--nx-accent)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_25%,var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_10%,transparent)]', text: 'text-[var(--nx-success)]', icon: 'text-[color-mix(in_oklch,var(--nx-success)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-success)_25%,var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_11%,transparent)]', text: 'text-[var(--nx-warning)]', icon: 'text-[color-mix(in_oklch,var(--nx-warning)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_25%,var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)]', text: 'text-[var(--nx-danger)]', icon: 'text-[color-mix(in_oklch,var(--nx-danger)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_25%,var(--nx-border))]' },
 };
 
 const localDateStr = (date = new Date()) => {
@@ -405,28 +405,26 @@ const Consultation = () => {
             <p className="text-body text-[var(--nx-text-muted)] text-center">Sin coincidencias.</p>
           </Surface>
         ) : (
-          <Surface className="p-5 md:p-6 shadow-medium">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map((sub) => {
-                const SubIcon = sub.icon;
-                return (
-                  <button
-                    key={sub.label}
-                    onClick={() => openSubmodule(sub.label)}
-                    className={`rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5 text-left shadow-low transition-all duration-fast ${ts.border} hover:shadow-medium`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.bg}`}>
-                        <SubIcon size={20} className={ts.text} />
-                      </div>
-                      <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredItems.map((sub) => {
+              const SubIcon = sub.icon;
+              return (
+                <button
+                  key={sub.label}
+                  onClick={() => openSubmodule(sub.label)}
+                  className={`flex flex-col rounded-panel border p-5 text-left transition-all duration-fast ${ts.bg} ${ts.border} hover:shadow-medium`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
+                      <SubIcon size={20} className={ts.icon} />
                     </div>
-                    <p className="mt-4 text-h3 text-[var(--nx-text)]">{sub.label}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </Surface>
+                    <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
+                  </div>
+                  <p className="mt-4 text-h3 text-[var(--nx-text)]">{sub.label}</p>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
     );
@@ -451,11 +449,11 @@ const Consultation = () => {
               <button
                 key={mod.title}
                 onClick={() => openModule(mod.title)}
-                className={`rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5 text-left shadow-low transition-all duration-fast ${ts.border} hover:shadow-medium`}
+                className={`flex flex-col rounded-panel border p-5 text-left transition-all duration-fast ${ts.bg} ${ts.border} hover:shadow-medium`}
               >
                 <div className="flex items-start justify-between">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.bg}`}>
-                    <ModIcon size={20} className={ts.text} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
+                    <ModIcon size={20} className={ts.icon} />
                   </div>
                   <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                 </div>

@@ -119,40 +119,38 @@ const Operation = () => {
   return (
     <div className="space-y-6">
       {!activeCommand ? (
-        <>
-          {filteredCommands.length === 0 ? (
-            <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
-              <NexoChatBubble message="¡Todo está al día! No hay operaciones pendientes en este momento." />
-            </Surface>
-          ) : (
-            <>
-              <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-                <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-                <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCommands.map((cmd) => {
-                  const ts = CMD_TONE_STYLES[cmd.tone] || CMD_TONE_STYLES.accent;
-                  return (
-                    <button
-                      key={cmd.id}
-                      onClick={() => setActiveCommand(cmd)}
-                      className={`flex flex-col p-5 rounded-panel border ${ts.bg} ${ts.border} hover:shadow-medium transition-all duration-fast text-left`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
-                          <cmd.icon size={20} className={ts.icon} />
-                        </div>
-                        <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
+        filteredCommands.length === 0 ? (
+          <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+            <NexoChatBubble message="¡Todo está al día! No hay operaciones pendientes en este momento." />
+          </Surface>
+        ) : (
+          <>
+            <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+              <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+              <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCommands.map((cmd) => {
+                const ts = CMD_TONE_STYLES[cmd.tone] || CMD_TONE_STYLES.accent;
+                return (
+                  <button
+                    key={cmd.id}
+                    onClick={() => setActiveCommand(cmd)}
+                    className={`flex flex-col p-5 rounded-panel border ${ts.bg} ${ts.border} hover:shadow-medium transition-all duration-fast text-left`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
+                        <cmd.icon size={20} className={ts.icon} />
                       </div>
-                      <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )
-        </>
+                      <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
+                    </div>
+                    <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )
       ) : (
         <CommandForm
           command={activeCommand}
