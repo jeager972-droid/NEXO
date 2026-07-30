@@ -6,8 +6,8 @@ import { clsx } from 'clsx';
 import { Badge } from '../ui/Badge';
 
 const levelToScheme = {
-  bajo: 'success',
-  normal: 'success',
+  bajo: 'warning',
+  normal: 'warning',
   medio: 'warning',
   alto: 'warning',
   critico: 'danger',
@@ -21,12 +21,12 @@ const trendIcon = {
 };
 
 export const RiskBadge = ({ level, trend, period, explanation, className }) => {
-  const scheme = levelToScheme[level?.toLowerCase()] || 'neutral';
+  const scheme = levelToScheme[level?.toLowerCase()] || 'warning';
   return (
     <div className={clsx('space-y-1', className)}>
       <div className="flex items-center gap-2">
         <Badge scheme={scheme} dot>
-          {level || 'Sin riesgo'}
+          riesgo
           {trend && trendIcon[trend] && <span className="ml-1">{trendIcon[trend]}</span>}
         </Badge>
         {period && <span className="text-caption text-[var(--nx-text-muted)]">{period}</span>}

@@ -513,7 +513,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     $notifStmt->execute([
                         $schoolId,
                         $resolvedTeacherId,
-                        "El acudiente de: " . ($studentName ?: 'Estudiante') . " envió el motivo de reagendamiento. Ver detalles.",
+                        "Se recibió el motivo de reagendamiento del acudiente de " . ($studentName ?: 'Estudiante') . ". Ver detalles.",
                         $meta
                     ]);
                     securityLog('CITACION_NOTIF_SUCCESS', "Type:reagendar_motivo Teacher:$resolvedTeacherId");
@@ -616,7 +616,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     $notifStmt->execute([
                         $schoolId,
                         $teacherRef['sender_user_id'],
-                        "El acudiente de: " . ($studentName ?: 'Estudiante') . " confirmó asistencia a la citación.",
+                        "Se confirmó la asistencia del acudiente de " . ($studentName ?: 'Estudiante') . " a la citación.",
                         $meta
                     ]);
                     securityLog('CITACION_NOTIF_SUCCESS', "Type:confirmada Teacher:{$teacherRef['sender_user_id']}");
@@ -731,7 +731,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                         $salNotif->execute([
                             $schoolId,
                             $issuerUserId,
-                            "El acudiente de {$sName} marcó la salida autorizada como un ERROR. Verificar de inmediato.",
+                            "Se marcó como error la salida autorizada de {$sName}. Verificar de inmediato.",
                             $salMeta
                         ]);
                     } catch (Throwable $e) {

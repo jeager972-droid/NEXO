@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Search, Activity, CalendarDays } from 'lucide-react';
+import { FileText, Search, Activity, CalendarDays, Sparkles, AlertTriangle } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
 import { TrackingModal } from './TrackingModal';
@@ -75,25 +75,30 @@ export default function Casos() {
       ) : filtered.length === 0 ? (
         <Surface>
           <EmptyState
-            icon={<FileText size={32} className="text-[var(--nx-border)]" />}
-            title="No hay casos activos"
+            icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
+            title="Todo en orden por aquí!"
             description={searchQuery ? 'Ningún estudiante coincide con tu búsqueda.' : 'No hay estudiantes en seguimiento en este momento.'}
           />
         </Surface>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((row) => (
-            <Card key={row.tracking_id || row.student_id} asAction onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
+            <Card key={row.tracking_id || row.student_id} asAction onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)} className="border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_14%,var(--nx-tone-mix))]">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)]">{row.group_name || 'Sin grupo'}</p>
                 </div>
-                <RiskBadge level={row.risk_level || row.risk_score} />
+                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
+                  <AlertTriangle size={20} />
+                </div>
               </div>
               <div className="mt-4 flex items-center gap-4 text-caption text-[var(--nx-text-muted)]">
                 <span className="flex items-center gap-1"><Activity size={12} /> {row.status || 'Activo'}</span>
                 {row.created_at && <span className="flex items-center gap-1"><CalendarDays size={12} /> {new Date(row.created_at).toLocaleDateString('es-CO')}</span>}
+              </div>
+              <div className="mt-3">
+                <RiskBadge level={row.risk_level || row.risk_score} />
               </div>
             </Card>
           ))}

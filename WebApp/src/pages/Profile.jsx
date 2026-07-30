@@ -5,6 +5,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
 import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -88,7 +89,7 @@ const RevealDialog = ({ onClose, onVerified, title }) => {
   return (
     <Dialog
       title={title}
-      description="Ingresa tu contraseña para ver este dato."
+      description="Ingresa tu contraseña para desbloquear tus datos de contacto."
       onClose={onClose}
       footer={
         <>
@@ -261,6 +262,7 @@ const Profile = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const [unlocked, setUnlocked] = useState(false);
   const [revealed, setRevealed] = useState({ email: false, phone: false, password: false });
   const [revealDialog, setRevealDialog] = useState(null);
   const [changeDialog, setChangeDialog] = useState(null);
@@ -335,14 +337,15 @@ const Profile = () => {
   };
 
   const handleReveal = (field) => {
-    if (revealed[field]) {
-      setRevealed((r) => ({ ...r, [field]: false }));
+    if (unlocked) {
+      setRevealed((r) => ({ ...r, [field]: !r[field] }));
     } else {
       setRevealDialog(field);
     }
   };
 
   const handleRevealVerified = () => {
+    setUnlocked(true);
     setRevealed((r) => ({ ...r, [revealDialog]: true }));
     setRevealDialog(null);
   };
@@ -408,7 +411,7 @@ const Profile = () => {
         </div>
         <div>
           <p className="text-h2 text-[var(--nx-text)]">{user?.nombre || 'Usuario'}</p>
-          <p className="text-body text-[var(--nx-text-muted)]">{user?.role}</p>
+          <p className="text-body text-[var(--nx-text-muted)]">{getRoleDisplay(user?.role)?.toLowerCase()}</p>
           <Toast toast={photoToast} />
         </div>
       </Card>
@@ -547,7 +550,7 @@ const Profile = () => {
       <AnimatePresence>
         {revealDialog && (
           <RevealDialog
-            title={revealDialog === 'password' ? 'Ver contraseña' : `Ver ${revealDialog === 'email' ? 'correo' : 'teléfono'}`}
+            title="Desbloquear contacto"
             onClose={() => setRevealDialog(null)}
             onVerified={handleRevealVerified}
           />

@@ -321,7 +321,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         $rows[] = "(?, ?, 'Alerta SOS', ?, 'SOS', ?::jsonb, NOW())";
                         $params[] = $schoolId;
                         $params[] = $r['user_id'];
-                        $params[] = "{$reporterName} envió una alerta SOS. Ver detalles.";
+                        $params[] = "Se emitió una alerta SOS por {$reporterName}. Ver detalles.";
                         $params[] = $sosMeta;
                     }
                     $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
@@ -554,7 +554,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             $params[] = $schoolId;
                             $params[] = $c['user_id'];
                             $params[] = 'Permiso';
-                            $params[] = "Nuevo permiso registrado. Ver detalles.";
+                            $params[] = "Se registró un permiso" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
                             $params[] = $meta;
                         }
                         $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
@@ -636,7 +636,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             $params[] = $schoolId;
                             $params[] = $c['user_id'];
                             $params[] = 'Salida autorizada';
-                            $params[] = "Nueva salida autorizada registrada. Ver detalles.";
+                            $params[] = "Se autorizó una salida" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
                             $params[] = $meta;
                         }
                         $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
@@ -764,7 +764,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
                             $params[] = $schoolId;
                             $params[] = $p['user_id'];
-                            $params[] = "{$senderName} solicita iniciar seguimiento. Ver detalles.";
+                            $params[] = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderName}. Ver detalles.";
                             $params[] = $meta;
                         }
                         $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
@@ -850,7 +850,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                                 INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
                                 VALUES (?, ?, 'Solicitud', ?, 'INFO', ?::jsonb, NOW())
                             ");
-                            $solNotif->execute([$schoolId, $params['recipient_id'], "{$senderName} te envió una solicitud. Ver detalles.", $solMeta]);
+                            $solNotif->execute([$schoolId, $params['recipient_id'], "Se envió una solicitud interna de {$senderName}. Ver detalles.", $solMeta]);
                         } catch (Throwable $e) {
                             error_log("[OPERATIONS] Solicitud notification insert error: " . $e->getMessage());
                         }
@@ -944,7 +944,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                                 $params[] = $schoolId;
                                 $params[] = $r['user_id'];
                                 $params[] = 'Incidente';
-                                $params[] = "Nuevo incidente reportado. Ver detalles.";
+                                $params[] = "Se reportó un incidente" . ($reason ? ": {$reason}" : '') . ". Ver detalles.";
                                 $params[] = $incMeta;
                             }
                             $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);

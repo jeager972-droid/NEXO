@@ -4,7 +4,7 @@
  * Usa Drawer de Overlay.jsx, RiskBadge pattern, SkeletonRows, humanizeError.
  */
 import { useState, useEffect, useRef } from 'react';
-import { Search, Activity, Filter, Eye, AlertTriangle } from 'lucide-react';
+import { Search, Activity, Filter, Eye, AlertTriangle, Sparkles } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
@@ -73,8 +73,9 @@ const TeacherQueryPanel = ({
   return (
     <div className="flex flex-col">
       <Surface className="border-b border-[var(--nx-border)] p-5 space-y-4 rounded-none">
-        <div className="flex items-center gap-2 text-label text-[var(--nx-text-muted)] uppercase">
-          <Filter size={14} /> Filtros de consulta
+        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+          <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+          <p className="text-label text-[var(--nx-text)]">Filtros de consulta</p>
         </div>
         <SearchableSelect label="Grupo académico" placeholder="Seleccionar grupo…" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
         <SearchableSelect label="Estudiante" placeholder={!selectedGroup ? 'Primero seleccione un grupo' : 'Todos los estudiantes del grupo'} options={studentOptions} value={selectedStudent} onChange={(v) => setSelectedStudent(v)} loading={studentsLoading} />
@@ -89,11 +90,11 @@ const TeacherQueryPanel = ({
         {error ? (
           <EmptyState icon={<AlertTriangle size={32} className="text-[var(--nx-danger)]" />} title="Error de consulta" description={error} />
         ) : !hasQueried && !loadingData ? (
-          <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin registros" description="Seleccione un grupo y un rango de fechas, luego presione Consultar." />
+          <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="Selecciona un grupo y un rango de fechas, luego presiona Consultar." />
         ) : loadingData && rows.length === 0 ? (
           <SkeletonRows count={4} />
         ) : rows.length === 0 ? (
-          <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin registros" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
+          <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
           <Surface className="overflow-x-auto">
             <table className="w-full min-w-[500px]">
@@ -139,8 +140,9 @@ const AdminFilterPanel = ({
 
   return (
     <Surface className="border-b border-[var(--nx-border)] p-5 space-y-4 rounded-none">
-      <div className="flex items-center gap-2 text-label text-[var(--nx-text-muted)] uppercase">
-        <Filter size={14} /> Filtros de consulta
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+        <p className="text-label text-[var(--nx-text)]">Filtros de consulta</p>
       </div>
       <SearchableSelect label="Grupo" placeholder="Todos los grupos" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
       <SearchableSelect label="Estudiante (opcional)" placeholder="Todos los estudiantes" options={studentOptions} value={selectedStudent} onChange={(v) => setSelectedStudent(v)} loading={studentsLoading} />
@@ -224,7 +226,7 @@ export const ConsultationDrawer = ({
                 </table>
               </Surface>
             ) : (
-              <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin datos disponibles" description="No se encontraron registros para este módulo." />
+              <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="No se encontraron registros para este módulo." />
             )}
             </div>
           </div>
@@ -281,7 +283,7 @@ export const ConsultationDrawer = ({
                 </table>
               </Surface>
             ) : (
-              <EmptyState icon={<Activity size={32} className="text-[var(--nx-border)]" />} title="Sin datos disponibles" description="No se encontraron registros para este módulo." />
+              <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="No se encontraron registros para este módulo." />
             )}
           </div>
         )}

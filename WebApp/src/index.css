@@ -25,6 +25,10 @@
   --nx-danger-strong: oklch(46% 0.180 25);
   --nx-on-solid:      oklch(99% 0.005 245);
 
+  /* Tone mix targets — change between light/dark */
+  --nx-tone-mix:      white;
+  --nx-icon-mix:      black;
+
   /* Ring de foco de campo — moodboard: 3px al 12% */
   --nx-ring:          0 0 0 3px color-mix(in oklch, var(--nx-accent) 14%, transparent);
   --nx-ring-danger:   0 0 0 3px color-mix(in oklch, var(--nx-danger) 14%, transparent);
@@ -80,6 +84,10 @@
   --nx-danger:        oklch(72% 0.145 25);
   --nx-danger-strong: oklch(78% 0.140 25);
   --nx-on-solid:      oklch(18% 0.008 245);
+
+  /* In dark mode, tone backgrounds mix with the dark surface, and icon text mixes with white */
+  --nx-tone-mix:      var(--nx-surface);
+  --nx-icon-mix:      white;
 
   /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
   --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.20);
@@ -224,14 +232,14 @@ body[data-nx-lock='true'] {
   overflow: hidden;
 }
 
-/* ── Indicador de notificación: parpadeo azul discreto ── */
+/* ── Indicador de notificación: pulso de tamaño discreto ── */
 @keyframes nx-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.5); }
 }
 .nx-blink {
   animation: nx-blink 1.8s var(--nx-ease-out) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .nx-blink { animation: none; opacity: 1; }
+  .nx-blink { animation: none; }
 }

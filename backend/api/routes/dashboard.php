@@ -571,37 +571,37 @@ if ($cleanPath === '/dashboard/events') {
             $label = '';
             switch (strtoupper($ev['command_type'])) {
                 case 'PERMISO':
-                    $label = $studentName ? "Permiso: {$studentName}" : "Permiso generado";
+                    $label = $studentName ? "Se registró un permiso para {$studentName}" : "Se registró un permiso";
                     break;
                 case 'AUTORIZAR_SALIDA':
-                    $label = $studentName ? "Salida autorizada: {$studentName}" : "Salida autorizada";
+                    $label = $studentName ? "Se autorizó una salida para {$studentName}" : "Se autorizó una salida";
                     break;
                 case 'SOS':
-                    $label = "Alerta SOS";
+                    $label = "Se emitió una alerta SOS";
                     break;
                 case 'CITACION':
-                    $label = $studentName ? "Citación: {$studentName}" : "Citación enviada";
+                    $label = $studentName ? "Se envió una citación para {$studentName}" : "Se envió una citación";
                     break;
                 case 'INASISTENCIA':
-                    $label = $studentName ? "Inasistencia: {$studentName}" : "Inasistencia reportada";
+                    $label = $studentName ? "Se registró inasistencia de {$studentName}" : "Se registró una inasistencia";
                     break;
                 case 'INCIDENTE':
-                    $label = "Incidente: {$reason}";
+                    $label = $reason ? "Se reportó un incidente: {$reason}" : "Se reportó un incidente";
                     break;
                 case 'PEDAGOGICA':
-                    $label = "Salida pedagógica: {$reason}";
+                    $label = $reason ? "Se programó una salida pedagógica: {$reason}" : "Se programó una salida pedagógica";
                     break;
                 case 'SEGUIMIENTO':
-                    $label = $studentName ? "Seguimiento: {$studentName}" : "Seguimiento iniciado";
+                    $label = $studentName ? "Se inició seguimiento para {$studentName}" : "Se inició un seguimiento";
                     break;
                 case 'SOLICITUD':
-                    $label = "Solicitud interna";
+                    $label = "Se envió una solicitud interna";
                     break;
                 case 'DAÑO':
-                    $label = "Reporte de daño: {$reason}";
+                    $label = $reason ? "Se reportó un daño: {$reason}" : "Se reportó un daño";
                     break;
                 case 'HORARIO':
-                    $label = "Cambio de horario";
+                    $label = "Se realizó un cambio de horario";
                     break;
                 default:
                     $label = $ev['command_type'];

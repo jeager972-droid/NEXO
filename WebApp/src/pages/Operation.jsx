@@ -42,10 +42,10 @@ const COMMANDS_CATALOG = [
 ];
 
 const CMD_TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]', text: 'text-[var(--nx-accent)]', icon: 'text-[color-mix(in_oklch,var(--nx-accent)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_25%,var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_10%,transparent)]', text: 'text-[var(--nx-success)]', icon: 'text-[color-mix(in_oklch,var(--nx-success)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-success)_25%,var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_11%,transparent)]', text: 'text-[var(--nx-warning)]', icon: 'text-[color-mix(in_oklch,var(--nx-warning)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_25%,var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)]', text: 'text-[var(--nx-danger)]', icon: 'text-[color-mix(in_oklch,var(--nx-danger)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_25%,var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_35%,var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-success)_35%,var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_16%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_35%,var(--nx-border))]' },
 };
 
 const FIELD_LABELS = {
@@ -139,8 +139,8 @@ const Operation = () => {
                     className={`flex flex-col p-5 rounded-panel border ${ts.bg} ${ts.border} hover:shadow-medium transition-all duration-fast text-left`}
                   >
                     <div className="flex items-start justify-between">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
-                        <cmd.icon size={20} className={ts.icon} />
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.icon}`}>
+                        <cmd.icon size={20} />
                       </div>
                       <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                     </div>
@@ -263,7 +263,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     }
   };
 
-  const accent = 'var(--nx-accent)';
+  const cmdTone = CMD_TONE_STYLES[command.tone] || CMD_TONE_STYLES.accent;
 
   const renderField = (field) => {
     if (field === 'group') {
@@ -348,8 +348,8 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
       ) : (
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-control" style={{ backgroundColor: `color-mix(in oklch, ${accent} 12%, transparent)` }}>
-              <command.icon size={20} style={{ color: accent }} />
+            <div className={`flex h-10 w-10 items-center justify-center rounded-control ${cmdTone.icon}`}>
+              <command.icon size={20} />
             </div>
             <div>
               <p className="text-h2 text-[var(--nx-text)]">{command.title}</p>

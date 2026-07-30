@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2, FileText
+  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -31,23 +31,14 @@ const EMPTY_STATS = {
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, outside: 0 },
 };
 
-const StreamItem = ({ ev, onClick, showIssuer }) => (
-  <button
-    onClick={onClick}
-    className="flex w-full items-center gap-3 rounded-control px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
-  >
-    <span
-      className="h-2 w-2 shrink-0 rounded-full"
-      style={{ backgroundColor: ev.type === 'alert' ? 'var(--nx-danger)' : 'var(--nx-success)' }}
-    />
-    <span className="flex-1 truncate text-body text-[var(--nx-text)]">{ev.label}</span>
-    {showIssuer && ev.issuer && <span className="hidden sm:block text-caption text-[var(--nx-text-muted)]">{ev.issuer}</span>}
-    <span className="shrink-0 text-caption text-[var(--nx-text-muted)]">{ev.time}</span>
-    <ChevronRight size={14} className="shrink-0 text-[var(--nx-text-muted)]" />
-  </button>
-);
+const eventToMessage = (ev) => {
+  const label = ev.label || '';
+  const issuer = ev.issuer ? ` · por ${ev.issuer}` : '';
+  const time = ev.time ? ` a las ${ev.time}` : '';
+  return `${label}${time}${issuer}.`;
+};
 
-const StreamList = ({ events, loading, emptyTitle, showIssuer, onItemClick }) => {
+const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
   if (loading) {
     return (
       <Surface className="p-6">
@@ -63,11 +54,24 @@ const StreamList = ({ events, loading, emptyTitle, showIssuer, onItemClick }) =>
     );
   }
   return (
-    <Surface className="divide-y divide-[var(--nx-border)]">
+    <div className="space-y-3">
       {events.map((ev, i) => (
-        <StreamItem key={i} ev={ev} showIssuer={showIssuer} onClick={() => onItemClick?.(ev)} />
+        <Surface key={i} className="p-4">
+          <NexoChatBubble
+            message={eventToMessage(ev)}
+            timestamp={ev.time || 'Ahora'}
+          />
+          {onItemClick && (
+            <button
+              onClick={() => onItemClick(ev)}
+              className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
+            >
+              Ver detalles <ChevronRight size={12} />
+            </button>
+          )}
+        </Surface>
       ))}
-    </Surface>
+    </div>
   );
 };
 
@@ -90,14 +94,14 @@ const Dashboard = () => {
     case ROLES.COORDINADOR:
       return <AdminDashboard stats={stats} loading={loading} />;
     case ROLES.SECRETARIA:
-      return <SecretaryDashboard tasks={stats.pendingTasks || []} loading={loading} />;
+      return <SecretaryDashboard stats={stats} loading={loading} />;
     case ROLES.PSICORIENTADOR:
-      return <CounselorDashboard tasks={stats.pendingTasks || []} loading={loading} />;
+      return <CounselorDashboard stats={stats} loading={loading} />;
     case ROLES.DOCENTE:
       return <TeacherDashboard stats={stats} loading={loading} />;
     case ROLES.PORTERO:
     case ROLES.AUXILIAR:
-      return <StaffDashboard tasks={stats.pendingTasks || []} loading={loading} />;
+      return <StaffDashboard stats={stats} loading={loading} />;
     default:
       return (
         <EmptyState
@@ -194,7 +198,7 @@ const AdminDashboard = ({ stats, loading }) => {
         </div>
       )}
 
-      <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+      <StreamList events={stream} loading={eventsLoading} showIssuer />
 
       <AnimatePresence>
         {activeCategory && (
@@ -212,64 +216,78 @@ const AdminDashboard = ({ stats, loading }) => {
   );
 };
 
-// ── Secretaria / Psicoorientador ──────────────────────────────────────────────
+// ── Secretaria ────────────────────────────────────────────────────────────────
 
-const SecretaryDashboard = ({ tasks = [], loading }) => {
+const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        setEvents(res?.status === 'ok' ? res.data || [] : []);
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
+
   return (
     <div className="space-y-8">
-      {loading ? (
-        <Surface className="p-6">
-          <NexoChatSkeleton />
-        </Surface>
-      ) : tasks.length > 0 ? (
-        <div className="space-y-3">
-          {tasks.slice(0, 6).map((t, i) => (
-            <SituationLine
-              key={i}
-              icon={<CheckCircle2 size={18} />}
-              label="Tarea"
-              value={t.label}
-              detail={t.time}
-              scheme="accent"
-            />
-          ))}
-        </div>
+      {parentLoading ? (
+        <SkeletonMetrics count={4} />
       ) : (
-        <Surface className="p-6">
-          <NexoChatBubble message="¡Todo está al día! No tienes tareas pendientes para hoy." />
-        </Surface>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Estudiantes" value={Object.keys(stats?.studentsByGroup || {}).length} tone="accent" />
+          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="success" />
+          <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Alertas" value={stats?.alertsCount ?? 0} tone="danger" />
+          <StatCard icon={<UserMinus size={18} strokeWidth={1.75} />} label="Ausentes" value={stats?.absentCount ?? 0} tone="warning" />
+        </div>
       )}
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>
   );
 };
 
 // ── Psicorientador ────────────────────────────────────────────────────────────
 
-const CounselorDashboard = ({ tasks = [], loading }) => {
+const CounselorDashboard = ({ stats, loading: parentLoading }) => {
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        setEvents(res?.status === 'ok' ? res.data || [] : []);
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
+
   return (
     <div className="space-y-8">
-      {loading ? (
-        <Surface className="p-6">
-          <NexoChatSkeleton />
-        </Surface>
-      ) : tasks.length > 0 ? (
-        <div className="space-y-3">
-          {tasks.slice(0, 6).map((t, i) => (
-            <SituationLine
-              key={i}
-              icon={<CheckCircle2 size={18} />}
-              label="Solicitud"
-              value={t.label}
-              detail={t.time}
-              scheme="accent"
-            />
-          ))}
-        </div>
+      {parentLoading ? (
+        <SkeletonMetrics count={4} />
       ) : (
-        <Surface className="p-6">
-          <NexoChatBubble message="¡Todo está al día! No tienes solicitudes pendientes." />
-        </Surface>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Estudiantes" value={Object.keys(stats?.studentsByGroup || {}).length} tone="accent" />
+          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="success" />
+          <StatCard icon={<AlertTriangle size={18} strokeWidth={1.75} />} label="Alertas" value={stats?.alertsCount ?? 0} tone="danger" />
+          <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Seguimientos" value={0} tone="warning" />
+        </div>
       )}
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>
   );
 };
@@ -407,9 +425,12 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               onClick={() => setGroupOpen((v) => !v)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
-              <div>
-                <p className="text-caption uppercase text-[var(--nx-text-muted)]">Seleccionar grupo · para revisar asistencia diaria</p>
-                <p className="text-h3 text-[var(--nx-text)] mt-0.5" style={{ fontWeight: '600' }}>{selectedGroup || 'Elegir grupo'}</p>
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                <div>
+                  <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
+                  <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup || 'Elegir grupo'}</p>
+                </div>
               </div>
               <Search size={18} className="text-[var(--nx-text-muted)]" />
             </button>
@@ -491,7 +512,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             )
           )}
 
-          <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
+          <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
 
           <AnimatePresence>
             {activeCategory && (
@@ -670,12 +691,16 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
   return (
     <>
       <Drawer
-        title={`${config?.label} — ${groupName}`}
+        title={config?.label}
         context={`${filteredData.length} estudiante${filteredData.length !== 1 ? 's' : ''}`}
         onClose={onClose}
         size="lg"
       >
         <div className="p-6">
+          <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <p className="text-label text-[var(--nx-text)]">{groupName}</p>
+          </div>
           <div className="mb-4">
             <Input
               placeholder="Buscar estudiante…"
@@ -722,14 +747,14 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             </Surface>
           ) : (
             <EmptyState
-              icon={<CalendarDays size={32} className="text-[var(--nx-border)]" />}
-              title={searchQuery ? 'Sin coincidencias' : 'Sin registros hoy'}
+              icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
+              title={searchQuery ? 'Sin coincidencias' : category === 'present' ? 'Todo en orden por aquí!' : 'Todo en orden por aquí!'}
               description={
                 searchQuery
                   ? 'Ningún estudiante coincide con tu búsqueda.'
-                  : emptyWarning
-                    ? 'Este grupo no tiene registros de ingreso para el día de hoy. Verifica que el nodo de control esté operativo.'
-                    : 'No se encontraron estudiantes en esta categoría para el período seleccionado.'
+                  : category === 'present'
+                    ? 'Este grupo no ha tenido ingresos el día de hoy.'
+                    : 'No hay estudiantes en esta categoría para el período seleccionado.'
               }
             />
           )}
@@ -795,31 +820,38 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
-const StaffDashboard = ({ tasks = [], loading }) => {
+const StaffDashboard = ({ stats, loading: parentLoading }) => {
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const res = await dashboardApi.getEvents();
+        setEvents(res?.status === 'ok' ? res.data || [] : []);
+      } catch (e) {
+        console.error(e);
+        setEvents([]);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
+
   return (
     <div className="space-y-8">
-      {loading ? (
-        <Surface className="p-6">
-          <NexoChatSkeleton />
-        </Surface>
-      ) : tasks.length > 0 ? (
-        <div className="space-y-3">
-          {tasks.slice(0, 6).map((t, i) => (
-            <SituationLine
-              key={i}
-              icon={<CheckCircle2 size={18} />}
-              label="Solicitud"
-              value={t.label}
-              detail={t.time}
-              scheme="accent"
-            />
-          ))}
-        </div>
+      {parentLoading ? (
+        <SkeletonMetrics count={4} />
       ) : (
-        <Surface className="p-6">
-          <NexoChatBubble message="¡Todo está al día! No tienes solicitudes pendientes para hoy." />
-        </Surface>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Presentes" value={stats?.presentCount ?? 0} tone="accent" />
+          <StatCard icon={<UserMinus size={18} strokeWidth={1.75} />} label="Ausentes" value={stats?.absentCount ?? 0} tone="warning" />
+          <StatCard icon={<AlertTriangle size={18} strokeWidth={1.75} />} label="Alertas" value={stats?.alertsCount ?? 0} tone="danger" />
+          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="success" />
+        </div>
       )}
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>
   );
 };

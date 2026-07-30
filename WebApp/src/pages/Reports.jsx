@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
 import {
   FileText, Users, ShieldAlert, MessageSquare, Activity,
-  Search, X, Download, CalendarDays, Filter, ChevronRight
+  Search, X, Download, CalendarDays, Filter, ChevronRight, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
@@ -164,7 +164,7 @@ const ReportDrawer = ({ activeSub, onClose }) => {
 
         {error ? <EmptyState icon={<X size={32} className="text-[var(--nx-danger)]" />} title="Error" description={error} /> :
          loading ? <SkeletonRows count={5} /> :
-         filteredRows.length === 0 ? <EmptyState icon={<FileText size={32} className="text-[var(--nx-border)]" />} title="Sin registros" description="Ajusta los filtros y consulta." /> : (
+         filteredRows.length === 0 ? <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="Ajusta los filtros y consulta para ver resultados." /> : (
           <Surface className="overflow-x-auto">
             <table className="w-full min-w-[600px]">
               <thead>

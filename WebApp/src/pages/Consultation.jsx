@@ -58,10 +58,10 @@ const MODULE_SLUGS = {
 };
 
 const TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]', text: 'text-[var(--nx-accent)]', icon: 'text-[color-mix(in_oklch,var(--nx-accent)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_25%,var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_10%,transparent)]', text: 'text-[var(--nx-success)]', icon: 'text-[color-mix(in_oklch,var(--nx-success)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-success)_25%,var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_11%,transparent)]', text: 'text-[var(--nx-warning)]', icon: 'text-[color-mix(in_oklch,var(--nx-warning)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_25%,var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)]', text: 'text-[var(--nx-danger)]', icon: 'text-[color-mix(in_oklch,var(--nx-danger)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_25%,var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_35%,var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-success)_35%,var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_16%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_35%,var(--nx-border))]' },
 };
 
 const localDateStr = (date = new Date()) => {
@@ -415,8 +415,8 @@ const Consultation = () => {
                   className={`flex flex-col rounded-panel border p-5 text-left transition-all duration-fast ${ts.bg} ${ts.border} hover:shadow-medium`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
-                      <SubIcon size={20} className={ts.icon} />
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.icon}`}>
+                      <SubIcon size={20} />
                     </div>
                     <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                   </div>
@@ -452,8 +452,8 @@ const Consultation = () => {
                 className={`flex flex-col rounded-panel border p-5 text-left transition-all duration-fast ${ts.bg} ${ts.border} hover:shadow-medium`}
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
-                    <ModIcon size={20} className={ts.icon} />
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.icon}`}>
+                    <ModIcon size={20} />
                   </div>
                   <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                 </div>

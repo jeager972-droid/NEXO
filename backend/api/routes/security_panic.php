@@ -106,7 +106,7 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
         // 4. Notificar a Rectores y Coordinadores del mismo colegio
         $stmt = $conn->prepare("
             INSERT INTO notifications (school_id, user_id, title, message, type, created_at)
-            SELECT school_id, user_id, 'ALERTA DE SEGURIDAD', 'Se activó el botón de pánico. Todas las sesiones y dispositivos han sido invalidados.', 'CRITICAL', NOW()
+            SELECT school_id, user_id, 'ALERTA DE SEGURIDAD', 'Se activó el botón de pánico. Todas las sesiones y dispositivos han sido invalidados. Ver detalles.', 'CRITICAL', NOW()
             FROM users u
             JOIN roles r ON u.role_id = r.role_id
             WHERE r.role_name IN ('RECTOR', 'COORDINATOR') AND u.deleted_at IS NULL AND u.school_id = ?

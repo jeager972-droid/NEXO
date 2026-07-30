@@ -9,18 +9,18 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const tones = {
   neutral:  'border-[var(--nx-border)] bg-[var(--nx-surface)]',
-  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-accent)_14%,white)]',
-  success:  'border-[color-mix(in_oklch,var(--nx-success)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-success)_14%,white)]',
-  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_16%,white)]',
-  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_14%,white)]',
+  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-accent)_14%,var(--nx-tone-mix))]',
+  success:  'border-[color-mix(in_oklch,var(--nx-success)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-success)_14%,var(--nx-tone-mix))]',
+  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_16%,var(--nx-tone-mix))]',
+  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_14%,var(--nx-tone-mix))]',
 };
 
 const iconTile = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]',
-  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,black)]',
-  success:  'bg-[color-mix(in_oklch,var(--nx-success)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,black)]',
-  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,black)]',
-  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,black)]',
+  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]',
+  success:  'bg-[color-mix(in_oklch,var(--nx-success)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]',
+  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]',
+  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]',
 };
 
 const trendMeta = {

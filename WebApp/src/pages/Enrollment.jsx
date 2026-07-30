@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User } from 'lucide-react';
+import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface, Section } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
@@ -286,7 +286,7 @@ const Enrollment = () => {
         <SkeletonCards count={6} />
       ) : students.length === 0 ? (
         <Surface>
-          <EmptyState icon={<UserPlus size={32} className="text-[var(--nx-border)]" />} title="Sin estudiantes" description="No se encontraron estudiantes con los filtros actuales." />
+          <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="No se encontraron estudiantes con los filtros actuales." />
         </Surface>
       ) : (
         <>
