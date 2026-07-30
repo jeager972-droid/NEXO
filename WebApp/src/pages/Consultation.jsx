@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, IdCard, ClipboardList, Mail, History, DoorOpen } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
@@ -276,7 +276,7 @@ const Consultation = () => {
         items: [
           { label: 'Estudiantes', icon: GraduationCap },
           { label: 'Grupos', icon: Users },
-          { label: 'Acudientes', icon: IdCard },
+          { label: 'Acudientes', icon: ContactRound },
           { label: 'Matrículas', icon: ClipboardList },
           { label: 'Cambios Registro', icon: FileText },
         ]
