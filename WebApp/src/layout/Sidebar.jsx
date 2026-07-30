@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { getRoleDisplay, getSecondaryActions } from '../config/roles';
+import { getRoleDisplay, getSecondaryActions, SIDEBAR_ITEMS } from '../config/roles';
 import { LogOut, Sun, Moon, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
@@ -39,7 +39,8 @@ const NavItem = ({ item, onClick, showNotifDot }) => {
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
-  const items = getSecondaryActions(user?.role);
+  const secondaryItems = getSecondaryActions(user?.role);
+  const allItems = SIDEBAR_ITEMS.filter((i) => i.roles.includes(user?.role));
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
   const [notifCount, setNotifCount] = useState(0);
@@ -95,14 +96,28 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-1" aria-label="Módulos principales">
-          {items.map((item) => (
-            <NavItem
-              key={item.path}
-              item={item}
-              onClick={closeMobile}
-              showNotifDot={item.path === '/notificaciones' && notifCount > 0}
-            />
-          ))}
+          {/* Mobile: only secondary actions (primary are in bottom bar) */}
+          <div className="lg:hidden">
+            {secondaryItems.map((item) => (
+              <NavItem
+                key={item.path}
+                item={item}
+                onClick={closeMobile}
+                showNotifDot={item.path === '/notificaciones' && notifCount > 0}
+              />
+            ))}
+          </div>
+          {/* Desktop: all items */}
+          <div className="hidden lg:block">
+            {allItems.map((item) => (
+              <NavItem
+                key={item.path}
+                item={item}
+                onClick={closeMobile}
+                showNotifDot={item.path === '/notificaciones' && notifCount > 0}
+              />
+            ))}
+          </div>
         </nav>
 
         {/* Footer: theme + user */}

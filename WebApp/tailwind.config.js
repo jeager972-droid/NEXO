@@ -21,13 +21,13 @@ export default {
       colors: {
         // NEXO Quiet Operations — OKLCH semantic tokens (03_DESIGN_SYSTEM.md)
         canvas: {
-          DEFAULT: 'oklch(97% 0.008 80)',
+          DEFAULT: 'oklch(100% 0 0)',
           dark:    'oklch(18% 0.008 245)',
         },
         surface: {
-          DEFAULT:     'oklch(99.3% 0.004 245)',
+          DEFAULT:     'oklch(100% 0 0)',
           dark:        'oklch(22% 0.009 245)',
-          subtle:      'oklch(96% 0.009 245)',
+          subtle:      'oklch(97% 0.006 245)',
           'subtle-dark': 'oklch(26% 0.010 245)',
         },
         // Semantic text colors

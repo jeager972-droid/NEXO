@@ -17,13 +17,12 @@ import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Surface } from '../components/ui/Surface';
-import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Drawer } from '../components/ui/Overlay';
 import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
+import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 import { humanizeError } from '../utils/messages';
 
 const EMPTY_STATS = {
@@ -51,17 +50,15 @@ const StreamItem = ({ ev, onClick, showIssuer }) => (
 const StreamList = ({ events, loading, emptyTitle, showIssuer, onItemClick }) => {
   if (loading) {
     return (
-      <Surface className="p-5 space-y-3">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
+      <Surface className="p-6">
+        <NexoChatSkeleton />
       </Surface>
     );
   }
   if (!events.length) {
     return (
-      <Surface>
-        <EmptyState title={emptyTitle} description="Aún no hay novedades para mostrar." />
+      <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+        <NexoChatBubble message="¡Todo está al día! No hay novedades recientes para mostrar." />
       </Surface>
     );
   }
@@ -125,14 +122,11 @@ const getGreeting = () => {
 
 const AdminDashboard = ({ stats, loading }) => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [activePerms, setActivePerms] = useState([]);
-  const [permsLoading, setPermsLoading] = useState(true);
 
   const localDateStr = (date = new Date()) => {
     const y = date.getFullYear();
@@ -183,7 +177,7 @@ const AdminDashboard = ({ stats, loading }) => {
   return (
     <div className="space-y-8">
       {loading ? (
-        <SkeletonMetrics count={4} className="grid-cols-2 md:grid-cols-4" />
+        <SkeletonMetrics count={4} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {kpis.map((k) => (
@@ -199,44 +193,6 @@ const AdminDashboard = ({ stats, loading }) => {
           ))}
         </div>
       )}
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 border-l-2 border-[var(--nx-accent)] pl-3">
-          <h2 className="text-h2 tracking-[-0.02em] text-[var(--nx-text)]">Permisos activos</h2>
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/consulta')}>
-          Ver todos
-        </Button>
-      </div>
-      {permsLoading ? (
-          <Surface className="p-5 space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </Surface>
-        ) : activePerms.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activePerms.slice(0, 6).map((p, i) => (
-              <Card key={i} className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-body text-[var(--nx-text)] truncate font-medium">{p.student_name || `${p.last_name || ''} ${p.first_name || ''}`.trim() || 'Estudiante'}</p>
-                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">{p.group_name || 'Sin grupo'}</p>
-                  </div>
-                  <Badge scheme="success" dot>Activo</Badge>
-                </div>
-                <div className="mt-3 flex items-center gap-3 text-caption text-[var(--nx-text-muted)]">
-                  {p.permiso_type && <span>{p.permiso_type}</span>}
-                  {p.time_start && <span>· {p.time_start}{p.time_end ? `–${p.time_end}` : ''}</span>}
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Surface>
-            <EmptyState icon={<FileText size={32} className="text-[var(--nx-border)]" />} title="Sin permisos activos" description="No hay permisos vigentes para hoy." />
-          </Surface>
-        )}
 
       <StreamList events={stream} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
 
@@ -262,10 +218,8 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
   return (
     <div className="space-y-8">
       {loading ? (
-        <Surface className="p-5 space-y-3">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+        <Surface className="p-6">
+          <NexoChatSkeleton />
         </Surface>
       ) : tasks.length > 0 ? (
         <div className="space-y-3">
@@ -281,12 +235,8 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
           ))}
         </div>
       ) : (
-        <Surface>
-          <EmptyState
-            icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
-            title="Sin tareas pendientes"
-            description="No tienes tareas asignadas para hoy."
-          />
+        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+          <NexoChatBubble message="¡Todo está al día! No tienes tareas pendientes para hoy." />
         </Surface>
       )}
     </div>
@@ -299,10 +249,8 @@ const CounselorDashboard = ({ tasks = [], loading }) => {
   return (
     <div className="space-y-8">
       {loading ? (
-        <Surface className="p-5 space-y-3">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+        <Surface className="p-6">
+          <NexoChatSkeleton />
         </Surface>
       ) : tasks.length > 0 ? (
         <div className="space-y-3">
@@ -318,12 +266,8 @@ const CounselorDashboard = ({ tasks = [], loading }) => {
           ))}
         </div>
       ) : (
-        <Surface>
-          <EmptyState
-            icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
-            title="Sin solicitudes pendientes"
-            description="No tienes solicitudes asignadas."
-          />
+        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+          <NexoChatBubble message="¡Todo está al día! No tienes solicitudes pendientes." />
         </Surface>
       )}
     </div>
@@ -447,9 +391,14 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   return (
     <div className="space-y-8">
       {parentLoading ? (
-        <Surface className="p-6 space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
+        <Surface className="relative">
+          <div className="flex w-full items-center justify-between px-5 py-4">
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-48" />
+              <Skeleton className="h-5 w-40" />
+            </div>
+            <Skeleton className="h-5 w-5 rounded-control" />
+          </div>
         </Surface>
       ) : (
         <>
@@ -459,8 +408,8 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
               <div>
-                <p className="text-caption uppercase text-[var(--nx-text-muted)]">Seleccionar grupo</p>
-                <p className="text-h3 text-[var(--nx-accent)] mt-0.5">{selectedGroup || '— Elegir grupo —'}</p>
+                <p className="text-caption uppercase text-[var(--nx-text-muted)]">Seleccionar grupo · para revisar asistencia diaria</p>
+                <p className="text-h3 text-[var(--nx-text)] mt-0.5" style={{ fontWeight: '600' }}>{selectedGroup || '— Elegir grupo —'}</p>
               </div>
               <Search size={18} className="text-[var(--nx-text-muted)]" />
             </button>
@@ -492,7 +441,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                         key={g}
                         onClick={() => { setSelectedGroup(g); setGroupOpen(false); setGroupQuery(''); }}
                         className="w-full border-b border-[var(--nx-border)] px-4 py-3 text-left text-body text-[var(--nx-text)] transition-colors last:border-0 hover:bg-[var(--nx-surface-subtle)]"
-                        style={{ color: g === selectedGroup ? 'var(--nx-accent)' : undefined }}
+                        style={{ fontWeight: g === selectedGroup ? '600' : undefined }}
                       >
                         {g}
                       </button>
@@ -526,7 +475,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           {selectedGroup && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {groupLoading ? (
-                <SkeletonMetrics count={4} className="grid-cols-2 md:grid-cols-4" />
+                <SkeletonMetrics count={4} />
               ) : (
                 cards.map((s) => (
                   <StatCard
@@ -850,10 +799,8 @@ const StaffDashboard = ({ tasks = [], loading }) => {
   return (
     <div className="space-y-8">
       {loading ? (
-        <Surface className="p-5 space-y-3">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+        <Surface className="p-6">
+          <NexoChatSkeleton />
         </Surface>
       ) : tasks.length > 0 ? (
         <div className="space-y-3">
@@ -869,12 +816,8 @@ const StaffDashboard = ({ tasks = [], loading }) => {
           ))}
         </div>
       ) : (
-        <Surface>
-          <EmptyState
-            icon={<CheckCircle2 size={32} className="text-[var(--nx-border)]" />}
-            title="Sin solicitudes pendientes"
-            description="No tienes solicitudes asignadas para hoy."
-          />
+        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+          <NexoChatBubble message="¡Todo está al día! No tienes solicitudes pendientes para hoy." />
         </Surface>
       )}
     </div>

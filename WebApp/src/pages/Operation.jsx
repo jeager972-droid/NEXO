@@ -26,19 +26,27 @@ import { SkeletonCards } from '../components/ui/Skeleton';
 import { Stepper } from '../components/ui/Stepper';
 import { OperationResult } from '../components/patterns/OperationResult';
 import { humanizeError } from '../utils/messages';
+import { NexoChatBubble } from '../components/patterns/NexoChat';
 
 const COMMANDS_CATALOG = [
-  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'date', 'time', 'message'] },
-  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'] },
-  { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'] },
-  { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'] },
-  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'] },
-  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'] },
-  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason'] },
-  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.' },
-  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason', 'timeRange'] },
-  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'location', 'message', 'targets'] },
+  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'date', 'time', 'message'], tone: 'accent' },
+  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'], tone: 'success' },
+  { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
+  { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'], tone: 'warning' },
+  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent' },
+  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'], tone: 'accent' },
+  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason'], tone: 'success' },
+  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
+  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason', 'timeRange'], tone: 'success' },
+  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
 ];
+
+const CMD_TONE_STYLES = {
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_8%,transparent)]', text: 'text-[var(--nx-accent)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-accent)_40%,var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_8%,transparent)]', text: 'text-[var(--nx-success)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-success)_40%,var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_9%,transparent)]', text: 'text-[var(--nx-warning)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-warning)_40%,var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)]', text: 'text-[var(--nx-danger)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-danger)_40%,var(--nx-border))]' },
+};
 
 const FIELD_LABELS = {
   group: 'Grupo', student: 'Estudiante', date: 'Fecha', time: 'Hora', timeRange: 'Rango de horas',
@@ -113,16 +121,8 @@ const Operation = () => {
       {!activeCommand ? (
         <>
           {filteredCommands.length === 0 ? (
-            <Surface className="p-6">
-              <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] font-bold text-body">N</div>
-                <div className="flex-1">
-                  <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                    <p className="text-body text-[var(--nx-text)] leading-relaxed">¡Todo está al día! No hay operaciones pendientes en este momento.</p>
-                  </div>
-                  <p className="text-caption text-[var(--nx-text-muted)] mt-1 px-1">NEXO · Ahora</p>
-                </div>
-              </div>
+            <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+              <NexoChatBubble message="¡Todo está al día! No hay operaciones pendientes en este momento." />
             </Surface>
           ) : (
             <Surface className="p-5 md:p-6 shadow-medium">
@@ -131,17 +131,20 @@ const Operation = () => {
                 <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCommands.map((cmd) => (
-                  <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className="p-5 shadow-low hover:shadow-medium transition-shadow duration-fast">
-                    <div className="flex items-start justify-between">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_12%,transparent)]">
-                        <cmd.icon size={20} className="text-[var(--nx-accent)]" />
+                {filteredCommands.map((cmd) => {
+                  const ts = CMD_TONE_STYLES[cmd.tone] || CMD_TONE_STYLES.accent;
+                  return (
+                    <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className={`p-5 shadow-low hover:shadow-medium transition-shadow duration-fast ${ts.border}`}>
+                      <div className="flex items-start justify-between">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.bg}`}>
+                          <cmd.icon size={20} className={ts.text} />
+                        </div>
+                        <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                       </div>
-                      <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
-                    </div>
-                    <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
-                  </Card>
-                ))}
+                      <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
+                    </Card>
+                  );
+                })}
               </div>
             </Surface>
           )}

@@ -22,15 +22,16 @@ export const SkeletonText = ({ lines = 1, className }) => (
 
 /** Rejilla de métricas en carga: conserva el layout final para evitar salto. */
 export const SkeletonMetrics = ({ count = 4, className }) => (
-  <div className={cn('grid grid-cols-2 gap-4 lg:grid-cols-4', className)}>
+  <div className={cn('grid grid-cols-2 md:grid-cols-4 gap-4', className)}>
     {Array.from({ length: count }).map((_, i) => (
       <div
         key={i}
         className="rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5"
       >
-        <Skeleton className="h-8 w-8 rounded-control" />
+        <Skeleton className="h-9 w-9 rounded-control" />
         <Skeleton className="mt-4 h-7 w-14" />
         <Skeleton className="mt-2.5 h-3 w-20" />
+        <Skeleton className="mt-2 h-3 w-16" />
       </div>
     ))}
   </div>

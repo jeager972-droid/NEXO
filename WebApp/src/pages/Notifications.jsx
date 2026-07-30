@@ -15,8 +15,8 @@ import { ROLES } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
+import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
 const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
@@ -191,7 +191,9 @@ const Notifications = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Surface><SkeletonRows count={4} /></Surface>
+        <Surface className="p-6">
+          <NexoChatSkeleton />
+        </Surface>
       </div>
     );
   }
@@ -207,16 +209,8 @@ const Notifications = () => {
       )}
 
       {notifications.length === 0 ? (
-        <Surface className="p-6">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] font-bold text-body">N</div>
-            <div className="flex-1">
-              <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                <p className="text-body text-[var(--nx-text)] leading-relaxed">¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí.</p>
-              </div>
-              <p className="text-caption text-[var(--nx-text-muted)] mt-1 px-1">NEXO · Ahora</p>
-            </div>
-          </div>
+        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+          <NexoChatBubble message="¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí." />
         </Surface>
       ) : (
         <div className="space-y-4">
@@ -251,12 +245,7 @@ const Notifications = () => {
                 <p className="text-body text-[var(--nx-text)] leading-relaxed">{detail.message}</p>
               </div>
               {(!detail.message || detail.message.trim() === '') && (
-                <div className="flex items-start gap-2">
-                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] font-bold text-caption">N</div>
-                  <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-3 py-2">
-                    <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">No se agregaron detalles en el mensaje.</p>
-                  </div>
-                </div>
+                <NexoChatBubble message="No se agregaron detalles en el mensaje." />
               )}
               {(() => {
                 const meta = parseMeta(detail.metadata_json);

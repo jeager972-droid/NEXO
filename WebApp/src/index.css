@@ -10,9 +10,9 @@
 /* ── Design tokens — Light theme (default) ── */
 :root {
   /* Color */
-  --nx-canvas:        oklch(97% 0.008 80);
-  --nx-surface:       oklch(99.3% 0.004 245);
-  --nx-surface-subtle: oklch(96% 0.009 245);
+  --nx-canvas:        oklch(100% 0 0);
+  --nx-surface:       oklch(100% 0 0);
+  --nx-surface-subtle: oklch(97% 0.006 245);
   --nx-text:          oklch(23% 0.018 245);
   --nx-text-muted:    oklch(48% 0.018 245);
   --nx-border:        oklch(88% 0.010 245);

@@ -8,11 +8,11 @@ import { cn } from '../../utils/cn';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const tones = {
-  neutral:  'border-[var(--nx-border)]',
-  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_28%,var(--nx-border))]',
-  success:  'border-[color-mix(in_oklch,var(--nx-success)_28%,var(--nx-border))]',
-  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_30%,var(--nx-border))]',
-  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_28%,var(--nx-border))]',
+  neutral:  'border-[var(--nx-border)] bg-[var(--nx-surface)]',
+  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_28%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-accent)_5%,var(--nx-surface))]',
+  success:  'border-[color-mix(in_oklch,var(--nx-success)_28%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-success)_5%,var(--nx-surface))]',
+  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_30%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_6%,var(--nx-surface))]',
+  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_28%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_5%,var(--nx-surface))]',
 };
 
 const iconTile = {
@@ -51,7 +51,7 @@ export const StatCard = ({
       type={interactive ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'nx-pressable rounded-surface border bg-[var(--nx-surface)] p-5 text-left',
+        'nx-pressable rounded-surface border p-5 text-left',
         tones[tone] ?? tones.neutral,
         interactive && 'cursor-pointer hover:shadow-medium',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]',
