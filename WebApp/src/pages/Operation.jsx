@@ -42,10 +42,10 @@ const COMMANDS_CATALOG = [
 ];
 
 const CMD_TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_8%,transparent)]', text: 'text-[var(--nx-accent)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-accent)_40%,var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_8%,transparent)]', text: 'text-[var(--nx-success)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-success)_40%,var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_9%,transparent)]', text: 'text-[var(--nx-warning)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-warning)_40%,var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)]', text: 'text-[var(--nx-danger)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-danger)_40%,var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)]', text: 'text-[var(--nx-accent)]', icon: 'text-[color-mix(in_oklch,var(--nx-accent)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_25%,var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_10%,transparent)]', text: 'text-[var(--nx-success)]', icon: 'text-[color-mix(in_oklch,var(--nx-success)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-success)_25%,var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_11%,transparent)]', text: 'text-[var(--nx-warning)]', icon: 'text-[color-mix(in_oklch,var(--nx-warning)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_25%,var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)]', text: 'text-[var(--nx-danger)]', icon: 'text-[color-mix(in_oklch,var(--nx-danger)_75%,black)]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_25%,var(--nx-border))]' },
 };
 
 const FIELD_LABELS = {
@@ -125,7 +125,7 @@ const Operation = () => {
               <NexoChatBubble message="¡Todo está al día! No hay operaciones pendientes en este momento." />
             </Surface>
           ) : (
-            <Surface className="p-5 md:p-6 shadow-medium">
+            <>
               <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
                 <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
                 <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
@@ -134,20 +134,24 @@ const Operation = () => {
                 {filteredCommands.map((cmd) => {
                   const ts = CMD_TONE_STYLES[cmd.tone] || CMD_TONE_STYLES.accent;
                   return (
-                    <Card key={cmd.id} asAction onClick={() => setActiveCommand(cmd)} className={`p-5 shadow-low hover:shadow-medium transition-shadow duration-fast ${ts.border}`}>
+                    <button
+                      key={cmd.id}
+                      onClick={() => setActiveCommand(cmd)}
+                      className={`flex flex-col p-5 rounded-panel border ${ts.bg} ${ts.border} hover:shadow-medium transition-all duration-fast text-left`}
+                    >
                       <div className="flex items-start justify-between">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.bg}`}>
-                          <cmd.icon size={20} className={ts.text} />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface)]">
+                          <cmd.icon size={20} className={ts.icon} />
                         </div>
                         <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                       </div>
                       <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
-                    </Card>
+                    </button>
                   );
                 })}
               </div>
-            </Surface>
-          )}
+            </>
+          )
         </>
       ) : (
         <CommandForm

@@ -1,19 +1,19 @@
 /**
  * SCR-PRO-01 Profile
- * B-09: una sola acción primaria por sección.
- * Usa PageHeader, PasswordInput, ConfirmDialog, humanizeError.
+ * Perfil limpio: datos censurados con toggle de ojo, verificación por contraseña,
+ * cambio de contacto vía diálogo con OTP, y cierre de sesión.
  */
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { usersApi } from '../api/users';
-import { Camera, Mail, ShieldCheck, Key, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
-import { ConfirmDialog } from '../components/ui/Overlay';
+import { Dialog } from '../components/ui/Overlay';
 import { humanizeError } from '../utils/messages';
 
 const compressImage = (file, maxWidth = 800, quality = 0.85) =>
@@ -37,6 +37,21 @@ const compressImage = (file, maxWidth = 800, quality = 0.85) =>
     reader.readAsDataURL(file);
   });
 
+const censor = (str, type) => {
+  if (!str) return '—';
+  if (type === 'email') {
+    const [name, domain] = str.split('@');
+    if (!domain) return '••••••';
+    const visible = name.slice(0, 2);
+    return `${visible}${'•'.repeat(Math.max(4, name.length - 2))}@${domain}`;
+  }
+  if (type === 'phone') {
+    const last4 = str.slice(-4);
+    return `••••••${last4}`;
+  }
+  return '••••••••';
+};
+
 const Toast = ({ toast }) => {
   if (!toast) return null;
   return (
@@ -47,11 +62,64 @@ const Toast = ({ toast }) => {
   );
 };
 
-const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
+const RevealDialog = ({ onClose, onVerified, title }) => {
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleVerify = async () => {
+    if (!password) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await usersApi.changePassword(password, password);
+      if (res.status === 'ok') {
+        onVerified();
+      } else {
+        setError(res.message || 'Contraseña incorrecta');
+      }
+    } catch (e) {
+      setError(humanizeError(e, 'Contraseña incorrecta'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog
+      title={title}
+      description="Ingresa tu contraseña para ver este dato."
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" loading={loading} onClick={handleVerify}>Ver</Button>
+        </>
+      }
+    >
+      <PasswordInput
+        label="Contraseña"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoFocus
+      />
+      {error && <p className="mt-2 text-body-sm text-[var(--nx-danger)]">{error}</p>}
+    </Dialog>
+  );
+};
+
+const ChangeDialog = ({ field, currentLabel, onClose, onSaved }) => {
+  const [newValue, setNewValue] = useState('');
+  const [step, setStep] = useState('edit');
   const [code, setCode] = useState('');
-  const [step, setStep] = useState('idle');
+  const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [countdown, setCountdown] = useState(0);
+
+  const purpose = field === 'email' ? 'email_change' : field === 'phone' ? 'phone_change' : 'backup_email_change';
+  const verifyPurpose = field === 'email' ? 'email' : field === 'phone' ? 'phone' : 'backup_email';
+  const inputType = field === 'phone' ? 'tel' : 'email';
+  const placeholder = field === 'phone' ? 'Nuevo teléfono' : 'Nuevo correo';
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -59,11 +127,31 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  const sendCode = async () => {
-    setStep('sent');
-    setToast({ type: 'info', message: 'Enviando código por WhatsApp…' });
+  const handleSave = async () => {
+    if (!newValue.trim()) return;
+    setLoading(true);
+    setToast(null);
     try {
-      const res = await usersApi.sendVerificationCode(purpose, target);
+      const res = await usersApi.updateProfile(purpose, newValue);
+      if (res.status === 'ok') {
+        setStep('verify');
+        setToast({ type: 'success', message: 'Dato guardado. Ahora debes verificarlo.' });
+        setCountdown(60);
+      } else {
+        setToast({ type: 'error', message: res.message || 'Error al actualizar' });
+      }
+    } catch (e) {
+      setToast({ type: 'error', message: humanizeError(e, 'Error al actualizar') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendCode = async () => {
+    setLoading(true);
+    setToast(null);
+    try {
+      const res = await usersApi.sendVerificationCode(verifyPurpose, newValue);
       if (res.status === 'ok') {
         setToast({ type: 'success', message: 'Código enviado. Válido 10 min.' });
         setCountdown(60);
@@ -72,56 +160,89 @@ const OtpBlock = ({ purpose, target, label, onVerified, disabled }) => {
       }
     } catch (e) {
       setToast({ type: 'error', message: e.message || 'Error de red' });
+    } finally {
+      setLoading(false);
     }
   };
 
   const verifyCode = async () => {
     if (code.length !== 6) return;
-    setStep('verifying');
+    setLoading(true);
     try {
-      const res = await usersApi.verifyCode(purpose, code);
+      const res = await usersApi.verifyCode(verifyPurpose, code);
       if (res.status === 'ok') {
-        setStep('verified');
-        setToast({ type: 'success', message: 'Código verificado' });
-        onVerified?.();
+        setToast({ type: 'success', message: '¡Verificado correctamente!' });
+        setTimeout(() => onSaved(newValue), 800);
       } else {
-        setStep('sent');
         setToast({ type: 'error', message: res.message || 'Código inválido' });
       }
     } catch (e) {
-      setStep('sent');
       setToast({ type: 'error', message: e.message || 'Error de red' });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-2">
-      {step === 'idle' && (
-        <Button variant="secondary" size="sm" onClick={sendCode} disabled={disabled} leftIcon={<ShieldCheck size={14} />}>
-          Verificar {label}
-        </Button>
-      )}
-      {(step === 'sent' || step === 'verifying') && (
-        <div className="flex items-end gap-2">
+    <Dialog
+      title={`Cambiar ${currentLabel}`}
+      description={step === 'edit'
+        ? 'Ingresa el nuevo dato. Te enviaremos un código de verificación.'
+        : 'Te enviamos un código de 6 dígitos por WhatsApp' + (field !== 'phone' ? ' y correo' : '') + '.'
+      }
+      onClose={onClose}
+      size="sm"
+      footer={
+        step === 'edit' ? (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" loading={loading} onClick={handleSave}>Guardar y verificar</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" loading={loading} onClick={verifyCode}>Verificar código</Button>
+          </>
+        )
+      }
+    >
+      {step === 'edit' ? (
+        <Input
+          type={inputType}
+          placeholder={placeholder}
+          value={newValue}
+          onChange={(e) => setNewValue(e.target.value)}
+          autoFocus
+        />
+      ) : (
+        <div className="space-y-3">
           <Input
-            label={`Código de 6 dígitos`}
+            label="Código de 6 dígitos"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="000000"
-            disabled={step === 'verifying'}
+            autoFocus
           />
-          <Button size="sm" loading={step === 'verifying'} onClick={verifyCode}>Verificar</Button>
+          {countdown > 0 ? (
+            <p className="text-caption text-[var(--nx-text-muted)]">Reenviar en {countdown}s</p>
+          ) : (
+            <button
+              onClick={sendCode}
+              disabled={loading}
+              className="text-caption text-[var(--nx-accent)] hover:underline"
+            >
+              Reenviar código
+            </button>
+          )}
         </div>
       )}
-      {step === 'verified' && <Badge scheme="success" dot>Verificado</Badge>}
-      {countdown > 0 && <p className="text-caption text-[var(--nx-text-muted)]">Reenviar en {countdown}s</p>}
       <Toast toast={toast} />
-    </div>
+    </Dialog>
   );
 };
 
 const Profile = () => {
-  const { user, setUser } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const fileRef = useRef(null);
 
   const [profile, setProfile] = useState(null);
@@ -132,15 +253,18 @@ const Profile = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [backupEmail, setBackupEmail] = useState('');
+
+  const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
+  const [actionToast, setActionToast] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
-  const [actionToast, setActionToast] = useState(null);
-  const [contactToast, setContactToast] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [revealed, setRevealed] = useState({ email: false, phone: false, password: false });
+  const [revealDialog, setRevealDialog] = useState(null);
+  const [changeDialog, setChangeDialog] = useState(null);
+  const [fontScale, setFontScale] = useState(1);
 
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
@@ -181,45 +305,6 @@ const Profile = () => {
     }
   };
 
-  const updateContact = async (purpose, value) => {
-    if (!value.trim()) return;
-    setActionLoading(true);
-    setContactToast(null);
-    try {
-      const res = await usersApi.updateProfile(purpose, value);
-      if (res.status === 'ok') {
-        setContactToast({ type: 'success', message: 'Dato actualizado correctamente' });
-        setProfile((p) => (p ? { ...p, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup_email']: value } : p));
-        setVerified((v) => ({ ...v, [purpose === 'email_change' ? 'email' : purpose === 'phone_change' ? 'phone' : 'backup']: false }));
-      } else {
-        setContactToast({ type: 'error', message: res.message || 'Error al actualizar' });
-      }
-    } catch (e) {
-      setContactToast({ type: 'error', message: humanizeError(e, 'Error al actualizar') });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const deleteField = async (field) => {
-    setActionLoading(true);
-    setContactToast(null);
-    try {
-      const res = await usersApi.deleteField(field);
-      if (res.status === 'ok') {
-        setContactToast({ type: 'success', message: res.message || 'Eliminado correctamente' });
-        setProfile((p) => (p ? { ...p, [field]: null } : p));
-      } else {
-        setContactToast({ type: 'error', message: res.message || 'Error al eliminar' });
-      }
-    } catch (e) {
-      setContactToast({ type: 'error', message: humanizeError(e, 'Error al eliminar') });
-    } finally {
-      setActionLoading(false);
-      setDeleteConfirm(null);
-    }
-  };
-
   const changePassword = async (e) => {
     e.preventDefault();
     setActionToast(null);
@@ -249,19 +334,62 @@ const Profile = () => {
     }
   };
 
+  const handleReveal = (field) => {
+    if (revealed[field]) {
+      setRevealed((r) => ({ ...r, [field]: false }));
+    } else {
+      setRevealDialog(field);
+    }
+  };
+
+  const handleRevealVerified = () => {
+    setRevealed((r) => ({ ...r, [revealDialog]: true }));
+    setRevealDialog(null);
+  };
+
+  const handleChangedSaved = (newValue) => {
+    if (changeDialog === 'email') {
+      setEmail(newValue);
+      setVerified((v) => ({ ...v, email: false }));
+    } else if (changeDialog === 'phone') {
+      setPhone(newValue);
+      setVerified((v) => ({ ...v, phone: false }));
+    } else if (changeDialog === 'backup_email') {
+      setBackupEmail(newValue);
+      setVerified((v) => ({ ...v, backup: false }));
+    }
+    setChangeDialog(null);
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('nx-font-scale');
+    if (saved) {
+      const scale = parseFloat(saved);
+      setFontScale(scale);
+      document.documentElement.style.setProperty('--nx-font-scale', String(scale));
+    }
+  }, []);
+
+  const handleFontScale = (val) => {
+    setFontScale(val);
+    document.documentElement.style.setProperty('--nx-font-scale', String(val));
+    localStorage.setItem('nx-font-scale', String(val));
+  };
+
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
 
   if (loadingProfile) {
     return (
       <div className="space-y-6 max-w-3xl">
         <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
 
   return (
     <div className="space-y-8 max-w-3xl">
+      {/* ── Foto + Nombre ── */}
       <Card className="flex items-center gap-5 p-5">
         <div className="relative">
           {profile?.profile_photo_url ? (
@@ -285,61 +413,176 @@ const Profile = () => {
         </div>
       </Card>
 
-      <Card className="space-y-5 p-5">
+      {/* ── Contacto ── */}
+      <Card className="space-y-4 p-5">
         <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2"><Mail size={18} className="text-[var(--nx-accent)]" /> Contacto</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Input label="Correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <div className="flex gap-2">
-              <Button size="sm" loading={actionLoading} onClick={() => updateContact('email_change', email)}>Guardar</Button>
-              <Button size="sm" variant="quiet" onClick={() => setDeleteConfirm('email')}>Eliminar</Button>
+
+        {/* Email */}
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--nx-border)]">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Mail size={16} className="text-[var(--nx-text-muted)] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-caption text-[var(--nx-text-muted)]">Correo electrónico</p>
+              <p className="text-body text-[var(--nx-text)] truncate">
+                {revealed.email ? (email || '—') : censor(email, 'email')}
+              </p>
+              {verified.email && <Badge scheme="success" dot className="mt-1">Verificado</Badge>}
             </div>
-            <OtpBlock purpose="email" target={email} label="correo" onVerified={() => setVerified((v) => ({ ...v, email: true }))} disabled={!email || verified.email} />
-            {verified.email && <Badge scheme="success" dot>Verificado</Badge>}
           </div>
-          <div className="space-y-2">
-            <Input label="Teléfono" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            <div className="flex gap-2">
-              <Button size="sm" loading={actionLoading} onClick={() => updateContact('phone_change', phone)}>Guardar</Button>
-              <Button size="sm" variant="quiet" onClick={() => setDeleteConfirm('phone')}>Eliminar</Button>
-            </div>
-            <OtpBlock purpose="phone" target={phone} label="teléfono" onVerified={() => setVerified((v) => ({ ...v, phone: true }))} disabled={!phone || verified.phone} />
-            {verified.phone && <Badge scheme="success" dot>Verificado</Badge>}
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Input label="Correo de respaldo" type="email" value={backupEmail} onChange={(e) => setBackupEmail(e.target.value)} />
-            <div className="flex gap-2">
-              <Button size="sm" loading={actionLoading} onClick={() => updateContact('backup_email_change', backupEmail)}>Guardar</Button>
-              <Button size="sm" variant="quiet" onClick={() => setDeleteConfirm('backup_email')}>Eliminar</Button>
-            </div>
-            <OtpBlock purpose="backup_email" target={backupEmail} label="correo de respaldo" onVerified={() => setVerified((v) => ({ ...v, backup: true }))} disabled={!backupEmail || verified.backup} />
-            {verified.backup && <Badge scheme="success" dot>Verificado</Badge>}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleReveal('email')}
+              className="flex h-8 w-8 items-center justify-center rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]"
+            >
+              {revealed.email ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
         </div>
-        <Toast toast={contactToast} />
+        <button
+          onClick={() => setChangeDialog('email')}
+          className="text-body-sm text-[var(--nx-accent)] hover:underline"
+        >
+          Cambiar correo electrónico
+        </button>
+
+        {/* Phone */}
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--nx-border)]">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Phone size={16} className="text-[var(--nx-text-muted)] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-caption text-[var(--nx-text-muted)]">Teléfono</p>
+              <p className="text-body text-[var(--nx-text)] truncate">
+                {revealed.phone ? (phone || '—') : censor(phone, 'phone')}
+              </p>
+              {verified.phone && <Badge scheme="success" dot className="mt-1">Verificado</Badge>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleReveal('phone')}
+              className="flex h-8 w-8 items-center justify-center rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]"
+            >
+              {revealed.phone ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        <button
+          onClick={() => setChangeDialog('phone')}
+          className="text-body-sm text-[var(--nx-accent)] hover:underline"
+        >
+          Cambiar teléfono
+        </button>
+
+        {/* Password */}
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--nx-border)]">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Key size={16} className="text-[var(--nx-text-muted)] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-caption text-[var(--nx-text-muted)]">Contraseña</p>
+              <p className="text-body text-[var(--nx-text)]">
+                {revealed.password ? '••••••••' : '••••••••'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleReveal('password')}
+              className="flex h-8 w-8 items-center justify-center rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]"
+            >
+              {revealed.password ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        <button
+          onClick={() => setChangeDialog('password')}
+          className="text-body-sm text-[var(--nx-accent)] hover:underline"
+        >
+          Cambiar contraseña
+        </button>
+
+        <Toast toast={actionToast} />
       </Card>
 
-      <Card className="space-y-5 p-5">
-        <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2"><Key size={18} className="text-[var(--nx-accent)]" /> Cambiar contraseña</p>
-        <form onSubmit={changePassword} className="space-y-4">
-          <PasswordInput label="Contraseña actual" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-          <PasswordInput label="Nueva contraseña" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-          <PasswordInput label="Confirmar nueva contraseña" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-          <Button type="submit" loading={actionLoading}>Actualizar contraseña</Button>
-          <Toast toast={actionToast} />
-        </form>
+      {/* ── Tamaño de fuente ── */}
+      <Card className="space-y-4 p-5">
+        <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2"><Type size={18} className="text-[var(--nx-accent)]" /> Tamaño de fuente</p>
+        <p className="text-body-sm text-[var(--nx-text-muted)]">Mueve la barra hasta tener el tamaño deseado</p>
+        <div className="flex items-center gap-4">
+          <span className="text-caption text-[var(--nx-text-muted)] shrink-0">A</span>
+          <input
+            type="range"
+            min={0.85}
+            max={1.3}
+            step={0.05}
+            value={fontScale}
+            onChange={(e) => handleFontScale(parseFloat(e.target.value))}
+            className="flex-1 accent-[var(--nx-accent)] cursor-pointer"
+          />
+          <span className="text-h3 text-[var(--nx-text)] shrink-0">A</span>
+        </div>
+        <div className="flex justify-between">
+          <button
+            onClick={() => handleFontScale(1)}
+            className="text-caption text-[var(--nx-accent)] hover:underline"
+          >
+            Restablecer
+          </button>
+          <span className="text-caption text-[var(--nx-text-muted)] tabular-nums">{Math.round(fontScale * 100)}%</span>
+        </div>
       </Card>
+
+      {/* ── Cerrar sesión ── */}
+      <div className="flex justify-center pb-4">
+        <Button
+          variant="ghost"
+          onClick={logout}
+          leftIcon={<LogOut size={16} />}
+          className="text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_6%,transparent)]"
+        >
+          Cerrar sesión
+        </Button>
+      </div>
+
+      {/* ── Diálogos ── */}
+      <AnimatePresence>
+        {revealDialog && (
+          <RevealDialog
+            title={revealDialog === 'password' ? 'Ver contraseña' : `Ver ${revealDialog === 'email' ? 'correo' : 'teléfono'}`}
+            onClose={() => setRevealDialog(null)}
+            onVerified={handleRevealVerified}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
-        {deleteConfirm && (
-          <ConfirmDialog
-            title="¿Eliminar dato de contacto?"
-            description="Se eliminará el contacto seleccionado de tu perfil. Esta acción no se puede deshacer."
-            confirmLabel="Eliminar"
-            destructive
-            loading={actionLoading}
-            onConfirm={() => deleteField(deleteConfirm)}
-            onClose={() => setDeleteConfirm(null)}
+        {changeDialog === 'password' && (
+          <Dialog
+            title="Cambiar contraseña"
+            onClose={() => setChangeDialog(null)}
+            size="sm"
+            footer={
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setChangeDialog(null)}>Cancelar</Button>
+                <Button size="sm" loading={actionLoading} onClick={changePassword}>Actualizar</Button>
+              </>
+            }
+          >
+            <form onSubmit={changePassword} className="space-y-4">
+              <PasswordInput label="Contraseña actual" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+              <PasswordInput label="Nueva contraseña" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              <PasswordInput label="Confirmar nueva contraseña" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            </form>
+          </Dialog>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {changeDialog && changeDialog !== 'password' && (
+          <ChangeDialog
+            field={changeDialog}
+            currentLabel={changeDialog === 'email' ? 'correo electrónico' : changeDialog === 'phone' ? 'teléfono' : 'correo de respaldo'}
+            onClose={() => setChangeDialog(null)}
+            onSaved={handleChangedSaved}
           />
         )}
       </AnimatePresence>

@@ -51,7 +51,11 @@
   --nx-deliberate:  250ms;
   --nx-max:         300ms;
 
+  /* Font scale — user adjustable from Profile */
+  --nx-font-scale: 1;
+
   /* Typography */
+  font-size: calc(16px * var(--nx-font-scale));
   font-family: 'Inter Variable', Inter, system-ui, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   font-variation-settings: 'wght' 400;

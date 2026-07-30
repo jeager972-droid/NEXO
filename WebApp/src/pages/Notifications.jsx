@@ -6,7 +6,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Info, AlertTriangle, Trash2, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Info, AlertTriangle, Trash2, ChevronRight, Eye } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
@@ -15,7 +15,7 @@ import { ROLES } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Drawer } from '../components/ui/Overlay';
+import { Drawer, Dialog } from '../components/ui/Overlay';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
@@ -24,10 +24,10 @@ const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-co
 const typeMeta = (type) => {
   switch (type) {
     case 'SOS': return { icon: AlertTriangle, scheme: 'danger', label: 'SOS', group: 'Operaciones' };
-    case 'ALERT': return { icon: AlertTriangle, scheme: 'warning', label: 'Alerta', group: 'NEXO · Inteligencia' };
+    case 'ALERT': return { icon: AlertTriangle, scheme: 'warning', label: 'Alerta', group: 'Alertas' };
     case 'SUCCESS': return { icon: CheckCircle2, scheme: 'success', label: 'Éxito', group: 'Operaciones' };
     case 'WHATSAPP': return { icon: CheckCircle2, scheme: 'success', label: 'WhatsApp', group: 'WhatsApp' };
-    default: return { icon: Info, scheme: 'info', label: 'Info', group: 'NEXO · Inteligencia' };
+    default: return { icon: Info, scheme: 'info', label: 'Info', group: 'Información' };
   }
 };
 
@@ -47,16 +47,20 @@ const relTime = (iso) => {
   return `hace ${d} d`;
 };
 
-const GROUP_ORDER = ['NEXO · Inteligencia', 'Operaciones', 'WhatsApp'];
+const GROUP_ORDER = ['Alertas', 'Operaciones', 'WhatsApp', 'Información'];
 
-const NotifItem = ({ notif, onClick }) => {
+const NotifItem = ({ notif, onClick, onShowDetails }) => {
   const meta = typeMeta(notif.type);
   const Icon = meta.icon;
   const isNexo = notif.type === 'ALERT' || notif.type === 'INFO';
+  const hasDetails = (() => {
+    const m = parseMeta(notif.metadata_json);
+    return m && Object.keys(m).length > 0;
+  })();
   return (
-    <button
+    <div
+      className="group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)] cursor-pointer"
       onClick={onClick}
-      className="group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--nx-surface-subtle)]"
     >
       <div
         className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-caption font-bold ${isNexo ? 'bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : ''}`}
@@ -71,17 +75,25 @@ const NotifItem = ({ notif, onClick }) => {
             {!notif.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nx-accent)] nx-blink" />}
           </div>
           <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5 line-clamp-2">{notif.message}</p>
+          {hasDetails && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onShowDetails(notif); }}
+              className="mt-2 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
+            >
+              <Eye size={12} /> Ver detalles
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-1 px-1">
           <p className="text-caption text-[var(--nx-text-muted)] font-medium tabular-nums">{relTime(notif.created_at)}</p>
           <span className="text-caption text-[var(--nx-accent)] font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-fast">Ver <ChevronRight size={10} /></span>
         </div>
       </div>
-    </button>
+    </div>
   );
 };
 
-const NotifGroup = ({ title, items, onOpen }) => {
+const NotifGroup = ({ title, items, onOpen, onShowDetails }) => {
   const [open, setOpen] = useState(true);
   return (
     <Surface className="overflow-hidden">
@@ -115,6 +127,7 @@ const NotifGroup = ({ title, items, onOpen }) => {
                   key={notif.id ?? notif.notification_id ?? i}
                   notif={notif}
                   onClick={() => onOpen(notif)}
+                  onShowDetails={onShowDetails}
                 />
               ))}
             </div>
@@ -132,6 +145,7 @@ const Notifications = () => {
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [detailsDialog, setDetailsDialog] = useState(null);
   const isStaff = user?.role === ROLES.PORTERO || user?.role === ROLES.AUXILIAR;
 
   useEffect(() => {
@@ -215,7 +229,7 @@ const Notifications = () => {
       ) : (
         <div className="space-y-4">
           {GROUP_ORDER.filter((g) => grouped[g]?.length).map((g) => (
-            <NotifGroup key={g} title={g} items={grouped[g]} onOpen={(n) => { setDetail(n); if (!n.read) markRead(n.id ?? n.notification_id); }} />
+            <NotifGroup key={g} title={g} items={grouped[g]} onOpen={(n) => { setDetail(n); if (!n.read) markRead(n.id ?? n.notification_id); }} onShowDetails={(n) => setDetailsDialog(n)} />
           ))}
         </div>
       )}
@@ -260,6 +274,26 @@ const Notifications = () => {
               })()}
             </div>
           </Drawer>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {detailsDialog && (
+          <Dialog
+            title="Detalles"
+            onClose={() => setDetailsDialog(null)}
+            size="md"
+            footer={<Button variant="ghost" size="sm" onClick={() => setDetailsDialog(null)}>Cerrar</Button>}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.entries(parseMeta(detailsDialog.metadata_json) || {}).map(([key, value]) => (
+                <div key={key} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                  <p className="text-caption uppercase text-[var(--nx-text-muted)] font-medium">{key.replace(/_/g, ' ')}</p>
+                  <p className="text-body text-[var(--nx-text)] mt-1 break-words">{String(value)}</p>
+                </div>
+              ))}
+            </div>
+          </Dialog>
         )}
       </AnimatePresence>
     </div>
