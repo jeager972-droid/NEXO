@@ -57,7 +57,7 @@ const StreamList = ({ events, loading, emptyTitle, showIssuer, onItemClick }) =>
   }
   if (!events.length) {
     return (
-      <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+      <Surface className="p-6">
         <NexoChatBubble message="¡Todo está al día! No hay novedades recientes para mostrar." />
       </Surface>
     );
@@ -235,7 +235,7 @@ const SecretaryDashboard = ({ tasks = [], loading }) => {
           ))}
         </div>
       ) : (
-        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+        <Surface className="p-6">
           <NexoChatBubble message="¡Todo está al día! No tienes tareas pendientes para hoy." />
         </Surface>
       )}
@@ -266,7 +266,7 @@ const CounselorDashboard = ({ tasks = [], loading }) => {
           ))}
         </div>
       ) : (
-        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+        <Surface className="p-6">
           <NexoChatBubble message="¡Todo está al día! No tienes solicitudes pendientes." />
         </Surface>
       )}
@@ -475,7 +475,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           {selectedGroup && (
             groupLoading ? (
               <SkeletonMetrics count={4} />
-            ) : hasActivity ? (
+            ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {cards.map((s) => (
                   <StatCard
@@ -488,7 +488,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                   />
                 ))}
               </div>
-            ) : null
+            )
           )}
 
           <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />
@@ -816,7 +816,7 @@ const StaffDashboard = ({ tasks = [], loading }) => {
           ))}
         </div>
       ) : (
-        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+        <Surface className="p-6">
           <NexoChatBubble message="¡Todo está al día! No tienes solicitudes pendientes para hoy." />
         </Surface>
       )}

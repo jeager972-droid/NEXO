@@ -1,7 +1,7 @@
 /**
  * SCR-CON-01 Consultation
- * Catálogo de módulos de consulta filtrado por rol. Muestra análisis de riesgo,
- * datos dinámicos por módulo y abre ConsultationDrawer para detalles.
+ * Catálogo de módulos de consulta filtrado por rol. Navegación de 3 niveles:
+ * 1. Grid de módulos (ej: Mis Clases)  2. Grid de submódulos  3. ConsultationDrawer
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
@@ -9,11 +9,11 @@ import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, IdCard, ClipboardList, Mail, History, DoorOpen } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
-import { Card } from '../components/ui/Card';
+import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { humanizeError } from '../utils/messages';
 
@@ -57,6 +57,13 @@ const MODULE_SLUGS = {
   'Permisos Activos Hoy': 'active_permissions',
 };
 
+const TONE_STYLES = {
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_8%,transparent)]', text: 'text-[var(--nx-accent)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-accent)_40%,var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_8%,transparent)]', text: 'text-[var(--nx-success)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-success)_40%,var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_9%,transparent)]', text: 'text-[var(--nx-warning)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-warning)_40%,var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)]', text: 'text-[var(--nx-danger)]', border: 'hover:border-[color-mix(in_oklch,var(--nx-danger)_40%,var(--nx-border))]' },
+};
+
 const localDateStr = (date = new Date()) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -68,6 +75,7 @@ const Consultation = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeModule, setActiveModule] = useState(null);
   const [activeItem, setActiveItem] = useState(null);
   const [riskStudents, setRiskStudents] = useState([]);
   const [dynamicData, setDynamicData] = useState([]);
@@ -179,87 +187,148 @@ const Consultation = () => {
     return <Navigate to="/" replace />;
   }
 
-  // Definición de módulos por rol
+  // ── Definición de módulos por rol con tonos de color e iconos de submódulos ──
   const rbacModules = {
     [ROLES.DOCENTE]: [
       {
         title: 'Mis Clases',
         icon: BookOpen,
-        items: ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones']
+        tone: 'accent',
+        items: [
+          { label: 'Llegadas Tarde', icon: Clock },
+          { label: 'Inasistencias', icon: UserX },
+          { label: 'Estudiantes Ausentes', icon: UserMinus },
+          { label: 'Estudiantes fuera del salón', icon: DoorOpen },
+          { label: 'Estudiantes con Permiso', icon: ShieldCheck },
+          { label: 'Citaciones', icon: Send },
+        ]
       }
     ],
     [ROLES.PSICORIENTADOR]: [
       {
         title: 'Análisis de Riesgo',
         icon: ShieldAlert,
-        items: ['Análisis de Riesgo']
+        tone: 'danger',
+        items: [
+          { label: 'Análisis de Riesgo', icon: AlertTriangle },
+        ]
       },
       {
         title: 'Seguimientos',
         icon: FileText,
-        items: ['Seguimientos completados']
+        tone: 'accent',
+        items: [
+          { label: 'Seguimientos completados', icon: ClipboardList },
+        ]
       }
     ],
     [ROLES.COORDINADOR]: [
-      { 
-        title: 'Incidentes', 
-        icon: ShieldAlert, 
-        items: ['Spam Biométrico', 'Vulneraciones', 'Alertas', 'Seguimiento Estudiantil'] 
+      {
+        title: 'Incidentes',
+        icon: ShieldAlert,
+        tone: 'danger',
+        items: [
+          { label: 'Spam Biométrico', icon: AlertTriangle },
+          { label: 'Vulneraciones', icon: ShieldAlert },
+          { label: 'Alertas', icon: AlertTriangle },
+          { label: 'Seguimiento Estudiantil', icon: ClipboardList },
+        ]
       },
-      { 
-        title: 'Permisos', 
-        icon: Activity, 
-        items: ['Permisos Emitidos', 'Salidas del colegio permitidas', 'Salidas Pedagógicas'] 
+      {
+        title: 'Permisos',
+        icon: Activity,
+        tone: 'success',
+        items: [
+          { label: 'Permisos Emitidos', icon: ShieldCheck },
+          { label: 'Salidas del colegio permitidas', icon: DoorOpen },
+          { label: 'Salidas Pedagógicas', icon: CalendarDays },
+        ]
       }
     ],
     [ROLES.RECTOR]: [
-      { 
-        title: 'Ejecutivo Institucional', 
-        icon: Activity, 
-        items: ['Métricas Globales', 'Asistencia Institucional', 'Estadísticas Históricas', 'Indicadores Críticos'] 
+      {
+        title: 'Ejecutivo Institucional',
+        icon: Activity,
+        tone: 'accent',
+        items: [
+          { label: 'Métricas Globales', icon: BarChart2 },
+          { label: 'Asistencia Institucional', icon: Activity },
+          { label: 'Estadísticas Históricas', icon: FileBarChart },
+          { label: 'Indicadores Críticos', icon: AlertTriangle },
+        ]
       },
-      { 
-        title: 'Reportes Consolidados', 
-        icon: Database, 
-        items: ['TODOS los Consolidados', 'Históricos Completos', 'Exportaciones Institucionales'] 
+      {
+        title: 'Reportes Consolidados',
+        icon: Database,
+        tone: 'warning',
+        items: [
+          { label: 'TODOS los Consolidados', icon: FileBarChart },
+          { label: 'Históricos Completos', icon: History },
+          { label: 'Exportaciones Institucionales', icon: FileText },
+        ]
       }
     ],
     [ROLES.SECRETARIA]: [
-      { 
-        title: 'Gestión Estudiantil', 
-        icon: Users, 
-        items: ['Estudiantes', 'Grupos', 'Acudientes', 'Matrículas', 'Cambios Registro'] 
+      {
+        title: 'Gestión Estudiantil',
+        icon: Users,
+        tone: 'accent',
+        items: [
+          { label: 'Estudiantes', icon: GraduationCap },
+          { label: 'Grupos', icon: Users },
+          { label: 'Acudientes', icon: IdCard },
+          { label: 'Matrículas', icon: ClipboardList },
+          { label: 'Cambios Registro', icon: FileText },
+        ]
       },
-      { 
-        title: 'Personal', 
-        icon: UserCheck, 
-        items: ['Profesores', 'Auxiliares', 'Portería', 'Personal Institucional'] 
+      {
+        title: 'Personal',
+        icon: UserCheck,
+        tone: 'success',
+        items: [
+          { label: 'Profesores', icon: GraduationCap },
+          { label: 'Auxiliares', icon: UserCheck },
+          { label: 'Portería', icon: DoorOpen },
+          { label: 'Personal Institucional', icon: Users },
+        ]
       },
-      { 
-        title: 'Mensajería', 
-        icon: MessageSquare, 
-        items: ['Mensajes Enviados'] 
+      {
+        title: 'Mensajería',
+        icon: MessageSquare,
+        tone: 'accent',
+        items: [
+          { label: 'Mensajes Enviados', icon: Mail },
+        ]
       },
-      { 
-        title: 'Históricos', 
-        icon: Database, 
-        items: ['Reportes', 'Auditoría Local'] 
+      {
+        title: 'Históricos',
+        icon: Database,
+        tone: 'warning',
+        items: [
+          { label: 'Reportes', icon: FileBarChart },
+          { label: 'Auditoría Local', icon: History },
+        ]
       },
       {
         title: 'Control de Acceso',
         icon: Activity,
-        items: ['Permisos Activos Hoy']
+        tone: 'warning',
+        items: [
+          { label: 'Permisos Activos Hoy', icon: ShieldCheck },
+        ]
       }
     ]
   };
 
   const modules = rbacModules[user?.role] || [];
-  const filtered = modules.map(m => ({
-    ...m,
-    items: m.items.filter(it => it.toLowerCase().includes(searchTerm.toLowerCase())),
-  })).filter(m => m.items.length > 0 || !searchTerm);
+  const currentModule = modules.find(m => m.title === activeModule);
 
-  const openModule = (item) => {
+  const openModule = (modTitle) => {
+    setActiveModule(modTitle);
+    setSearchTerm('');
+  };
+
+  const openSubmodule = (item) => {
     setActiveItem(item);
     setDynamicData([]);
     setDynamicColumns({});
@@ -267,72 +336,137 @@ const Consultation = () => {
     setQueryError(null);
   };
 
+  const goBackToModules = () => {
+    setActiveModule(null);
+    setActiveItem(null);
+  };
+
+  const goBackToSubmodules = () => {
+    setActiveItem(null);
+  };
+
+  // ── Nivel 3: ConsultationDrawer (submódulo seleccionado) ──
+  if (activeItem) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" onClick={goBackToSubmodules} leftIcon={<ChevronLeft size={16} />}>
+            Volver
+          </Button>
+          <h2 className="text-h2 text-[var(--nx-text)]">{activeItem}</h2>
+        </div>
+        <ConsultationDrawer
+          item={activeItem}
+          riskStudents={riskStudents}
+          dynamicData={dynamicData}
+          dynamicColumns={dynamicColumns}
+          loadingData={loadingData}
+          isTeacherModule={isTeacherModule}
+          hasQueried={hasQueried}
+          groups={groups}
+          selectedGroup={selectedGroup}
+          setSelectedGroup={setSelectedGroup}
+          selectedStudent={selectedStudent}
+          setSelectedStudent={setSelectedStudent}
+          fromDate={fromDate}
+          setFromDate={setFromDate}
+          toDate={toDate}
+          setToDate={setToDate}
+          onQuery={executeQuery}
+          onClose={goBackToSubmodules}
+          error={queryError}
+        />
+      </div>
+    );
+  }
+
+  // ── Nivel 2: Grid de submódulos ──
+  if (activeModule && currentModule) {
+    const ts = TONE_STYLES[currentModule.tone] || TONE_STYLES.accent;
+    const filteredItems = currentModule.items.filter(it =>
+      it.label.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
+            Volver
+          </Button>
+          <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
+        </div>
+        <Input
+          placeholder="Filtrar submódulos…"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
+        />
+        {filteredItems.length === 0 ? (
+          <Surface className="p-6">
+            <p className="text-body text-[var(--nx-text-muted)] text-center">Sin coincidencias.</p>
+          </Surface>
+        ) : (
+          <Surface className="p-5 md:p-6 shadow-medium">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredItems.map((sub) => {
+                const SubIcon = sub.icon;
+                return (
+                  <button
+                    key={sub.label}
+                    onClick={() => openSubmodule(sub.label)}
+                    className={`rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5 text-left shadow-low transition-all duration-fast ${ts.border} hover:shadow-medium`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.bg}`}>
+                        <SubIcon size={20} className={ts.text} />
+                      </div>
+                      <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
+                    </div>
+                    <p className="mt-4 text-h3 text-[var(--nx-text)]">{sub.label}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </Surface>
+        )}
+      </div>
+    );
+  }
+
+  // ── Nivel 1: Grid de módulos ──
   return (
     <div className="space-y-6">
-      {!activeItem ? (
-        <>
-          <Input
-            placeholder="Filtrar módulos y submódulos…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filtered.map((mod, idx) => (
-              <Card key={idx} className="p-0 overflow-hidden">
-                <div className="flex items-center gap-3 border-b border-[var(--nx-border)] px-5 py-3.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]">
-                    <mod.icon size={16} strokeWidth={2} />
+      <Input
+        placeholder="Filtrar módulos…"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {modules
+          .filter(m => m.title.toLowerCase().includes(searchTerm.toLowerCase()))
+          .map((mod) => {
+            const ts = TONE_STYLES[mod.tone] || TONE_STYLES.accent;
+            const ModIcon = mod.icon;
+            return (
+              <button
+                key={mod.title}
+                onClick={() => openModule(mod.title)}
+                className={`rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5 text-left shadow-low transition-all duration-fast ${ts.border} hover:shadow-medium`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.bg}`}>
+                    <ModIcon size={20} className={ts.text} />
                   </div>
-                  <p className="text-label uppercase text-[var(--nx-text)]">{mod.title}</p>
+                  <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                 </div>
-                <div>
-                  {mod.items.map((item, i) => (
-                    <button
-                      key={i}
-                      onClick={() => openModule(item)}
-                      className="group flex w-full items-center justify-between border-b border-[var(--nx-border)] px-5 py-3 text-left text-body text-[var(--nx-text)] transition-colors last:border-0 hover:bg-[var(--nx-surface-subtle)]"
-                    >
-                      <span>{item}</span>
-                      <ChevronRight size={14} className="text-[var(--nx-text-muted)] group-hover:text-[var(--nx-accent)]" />
-                    </button>
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={() => setActiveItem(null)} leftIcon={<ChevronLeft size={16} />}>
-              Volver
-            </Button>
-            <h2 className="text-h2 text-[var(--nx-text)]">{activeItem}</h2>
-          </div>
-          <ConsultationDrawer
-            item={activeItem}
-            riskStudents={riskStudents}
-            dynamicData={dynamicData}
-            dynamicColumns={dynamicColumns}
-            loadingData={loadingData}
-            isTeacherModule={isTeacherModule}
-            hasQueried={hasQueried}
-            groups={groups}
-            selectedGroup={selectedGroup}
-            setSelectedGroup={setSelectedGroup}
-            selectedStudent={selectedStudent}
-            setSelectedStudent={setSelectedStudent}
-            fromDate={fromDate}
-            setFromDate={setFromDate}
-            toDate={toDate}
-            setToDate={setToDate}
-            onQuery={executeQuery}
-            onClose={() => setActiveItem(null)}
-            error={queryError}
-          />
-        </>
-      )}
+                <p className="mt-4 text-h3 text-[var(--nx-text)]">{mod.title}</p>
+                <p className="mt-1 text-caption text-[var(--nx-text-muted)]">
+                  {mod.items.length} {mod.items.length === 1 ? 'submódulo' : 'submódulos'}
+                </p>
+              </button>
+            );
+          })}
+      </div>
     </div>
   );
 };
