@@ -9,18 +9,18 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const tones = {
   neutral:  'border-[var(--nx-border)] bg-[var(--nx-surface)]',
-  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_28%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-accent)_5%,var(--nx-surface))]',
-  success:  'border-[color-mix(in_oklch,var(--nx-success)_28%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-success)_5%,var(--nx-surface))]',
-  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_30%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_6%,var(--nx-surface))]',
-  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_28%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_5%,var(--nx-surface))]',
+  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-accent)_14%,white)]',
+  success:  'border-[color-mix(in_oklch,var(--nx-success)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-success)_14%,white)]',
+  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_16%,white)]',
+  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_35%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_14%,white)]',
 };
 
 const iconTile = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]',
-  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_11%,transparent)] text-[var(--nx-accent)]',
-  success:  'bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)] text-[var(--nx-success)]',
-  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_13%,transparent)] text-[var(--nx-warning)]',
-  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)] text-[var(--nx-danger)]',
+  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,black)]',
+  success:  'bg-[color-mix(in_oklch,var(--nx-success)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,black)]',
+  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,black)]',
+  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,black)]',
 };
 
 const trendMeta = {

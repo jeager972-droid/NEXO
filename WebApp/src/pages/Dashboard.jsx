@@ -409,7 +409,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             >
               <div>
                 <p className="text-caption uppercase text-[var(--nx-text-muted)]">Seleccionar grupo · para revisar asistencia diaria</p>
-                <p className="text-h3 text-[var(--nx-text)] mt-0.5" style={{ fontWeight: '600' }}>{selectedGroup || '— Elegir grupo —'}</p>
+                <p className="text-h3 text-[var(--nx-text)] mt-0.5" style={{ fontWeight: '600' }}>{selectedGroup || 'Elegir grupo'}</p>
               </div>
               <Search size={18} className="text-[var(--nx-text-muted)]" />
             </button>
@@ -473,11 +473,11 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           )}
 
           {selectedGroup && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {groupLoading ? (
-                <SkeletonMetrics count={4} />
-              ) : (
-                cards.map((s) => (
+            groupLoading ? (
+              <SkeletonMetrics count={4} />
+            ) : hasActivity ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {cards.map((s) => (
                   <StatCard
                     key={s.key}
                     icon={s.icon}
@@ -486,9 +486,9 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                     tone={s.tone}
                     onClick={() => openDetail(s.key)}
                   />
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            ) : null
           )}
 
           <StreamList events={events.slice(0, 8)} loading={eventsLoading} emptyTitle="Sin eventos recientes" showIssuer />

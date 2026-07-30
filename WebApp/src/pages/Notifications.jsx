@@ -209,7 +209,7 @@ const Notifications = () => {
       )}
 
       {notifications.length === 0 ? (
-        <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+        <Surface className="p-6">
           <NexoChatBubble message="¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí." />
         </Surface>
       ) : (
