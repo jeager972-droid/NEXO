@@ -14,10 +14,10 @@ const variants = {
     'hover:bg-[var(--nx-accent-strong)] hover:shadow-medium',
   secondary:
     'bg-[var(--nx-surface)] text-[var(--nx-text)] border border-[var(--nx-border)] ' +
-    'hover:bg-[var(--nx-surface-subtle)] hover:border-[color-mix(in_oklch,var(--nx-text)_22%,transparent)]',
+    'hover:bg-[var(--nx-surface-subtle)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),transparent)]',
   quiet:
     'bg-transparent text-[var(--nx-accent)] ' +
-    'hover:bg-[color-mix(in_oklch,var(--nx-accent)_9%,transparent)]',
+    'hover:bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)]',
   ghost:
     'bg-transparent text-[var(--nx-text-muted)] ' +
     'hover:text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]',

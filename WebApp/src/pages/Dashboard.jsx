@@ -770,7 +770,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             className="fixed bottom-6 right-6 z-[60] w-full max-w-sm rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4 shadow-high"
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)] text-[var(--nx-success)]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),transparent)] text-[var(--nx-success)]">
                 <CheckCircle2 size={18} strokeWidth={2.5} />
               </div>
               <div className="flex-1">
@@ -799,7 +799,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
             className="fixed bottom-6 right-6 z-[60] w-full max-w-sm rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface)] p-4 shadow-high"
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)] text-[var(--nx-danger)]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] text-[var(--nx-danger)]">
                 <AlertTriangle size={18} strokeWidth={2.5} />
               </div>
               <div className="flex-1">

@@ -23,7 +23,7 @@ const NavItem = ({ item, onClick, showNotifDot }) => {
       className={({ isActive }) =>
         `group flex items-center gap-3 px-4 py-3 mx-3 rounded-control text-body font-medium transition-all duration-fast ` +
         (isActive
-          ? 'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]'
+          ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]'
           : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]')
       }
     >

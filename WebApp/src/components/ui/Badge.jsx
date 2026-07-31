@@ -6,10 +6,10 @@ import { cn } from '../../utils/cn';
 
 const schemes = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] border-[var(--nx-border)]',
-  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)] border-[color-mix(in_oklch,var(--nx-accent)_25%,transparent)]',
-  success:  'bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)] text-[var(--nx-success)] border-[color-mix(in_oklch,var(--nx-success)_25%,transparent)]',
-  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_12%,transparent)] text-[var(--nx-warning)] border-[color-mix(in_oklch,var(--nx-warning)_25%,transparent)]',
-  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_10%,transparent)] text-[var(--nx-danger)] border-[color-mix(in_oklch,var(--nx-danger)_25%,transparent)]',
+  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)] border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),transparent)]',
+  success:  'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),transparent)] text-[var(--nx-success)] border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),transparent)]',
+  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),transparent)] text-[var(--nx-warning)] border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),transparent)]',
+  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] text-[var(--nx-danger)] border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),transparent)]',
 };
 
 const dots = {

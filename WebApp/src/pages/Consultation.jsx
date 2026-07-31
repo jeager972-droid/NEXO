@@ -58,10 +58,10 @@ const MODULE_SLUGS = {
 };
 
 const TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_35%,var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-success)_35%,var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_16%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_20%,transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_35%,var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_14%,var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_18%,transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_35%,var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),var(--nx-border))]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),var(--nx-border))]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),var(--nx-border))]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))]' },
 };
 
 const localDateStr = (date = new Date()) => {

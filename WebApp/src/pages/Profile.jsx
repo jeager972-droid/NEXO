@@ -540,7 +540,7 @@ const Profile = () => {
           variant="ghost"
           onClick={logout}
           leftIcon={<LogOut size={16} />}
-          className="text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_6%,transparent)]"
+          className="text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)]"
         >
           Cerrar sesión
         </Button>

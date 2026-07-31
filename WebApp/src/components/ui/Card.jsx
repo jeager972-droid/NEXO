@@ -10,10 +10,10 @@ import { cn } from '../../utils/cn';
 /** Tonos cerrados: el color acompaña al texto, nunca lo sustituye. */
 const tones = {
   neutral: 'border-[var(--nx-border)]',
-  accent:  'border-[color-mix(in_oklch,var(--nx-accent)_30%,var(--nx-border))]',
-  success: 'border-[color-mix(in_oklch,var(--nx-success)_30%,var(--nx-border))]',
-  warning: 'border-[color-mix(in_oklch,var(--nx-warning)_34%,var(--nx-border))]',
-  danger:  'border-[color-mix(in_oklch,var(--nx-danger)_32%,var(--nx-border))]',
+  accent:  'border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),var(--nx-border))]',
+  success: 'border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),var(--nx-border))]',
+  warning: 'border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),var(--nx-border))]',
+  danger:  'border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))]',
 };
 
 /** Franja de 3 px a la izquierda: patrón de riesgo del moodboard (.nx-risk). */

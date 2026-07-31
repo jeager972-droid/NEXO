@@ -39,7 +39,7 @@ export const Select = React.forwardRef(
               'disabled:cursor-not-allowed disabled:opacity-50',
               error
                 ? 'border-[var(--nx-danger)] focus:shadow-[var(--nx-ring-danger)]'
-                : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_28%,transparent)] focus:border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]'
+                : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),transparent)] focus:border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]'
             )}
             {...props}
           >

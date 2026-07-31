@@ -45,26 +45,26 @@ export default {
         // Accent — Azul institucional
         accent: {
           DEFAULT: 'oklch(48% 0.115 245)',
-          dark:    'oklch(72% 0.105 245)',
+          dark:    'oklch(44% 0.170 245)',
           text:    'oklch(99% 0.005 245)',
           surface: 'oklch(from oklch(48% 0.115 245) l c h / 0.08)',
         },
         // Success — Verde
         success: {
           DEFAULT: 'oklch(52% 0.125 155)',
-          dark:    'oklch(72% 0.115 155)',
+          dark:    'oklch(48% 0.180 155)',
           surface: 'oklch(from oklch(52% 0.125 155) l c h / 0.10)',
         },
         // Warning — Naranja
         warning: {
           DEFAULT: 'oklch(62% 0.135 70)',
-          dark:    'oklch(78% 0.120 70)',
+          dark:    'oklch(58% 0.190 70)',
           surface: 'oklch(from oklch(62% 0.135 70) l c h / 0.10)',
         },
         // Danger — Rojo
         danger: {
           DEFAULT: 'oklch(52% 0.175 25)',
-          dark:    'oklch(72% 0.145 25)',
+          dark:    'oklch(48% 0.230 25)',
           surface: 'oklch(from oklch(52% 0.175 25) l c h / 0.10)',
         },
       },

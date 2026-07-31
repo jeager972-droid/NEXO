@@ -26,7 +26,7 @@ export default class ErrorBoundary extends Component {
       return (
         <div className="flex min-h-[50vh] items-center justify-center p-6">
           <Surface className="max-w-md p-8 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)] text-[var(--nx-danger)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] text-[var(--nx-danger)]">
               <AlertTriangle size={28} />
             </div>
             <h2 className="mt-5 text-h2 text-[var(--nx-text)]">Algo salió mal</h2>

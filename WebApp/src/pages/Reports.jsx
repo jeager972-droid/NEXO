@@ -274,7 +274,7 @@ const Reports = () => {
           >
             <Card className="p-5 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_10%,transparent)] text-[var(--nx-accent)]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]">
                   <mod.icon size={20} />
                 </div>
                 <p className="text-h3 text-[var(--nx-text)]">{mod.title}</p>

@@ -110,7 +110,7 @@ const Login = () => {
                 />
 
                 {error && (
-                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
+                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
                     {error}
                   </div>
                 )}
@@ -142,7 +142,7 @@ const Login = () => {
                   placeholder="000000"
                 />
                 {error && (
-                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_8%,transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
+                  <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
                     {error}
                   </div>
                 )}

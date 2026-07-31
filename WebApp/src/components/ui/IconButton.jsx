@@ -9,7 +9,7 @@ const variants = {
   primary:   'bg-[var(--nx-accent)] text-[var(--nx-accent-text)] hover:bg-[var(--nx-accent-strong)]',
   secondary: 'bg-transparent text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]',
   quiet:     'bg-transparent text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]',
-  danger:    'bg-transparent text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_9%,transparent)]',
+  danger:    'bg-transparent text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)]',
 };
 
 const sizes = {
