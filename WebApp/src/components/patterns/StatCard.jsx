@@ -9,10 +9,10 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const tones = {
   neutral:  'border-[var(--nx-border)] bg-[var(--nx-surface)]',
-  accent:   'border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]',
-  success:  'border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]',
-  warning:  'border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]',
-  danger:   'border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]',
+  accent:   'border-[var(--nx-accent)] bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]',
+  success:  'border-[var(--nx-success)] bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]',
+  warning:  'border-[var(--nx-warning)] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]',
+  danger:   'border-[var(--nx-danger)] bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]',
 };
 
 const iconTile = {

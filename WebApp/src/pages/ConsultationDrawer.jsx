@@ -4,7 +4,7 @@
  * Usa Drawer de Overlay.jsx, RiskBadge pattern, SkeletonRows, humanizeError.
  */
 import { useState, useEffect, useRef } from 'react';
-import { Search, Activity, Filter, Eye, AlertTriangle, Sparkles } from 'lucide-react';
+import { Search, Activity, Filter, Eye, AlertTriangle, Sparkles, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
@@ -18,6 +18,7 @@ import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
 import { RiskBadge } from '../components/patterns/RiskBadge';
 import { SearchableSelect as GlobalSearchableSelect } from '../components/ui/SearchableSelect';
+import { exportExcel, exportWord } from '../utils/exporters';
 
 const EXCLUDE_COLS = ['student_id', 'id', 'metadata', 'metadata_json', 'raw'];
 
@@ -48,6 +49,18 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, loadin
   );
 };
 
+const ExportActions = ({ rows, columns, item, fromDate, toDate }) => {
+  if (!rows || rows.length === 0) return null;
+  const spec = { title: item, rows, columns, from: fromDate, to: toDate };
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-[var(--nx-border)] pb-3 mb-3">
+      <span className="text-caption text-[var(--nx-text-muted)]">Exportar:</span>
+      <Button variant="secondary" size="sm" onClick={() => exportExcel(spec)} leftIcon={<FileSpreadsheet size={14} />}>Excel</Button>
+      <Button variant="secondary" size="sm" onClick={() => exportWord(spec)} leftIcon={<FileText size={14} />}>Word</Button>
+    </div>
+  );
+};
+
 const TeacherQueryPanel = ({
   item, groups, selectedGroup, setSelectedGroup, selectedStudent, setSelectedStudent,
   fromDate, setFromDate, toDate, setToDate, onQuery, loadingData, hasQueried, dynamicData, error
@@ -74,7 +87,7 @@ const TeacherQueryPanel = ({
     <div className="flex flex-col">
       <Surface className="border-b border-[var(--nx-border)] p-5 space-y-4 rounded-none">
         <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-          <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
           <p className="text-label text-[var(--nx-text)]">Filtros de consulta</p>
         </div>
         <SearchableSelect label="Grupo académico" placeholder="Seleccionar grupo…" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
@@ -96,7 +109,8 @@ const TeacherQueryPanel = ({
         ) : rows.length === 0 ? (
           <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
-          <Surface className="overflow-x-auto">
+          <Surface className="overflow-x-auto p-5">
+            <ExportActions rows={rows} columns={visibleKeys} item={item} fromDate={fromDate} toDate={toDate} />
             <table className="w-full min-w-[500px]">
               <thead>
                 <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
@@ -178,7 +192,7 @@ export const ConsultationDrawer = ({
     <>
       <Drawer
         title={item}
-        context={showFilters ? 'Consulta con filtros' : 'Consulta de datos institucionales'}
+        context={showFilters ? undefined : 'Consulta de datos institucionales'}
         onClose={onClose}
         size="lg"
       >
@@ -203,7 +217,8 @@ export const ConsultationDrawer = ({
               ) : loadingData ? (
                 <SkeletonRows count={4} />
               ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
-              <Surface className="overflow-x-auto">
+              <Surface className="overflow-x-auto p-5">
+                <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} />
                 <table className="w-full min-w-[440px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
@@ -237,7 +252,8 @@ export const ConsultationDrawer = ({
             ) : loadingData ? (
               <SkeletonRows count={4} />
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
-              <Surface className="overflow-x-auto">
+              <Surface className="overflow-x-auto p-5">
+                <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} />
                 <table className="w-full min-w-[440px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
@@ -260,7 +276,8 @@ export const ConsultationDrawer = ({
                 </table>
               </Surface>
             ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
-              <Surface className="overflow-x-auto">
+              <Surface className="overflow-x-auto p-5">
+                <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} />
                 <table className="w-full min-w-[500px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">

@@ -40,16 +40,8 @@ const compressImage = (file, maxWidth = 800, quality = 0.85) =>
 
 const censor = (str, type) => {
   if (!str) return '—';
-  if (type === 'email') {
-    const [name, domain] = str.split('@');
-    if (!domain) return '••••••';
-    const visible = name.slice(0, 2);
-    return `${visible}${'•'.repeat(Math.max(4, name.length - 2))}@${domain}`;
-  }
-  if (type === 'phone') {
-    const last4 = str.slice(-4);
-    return `••••••${last4}`;
-  }
+  if (type === 'email') return '•'.repeat(8);
+  if (type === 'phone') return '•'.repeat(10);
   return '••••••••';
 };
 
@@ -482,26 +474,13 @@ const Profile = () => {
             <Key size={16} className="text-[var(--nx-text-muted)] shrink-0" />
             <div className="min-w-0">
               <p className="text-caption text-[var(--nx-text-muted)]">Contraseña</p>
-              <p className="text-body text-[var(--nx-text)]">
-                {revealed.password ? '••••••••' : '••••••••'}
-              </p>
+              <p className="text-body text-[var(--nx-text)]">••••••••</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => handleReveal('password')}
-              className="flex h-8 w-8 items-center justify-center rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]"
-            >
-              {revealed.password ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
+          <Button size="sm" variant="secondary" onClick={() => setChangeDialog('password')}>
+            Cambiar
+          </Button>
         </div>
-        <button
-          onClick={() => setChangeDialog('password')}
-          className="text-body-sm text-[var(--nx-accent)] hover:underline"
-        >
-          Cambiar contraseña
-        </button>
 
         <Toast toast={actionToast} />
       </Card>

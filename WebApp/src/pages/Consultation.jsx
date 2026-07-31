@@ -58,10 +58,10 @@ const MODULE_SLUGS = {
 };
 
 const TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-accent)]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-success)]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-warning)]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-danger)]' },
 };
 
 const localDateStr = (date = new Date()) => {
@@ -349,11 +349,14 @@ const Consultation = () => {
   if (activeItem) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="space-y-3">
           <Button variant="secondary" size="sm" onClick={goBackToSubmodules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <h2 className="text-h2 text-[var(--nx-text)]">{activeItem}</h2>
+          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <h2 className="text-h2 text-[var(--nx-text)]">{activeItem}</h2>
+          </div>
         </div>
         <ConsultationDrawer
           item={activeItem}
@@ -388,11 +391,14 @@ const Consultation = () => {
     );
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="space-y-3">
           <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
+          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
+          </div>
         </div>
         <Input
           placeholder="Filtrar submódulos…"

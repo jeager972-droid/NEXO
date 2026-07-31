@@ -68,12 +68,6 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
   },
   {
-    title: 'Informes',
-    path: '/informes',
-    icon: BarChart2,
-    roles: [ROLES.RECTOR],
-  },
-  {
     title: 'Enrolamiento',
     path: '/enrolamiento',
     icon: UserPlus,
@@ -142,7 +136,7 @@ export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
  * Las demás quedan en el sidebar vertical.
  */
 export const PRIMARY_ACTIONS = {
-  [ROLES.RECTOR]:         ['/', '/operacion', '/consulta', '/informes'],
+  [ROLES.RECTOR]:         ['/', '/operacion', '/consulta', '/casos'],
   [ROLES.COORDINADOR]:    ['/', '/operacion', '/notificaciones', '/casos'],
   [ROLES.DOCENTE]:        ['/', '/operacion', '/consulta', '/notificaciones'],
   [ROLES.SECRETARIA]:     ['/', '/consulta', '/enrolamiento', '/notificaciones'],

@@ -14,7 +14,6 @@ import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
-import { RiskBadge } from '../components/patterns/RiskBadge';
 
 export default function Casos() {
   const [searchParams] = useSearchParams();
@@ -96,9 +95,6 @@ export default function Casos() {
               <div className="mt-4 flex items-center gap-4 text-caption text-[var(--nx-text-muted)]">
                 <span className="flex items-center gap-1"><Activity size={12} /> {row.status || 'Activo'}</span>
                 {row.created_at && <span className="flex items-center gap-1"><CalendarDays size={12} /> {new Date(row.created_at).toLocaleDateString('es-CO')}</span>}
-              </div>
-              <div className="mt-3">
-                <RiskBadge level={row.risk_level || row.risk_score} />
               </div>
             </Card>
           ))}

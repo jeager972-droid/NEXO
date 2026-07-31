@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles
+  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -29,6 +29,29 @@ const EMPTY_STATS = {
   presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
   pendingTasks: [], studentsByGroup: {}, teacherGroups: [],
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, outside: 0 },
+};
+
+const TasksEmptyState = ({ loading }) => {
+  if (loading) {
+    return (
+      <Surface className="p-6">
+        <div className="flex flex-col items-center justify-center space-y-4 py-10">
+          <Skeleton className="h-13 w-13 rounded-surface" />
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+      </Surface>
+    );
+  }
+  return (
+    <Surface className="p-6">
+      <EmptyState
+        icon={<ClipboardCheck size={22} strokeWidth={1.75} className="text-[var(--nx-success)]" />}
+        title="Todo en orden"
+        description="Parece que todas tus tareas están al día."
+      />
+    </Surface>
+  );
 };
 
 const eventToMessage = (ev) => {
@@ -239,16 +262,7 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
-      {parentLoading ? (
-        <SkeletonMetrics count={4} />
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Estudiantes" value={Object.keys(stats?.studentsByGroup || {}).length} tone="accent" />
-          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="success" />
-          <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Alertas" value={stats?.alertsCount ?? 0} tone="danger" />
-          <StatCard icon={<UserMinus size={18} strokeWidth={1.75} />} label="Ausentes" value={stats?.absentCount ?? 0} tone="warning" />
-        </div>
-      )}
+      <TasksEmptyState loading={parentLoading} />
       <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>
   );
@@ -426,7 +440,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
               <div className="flex items-center gap-2">
-                <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
                 <div>
                   <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup || 'Elegir grupo'}</p>
@@ -698,7 +712,7 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
       >
         <div className="p-6">
           <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
             <p className="text-label text-[var(--nx-text)]">{groupName}</p>
           </div>
           <div className="mb-4">
@@ -841,16 +855,7 @@ const StaffDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
-      {parentLoading ? (
-        <SkeletonMetrics count={4} />
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Presentes" value={stats?.presentCount ?? 0} tone="accent" />
-          <StatCard icon={<UserMinus size={18} strokeWidth={1.75} />} label="Ausentes" value={stats?.absentCount ?? 0} tone="warning" />
-          <StatCard icon={<AlertTriangle size={18} strokeWidth={1.75} />} label="Alertas" value={stats?.alertsCount ?? 0} tone="danger" />
-          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="success" />
-        </div>
-      )}
+      <TasksEmptyState loading={parentLoading} />
       <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>
   );

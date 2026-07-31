@@ -20,7 +20,6 @@ import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Select } from '../components/ui/Select';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { SkeletonCards } from '../components/ui/Skeleton';
 import { Stepper } from '../components/ui/Stepper';
@@ -42,10 +41,10 @@ const COMMANDS_CATALOG = [
 ];
 
 const CMD_TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),var(--nx-border))]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),var(--nx-border))]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),var(--nx-border))]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))]' },
+  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-accent)]' },
+  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-success)]' },
+  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-warning)]' },
+  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-danger)]' },
 };
 
 const FIELD_LABELS = {
@@ -126,7 +125,7 @@ const Operation = () => {
         ) : (
           <>
             <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-              <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+              <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
               <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -277,7 +276,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     }
     if (field === 'targetRole') {
       const roles = Object.entries(ROLES).map(([k, v]) => ({ value: v, label: getRoleDisplay(v) || k }));
-      return <Select key={field} label={FIELD_LABELS[field]} options={[{ value: '', label: '— Seleccionar rol —' }, ...roles]} value={form.targetRole || ''} onChange={(e) => updateField('targetRole', e.target.value)} />;
+      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={roles} value={form.targetRole || ''} onChange={(v) => updateField('targetRole', v)} placeholder="— Seleccionar rol —" searchPlaceholder="Buscar rol…" clearable />;
     }
     if (field === 'targets') {
       const isIncident = command.id === 'incidente';
@@ -294,27 +293,20 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         if (!form.targetRole) return <div className="rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</div>;
         options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id }));
       }
+      const value = (form.targets || '').split(',').filter(Boolean);
       return (
-        <div key={field} className="space-y-1.5">
-          <label className="block text-label text-[var(--nx-text)]">{FIELD_LABELS[field]}</label>
-          <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-2 max-h-32 overflow-y-auto space-y-1">
-            {options.map((o) => (
-              <label key={o.value} className="flex items-center gap-2 text-body-sm text-[var(--nx-text)]">
-                <input
-                  type="checkbox"
-                  checked={(form.targets || '').split(',').includes(o.value)}
-                  onChange={(e) => {
-                    const current = (form.targets || '').split(',').filter(Boolean);
-                    const next = e.target.checked ? [...current, o.value] : current.filter((v) => v !== o.value);
-                    updateField('targets', next.join(','));
-                  }}
-                  className="accent-[var(--nx-accent)]"
-                />
-                {o.label}
-              </label>
-            ))}
-          </div>
-        </div>
+        <SearchableSelect
+          key={field}
+          label={FIELD_LABELS[field]}
+          options={options}
+          value={value}
+          onChange={(arr) => updateField('targets', Array.isArray(arr) ? arr.join(',') : arr)}
+          multiple
+          clearable
+          placeholder="Seleccionar destinatarios…"
+          searchPlaceholder="Buscar destinatario…"
+          emptyText="Sin destinatarios"
+        />
       );
     }
     if (field === 'message' || field === 'description' || field === 'reason') {

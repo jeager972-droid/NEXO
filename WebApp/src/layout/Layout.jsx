@@ -80,12 +80,12 @@ const Layout = () => {
   const greeting = useMemo(() => getGreeting(), []);
   const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
-  const isTeacher = user?.role === ROLES.DOCENTE;
+  const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)]">
-      {/* Sidebar: hidden on mobile for teacher, always visible on desktop */}
-      {(!isTeacher || isDesktop) && (
+      {/* Sidebar: hidden on mobile for teacher, portero and auxiliar, always visible on desktop */}
+      {(!noSidebar || isDesktop) && (
         <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
       )}
 
@@ -93,7 +93,7 @@ const Layout = () => {
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 lg:px-8" style={{ height: '72px' }}>
           <div className="flex items-center gap-3 min-w-0">
-            {(!isTeacher) && (
+            {(!noSidebar) && (
               <button
                 onClick={() => setSidebarOpen((v) => !v)}
                 className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"

@@ -4,13 +4,11 @@
  * Moodboard: mensajes llegados de NEXO — formato chat unificado para todos los roles.
  */
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Trash2, ChevronRight } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
-import { trackingApi } from '../api/tracking';
-import { ROLES } from '../config/roles';
+import { ROLES, getRoleDisplay } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Drawer } from '../components/ui/Overlay';
@@ -23,24 +21,78 @@ const parseMeta = (json) => {
   try { return json ? JSON.parse(json) : null; } catch { return null; }
 };
 
-const relTime = (iso) => {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'ahora';
-  if (min < 60) return `hace ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  const d = Math.floor(h / 24);
-  return `hace ${d} d`;
+const formatChatTime = (ts) => {
+  if (!ts) return '';
+  try {
+    const date = new Date(ts);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+  } catch { /* fallthrough */ }
+  if (typeof ts === 'string' && ts.includes(':')) {
+    const parts = ts.trim().split(' ');
+    return parts[parts.length - 1];
+  }
+  return ts;
+};
+
+const humanizeMessage = (notif) => {
+  const meta = parseMeta(notif.metadata_json);
+  const message = notif.message || notif.desc || '';
+  const action = meta?.action;
+
+  const get = (k) => (meta?.[k] ? String(meta[k]).trim() : '');
+  const student = get('student_name');
+  const group = get('group_name');
+  const teacher = get('teacher_name');
+  const sender = get('sender_name');
+  const reporter = get('reporter_name');
+  const reporterRole = get('reporter_role');
+  const reason = get('reason');
+  const location = get('location');
+  const motive = get('motivo');
+
+  const withGroup = (base) => (group ? `${base} del grupo ${group}` : base);
+  const by = (name, role) => {
+    if (!name) return '';
+    if (role && role !== name) return ` por ${name} (${role})`;
+    return ` por ${name}`;
+  };
+
+  switch (action) {
+    case 'permiso':
+      return `Se ha registrado un permiso${withGroup(student ? ` para el estudiante ${student}` : '')}${by(teacher)}.`;
+    case 'autorizar_salida':
+      return `Se autorizó una salida${withGroup(student ? ` para el estudiante ${student}` : '')}${by(teacher)}.`;
+    case 'sos':
+      return `Se emitió una alerta SOS${by(reporter, reporterRole)}${location && location !== 'No especificada' ? `. Ubicación: ${location}` : ''}.`;
+    case 'iniciar_seguimiento':
+      return `Se inició un seguimiento${withGroup(student ? ` para el estudiante ${student}` : '')} solicitado${by(sender)}.`;
+    case 'solicitud': {
+      const from = by(sender, get('sender_role'));
+      const roleText = get('sender_role') ? `${getRoleDisplay(get('sender_role')) || get('sender_role')}` : 'Personal de la institución';
+      return `${from ? `El ${roleText} ${sender}` : 'El personal de la institución'} te envió una solicitud. Revisa los detalles.`;
+    }
+    case 'incidente':
+      return `Se reportó un incidente${by(reporter, reporterRole)}${reason ? `: ${reason}` : ''}${location && location !== 'No especificada' ? `. Ubicación: ${location}` : ''}.`;
+    case 'citacion_confirmada':
+      return `El acudiente${withGroup(student ? ` de ${student}` : '')} confirmó la citación.`;
+    case 'reagendar_motivo':
+      return `El acudiente${withGroup(student ? ` de ${student}` : '')} pidió reagendar la citación${motive ? `: "${motive}"` : ''}.`;
+    case 'salida_no_autorizada':
+      return `Se marcó como error la salida autorizada${withGroup(student ? ` de ${student}` : '')}. Verificar de inmediato.`;
+    default:
+      if (message) return message.replace(/\.\s*Ver detalles\.?$/i, '').trim();
+      return notif.title || 'Novedad institucional';
+  }
 };
 
 const NotifItem = ({ notif, hasDetails, onClick }) => (
   <Surface className="p-4">
     <button onClick={onClick} className="w-full text-left">
       <NexoChatBubble
-        message={notif.message || notif.title || 'Novedad institucional'}
-        timestamp={relTime(notif.created_at)}
+        message={humanizeMessage(notif)}
+        timestamp={formatChatTime(notif.time || notif.created_at)}
       />
     </button>
     {hasDetails && (
@@ -56,7 +108,6 @@ const NotifItem = ({ notif, hasDetails, onClick }) => (
 
 const Notifications = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
@@ -97,27 +148,38 @@ const Notifications = () => {
     setNotifications((prev) => prev.map((n) => (n.id === id || n.notification_id === id ? { ...n, read: true } : n)));
   };
 
-  const startTrackingFromNotif = async (studentId) => {
-    try {
-      const res = await trackingApi.startTracking(studentId);
-      if (res.status === 'ok') {
-        setDetail(null);
-        navigate('/casos');
-        window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count: -1 } }));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const renderMetaList = (meta) => {
     if (!meta || !Object.keys(meta).length) return null;
+
+    const skip = new Set(['action']);
+    const labels = {
+      student_id: 'ID estudiante',
+      student_name: 'Estudiante',
+      teacher_name: 'Responsable',
+      sender_name: 'Remitente',
+      sender_role: 'Rol',
+      reporter_name: 'Reportante',
+      reporter_role: 'Rol',
+      guardian_phone: 'Teléfono acudiente',
+      group_name: 'Grupo',
+      reason: 'Motivo',
+      location: 'Ubicación',
+      message: 'Mensaje',
+      motivo: 'Mensaje del acudiente',
+      time_start: 'Hora inicio',
+      time_end: 'Hora fin',
+      targets: 'Destinatarios',
+    };
+
+    const entries = Object.entries(meta).filter(([key]) => !skip.has(key));
+    if (!entries.length) return null;
+
     return (
       <div className="space-y-2 mt-4">
-        {Object.entries(meta).map(([key, value]) => (
-          <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-            <span className="text-caption uppercase text-[var(--nx-text-muted)] font-medium shrink-0 sm:w-32">{key.replace(/_/g, ' ')}</span>
-            <span className="text-body text-[var(--nx-text)] break-words">{String(value)}</span>
+        {entries.map(([key, value]) => (
+          <div key={key} className="flex flex-col rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+            <span className="text-caption text-[var(--nx-text-muted)] font-medium shrink-0">{(labels[key] || key.replace(/_/g, ' '))}</span>
+            <span className="text-body text-[var(--nx-text)] break-words mt-0.5">{String(value)}</span>
           </div>
         ))}
       </div>
@@ -169,26 +231,26 @@ const Notifications = () => {
         {detail && (
           <Drawer
             title={detail.title || 'Notificación'}
-            context={detail.created_at ? new Date(detail.created_at).toLocaleString('es-CO') : undefined}
+            context={detail.time ? (detail.time.includes('/') ? detail.time : `Hoy a las ${detail.time}`) : undefined}
             onClose={() => setDetail(null)}
             size="sm"
           >
             <div className="p-5 space-y-3">
               <NexoChatBubble
-                message={detail.message || detail.title || 'Novedad institucional'}
-                timestamp={relTime(detail.created_at)}
+                message={humanizeMessage(detail)}
+                timestamp={formatChatTime(detail.time || detail.created_at)}
               />
-              {renderMetaList(parseMeta(detail.metadata_json))}
               {(() => {
                 const meta = parseMeta(detail.metadata_json);
-                if (meta?.action === 'iniciar_seguimiento' && meta.student_id && !isStaff) {
+                if (meta?.action === 'solicitud') {
                   return (
-                    <Button className="w-full mt-4" onClick={() => startTrackingFromNotif(meta.student_id)}>
-                      Iniciar seguimiento
-                    </Button>
+                    <NexoChatBubble
+                      message={meta?.reason || 'Sin detalles adicionales'}
+                      timestamp={formatChatTime(detail.time || detail.created_at)}
+                    />
                   );
                 }
-                return null;
+                return renderMetaList(meta);
               })()}
             </div>
           </Drawer>

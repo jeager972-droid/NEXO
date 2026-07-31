@@ -26,6 +26,7 @@ export const SearchableSelect = ({
   className,
   id: idProp,
   clearable,
+  multiple,
 }) => {
   const auto = useId();
   const id = idProp ?? `nx-ss-${auto}`;
@@ -52,7 +53,12 @@ export const SearchableSelect = ({
     }
   }, [open]);
 
-  const selected = options.find((o) => o.value === value);
+  const selectedValues = useMemo(() => {
+    if (!multiple) return value ? [value] : [];
+    return Array.isArray(value) ? value : (value ? String(value).split(',').filter(Boolean) : []);
+  }, [multiple, value]);
+
+  const selected = multiple ? options.filter((o) => selectedValues.includes(o.value)) : options.find((o) => o.value === value);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return options;
@@ -61,9 +67,20 @@ export const SearchableSelect = ({
   }, [options, query]);
 
   const handleSelect = (val) => {
-    onChange?.(val);
-    setOpen(false);
-    setQuery('');
+    if (!multiple) {
+      onChange?.(val);
+      setOpen(false);
+      setQuery('');
+      return;
+    }
+    const current = selectedValues;
+    const next = current.includes(val) ? current.filter((v) => v !== val) : [...current, val];
+    onChange?.(next);
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange?.(multiple ? [] : '');
   };
 
   return (
@@ -95,15 +112,17 @@ export const SearchableSelect = ({
                 : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),transparent)]'
           )}
         >
-          <span className={clsx('truncate', !selected && 'text-[var(--nx-text-muted)]')}>
-            {selected ? selected.label : placeholder}
+          <span className={clsx('truncate', (!selected || (Array.isArray(selected) && selected.length === 0)) && 'text-[var(--nx-text-muted)]')}>
+            {multiple
+              ? (selected?.length ? `${selected[0].label}${selected.length > 1 ? ` +${selected.length - 1}` : ''}` : placeholder)
+              : (selected ? selected.label : placeholder)}
           </span>
           <span className="flex items-center gap-1">
-            {clearable && selected && (
+            {clearable && (multiple ? selected?.length > 0 : selected) && (
               <span
                 role="button"
                 tabIndex={-1}
-                onClick={(e) => { e.stopPropagation(); handleSelect(''); }}
+                onClick={handleClear}
                 className="grid h-5 w-5 place-items-center rounded-xs text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]"
               >
                 <X size={14} />
@@ -145,24 +164,35 @@ export const SearchableSelect = ({
                 {filtered.length === 0 ? (
                   <p className="px-4 py-3 text-center text-body-sm text-[var(--nx-text-muted)]">{emptyText}</p>
                 ) : (
-                  filtered.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="option"
-                      aria-selected={opt.value === value}
-                      onClick={() => handleSelect(opt.value)}
-                      className={clsx(
-                        'flex w-full items-center justify-between px-4 py-2.5 text-left text-body transition-colors',
-                        opt.value === value
-                          ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]'
-                          : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'
-                      )}
-                    >
-                      <span className="truncate">{opt.label}</span>
-                      {opt.value === value && <Check size={14} className="shrink-0" />}
-                    </button>
-                  ))
+                  filtered.map((opt) => {
+                    const isSelected = selectedValues.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => handleSelect(opt.value)}
+                        className={clsx(
+                          'flex w-full items-center gap-3 px-4 py-2.5 text-left text-body transition-colors',
+                          isSelected
+                            ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]'
+                            : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'
+                        )}
+                      >
+                        {multiple && (
+                          <span className={clsx(
+                            'grid h-4 w-4 shrink-0 place-items-center rounded-xs border',
+                            isSelected ? 'border-[var(--nx-accent)] bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface)]'
+                          )}>
+                            {isSelected && <Check size={12} />}
+                          </span>
+                        )}
+                        <span className="flex-1 truncate">{opt.label}</span>
+                        {!multiple && isSelected && <Check size={14} className="shrink-0" />}
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </motion.div>

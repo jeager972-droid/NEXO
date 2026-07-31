@@ -171,5 +171,4 @@ export const exportWord = (spec) => {
 export const EXPORT_FORMATS = [
   { id: 'excel', label: 'Excel', extension: '.xls', run: exportExcel },
   { id: 'word',  label: 'Word',  extension: '.doc', run: exportWord },
-  { id: 'csv',   label: 'CSV',   extension: '.csv', run: exportCsv },
 ];
