@@ -28,10 +28,10 @@ const edges = {
 /** Hover border per tone — keeps the card's color identity on hover */
 const hoverBorders = {
   neutral: 'hover:border-[var(--nx-border-accent)]',
-  accent:  'hover:border-[var(--nx-accent)]',
-  success: 'hover:border-[var(--nx-success)]',
-  warning: 'hover:border-[var(--nx-warning)]',
-  danger:  'hover:border-[var(--nx-danger)]',
+  accent:  'hover:border-[var(--nx-border-accent)]',
+  success: 'hover:border-[var(--nx-border-success)]',
+  warning: 'hover:border-[var(--nx-border-warning)]',
+  danger:  'hover:border-[var(--nx-border-danger)]',
 };
 
 export const Card = React.forwardRef(
