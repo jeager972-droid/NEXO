@@ -41,10 +41,10 @@ const COMMANDS_CATALOG = [
 ];
 
 const CMD_TONE_STYLES = {
-  accent:  { bg: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-accent)]' },
-  success: { bg: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-success)]' },
-  warning: { bg: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-warning)]' },
-  danger:  { bg: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]', icon: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-danger)]' },
+  accent:  { bg: 'bg-[var(--nx-surface-accent)]', icon: 'bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-accent)]' },
+  success: { bg: 'bg-[var(--nx-surface-success)]', icon: 'bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-success)]' },
+  warning: { bg: 'bg-[var(--nx-surface-warning)]', icon: 'bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-warning)]' },
+  danger:  { bg: 'bg-[var(--nx-surface-danger)]', icon: 'bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-danger)]' },
 };
 
 const FIELD_LABELS = {
@@ -346,7 +346,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
             <div>
               <p className="text-h2 text-[var(--nx-text)]">{command.title}</p>
               {command.warning && (
-                <div className="mt-2 flex items-center gap-2 rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),var(--nx-tint-base))] px-3 py-2">
+                <div className="mt-2 flex items-center gap-2 rounded-control bg-[var(--nx-subtle-bg-warning)] px-3 py-2">
                   <AlertOctagon size={14} className="shrink-0 text-[var(--nx-warning)]" />
                   <p className="text-body-sm text-[var(--nx-warning)]">{command.warning}</p>
                 </div>
@@ -355,7 +355,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
           </div>
 
           {fetchError && (
-            <div className="mb-4 flex items-center gap-3 rounded-control border border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] px-4 py-3" role="alert">
+            <div className="mb-4 flex items-center gap-3 rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3" role="alert">
               <AlertOctagon size={18} className="shrink-0 text-[var(--nx-danger)]" />
               <p className="text-body-sm text-[var(--nx-danger)]">{fetchError}</p>
             </div>

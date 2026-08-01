@@ -165,8 +165,8 @@ export const ConfirmDialog = ({
       className={cn(
         'mb-5 grid h-12 w-12 place-items-center rounded-surface',
         destructive
-          ? 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-danger)]'
-          : 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)]'
+          ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
+          : 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
       )}
     >
       <AlertTriangle size={22} strokeWidth={1.75} aria-hidden />

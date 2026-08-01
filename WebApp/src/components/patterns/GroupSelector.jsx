@@ -51,7 +51,7 @@ export const GroupSelector = ({ value, options = [], onChange, loading, disabled
               className={clsx(
                 'px-3 py-2.5 text-body cursor-pointer transition-colors duration-fast',
                 opt.value === value
-                  ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)]'
+                  ? 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
                   : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'
               )}
             >

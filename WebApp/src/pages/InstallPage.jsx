@@ -70,7 +70,7 @@ export default function InstallPage() {
         <>
           <Card>
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))]">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[var(--nx-subtle-bg-accent)]">
                 <Icon size={24} className="text-[var(--nx-accent)]" />
               </div>
               <div className="flex-1">

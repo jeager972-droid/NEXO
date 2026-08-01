@@ -82,13 +82,13 @@ export default function Casos() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((row) => (
-            <Card key={row.tracking_id || row.student_id} asAction tone="warning" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)} className="border-[color-mix(in_oklch,var(--nx-warning)_55%,var(--nx-border))] hover:border-[color-mix(in_oklch,var(--nx-warning)_65%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]">
+            <Card key={row.tracking_id || row.student_id} asAction tone="warning" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)} className="border-[var(--nx-border-warning)] hover:border-[var(--nx-warning)] bg-[var(--nx-surface-warning)]">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)]">{row.group_name || 'Sin grupo'}</p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
                   <AlertTriangle size={20} />
                 </div>
               </div>

@@ -176,7 +176,7 @@ export const SearchableSelect = ({
                         className={clsx(
                           'flex w-full items-center gap-3 px-4 py-2.5 text-left text-body transition-colors',
                           isSelected
-                            ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)]'
+                            ? 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
                             : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'
                         )}
                       >

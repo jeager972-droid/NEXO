@@ -10,10 +10,10 @@ import { cn } from '../../utils/cn';
 /** Tonos cerrados: el color acompaña al texto, nunca lo sustituye. */
 const tones = {
   neutral: 'border-[var(--nx-border)]',
-  accent:  'border-[color-mix(in_oklch,var(--nx-accent)_var(--nx-border-mix),var(--nx-border))]',
-  success: 'border-[color-mix(in_oklch,var(--nx-success)_var(--nx-border-mix),var(--nx-border))]',
-  warning: 'border-[color-mix(in_oklch,var(--nx-warning)_var(--nx-border-mix),var(--nx-border))]',
-  danger:  'border-[color-mix(in_oklch,var(--nx-danger)_var(--nx-border-mix),var(--nx-border))]',
+  accent:  'border-[var(--nx-border-accent)]',
+  success: 'border-[var(--nx-border-success)]',
+  warning: 'border-[var(--nx-border-warning)]',
+  danger:  'border-[var(--nx-border-danger)]',
 };
 
 /** Franja de 3 px a la izquierda: patrón de riesgo del moodboard (.nx-risk). */
@@ -27,11 +27,11 @@ const edges = {
 
 /** Hover border per tone — keeps the card's color identity on hover */
 const hoverBorders = {
-  neutral: 'hover:border-[color-mix(in_oklch,var(--nx-accent)_45%,var(--nx-border))]',
-  accent:  'hover:border-[color-mix(in_oklch,var(--nx-accent)_50%,var(--nx-border))]',
-  success: 'hover:border-[color-mix(in_oklch,var(--nx-success)_50%,var(--nx-border))]',
-  warning: 'hover:border-[color-mix(in_oklch,var(--nx-warning)_50%,var(--nx-border))]',
-  danger:  'hover:border-[color-mix(in_oklch,var(--nx-danger)_50%,var(--nx-border))]',
+  neutral: 'hover:border-[var(--nx-border-accent)]',
+  accent:  'hover:border-[var(--nx-accent)]',
+  success: 'hover:border-[var(--nx-success)]',
+  warning: 'hover:border-[var(--nx-warning)]',
+  danger:  'hover:border-[var(--nx-danger)]',
 };
 
 export const Card = React.forwardRef(

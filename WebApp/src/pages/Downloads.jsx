@@ -43,7 +43,7 @@ const Downloads = () => {
             key={p.id}
             onClick={() => setSelected(p.id)}
             className={`rounded-surface border p-4 text-left transition-all duration-fast ${
-              selected === p.id ? 'border-[var(--nx-accent)] bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))]' : 'border-[var(--nx-border)] hover:border-[var(--nx-text-muted)]'
+              selected === p.id ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)]' : 'border-[var(--nx-border)] hover:border-[var(--nx-text-muted)]'
             }`}
           >
             <div className="flex items-center justify-between">
@@ -57,7 +57,7 @@ const Downloads = () => {
 
       <Card>
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control" style={{ backgroundColor: 'color-mix(in oklch, var(--nx-accent) var(--nx-subtle-mix), var(--nx-tint-base))' }}>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control" style={{ backgroundColor: 'var(--nx-subtle-bg-accent)' }}>
             <Icon size={24} style={{ color: active.color }} />
           </div>
           <div className="flex-1">

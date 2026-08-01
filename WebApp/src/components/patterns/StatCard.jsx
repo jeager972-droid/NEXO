@@ -9,18 +9,18 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const tones = {
   neutral:  'border-[var(--nx-border)] bg-[var(--nx-surface)]',
-  accent:   'border-[var(--nx-accent)] bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-state-mix),var(--nx-tone-mix))]',
-  success:  'border-[var(--nx-success)] bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-state-mix),var(--nx-tone-mix))]',
-  warning:  'border-[var(--nx-warning)] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]',
-  danger:   'border-[var(--nx-danger)] bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-state-mix),var(--nx-tone-mix))]',
+  accent:   'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)]',
+  success:  'border-[var(--nx-success)] bg-[var(--nx-surface-success)]',
+  warning:  'border-[var(--nx-warning)] bg-[var(--nx-surface-warning)]',
+  danger:   'border-[var(--nx-danger)] bg-[var(--nx-surface-danger)]',
 };
 
 const iconTile = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]',
-  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]',
-  success:  'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]',
-  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]',
-  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]',
+  accent:   'bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]',
+  success:  'bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]',
+  warning:  'bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]',
+  danger:   'bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]',
 };
 
 const trendMeta = {

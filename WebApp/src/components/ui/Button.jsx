@@ -17,7 +17,7 @@ const variants = {
     'hover:bg-[var(--nx-surface-subtle)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),var(--nx-tint-base))]',
   quiet:
     'bg-transparent text-[var(--nx-accent)] ' +
-    'hover:bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))]',
+    'hover:bg-[var(--nx-subtle-bg-accent)]',
   ghost:
     'bg-transparent text-[var(--nx-text-muted)] ' +
     'hover:text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]',

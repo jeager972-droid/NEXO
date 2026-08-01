@@ -39,6 +39,27 @@
   --nx-subtle-mix-w:  13%;
   --nx-border-mix:    35%;
 
+  /* Per-tone surfaces — color-mix in light, solid oklch in dark */
+  --nx-surface-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-state-mix), var(--nx-tone-mix));
+  --nx-surface-success: color-mix(in oklch, var(--nx-success) var(--nx-state-mix), var(--nx-tone-mix));
+  --nx-surface-warning: color-mix(in oklch, var(--nx-warning) var(--nx-state-mix-w), var(--nx-tone-mix));
+  --nx-surface-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-state-mix), var(--nx-tone-mix));
+
+  --nx-icon-bg-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-icon-mix-pct), var(--nx-tint-base));
+  --nx-icon-bg-success: color-mix(in oklch, var(--nx-success) var(--nx-icon-mix-pct), var(--nx-tint-base));
+  --nx-icon-bg-warning: color-mix(in oklch, var(--nx-warning) var(--nx-icon-mix-w), var(--nx-tint-base));
+  --nx-icon-bg-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-icon-mix-pct), var(--nx-tint-base));
+
+  --nx-subtle-bg-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-subtle-mix), var(--nx-tint-base));
+  --nx-subtle-bg-success: color-mix(in oklch, var(--nx-success) var(--nx-subtle-mix), var(--nx-tint-base));
+  --nx-subtle-bg-warning: color-mix(in oklch, var(--nx-warning) var(--nx-subtle-mix-w), var(--nx-tint-base));
+  --nx-subtle-bg-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-subtle-mix), var(--nx-tint-base));
+
+  --nx-border-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-border-mix), var(--nx-border));
+  --nx-border-success: color-mix(in oklch, var(--nx-success) var(--nx-border-mix), var(--nx-border));
+  --nx-border-warning: color-mix(in oklch, var(--nx-warning) var(--nx-border-mix), var(--nx-border));
+  --nx-border-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-border-mix), var(--nx-border));
+
   /* Ring de foco de campo — moodboard: 3px al 12% */
   --nx-ring:          0 0 0 3px color-mix(in oklch, var(--nx-accent) var(--nx-state-mix), transparent);
   --nx-ring-danger:   0 0 0 3px color-mix(in oklch, var(--nx-danger) var(--nx-state-mix), transparent);
@@ -97,8 +118,7 @@
   --nx-danger-strong: oklch(78% 0.17 25);
   --nx-on-solid:      oklch(18% 0.008 245);
 
-  /* Dark mode: colors overlay as dark pastel — they predominate, never blend with the background.
-     Mix target is a fixed dark neutral (not the surface) so the color stays true. */
+  /* Dark mode: solid dark pastel colors — NO mixing, colors overlay directly */
   --nx-tone-mix:      oklch(30% 0.003 245);
   --nx-icon-mix:      oklch(99% 0.005 245);
   --nx-tint-base:     oklch(30% 0.003 245);
@@ -109,6 +129,27 @@
   --nx-subtle-mix:    22%;
   --nx-subtle-mix-w:  24%;
   --nx-border-mix:    55%;
+
+  /* Solid dark pastel surfaces — predominate, never blend */
+  --nx-surface-accent:  oklch(30% 0.07 245);
+  --nx-surface-success: oklch(30% 0.07 155);
+  --nx-surface-warning: oklch(33% 0.07 70);
+  --nx-surface-danger:  oklch(30% 0.08 25);
+
+  --nx-icon-bg-accent:  oklch(26% 0.06 245);
+  --nx-icon-bg-success: oklch(26% 0.06 155);
+  --nx-icon-bg-warning: oklch(28% 0.06 70);
+  --nx-icon-bg-danger:  oklch(26% 0.07 25);
+
+  --nx-subtle-bg-accent:  oklch(23% 0.04 245);
+  --nx-subtle-bg-success: oklch(23% 0.04 155);
+  --nx-subtle-bg-warning: oklch(25% 0.04 70);
+  --nx-subtle-bg-danger:  oklch(23% 0.045 25);
+
+  --nx-border-accent:  oklch(52% 0.11 245);
+  --nx-border-success: oklch(52% 0.11 155);
+  --nx-border-warning: oklch(56% 0.11 70);
+  --nx-border-danger:  oklch(52% 0.13 25);
 
   /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
   --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.20);

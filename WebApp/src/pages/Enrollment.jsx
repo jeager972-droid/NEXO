@@ -90,7 +90,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
           <Stepper steps={STEPS} current={step} />
         </div>
 
-        {saveError && <div className="mb-4 rounded-control bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">{saveError}</div>}
+        {saveError && <div className="mb-4 rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">{saveError}</div>}
 
         <AnimatePresence mode="wait">
           <motion.div key={step} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.16 }} className="space-y-5">
@@ -113,13 +113,13 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             )}
             {step === 4 && (
               <div className="space-y-5">
-                <div className="rounded-control bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),var(--nx-tint-base))] p-4 text-body text-[var(--nx-success)] flex items-center gap-2">
+                <div className="rounded-control bg-[var(--nx-subtle-bg-success)] p-4 text-body text-[var(--nx-success)] flex items-center gap-2">
                   <Check size={18} /> Estudiante guardado correctamente.
                 </div>
                 <div className="space-y-2">
                   <p className="text-label text-[var(--nx-text)]">Lector biométrico</p>
                   {biometricStatus === 'checking' ? <Skeleton className="h-12" /> : (
-                    <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-success)]' : 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),var(--nx-tint-base))] text-[var(--nx-warning)]'}`}>
+                    <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]'}`}>
                       {biometricStatus === 'connected' ? 'Lector conectado. Puedes registrar huella.' : 'No se detectó lector biométrico.'}
                     </div>
                   )}
@@ -138,7 +138,7 @@ const StudentAvatar = ({ student, size = 'md' }) => {
   const initials = `${(student.first_name || '')[0] || ''}${(student.last_name || '')[0] || ''}`.toUpperCase();
   const sizes = { sm: 'h-9 w-9 text-body-sm', md: 'h-12 w-12 text-h3', lg: 'h-16 w-16 text-h2' };
   return (
-    <div className={`grid shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)] font-semibold ${sizes[size]}`}>
+    <div className={`grid shrink-0 place-items-center rounded-full bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] font-semibold ${sizes[size]}`}>
       {initials || <User size={size === 'lg' ? 28 : 18} />}
     </div>
   );
