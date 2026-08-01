@@ -88,7 +88,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5 border-b border-[var(--nx-border)]">
-          <LogoNexo className="h-8" />
+          <LogoNexo className="h-8" useImage />
           <button onClick={toggleSidebar} className="lg:hidden p-1 text-[var(--nx-text-muted)]" aria-label="Cerrar menú">
             <X size={20} />
           </button>

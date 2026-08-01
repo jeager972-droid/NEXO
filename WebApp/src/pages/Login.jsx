@@ -81,7 +81,7 @@ const Login = () => {
       >
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="h-14 w-14 rounded-surface bg-[var(--nx-accent)] text-[var(--nx-accent-text)] flex items-center justify-center">
-            <LogoNexo className="h-8" showText={false} />
+            <LogoNexo className="h-8" showText={false} useImage />
           </div>
         </div>
 

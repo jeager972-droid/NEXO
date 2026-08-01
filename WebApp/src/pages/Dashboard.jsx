@@ -323,8 +323,12 @@ const localDateStr = (date = new Date()) => {
   return `${y}-${m}-${d}`;
 };
 
+const GROUP_KEY = 'nexo:teacher:selected-group';
+
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
-  const [selectedGroup, setSelectedGroup] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState(() => {
+    try { return localStorage.getItem(GROUP_KEY) || ''; } catch { return ''; }
+  });
   const [groupStats, setGroupStats]       = useState(null);
   const [groupLoading, setGroupLoading]   = useState(false);
 
@@ -357,6 +361,12 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const filteredGroups = groupQuery.trim()
     ? groupNames.filter(g => g.toLowerCase().includes(groupQuery.toLowerCase()))
     : groupNames;
+
+  // Persist selected group and keep selector bar usable
+  useEffect(() => {
+    if (selectedGroup) localStorage.setItem(GROUP_KEY, selectedGroup);
+    else localStorage.removeItem(GROUP_KEY);
+  }, [selectedGroup]);
 
   // Fetch per-group stats when group changes
   useEffect(() => {

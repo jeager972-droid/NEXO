@@ -1,8 +1,25 @@
 /**
  * LogoNexo / NEXO Institucional
- * Logo SVG reutilizable con color controlado por token semántico.
+ * Logo reutilizable. Puede mostrar la imagen institucional del
+ * usuario (public/logo/logo_nexo_app.png) o fallback al SVG NEXO.
  */
-const LogoNexo = ({ className = 'h-12', showText = true, variant = 'default' }) => {
+import { useState } from 'react';
+
+const LogoNexo = ({ className = 'h-12', showText = true, variant = 'default', useImage = false }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (useImage && !imageFailed) {
+    return (
+      <img
+        src="/logo/logo_nexo_app.png"
+        alt="NEXO"
+        className={className}
+        style={{ objectFit: 'contain', objectPosition: 'left center' }}
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
   const color = variant === 'light' ? 'var(--nx-canvas)' : 'var(--nx-text)';
   const accent = 'var(--nx-accent)';
   return (

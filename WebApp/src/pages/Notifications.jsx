@@ -148,42 +148,13 @@ const Notifications = () => {
     setNotifications((prev) => prev.map((n) => (n.id === id || n.notification_id === id ? { ...n, read: true } : n)));
   };
 
-  const renderMetaList = (meta) => {
-    if (!meta || !Object.keys(meta).length) return null;
-
-    const skip = new Set(['action']);
-    const labels = {
-      student_id: 'ID estudiante',
-      student_name: 'Estudiante',
-      teacher_name: 'Responsable',
-      sender_name: 'Remitente',
-      sender_role: 'Rol',
-      reporter_name: 'Reportante',
-      reporter_role: 'Rol',
-      guardian_phone: 'Teléfono acudiente',
-      group_name: 'Grupo',
-      reason: 'Motivo',
-      location: 'Ubicación',
-      message: 'Mensaje',
-      motivo: 'Mensaje del acudiente',
-      time_start: 'Hora inicio',
-      time_end: 'Hora fin',
-      targets: 'Destinatarios',
-    };
-
-    const entries = Object.entries(meta).filter(([key]) => !skip.has(key));
-    if (!entries.length) return null;
-
-    return (
-      <div className="space-y-2 mt-4">
-        {entries.map(([key, value]) => (
-          <div key={key} className="flex flex-col rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-            <span className="text-caption text-[var(--nx-text-muted)] font-medium shrink-0">{(labels[key] || key.replace(/_/g, ' '))}</span>
-            <span className="text-body text-[var(--nx-text)] break-words mt-0.5">{String(value)}</span>
-          </div>
-        ))}
-      </div>
-    );
+  const getDetailMessage = (notif, meta) => {
+    const raw = notif?.message || '';
+    const cleanRaw = raw.replace(/\.?\s*Ver detalles\.?$/i, '').trim();
+    const extra = meta?.message || meta?.reason || meta?.motivo || '';
+    if (extra) return String(extra).trim();
+    if (cleanRaw && cleanRaw !== humanizeMessage(notif)) return cleanRaw;
+    return '';
   };
 
   if (loading) {
@@ -242,15 +213,14 @@ const Notifications = () => {
               />
               {(() => {
                 const meta = parseMeta(detail.metadata_json);
-                if (meta?.action === 'solicitud') {
-                  return (
-                    <NexoChatBubble
-                      message={meta?.reason || 'Sin detalles adicionales'}
-                      timestamp={formatChatTime(detail.time || detail.created_at)}
-                    />
-                  );
-                }
-                return renderMetaList(meta);
+                const detailMessage = getDetailMessage(detail, meta);
+                if (!detailMessage) return null;
+                return (
+                  <NexoChatBubble
+                    message={detailMessage}
+                    timestamp={formatChatTime(detail.time || detail.created_at)}
+                  />
+                );
               })()}
             </div>
           </Drawer>

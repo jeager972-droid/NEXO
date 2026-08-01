@@ -32,7 +32,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg', 'logo/logo_nexo_app.png'],
       workbox: {
         navigateFallback: '/app/index.html',
         runtimeCaching: [
@@ -86,20 +86,20 @@ export default defineConfig({
             name: 'Panel',
             short_name: 'Panel',
             url: '/app/',
-            icons: [{ src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' }]
+            icons: [{ src: '/logo/logo_nexo_app.png', sizes: 'any', type: 'image/png' }]
           },
           {
             name: 'Operación',
             short_name: 'Operación',
             url: '/app/operacion',
-            icons: [{ src: '/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml' }]
+            icons: [{ src: '/logo/logo_nexo_app.png', sizes: 'any', type: 'image/png' }]
           }
         ],
         icons: [
           {
-            src: '/pwa-icon.svg',
+            src: '/logo/logo_nexo_app.png',
             sizes: 'any',
-            type: 'image/svg+xml'
+            type: 'image/png'
           },
           {
             src: '/mask-icon.svg',
