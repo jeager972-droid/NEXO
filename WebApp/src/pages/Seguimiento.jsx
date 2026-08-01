@@ -82,7 +82,7 @@ export default function Casos() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((row) => (
-            <Card key={row.tracking_id || row.student_id} asAction tone="warning" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)} className="bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]">
+            <Card key={row.tracking_id || row.student_id} asAction tone="warning" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)} className="border-[color-mix(in_oklch,var(--nx-warning)_55%,var(--nx-border))] hover:border-[color-mix(in_oklch,var(--nx-warning)_65%,var(--nx-border))] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-state-mix-w),var(--nx-tone-mix))]">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>

@@ -10,7 +10,6 @@ import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
 import { ROLES, getRoleDisplay } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
-import { Button } from '../components/ui/Button';
 import { Drawer } from '../components/ui/Overlay';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 
@@ -174,15 +173,20 @@ const Notifications = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3 flex-1">
           <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
           <p className="text-label text-[var(--nx-text)]">Notificaciones</p>
         </div>
         {notifications.length > 0 && (
-          <Button variant="ghost" size="sm" loading={clearing} onClick={handleClear} leftIcon={<Trash2 size={14} />} className="ml-4 shrink-0">
+          <button
+            onClick={handleClear}
+            disabled={clearing}
+            className="mt-0 flex shrink-0 items-center gap-1 text-caption text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
+          >
+            <Trash2 size={12} />
             Vaciar
-          </Button>
+          </button>
         )}
       </div>
 

@@ -96,16 +96,17 @@
   --nx-danger-strong: oklch(78% 0.17 25);
   --nx-on-solid:      oklch(18% 0.008 245);
 
-  /* In dark mode, higher mix percentages so tints are clearly visible on dark surfaces */
-  --nx-tone-mix:      var(--nx-surface-subtle);
+  /* Dark mode: colors overlay as dark pastel — they predominate, never blend with the background.
+     Mix target is a fixed dark neutral (not the surface) so the color stays true. */
+  --nx-tone-mix:      oklch(30% 0.003 245);
   --nx-icon-mix:      oklch(99% 0.005 245);
-  --nx-state-mix:     24%;
-  --nx-state-mix-w:   26%;
-  --nx-icon-mix-pct:  24%;
-  --nx-icon-mix-w:    26%;
-  --nx-subtle-mix:    18%;
-  --nx-subtle-mix-w:  20%;
-  --nx-border-mix:    45%;
+  --nx-state-mix:     38%;
+  --nx-state-mix-w:   40%;
+  --nx-icon-mix-pct:  30%;
+  --nx-icon-mix-w:    32%;
+  --nx-subtle-mix:    22%;
+  --nx-subtle-mix-w:  24%;
+  --nx-border-mix:    55%;
 
   /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
   --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.20);
