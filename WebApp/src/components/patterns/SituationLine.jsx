@@ -8,10 +8,10 @@ import { Badge } from '../ui/Badge';
 
 const schemes = {
   neutral:  { bar: 'bg-[var(--nx-text-muted)]', tile: 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]' },
-  accent:   { bar: 'bg-[var(--nx-accent)]',     tile: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]' },
-  success:  { bar: 'bg-[var(--nx-success)]',    tile: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),transparent)] text-[var(--nx-success)]' },
-  warning:  { bar: 'bg-[var(--nx-warning)]',    tile: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),transparent)] text-[var(--nx-warning)]' },
-  danger:   { bar: 'bg-[var(--nx-danger)]',     tile: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] text-[var(--nx-danger)]' },
+  accent:   { bar: 'bg-[var(--nx-accent)]',     tile: 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)]' },
+  success:  { bar: 'bg-[var(--nx-success)]',    tile: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-success)]' },
+  warning:  { bar: 'bg-[var(--nx-warning)]',    tile: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),var(--nx-tint-base))] text-[var(--nx-warning)]' },
+  danger:   { bar: 'bg-[var(--nx-danger)]',     tile: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-danger)]' },
 };
 
 export const SituationLine = ({

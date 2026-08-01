@@ -23,7 +23,7 @@ const NavItem = ({ item, onClick, showNotifDot }) => {
       className={({ isActive }) =>
         `group flex items-center gap-3 px-4 py-3 mx-3 rounded-control text-body font-medium transition-all duration-fast ` +
         (isActive
-          ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]'
+          ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)]'
           : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]')
       }
     >
@@ -72,7 +72,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={toggleSidebar}
-            className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_45%,transparent)] lg:hidden"
+            className="fixed inset-0 z-40 bg-[color-mix(in_oklch,var(--nx-text)_45%,var(--nx-tint-base))] lg:hidden"
           />
         )}
       </AnimatePresence>

@@ -151,7 +151,7 @@ const Layout = () => {
                     <div className="border-t border-[var(--nx-border)]" />
                     <button
                       onClick={() => { setProfileOpen(false); logout(); }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-body text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] transition-colors"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-body text-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] transition-colors"
                     >
                       <LogOut size={16} /> Cerrar sesión
                     </button>

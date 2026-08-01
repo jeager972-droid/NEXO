@@ -16,7 +16,7 @@ const field = (invalid) =>
     'disabled:cursor-not-allowed disabled:opacity-50',
     invalid
       ? 'border-[var(--nx-danger)] focus:shadow-[var(--nx-ring-danger)]'
-      : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),transparent)] focus:border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]'
+      : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),var(--nx-tint-base))] focus:border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]'
   );
 
 const FieldShell = ({ id, label, error, help, hint, required, children, className }) => (

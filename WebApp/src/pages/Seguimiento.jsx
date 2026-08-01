@@ -88,7 +88,7 @@ export default function Casos() {
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)]">{row.group_name || 'Sin grupo'}</p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
                   <AlertTriangle size={20} />
                 </div>
               </div>

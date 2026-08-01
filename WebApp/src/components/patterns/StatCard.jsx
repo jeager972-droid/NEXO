@@ -17,10 +17,10 @@ const tones = {
 
 const iconTile = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]',
-  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]',
-  success:  'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]',
-  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),transparent)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]',
-  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),transparent)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]',
+  accent:   'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]',
+  success:  'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]',
+  warning:  'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-icon-mix-w),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]',
+  danger:   'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-icon-mix-pct),var(--nx-tint-base))] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]',
 };
 
 const trendMeta = {

@@ -28,6 +28,7 @@
   /* Tone mix targets — change between light/dark */
   --nx-tone-mix:      white;
   --nx-icon-mix:      black;
+  --nx-tint-base:     transparent;
 
   /* State mix opacities — light theme (pastel, calm) */
   --nx-state-mix:     14%;
@@ -100,6 +101,7 @@
      Mix target is a fixed dark neutral (not the surface) so the color stays true. */
   --nx-tone-mix:      oklch(30% 0.003 245);
   --nx-icon-mix:      oklch(99% 0.005 245);
+  --nx-tint-base:     oklch(30% 0.003 245);
   --nx-state-mix:     38%;
   --nx-state-mix-w:   40%;
   --nx-icon-mix-pct:  30%;

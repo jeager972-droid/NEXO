@@ -15,17 +15,17 @@ const EASE = [0.22, 1, 0.36, 1];
 
 const variants = {
   success: {
-    ring: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),transparent)] text-[var(--nx-success)]',
+    ring: 'bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-success)]',
     Icon: CheckCircle2,
     animate: 'animate-seal',
   },
   warning: {
-    ring: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),transparent)] text-[var(--nx-warning)]',
+    ring: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),var(--nx-tint-base))] text-[var(--nx-warning)]',
     Icon: AlertTriangle,
     animate: '',
   },
   danger: {
-    ring: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] text-[var(--nx-danger)]',
+    ring: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-danger)]',
     Icon: XCircle,
     animate: '',
   },

@@ -109,7 +109,7 @@ export const SearchableSelect = ({
               ? 'border-[var(--nx-danger)]'
               : open
                 ? 'border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]'
-                : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),transparent)]'
+                : 'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),var(--nx-tint-base))]'
           )}
         >
           <span className={clsx('truncate', (!selected || (Array.isArray(selected) && selected.length === 0)) && 'text-[var(--nx-text-muted)]')}>
@@ -176,7 +176,7 @@ export const SearchableSelect = ({
                         className={clsx(
                           'flex w-full items-center gap-3 px-4 py-2.5 text-left text-body transition-colors',
                           isSelected
-                            ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),transparent)] text-[var(--nx-accent)]'
+                            ? 'bg-[color-mix(in_oklch,var(--nx-accent)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-accent)]'
                             : 'text-[var(--nx-text)] hover:bg-[var(--nx-surface-subtle)]'
                         )}
                       >

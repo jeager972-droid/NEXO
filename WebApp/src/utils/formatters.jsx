@@ -100,8 +100,8 @@ export function formatCellValue(key, value) {
     if (!isNaN(d)) return fmtShortDateOnly(value);
   }
   const sv = String(value).trim();
-  if (sv === 'en proceso') return <span className="inline-flex items-center rounded-full border border-[var(--nx-warning)] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),transparent)] px-2 py-0.5 text-caption font-medium text-[var(--nx-warning)]">En Proceso</span>;
-  if (sv === 'resuelto') return <span className="inline-flex items-center rounded-full border border-[var(--nx-success)] bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),transparent)] px-2 py-0.5 text-caption font-medium text-[var(--nx-success)]">Resuelto</span>;
+  if (sv === 'en proceso') return <span className="inline-flex items-center rounded-full border border-[var(--nx-warning)] bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),var(--nx-tint-base))] px-2 py-0.5 text-caption font-medium text-[var(--nx-warning)]">En Proceso</span>;
+  if (sv === 'resuelto') return <span className="inline-flex items-center rounded-full border border-[var(--nx-success)] bg-[color-mix(in_oklch,var(--nx-success)_var(--nx-subtle-mix),var(--nx-tint-base))] px-2 py-0.5 text-caption font-medium text-[var(--nx-success)]">Resuelto</span>;
 
   if (ENUM_LABELS[sv]) return ENUM_LABELS[sv];
   if (ENUM_LABELS[sv.toUpperCase()]) return ENUM_LABELS[sv.toUpperCase()];

@@ -9,9 +9,9 @@ import { cn } from '../../utils/cn';
 
 const variants = {
   empty:   { tile: 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]', fallback: Inbox },
-  error:   { tile: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),transparent)] text-[var(--nx-danger)]', fallback: AlertTriangle },
+  error:   { tile: 'bg-[color-mix(in_oklch,var(--nx-danger)_var(--nx-subtle-mix),var(--nx-tint-base))] text-[var(--nx-danger)]', fallback: AlertTriangle },
   denied:  { tile: 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]', fallback: Lock },
-  offline: { tile: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),transparent)] text-[var(--nx-warning)]', fallback: WifiOff },
+  offline: { tile: 'bg-[color-mix(in_oklch,var(--nx-warning)_var(--nx-subtle-mix-w),var(--nx-tint-base))] text-[var(--nx-warning)]', fallback: WifiOff },
 };
 
 export const EmptyState = ({
