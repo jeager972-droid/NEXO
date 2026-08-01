@@ -86,26 +86,26 @@
   --nx-text-muted:    oklch(72% 0.012 245);
   --nx-border:        oklch(35% 0.012 245);
 
-  /* Semantic colors: same hues as light, darkened 3 tones so they stand out without glowing */
-  --nx-accent:        oklch(45% 0.115 245);
-  --nx-accent-strong: oklch(51% 0.120 245);
-  --nx-accent-text:   oklch(99% 0.005 245);
-  --nx-success:       oklch(49% 0.125 155);
-  --nx-warning:       oklch(59% 0.135 70);
-  --nx-danger:        oklch(49% 0.175 25);
-  --nx-danger-strong: oklch(55% 0.180 25);
-  --nx-on-solid:      oklch(99% 0.005 245);
+  /* Semantic colors: brighter & more saturated than light mode so they pop on dark surfaces */
+  --nx-accent:        oklch(72% 0.14 245);
+  --nx-accent-strong: oklch(78% 0.12 245);
+  --nx-accent-text:   oklch(18% 0.008 245);
+  --nx-success:       oklch(74% 0.16 155);
+  --nx-warning:       oklch(78% 0.15 70);
+  --nx-danger:        oklch(72% 0.19 25);
+  --nx-danger-strong: oklch(78% 0.17 25);
+  --nx-on-solid:      oklch(18% 0.008 245);
 
-  /* In dark mode, keep surface tints subtle — never loud */
+  /* In dark mode, higher mix percentages so tints are clearly visible on dark surfaces */
   --nx-tone-mix:      var(--nx-surface-subtle);
   --nx-icon-mix:      oklch(99% 0.005 245);
-  --nx-state-mix:     16%;
-  --nx-state-mix-w:   18%;
-  --nx-icon-mix-pct:  18%;
-  --nx-icon-mix-w:    20%;
-  --nx-subtle-mix:    12%;
-  --nx-subtle-mix-w:  14%;
-  --nx-border-mix:    35%;
+  --nx-state-mix:     24%;
+  --nx-state-mix-w:   26%;
+  --nx-icon-mix-pct:  24%;
+  --nx-icon-mix-w:    26%;
+  --nx-subtle-mix:    18%;
+  --nx-subtle-mix-w:  20%;
+  --nx-border-mix:    45%;
 
   /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
   --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.20);
@@ -251,20 +251,23 @@ body[data-nx-lock='true'] {
 }
 
 /* ── Inputs tipo date: indicador centrado, no pegado al borde ── */
+input[type="date"],
+input[type="datetime-local"] {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 0.75rem;
+  top: 0;
+  bottom: 0;
+  margin: auto;
   width: 1.125rem;
   height: 1.125rem;
   opacity: 0.6;
   cursor: pointer;
-}
-input[type="date"],
-input[type="datetime-local"] {
-  position: relative;
 }
 
 /* ── Indicador de notificación: pulso de tamaño discreto ── */

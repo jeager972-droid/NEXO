@@ -234,6 +234,150 @@ const ChangeDialog = ({ field, currentLabel, onClose, onSaved }) => {
   );
 };
 
+const ForgotPasswordDialog = ({ phone, onClose, onSuccess }) => {
+  const [step, setStep] = useState('send');
+  const [code, setCode] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [countdown, setCountdown] = useState(0);
+
+  const maskedPhone = phone ? `••••••${phone.slice(-4)}` : 'tu teléfono';
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const handleSend = async () => {
+    setLoading(true);
+    setToast(null);
+    try {
+      const res = await usersApi.sendVerificationCode('password_reset', phone || '');
+      if (res.status === 'ok') {
+        setStep('verify');
+        setToast({ type: 'success', message: `Código enviado a ${maskedPhone}.` });
+        setCountdown(60);
+      } else {
+        setToast({ type: 'error', message: res.message || 'No se pudo enviar el código' });
+      }
+    } catch (e) {
+      setToast({ type: 'error', message: humanizeError(e, 'No se pudo enviar el código') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (code.length !== 6) return;
+    setLoading(true);
+    setToast(null);
+    try {
+      const res = await usersApi.verifyCode('password_reset', code);
+      if (res.status === 'ok') {
+        setStep('reset');
+        setToast(null);
+      } else {
+        setToast({ type: 'error', message: res.message || 'Código inválido' });
+      }
+    } catch (e) {
+      setToast({ type: 'error', message: humanizeError(e, 'Código inválido') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (newPass.length < 8) {
+      setToast({ type: 'error', message: 'La contraseña debe tener al menos 8 caracteres' });
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setToast({ type: 'error', message: 'Las contraseñas no coinciden' });
+      return;
+    }
+    setLoading(true);
+    setToast(null);
+    try {
+      const res = await usersApi.resetPassword(code, newPass);
+      if (res.status === 'ok') {
+        setToast({ type: 'success', message: 'Contraseña actualizada correctamente' });
+        setTimeout(() => onSuccess(), 800);
+      } else {
+        setToast({ type: 'error', message: res.message || 'Error al actualizar' });
+      }
+    } catch (e) {
+      setToast({ type: 'error', message: humanizeError(e, 'Error al actualizar') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog
+      title="Recuperar contraseña"
+      description={
+        step === 'send' ? `Enviaremos un código de verificación a ${maskedPhone}.`
+        : step === 'verify' ? 'Ingresa el código de 6 dígitos que enviamos a tu teléfono.'
+        : 'Ingresa tu nueva contraseña.'
+      }
+      onClose={onClose}
+      size="sm"
+      footer={
+        step === 'send' ? (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" loading={loading} onClick={handleSend}>Enviar código</Button>
+          </>
+        ) : step === 'verify' ? (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" loading={loading} onClick={handleVerify}>Validar</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" loading={loading} onClick={handleReset}>Actualizar</Button>
+          </>
+        )
+      }
+    >
+      {step === 'send' && (
+        <p className="text-body-sm text-[var(--nx-text-muted)]">
+          Se enviará un código de 6 dígitos por WhatsApp al número registrado en tu cuenta.
+        </p>
+      )}
+      {step === 'verify' && (
+        <div className="space-y-3">
+          <Input
+            label="Código de verificación"
+            placeholder="6 dígitos"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            autoFocus
+          />
+          {countdown > 0 ? (
+            <p className="text-caption text-[var(--nx-text-muted)]">Reenviar en {countdown}s</p>
+          ) : (
+            <button onClick={handleSend} className="text-caption text-[var(--nx-accent)] hover:underline">
+              Reenviar código
+            </button>
+          )}
+        </div>
+      )}
+      {step === 'reset' && (
+        <div className="space-y-4">
+          <PasswordInput label="Nueva contraseña" value={newPass} onChange={(e) => setNewPass(e.target.value)} autoFocus />
+          <PasswordInput label="Confirmar contraseña" value={confirmPass} onChange={(e) => setConfirmPass(e.target.value)} />
+        </div>
+      )}
+      <Toast toast={toast} />
+    </Dialog>
+  );
+};
+
 const Profile = () => {
   const { user, setUser, logout } = useAuth();
   const fileRef = useRef(null);
@@ -258,6 +402,7 @@ const Profile = () => {
   const [revealed, setRevealed] = useState({ email: false, phone: false, password: false });
   const [revealDialog, setRevealDialog] = useState(null);
   const [changeDialog, setChangeDialog] = useState(null);
+  const [forgotPassword, setForgotPassword] = useState(false);
   const [fontScale, setFontScale] = useState(1);
 
   useEffect(() => {
@@ -553,6 +698,13 @@ const Profile = () => {
               <PasswordInput label="Contraseña actual" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
               <PasswordInput label="Nueva contraseña" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
               <PasswordInput label="Confirmar nueva contraseña" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <button
+                type="button"
+                onClick={() => { setChangeDialog(null); setForgotPassword(true); }}
+                className="text-body-sm text-[var(--nx-accent)] hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
             </form>
           </Dialog>
         )}
@@ -565,6 +717,19 @@ const Profile = () => {
             currentLabel={changeDialog === 'email' ? 'correo electrónico' : changeDialog === 'phone' ? 'teléfono' : 'correo de respaldo'}
             onClose={() => setChangeDialog(null)}
             onSaved={handleChangedSaved}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {forgotPassword && (
+          <ForgotPasswordDialog
+            phone={phone}
+            onClose={() => setForgotPassword(false)}
+            onSuccess={() => {
+              setForgotPassword(false);
+              setActionToast({ type: 'success', message: 'Contraseña actualizada correctamente' });
+            }}
           />
         )}
       </AnimatePresence>

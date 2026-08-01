@@ -25,6 +25,15 @@ const edges = {
   danger:  'border-l-[3px] border-l-[var(--nx-danger)]',
 };
 
+/** Hover border per tone — keeps the card's color identity on hover */
+const hoverBorders = {
+  neutral: 'hover:border-[color-mix(in_oklch,var(--nx-accent)_45%,var(--nx-border))]',
+  accent:  'hover:border-[color-mix(in_oklch,var(--nx-accent)_50%,var(--nx-border))]',
+  success: 'hover:border-[color-mix(in_oklch,var(--nx-success)_50%,var(--nx-border))]',
+  warning: 'hover:border-[color-mix(in_oklch,var(--nx-warning)_50%,var(--nx-border))]',
+  danger:  'hover:border-[color-mix(in_oklch,var(--nx-danger)_50%,var(--nx-border))]',
+};
+
 export const Card = React.forwardRef(
   ({ children, className, asAction, tone = 'neutral', edge, onClick, ...props }, ref) => {
     const shared = cn(
@@ -34,7 +43,8 @@ export const Card = React.forwardRef(
       asAction &&
         cn(
           'nx-pressable block w-full cursor-pointer',
-          'hover:border-[color-mix(in_oklch,var(--nx-accent)_45%,var(--nx-border))] hover:shadow-medium',
+          hoverBorders[tone] ?? hoverBorders.neutral,
+          'hover:shadow-medium',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]'
         ),
       className

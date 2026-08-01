@@ -54,6 +54,14 @@ export const usersApi = {
     return response.data ?? {};
   },
 
+  resetPassword: async (code, newPassword) => {
+    const response = await client.post('/users/reset-password', {
+      code,
+      new_password: newPassword
+    });
+    return response.data ?? {};
+  },
+
   deleteField: async (field) => {
     const response = await client.post('/users/delete-field', { field });
     return response.data ?? {};

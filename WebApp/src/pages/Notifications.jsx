@@ -87,11 +87,16 @@ const humanizeMessage = (notif) => {
   }
 };
 
-const NotifItem = ({ notif, hasDetails, onClick }) => (
+const ACTIONS_WITH_DETAILS = [
+  'permiso', 'autorizar_salida', 'sos', 'iniciar_seguimiento',
+  'solicitud', 'incidente', 'citacion_confirmada', 'reagendar_motivo', 'salida_no_autorizada',
+];
+
+const NotifItem = ({ notif, hasDetails, noDetailsNote, onClick }) => (
   <Surface className="p-4">
     <button onClick={onClick} className="w-full text-left">
       <NexoChatBubble
-        message={humanizeMessage(notif)}
+        message={humanizeMessage(notif) + (noDetailsNote ? ' No se agregaron detalles extra.' : '')}
         timestamp={formatChatTime(notif.time || notif.created_at)}
       />
     </button>
@@ -169,13 +174,17 @@ const Notifications = () => {
 
   return (
     <div className="space-y-6">
-      {notifications.length > 0 && (
-        <div className="flex justify-end">
-          <Button variant="ghost" size="sm" loading={clearing} onClick={handleClear} leftIcon={<Trash2 size={14} />}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3 flex-1">
+          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+          <p className="text-label text-[var(--nx-text)]">Notificaciones</p>
+        </div>
+        {notifications.length > 0 && (
+          <Button variant="ghost" size="sm" loading={clearing} onClick={handleClear} leftIcon={<Trash2 size={14} />} className="ml-4 shrink-0">
             Vaciar
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {notifications.length === 0 ? (
         <Surface className="p-6">
@@ -185,12 +194,16 @@ const Notifications = () => {
         <div className="space-y-3">
           {notifications.map((notif, i) => {
             const meta = parseMeta(notif.metadata_json);
-            const hasDetails = meta && Object.keys(meta).length > 0;
+            const action = meta?.action;
+            const detailMessage = getDetailMessage(notif, meta);
+            const hasDetails = !!detailMessage;
+            const noDetailsNote = ACTIONS_WITH_DETAILS.includes(action) && !hasDetails;
             return (
               <NotifItem
                 key={notif.id ?? notif.notification_id ?? i}
                 notif={notif}
                 hasDetails={hasDetails}
+                noDetailsNote={noDetailsNote}
                 onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
               />
             );
@@ -206,22 +219,35 @@ const Notifications = () => {
             onClose={() => setDetail(null)}
             size="sm"
           >
-            <div className="p-5 space-y-3">
-              <NexoChatBubble
-                message={humanizeMessage(detail)}
-                timestamp={formatChatTime(detail.time || detail.created_at)}
-              />
-              {(() => {
-                const meta = parseMeta(detail.metadata_json);
-                const detailMessage = getDetailMessage(detail, meta);
-                if (!detailMessage) return null;
-                return (
-                  <NexoChatBubble
-                    message={detailMessage}
-                    timestamp={formatChatTime(detail.time || detail.created_at)}
-                  />
-                );
-              })()}
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+                <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                <p className="text-h3 text-[var(--nx-text)]">{detail.title || 'Notificación'}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                <p className="text-label text-[var(--nx-text-muted)]">Detalles</p>
+              </div>
+              <div className="space-y-3">
+                {(() => {
+                  const meta = parseMeta(detail.metadata_json);
+                  const detailMessage = getDetailMessage(detail, meta);
+                  if (!detailMessage) {
+                    return (
+                      <NexoChatBubble
+                        message="No se agregaron detalles extra."
+                        timestamp={formatChatTime(detail.time || detail.created_at)}
+                      />
+                    );
+                  }
+                  return (
+                    <NexoChatBubble
+                      message={detailMessage}
+                      timestamp={formatChatTime(detail.time || detail.created_at)}
+                    />
+                  );
+                })()}
+              </div>
             </div>
           </Drawer>
         )}
