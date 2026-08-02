@@ -29,7 +29,7 @@ const PLATFORMS = [
     id: 'android',
     name: 'Android',
     glowColor: 'rgba(61,220,132,0.35)',   // Android green
-    href: 'https://app.nexo.com/app/instalar/android',
+    href: 'https://nexo-eight-xi.vercel.app/app/instalar/android',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -46,7 +46,7 @@ const PLATFORMS = [
     id: 'ios',
     name: 'iOS',
     glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
-    href: 'https://app.nexo.com/app/instalar/ios',
+    href: 'https://nexo-eight-xi.vercel.app/app/instalar/ios',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -59,7 +59,7 @@ const PLATFORMS = [
     id: 'windows',
     name: 'Windows',
     glowColor: 'rgba(0,120,212,0.35)',     // Windows blue
-    href: 'https://app.nexo.com/app/instalar/windows',
+    href: 'https://nexo-eight-xi.vercel.app/app/instalar/windows',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -74,7 +74,7 @@ const PLATFORMS = [
     id: 'mac',
     name: 'Mac',
     glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
-    href: 'https://app.nexo.com/app/instalar/mac',
+    href: 'https://nexo-eight-xi.vercel.app/app/instalar/mac',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -89,7 +89,7 @@ const PLATFORMS = [
     id: 'linux',
     name: 'Linux',
     glowColor: 'rgba(255,185,0,0.30)',     // Tux yellow
-    href: 'https://app.nexo.com/app/instalar/linux',
+    href: 'https://nexo-eight-xi.vercel.app/app/instalar/linux',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">

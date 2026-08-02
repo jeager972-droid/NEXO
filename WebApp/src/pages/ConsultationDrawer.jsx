@@ -49,8 +49,8 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, loadin
   );
 };
 
-const ExportActions = ({ rows, columns, item, fromDate, toDate }) => {
-  if (!rows || rows.length === 0) return null;
+const ExportActions = ({ rows, columns, item, fromDate, toDate, canExport }) => {
+  if (!rows || rows.length === 0 || !canExport) return null;
   const spec = { title: item, rows, columns, from: fromDate, to: toDate };
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--nx-border)] pb-3 mb-3">
@@ -63,7 +63,7 @@ const ExportActions = ({ rows, columns, item, fromDate, toDate }) => {
 
 const TeacherQueryPanel = ({
   item, groups, selectedGroup, setSelectedGroup, selectedStudent, setSelectedStudent,
-  fromDate, setFromDate, toDate, setToDate, onQuery, loadingData, hasQueried, dynamicData, error
+  fromDate, setFromDate, toDate, setToDate, onQuery, loadingData, hasQueried, dynamicData, error, canExport
 }) => {
   const [students, setStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -110,7 +110,7 @@ const TeacherQueryPanel = ({
           <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
           <Surface className="overflow-x-auto p-5">
-            <ExportActions rows={rows} columns={visibleKeys} item={item} fromDate={fromDate} toDate={toDate} />
+            <ExportActions rows={rows} columns={visibleKeys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
             <table className="w-full min-w-[500px]">
               <thead>
                 <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
@@ -181,6 +181,7 @@ export const ConsultationDrawer = ({
   const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
 
   const isAdminRole = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
+  const canExport = user?.role === ROLES.RECTOR;
   const showFilters = isTeacherModule || isAdminRole;
 
   const openTracking = (studentId, studentName, trackingId = null, metadata = null) => {
@@ -201,7 +202,7 @@ export const ConsultationDrawer = ({
             item={item} groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
             selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
             fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
-            onQuery={onQuery} loadingData={loadingData} hasQueried={hasQueried} dynamicData={dynamicData} error={error}
+            onQuery={onQuery} loadingData={loadingData} hasQueried={hasQueried} dynamicData={dynamicData} error={error} canExport={canExport}
           />
         ) : isAdminRole ? (
           <div className="flex flex-col">
@@ -218,7 +219,7 @@ export const ConsultationDrawer = ({
                 <SkeletonRows count={4} />
               ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <Surface className="overflow-x-auto p-5">
-                <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} />
+                <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <table className="w-full min-w-[440px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
@@ -253,7 +254,7 @@ export const ConsultationDrawer = ({
               <SkeletonRows count={4} />
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <Surface className="overflow-x-auto p-5">
-                <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} />
+                <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <table className="w-full min-w-[440px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
@@ -277,7 +278,7 @@ export const ConsultationDrawer = ({
               </Surface>
             ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
               <Surface className="overflow-x-auto p-5">
-                <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} />
+                <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <table className="w-full min-w-[500px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">

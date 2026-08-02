@@ -116,6 +116,76 @@ function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
 }
 
 // ============================================================================
+// LEGACY ENDPOINTS
+// ============================================================================
+
+// GET /audit/global — Returns global audit logs (legacy alias)
+if ($cleanPath === '/audit/global' && $method === 'GET') {
+    try {
+        $f = auditFilters('gal', 'created_at', null);
+        $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
+        $params = array_merge([$schoolId], $f['params']);
+
+        $limit = min((int)($_GET['limit'] ?? 100), 500);
+        $params[] = $limit;
+
+        $stmt = $conn->prepare("
+            SELECT gal.log_id, gal.action_type, gal.entity_type, gal.entity_id,
+                   gal.action_details, gal.ip_address, gal.created_at,
+                   u.first_name, u.last_name
+            FROM global_audit_logs gal
+            LEFT JOIN users u ON gal.performed_by_user_id = u.user_id
+            WHERE gal.school_id = ?
+            {$where}
+            ORDER BY gal.created_at DESC
+            LIMIT ?
+        ");
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $columns = [
+            'log_id' => 'ID', 'action_type' => 'Acción', 'entity_type' => 'Entidad',
+            'first_name' => 'Usuario', 'last_name' => 'Apellido',
+            'ip_address' => 'IP', 'created_at' => 'Fecha'
+        ];
+
+        auditJson(['status' => 'ok', 'data' => $rows, 'columns' => $columns]);
+    } catch (Throwable $e) {
+        auditError('Error: ' . $e->getMessage());
+    }
+}
+
+// GET /audit/integrity — Validates audit hash chain integrity
+if ($cleanPath === '/audit/integrity' && $method === 'GET') {
+    try {
+        $stmt = $conn->prepare("SELECT fn_validate_audit_chain(?) AS result");
+        $stmt->execute([$schoolId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $rawResult = $result['result'] ?? null;
+        $parsed = is_string($rawResult) ? json_decode($rawResult, true) : $rawResult;
+        $status = $parsed['status'] ?? 'ok';
+        $valid = ($status === 'ok');
+
+        auditJson([
+            'status' => 'ok',
+            'data' => [
+                'school_id' => $schoolId,
+                'integrity_valid' => $valid,
+                'chain_status' => $status,
+                'total_records' => $parsed['total_records'] ?? 0,
+                'checked_at' => date('c'),
+            ],
+            'message' => $valid
+                ? 'La cadena de auditoría es válida'
+                : 'Se detectó una interrupción en la cadena de auditoría'
+        ]);
+    } catch (Throwable $e) {
+        auditError('Error validando integridad: ' . $e->getMessage());
+    }
+}
+
+// ============================================================================
 // 1. ASISTENCIA
 // ============================================================================
 

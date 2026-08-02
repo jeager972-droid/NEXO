@@ -8,6 +8,7 @@ import { useSearchParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
+import { auditApi } from '../api/audit';
 import { studentsApi } from '../api/students';
 import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen } from 'lucide-react';
 import { ROLES } from '../config/roles';
@@ -55,6 +56,57 @@ const MODULE_SLUGS = {
   'Reportes': 'reports',
   'Auditoría Local': 'audit_logs',
   'Permisos Activos Hoy': 'active_permissions',
+};
+
+const AUDIT_MODULES = {
+  'Auditoría Global': (params) => auditApi.getGlobalLogs(params),
+  'Integridad de Auditoría': () => auditApi.getIntegrity(),
+  'Alertas SOS': (params) => auditApi.getSosAlerts(params),
+  'SOS Resueltas': (params) => auditApi.getSosResolved(params),
+  'Tiempo de Resolución SOS': (params) => auditApi.getSosResolutionTime(params),
+  'Historial SOS': (params) => auditApi.getSosHistory(params),
+  'Seguridad Global': (params) => auditApi.getSecurityGlobal(params),
+  'Accesos al Sistema': (params) => auditApi.getSecurityAccesses(params),
+  'Sesiones Activas': (params) => auditApi.getSecuritySessions(params),
+  'Comandos del Sistema': (params) => auditApi.getSecurityCommands(params),
+  'Actividad Administrativa': (params) => auditApi.getSecurityAdminActivity(params),
+  'Intentos Fallidos': (params) => auditApi.getSecurityFailedAttempts(params),
+  'Asistencia Consolidada': (params) => auditApi.getConsolidatedAttendance(params),
+  'Disciplina Consolidada': (params) => auditApi.getConsolidatedDiscipline(params),
+  'Permisos Consolidados': (params) => auditApi.getConsolidatedPermissions(params),
+  'Mensajería Consolidada': (params) => auditApi.getConsolidatedMessaging(params),
+  'Docentes Consolidado': (params) => auditApi.getConsolidatedTeacher(params),
+  'Seguridad Consolidada': (params) => auditApi.getConsolidatedSecurity(params),
+  'Métricas Institucionales': (params) => auditApi.getConsolidatedInstitutional(params),
+  'Histórico de Estudiantes': (params) => auditApi.getHistoricalStudent(params),
+  'Histórico de Docentes': (params) => auditApi.getHistoricalTeacher(params),
+  'Histórico de Asistencia': (params) => auditApi.getHistoricalAttendance(params),
+  'Histórico de Disciplina': (params) => auditApi.getHistoricalDiscipline(params),
+  'Histórico de Permisos': (params) => auditApi.getHistoricalPermissions(params),
+  'Histórico de Mensajería': (params) => auditApi.getHistoricalMessaging(params),
+  'Actividad Docente': (params) => auditApi.getTeacherActivity(params),
+  'Clases de Docentes': (params) => auditApi.getTeacherClasses(params),
+  'Permisos de Docentes': (params) => auditApi.getTeacherPermissions(params),
+  'Incidentes de Docentes': (params) => auditApi.getTeacherIncidents(params),
+  'Sistema Docente': (params) => auditApi.getTeacherSystemActivity(params),
+  'Mensajes WhatsApp': (params) => auditApi.getMessagingWhatsAppSent(params),
+  'Respuestas de Acudientes': (params) => auditApi.getMessagingGuardianReplies(params),
+  'Mensajes Fallidos': (params) => auditApi.getMessagingFailed(params),
+  'Citaciones Enviadas': (params) => auditApi.getMessagingCitations(params),
+  'Mensajes Internos': (params) => auditApi.getMessagingInternal(params),
+  'Permisos de Salida': (params) => auditApi.getPermissionsClassExits(params),
+  'Salidas del Colegio': (params) => auditApi.getPermissionsSchoolExits(params),
+  'Salidas Pedagógicas Audit': (params) => auditApi.getPermissionsPedagogical(params),
+  'Retornos Pendientes': (params) => auditApi.getPermissionsPendingReturns(params),
+  'Historial de Permisos': (params) => auditApi.getPermissionsHistory(params),
+  'Incidentes de Disciplina': (params) => auditApi.getDisciplineIncidents(params),
+  'Violaciones de Disciplina': (params) => auditApi.getDisciplineViolations(params),
+  'Aula Equivocada': (params) => auditApi.getDisciplineWrongClassroom(params),
+  'Reportes de Disciplina': (params) => auditApi.getDisciplineReports(params),
+  'Asistencia General': (params) => auditApi.getAttendanceGeneral(params),
+  'Inasistencias Audit': (params) => auditApi.getAttendanceAbsences(params),
+  'Llegadas Tarde Audit': (params) => auditApi.getAttendanceLates(params),
+  'Evasión Escolar': (params) => auditApi.getAttendanceEvasion(params),
 };
 
 const TONE_STYLES = {
@@ -109,6 +161,29 @@ const Consultation = () => {
     setLoadingData(true);
     setHasQueried(true);
     setQueryError(null);
+
+    const auditFn = AUDIT_MODULES[activeItem];
+    if (auditFn) {
+      const params = { from: fromDate, to: toDate };
+      if (selectedGroup) params.group_id = selectedGroup;
+      if (selectedStudent) params.student_id = selectedStudent;
+      try {
+        const res = await auditFn(params);
+        const rows = res.data || [];
+        setDynamicData(rows);
+        const cols = {};
+        if (rows.length > 0) Object.keys(rows[0]).forEach(k => { if (!['log_id','entity_id','action_details','metadata_json'].includes(k)) cols[k] = k.replace(/_/g,' ').replace(/\b\w/g, l => l.toUpperCase()); });
+        setDynamicColumns(cols);
+      } catch (err) {
+        setQueryError(humanizeError(err, 'Error de red al consultar auditoría'));
+        setDynamicData([]);
+        setDynamicColumns({});
+      } finally {
+        setLoadingData(false);
+      }
+      return;
+    }
+
     const moduleSlug = MODULE_SLUGS[activeItem];
     if (!moduleSlug) {
       setQueryError('Módulo no soportado');
@@ -145,8 +220,9 @@ const Consultation = () => {
     setLoadingData(true);
     setHasQueried(true);
 
+    const auditFn = AUDIT_MODULES[activeItem];
     const moduleSlug = activeItem === 'Análisis de Riesgo' ? null : MODULE_SLUGS[activeItem];
-    if (activeItem !== 'Análisis de Riesgo' && !moduleSlug) {
+    if (activeItem !== 'Análisis de Riesgo' && !moduleSlug && !auditFn) {
       if (!abortController.signal.aborted) {
         setQueryError('Módulo no soportado');
         setLoadingData(false);
@@ -154,7 +230,22 @@ const Consultation = () => {
       return () => abortController.abort();
     }
 
-    if (activeItem === 'Análisis de Riesgo') {
+    if (auditFn) {
+      const params = { from: fromDate, to: toDate };
+      if (selectedGroup) params.group_id = selectedGroup;
+      auditFn(params)
+        .then((res) => {
+          if (!abortController.signal.aborted) {
+            const rows = res.data || [];
+            setDynamicData(rows);
+            const cols = {};
+            if (rows.length > 0) Object.keys(rows[0]).forEach(k => { if (!['log_id','entity_id','action_details','metadata_json'].includes(k)) cols[k] = k.replace(/_/g,' ').replace(/\b\w/g, l => l.toUpperCase()); });
+            setDynamicColumns(cols);
+          }
+        })
+        .catch((err) => { if (!abortController.signal.aborted) setQueryError(humanizeError(err, 'Error de red al consultar auditoría')); })
+        .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
+    } else if (activeItem === 'Análisis de Riesgo') {
       behaviorApi.getRiskAnalysis('', '', abortController.signal)
         .then((res) => {
           if (!abortController.signal.aborted) {
@@ -230,7 +321,8 @@ const Consultation = () => {
         items: [
           { label: 'Spam Biométrico', icon: AlertTriangle },
           { label: 'Vulneraciones', icon: ShieldAlert },
-          { label: 'Alertas', icon: AlertTriangle },
+          { label: 'Alertas SOS', icon: AlertTriangle },
+          { label: 'SOS Resueltas', icon: ShieldCheck },
           { label: 'Seguimiento Estudiantil', icon: ClipboardList },
         ]
       },
@@ -242,6 +334,30 @@ const Consultation = () => {
           { label: 'Permisos Emitidos', icon: ShieldCheck },
           { label: 'Salidas del colegio permitidas', icon: DoorOpen },
           { label: 'Salidas Pedagógicas', icon: CalendarDays },
+        ]
+      },
+      {
+        title: 'Auditoría',
+        icon: Database,
+        tone: 'warning',
+        items: [
+          { label: 'Seguridad Global', icon: ShieldAlert },
+          { label: 'Accesos al Sistema', icon: ShieldCheck },
+          { label: 'Sesiones Activas', icon: Activity },
+          { label: 'Comandos del Sistema', icon: ClipboardList },
+          { label: 'Actividad Administrativa', icon: FileText },
+          { label: 'Intentos Fallidos', icon: AlertTriangle },
+        ]
+      },
+      {
+        title: 'Disciplina',
+        icon: ShieldAlert,
+        tone: 'danger',
+        items: [
+          { label: 'Incidentes de Disciplina', icon: AlertTriangle },
+          { label: 'Violaciones de Disciplina', icon: ShieldAlert },
+          { label: 'Aula Equivocada', icon: DoorOpen },
+          { label: 'Reportes de Disciplina', icon: FileBarChart },
         ]
       }
     ],
@@ -263,8 +379,63 @@ const Consultation = () => {
         tone: 'warning',
         items: [
           { label: 'TODOS los Consolidados', icon: FileBarChart },
+          { label: 'Asistencia Consolidada', icon: Activity },
+          { label: 'Disciplina Consolidada', icon: ShieldAlert },
+          { label: 'Permisos Consolidados', icon: ShieldCheck },
+          { label: 'Mensajería Consolidada', icon: MessageSquare },
+          { label: 'Docentes Consolidado', icon: GraduationCap },
+          { label: 'Seguridad Consolidada', icon: ShieldCheck },
+          { label: 'Métricas Institucionales', icon: BarChart2 },
+        ]
+      },
+      {
+        title: 'Históricos',
+        icon: History,
+        tone: 'accent',
+        items: [
           { label: 'Históricos Completos', icon: History },
+          { label: 'Histórico de Estudiantes', icon: GraduationCap },
+          { label: 'Histórico de Docentes', icon: UserCheck },
+          { label: 'Histórico de Asistencia', icon: Activity },
+          { label: 'Histórico de Disciplina', icon: ShieldAlert },
+          { label: 'Histórico de Permisos', icon: ShieldCheck },
+          { label: 'Histórico de Mensajería', icon: MessageSquare },
+        ]
+      },
+      {
+        title: 'Auditoría',
+        icon: Database,
+        tone: 'danger',
+        items: [
+          { label: 'Auditoría Global', icon: FileText },
+          { label: 'Integridad de Auditoría', icon: ShieldCheck },
+          { label: 'Seguridad Global', icon: ShieldAlert },
+          { label: 'Accesos al Sistema', icon: ShieldCheck },
+          { label: 'Sesiones Activas', icon: Activity },
+          { label: 'Comandos del Sistema', icon: ClipboardList },
+          { label: 'Actividad Administrativa', icon: FileText },
+          { label: 'Intentos Fallidos', icon: AlertTriangle },
+        ]
+      },
+      {
+        title: 'Mensajería',
+        icon: MessageSquare,
+        tone: 'accent',
+        items: [
+          { label: 'Mensajes WhatsApp', icon: Send },
+          { label: 'Respuestas de Acudientes', icon: ContactRound },
+          { label: 'Mensajes Fallidos', icon: AlertTriangle },
+          { label: 'Citaciones Enviadas', icon: Mail },
+          { label: 'Mensajes Internos', icon: FileText },
+        ]
+      },
+      {
+        title: 'Exportaciones',
+        icon: FileText,
+        tone: 'warning',
+        items: [
           { label: 'Exportaciones Institucionales', icon: FileText },
+          { label: 'Reportes', icon: FileBarChart },
         ]
       }
     ],
@@ -378,6 +549,7 @@ const Consultation = () => {
           onQuery={executeQuery}
           onClose={goBackToSubmodules}
           error={queryError}
+          executeQuery={executeQuery}
         />
       </div>
     );

@@ -507,6 +507,61 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
 }
 
 // ============================================================================
+// POST /users/reset-password
+// Body: { code: string, new_password: string }
+// Resets password after OTP verification (purpose = 'password_reset')
+// ============================================================================
+if ($cleanPath === '/users/reset-password' && $method === 'POST') {
+    try {
+        $code = trim((string)($input['code'] ?? ''));
+        $new  = trim((string)($input['new_password'] ?? ''));
+
+        if ($code === '' || $new === '' || strlen($new) < 8) {
+            usersJson(['status' => 'error', 'message' => 'Código y nueva contraseña (mínimo 8 caracteres) requeridos'], 400);
+        }
+
+        $stmt = $conn->prepare("
+            SELECT code_id, used, expires_at, verified_at
+            FROM verification_codes
+            WHERE user_id = ? AND purpose = 'password_reset' AND code = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$userId, $code]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            usersJson(['status' => 'error', 'message' => 'Código incorrecto o no encontrado'], 400);
+        }
+        if ($row['used']) {
+            usersJson(['status' => 'error', 'message' => 'Código ya utilizado'], 400);
+        }
+        if (strtotime($row['expires_at']) < time()) {
+            usersJson(['status' => 'error', 'message' => 'Código expirado'], 400);
+        }
+        if ($row['verified_at'] === null) {
+            usersJson(['status' => 'error', 'message' => 'Código no verificado. Verifica el código primero.'], 400);
+        }
+
+        $newHash = password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]);
+        try {
+            $upd = $conn->prepare("UPDATE users SET password_hash = ?, password_salt = NULL, updated_at = NOW() WHERE user_id = ?");
+            $upd->execute([$newHash, $userId]);
+        } catch (PDOException $e) {
+            $upd = $conn->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE user_id = ?");
+            $upd->execute([$newHash, $userId]);
+        }
+
+        $mark = $conn->prepare("UPDATE verification_codes SET used = TRUE WHERE code_id = ?");
+        $mark->execute([$row['code_id']]);
+
+        usersJson(['status' => 'ok', 'message' => 'Contraseña actualizada correctamente']);
+    } catch (Throwable $e) {
+        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+}
+
+// ============================================================================
 // GET /users/me/photo (kept for compatibility)
 // ============================================================================
 if ($cleanPath === '/users/me/photo' && $method === 'GET') {

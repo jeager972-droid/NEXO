@@ -27,15 +27,4 @@ export const consultationsApi = {
     return response.data?.data ?? response.data ?? [];
   },
 
-  // Detalle de un item por ID
-  getItemDetails: async (itemId, module) => {
-    if (!itemId) return null;
-    try {
-      const response = await client.get('/consultation/details', { params: { id: itemId, module } });
-      return response.data?.data ?? null;
-    } catch (e) {
-      console.error('getItemDetails error:', e);
-      return null;
-    }
-  },
 };
