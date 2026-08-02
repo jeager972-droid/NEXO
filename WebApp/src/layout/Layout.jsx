@@ -12,7 +12,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { notificationsApi } from '../api/notifications';
-import { StatusDot } from '../components/patterns/StatusDot';
 import { NavLink } from 'react-router-dom';
 
 const getGreeting = () => {
@@ -26,21 +25,12 @@ const Layout = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
-  const [online, setOnline] = useState(navigator.onLine);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const profileRef = useRef(null);
-
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener('online', on);
-    window.addEventListener('offline', off);
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-  }, []);
 
   useEffect(() => {
     const poll = () => {
@@ -109,12 +99,6 @@ const Layout = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Estado de red */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-              <StatusDot scheme={online ? 'success' : 'warning'} pulse={online} />
-              <span className="text-caption text-[var(--nx-text-muted)]">{online ? 'En línea' : 'Sin conexión'}</span>
-            </div>
-
             {/* Perfil */}
             <div ref={profileRef} className="relative">
               <button

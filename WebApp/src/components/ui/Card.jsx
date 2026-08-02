@@ -37,7 +37,7 @@ const hoverBorders = {
 export const Card = React.forwardRef(
   ({ children, className, asAction, tone = 'neutral', edge, onClick, ...props }, ref) => {
     const shared = cn(
-      'rounded-surface border bg-[var(--nx-surface)] p-5 text-left',
+      'rounded-surface border bg-[var(--nx-surface-card)] p-5 text-left',
       tones[tone] ?? tones.neutral,
       edge && (edges[tone] || edges.accent),
       asAction &&
