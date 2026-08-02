@@ -25,18 +25,27 @@ import { humanizeError } from '../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
 
-const STEPS = ['Datos básicos', 'Documento', 'Grupo'];
+const STEPS = ['Datos básicos', 'Acudiente', 'Grado y grupo', 'Huella dactilar', 'Finalizado'];
 
 const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ nombres: '', apellidos: '', documento: '', grado: '' });
+  const [form, setForm] = useState({
+    nombres: '', apellidos: '', documento: '',
+    acudienteNombre: '', acudienteApellidos: '', acudienteDocumento: '', acudienteCelular: '',
+    grado: '', grupo: '',
+  });
   const [groups, setGroups] = useState([]);
   const [biometricStatus, setBiometricStatus] = useState('checking');
 
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
-  const canNext = step === 1 ? !!(form.nombres && form.apellidos) : step === 2 ? !!form.documento : step === 3 ? !!form.grado : false;
+  const canNext =
+    step === 1 ? !!(form.nombres && form.apellidos && form.documento) :
+    step === 2 ? !!(form.acudienteNombre && form.acudienteApellidos && form.acudienteDocumento && form.acudienteCelular) :
+    step === 3 ? !!(form.grado && form.grupo) :
+    step === 4 ? true :
+    false;
 
   useEffect(() => {
     studentsApi.getGroups().then(setGroups).catch(() => {});
@@ -46,7 +55,12 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     setLoading(true);
     setSaveError('');
     try {
-      await studentsApi.create({ first_name: form.nombres, last_name: form.apellidos, document: form.documento, grade: form.grado });
+      await studentsApi.create({
+        first_name: form.nombres, last_name: form.apellidos, document: form.documento,
+        grade: form.grado, group: form.grupo,
+        guardian_name: `${form.acudienteNombre} ${form.acudienteApellidos}`,
+        guardian_document: form.acudienteDocumento, guardian_phone: form.acudienteCelular,
+      });
       onRefresh?.();
       setStep(4);
     } catch (err) {
@@ -67,7 +81,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
 
   return (
     <Drawer
-      title="Nuevo estudiante"
+      title="Nuevo alumno"
       onClose={onClose}
       size="sm"
       footer={
@@ -75,10 +89,12 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
           <Button variant="secondary" onClick={() => (step > 1 ? setStep((s) => s - 1) : onClose())} leftIcon={step === 1 ? <X size={16} /> : <ChevronLeft size={16} />}>
             {step === 1 ? 'Cancelar' : 'Atrás'}
           </Button>
-          {step < STEPS.length ? (
+          {step < 3 ? (
             <Button className="flex-1" onClick={() => canNext && setStep((s) => s + 1)} disabled={!canNext} rightIcon={<ChevronRight size={16} />}>Siguiente</Button>
           ) : step === 3 ? (
-            <Button className="flex-1" loading={loading} onClick={handleSaveAndProceed} leftIcon={<Check size={16} />}>Guardar</Button>
+            <Button className="flex-1" loading={loading} onClick={handleSaveAndProceed} leftIcon={<Check size={16} />}>Guardar y continuar</Button>
+          ) : step === 4 ? (
+            <Button className="flex-1" onClick={() => canNext && setStep(5)} rightIcon={<ChevronRight size={16} />}>Siguiente</Button>
           ) : (
             <Button className="flex-1" onClick={onClose}>Finalizar</Button>
           )}
@@ -96,25 +112,55 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
           <motion.div key={step} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.16 }} className="space-y-5">
             {step === 1 && (
               <>
+                <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                    <p className="text-label text-[var(--nx-text)]">Datos del alumno</p>
+                  </div>
+                </div>
                 <Input label="Nombres" value={form.nombres} onChange={set('nombres')} placeholder="Ej. Juan Carlos" />
                 <Input label="Apellidos" value={form.apellidos} onChange={set('apellidos')} placeholder="Ej. Pérez Torres" />
+                <Input label="Número de documento" value={form.documento} onChange={set('documento')} placeholder="12345678" />
               </>
             )}
-            {step === 2 && <Input label="Número de documento" value={form.documento} onChange={set('documento')} placeholder="12345678" />}
+            {step === 2 && (
+              <>
+                <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                    <p className="text-label text-[var(--nx-text)]">Datos del acudiente</p>
+                  </div>
+                </div>
+                <Input label="Nombres" value={form.acudienteNombre} onChange={set('acudienteNombre')} placeholder="Ej. María" />
+                <Input label="Apellidos" value={form.acudienteApellidos} onChange={set('acudienteApellidos')} placeholder="Ej. Gómez Ruiz" />
+                <Input label="Número de documento" value={form.acudienteDocumento} onChange={set('acudienteDocumento')} placeholder="12345678" />
+                <Input label="Número de celular" value={form.acudienteCelular} onChange={set('acudienteCelular')} placeholder="300 123 4567" />
+              </>
+            )}
             {step === 3 && (
-              <SearchableSelect
-                label="Grado institucional"
-                options={groups.map((g) => ({ value: g.name || g, label: g.name || g }))}
-                value={form.grado}
-                onChange={(v) => setForm((p) => ({ ...p, grado: v }))}
-                placeholder="— Seleccionar grado —"
-                searchPlaceholder="Buscar grado…"
-              />
+              <>
+                <SearchableSelect
+                  label="Grado"
+                  options={groups.map((g) => ({ value: g.name || g, label: g.name || g }))}
+                  value={form.grado}
+                  onChange={(v) => setForm((p) => ({ ...p, grado: v }))}
+                  placeholder="— Seleccionar grado —"
+                  searchPlaceholder="Buscar grado…"
+                />
+                <SearchableSelect
+                  label="Grupo"
+                  options={groups.map((g) => ({ value: g.name || g, label: g.name || g }))}
+                  value={form.grupo}
+                  onChange={(v) => setForm((p) => ({ ...p, grupo: v }))}
+                  placeholder="— Seleccionar grupo —"
+                  searchPlaceholder="Buscar grupo…"
+                />
+              </>
             )}
             {step === 4 && (
               <div className="space-y-5">
                 <div className="rounded-control bg-[var(--nx-subtle-bg-success)] p-4 text-body text-[var(--nx-success)] flex items-center gap-2">
-                  <Check size={18} /> Estudiante guardado correctamente.
+                  <Check size={18} /> Alumno guardado correctamente.
                 </div>
                 <div className="space-y-2">
                   <p className="text-label text-[var(--nx-text)]">Lector biométrico</p>
@@ -124,6 +170,13 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     </div>
                   )}
                   <Button variant="secondary" className="w-full" disabled={biometricStatus !== 'connected'} leftIcon={<Fingerprint size={16} />}>Registrar huella</Button>
+                </div>
+              </div>
+            )}
+            {step === 5 && (
+              <div className="space-y-5">
+                <div className="rounded-control bg-[var(--nx-subtle-bg-success)] p-4 text-body text-[var(--nx-success)] flex items-center gap-2">
+                  <Check size={18} /> Alumno registrado exitosamente.
                 </div>
               </div>
             )}
@@ -250,6 +303,8 @@ const Enrollment = () => {
     [allGroups]
   );
 
+  const [view, setView] = useState('home');
+
   if (user?.role !== ROLES.SECRETARIA) {
     return (
       <div className="max-w-3xl">
@@ -262,11 +317,54 @@ const Enrollment = () => {
     );
   }
 
+  const sortedStudents = [...students].sort((a, b) =>
+    `${a.last_name || ''} ${a.first_name || ''}`.localeCompare(`${b.last_name || ''} ${b.first_name || ''}`, 'es')
+  );
+
+  if (view === 'home') {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+          <Card asAction tone="accent" onClick={() => { setIsDrawerOpen(true); }} className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]">
+                <UserPlus size={24} />
+              </div>
+              <div>
+                <p className="text-h3 text-[var(--nx-text)]">Nuevo alumno</p>
+                <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">Registra un nuevo alumno paso a paso</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card asAction tone="success" onClick={() => { setView('search'); }} className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">
+                <Search size={24} />
+              </div>
+              <div>
+                <p className="text-h3 text-[var(--nx-text)]">Buscar estudiante</p>
+                <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">Consulta y edita alumnos existentes</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <AnimatePresence>
+          {isDrawerOpen && <EnrollmentDrawer onClose={() => setIsDrawerOpen(false)} onRefresh={() => fetchStudents(true)} />}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button onClick={() => setIsDrawerOpen(true)} leftIcon={<UserPlus size={18} />}>Nuevo estudiante</Button>
-      </div>
+      <button
+        onClick={() => setView('home')}
+        className="flex items-center gap-1 text-body-sm text-[var(--nx-accent)] font-medium hover:underline"
+      >
+        <ChevronLeft size={16} /> Volver
+      </button>
 
       <Surface className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -284,14 +382,14 @@ const Enrollment = () => {
 
       {loading && students.length === 0 ? (
         <SkeletonCards count={6} />
-      ) : students.length === 0 ? (
+      ) : sortedStudents.length === 0 ? (
         <Surface>
           <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="No se encontraron estudiantes con los filtros actuales." />
         </Surface>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {students.map((s, i) => (
+            {sortedStudents.map((s, i) => (
               <motion.div
                 key={s.student_id || s.id}
                 initial={{ opacity: 0, y: 6 }}

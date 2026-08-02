@@ -9,9 +9,11 @@ import { Button } from '../components/ui/Button';
 import { Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 
+const APP_URL = 'https://nexo-eight-xi.vercel.app';
+
 const PLATFORMS = {
-  android: { title: 'Android', icon: Smartphone, store: 'Google Play', steps: ['Abre Chrome y visita nexo.edu.co.', 'Toca el menú y selecciona "Agregar a pantalla de inicio".', 'Confirma con "Agregar".'] },
-  ios:     { title: 'iOS',     icon: Smartphone, store: 'App Store',   steps: ['Abre Safari y visita nexo.edu.co.', 'Toca Compartir y luego "Agregar a inicio".', 'Confirma con "Agregar".'] },
+  android: { title: 'Android', icon: Smartphone, store: 'Google Play', steps: [`Abre Chrome y visita ${APP_URL}.`, 'Toca el menú y selecciona "Agregar a pantalla de inicio".', 'Confirma con "Agregar".'] },
+  ios:     { title: 'iOS',     icon: Smartphone, store: 'App Store',   steps: [`Abre Safari y visita ${APP_URL}.`, 'Toca Compartir y luego "Agregar a inicio".', 'Confirma con "Agregar".'] },
   windows: { title: 'Windows', icon: Monitor,    store: 'Edge/Chrome', steps: ['Abre Edge o Chrome.', 'Haz clic en el icono de instalación en la barra de direcciones.', 'Confirma la instalación.'] },
   mac:     { title: 'macOS',   icon: Apple,      store: 'Chrome',      steps: ['Abre Chrome.', 'Haz clic en el icono de instalación en la barra de direcciones.', 'Arrastra NEXO a Aplicaciones si aplica.'] },
   linux:   { title: 'Linux',   icon: Monitor,    store: 'Chrome',      steps: ['Abre Chrome.', 'Haz clic en "Instalar" en el banner de PWA.', 'Confirma la instalación.'] },

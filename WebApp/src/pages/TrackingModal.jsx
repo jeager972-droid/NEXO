@@ -159,7 +159,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
                   <div className="space-y-2">
                     {notes.map((n, i) => (
                       <Surface key={i} className="p-3">
-                        <p className="text-body-sm text-[var(--nx-text)]">{n.note}</p>
+                        <p className="text-body-sm text-[var(--nx-text)]">{n.note_text}</p>
                         <p className="text-caption text-[var(--nx-text-muted)] mt-1">{n.created_at && new Date(n.created_at).toLocaleString('es-CO')}</p>
                       </Surface>
                     ))}

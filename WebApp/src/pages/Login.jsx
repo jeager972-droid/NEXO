@@ -79,10 +79,8 @@ const Login = () => {
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[420px] space-y-8"
       >
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="h-14 w-14 rounded-surface bg-[var(--nx-accent)] text-[var(--nx-accent-text)] flex items-center justify-center">
-            <LogoNexo className="h-8" showText={false} useImage />
-          </div>
+        <div className="flex flex-col items-center">
+          <LogoNexo className="h-16" useImage />
         </div>
 
         <div className="rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 lg:p-8 shadow-medium">

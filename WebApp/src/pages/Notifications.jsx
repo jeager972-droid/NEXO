@@ -173,8 +173,8 @@ const Notifications = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3 flex-1">
+      <div>
+        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
           <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
           <p className="text-label text-[var(--nx-text)]">Notificaciones</p>
         </div>
@@ -182,7 +182,7 @@ const Notifications = () => {
           <button
             onClick={handleClear}
             disabled={clearing}
-            className="mt-0 flex shrink-0 items-center gap-1 text-caption text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
+            className="mt-2 flex items-center gap-1 text-caption text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
           >
             <Trash2 size={12} />
             Vaciar

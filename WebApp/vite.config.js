@@ -86,20 +86,20 @@ export default defineConfig({
             name: 'Panel',
             short_name: 'Panel',
             url: '/app/',
-            icons: [{ src: '/logo/logo_nexo_app.png', sizes: 'any', type: 'image/png' }]
+            icons: [{ src: '/logo/logo_app.jpg', sizes: 'any', type: 'image/jpeg' }]
           },
           {
             name: 'Operación',
             short_name: 'Operación',
             url: '/app/operacion',
-            icons: [{ src: '/logo/logo_nexo_app.png', sizes: 'any', type: 'image/png' }]
+            icons: [{ src: '/logo/logo_app.jpg', sizes: 'any', type: 'image/jpeg' }]
           }
         ],
         icons: [
           {
-            src: '/logo/logo_nexo_app.png',
+            src: '/logo/logo_app.jpg',
             sizes: 'any',
-            type: 'image/png'
+            type: 'image/jpeg'
           },
           {
             src: '/mask-icon.svg',

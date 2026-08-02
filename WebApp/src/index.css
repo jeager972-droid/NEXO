@@ -10,7 +10,7 @@
 /* ── Design tokens — Light theme (default) ── */
 :root {
   /* Color */
-  --nx-canvas:        oklch(92% 0.005 245);
+  --nx-canvas:        oklch(100% 0 0);
   --nx-surface:       oklch(99% 0.004 245);
   --nx-surface-subtle: oklch(96% 0.009 245);
   --nx-surface-card:  oklch(99% 0.004 245);

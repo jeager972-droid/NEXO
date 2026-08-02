@@ -11,6 +11,7 @@ import Layout from './layout/Layout';
 import { ROLES } from './config/roles';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
+import LogoNexo from './components/LogoNexo';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -60,9 +61,14 @@ function App() {
 
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--nx-canvas)]">
-        <div className="text-h2 font-bold uppercase tracking-[0.2em] text-[var(--nx-accent)]">NEXO</div>
-        <div className="text-caption font-medium uppercase tracking-[0.2em] text-[var(--nx-text-muted)]">Cargando módulo…</div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--nx-canvas)]">
+        <motion.div
+          initial={{ scale: 0.3, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <LogoNexo className="h-20" useImage />
+        </motion.div>
       </div>
     }>
       <AnimatePresence mode="wait" initial={false}>
