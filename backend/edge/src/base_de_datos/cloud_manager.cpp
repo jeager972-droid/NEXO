@@ -19,6 +19,7 @@
 
 #include "base_de_datos/cloud_manager.h"
 #include "utils/Logger.h"
+#include "utils/ConfigManager.h"
 #include <curl/curl.h>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -30,6 +31,10 @@ CloudManager::CloudManager() : m_apiUrl(loadApiUrl()) {}
 std::string CloudManager::loadApiUrl() {
     const char* envUrl = std::getenv("NEXO_API_URL");
     if (envUrl && std::strlen(envUrl) > 0) return envUrl;
+    // Prefer ConfigManager (already loaded from cwd config.json)
+    std::string cfgUrl = ConfigManager::getInstance().getString("api_url", "");
+    if (!cfgUrl.empty()) return cfgUrl;
+    // Fallback: /opt/nexo/config.json for production deployments
     std::ifstream f("/opt/nexo/config.json");
     if (f.good()) {
         try {

@@ -167,7 +167,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
+    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', false)")->execute();
     $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -175,7 +175,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
     }
-    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
+    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
     $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
@@ -221,7 +221,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
+    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', false)")->execute();
     $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -229,7 +229,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
     }
-    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
+    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
     $stmtConfig->execute([(string)$device['school_id']]);
 
     try {

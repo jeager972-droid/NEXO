@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
+import { devicesApi } from '../api/devices';
 import { ROLES } from '../config/roles';
 import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,6 +39,8 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   });
   const [groups, setGroups] = useState([]);
   const [biometricStatus, setBiometricStatus] = useState('checking');
+  const [edgeDevice, setEdgeDevice] = useState(null);
+  const [enrollCmd, setEnrollCmd] = useState({ state: 'idle', message: '' });
 
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
   const canNext =
@@ -73,11 +76,33 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   useEffect(() => {
     if (step !== 4) return;
     setBiometricStatus('checking');
-    fetch('http://localhost:8765/status', { signal: AbortSignal.timeout(3000) })
-      .then((res) => res.json())
-      .then((data) => setBiometricStatus(data.connected ? 'connected' : 'error'))
+    setEnrollCmd({ state: 'idle', message: '' });
+    devicesApi.getAll()
+      .then((devices) => {
+        const device = devices.find((d) => d.active) || devices[0] || null;
+        setEdgeDevice(device);
+        setBiometricStatus(device ? 'connected' : 'error');
+      })
       .catch(() => setBiometricStatus('error'));
   }, [step]);
+
+  const handleEnrollCommand = async () => {
+    if (!edgeDevice) return;
+    setEnrollCmd({ state: 'sending', message: '' });
+    try {
+      const res = await devicesApi.requestEnrollment(edgeDevice.device_id, {
+        doc: form.documento,
+        nombre: `${form.nombres} ${form.apellidos}`.trim(),
+        tel: form.acudienteCelular,
+      });
+      setEnrollCmd({
+        state: 'sent',
+        message: `Comando enviado por ${res?.channel || 'MQTT'}. Coloca el dedo del alumno en el lector del dispositivo "${edgeDevice.device_name || 'edge'}".`,
+      });
+    } catch (err) {
+      setEnrollCmd({ state: 'error', message: humanizeError(err, 'No se pudo enviar el comando al dispositivo.') });
+    }
+  };
 
   return (
     <Drawer
@@ -166,10 +191,26 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                   <p className="text-label text-[var(--nx-text)]">Lector biométrico</p>
                   {biometricStatus === 'checking' ? <Skeleton className="h-12" /> : (
                     <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]'}`}>
-                      {biometricStatus === 'connected' ? 'Lector conectado. Puedes registrar huella.' : 'No se detectó lector biométrico.'}
+                      {biometricStatus === 'connected'
+                        ? `Dispositivo "${edgeDevice?.device_name || 'edge'}" disponible. Puedes registrar la huella.`
+                        : 'No hay dispositivo edge registrado. Regístralo desde el panel de dispositivos.'}
                     </div>
                   )}
-                  <Button variant="secondary" className="w-full" disabled={biometricStatus !== 'connected'} leftIcon={<Fingerprint size={16} />}>Registrar huella</Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    disabled={biometricStatus !== 'connected' || enrollCmd.state === 'sending'}
+                    loading={enrollCmd.state === 'sending'}
+                    onClick={handleEnrollCommand}
+                    leftIcon={<Fingerprint size={16} />}
+                  >
+                    {enrollCmd.state === 'sent' ? 'Reenviar comando de enrolamiento' : 'Registrar huella'}
+                  </Button>
+                  {enrollCmd.message && (
+                    <div className={`rounded-control p-4 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'}`} role="status">
+                      {enrollCmd.message}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

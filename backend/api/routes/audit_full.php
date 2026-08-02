@@ -217,7 +217,7 @@ if ($cleanPath === '/audit/attendance/general' && $method === 'GET') {
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -250,7 +250,7 @@ if ($cleanPath === '/audit/attendance/absences' && $method === 'GET') {
             FROM attendance_incidents ai
             LEFT JOIN students s ON ai.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -281,7 +281,7 @@ if ($cleanPath === '/audit/attendance/lates' && $method === 'GET') {
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -313,7 +313,7 @@ if ($cleanPath === '/audit/attendance/evasion' && $method === 'GET') {
             FROM attendance_incidents ai
             LEFT JOIN students s ON ai.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -400,7 +400,7 @@ if ($cleanPath === '/audit/discipline/incidents' && $method === 'GET') {
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -432,7 +432,7 @@ if ($cleanPath === '/audit/discipline/violations' && $method === 'GET') {
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -463,7 +463,7 @@ if ($cleanPath === '/audit/discipline/wrong-classroom' && $method === 'GET') {
             FROM biometric_events be
             LEFT JOIN students s ON be.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -495,7 +495,7 @@ if ($cleanPath === '/audit/discipline/biometric-spam' && $method === 'GET') {
             FROM biometric_events be
             INNER JOIN students s ON be.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -529,7 +529,7 @@ if ($cleanPath === '/audit/discipline/reports' && $method === 'GET') {
             FROM security_incidents si
             LEFT JOIN students s ON si.related_student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -611,7 +611,7 @@ if ($cleanPath === '/audit/permissions/class-exits' && $method === 'GET') {
             FROM class_exit_authorizations cea
             LEFT JOIN students s ON cea.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -647,7 +647,7 @@ if ($cleanPath === '/audit/permissions/school-exits' && $method === 'GET') {
             FROM school_exit_authorizations sea
             LEFT JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -708,7 +708,7 @@ if ($cleanPath === '/audit/permissions/pending-returns' && $method === 'GET') {
             FROM school_exit_authorizations sea
             LEFT JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id
@@ -952,7 +952,7 @@ if ($cleanPath === '/audit/teacher/incidents' && $method === 'GET') {
             LEFT JOIN users u ON si.related_user_id = u.user_id
             LEFT JOIN students s ON si.related_student_id = s.student_id
             LEFT JOIN (
-                SELECT student_id, MIN(group_id) as group_id
+                SELECT student_id, MIN(group_id::text)::uuid as group_id
                 FROM student_group_assignments
                 WHERE active = TRUE
                 GROUP BY student_id

@@ -621,7 +621,7 @@ if (!function_exists('requireAuth')) {
                     WHERE u.user_id = ? AND u.deleted_at IS NULL
                     LIMIT 1
                 )
-                SELECT u.*, set_config('app.current_school_id', u.school_id::text, true) AS _cfg1
+                SELECT u.*, set_config('app.current_school_id', u.school_id::text, false) AS _cfg1
                 FROM u
             ");
             $stmt->execute([$claims['sub']]);
@@ -648,7 +648,7 @@ if (!function_exists('requireAuth')) {
             $permsStmt->execute([$user['role_id']]);
             $permissions = $permsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-            $stmtConfig = $conn->prepare("SELECT set_config('app.current_role', ?, true)");
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_role', ?, false)");
             $stmtConfig->execute([$roleName]);
 
             return [

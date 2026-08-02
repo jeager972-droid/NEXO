@@ -35,7 +35,9 @@ void signalHandler(int) {
 }
 
 static std::string dpErrorString(int err) {
-    return "0x" + std::to_string(static_cast<unsigned int>(err));
+    char buf[16];
+    snprintf(buf, sizeof(buf), "0x%08x", static_cast<unsigned int>(err));
+    return buf;
 }
 
 // Undocumented SDK helper: sets the directory where .dat/.lic files are located.
@@ -72,17 +74,20 @@ static bool configureUareuEnvironment() {
     return true;
 }
 
+static unsigned int g_dpi = 0;
+
 static bool captureFinger(DPFPDD_DEV dev, std::vector<unsigned char>& fid, int timeoutMs = 10000) {
     DPFPDD_CAPTURE_PARAM capParam{};
     capParam.size = sizeof(capParam);
     capParam.image_fmt = DPFPDD_IMG_FMT_ISOIEC19794;
     capParam.image_proc = DPFPDD_IMG_PROC_DEFAULT;
-    capParam.image_res = 0;
+    capParam.image_res = g_dpi;
 
     std::vector<unsigned char> imageData(512 * 1024);
     unsigned int imageSize = static_cast<unsigned int>(imageData.size());
     DPFPDD_CAPTURE_RESULT capResult{};
     capResult.size = sizeof(capResult);
+    capResult.info.size = sizeof(capResult.info);
 
     auto t0 = std::chrono::steady_clock::now();
     int rc = dpfpdd_capture(dev, &capParam, static_cast<unsigned int>(timeoutMs),
@@ -230,6 +235,31 @@ int main() {
         dpfpdd_close(g_dev);
         dpfpdd_exit();
         return 1;
+    }
+
+    // Same pattern as UareUCaptureOnly/selection.c: read first supported resolution
+    {
+        unsigned int capsSize = sizeof(DPFPDD_DEV_CAPS);
+        std::vector<unsigned char> capsBuf(capsSize);
+        while (true) {
+            DPFPDD_DEV_CAPS* pCaps = reinterpret_cast<DPFPDD_DEV_CAPS*>(capsBuf.data());
+            pCaps->size = capsSize;
+            int capRc = dpfpdd_get_device_capabilities(g_dev, pCaps);
+            if (capRc == DPFPDD_SUCCESS) {
+                if (pCaps->resolution_cnt > 0) {
+                    g_dpi = pCaps->resolutions[0];
+                    std::cout << "Reader native resolution: " << g_dpi << " dpi\n";
+                }
+                break;
+            }
+            if (capRc == DPFPDD_E_MORE_DATA && pCaps->size > capsSize) {
+                capsSize = pCaps->size;
+                capsBuf.resize(capsSize);
+                continue;
+            }
+            std::cerr << "get_device_capabilities failed: " << dpErrorString(capRc) << "\n";
+            break;
+        }
     }
 
     // Enroll 3 fingers for the 1:N test

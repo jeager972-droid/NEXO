@@ -211,8 +211,10 @@ void UareU5300BiometricSensor::closeDevice() {
 
 bool UareU5300BiometricSensor::selectEngine(DPFPDD_DEV dev) {
     int rc = dpfj_select_engine(dev, DPFJ_ENGINE_DPFJ7);
-    if (rc == DPFJ_E_NOT_IMPLEMENTED) {
-        LOG_WARN("FingerJet v7 not available, falling back to v6");
+    if (rc != DPFJ_SUCCESS) {
+        // Fallback ante CUALQUIER error de r7 (no implementado, licencia, etc.):
+        // el sample oficial usa r6 (DPFJ_ENGINE_DPFJ) como motor principal.
+        LOG_WARN("FingerJet v7 unavailable ({}), falling back to v6", dpErrorString(rc));
         rc = dpfj_select_engine(dev, DPFJ_ENGINE_DPFJ);
     }
     if (rc != DPFJ_SUCCESS) {
@@ -303,16 +305,32 @@ NexoResult<std::vector<uint8_t>> UareU5300BiometricSensor::captureFinger() {
         if (!reconnect()) return NexoResult<std::vector<uint8_t>>::fail(NexoError::NotInitialized, m_lastError);
     }
 
+    // Same pattern as UareUSample/helpers.c: wait for the reader to be READY
+    // before capturing (bounded to ~2s to avoid delaying the flow).
+    for (int i = 0; i < 20; ++i) {
+        DPFPDD_DEV_STATUS ds{};
+        ds.size = sizeof(DPFPDD_DEV_STATUS);
+        int statusRc = dpfpdd_get_device_status(m_device, &ds);
+        if (statusRc != DPFPDD_SUCCESS || ds.status == DPFPDD_STATUS_FAILURE) {
+            m_isReady = false;
+            if (reconnect()) return captureFinger();
+            return NexoResult<std::vector<uint8_t>>::fail(NexoError::SensorError, m_lastError);
+        }
+        if (ds.status == DPFPDD_STATUS_READY || ds.status == DPFPDD_STATUS_NEED_CALIBRATION) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
     DPFPDD_CAPTURE_PARAM capParam{};
     capParam.size = sizeof(capParam);
     capParam.image_fmt = DPFPDD_IMG_FMT_ISOIEC19794;
-    capParam.image_proc = DPFPDD_IMG_PROC_NONE;
+    capParam.image_proc = DPFPDD_IMG_PROC_DEFAULT;
     capParam.image_res = m_dpi;
 
     std::vector<unsigned char> imageData(512 * 1024);
     unsigned int imageSize = static_cast<unsigned int>(imageData.size());
     DPFPDD_CAPTURE_RESULT capResult{};
     capResult.size = sizeof(capResult);
+    capResult.info.size = sizeof(capResult.info);
 
     auto t0 = std::chrono::steady_clock::now();
     int rc = dpfpdd_capture(m_device, &capParam, static_cast<unsigned int>(m_matchTimeoutMs),
@@ -382,14 +400,26 @@ NexoResult<void> UareU5300BiometricSensor::enrollUser(uint32_t /*userId*/, std::
     bool enrollmentReady = false;
     int captures = 0;
     while (captures < m_enrollmentMaxCaptures) {
-        auto fidRes = captureFinger();
-        if (!fidRes) {
+        // Retry individual capture on bad quality (finger not placed properly)
+        std::vector<uint8_t> fidData;
+        bool capturedOk = false;
+        for (int attempt = 0; attempt < 3; ++attempt) {
+            auto fidRes = captureFinger();
+            if (fidRes) {
+                fidData = fidRes.value.value();
+                capturedOk = true;
+                break;
+            }
+            LOG_WARN("Enroll capture {} attempt {} failed: {}", captures + 1, attempt + 1, fidRes.message);
+        }
+        if (!capturedOk) {
             dpfj_finish_enrollment();
-            return NexoResult<void>::fail(fidRes.error, fidRes.message);
+            return NexoResult<void>::fail(NexoError::BadQuality,
+                "Image quality not good after 3 attempts. Last: capture failed");
         }
 
         std::vector<uint8_t> fmd;
-        if (!createFmdFromFid(fidRes.value.value(), fmd)) {
+        if (!createFmdFromFid(fidData, fmd)) {
             dpfj_finish_enrollment();
             return NexoResult<void>::fail(NexoError::SensorError, m_lastError);
         }
@@ -453,11 +483,24 @@ NexoResult<void> UareU5300BiometricSensor::searchUser(const std::vector<uint8_t>
     if (!m_isReady) return NexoResult<void>::fail(NexoError::NotInitialized);
     if (m_fmdCache.empty()) return NexoResult<void>::fail(NexoError::NoMatch, "Empty cache");
 
-    auto fidRes = captureFinger();
-    if (!fidRes) return NexoResult<void>::fail(fidRes.error, fidRes.message);
+    // Retry capture on bad quality (finger not placed properly)
+    std::vector<uint8_t> fidData;
+    bool capturedOk = false;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        auto fidRes = captureFinger();
+        if (fidRes) {
+            fidData = fidRes.value.value();
+            capturedOk = true;
+            break;
+        }
+        LOG_DEBUG("Identify capture attempt {} failed: {}", attempt + 1, fidRes.message);
+    }
+    if (!capturedOk) {
+        return NexoResult<void>::fail(NexoError::BadQuality, "Image quality not good after 3 attempts");
+    }
 
     std::vector<uint8_t> probeFmd;
-    if (!createFmdFromFid(fidRes.value.value(), probeFmd)) {
+    if (!createFmdFromFid(fidData, probeFmd)) {
         return NexoResult<void>::fail(NexoError::SensorError, m_lastError);
     }
 

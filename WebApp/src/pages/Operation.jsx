@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
+import { devicesApi } from '../api/devices';
 import { usersApi } from '../api/users';
 import { ROLES, getRoleDisplay } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
@@ -255,6 +256,23 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
 
       setResult({ variant: 'success', message: result?.message || 'Operación exitosa' });
       if (result?.message_ids?.length) pollTwilio(result.message_ids);
+
+      // Integración edge: al autorizar salida, notificar al lector biométrico
+      // para que registre SALIDA_AUTORIZADA en el dispositivo (best-effort).
+      if (command.id === 'autorizar') {
+        try {
+          const student = students.find((s) => (s.student_id || s.id) === form.student);
+          const doc = student?.document || student?.documento;
+          if (doc) {
+            const devices = await devicesApi.getAll();
+            const device = devices.find((d) => d.active) || devices[0];
+            if (device) {
+              await devicesApi.authorizeExit(device.device_id, String(doc));
+              setDeliveryStatus((prev) => prev || 'Salida notificada al lector biométrico');
+            }
+          }
+        } catch { /* la autorización ya quedó registrada en la nube */ }
+      }
     } catch (error) {
       setResult({ variant: 'danger', message: humanizeError(error, 'Error al ejecutar el comando') });
     } finally {

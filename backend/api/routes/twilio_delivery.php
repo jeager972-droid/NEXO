@@ -58,7 +58,7 @@ if ($cleanPath === '/webhooks/twilio/status' && $method === 'POST') {
     if ($messageSid && $status) {
         try {
             // BYPASS RLS: Es un proceso de sistema autenticado por HMAC, no un usuario
-            $conn->query("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+            $conn->query("SELECT set_config('app.current_role', 'SYSTEM_WORKER', false)");
             
             $errorJson = $errorCode ? json_encode(['code' => $errorCode, 'msg' => $errorMessage]) : '{}';
             

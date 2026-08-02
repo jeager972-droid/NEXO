@@ -268,7 +268,7 @@ if (isset($input['payload'])) {
 
 
             $instId = (string)$realSchoolId;
-            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
             $stmtConfig->execute([$instId]);
 
 

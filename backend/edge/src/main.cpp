@@ -446,7 +446,7 @@ bool runSecurityProvisioning() {
         return true;
     }
 
-    const std::string provisionPath = "/boot/nexo_provision.json";
+    const std::string provisionPath = ConfigManager::getInstance().getString("provision_file", "/boot/nexo_provision.json");
 
     while (!crypto.isKeyProvisioned() || !crypto.isTokenProvisioned()) {
         // FIX (SRE-3): Auto-provision from staging file injected via USB/MicroSD.
@@ -691,6 +691,47 @@ void showMainMenu() {
         "Seleccione: ";
 }
 
+// =============================================================================
+// Enrolamiento atómico compartido (menú local + comando remoto MQTT)
+// =============================================================================
+// Captura la huella vía sensor y persiste en SQLite ANTES de actualizar la
+// cache del sensor. La transacción explícita permite rollback completo.
+// Devuelve true solo si el estudiante queda persistido y en cache.
+bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
+                           const std::string& nombre, const std::string& tel,
+                           std::string& errOut) {
+    auto& db = SqliteManager::getInstance();
+    uint32_t huellaId = db.getNextHuellaID();
+    std::vector<uint8_t> tpl;
+    auto res = sensor->enrollUser(huellaId, tpl);
+    if (!res) {
+        errOut = res.message;
+        LOG_ERROR("Enroll failed: {} - {}", toString(res.error), res.message);
+        return false;
+    }
+
+    Estudiante est{doc, nombre, tel, "", huellaId, tpl.empty() ? std::vector<uint8_t>(256, 0) : tpl};
+    sqlite3_exec(db.getDB(), "BEGIN;", nullptr, nullptr, nullptr);
+    if (db.saveEstudiante(est)) {
+        auto cacheRes = sensor->addTemplate(huellaId, est.template_huella);
+        if (cacheRes) {
+            sqlite3_exec(db.getDB(), "COMMIT;", nullptr, nullptr, nullptr);
+            LOG_INFO("Student enrolled: {} ({})", nombre, doc);
+            return true;
+        }
+        sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);
+        sensor->deleteUser(huellaId); // cache sanity cleanup
+        errOut = cacheRes.message;
+        LOG_ERROR("Sensor cache add failed for {}. SQLite rolled back: {}", doc, cacheRes.message);
+        return false;
+    }
+    sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);
+    sensor->deleteUser(huellaId); // rollback cache (no-op si no se añadió)
+    errOut = "DB save failed";
+    LOG_ERROR("DB save failed for {}. Sensor cache rolled back.", doc);
+    return false;
+}
+
 void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
     while (!g_shutdownRequested.load()) {
         std::cout << "\n--- MODO SECRETARIA ---\n"
@@ -717,34 +758,11 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             std::string tel;
             if (!readLineNonBlocking(tel)) break;
 
-            uint32_t huellaId = db.getNextHuellaID();
-            std::vector<uint8_t> tpl;
-            auto res = sensor->enrollUser(huellaId, tpl);
-            if (res) {
-                Estudiante est{doc, nombre, tel, "", huellaId, tpl.empty() ? std::vector<uint8_t>(256, 0) : tpl};
-                // Enrolamiento atómico: SQLite primero, cache del sensor después.
-                // La transacción explícita permite rollback completo si el cache del sensor falla.
-                sqlite3_exec(db.getDB(), "BEGIN;", nullptr, nullptr, nullptr);
-                if (db.saveEstudiante(est)) {
-                    auto cacheRes = sensor->addTemplate(huellaId, est.template_huella);
-                    if (cacheRes) {
-                        sqlite3_exec(db.getDB(), "COMMIT;", nullptr, nullptr, nullptr);
-                        LOG_INFO("Student enrolled: {} ({})", nombre, doc);
-                        std::cout << "Estudiante enrolado exitosamente.\n";
-                    } else {
-                        sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);
-                        sensor->deleteUser(huellaId); // cache sanity cleanup
-                        LOG_ERROR("Sensor cache add failed for {}. SQLite rolled back: {}", doc, cacheRes.message);
-                        std::cout << "Error: no se pudo registrar en cache del sensor.\n";
-                    }
-                } else {
-                    sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);
-                    sensor->deleteUser(huellaId); // rollback cache (no-op si no se añadió)
-                    LOG_ERROR("DB save failed for {}. Sensor cache rolled back.", doc);
-                    std::cout << "Error: no se pudo guardar en base de datos.\n";
-                }
+            std::string err;
+            if (enrollStudentOnDevice(sensor, doc, nombre, tel, err)) {
+                std::cout << "Estudiante enrolado exitosamente.\n";
             } else {
-                LOG_ERROR("Enroll failed: {} - {}", toString(res.error), res.message);
+                std::cout << "Error de enrolamiento: " << err << "\n";
             }
         } else if (ch[0] == '2') {
             std::cout << "Documento a eliminar: ";
@@ -907,6 +925,60 @@ int main() {
                         syncWorker.nudge();
                     } else if (cmd == "UPDATE_FIRMWARE") {
                         LOG_WARN("[Main] UPDATE_FIRMWARE placeholder");
+                    } else if (cmd == "ENROLL_REQUEST") {
+                        // Enrolamiento remoto desde WebApp: captura huella en el lector
+                        // y persiste localmente (templates nunca salen del edge).
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        std::string nombre = p.value("nombre", "");
+                        std::string tel = p.value("tel", p.value("parent_tel", ""));
+                        if (doc.empty() || nombre.empty()) {
+                            LOG_WARN("[Main] ENROLL_REQUEST sin doc/nombre. Ignorado.");
+                        } else {
+                            LOG_INFO("[Main] Remote enrollment requested: doc={} ({})", doc, nombre);
+                            std::cout << "\n[REMOTO] Enrolamiento solicitado para " << nombre
+                                      << " (" << doc << "). Coloque el dedo en el lector...\n";
+                            display->showMessage("ENROLAMIENTO", "Coloque dedo");
+                            std::string err;
+                            if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err)) {
+                                display->showMessage("ENROLL OK", nombre.substr(0, 16));
+                                std::cout << "[REMOTO] Estudiante enrolado exitosamente.\n";
+                                AuditTrail::logEvent(doc, "ENROLL_OK");
+                                syncWorker.nudge();
+                            } else {
+                                display->showMessage("ENROLL FAIL", err.substr(0, 16));
+                                std::cout << "[REMOTO] Error de enrolamiento: " << err << "\n";
+                            }
+                        }
+                    } else if (cmd == "AUTHORIZE_EXIT") {
+                        // Salida autorizada por rectoría/coordinación desde WebApp.
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        if (doc.empty()) {
+                            LOG_WARN("[Main] AUTHORIZE_EXIT sin doc. Ignorado.");
+                        } else {
+                            LOG_INFO("[Main] Exit authorized by cloud for doc={}", doc);
+                            AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
+                            syncWorker.nudge();
+                            display->showMessage("SALIDA", "AUTORIZADA");
+                            std::cout << "\n[REMOTO] Salida autorizada registrada para doc " << doc << ".\n";
+                        }
+                    } else if (cmd == "DELETE_STUDENT") {
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        if (!doc.empty()) {
+                            auto& db = SqliteManager::getInstance();
+                            Estudiante est;
+                            if (db.getEstudianteByDocumento(doc, est)) {
+                                db.deleteEstudiante(doc);
+                                biometricSensor->deleteUser(est.huella_id);
+                                CloudManager::getInstance().deleteStudent(doc);
+                                LOG_INFO("[Main] Student deleted by cloud command: {}", doc);
+                                display->showMessage("ELIMINADO", doc.substr(0, 16));
+                            } else {
+                                LOG_WARN("[Main] DELETE_STUDENT para doc desconocido={}", doc);
+                            }
+                        }
                     }
                 } catch (const std::exception& e) {
                     LOG_WARN("[Main] Bad MQTT JSON: {}", e.what());

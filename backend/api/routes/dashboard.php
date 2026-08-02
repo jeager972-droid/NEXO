@@ -153,10 +153,10 @@ if ($cleanPath === '/dashboard/stats') {
                     (SELECT cnt FROM perm_cte) as perm_count
             ";
             $statsParams = array_merge(
-                [$schoolId, $authUser['id']],
-                [$schoolId, $authUser['id']],
+                $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
+                $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $authUser['id'], $groupName] : [$schoolId, $authUser['id']],
-                [$schoolId, $authUser['id']]
+                $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']]
             );
         } else {
             // Para roles globales (RECTOR, ADMIN, etc.)
@@ -202,10 +202,10 @@ if ($cleanPath === '/dashboard/stats') {
                     (SELECT cnt FROM perm_cte) as perm_count
             ";
             $statsParams = array_merge(
-                [$schoolId],
-                [$schoolId],
+                $groupName ? [$schoolId, $groupName] : [$schoolId],
+                $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId],
-                [$schoolId]
+                $groupName ? [$schoolId, $groupName] : [$schoolId]
             );
         }
 
@@ -511,9 +511,10 @@ if ($cleanPath === '/dashboard/events') {
             $stmt = $conn->prepare("
                 SELECT uc.command_type, uc.executed_at, uc.command_payload,
                        u.first_name as issuer_first, u.last_name as issuer_last,
-                       u.role as issuer_role
+                       r.role_name as issuer_role
                 FROM user_commands uc
                 LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                LEFT JOIN roles r ON u.role_id = r.role_id
                 WHERE uc.school_id = ?
                   AND uc.executed_at >= CURRENT_DATE
                   AND (
@@ -530,9 +531,10 @@ if ($cleanPath === '/dashboard/events') {
             $stmt = $conn->prepare("
                 SELECT uc.command_type, uc.executed_at, uc.command_payload,
                        u.first_name as issuer_first, u.last_name as issuer_last,
-                       u.role as issuer_role
+                       r.role_name as issuer_role
                 FROM user_commands uc
                 LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                LEFT JOIN roles r ON u.role_id = r.role_id
                 WHERE uc.school_id = ?
                   AND uc.executed_at >= CURRENT_DATE
                   AND uc.executed_by_user_id = ?
@@ -546,9 +548,10 @@ if ($cleanPath === '/dashboard/events') {
             $stmt = $conn->prepare("
                 SELECT uc.command_type, uc.executed_at, uc.command_payload,
                        u.first_name as issuer_first, u.last_name as issuer_last,
-                       u.role as issuer_role
+                       r.role_name as issuer_role
                 FROM user_commands uc
                 LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                LEFT JOIN roles r ON u.role_id = r.role_id
                 WHERE uc.school_id = ?
                   AND uc.executed_by_user_id = ?
                   AND uc.executed_at >= CURRENT_DATE
