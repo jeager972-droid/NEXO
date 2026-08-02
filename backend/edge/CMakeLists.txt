@@ -192,9 +192,26 @@ if(BUILD_TESTING)
     add_executable(nexo-tests
         tests/test_sqlite.cpp
         tests/test_crypto.cpp
+        tests/test_config_manager.cpp
+        tests/test_nexo_result.cpp
+        tests/test_dev_stub_sensor.cpp
+        tests/test_cloud_manager.cpp
+        tests/test_mqtt_command_worker.cpp
+        tests/test_audit_trail.cpp
+        tests/test_watchdog.cpp
+        # Implementation files needed by tests
+        src/utils/ConfigManager.cpp
+        src/base_de_datos/sqlite_manager.cpp
+        src/base_de_datos/encryption.cpp
+        src/base_de_datos/cloud_manager.cpp
+        src/hardware/dev_stub/DevStubBiometricSensor.cpp
+        src/hardware/dev_stub/DevStubHttpClient.cpp
+        src/interoperabilidad/audit_trail.cpp
+        src/mqtt/mqtt_command_worker.cpp
+        src/hardware/watchdog.cpp
     )
 
-    target_include_directories(nexo-tests PRIVATE ${EDGE_INCLUDE_DIR})
+    target_include_directories(nexo-tests PRIVATE ${EDGE_INCLUDE_DIR} ${MOSQUITTO_INCLUDE_DIRS})
 
     target_link_libraries(nexo-tests PRIVATE
         Catch2::Catch2WithMain
@@ -202,6 +219,8 @@ if(BUILD_TESTING)
         SQLite3::SQLite3
         spdlog::spdlog
         nlohmann_json::nlohmann_json
+        CURL::libcurl
+        ${MOSQUITTO_LIBRARIES}
     )
 
     target_compile_features(nexo-tests PRIVATE cxx_std_20)

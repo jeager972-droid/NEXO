@@ -373,8 +373,8 @@ DECLARE
 BEGIN
     SELECT array_agg(device_id::UUID) INTO d FROM edge_devices WHERE school_id='a3333333-3333-3333-3333-333333333333'::UUID AND active=TRUE;
     FOR grp_idx IN 1..5 LOOP
-        SELECT array_agg(sga.student_id::UUID) INTO s
-        FROM student_group_assignments sga WHERE sga.group_id=groups[grp_idx] AND sga.active=TRUE ORDER BY sga.student_id;
+        SELECT array_agg(sga.student_id::UUID ORDER BY sga.student_id) INTO s
+        FROM student_group_assignments sga WHERE sga.group_id=groups[grp_idx] AND sga.active=TRUE;
         -- 4 INGRESO
         FOR i IN 1..LEAST(4, array_length(s,1)) LOOP
             INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,confidence_score,event_timestamp)
@@ -410,8 +410,8 @@ DECLARE
     groups UUID[]:=ARRAY['a10aaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::UUID,'a20bbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::UUID,'a30ccccc-cccc-cccc-cccc-cccccccccccc'::UUID,'a40ddddd-dddd-dddd-dddd-dddddddddddd'::UUID,'a50eeeee-eeee-eeee-eeee-eeeeeeeeeeee'::UUID];
 BEGIN
     FOR grp_idx IN 1..5 LOOP
-        SELECT array_agg(sga.student_id::UUID) INTO s
-        FROM student_group_assignments sga WHERE sga.group_id=groups[grp_idx] AND sga.active=TRUE ORDER BY sga.student_id;
+        SELECT array_agg(sga.student_id::UUID ORDER BY sga.student_id) INTO s
+        FROM student_group_assignments sga WHERE sga.group_id=groups[grp_idx] AND sga.active=TRUE;
         -- 2 INASISTENCIA hoy
         FOR i IN 9..LEAST(10, array_length(s,1)) LOOP
             INSERT INTO attendance_incidents(incident_id,school_id,student_id,incident_type,detected_at,resolved,created_at)
