@@ -325,29 +325,33 @@ const Enrollment = () => {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-          <Card asAction tone="accent" onClick={() => { setIsDrawerOpen(true); }} className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]">
-                <UserPlus size={24} />
+          <button
+            onClick={() => { setIsDrawerOpen(true); }}
+            className="flex flex-col p-5 rounded-panel border bg-[var(--nx-surface-accent)] border-[var(--nx-border-accent)] hover:shadow-medium transition-all duration-fast text-left"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]">
+                <UserPlus size={20} />
               </div>
-              <div>
-                <p className="text-h3 text-[var(--nx-text)]">Nuevo alumno</p>
-                <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">Registra un nuevo alumno paso a paso</p>
-              </div>
+              <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
             </div>
-          </Card>
+            <p className="mt-4 text-h3 text-[var(--nx-text)]">Nuevo alumno</p>
+            <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">Registra un nuevo alumno paso a paso</p>
+          </button>
 
-          <Card asAction tone="success" onClick={() => { setView('search'); }} className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">
-                <Search size={24} />
+          <button
+            onClick={() => { setView('search'); }}
+            className="flex flex-col p-5 rounded-panel border bg-[var(--nx-surface-success)] border-[var(--nx-border-success)] hover:shadow-medium transition-all duration-fast text-left"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">
+                <Search size={20} />
               </div>
-              <div>
-                <p className="text-h3 text-[var(--nx-text)]">Buscar estudiante</p>
-                <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">Consulta y edita alumnos existentes</p>
-              </div>
+              <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
             </div>
-          </Card>
+            <p className="mt-4 text-h3 text-[var(--nx-text)]">Buscar estudiante</p>
+            <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">Consulta y edita alumnos existentes</p>
+          </button>
         </div>
 
         <AnimatePresence>
@@ -380,7 +384,15 @@ const Enrollment = () => {
         </div>
       </Surface>
 
-      {loading && students.length === 0 ? (
+      {!selectedGroup && !debouncedSearch ? (
+        <Surface>
+          <EmptyState
+            icon={<Search size={32} className="text-[var(--nx-success)]" />}
+            title="Selecciona un grupo"
+            description="Elige un grupo o busca un estudiante para ver los resultados aquí."
+          />
+        </Surface>
+      ) : loading && students.length === 0 ? (
         <SkeletonCards count={6} />
       ) : sortedStudents.length === 0 ? (
         <Surface>

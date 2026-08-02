@@ -80,7 +80,7 @@ const Login = () => {
         className="w-full max-w-[420px] space-y-8"
       >
         <div className="flex flex-col items-center">
-          <LogoNexo className="h-16" useImage />
+          <LogoNexo className="h-28" useImage />
         </div>
 
         <div className="rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 lg:p-8 shadow-medium">
