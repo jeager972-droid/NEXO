@@ -15,36 +15,26 @@ const PLATFORMS = {
   android: {
     title: 'Android',
     icon: Smartphone,
-    nativeFile: '/downloads/nexo-android.apk',
-    nativeLabel: 'Descargar APK',
     steps: [`Abre Chrome y visita ${APP_URL}.`, 'Toca el menú y selecciona "Agregar a pantalla de inicio".', 'Confirma con "Agregar".'],
   },
   ios: {
     title: 'iOS',
     icon: Smartphone,
-    nativeFile: null,
-    nativeLabel: null,
     steps: [`Abre Safari y visita ${APP_URL}.`, 'Toca Compartir y luego "Agregar a inicio".', 'Confirma con "Agregar".'],
   },
   windows: {
     title: 'Windows',
     icon: Monitor,
-    nativeFile: '/downloads/nexo-windows.exe',
-    nativeLabel: 'Descargar .exe',
     steps: ['Abre Edge o Chrome.', 'Haz clic en el icono de instalación en la barra de direcciones.', 'Confirma la instalación.'],
   },
   mac: {
     title: 'macOS',
     icon: Apple,
-    nativeFile: '/downloads/nexo-macos.dmg',
-    nativeLabel: 'Descargar .dmg',
     steps: ['Abre Chrome.', 'Haz clic en el icono de instalación en la barra de direcciones.', 'Arrastra NEXO a Aplicaciones si aplica.'],
   },
   linux: {
     title: 'Linux',
     icon: Monitor,
-    nativeFile: null,
-    nativeLabel: null,
     steps: ['Abre Chrome.', 'Haz clic en "Instalar" en el banner de PWA.', 'Confirma la instalación.'],
   },
 };
@@ -142,16 +132,15 @@ export default function InstallPage() {
                 <div className="flex-1">
                   <p className="text-h2 text-[var(--nx-text)]">{config.title}</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">
-                    Descarga e instala NEXO en tu dispositivo
+                    Instala NEXO como aplicación en tu dispositivo
                   </p>
                 </div>
               </div>
 
-              {/* Direct download button (green) */}
-              {config.nativeFile && (
-                <a
-                  href={config.nativeFile}
-                  download
+              {/* Main green button: PWA install or manual instructions */}
+              {deferredPrompt ? (
+                <button
+                  onClick={handleInstall}
                   className="flex h-13 w-full items-center justify-center gap-2 rounded-control font-label text-body transition-all hover:shadow-medium active:scale-[0.98]"
                   style={{
                     backgroundColor: 'var(--nx-success)',
@@ -159,25 +148,9 @@ export default function InstallPage() {
                   }}
                 >
                   <Download size={20} />
-                  {config.nativeLabel}
-                </a>
-              )}
-
-              {/* PWA install button (if browser supports it) */}
-              {deferredPrompt && (
-                <Button
-                  size="lg"
-                  block
-                  variant="primary"
-                  onClick={handleInstall}
-                  leftIcon={<Download size={18} />}
-                >
-                  Instalar como app
-                </Button>
-              )}
-
-              {/* Open as PWA in browser */}
-              {!config.nativeFile && !deferredPrompt && (
+                  Descargar app
+                </button>
+              ) : (
                 <a
                   href={APP_URL}
                   target="_blank"
@@ -189,7 +162,7 @@ export default function InstallPage() {
                   }}
                 >
                   <Globe size={20} />
-                  Abrir NEXO
+                  Descargar app
                 </a>
               )}
             </div>
@@ -197,7 +170,7 @@ export default function InstallPage() {
             {/* Manual steps */}
             <div className="rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-5 space-y-3">
               <p className="text-label text-[var(--nx-text)]">
-                {config.nativeFile ? 'Instalación del archivo descargado' : 'Pasos manuales'}
+                Pasos manuales
               </p>
               <ol className="list-decimal pl-5 space-y-2 text-body-sm text-[var(--nx-text-muted)]">
                 {config.steps.map((s, i) => <li key={i}>{s}</li>)}
