@@ -12,7 +12,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Dialog } from '../components/ui/Overlay';
 import { humanizeError } from '../utils/messages';
@@ -403,7 +402,10 @@ const Profile = () => {
   const [revealDialog, setRevealDialog] = useState(null);
   const [changeDialog, setChangeDialog] = useState(null);
   const [forgotPassword, setForgotPassword] = useState(false);
-  const [fontScale, setFontScale] = useState(1);
+  const [fontScale, setFontScale] = useState(() => {
+    const saved = localStorage.getItem('nx-font-scale');
+    return saved ? parseFloat(saved) : 1;
+  });
 
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
@@ -501,15 +503,6 @@ const Profile = () => {
     setChangeDialog(null);
   };
 
-  useEffect(() => {
-    const saved = localStorage.getItem('nx-font-scale');
-    if (saved) {
-      const scale = parseFloat(saved);
-      setFontScale(scale);
-      document.documentElement.style.setProperty('--nx-font-scale', String(scale));
-    }
-  }, []);
-
   const handleFontScale = (val) => {
     setFontScale(val);
     document.documentElement.style.setProperty('--nx-font-scale', String(val));
@@ -566,7 +559,6 @@ const Profile = () => {
               <p className="text-body text-[var(--nx-text)] truncate">
                 {revealed.email ? (email || '—') : censor(email, 'email')}
               </p>
-              {verified.email && <Badge scheme="success" dot className="mt-1">Verificado</Badge>}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -594,7 +586,6 @@ const Profile = () => {
               <p className="text-body text-[var(--nx-text)] truncate">
                 {revealed.phone ? (phone || '—') : censor(phone, 'phone')}
               </p>
-              {verified.phone && <Badge scheme="success" dot className="mt-1">Verificado</Badge>}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

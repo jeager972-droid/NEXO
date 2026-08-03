@@ -182,9 +182,9 @@ const Notifications = () => {
           <button
             onClick={handleClear}
             disabled={clearing}
-            className="mt-2 flex items-center gap-1 text-caption text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
+            className="mt-2 flex items-center gap-1 text-label text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
           >
-            <Trash2 size={12} />
+            <Trash2 size={14} />
             Vaciar
           </button>
         )}

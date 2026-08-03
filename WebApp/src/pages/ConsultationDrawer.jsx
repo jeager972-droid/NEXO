@@ -180,7 +180,7 @@ export const ConsultationDrawer = ({
   const [trackingModalOpen, setTrackingModalOpen] = useState(false);
   const [selectedTrackingTarget, setSelectedTrackingTarget] = useState(null);
 
-  const isAdminRole = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
+  const isAdminRole = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR || user?.role === ROLES.SECRETARIA;
   const canExport = user?.role === ROLES.RECTOR;
   const showFilters = isTeacherModule || isAdminRole;
 
@@ -192,8 +192,8 @@ export const ConsultationDrawer = ({
   return (
     <>
       <Drawer
-        title={item}
-        context={showFilters ? undefined : 'Consulta de datos institucionales'}
+        title={showFilters ? 'Consulta de datos institucionales' : item}
+        context={showFilters ? item : undefined}
         onClose={onClose}
         size="lg"
       >
@@ -217,6 +217,8 @@ export const ConsultationDrawer = ({
                 <EmptyState icon={<AlertTriangle size={32} className="text-[var(--nx-danger)]" />} title="Error de consulta" description={error} />
               ) : loadingData ? (
                 <SkeletonRows count={4} />
+              ) : !hasQueried ? (
+                <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="Selecciona un grupo y un rango de fechas, luego presiona Consultar." />
               ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <Surface className="overflow-x-auto p-5">
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />

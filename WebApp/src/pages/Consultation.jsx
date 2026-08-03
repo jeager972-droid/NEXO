@@ -155,6 +155,7 @@ const Consultation = () => {
   }, [searchParams]);
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
+  const isFilterRole = isTeacherModule || user?.role === ROLES.SECRETARIA || user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
 
   const executeQuery = async () => {
     if (!activeItem) return;
@@ -207,7 +208,7 @@ const Consultation = () => {
 
   useEffect(() => {
     if (!activeItem) return;
-    if (isTeacherModule) {
+    if (isFilterRole) {
       setHasQueried(false);
       setQueryError(null);
       setDynamicData([]);
@@ -271,7 +272,7 @@ const Consultation = () => {
         .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
     }
     return () => abortController.abort();
-  }, [activeItem, isTeacherModule]);
+  }, [activeItem, isFilterRole]);
 
   const allowedForConsulta = [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR];
   if (!allowedForConsulta.includes(user?.role)) {
@@ -526,7 +527,11 @@ const Consultation = () => {
           </Button>
           <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
             <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <h2 className="text-h2 text-[var(--nx-text)]">{activeItem}</h2>
+            <h2 className="text-h2 text-[var(--nx-text)]">{activeModule || 'Consulta'}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <p className="text-label text-[var(--nx-text-muted)]">{activeItem}</p>
           </div>
         </div>
         <ConsultationDrawer
@@ -571,6 +576,10 @@ const Consultation = () => {
             <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
             <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <p className="text-label text-[var(--nx-text-muted)]">Submódulos</p>
+          </div>
         </div>
         <Input
           placeholder="Filtrar submódulos…"
@@ -611,6 +620,10 @@ const Consultation = () => {
   // ── Nivel 1: Grid de módulos ──
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-8 w-1 rounded-full bg-[var(--nx-accent)]" />
+        <h1 className="text-h1 text-[var(--nx-text)]">Consultas</h1>
+      </div>
       <Input
         placeholder="Filtrar módulos…"
         value={searchTerm}

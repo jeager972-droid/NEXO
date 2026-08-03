@@ -30,6 +30,13 @@ function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const saved = localStorage.getItem('nx-font-scale');
+    if (saved) {
+      document.documentElement.style.setProperty('--nx-font-scale', String(saved));
+    }
+  }, []);
+
+  useEffect(() => {
     const handler = (e) => { e.preventDefault(); window.__nexoPwaPrompt = e; };
     const installedHandler = () => { window.__nexoPwaPrompt = null; };
     window.addEventListener('beforeinstallprompt', handler);

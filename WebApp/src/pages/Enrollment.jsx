@@ -9,9 +9,9 @@ import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { devicesApi } from '../api/devices';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User, Sparkles } from 'lucide-react';
+import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User, Sparkles, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Surface, Section } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -239,15 +239,58 @@ const StudentAvatar = ({ student, size = 'md' }) => {
 };
 
 const StudentProfileDrawer = ({ student, onClose }) => {
+  const [biometricStatus, setBiometricStatus] = useState('checking');
+  const [edgeDevice, setEdgeDevice] = useState(null);
+  const [enrollCmd, setEnrollCmd] = useState({ state: 'idle', message: '' });
+  const [hasFingerprint, setHasFingerprint] = useState(null);
+
+  useEffect(() => {
+    if (!student) return;
+    devicesApi.getAll()
+      .then((devices) => {
+        const device = devices.find((d) => d.active) || devices[0] || null;
+        setEdgeDevice(device);
+        setBiometricStatus(device ? 'connected' : 'error');
+      })
+      .catch(() => setBiometricStatus('error'));
+    studentsApi.getAll({ search: student.document || student.documento, limit: 1 })
+      .then((res) => {
+        const found = res.students?.[0];
+        setHasFingerprint(!!found?.has_fingerprint);
+      })
+      .catch(() => setHasFingerprint(false));
+  }, [student]);
+
+  const handleChangeFingerprint = async () => {
+    if (!edgeDevice) return;
+    setEnrollCmd({ state: 'sending', message: '' });
+    try {
+      const res = await devicesApi.requestEnrollment(edgeDevice.device_id, {
+        doc: student.document || student.documento,
+        nombre: `${student.first_name || ''} ${student.last_name || ''}`.trim(),
+        tel: student.guardian_phone || '',
+      });
+      setEnrollCmd({
+        state: 'sent',
+        message: `Comando enviado por ${res?.channel || 'MQTT'}. Coloca el dedo del alumno en el lector del dispositivo "${edgeDevice.device_name || 'edge'}".`,
+      });
+    } catch (err) {
+      setEnrollCmd({ state: 'error', message: humanizeError(err, 'No se pudo enviar el comando al dispositivo.') });
+    }
+  };
+
   if (!student) return null;
   return (
     <Drawer
-      title={`${student.last_name} ${student.first_name}`}
-      context={student.group_name || student.grade || 'Sin grupo'}
+      title="Perfil del estudiante"
       onClose={onClose}
       size="md"
     >
       <div className="p-6 space-y-6">
+        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+          <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
+        </div>
         <div className="flex items-center gap-4">
           <StudentAvatar student={student} size="lg" />
           <div>
@@ -257,12 +300,25 @@ const StudentProfileDrawer = ({ student, onClose }) => {
           </div>
         </div>
 
-        <Section title="Datos del estudiante">
+        <Surface className="divide-y divide-[var(--nx-border)]">
+          {[
+            { icon: Hash, label: 'Documento', value: student.document || student.documento || '—' },
+            { icon: GraduationCap, label: 'Grupo', value: student.group_name || student.grade || '—' },
+            { icon: FileText, label: 'ID', value: student.student_id || student.id || '—' },
+          ].map((row) => (
+            <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
+              <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
+              <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
+              <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
+            </div>
+          ))}
+        </Surface>
+
+        {student.guardian_name && (
           <Surface className="divide-y divide-[var(--nx-border)]">
             {[
-              { icon: Hash, label: 'Documento', value: student.document || student.documento || '—' },
-              { icon: GraduationCap, label: 'Grupo', value: student.group_name || student.grade || '—' },
-              { icon: FileText, label: 'ID', value: student.student_id || student.id || '—' },
+              { icon: User, label: 'Acudiente', value: student.guardian_name },
+              { icon: Phone, label: 'Teléfono', value: student.guardian_phone || '—' },
             ].map((row) => (
               <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
                 <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
@@ -271,24 +327,35 @@ const StudentProfileDrawer = ({ student, onClose }) => {
               </div>
             ))}
           </Surface>
-        </Section>
-
-        {student.guardian_name && (
-          <Section title="Acudiente">
-            <Surface className="divide-y divide-[var(--nx-border)]">
-              {[
-                { icon: User, label: 'Nombre', value: student.guardian_name },
-                { icon: Phone, label: 'Teléfono', value: student.guardian_phone || '—' },
-              ].map((row) => (
-                <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
-                  <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
-                  <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
-                  <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
-                </div>
-              ))}
-            </Surface>
-          </Section>
         )}
+
+        <div className="grid grid-cols-1">
+          <button
+            onClick={handleChangeFingerprint}
+            disabled={biometricStatus !== 'connected' || enrollCmd.state === 'sending'}
+            className="flex items-center gap-3 rounded-panel border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4 text-left transition-all duration-fast hover:shadow-medium disabled:opacity-45"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">
+              <Fingerprint size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-h3 text-[var(--nx-text)]">Cambiar huella del estudiante</p>
+              <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">
+                {hasFingerprint === null
+                  ? 'Verificando huella registrada…'
+                  : hasFingerprint
+                    ? 'Huella actual verificada. Presiona para reemplazar.'
+                    : 'No hay huella registrada aún. Presiona para registrar.'}
+              </p>
+            </div>
+            {enrollCmd.state === 'sending' && <Loader2 size={18} className="animate-spin text-[var(--nx-success)]" />}
+          </button>
+          {enrollCmd.message && (
+            <div className={`mt-2 rounded-control p-3 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'}`} role="status">
+              {enrollCmd.message}
+            </div>
+          )}
+        </div>
       </div>
     </Drawer>
   );

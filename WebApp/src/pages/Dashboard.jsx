@@ -508,13 +508,9 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           )}
 
           {selectedGroup && !groupLoading && groupStats && !hasActivity && (
-            <SituationLine
-              icon={<AlertTriangle size={18} />}
-              label="Atención"
-              value={`El grupo ${selectedGroup} no tiene registros de ingreso hoy`}
-              detail="Verifica que el nodo de control esté operativo"
-              scheme="warning"
-            />
+            <Surface className="p-4">
+              <NexoChatBubble message={`El grupo ${selectedGroup} no tiene registros de ingreso hoy. Verifica que el nodo de control esté operativo.`} />
+            </Surface>
           )}
 
           {selectedGroup && (
@@ -772,13 +768,15 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
           ) : (
             <EmptyState
               icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
-              title={searchQuery ? 'Sin coincidencias' : category === 'present' ? 'Todo en orden por aquí!' : 'Todo en orden por aquí!'}
+              title={searchQuery ? 'Sin coincidencias' : emptyWarning ? 'Atención' : 'Todo en orden por aquí!'}
               description={
                 searchQuery
                   ? 'Ningún estudiante coincide con tu búsqueda.'
-                  : category === 'present'
-                    ? 'Este grupo no ha tenido ingresos el día de hoy.'
-                    : 'No hay estudiantes en esta categoría para el período seleccionado.'
+                  : emptyWarning
+                    ? `El grupo ${groupName} no tiene registros de ingreso hoy. Verifica que el nodo de control esté operativo.`
+                    : category === 'present'
+                      ? 'Este grupo no ha tenido ingresos el día de hoy.'
+                      : 'No hay estudiantes en esta categoría para el período seleccionado.'
               }
             />
           )}
