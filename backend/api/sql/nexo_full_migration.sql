@@ -456,6 +456,7 @@ INSERT INTO permissions (permission_id, permission_code, description) VALUES
     (uuid_generate_v4(), 'operations.horario', 'Notify group schedule change'),
     (uuid_generate_v4(), 'operations.incidente', 'Report disciplinary incident'),
     (uuid_generate_v4(), 'operations.seguimiento', 'Request counselor tracking'),
+    (uuid_generate_v4(), 'operations.situacion_critica', 'Report critical situation to rector and coordinator'),
     (uuid_generate_v4(), 'consultations.teacher_view', 'View queries filtered by assigned groups'),
     (uuid_generate_v4(), 'consultations.global_view', 'View all institution queries'),
     (uuid_generate_v4(), 'reports.preview', 'View biometric report preview'),
@@ -505,6 +506,7 @@ SELECT assign_permission_to_role('RECTOR', 'operations.pedagogica');
 SELECT assign_permission_to_role('RECTOR', 'operations.horario');
 SELECT assign_permission_to_role('RECTOR', 'operations.incidente');
 SELECT assign_permission_to_role('RECTOR', 'operations.seguimiento');
+SELECT assign_permission_to_role('RECTOR', 'operations.situacion_critica');
 SELECT assign_permission_to_role('RECTOR', 'consultations.global_view');
 SELECT assign_permission_to_role('RECTOR', 'reports.preview');
 SELECT assign_permission_to_role('RECTOR', 'reports.export');
@@ -532,6 +534,7 @@ SELECT assign_permission_to_role('COORDINATOR', 'operations.pedagogica');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.horario');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.incidente');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.seguimiento');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.situacion_critica');
 SELECT assign_permission_to_role('COORDINATOR', 'consultations.global_view');
 SELECT assign_permission_to_role('COORDINATOR', 'reports.preview');
 SELECT assign_permission_to_role('COORDINATOR', 'reports.export');
@@ -553,6 +556,7 @@ SELECT assign_permission_to_role('TEACHER', 'operations.pedagogica');
 SELECT assign_permission_to_role('TEACHER', 'operations.horario');
 SELECT assign_permission_to_role('TEACHER', 'operations.incidente');
 SELECT assign_permission_to_role('TEACHER', 'operations.seguimiento');
+SELECT assign_permission_to_role('TEACHER', 'operations.situacion_critica');
 SELECT assign_permission_to_role('TEACHER', 'consultations.teacher_view');
 SELECT assign_permission_to_role('TEACHER', 'reports.preview');
 SELECT assign_permission_to_role('TEACHER', 'students.view');
@@ -566,6 +570,7 @@ SELECT assign_permission_to_role('SECRETARY', 'consultations.global_view');
 SELECT assign_permission_to_role('SECRETARY', 'reports.preview');
 SELECT assign_permission_to_role('SECRETARY', 'reports.export');
 SELECT assign_permission_to_role('SECRETARY', 'operations.solicitud');
+SELECT assign_permission_to_role('SECRETARY', 'operations.situacion_critica');
 
 -- COUNSELOR: tracking, behavior, consultations
 SELECT assign_permission_to_role('COUNSELOR', 'dashboard.teacher_view');
@@ -574,6 +579,7 @@ SELECT assign_permission_to_role('COUNSELOR', 'behavior.view_risk');
 SELECT assign_permission_to_role('COUNSELOR', 'consultations.teacher_view');
 SELECT assign_permission_to_role('COUNSELOR', 'consultations.global_view');
 SELECT assign_permission_to_role('COUNSELOR', 'operations.seguimiento');
+SELECT assign_permission_to_role('COUNSELOR', 'operations.situacion_critica');
 SELECT assign_permission_to_role('COUNSELOR', 'students.view');
 
 -- SECURITY: view only

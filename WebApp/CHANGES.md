@@ -4,6 +4,66 @@
 
 ---
 
+## Auditoría y corrección Backend ↔ Frontend
+
+### Problema: "Error de consulta — Módulo no soportado"
+
+**Causa raíz:** Varios submódulos del frontend enviaban slugs que no existían en el backend, o usaban el slug genérico `incidents` para tipos de eventos diferentes.
+
+### Correcciones frontend
+
+**`src/pages/Consultation.jsx`:**
+- Agregado `'Permisos': 'active_permissions'` a `MODULE_SLUGS` (faltaba).
+- Agregado `'Seguimientos': 'student_tracking_completed'` a `MODULE_SLUGS` (faltaba).
+- Cambiados slugs de eventos críticos de `incidents` a slugs específicos:
+  - `'Evasiones Internas': 'evasions'`
+  - `'SOS Emitidos': 'sos_emitted'`
+  - `'Daños Reportados': 'damages_reported'`
+  - `'Situaciones Críticas': 'critical_situations'`
+
+### Correcciones backend — `backend/api/routes/consultations.php`
+
+- **Filtro por grado:** Agregado `$gradeFilter` a las consultas `late_arrivals`, `absences`, `active_permissions` (ya existía el helper pero no se usaba en estas queries).
+- **Nuevos cases en el switch:**
+  - `justified_absences` — Consulta `attendance_incidents` con tipos `JUSTIFIED_ABSENCE`, `INASISTENCIA_JUSTIFICADA`.
+  - `evasions` — Consulta `attendance_incidents` con tipos `EVASION`, `EVASION_INTERNA`, `CLASSROOM_EVASION`.
+  - `sos_emitted` — Consulta `sos_alerts` con join a `users` para mostrar emisor.
+  - `damages_reported` — Consulta `user_commands` donde `command_type = 'DAÑO'`, extrae payload JSON.
+  - `critical_situations` — Consulta `user_commands` donde `command_type = 'SITUACION_CRITICA'`, extrae payload JSON.
+
+### Correcciones backend — `backend/api/routes/operations.php`
+
+- **Nueva operación `situacion_critica`:**
+  - Agregado `'/operations/situacion_critica' => 'situacion_critica'` al `$pathMap`.
+  - Agregado `case 'situacion_critica'` en el switch que:
+    - Inserta un registro en `attendance_incidents` con tipo `SITUACION_CRITICA`.
+    - Notifica a RECTOR y COORDINATOR vía WhatsApp (Twilio).
+    - Crea notificaciones in-app para RECTOR y COORDINATOR.
+    - Registra el comando en `user_commands`.
+
+### Correcciones backend — Permisos RBAC
+
+**`backend/api/sql/nexo_seed.sql`:**
+- Agregado permiso `operations.situacion_critica` a la tabla `permissions`.
+- Agregado `operations.situacion_critica` a los roles: TEACHER, SECRETARY, COUNSELOR.
+- (RECTOR y COORDINATOR reciben todos los permisos automáticamente.)
+
+**`backend/api/sql/nexo_full_migration.sql`:**
+- Agregado permiso `operations.situacion_critica` a la tabla `permissions`.
+- Agregado `assign_permission_to_role` para RECTOR, COORDINATOR, TEACHER, SECRETARY, COUNSELOR.
+
+**`backend/api/tests/integration_test.php`:**
+- Agregado `operations.situacion_critica` a la lista de permisos esperados.
+
+### Verificación de integridad
+
+- **Build frontend:** `npx vite build` — sin errores.
+- **Tests frontend:** 29 archivos, 339 tests — todos pasan.
+- **Sintaxis PHP:** `php -l` en `consultations.php` y `operations.php` — sin errores.
+- **Auditoría slugs:** Todos los slugs del frontend (`MODULE_SLUGS`) tienen un `case` correspondiente en el backend.
+
+---
+
 ### 1. Botón "Situación Crítica" en Operaciones (todos los roles)
 
 **Archivos modificados:**

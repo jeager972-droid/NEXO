@@ -238,6 +238,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     $action = filter_var($input['command'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $pathMap = [
         '/operations/sos' => 'sos',
+        '/operations/situacion_critica' => 'situacion_critica',
         '/operations/inasistencia' => 'inasistencia',
         '/operations/citacion' => 'citacion',
         '/operations/salida' => 'autorizar_salida',
@@ -334,6 +335,66 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
                 echo json_encode(['status' => 'ok', 'message' => 'Alerta SOS registrada y notificada a directivos']);
+                break;
+
+            case 'situacion_critica':
+                $location = filter_var($params['location'] ?? 'Ubicación no definida', FILTER_SANITIZE_SPECIAL_CHARS);
+                $message = filter_var($params['message'] ?? 'Situación crítica reportada', FILTER_SANITIZE_SPECIAL_CHARS);
+
+                $reporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                $critMeta = json_encode([
+                    'location' => $location,
+                    'message' => $message,
+                    'reporter_name' => $reporterName,
+                    'reporter_role' => $role,
+                    'action' => 'situacion_critica',
+                ], JSON_UNESCAPED_UNICODE);
+
+                // Insertar en attendance_incidents para trazabilidad
+                $incStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                    VALUES (uuid_generate_v4(), ?, NULL, 'SITUACION_CRITICA', NOW(), ?::jsonb)
+                ");
+                $incStmt->execute([$schoolId, $critMeta]);
+
+                // Notificar a RECTOR y COORDINATOR
+                $notifyRoles = ['RECTOR', 'COORDINATOR'];
+                $placeholders = implode(',', array_fill(0, count($notifyRoles), '?'));
+                $nStmt = $conn->prepare("
+                    SELECT user_id, phone FROM users
+                    WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) IN ($placeholders)) AND active = TRUE
+                ");
+                $nStmt->execute(array_merge([$schoolId], $notifyRoles));
+                $recipients = $nStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $critMsg = "🚨 *NEXO — SITUACIÓN CRÍTICA*\n\nUbicación: {$location}\nDetalle: {$message}\nReportado por: {$reporterName} ({$role})\n\nVerifique la plataforma inmediatamente.";
+
+                if (!empty($recipients)) {
+                    foreach ($recipients as $r) {
+                        if (!empty($r['phone'])) {
+                            enqueueTwilioJob($r['phone'], $critMsg, $schoolId, null, null, $userId, 'CRITICAL_SITUATION');
+                        }
+                    }
+
+                    $rows = [];
+                    $notifParams = [];
+                    foreach ($recipients as $r) {
+                        $rows[] = "(?, ?, 'Situación Crítica', ?, 'SOS', ?::jsonb, NOW())";
+                        $notifParams[] = $schoolId;
+                        $notifParams[] = $r['user_id'];
+                        $notifParams[] = "Se reportó una situación crítica por {$reporterName}. Ver detalles.";
+                        $notifParams[] = $critMeta;
+                    }
+                    $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                    try {
+                        $conn->prepare($sql)->execute($notifParams);
+                    } catch (Throwable $e) {
+                        error_log("[OPERATIONS] Situación crítica notification batch insert error: " . $e->getMessage());
+                    }
+                }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                echo json_encode(['status' => 'ok', 'message' => 'Situación crítica registrada y notificada a directivos']);
                 break;
 
             case 'inasistencia':

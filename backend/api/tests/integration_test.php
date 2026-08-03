@@ -53,7 +53,7 @@ $expectedPerms = [
     'operations.sos', 'operations.inasistencia', 'operations.citacion',
     'operations.autorizar_salida', 'operations.permiso', 'operations.solicitud',
     'operations.daño', 'operations.pedagogica', 'operations.horario',
-    'operations.incidente', 'operations.seguimiento',
+    'operations.incidente', 'operations.seguimiento', 'operations.situacion_critica',
     'consultations.teacher_view', 'consultations.global_view',
     'reports.preview', 'reports.export',
     'devices.manage', 'devices.admin_health',

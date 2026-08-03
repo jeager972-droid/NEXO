@@ -57,14 +57,16 @@ const MODULE_SLUGS = {
   'Auditoría Local': 'audit_logs',
   'Permisos Activos Hoy': 'active_permissions',
   'Inasistencias Justificadas': 'justified_absences',
-  'Evasiones Internas': 'incidents',
-  'SOS Emitidos': 'incidents',
-  'Daños Reportados': 'incidents',
-  'Situaciones Críticas': 'incidents',
+  'Evasiones Internas': 'evasions',
+  'SOS Emitidos': 'sos_emitted',
+  'Daños Reportados': 'damages_reported',
+  'Situaciones Críticas': 'critical_situations',
   'Spam al Nodo': 'biometric_spam',
   'Permisos de Salida': 'school_exits',
   'Permisos Internos': 'active_permissions',
   'Grados': 'all_groups',
+  'Permisos': 'active_permissions',
+  'Seguimientos': 'student_tracking_completed',
 };
 
 const AUDIT_MODULES = {

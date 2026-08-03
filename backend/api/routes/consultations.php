@@ -43,6 +43,7 @@ if ($cleanPath === '/consultations/query') {
     $studentId = filter_var($input['student_id'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $fromDate = filter_var($input['from_date'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $toDate = filter_var($input['to_date'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
+    $grade = filter_var($input['grade'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $userRoleUpper = strtoupper($role ?? '');
 
     if (!$module) {
@@ -76,6 +77,16 @@ if ($cleanPath === '/consultations/query') {
                 WHERE sch.teacher_user_id = {$safeUserId} AND sga.active = TRUE
             )";
         }
+    }
+
+    // Helper: filtro por grado (ej. '6', '7', ... '11') — filtra grupos cuyo grade_level coincide
+    $gradeFilter = '';
+    if ($grade) {
+        $gradeFilter = " AND s.student_id IN (
+            SELECT sga.student_id FROM student_group_assignments sga
+            JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE ag.grade_level = ? AND sga.active = TRUE
+        )";
     }
 
     // Fechas por defecto: hoy
@@ -121,12 +132,14 @@ if ($cleanPath === '/consultations/query') {
                       {$gFilter}
                       {$sFilter}
                       {$teacherGroupFilter}
+                      {$gradeFilter}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 50
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
                 if ($studentId) $params[] = $studentId;
+                if ($grade) $params[] = $grade;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Tipo', 'event_result' => 'Resultado'];
@@ -144,12 +157,14 @@ if ($cleanPath === '/consultations/query') {
                       {$gFilter}
                       {$sFilter}
                       {$teacherGroupFilter}
+                      {$gradeFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
                 if ($studentId) $params[] = $studentId;
+                if ($grade) $params[] = $grade;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Incidente'];
@@ -167,12 +182,14 @@ if ($cleanPath === '/consultations/query') {
                       {$gFilter}
                       {$sFilter}
                       {$teacherGroupFilter}
+                      {$gradeFilter}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
                 if ($studentId) $params[] = $studentId;
+                if ($grade) $params[] = $grade;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo Permiso'];
@@ -594,6 +611,126 @@ if ($cleanPath === '/consultations/query') {
             case 'audit_logs':
                 $data = [];
                 $columns = ['info' => 'Información'];
+                break;
+
+            // ==========================================
+            // NUEVOS MÓDULOS: Inasistencias Justificadas, Eventos Críticos
+            // ==========================================
+            case 'justified_absences':
+                $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
+                $sFilter = $studentId ? " AND ai.student_id = ?" : "";
+                $stmt = $conn->prepare("
+                    SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type, s.student_id, ai.metadata_json
+                    FROM attendance_incidents ai
+                    JOIN students s ON ai.student_id = s.student_id
+                    WHERE ai.school_id = ? AND ai.incident_type IN ('JUSTIFIED_ABSENCE', 'INASISTENCIA_JUSTIFICADA')
+                      AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
+                      {$gFilter}
+                      {$sFilter}
+                      {$teacherGroupFilter}
+                      {$gradeFilter}
+                    ORDER BY ai.detected_at DESC
+                    LIMIT 50
+                ");
+                $params = [$schoolId, $fromDate, $toDate];
+                if ($groupName) $params[] = $groupName;
+                if ($studentId) $params[] = $studentId;
+                if ($grade) $params[] = $grade;
+                $stmt->execute($params);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo'];
+                break;
+
+            case 'evasions':
+                $gFilter = $groupName ? " AND s.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
+                $sFilter = $studentId ? " AND s.student_id = ?" : "";
+                $stmt = $conn->prepare("
+                    SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type, s.student_id, ai.metadata_json
+                    FROM attendance_incidents ai
+                    JOIN students s ON ai.student_id = s.student_id
+                    WHERE ai.school_id = ? AND ai.incident_type IN ('EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION')
+                      AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
+                      {$gFilter}
+                      {$sFilter}
+                      {$teacherGroupFilter}
+                      {$gradeFilter}
+                    ORDER BY ai.detected_at DESC
+                    LIMIT 50
+                ");
+                $params = [$schoolId, $fromDate, $toDate];
+                if ($groupName) $params[] = $groupName;
+                if ($studentId) $params[] = $studentId;
+                if ($grade) $params[] = $grade;
+                $stmt->execute($params);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo'];
+                break;
+
+            case 'sos_emitted':
+                $stmt = $conn->prepare("
+                    SELECT sa.alert_id, sa.alert_description, sa.emitted_at, sa.resolved_at,
+                           u.first_name AS emitter_first, u.last_name AS emitter_last,
+                           sa.emitted_by_user_id
+                    FROM sos_alerts sa
+                    LEFT JOIN users u ON sa.emitted_by_user_id = u.user_id
+                    WHERE sa.school_id = ?
+                      AND sa.emitted_at >= (?::date) AND sa.emitted_at < ((?::date + INTERVAL '1 day'))
+                    ORDER BY sa.emitted_at DESC
+                    LIMIT 100
+                ");
+                $stmt->execute([$schoolId, $fromDate, $toDate]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['emitter_first' => 'Nombre', 'emitter_last' => 'Apellido', 'alert_description' => 'Descripción', 'emitted_at' => 'Fecha/Hora', 'resolved_at' => 'Resuelto'];
+                break;
+
+            case 'damages_reported':
+                $stmt = $conn->prepare("
+                    SELECT uc.executed_at, uc.command_payload, u.first_name, u.last_name
+                    FROM user_commands uc
+                    LEFT JOIN users u ON uc.executed_by_user_id = u.user_id
+                    WHERE uc.school_id = ? AND uc.command_type = 'DAÑO'
+                      AND uc.executed_at >= (?::date) AND uc.executed_at < ((?::date + INTERVAL '1 day'))
+                    ORDER BY uc.executed_at DESC
+                    LIMIT 100
+                ");
+                $stmt->execute([$schoolId, $fromDate, $toDate]);
+                $rawRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $data = array_map(function($r) {
+                    $payload = json_decode($r['command_payload'] ?? '{}', true) ?: [];
+                    return [
+                        'first_name' => $r['first_name'],
+                        'last_name' => $r['last_name'],
+                        'location' => $payload['location'] ?? '—',
+                        'description' => $payload['description'] ?? $payload['message'] ?? '—',
+                        'executed_at' => $r['executed_at'],
+                    ];
+                }, $rawRows);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'location' => 'Ubicación', 'description' => 'Descripción', 'executed_at' => 'Fecha/Hora'];
+                break;
+
+            case 'critical_situations':
+                $stmt = $conn->prepare("
+                    SELECT uc.executed_at, uc.command_payload, u.first_name, u.last_name
+                    FROM user_commands uc
+                    LEFT JOIN users u ON uc.executed_by_user_id = u.user_id
+                    WHERE uc.school_id = ? AND uc.command_type = 'SITUACION_CRITICA'
+                      AND uc.executed_at >= (?::date) AND uc.executed_at < ((?::date + INTERVAL '1 day'))
+                    ORDER BY uc.executed_at DESC
+                    LIMIT 100
+                ");
+                $stmt->execute([$schoolId, $fromDate, $toDate]);
+                $rawRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $data = array_map(function($r) {
+                    $payload = json_decode($r['command_payload'] ?? '{}', true) ?: [];
+                    return [
+                        'first_name' => $r['first_name'],
+                        'last_name' => $r['last_name'],
+                        'location' => $payload['location'] ?? '—',
+                        'message' => $payload['message'] ?? '—',
+                        'executed_at' => $r['executed_at'],
+                    ];
+                }, $rawRows);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'location' => 'Ubicación', 'message' => 'Detalle', 'executed_at' => 'Fecha/Hora'];
                 break;
 
             default:

@@ -12,7 +12,8 @@
     { "source": "/auditoria", "destination": "/app/auditoria", "permanent": false },
     { "source": "/informes", "destination": "/app/informes", "permanent": false },
     { "source": "/enrolamiento", "destination": "/app/enrolamiento", "permanent": false },
-    { "source": "/descargas", "destination": "/app/descargas", "permanent": false }
+    { "source": "/descargas", "destination": "/app/descargas", "permanent": false },
+    { "source": "/instalar/:platform", "destination": "/app/instalar/:platform", "permanent": false }
   ],
   "rewrites": [
     {
