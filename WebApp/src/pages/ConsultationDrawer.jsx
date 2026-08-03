@@ -4,7 +4,7 @@
  * Usa Drawer de Overlay.jsx, RiskBadge pattern, SkeletonRows, humanizeError.
  */
 import { useState, useEffect, useRef } from 'react';
-import { Search, Activity, Filter, Eye, AlertTriangle, Sparkles, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Search, Eye, AlertTriangle, Sparkles, FileSpreadsheet, FileText, FileDown } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
@@ -18,19 +18,135 @@ import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
 import { RiskBadge } from '../components/patterns/RiskBadge';
 import { SearchableSelect as GlobalSearchableSelect } from '../components/ui/SearchableSelect';
-import { exportExcel, exportWord } from '../utils/exporters';
+import { exportExcel, exportWord, exportPdf } from '../utils/exporters';
 
-const EXCLUDE_COLS = ['student_id', 'id', 'metadata', 'metadata_json', 'raw'];
+const DETAIL_MODULES = [
+  'Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados', 'Seguimientos',
+  'Permisos', 'Permisos Emitidos', 'Permisos de Salida', 'Permisos Internos',
+  'SOS Emitidos', 'Evasiones Internas', 'Situaciones Críticas', 'Daños Reportados',
+  'Spam al Nodo', 'Estudiantes con Permiso',
+];
 
-const humanizeColumn = (k) => String(k).replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+const EXCLUDE_COLS = ['student_id', 'id', 'metadata', 'metadata_json', 'raw', 'event_result'];
+
+const GRADO_OPTIONS = [
+  { id: '6', name: 'Sexto' },
+  { id: '7', name: 'Séptimo' },
+  { id: '8', name: 'Octavo' },
+  { id: '9', name: 'Noveno' },
+  { id: '10', name: 'Décimo' },
+  { id: '11', name: 'Once' },
+];
+
+const COLUMN_LABELS_ES = {
+  first_name: 'Nombres',
+  last_name: 'Apellidos',
+  group_name: 'Grupo',
+  document: 'Documento',
+  documento: 'Documento',
+  event_timestamp: 'Fecha',
+  event_time: 'Fecha',
+  event_type: 'Suceso',
+  event_result: 'Resultado',
+  created_at: 'Registrado',
+  updated_at: 'Actualizado',
+  last_entry: 'Último ingreso',
+  absent_since: 'Desde',
+  alert_type: 'Evento',
+  alert_at: 'Fecha',
+  permiso_type: 'Tipo',
+  permiso_at: 'Fecha',
+  reason: 'Motivo',
+  status: 'Estado',
+  risk_score: 'Riesgo',
+  risk_level: 'Nivel',
+  phone: 'Teléfono',
+  guardian_name: 'Acudiente',
+  guardian_phone: 'Teléfono acudiente',
+  grade: 'Grado',
+  grade_level: 'Nivel',
+  institution_name: 'Institución',
+  school_name: 'Institución',
+  teacher_name: 'Docente',
+  issuer: 'Registrado por',
+  sender_name: 'Enviado por',
+  channel: 'Canal',
+  time: 'Hora',
+  date: 'Fecha',
+  count: 'Cantidad',
+  total: 'Total',
+};
+
+const EVENT_TRANSLATIONS = {
+  INGRESO_NORMAL: 'Ingreso normal',
+  INGRESO_TARDE: 'Llegada tarde',
+  LATE_ARRIVAL: 'Llegada tarde',
+  EARLY_EXIT: 'Salida temprana',
+  EVASION_INTERNA: 'Evasión interna',
+  SPAM_BIOMETRIC: 'Spam biométrico',
+  BIOMETRIC_FAILURE: 'Falla biométrica',
+  UNAUTHORIZED_ABSENCE: 'Fuga',
+  WRONG_CLASSROOM: 'Salón incorrecto',
+  SOS_WEBAPP: 'Alerta SOS',
+  SOS_DEVICE: 'Alerta SOS (dispositivo)',
+  RISK_ALERT_HIGH: 'Riesgo alto',
+  RISK_ALERT_MEDIUM: 'Riesgo medio',
+  RISK_ALERT_LOW: 'Riesgo bajo',
+  SUCCESS: 'Exitoso',
+  FAILED: 'Fallido',
+  PENDING: 'Pendiente',
+  APPROVED: 'Aprobado',
+  REJECTED: 'Rechazado',
+  LATE: 'Tardío',
+  class: 'Salida de clase',
+  school: 'Salida del colegio',
+  trip: 'Salida pedagógica',
+};
+
+const humanizeColumn = (k) => COLUMN_LABELS_ES[k] ?? String(k).replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+
+const formatDateEs = (v) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return String(v);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  let h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return `${dd}/${mm}/${yy} a las ${h}:${min} ${ampm}`;
+};
+
+const humanizeValue = (v) => {
+  if (v === null || v === undefined) return '—';
+  const s = String(v).trim();
+  return EVENT_TRANSLATIONS[s] ?? EVENT_TRANSLATIONS[s.toUpperCase()] ?? s;
+};
 
 const formatCellValue = (k, v) => {
   if (v === null || v === undefined) return '—';
-  if (k.toLowerCase().includes('date') || k.toLowerCase().includes('at') || k.toLowerCase().includes('created') || k.toLowerCase().includes('entry')) {
-    const d = new Date(v);
-    return isNaN(d) ? String(v) : d.toLocaleString('es-CO');
+  const lower = k.toLowerCase();
+  if (lower.includes('date') || lower.includes('_at') || lower.includes('created') || lower.includes('entry') || lower.includes('timestamp') || lower.includes('_time') || lower === 'time') {
+    return formatDateEs(v);
+  }
+  if (lower === 'event_type' || lower === 'event_result' || lower === 'alert_type' || lower === 'status' || lower === 'risk_level') {
+    return humanizeValue(v);
   }
   return String(v);
+};
+
+const sortRowsAlpha = (rows) => {
+  if (!Array.isArray(rows) || rows.length === 0) return rows;
+  const hasName = rows.some(r => r.last_name || r.first_name);
+  if (!hasName) return rows;
+  return [...rows].sort((a, b) => {
+    const la = (a.last_name || '').toLowerCase();
+    const lb = (b.last_name || '').toLowerCase();
+    if (la !== lb) return la.localeCompare(lb, 'es');
+    return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase(), 'es');
+  });
 };
 
 const riskLevelMap = { CRITICAL: 'critico', MEDIUM: 'medio', LOW: 'bajo', HIGH: 'alto' };
@@ -52,22 +168,30 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder, loadin
 const ExportActions = ({ rows, columns, item, fromDate, toDate, canExport }) => {
   if (!rows || rows.length === 0 || !canExport) return null;
   const spec = { title: item, rows, columns, from: fromDate, to: toDate };
+  const btnBase = 'flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-medium transition-all duration-fast hover:shadow-small';
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--nx-border)] pb-3 mb-3">
-      <span className="text-caption text-[var(--nx-text-muted)]">Exportar:</span>
-      <Button variant="secondary" size="sm" onClick={() => exportExcel(spec)} leftIcon={<FileSpreadsheet size={14} />}>Excel</Button>
-      <Button variant="secondary" size="sm" onClick={() => exportWord(spec)} leftIcon={<FileText size={14} />}>Word</Button>
+      <span className="text-caption text-[var(--nx-text-muted)]">Descargar:</span>
+      <button onClick={() => exportExcel(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)] border border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)]`}>
+        <FileSpreadsheet size={14} /> Excel
+      </button>
+      <button onClick={() => exportWord(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] hover:bg-[color-mix(in_oklch,var(--nx-accent)_12%,transparent)]`}>
+        <FileText size={14} /> Word
+      </button>
+      <button onClick={() => exportPdf(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)]`}>
+        <FileDown size={14} /> PDF
+      </button>
     </div>
   );
 };
 
 const TeacherQueryPanel = ({
-  item, groups, selectedGroup, setSelectedGroup, selectedStudent, setSelectedStudent,
+  item, groups, selectedGroup, setSelectedGroup, selectedGrade, setSelectedGrade, selectedStudent, setSelectedStudent,
   fromDate, setFromDate, toDate, setToDate, onQuery, loadingData, hasQueried, dynamicData, error, canExport
 }) => {
   const [students, setStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
-  const rows = dynamicData;
+  const rows = sortRowsAlpha(dynamicData);
   const visibleKeys = rows.length > 0 ? Object.keys(rows[0]).filter((k) => !EXCLUDE_COLS.includes(k)) : [];
 
   useEffect(() => {
@@ -82,6 +206,7 @@ const TeacherQueryPanel = ({
 
   const groupOptions = groups.map((g) => ({ id: g.name || g.group_name || g, name: `${g.name || g.group_name || g}${g.grade_level ? ` (${g.grade_level})` : ''}` }));
   const studentOptions = [...students].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => ({ id: String(s.id || s.student_id), name: `${s.last_name || ''} ${s.first_name || ''}`.trim() }));
+  const gradeOptions = GRADO_OPTIONS;
 
   return (
     <div className="flex flex-col">
@@ -90,6 +215,7 @@ const TeacherQueryPanel = ({
           <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
           <p className="text-label text-[var(--nx-text)]">Filtros de consulta</p>
         </div>
+        <SearchableSelect label="Grado" placeholder="Seleccionar grado…" options={gradeOptions} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedStudent(''); }} />
         <SearchableSelect label="Grupo académico" placeholder="Seleccionar grupo…" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
         <SearchableSelect label="Estudiante" placeholder={!selectedGroup ? 'Primero seleccione un grupo' : 'Todos los estudiantes del grupo'} options={studentOptions} value={selectedStudent} onChange={(v) => setSelectedStudent(v)} loading={studentsLoading} />
         <div className="grid grid-cols-2 gap-3">
@@ -133,7 +259,7 @@ const TeacherQueryPanel = ({
 };
 
 const AdminFilterPanel = ({
-  groups, selectedGroup, setSelectedGroup, selectedStudent, setSelectedStudent,
+  groups, selectedGroup, setSelectedGroup, selectedGrade, setSelectedGrade, selectedStudent, setSelectedStudent,
   fromDate, setFromDate, toDate, setToDate, onQuery, loadingData,
 }) => {
   const [students, setStudents] = useState([]);
@@ -158,6 +284,7 @@ const AdminFilterPanel = ({
         <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
         <p className="text-label text-[var(--nx-text)]">Filtros de consulta</p>
       </div>
+      <SearchableSelect label="Grado" placeholder="Todos los grados" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedStudent(''); }} />
       <SearchableSelect label="Grupo" placeholder="Todos los grupos" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
       <SearchableSelect label="Estudiante (opcional)" placeholder="Todos los estudiantes" options={studentOptions} value={selectedStudent} onChange={(v) => setSelectedStudent(v)} loading={studentsLoading} />
       <div className="grid grid-cols-2 gap-3">
@@ -172,6 +299,7 @@ const AdminFilterPanel = ({
 export const ConsultationDrawer = ({
   item, riskStudents, dynamicData, dynamicColumns, loadingData,
   isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
+  selectedGrade, setSelectedGrade,
   selectedStudent, setSelectedStudent, fromDate, setFromDate, toDate, setToDate,
   onQuery, onClose, error, executeQuery
 }) => {
@@ -200,6 +328,7 @@ export const ConsultationDrawer = ({
         {isTeacherModule ? (
           <TeacherQueryPanel
             item={item} groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
+            selectedGrade={selectedGrade} setSelectedGrade={setSelectedGrade}
             selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
             fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
             onQuery={onQuery} loadingData={loadingData} hasQueried={hasQueried} dynamicData={dynamicData} error={error} canExport={canExport}
@@ -208,6 +337,7 @@ export const ConsultationDrawer = ({
           <div className="flex flex-col">
             <AdminFilterPanel
               groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
+              selectedGrade={selectedGrade} setSelectedGrade={setSelectedGrade}
               selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
               fromDate={fromDate} setFromDate={setFromDate} toDate={toDate} setToDate={setToDate}
               onQuery={onQuery} loadingData={loadingData}
@@ -238,6 +368,30 @@ export const ConsultationDrawer = ({
                         <td className="px-4 py-3 text-right">
                           <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Surface>
+            ) : dynamicData.length > 0 ? (
+              <Surface className="overflow-x-auto p-5">
+                <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
+                <table className="w-full min-w-[500px]">
+                  <thead>
+                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                      {keys.map((k) => <th key={k} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)] whitespace-nowrap">{humanizeColumn(k)}</th>)}
+                      {DETAIL_MODULES.includes(item) && <th className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">Acción</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--nx-border)]">
+                    {sortRowsAlpha(dynamicData).map((row, i) => (
+                      <tr key={i} className="hover:bg-[var(--nx-surface-subtle)]">
+                        {keys.map((k) => <td key={k} className="px-4 py-3 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[200px] truncate">{formatCellValue(k, row[k])}</td>)}
+                        {DETAIL_MODULES.includes(item) && row.student_id && (
+                          <td className="px-4 py-3">
+                            <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver detalles</Button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -284,17 +438,17 @@ export const ConsultationDrawer = ({
                 <table className="w-full min-w-[500px]">
                   <thead>
                     <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                      {keys.map((k) => <th key={k} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">{dynamicColumns[k] || humanizeColumn(k)}</th>)}
-                      {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== ROLES.DOCENTE && <th className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">Acción</th>}
+                      {keys.map((k) => <th key={k} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">{humanizeColumn(k)}</th>)}
+                      {DETAIL_MODULES.includes(item) && user?.role !== ROLES.DOCENTE && <th className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">Acción</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--nx-border)]">
-                    {dynamicData.map((row, i) => (
+                    {sortRowsAlpha(dynamicData).map((row, i) => (
                       <tr key={i} className="hover:bg-[var(--nx-surface-subtle)]">
                         {keys.map((k) => <td key={k} className="px-4 py-3 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[200px] truncate">{formatCellValue(k, row[k])}</td>)}
-                        {['Seguimiento Estudiantil', 'Alertas', 'Seguimientos completados'].includes(item) && user?.role !== ROLES.DOCENTE && row.student_id && (
+                        {DETAIL_MODULES.includes(item) && user?.role !== ROLES.DOCENTE && row.student_id && (
                           <td className="px-4 py-3">
-                            <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver</Button>
+                            <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver detalles</Button>
                           </td>
                         )}
                       </tr>

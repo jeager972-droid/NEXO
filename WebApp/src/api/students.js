@@ -15,11 +15,12 @@ const normalizeStudent = (student) => ({
 });
 
 export const studentsApi = {
-  getAll: async ({ last_id = '', limit = 50, search = '', group_name = '' } = {}) => {
+  getAll: async ({ last_id = '', limit = 50, search = '', group_name = '', grade = '' } = {}) => {
     const params = { limit };
     if (last_id !== '' && last_id !== '0' && last_id !== 0) params.last_id = last_id;
     if (search && search.trim()) params.search = search.trim();
     if (group_name && group_name.trim()) params.group_name = group_name.trim();
+    if (grade) params.grade = grade;
     const response = await client.get('/students', { params });
     const payload = response.data;
     const rows = payload?.data ?? [];

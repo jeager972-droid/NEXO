@@ -10,7 +10,7 @@ import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { auditApi } from '../api/audit';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen, Siren, Wrench, FolderHeart } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
@@ -18,7 +18,7 @@ import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { humanizeError } from '../utils/messages';
 
-const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
+const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Inasistencias Justificadas', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
 const MODULE_SLUGS = {
   'Llegadas Tarde': 'late_arrivals',
@@ -56,6 +56,15 @@ const MODULE_SLUGS = {
   'Reportes': 'reports',
   'Auditoría Local': 'audit_logs',
   'Permisos Activos Hoy': 'active_permissions',
+  'Inasistencias Justificadas': 'justified_absences',
+  'Evasiones Internas': 'incidents',
+  'SOS Emitidos': 'incidents',
+  'Daños Reportados': 'incidents',
+  'Situaciones Críticas': 'incidents',
+  'Spam al Nodo': 'biometric_spam',
+  'Permisos de Salida': 'school_exits',
+  'Permisos Internos': 'active_permissions',
+  'Grados': 'all_groups',
 };
 
 const AUDIT_MODULES = {
@@ -136,6 +145,7 @@ const Consultation = () => {
 
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState('');
   const [fromDate, setFromDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return localDateStr(d); });
   const [toDate, setToDate] = useState(() => localDateStr());
   const [hasQueried, setHasQueried] = useState(false);
@@ -194,7 +204,7 @@ const Consultation = () => {
       return;
     }
     try {
-      const res = await consultationsApi.queryModule(moduleSlug, selectedGroup, fromDate, toDate, selectedStudent);
+      const res = await consultationsApi.queryModule(moduleSlug, selectedGroup, fromDate, toDate, selectedStudent, null, selectedGrade);
       setDynamicData(res.data || []);
       setDynamicColumns(res.columns || {});
     } catch (err) {
@@ -258,7 +268,7 @@ const Consultation = () => {
         .catch((err) => { if (!abortController.signal.aborted) setQueryError(humanizeError(err, 'Error de red')); })
         .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
     } else {
-      consultationsApi.queryModule(moduleSlug, '', '', '', '', abortController.signal)
+      consultationsApi.queryModule(moduleSlug, '', '', '', '', null, '', abortController.signal)
         .then((res) => {
           if (!abortController.signal.aborted) { setDynamicData(res.data || []); setDynamicColumns(res.columns || {}); }
         })
@@ -289,6 +299,7 @@ const Consultation = () => {
         items: [
           { label: 'Llegadas Tarde', icon: Clock },
           { label: 'Inasistencias', icon: UserX },
+          { label: 'Inasistencias Justificadas', icon: ShieldCheck },
           { label: 'Estudiantes Ausentes', icon: UserMinus },
           { label: 'Estudiantes fuera del salón', icon: DoorOpen },
           { label: 'Estudiantes con Permiso', icon: ShieldCheck },
@@ -316,127 +327,55 @@ const Consultation = () => {
     ],
     [ROLES.COORDINADOR]: [
       {
-        title: 'Incidentes',
-        icon: ShieldAlert,
-        tone: 'danger',
-        items: [
-          { label: 'Spam Biométrico', icon: AlertTriangle },
-          { label: 'Vulneraciones', icon: ShieldAlert },
-          { label: 'Alertas SOS', icon: AlertTriangle },
-          { label: 'SOS Resueltas', icon: ShieldCheck },
-          { label: 'Seguimiento Estudiantil', icon: ClipboardList },
-        ]
-      },
-      {
-        title: 'Permisos',
+        title: 'Reportes de Asistencia',
         icon: Activity,
-        tone: 'success',
+        tone: 'accent',
         items: [
-          { label: 'Permisos Emitidos', icon: ShieldCheck },
-          { label: 'Salidas del colegio permitidas', icon: DoorOpen },
+          { label: 'Inasistencias', icon: UserX },
+          { label: 'Inasistencias Justificadas', icon: ShieldCheck },
+          { label: 'Llegadas Tarde', icon: Clock },
           { label: 'Salidas Pedagógicas', icon: CalendarDays },
+          { label: 'Permisos', icon: ShieldCheck },
         ]
       },
       {
-        title: 'Auditoría',
-        icon: Database,
-        tone: 'warning',
-        items: [
-          { label: 'Seguridad Global', icon: ShieldAlert },
-          { label: 'Accesos al Sistema', icon: ShieldCheck },
-          { label: 'Sesiones Activas', icon: Activity },
-          { label: 'Comandos del Sistema', icon: ClipboardList },
-          { label: 'Actividad Administrativa', icon: FileText },
-          { label: 'Intentos Fallidos', icon: AlertTriangle },
-        ]
-      },
-      {
-        title: 'Disciplina',
+        title: 'Reportes de Eventos Críticos',
         icon: ShieldAlert,
         tone: 'danger',
         items: [
-          { label: 'Incidentes de Disciplina', icon: AlertTriangle },
-          { label: 'Violaciones de Disciplina', icon: ShieldAlert },
-          { label: 'Aula Equivocada', icon: DoorOpen },
-          { label: 'Reportes de Disciplina', icon: FileBarChart },
+          { label: 'Seguimientos', icon: FolderHeart },
+          { label: 'Evasiones Internas', icon: DoorOpen },
+          { label: 'SOS Emitidos', icon: AlertTriangle },
+          { label: 'Daños Reportados', icon: Wrench },
+          { label: 'Situaciones Críticas', icon: Siren },
+          { label: 'Spam al Nodo', icon: AlertTriangle },
         ]
       }
     ],
     [ROLES.RECTOR]: [
       {
-        title: 'Ejecutivo Institucional',
+        title: 'Reportes de Asistencia',
         icon: Activity,
         tone: 'accent',
         items: [
-          { label: 'Métricas Globales', icon: BarChart2 },
-          { label: 'Asistencia Institucional', icon: Activity },
-          { label: 'Estadísticas Históricas', icon: FileBarChart },
-          { label: 'Indicadores Críticos', icon: AlertTriangle },
+          { label: 'Inasistencias', icon: UserX },
+          { label: 'Inasistencias Justificadas', icon: ShieldCheck },
+          { label: 'Llegadas Tarde', icon: Clock },
+          { label: 'Salidas Pedagógicas', icon: CalendarDays },
+          { label: 'Permisos', icon: ShieldCheck },
         ]
       },
       {
-        title: 'Reportes Consolidados',
-        icon: Database,
-        tone: 'warning',
-        items: [
-          { label: 'TODOS los Consolidados', icon: FileBarChart },
-          { label: 'Asistencia Consolidada', icon: Activity },
-          { label: 'Disciplina Consolidada', icon: ShieldAlert },
-          { label: 'Permisos Consolidados', icon: ShieldCheck },
-          { label: 'Mensajería Consolidada', icon: MessageSquare },
-          { label: 'Docentes Consolidado', icon: GraduationCap },
-          { label: 'Seguridad Consolidada', icon: ShieldCheck },
-          { label: 'Métricas Institucionales', icon: BarChart2 },
-        ]
-      },
-      {
-        title: 'Históricos',
-        icon: History,
-        tone: 'accent',
-        items: [
-          { label: 'Históricos Completos', icon: History },
-          { label: 'Histórico de Estudiantes', icon: GraduationCap },
-          { label: 'Histórico de Docentes', icon: UserCheck },
-          { label: 'Histórico de Asistencia', icon: Activity },
-          { label: 'Histórico de Disciplina', icon: ShieldAlert },
-          { label: 'Histórico de Permisos', icon: ShieldCheck },
-          { label: 'Histórico de Mensajería', icon: MessageSquare },
-        ]
-      },
-      {
-        title: 'Auditoría',
-        icon: Database,
+        title: 'Reportes de Eventos Críticos',
+        icon: ShieldAlert,
         tone: 'danger',
         items: [
-          { label: 'Auditoría Global', icon: FileText },
-          { label: 'Integridad de Auditoría', icon: ShieldCheck },
-          { label: 'Seguridad Global', icon: ShieldAlert },
-          { label: 'Accesos al Sistema', icon: ShieldCheck },
-          { label: 'Sesiones Activas', icon: Activity },
-          { label: 'Comandos del Sistema', icon: ClipboardList },
-          { label: 'Actividad Administrativa', icon: FileText },
-          { label: 'Intentos Fallidos', icon: AlertTriangle },
-        ]
-      },
-      {
-        title: 'Mensajería',
-        icon: MessageSquare,
-        tone: 'accent',
-        items: [
-          { label: 'Mensajes WhatsApp', icon: Send },
-          { label: 'Respuestas de Acudientes', icon: ContactRound },
-          { label: 'Mensajes Fallidos', icon: AlertTriangle },
-          { label: 'Citaciones Enviadas', icon: Mail },
-          { label: 'Mensajes Internos', icon: FileText },
-        ]
-      },
-      {
-        title: 'Exportaciones',
-        icon: FileText,
-        tone: 'warning',
-        items: [
-          { label: 'Exportaciones Institucionales', icon: FileText },
-          { label: 'Reportes', icon: FileBarChart },
+          { label: 'Seguimientos', icon: FolderHeart },
+          { label: 'Evasiones Internas', icon: DoorOpen },
+          { label: 'SOS Emitidos', icon: AlertTriangle },
+          { label: 'Daños Reportados', icon: Wrench },
+          { label: 'Situaciones Críticas', icon: Siren },
+          { label: 'Spam al Nodo', icon: AlertTriangle },
         ]
       }
     ],
@@ -447,46 +386,10 @@ const Consultation = () => {
         tone: 'accent',
         items: [
           { label: 'Estudiantes', icon: GraduationCap },
+          { label: 'Grados', icon: GraduationCap },
           { label: 'Grupos', icon: Users },
           { label: 'Acudientes', icon: ContactRound },
           { label: 'Matrículas', icon: ClipboardList },
-          { label: 'Cambios Registro', icon: FileText },
-        ]
-      },
-      {
-        title: 'Personal',
-        icon: UserCheck,
-        tone: 'success',
-        items: [
-          { label: 'Profesores', icon: GraduationCap },
-          { label: 'Auxiliares', icon: UserCheck },
-          { label: 'Portería', icon: DoorOpen },
-          { label: 'Personal Institucional', icon: Users },
-        ]
-      },
-      {
-        title: 'Mensajería',
-        icon: MessageSquare,
-        tone: 'accent',
-        items: [
-          { label: 'Mensajes Enviados', icon: Mail },
-        ]
-      },
-      {
-        title: 'Históricos',
-        icon: Database,
-        tone: 'warning',
-        items: [
-          { label: 'Reportes', icon: FileBarChart },
-          { label: 'Auditoría Local', icon: History },
-        ]
-      },
-      {
-        title: 'Control de Acceso',
-        icon: Activity,
-        tone: 'warning',
-        items: [
-          { label: 'Permisos Activos Hoy', icon: ShieldCheck },
         ]
       }
     ]
@@ -506,6 +409,7 @@ const Consultation = () => {
     setDynamicColumns({});
     setHasQueried(false);
     setQueryError(null);
+    setSelectedGrade('');
   };
 
   const goBackToModules = () => {
@@ -545,6 +449,8 @@ const Consultation = () => {
           groups={groups}
           selectedGroup={selectedGroup}
           setSelectedGroup={setSelectedGroup}
+          selectedGrade={selectedGrade}
+          setSelectedGrade={setSelectedGrade}
           selectedStudent={selectedStudent}
           setSelectedStudent={setSelectedStudent}
           fromDate={fromDate}

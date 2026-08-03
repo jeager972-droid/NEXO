@@ -2,7 +2,7 @@
  * AuthContext / NEXO Institucional
  * Estado global de autenticación: fuente de verdad authApi.getMe(), flujo 2FA, logout.
  */
-import { createContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth';
 import userStore from '../store/userStore';
@@ -13,6 +13,9 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const hasInitRef = useRef(false);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -25,13 +28,15 @@ export const AuthProvider = ({ children }) => {
       const publicPaths = ['/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
       const isPublic = publicPaths.some((p) => currentPath.includes(p));
-      if (!isPublic) navigate('/login');
+      if (!isPublic) navigateRef.current('/login');
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
+    if (hasInitRef.current) return;
+    hasInitRef.current = true;
     fetchUser();
   }, [fetchUser]);
 

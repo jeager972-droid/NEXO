@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { devicesApi } from '../api/devices';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, FileText, Hash, GraduationCap, User, Sparkles, Loader2 } from 'lucide-react';
+import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
@@ -27,6 +27,15 @@ import { humanizeError } from '../utils/messages';
 const EASE = [0.22, 1, 0.36, 1];
 
 const STEPS = ['Datos básicos', 'Acudiente', 'Grado y grupo', 'Huella dactilar', 'Finalizado'];
+
+const GRADO_OPTIONS = [
+  { value: '6', label: 'Sexto' },
+  { value: '7', label: 'Séptimo' },
+  { value: '8', label: 'Octavo' },
+  { value: '9', label: 'Noveno' },
+  { value: '10', label: 'Décimo' },
+  { value: '11', label: 'Once' },
+];
 
 const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
@@ -166,18 +175,24 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
               <>
                 <SearchableSelect
                   label="Grado"
-                  options={groups.map((g) => ({ value: g.name || g, label: g.name || g }))}
+                  options={GRADO_OPTIONS}
                   value={form.grado}
-                  onChange={(v) => setForm((p) => ({ ...p, grado: v }))}
+                  onChange={(v) => setForm((p) => ({ ...p, grado: v, grupo: '' }))}
                   placeholder="— Seleccionar grado —"
                   searchPlaceholder="Buscar grado…"
                 />
                 <SearchableSelect
                   label="Grupo"
-                  options={groups.map((g) => ({ value: g.name || g, label: g.name || g }))}
+                  options={groups
+                    .filter((g) => {
+                      if (!form.grado) return true;
+                      const gName = g.name || g.group_name || g;
+                      return String(gName).startsWith(form.grado) || g.grade_level === form.grado;
+                    })
+                    .map((g) => ({ value: g.name || g.group_name || g, label: g.name || g.group_name || g }))}
                   value={form.grupo}
                   onChange={(v) => setForm((p) => ({ ...p, grupo: v }))}
-                  placeholder="— Seleccionar grupo —"
+                  placeholder={!form.grado ? 'Primero seleccione un grado' : '— Seleccionar grupo —'}
                   searchPlaceholder="Buscar grupo…"
                 />
               </>
@@ -304,7 +319,6 @@ const StudentProfileDrawer = ({ student, onClose }) => {
           {[
             { icon: Hash, label: 'Documento', value: student.document || student.documento || '—' },
             { icon: GraduationCap, label: 'Grupo', value: student.group_name || student.grade || '—' },
-            { icon: FileText, label: 'ID', value: student.student_id || student.id || '—' },
           ].map((row) => (
             <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
               <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
@@ -314,20 +328,19 @@ const StudentProfileDrawer = ({ student, onClose }) => {
           ))}
         </Surface>
 
-        {student.guardian_name && (
-          <Surface className="divide-y divide-[var(--nx-border)]">
-            {[
-              { icon: User, label: 'Acudiente', value: student.guardian_name },
-              { icon: Phone, label: 'Teléfono', value: student.guardian_phone || '—' },
-            ].map((row) => (
+        <Surface className="divide-y divide-[var(--nx-border)]">
+          {[
+            { icon: User, label: 'Acudiente', value: student.guardian_name || '—' },
+            { icon: Hash, label: 'Cédula', value: student.guardian_document || student.guardian_id || '—' },
+            { icon: Phone, label: 'Teléfono', value: student.guardian_phone || '—' },
+          ].map((row) => (
               <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
                 <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
                 <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
                 <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
               </div>
             ))}
-          </Surface>
-        )}
+        </Surface>
 
         <div className="grid grid-cols-1">
           <button
@@ -374,6 +387,7 @@ const Enrollment = () => {
 
   const [allGroups, setAllGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedProfile, setSelectedProfile] = useState(null);
 
   useEffect(() => {
@@ -391,7 +405,7 @@ const Enrollment = () => {
     setLoading(true);
     try {
       const cursor = reset ? 0 : lastId;
-      const result = await studentsApi.getAll({ last_id: cursor, limit: 50, search: debouncedSearch, group_name: selectedGroup });
+      const result = await studentsApi.getAll({ last_id: cursor, limit: 50, search: debouncedSearch, group_name: selectedGroup, grade: selectedGrade });
       setStudents((prev) => (reset ? result.students : [...prev, ...result.students]));
       setLastId(result.lastId);
       setHasMore(result.students.length === 50 && !!result.lastId);
@@ -401,10 +415,10 @@ const Enrollment = () => {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [debouncedSearch, lastId, selectedGroup]);
+  }, [debouncedSearch, lastId, selectedGroup, selectedGrade]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetchStudents(true); }, [debouncedSearch, selectedGroup]);
+  useEffect(() => { fetchStudents(true); }, [debouncedSearch, selectedGroup, selectedGrade]);
 
   const groupOptions = useMemo(() =>
     allGroups.map((g) => ({ value: g.name || g.group_name || g, label: g.name || g.group_name || g })),
@@ -479,10 +493,18 @@ const Enrollment = () => {
       </button>
 
       <Surface className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Input placeholder="Buscar estudiante…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />} />
           <SearchableSelect
-            options={groupOptions}
+            options={GRADO_OPTIONS}
+            value={selectedGrade}
+            onChange={(v) => { setSelectedGrade(v); setLastId(0); setStudents([]); setHasMore(true); }}
+            placeholder="Todos los grados"
+            searchPlaceholder="Buscar grado…"
+            clearable
+          />
+          <SearchableSelect
+            options={groupOptions.filter((o) => !selectedGrade || String(o.label).startsWith(selectedGrade))}
             value={selectedGroup}
             onChange={(v) => { setSelectedGroup(v); setLastId(0); setStudents([]); setHasMore(true); }}
             placeholder="Todos los grupos"
@@ -492,7 +514,7 @@ const Enrollment = () => {
         </div>
       </Surface>
 
-      {!selectedGroup && !debouncedSearch ? (
+      {!selectedGroup && !selectedGrade && !debouncedSearch ? (
         <Surface>
           <EmptyState
             icon={<Search size={32} className="text-[var(--nx-success)]" />}

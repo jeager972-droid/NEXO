@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import {
   AlertOctagon, ShieldCheck, ShieldAlert,
   Clock, Bus, Calendar, Wrench, Send, UserCheck,
-  ChevronRight, Loader2, FileText
+  ChevronRight, Loader2, FileText, Siren
 } from 'lucide-react';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
@@ -32,6 +32,7 @@ const COMMANDS_CATALOG = [
   { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'date', 'time', 'message'], tone: 'accent' },
   { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'], tone: 'success' },
   { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
+  { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'], tone: 'warning' },
   { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent' },
   { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'], tone: 'accent' },
@@ -242,6 +243,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
       let result;
       switch (command.id) {
         case 'sos':         result = await operationsApi.sos(payload); break;
+        case 'situacion_critica': result = await operationsApi.execute('situacion_critica', payload, '/operations/situacion_critica'); break;
         case 'citar':       result = await operationsApi.citacion(payload); break;
         case 'autorizar':   result = await operationsApi.salida(payload); break;
         case 'permiso':     result = await operationsApi.permiso(payload); break;

@@ -65,6 +65,8 @@ const humanizeMessage = (notif) => {
       return `Se autorizó una salida${withGroup(student ? ` para el estudiante ${student}` : '')}${by(teacher)}.`;
     case 'sos':
       return `Se emitió una alerta SOS${by(reporter, reporterRole)}${location && location !== 'No especificada' ? `. Ubicación: ${location}` : ''}.`;
+    case 'situacion_critica':
+      return `Se reportó una situación crítica${by(reporter, reporterRole)}${location && location !== 'No especificada' ? `. Ubicación: ${location}` : ''}${reason ? `. Detalle: ${reason}` : ''}.`;
     case 'iniciar_seguimiento':
       return `Se inició un seguimiento${withGroup(student ? ` para el estudiante ${student}` : '')} solicitado${by(sender)}.`;
     case 'solicitud': {
@@ -122,9 +124,10 @@ const Notifications = () => {
     const fetch = async () => {
       try {
         const data = await notificationsApi.getAll();
-        setNotifications(Array.isArray(data) ? data : []);
+        const arr = Array.isArray(data) ? data : [];
+        setNotifications(arr);
+        sessionStorage.setItem(LAST_COUNT_KEY, String(arr.length));
         emitCount(0);
-        sessionStorage.setItem(LAST_COUNT_KEY, '0');
       } catch (e) {
         console.error(e);
       } finally {
@@ -140,6 +143,7 @@ const Notifications = () => {
     try {
       await notificationsApi.clearAll();
       setNotifications([]);
+      sessionStorage.setItem(LAST_COUNT_KEY, '0');
       emitCount(0);
     } catch (e) {
       console.error(e);

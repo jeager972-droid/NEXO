@@ -93,11 +93,6 @@ export default function Casos() {
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-2 text-caption text-[var(--nx-text-muted)]">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-                  <span className="text-[var(--nx-text-muted)]">Estado</span>
-                  <span className="font-medium text-[var(--nx-text)]">{row.status || 'Activo'}</span>
-                </div>
                 {row.created_at && <span className="flex items-center gap-1"><CalendarDays size={12} /> {new Date(row.created_at).toLocaleDateString('es-CO')}</span>}
               </div>
             </Card>

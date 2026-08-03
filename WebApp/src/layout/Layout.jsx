@@ -36,7 +36,8 @@ const Layout = () => {
     const poll = () => {
       notificationsApi.getAll().then((data) => {
         const arr = Array.isArray(data) ? data : [];
-        setNotifCount(arr.length);
+        const lastSeen = parseInt(sessionStorage.getItem('nexo:last-notif-count') || '0', 10);
+        setNotifCount(Math.max(0, arr.length - lastSeen));
       }).catch(() => {});
     };
     poll();

@@ -228,6 +228,7 @@ const AdminDashboard = ({ stats, loading }) => {
           <TeacherDetailDrawer
             category={activeCategory}
             groupName="Toda la Institución"
+            scopeLabel="institución"
             data={detailData}
             loading={detailLoading}
             emptyWarning={false}
@@ -509,7 +510,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
           {selectedGroup && !groupLoading && groupStats && !hasActivity && (
             <Surface className="p-4">
-              <NexoChatBubble message={`El grupo ${selectedGroup} no tiene registros de ingreso hoy. Verifica que el nodo de control esté operativo.`} />
+              <NexoChatBubble message={`El grupo ${selectedGroup} no tiene registros de ingreso hoy.`} />
             </Surface>
           )}
 
@@ -584,7 +585,7 @@ function humanizeDetailVal(v) {
   return ENUM_ES_D[s] || ENUM_ES_D[s.toUpperCase()] || s;
 }
 
-const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning, onClose }) => {
+const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, loading, emptyWarning, onClose }) => {
   const { user } = useAuth();
   const config = CATEGORY_LABELS[category];
   const [searchQuery, setSearchQuery] = useState('');
@@ -773,10 +774,10 @@ const TeacherDetailDrawer = ({ category, groupName, data, loading, emptyWarning,
                 searchQuery
                   ? 'Ningún estudiante coincide con tu búsqueda.'
                   : emptyWarning
-                    ? `El grupo ${groupName} no tiene registros de ingreso hoy. Verifica que el nodo de control esté operativo.`
+                    ? `La ${scopeLabel} ${groupName} no tiene registros de ingreso hoy.`
                     : category === 'present'
-                      ? 'Este grupo no ha tenido ingresos el día de hoy.'
-                      : 'No hay estudiantes en esta categoría para el período seleccionado.'
+                      ? `Esta ${scopeLabel} no ha tenido ingresos el día de hoy.`
+                      : `No hay estudiantes en esta categoría para la ${scopeLabel} y el período seleccionado.`
               }
             />
           )}

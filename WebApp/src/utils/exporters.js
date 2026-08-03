@@ -17,8 +17,29 @@ const LABEL_OVERRIDES = {
   last_name: 'Apellidos',
   created_at: 'Registrado',
   updated_at: 'Actualizado',
-  event_time: 'Hora',
+  event_time: 'Fecha',
+  event_timestamp: 'Fecha',
+  event_type: 'Suceso',
+  event_result: 'Resultado',
   risk_score: 'Riesgo',
+  risk_level: 'Nivel',
+  document: 'Documento',
+  documento: 'Documento',
+  phone: 'Teléfono',
+  guardian_name: 'Acudiente',
+  guardian_phone: 'Teléfono acudiente',
+  grade: 'Grado',
+  grade_level: 'Nivel',
+  status: 'Estado',
+  reason: 'Motivo',
+  teacher_name: 'Docente',
+  issuer: 'Registrado por',
+  sender_name: 'Enviado por',
+  channel: 'Canal',
+  time: 'Hora',
+  date: 'Fecha',
+  count: 'Cantidad',
+  total: 'Total',
 };
 
 export const humanizeKey = (key) =>
@@ -37,18 +58,79 @@ export const visibleColumns = (rows) => {
   );
 };
 
-const cell = (value) => {
+const EVENT_TRANSLATIONS = {
+  INGRESO_NORMAL: 'Ingreso normal',
+  INGRESO_TARDE: 'Llegada tarde',
+  LATE_ARRIVAL: 'Llegada tarde',
+  EARLY_EXIT: 'Salida temprana',
+  EVASION_INTERNA: 'Evasión interna',
+  SPAM_BIOMETRIC: 'Spam biométrico',
+  BIOMETRIC_FAILURE: 'Falla biométrica',
+  UNAUTHORIZED_ABSENCE: 'Fuga',
+  WRONG_CLASSROOM: 'Salón incorrecto',
+  SOS_WEBAPP: 'Alerta SOS',
+  SOS_DEVICE: 'Alerta SOS (dispositivo)',
+  RISK_ALERT_HIGH: 'Riesgo alto',
+  RISK_ALERT_MEDIUM: 'Riesgo medio',
+  RISK_ALERT_LOW: 'Riesgo bajo',
+  SUCCESS: 'Exitoso',
+  FAILED: 'Fallido',
+  PENDING: 'Pendiente',
+  APPROVED: 'Aprobado',
+  REJECTED: 'Rechazado',
+  LATE: 'Tardío',
+  class: 'Salida de clase',
+  school: 'Salida del colegio',
+  trip: 'Salida pedagógica',
+};
+
+const formatDateEs = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d)) return String(v);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  let h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return `${dd}/${mm}/${yy} a las ${h}:${min} ${ampm}`;
+};
+
+const humanizeValue = (v) => {
+  if (v === null || v === undefined) return '';
+  const s = String(v).trim();
+  return EVENT_TRANSLATIONS[s] ?? EVENT_TRANSLATIONS[s.toUpperCase()] ?? s;
+};
+
+const isDateKey = (k) => {
+  const lower = k.toLowerCase();
+  return lower.includes('date') || lower.includes('_at') || lower.includes('created') || lower.includes('entry') || lower.includes('timestamp') || lower.includes('_time') || lower === 'time';
+};
+
+const isEventKey = (k) => {
+  const lower = k.toLowerCase();
+  return lower === 'event_type' || lower === 'event_result' || lower === 'alert_type' || lower === 'status' || lower === 'risk_level';
+};
+
+const cell = (key, value) => {
   if (value === null || value === undefined || value === '') return '';
+  if (isDateKey(key)) return formatDateEs(value);
+  if (isEventKey(key)) return humanizeValue(value);
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 };
 
-const escapeHtml = (value) =>
-  cell(value)
+const escapeHtml = (key, value) => {
+  const v = value === undefined ? key : value;
+  const k = value === undefined ? '' : key;
+  return cell(k, v)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+};
 
 const slug = (text) =>
   String(text || 'nexo')
@@ -90,10 +172,10 @@ const stamp = () =>
 /** CSV con BOM para que Excel respete acentos. */
 export const exportCsv = ({ title, rows, columns, from, to }) => {
   const cols = columns?.length ? columns : visibleColumns(rows);
-  const escape = (v) => `"${cell(v).replace(/"/g, '""')}"`;
+  const escape = (v) => `"${cell('', v).replace(/"/g, '""')}`;
   const body = [
     cols.map((c) => escape(humanizeKey(c))).join(','),
-    ...rows.map((row) => cols.map((c) => escape(row?.[c])).join(',')),
+    ...rows.map((row) => cols.map((c) => escape(cell(c, row?.[c]))).join(',')),
   ].join('\r\n');
   const blob = new Blob([`\uFEFF${body}`], { type: 'text/csv;charset=utf-8;' });
   download(blob, `nexo-${slug(title)}-${slug(periodLabel(from, to))}.csv`);
@@ -118,7 +200,7 @@ const tableHtml = (cols, rows) => `
         .map(
           (row) =>
             `<tr>${cols
-              .map((c) => `<td style="vertical-align:top">${escapeHtml(row?.[c])}</td>`)
+              .map((c) => `<td style="vertical-align:top">${escapeHtml(c, row?.[c])}</td>`)
               .join('')}</tr>`
         )
         .join('')}
@@ -168,7 +250,20 @@ export const exportWord = (spec) => {
   download(blob, `nexo-${slug(spec.title)}-${slug(periodLabel(spec.from, spec.to))}.doc`);
 };
 
+/** PDF: abre una ventana de impresión con HTML formateado — el usuario guarda como PDF. */
+export const exportPdf = (spec) => {
+  const cols = spec.columns?.length ? spec.columns : visibleColumns(spec.rows);
+  const html = documentHtml({ ...spec, cols, rows: spec.rows });
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+};
+
 export const EXPORT_FORMATS = [
   { id: 'excel', label: 'Excel', extension: '.xls', run: exportExcel },
   { id: 'word',  label: 'Word',  extension: '.doc', run: exportWord },
+  { id: 'pdf',   label: 'PDF',   extension: '.pdf', run: exportPdf },
 ];
