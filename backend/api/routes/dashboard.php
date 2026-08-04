@@ -219,16 +219,21 @@ if ($cleanPath === '/dashboard/stats') {
         $permCount = (int)($statsRow['perm_count'] ?? 0);
 
         // 4. Tareas pendientes (Reportes) (Bogotá TZ) — no filtrar por grupo
-        $tasksStmt = $conn->prepare("
-            SELECT report_export_id as id, report_type as title,
-            TO_CHAR(generated_at, 'HH24:MI') as time
-            FROM report_exports
-            WHERE school_id = ?
-              AND generated_at >= CURRENT_DATE AND generated_at < (CURRENT_DATE + INTERVAL '1 day')
-            LIMIT 5
-        ");
-        $tasksStmt->execute([$schoolId]);
-        $pendingTasks = $tasksStmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $tasksStmt = $conn->prepare("
+                SELECT report_export_id as id, report_type as title,
+                TO_CHAR(generated_at, 'HH24:MI') as time
+                FROM report_exports
+                WHERE school_id = ?
+                  AND generated_at >= CURRENT_DATE AND generated_at < (CURRENT_DATE + INTERVAL '1 day')
+                LIMIT 5
+            ");
+            $tasksStmt->execute([$schoolId]);
+            $pendingTasks = $tasksStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $pendingTasks = [];
+            securityLog('DASHBOARD_TASKS_ERROR', $e->getMessage());
+        }
 
         // 5. Estudiantes por grupo (FIX: docentes solo ven grupos asignados via schedules)
         $teacherFilter = '';
