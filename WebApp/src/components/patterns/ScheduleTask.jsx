@@ -31,7 +31,13 @@ const getShiftFromUser = (user) => {
 
 const getActivationTime = (shift) => shift === 'morning' ? '1:00pm' : '6:00pm';
 
+// TESTING_MODE: cuando es true, la tarea aparece las 24h del día sin importar la jornada.
+// Esto permite probar el flujo completo (activación, completado, persistencia) en cualquier momento.
+// TODO: Cambiar a false o eliminar esta constante una vez se valide el flujo en producción.
+const TESTING_MODE = true;
+
 const isTaskActive = (user) => {
+  if (TESTING_MODE) return true;
   const shift = getShiftFromUser(user);
   const now = new Date();
   const hour = now.getHours();
