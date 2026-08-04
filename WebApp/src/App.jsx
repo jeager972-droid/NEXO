@@ -3,7 +3,7 @@
  * Enrutador SPA: lazy loading, protección por rol, PWA y deep links.
  */
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './hooks/useAuth';
 import ProtectedRoute from './routes/ProtectedRoute';
@@ -28,6 +28,8 @@ const Profile = lazy(() => import('./pages/Profile'));
 function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isInstallRoute = location.pathname.includes('/instalar/');
 
   useEffect(() => {
     const saved = localStorage.getItem('nx-font-scale');
@@ -78,6 +80,13 @@ function App() {
         </motion.div>
       </div>
     }>
+      {/* Install page outside AnimatePresence to avoid remounts losing deferredPrompt */}
+      {isInstallRoute && (
+        <Routes>
+          <Route path="/instalar/:platform" element={<InstallPage />} />
+        </Routes>
+      )}
+
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={shellKey}
@@ -111,13 +120,12 @@ function App() {
             </Route>
 
             <Route path="/descargas" element={<Downloads />} />
-            <Route path="/instalar/:platform" element={<InstallPage />} />
             <Route path="/auditoria" element={<Navigate to="/consulta" replace />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </motion.div>
       </AnimatePresence>
-      <PwaInstallPrompt />
+      {!isInstallRoute && <PwaInstallPrompt />}
     </Suspense>
   );
 }

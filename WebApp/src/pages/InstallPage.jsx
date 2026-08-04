@@ -40,6 +40,10 @@ export default function InstallPage() {
   }, [platform, navigate])
 
   useEffect(() => {
+    // Check if beforeinstallprompt already fired and was captured by App.jsx
+    if (window.__nexoPwaPrompt) {
+      setDeferredPrompt(window.__nexoPwaPrompt)
+    }
     const handler = (e) => {
       e.preventDefault()
       setDeferredPrompt(e)
