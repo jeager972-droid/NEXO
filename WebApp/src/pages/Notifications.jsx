@@ -93,24 +93,34 @@ const ACTIONS_WITH_DETAILS = [
   'solicitud', 'incidente', 'citacion_confirmada', 'reagendar_motivo', 'salida_no_autorizada',
 ];
 
-const NotifItem = ({ notif, hasDetails, noDetailsNote, onClick }) => (
-  <Surface className="p-4">
-    <button onClick={onClick} className="w-full text-left">
-      <NexoChatBubble
-        message={humanizeMessage(notif) + (noDetailsNote ? ' No se agregaron detalles extra.' : '')}
-        timestamp={formatChatTime(notif.time || notif.created_at)}
-      />
-    </button>
-    {hasDetails && (
-      <button
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
-      >
-        Ver detalles <ChevronRight size={12} />
-      </button>
-    )}
-  </Surface>
-);
+const NotifItem = ({ notif, hasDetails, onClick }) => {
+  const content = (
+    <NexoChatBubble
+      message={humanizeMessage(notif)}
+      timestamp={formatChatTime(notif.time || notif.created_at)}
+    />
+  );
+
+  return (
+    <Surface className="p-4">
+      {hasDetails ? (
+        <button onClick={onClick} className="w-full text-left">
+          {content}
+        </button>
+      ) : (
+        content
+      )}
+      {hasDetails && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
+        >
+          Ver detalles <ChevronRight size={12} />
+        </button>
+      )}
+    </Surface>
+  );
+};
 
 const Notifications = () => {
   const { user } = useAuth();
@@ -205,13 +215,11 @@ const Notifications = () => {
             const action = meta?.action;
             const detailMessage = getDetailMessage(notif, meta);
             const hasDetails = !!detailMessage || ACTIONS_WITH_DETAILS.includes(action);
-            const noDetailsNote = ACTIONS_WITH_DETAILS.includes(action) && !hasDetails;
             return (
               <NotifItem
                 key={notif.id ?? notif.notification_id ?? i}
                 notif={notif}
                 hasDetails={hasDetails}
-                noDetailsNote={noDetailsNote}
                 onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
               />
             );
@@ -228,10 +236,6 @@ const Notifications = () => {
             size="sm"
           >
             <div className="p-5 space-y-4">
-              <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-                <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-                <p className="text-h3 text-[var(--nx-text)]">{detail.title || 'Notificación'}</p>
-              </div>
               <div className="flex items-center gap-2">
                 <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
                 <p className="text-label text-[var(--nx-text-muted)]">Detalles</p>
