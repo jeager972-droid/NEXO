@@ -610,14 +610,14 @@ if (!function_exists('requireAuth')) {
         try {
             $claims = verifyJwtToken($token);
 
-            // FIX (PgBouncer): set_config(..., false) no persiste entre consultas
-            // con PgBouncer transaction-pool. Usamos exec("BEGIN") + SET LOCAL
-            // para forzar una transacción real que PgBouncer mantiene en un backend.
-            // PDO::beginTransaction con EMULATE_PREPARES puede no enviar BEGIN
-            // correctamente, así que usamos exec() directamente.
+            // FIX (PgBouncer): En transaction-pool mode, set_config(..., false)
+            // no persiste entre consultas. Usamos beginTransaction() + set_config
+            // transaction-level. PgBouncer mantiene la misma conexión durante
+            // la transacción.
+            $startedTx = false;
             if (!$conn->inTransaction()) {
-                $conn->exec("BEGIN");
-                $conn->setAttribute(PDO::ATTR_AUTOCOMMIT, false);
+                $conn->beginTransaction();
+                $startedTx = true;
             }
 
             $stmt = $conn->prepare("
@@ -637,21 +637,21 @@ if (!function_exists('requireAuth')) {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$user) {
-                if ($conn->inTransaction()) { try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {} }
+                if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
                 http_response_code(401);
                 exit(json_encode(['status' => 'error', 'message' => 'Usuario no encontrado o inactivo']));
             }
 
             $roleName = strtoupper(trim($user['role_name']));
             if (is_array($allowedRoles) && !in_array($roleName, $allowedRoles, true)) {
-                if ($conn->inTransaction()) { try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {} }
+                if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
                 http_response_code(403);
                 exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
             }
 
-            // SET LOCAL: persiste durante toda la transacción
-            $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote($user['school_id']));
-            $conn->exec("SET LOCAL app.current_role = " . $conn->quote($roleName));
+            // set_config transaction-level: persiste durante toda la transacción
+            $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
+            $stmtCtx->execute([$user['school_id'], $roleName]);
 
             // Fetch permissions
             $permsStmt = $conn->prepare("
@@ -663,14 +663,16 @@ if (!function_exists('requireAuth')) {
             $permsStmt->execute([$user['role_id']]);
             $permissions = $permsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-            // Registrar commit automático al final de la request
-            register_shutdown_function(function() use ($conn) {
-                try {
-                    if ($conn->inTransaction()) {
-                        $conn->exec("COMMIT");
-                    }
-                } catch (Exception $e) { /* silenciar en shutdown */ }
-            });
+            // Commit automático al final de la request
+            if ($startedTx) {
+                register_shutdown_function(function() use ($conn) {
+                    try {
+                        if ($conn->inTransaction()) {
+                            $conn->commit();
+                        }
+                    } catch (Exception $e) { /* silenciar en shutdown */ }
+                });
+            }
 
             return [
                 'id' => $user['user_id'],
