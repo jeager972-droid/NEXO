@@ -238,6 +238,10 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             
             echo json_encode([
                 'status' => 'ok',
+                // TEMPORAL ITP WORKAROUND: token en body para iOS/Safari donde ITP bloquea cookies cross-site.
+                // La cookie HttpOnly sigue seteándose arriba para cuando frontend y backend estén en same-site.
+                // TODO: Cuando se migre a same-site, eliminar 'token' del response y usar solo cookie HttpOnly.
+                'token' => $token,
                 'user' => [
                     'id' => $user['user_id'],
                     'nombre' => $user['first_name'] . ' ' . $user['last_name'],
@@ -370,6 +374,10 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         securityLog('LOGIN_2FA_SUCCESS', "User authenticated via 2FA: " . $user['user_id']);
         echo json_encode([
             'status' => 'ok',
+            // TEMPORAL ITP WORKAROUND: token en body para iOS/Safari donde ITP bloquea cookies cross-site.
+            // La cookie HttpOnly sigue seteándose arriba para cuando frontend y backend estén en same-site.
+            // TODO: Cuando se migre a same-site, eliminar 'token' del response y usar solo cookie HttpOnly.
+            'token' => $token,
             'user' => [
                 'id' => $user['user_id'],
                 'nombre' => $user['first_name'] . ' ' . $user['last_name'],

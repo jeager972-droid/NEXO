@@ -12,6 +12,17 @@ export const AuthContext = createContext();
 
 const USER_FALLBACK_KEY = 'nexo:user-fallback';
 
+// TEMPORAL ITP WORKAROUND: token en localStorage para iOS/Safari donde ITP bloquea cookies cross-site.
+// TODO: Cuando frontend y backend estén en same-site, eliminar TOKEN_KEY y usar solo cookie HttpOnly.
+const TOKEN_KEY = 'nexo:auth-token';
+
+const saveToken = (token) => {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch { /* ignore */ }
+};
+
 const saveUserFallback = (user) => {
   try {
     if (user) localStorage.setItem(USER_FALLBACK_KEY, JSON.stringify(user));
@@ -71,6 +82,7 @@ export const AuthProvider = ({ children }) => {
       userStore.clear();
       setUser(null);
       saveUserFallback(null);
+      saveToken(null);
       setLoading(true);
       navigateRef.current('/login');
     };
@@ -83,6 +95,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authApi.login(email, password);
       if (data.status === '2fa_required' || data.requires_2fa) return data;
+      if (data.token) saveToken(data.token);
       if (!data.user) throw new Error('La API no retornó el objeto de usuario esperado');
       userStore.set(data.user);
       setUser(data.user);
@@ -106,6 +119,7 @@ export const AuthProvider = ({ children }) => {
       userStore.clear();
       setUser(null);
       saveUserFallback(null);
+      saveToken(null);
       setLoading(true);
       navigate('/login');
     }

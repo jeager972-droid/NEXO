@@ -39,6 +39,14 @@ client.interceptors.request.use(
     }
     config._t0 = performance.now();
 
+    // TEMPORAL ITP WORKAROUND: token en localStorage para iOS/Safari donde ITP bloquea cookies cross-site.
+    // La cookie HttpOnly sigue funcionando en navegadores que la permiten; este header es fallback.
+    // TODO: Cuando frontend y backend estén en same-site, eliminar esto y volver a usar solo cookie HttpOnly.
+    const token = localStorage.getItem('nexo:auth-token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
