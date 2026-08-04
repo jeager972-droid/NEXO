@@ -281,6 +281,10 @@ if ($cleanPath === '/dashboard/stats') {
             ");
             $tgStmt->execute([$schoolId]);
             $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
+            // DEBUG temporal: log si está vacío
+            if (empty($teacherGroups)) {
+                securityLog('DASHBOARD_TEACHER_GROUPS_EMPTY', "schoolId=$schoolId role=$userRole isTeacher=" . ($isTeacher ? '1' : '0') . " rowCount=" . $tgStmt->rowCount());
+            }
         }
 
         $response = json_encode([

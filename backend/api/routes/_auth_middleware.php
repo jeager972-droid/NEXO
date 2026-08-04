@@ -610,18 +610,12 @@ if (!function_exists('requireAuth')) {
         try {
             $claims = verifyJwtToken($token);
 
-            // FIX (PgBouncer): Iniciar transacción ANTES de cualquier consulta
-            // para que todas las consultas de la request vayan al mismo backend
-            // y set_config(..., true) (transaction-level) persista para RLS.
+            // FIX (PgBouncer): set_config(..., false) no persiste entre consultas
+            // con PgBouncer transaction-pool. Usamos set_config(..., true) que es
+            // transaction-level, pero requiere estar dentro de una transacción.
+            // PgBouncer mantiene la misma conexión dentro de beginTransaction/commit.
             if (!$conn->inTransaction()) {
                 $conn->beginTransaction();
-                register_shutdown_function(function() use ($conn) {
-                    try {
-                        if ($conn->inTransaction()) {
-                            $conn->commit();
-                        }
-                    } catch (Exception $e) { /* silenciar en shutdown */ }
-                });
             }
 
             $stmt = $conn->prepare("
@@ -659,13 +653,22 @@ if (!function_exists('requireAuth')) {
 
             // Fetch permissions
             $permsStmt = $conn->prepare("
-                SELECT p.permission_code 
+                SELECT p.permission_code
                 FROM role_permissions rp
                 JOIN permissions p ON rp.permission_id = p.permission_id
                 WHERE rp.role_id = ?
             ");
             $permsStmt->execute([$user['role_id']]);
             $permissions = $permsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            // Registrar commit automático al final de la request
+            register_shutdown_function(function() use ($conn) {
+                try {
+                    if ($conn->inTransaction()) {
+                        $conn->commit();
+                    }
+                } catch (Exception $e) { /* silenciar en shutdown */ }
+            });
 
             return [
                 'id' => $user['user_id'],
