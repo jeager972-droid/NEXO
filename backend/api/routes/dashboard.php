@@ -225,7 +225,8 @@ if ($cleanPath === '/dashboard/stats') {
         $statsStmt = $conn->prepare($statsSql);
         $statsStmt->execute($statsParams);
         $statsRow = $statsStmt->fetch(PDO::FETCH_ASSOC);
-        
+        $debugInfo .= " | stats_ok present={$statsRow['present_count']} inTx2=" . ($conn->inTransaction() ? '1' : '0');
+
         $presentCount = (int)($statsRow['present_count'] ?? 0);
         $absentCount = (int)($statsRow['absent_count'] ?? 0);
         $alertsCount = (int)($statsRow['alerts_count'] ?? 0);
@@ -271,7 +272,8 @@ if ($cleanPath === '/dashboard/stats') {
             $groupsStmt->execute([$schoolId]);
         }
         $allStudents = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
-        
+        $debugInfo .= " | students=" . count($allStudents) . " inTx3=" . ($conn->inTransaction() ? '1' : '0');
+
         $studentsByGroup = [];
         foreach ($allStudents as $row) {
             $studentsByGroup[$row['group_name']][] = ['name' => $row['name']];
@@ -299,10 +301,7 @@ if ($cleanPath === '/dashboard/stats') {
             ");
             $tgStmt->execute([$schoolId]);
             $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
-            // DEBUG temporal: log si está vacío
-            if (empty($teacherGroups)) {
-                securityLog('DASHBOARD_TEACHER_GROUPS_EMPTY', "schoolId=$schoolId role=$userRole isTeacher=" . ($isTeacher ? '1' : '0') . " rowCount=" . $tgStmt->rowCount());
-            }
+            $debugInfo .= " | tg=" . count($teacherGroups) . " inTx4=" . ($conn->inTransaction() ? '1' : '0');
         }
 
         $response = json_encode([
