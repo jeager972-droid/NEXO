@@ -204,7 +204,7 @@ const Notifications = () => {
             const meta = parseMeta(notif.metadata_json);
             const action = meta?.action;
             const detailMessage = getDetailMessage(notif, meta);
-            const hasDetails = !!detailMessage;
+            const hasDetails = !!detailMessage || ACTIONS_WITH_DETAILS.includes(action);
             const noDetailsNote = ACTIONS_WITH_DETAILS.includes(action) && !hasDetails;
             return (
               <NotifItem

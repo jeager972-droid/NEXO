@@ -26,20 +26,22 @@ import { SkeletonCards } from '../components/ui/Skeleton';
 import { Stepper } from '../components/ui/Stepper';
 import { OperationResult } from '../components/patterns/OperationResult';
 import { humanizeError } from '../utils/messages';
+import { formatGroupName } from '../utils/groupFormat';
+import { GRADO_OPTIONS } from '../config/grados';
 import { NexoChatBubble } from '../components/patterns/NexoChat';
 
 const COMMANDS_CATALOG = [
-  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'date', 'time', 'message'], tone: 'accent' },
-  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'], tone: 'success' },
+  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent' },
+  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'success' },
   { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'], tone: 'warning' },
   { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent' },
-  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason'], tone: 'accent' },
-  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason'], tone: 'success' },
-  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
-  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['group', 'student', 'reason', 'timeRange'], tone: 'success' },
-  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
+  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'accent' },
+  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason'], tone: 'success' },
+  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
+  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeRange'], tone: 'success' },
+  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
 ];
 
 const CMD_TONE_STYLES = {
@@ -50,7 +52,7 @@ const CMD_TONE_STYLES = {
 };
 
 const FIELD_LABELS = {
-  group: 'Grupo', student: 'Estudiante', date: 'Fecha', time: 'Hora', timeRange: 'Rango de horas',
+  group: 'Grupo', student: 'Estudiante', grade: 'Grado', date: 'Fecha', time: 'Hora', timeRange: 'Rango de horas',
   message: 'Mensaje', reason: 'Motivo', location: 'Ubicación', description: 'Descripción',
   targetRole: 'Rol destinatario', targets: 'Destinatarios'
 };
@@ -122,7 +124,7 @@ const Operation = () => {
       {!activeCommand ? (
         filteredCommands.length === 0 ? (
           <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
-            <NexoChatBubble message="¡Todo está al día! No hay operaciones pendientes en este momento." />
+            <NexoChatBubble message="No hay nada para mostrar." />
           </Surface>
         ) : (
           <>
@@ -181,7 +183,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   useEffect(() => {
     if (command.fields.includes('targets') && form.targetRole) {
       setLoadingUsers(true);
-      usersApi.getByRole(form.targetRole, true)
+      usersApi.getByRole(form.targetRole, false)
         .then((res) => setTargetUsers(res.data || []))
         .catch(() => setTargetUsers([]))
         .finally(() => setLoadingUsers(false));
@@ -190,7 +192,12 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
 
   const filteredStudents = form.group
     ? students.filter((s) => (s.group_name || s.group) === form.group || `${s.group_name || ''}`.toLowerCase().includes(form.group.toLowerCase()))
-    : students;
+    : form.grade
+      ? students.filter((s) => {
+          const gName = s.group_name || s.group || '';
+          return String(gName).startsWith(form.grade);
+        })
+      : students;
 
   const pollTwilio = (msgIds) => {
     let attempts = 0;
@@ -235,7 +242,17 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         payload.timeEnd = tr[1] || null;
       }
 
-      if (command.id === 'solicitud' && form.targets) {
+      if (command.id === 'solicitud') {
+        if (!form.message || !form.message.trim()) {
+          setResult({ variant: 'danger', message: 'El mensaje no puede estar vacío.' });
+          setIsSubmitting(false);
+          return;
+        }
+        if (!form.targets || !form.targets.trim()) {
+          setResult({ variant: 'danger', message: 'Debes seleccionar al menos un destinatario.' });
+          setIsSubmitting(false);
+          return;
+        }
         const ids = form.targets.split(',').filter(Boolean);
         payload.recipient_id = ids[0] || null;
       }
@@ -285,10 +302,19 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   const cmdTone = CMD_TONE_STYLES[command.tone] || CMD_TONE_STYLES.accent;
 
   const renderField = (field) => {
+    if (field === 'grade') {
+      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={GRADO_OPTIONS} value={form.grade || ''} onChange={(v) => { updateField('grade', v); updateField('group', ''); updateField('student', ''); }} placeholder="Todos los grados" searchPlaceholder="Buscar grado…" clearable />;
+    }
     if (field === 'group') {
       const groupLabel = (g) => g?.name || g?.group_name || g;
-      const options = groups.map((g) => ({ value: groupLabel(g), label: groupLabel(g) }));
-      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.group || ''} onChange={(v) => updateField('group', v)} placeholder="— Seleccionar grupo —" searchPlaceholder="Buscar grupo…" clearable />;
+      const filteredGroups = form.grade
+        ? groups.filter((g) => {
+            const gName = groupLabel(g);
+            return String(gName).startsWith(form.grade) || g.grade_level === form.grade;
+          })
+        : groups;
+      const options = filteredGroups.map((g) => ({ value: groupLabel(g), label: formatGroupName(groupLabel(g)) }));
+      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.group || ''} onChange={(v) => { updateField('group', v); updateField('student', ''); }} placeholder="— Seleccionar grupo —" searchPlaceholder="Buscar grupo…" clearable />;
     }
     if (field === 'student') {
       const options = filteredStudents.map((s) => ({ value: s.student_id || s.id, label: `${s.last_name || ''} ${s.first_name || ''}`.trim() || s.student_id }));
@@ -353,9 +379,9 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
           deliveryStatus={deliveryStatus}
           recipients={result.recipients}
           onPrimary={() => { setResult(null); setForm({}); setDeliveryStatus(null); }}
-          primaryLabel="Nueva operación"
+          primaryLabel="Repetir operación"
           onSecondary={onClose}
-          secondaryLabel="Volver al inicio"
+          secondaryLabel="Volver"
         />
       ) : (
         <Card className="p-6">

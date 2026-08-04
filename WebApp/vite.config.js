@@ -71,7 +71,7 @@ export default defineConfig({
       },
       manifest: {
         id: '/app/',
-        name: 'NEXO Institucional',
+        name: 'NEXO',
         short_name: 'NEXO',
         description: 'Plataforma Institucional de Gestión',
         start_url: '/app/',
@@ -97,15 +97,28 @@ export default defineConfig({
         ],
         icons: [
           {
-            src: '/logo/logo_app.jpg',
-            sizes: 'any',
-            type: 'image/jpeg'
+            src: '/logo/logo_nexo_app.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/logo/logo_nexo_app.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/logo/logo_nexo_app.png',
+            sizes: '180x180',
+            type: 'image/png',
+            purpose: 'any'
           },
           {
             src: '/mask-icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
-            purpose: 'any maskable'
+            purpose: 'maskable'
           }
         ]
       }

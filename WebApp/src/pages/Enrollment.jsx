@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { devicesApi } from '../api/devices';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2 } from 'lucide-react';
+import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
@@ -18,24 +18,16 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton, SkeletonRows, SkeletonCards } from '../components/ui/Skeleton';
-import { Select } from '../components/ui/Select';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { Stepper } from '../components/ui/Stepper';
 import { Drawer } from '../components/ui/Overlay';
 import { humanizeError } from '../utils/messages';
+import { formatGroupName } from '../utils/groupFormat';
+import { GRADO_OPTIONS } from '../config/grados';
 
 const EASE = [0.22, 1, 0.36, 1];
 
 const STEPS = ['Datos básicos', 'Acudiente', 'Grado y grupo', 'Huella dactilar', 'Finalizado'];
-
-const GRADO_OPTIONS = [
-  { value: '6', label: 'Sexto' },
-  { value: '7', label: 'Séptimo' },
-  { value: '8', label: 'Octavo' },
-  { value: '9', label: 'Noveno' },
-  { value: '10', label: 'Décimo' },
-  { value: '11', label: 'Once' },
-];
 
 const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
@@ -189,7 +181,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                       const gName = g.name || g.group_name || g;
                       return String(gName).startsWith(form.grado) || g.grade_level === form.grado;
                     })
-                    .map((g) => ({ value: g.name || g.group_name || g, label: g.name || g.group_name || g }))}
+                    .map((g) => ({ value: g.name || g.group_name || g, label: formatGroupName(g.name || g.group_name || g) }))}
                   value={form.grupo}
                   onChange={(v) => setForm((p) => ({ ...p, grupo: v }))}
                   placeholder={!form.grado ? 'Primero seleccione un grado' : '— Seleccionar grupo —'}
@@ -208,7 +200,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]'}`}>
                       {biometricStatus === 'connected'
                         ? `Dispositivo "${edgeDevice?.device_name || 'edge'}" disponible. Puedes registrar la huella.`
-                        : 'No hay dispositivo edge registrado. Regístralo desde el panel de dispositivos.'}
+                        : 'No se detectó el sensor de huellas.'}
                     </div>
                   )}
                   <Button
@@ -234,6 +226,11 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                 <div className="rounded-control bg-[var(--nx-subtle-bg-success)] p-4 text-body text-[var(--nx-success)] flex items-center gap-2">
                   <Check size={18} /> Alumno registrado exitosamente.
                 </div>
+                {biometricStatus !== 'connected' && (
+                  <div className="rounded-control bg-[var(--nx-subtle-bg-warning)] p-4 text-body text-[var(--nx-warning)] flex items-center gap-2">
+                    <AlertCircle size={18} /> El alumno queda pendiente de registrar su huella.
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
@@ -310,7 +307,7 @@ const StudentProfileDrawer = ({ student, onClose }) => {
           <StudentAvatar student={student} size="lg" />
           <div>
             <p className="text-h2 text-[var(--nx-text)]">{student.last_name} {student.first_name}</p>
-            <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{student.group_name || student.grade || 'Sin grupo'}</p>
+            <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{formatGroupName(student.group_name) || student.grade || 'Sin grupo'}</p>
             {student.status && <Badge scheme={student.status === 'active' ? 'success' : 'warning'} dot className="mt-2">{student.status === 'active' ? 'Activo' : 'Inactivo'}</Badge>}
           </div>
         </div>
@@ -318,7 +315,7 @@ const StudentProfileDrawer = ({ student, onClose }) => {
         <Surface className="divide-y divide-[var(--nx-border)]">
           {[
             { icon: Hash, label: 'Documento', value: student.document || student.documento || '—' },
-            { icon: GraduationCap, label: 'Grupo', value: student.group_name || student.grade || '—' },
+            { icon: GraduationCap, label: 'Grupo', value: formatGroupName(student.group_name) || student.grade || '—' },
           ].map((row) => (
             <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
               <row.icon size={16} className="shrink-0 text-[var(--nx-text-muted)]" />
@@ -354,11 +351,15 @@ const StudentProfileDrawer = ({ student, onClose }) => {
             <div className="min-w-0 flex-1">
               <p className="text-h3 text-[var(--nx-text)]">Cambiar huella del estudiante</p>
               <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">
-                {hasFingerprint === null
-                  ? 'Verificando huella registrada…'
-                  : hasFingerprint
-                    ? 'Huella actual verificada. Presiona para reemplazar.'
-                    : 'No hay huella registrada aún. Presiona para registrar.'}
+                {biometricStatus === 'checking'
+                  ? 'Verificando sensor…'
+                  : biometricStatus !== 'connected'
+                    ? 'No se detectó el sensor de huellas.'
+                    : hasFingerprint === null
+                      ? 'Verificando huella registrada…'
+                      : hasFingerprint
+                        ? 'Huella actual verificada. Presiona para reemplazar.'
+                        : 'No hay huella registrada aún. Presiona para registrar.'}
               </p>
             </div>
             {enrollCmd.state === 'sending' && <Loader2 size={18} className="animate-spin text-[var(--nx-success)]" />}
@@ -421,7 +422,7 @@ const Enrollment = () => {
   useEffect(() => { fetchStudents(true); }, [debouncedSearch, selectedGroup, selectedGrade]);
 
   const groupOptions = useMemo(() =>
-    allGroups.map((g) => ({ value: g.name || g.group_name || g, label: g.name || g.group_name || g })),
+    allGroups.map((g) => ({ value: g.name || g.group_name || g, label: formatGroupName(g.name || g.group_name || g) })),
     [allGroups]
   );
 
@@ -518,7 +519,7 @@ const Enrollment = () => {
         <Surface>
           <EmptyState
             icon={<Search size={32} className="text-[var(--nx-success)]" />}
-            title="Selecciona un grupo"
+            title="No hay nada para mostrar."
             description="Elige un grupo o busca un estudiante para ver los resultados aquí."
           />
         </Surface>
@@ -526,7 +527,7 @@ const Enrollment = () => {
         <SkeletonCards count={6} />
       ) : sortedStudents.length === 0 ? (
         <Surface>
-          <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="Todo en orden por aquí!" description="No se encontraron estudiantes con los filtros actuales." />
+          <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="No hay nada para mostrar." description="No se encontraron estudiantes con los filtros actuales." />
         </Surface>
       ) : (
         <>
@@ -543,7 +544,7 @@ const Enrollment = () => {
                     <StudentAvatar student={s} />
                     <div className="min-w-0 flex-1">
                       <p className="text-h3 text-[var(--nx-text)] truncate">{s.last_name} {s.first_name}</p>
-                      <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{s.group_name || s.grade || 'Sin grupo'}</p>
+                      <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{formatGroupName(s.group_name) || s.grade || 'Sin grupo'}</p>
                       {s.document && (
                         <p className="text-caption text-[var(--nx-text-muted)] mt-1.5">Doc: {s.document}</p>
                       )}

@@ -10,7 +10,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo/logo_nexo_app.png" />
-    <link rel="apple-touch-icon" href="/logo/logo_app.jpg" />
+    <link rel="apple-touch-icon" href="/logo/logo_nexo_app.png" />
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#003366" />
@@ -45,14 +45,14 @@
     <meta property="og:site_name" content="NEXO" />
     <meta property="og:locale" content="es_ES" />
 
-    <title>NEXO: Soberanía Educativa Digital</title>
+    <title>NEXO</title>
   </head>
   <body>
     <!-- Stage 9: Skip link for accessibility -->
-    <a href="#main-content" style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;">
+    <div id="root" role="main"></div>
+    <a href="#root" id="main-content" style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;">
       Saltar al contenido principal
     </a>
-    <div id="root" role="main" id="main-content"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

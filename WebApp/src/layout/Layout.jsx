@@ -33,8 +33,10 @@ const Layout = () => {
   const profileRef = useRef(null);
 
   useEffect(() => {
+    let mounted = true;
     const poll = () => {
       notificationsApi.getAll().then((data) => {
+        if (!mounted) return;
         const arr = Array.isArray(data) ? data : [];
         const lastSeen = parseInt(sessionStorage.getItem('nexo:last-notif-count') || '0', 10);
         setNotifCount(Math.max(0, arr.length - lastSeen));
@@ -42,7 +44,7 @@ const Layout = () => {
     };
     poll();
     const id = setInterval(poll, 60000);
-    return () => clearInterval(id);
+    return () => { mounted = false; clearInterval(id); };
   }, []);
 
   useEffect(() => {

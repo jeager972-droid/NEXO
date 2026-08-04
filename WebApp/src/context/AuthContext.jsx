@@ -1,6 +1,7 @@
 /**
- * AuthContext / NEXO Institucional
+ * AuthContext / NEXO
  * Estado global de autenticación: fuente de verdad authApi.getMe(), flujo 2FA, logout.
+ * Incluye fallback para iOS PWA standalone donde las cookies HttpOnly no se envían.
  */
 import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +9,22 @@ import { authApi } from '../api/auth';
 import userStore from '../store/userStore';
 
 export const AuthContext = createContext();
+
+const USER_FALLBACK_KEY = 'nexo:user-fallback';
+
+const saveUserFallback = (user) => {
+  try {
+    if (user) localStorage.setItem(USER_FALLBACK_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_FALLBACK_KEY);
+  } catch { /* ignore */ }
+};
+
+const loadUserFallback = () => {
+  try {
+    const raw = localStorage.getItem(USER_FALLBACK_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -22,13 +39,22 @@ export const AuthProvider = ({ children }) => {
       const data = await authApi.getMe();
       setUser(data.user);
       userStore.set(data.user);
+      saveUserFallback(data.user);
     } catch (error) {
-      userStore.clear();
-      setUser(null);
-      const publicPaths = ['/login', '/instalar/', '/descargas'];
-      const currentPath = window.location.pathname;
-      const isPublic = publicPaths.some((p) => currentPath.includes(p));
-      if (!isPublic) navigateRef.current('/login');
+      // iOS PWA fallback: if getMe fails but we have a recently stored user, use it
+      const fallback = loadUserFallback();
+      if (fallback && error.response?.status !== 403) {
+        setUser(fallback);
+        userStore.set(fallback);
+      } else {
+        userStore.clear();
+        setUser(null);
+        saveUserFallback(null);
+        const publicPaths = ['/login', '/instalar/', '/descargas'];
+        const currentPath = window.location.pathname;
+        const isPublic = publicPaths.some((p) => currentPath.includes(p));
+        if (!isPublic) navigateRef.current('/login');
+      }
     } finally {
       setLoading(false);
     }
@@ -40,6 +66,18 @@ export const AuthProvider = ({ children }) => {
     fetchUser();
   }, [fetchUser]);
 
+  useEffect(() => {
+    const onAuthLogout = () => {
+      userStore.clear();
+      setUser(null);
+      saveUserFallback(null);
+      setLoading(true);
+      navigateRef.current('/login');
+    };
+    window.addEventListener('nexo:auth-logout', onAuthLogout);
+    return () => window.removeEventListener('nexo:auth-logout', onAuthLogout);
+  }, []);
+
   const login = useCallback(async (email, password) => {
     setLoading(true);
     try {
@@ -48,8 +86,11 @@ export const AuthProvider = ({ children }) => {
       if (!data.user) throw new Error('La API no retornó el objeto de usuario esperado');
       userStore.set(data.user);
       setUser(data.user);
+      saveUserFallback(data.user);
       return data;
     } catch (error) {
+      userStore.clear();
+      setUser(null);
       throw new Error(error.response?.data?.message || error.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
@@ -64,6 +105,8 @@ export const AuthProvider = ({ children }) => {
     } finally {
       userStore.clear();
       setUser(null);
+      saveUserFallback(null);
+      setLoading(true);
       navigate('/login');
     }
   }, [navigate]);

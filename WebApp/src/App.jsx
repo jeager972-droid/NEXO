@@ -4,7 +4,6 @@
  */
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './hooks/useAuth';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Layout from './layout/Layout';
@@ -66,36 +65,22 @@ function App() {
     setupDeepLink();
   }, [navigate]);
 
-  const shellKey = user ? 'authenticated' : 'unauthenticated';
-
   return (
     <Suspense fallback={
       <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--nx-canvas)]">
-        <motion.div
-          initial={{ scale: 0.3, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        >
+        <div className="animate-pulse">
           <LogoNexo className="h-20" useImage />
-        </motion.div>
+        </div>
       </div>
     }>
-      {/* Install page outside AnimatePresence to avoid remounts losing deferredPrompt */}
+      {/* Install page outside main routes to avoid remounts losing deferredPrompt */}
       {isInstallRoute && (
         <Routes>
           <Route path="/instalar/:platform" element={<InstallPage />} />
         </Routes>
       )}
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={shellKey}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.22, ease: 'easeInOut' }}
-          className="min-h-screen"
-        >
+      <div className="min-h-screen">
           <Routes>
             <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
@@ -123,8 +108,7 @@ function App() {
             <Route path="/auditoria" element={<Navigate to="/consulta" replace />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
-        </motion.div>
-      </AnimatePresence>
+      </div>
       {!isInstallRoute && <PwaInstallPrompt />}
     </Suspense>
   );

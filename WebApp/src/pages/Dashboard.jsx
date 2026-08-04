@@ -23,6 +23,8 @@ import { Drawer } from '../components/ui/Overlay';
 import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
+import { ScheduleTask, isTaskActive, isTaskDoneToday } from '../components/patterns/ScheduleTask';
+import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
 
 const EMPTY_STATS = {
@@ -72,7 +74,7 @@ const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
   if (!events.length) {
     return (
       <Surface className="p-6">
-        <NexoChatBubble message="¡Todo está al día! No hay novedades recientes para mostrar." />
+        <NexoChatBubble message="No hay nada para mostrar." />
       </Surface>
     );
   }
@@ -119,7 +121,7 @@ const Dashboard = () => {
     case ROLES.SECRETARIA:
       return <SecretaryDashboard stats={stats} loading={loading} />;
     case ROLES.PSICORIENTADOR:
-      return <CounselorDashboard stats={stats} loading={loading} />;
+      return <SecretaryDashboard stats={stats} loading={loading} />;
     case ROLES.DOCENTE:
       return <TeacherDashboard stats={stats} loading={loading} />;
     case ROLES.PORTERO:
@@ -154,6 +156,13 @@ const AdminDashboard = ({ stats, loading }) => {
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [showScheduleTask, setShowScheduleTask] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === ROLES.COORDINADOR && isTaskActive(user) && !isTaskDoneToday()) {
+      setShowScheduleTask(true);
+    }
+  }, [user]);
 
   const localDateStr = (date = new Date()) => {
     const y = date.getFullYear();
@@ -178,10 +187,10 @@ const AdminDashboard = ({ stats, loading }) => {
   };
 
   const kpis = [
-    { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Ingresos hoy' },
-    { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: 'Sin registro de entrada' },
-    { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: 'Requieren atención' },
-    { key: 'permiso',  label: 'Permisos',     value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: 'Permisos activos hoy' },
+    { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
+    { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: stats.absentCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Sin registro de entrada' },
+    { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: stats.alertsCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Requieren atención' },
+    { key: 'permiso',  label: 'Permisos',     value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
   ];
 
   useEffect(() => {
@@ -203,6 +212,9 @@ const AdminDashboard = ({ stats, loading }) => {
 
   return (
     <div className="space-y-8">
+      {showScheduleTask && (
+        <ScheduleTask onDismiss={() => setShowScheduleTask(false)} />
+      )}
       {loading ? (
         <SkeletonMetrics count={4} />
       ) : (
@@ -358,9 +370,10 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
       return acc;
     }, {})
   );
+  const groupDisplay = groupNames.map(formatGroupName);
 
   const filteredGroups = groupQuery.trim()
-    ? groupNames.filter(g => g.toLowerCase().includes(groupQuery.toLowerCase()))
+    ? groupNames.filter((g, i) => groupDisplay[i].toLowerCase().includes(groupQuery.toLowerCase()))
     : groupNames;
 
   // Persist selected group and keep selector bar usable
@@ -422,14 +435,14 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
     }
   };
 
-  const cards = [
-    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent'  },
-    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning' },
-    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger'  },
-    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'success' },
-  ];
-
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
+
+  const cards = [
+    { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
+    { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
+    { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: !hasActivity ? 'No hay estudiantes' : undefined },
+    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'success', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
+  ];
 
   return (
     <div className="space-y-8">
@@ -454,7 +467,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                 <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
                 <div>
                   <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
-                  <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup || 'Elegir grupo'}</p>
+                  <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup ? formatGroupName(selectedGroup) : 'Elegir grupo'}</p>
                 </div>
               </div>
               <Search size={18} className="text-[var(--nx-text-muted)]" />
@@ -489,7 +502,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                         className="w-full border-b border-[var(--nx-border)] px-4 py-3 text-left text-body text-[var(--nx-text)] transition-colors last:border-0 hover:bg-[var(--nx-surface-subtle)]"
                         style={{ fontWeight: g === selectedGroup ? '600' : undefined }}
                       >
-                        {g}
+                        {formatGroupName(g)}
                       </button>
                     ))
                   )}
@@ -510,7 +523,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
           {selectedGroup && !groupLoading && groupStats && !hasActivity && (
             <Surface className="p-4">
-              <NexoChatBubble message={`El grupo ${selectedGroup} no tiene registros de ingreso hoy.`} />
+              <NexoChatBubble message={`El grupo ${formatGroupName(selectedGroup)} no tiene registros de ingreso hoy.`} />
             </Surface>
           )}
 
@@ -702,6 +715,9 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
       );
     }
     const v = row[col.key];
+    if (col.key === 'group_name' || col.key === 'group' || col.key === 'grupo') {
+      return formatGroupName(String(v));
+    }
     if (v === null || v === undefined) return '—';
     if (col.key.includes('_at') || col.key.includes('entry') || col.key.includes('since')) {
       return fmtDetailDate(v);
@@ -769,7 +785,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
           ) : (
             <EmptyState
               icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
-              title={searchQuery ? 'Sin coincidencias' : emptyWarning ? 'Atención' : 'Todo en orden por aquí!'}
+              title={searchQuery ? 'Sin coincidencias' : emptyWarning ? 'Atención' : 'No hay nada para mostrar.'}
               description={
                 searchQuery
                   ? 'Ningún estudiante coincide con tu búsqueda.'

@@ -3,23 +3,30 @@
  * Lista de estudiantes en seguimiento con búsqueda y apertura de TrackingDrawer.
  * Usa PageHeader, RiskBadge, SkeletonRows, Drawer unificado.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, CalendarDays, Sparkles, AlertTriangle } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
+import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { GRADO_OPTIONS } from '../config/grados';
+import { formatGroupName } from '../utils/groupFormat';
 
 export default function Casos() {
   const [searchParams] = useSearchParams();
   const [trackings, setTrackings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [allGroups, setAllGroups] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
@@ -51,9 +58,36 @@ export default function Casos() {
     return () => window.removeEventListener('nexo:tracking-refresh', handler);
   }, [searchParams]);
 
-  const filtered = searchQuery.trim()
-    ? trackings.filter((row) => `${row.last_name || ''} ${row.first_name || ''}`.toLowerCase().includes(searchQuery.toLowerCase()))
-    : trackings;
+  useEffect(() => {
+    studentsApi.getGroups().then(setAllGroups).catch(() => {});
+  }, []);
+
+  const groupOptions = useMemo(() =>
+    allGroups
+      .filter((g) => {
+        if (!selectedGrade) return true;
+        const gName = g.name || g.group_name || g;
+        return String(gName).startsWith(selectedGrade) || g.grade_level === selectedGrade;
+      })
+      .map((g) => ({ value: g.name || g.group_name || g, label: formatGroupName(g.name || g.group_name || g) })),
+    [allGroups, selectedGrade]
+  );
+
+  const filtered = useMemo(() => {
+    let result = trackings;
+    if (selectedGroup) {
+      result = result.filter((row) => (row.group_name || row.group) === selectedGroup);
+    } else if (selectedGrade) {
+      result = result.filter((row) => {
+        const gName = row.group_name || row.group || '';
+        return String(gName).startsWith(selectedGrade);
+      });
+    }
+    if (searchQuery.trim()) {
+      result = result.filter((row) => `${row.last_name || ''} ${row.first_name || ''}`.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return result;
+  }, [trackings, selectedGrade, selectedGroup, searchQuery]);
 
   const openTracking = (trackingId, studentName, studentId) => {
     setSelected({ trackingId, studentName, studentId });
@@ -62,12 +96,27 @@ export default function Casos() {
 
   return (
     <div className="space-y-8">
-      <Input
-        placeholder="Buscar estudiante…"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
-      />
+      <Surface className="p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Input placeholder="Buscar estudiante…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />} />
+          <SearchableSelect
+            options={GRADO_OPTIONS}
+            value={selectedGrade}
+            onChange={(v) => { setSelectedGrade(v || ''); setSelectedGroup(''); }}
+            placeholder="Todos los grados"
+            searchPlaceholder="Buscar grado…"
+            clearable
+          />
+          <SearchableSelect
+            options={groupOptions}
+            value={selectedGroup}
+            onChange={(v) => setSelectedGroup(v || '')}
+            placeholder="Todos los grupos"
+            searchPlaceholder="Buscar grupo…"
+            clearable
+          />
+        </div>
+      </Surface>
 
       {loading ? (
         <Surface><SkeletonRows count={4} /></Surface>
@@ -75,8 +124,8 @@ export default function Casos() {
         <Surface>
           <EmptyState
             icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
-            title="Todo en orden por aquí!"
-            description={searchQuery ? 'Ningún estudiante coincide con tu búsqueda.' : 'No hay estudiantes en seguimiento en este momento.'}
+            title="No hay nada para mostrar."
+            description={searchQuery || selectedGrade || selectedGroup ? 'Ningún estudiante coincide con los filtros.' : 'No hay estudiantes en seguimiento en este momento.'}
           />
         </Surface>
       ) : (
@@ -86,7 +135,7 @@ export default function Casos() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
-                  <p className="text-body-sm text-[var(--nx-text-muted)]">{row.group_name || 'Sin grupo'}</p>
+                  <p className="text-body-sm text-[var(--nx-text-muted)]">{formatGroupName(row.group_name) || 'Sin grupo'}</p>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
                   <AlertTriangle size={20} />

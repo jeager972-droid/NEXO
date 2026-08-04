@@ -529,7 +529,7 @@ const Consultation = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-        <div className="h-8 w-1 rounded-full bg-[var(--nx-accent)]" />
+        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
         <h1 className="text-h1 text-[var(--nx-text)]">Consultas</h1>
       </div>
       <Input

@@ -71,14 +71,13 @@ client.interceptors.response.use(
   (error) => {
     emitLatency(error.config, error.response?.status ?? 0);
     if (error.response?.status === 401) {
-      // BUGFIX: La app vive en /app/ (basename). Sin ello el redirect causa 404 en Vercel.
       const publicRoutes = ['/app/login', '/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
       const isPublicRoute = publicRoutes.some(route => currentPath.startsWith(route) || currentPath.includes(route));
-      const isAuthRequest = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/verify-2fa');
+      const isAuthRequest = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/verify-2fa') || error.config?.url?.includes('/auth/me');
 
       if (!isAuthRequest && !isPublicRoute) {
-        window.location.href = '/app/login';
+        window.dispatchEvent(new CustomEvent('nexo:auth-logout'));
       }
     }
     return Promise.reject(error);

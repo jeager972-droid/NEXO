@@ -60,6 +60,7 @@ const Login = () => {
     try {
       const data = await authApi.verify2FA(email, otpCode);
       if (data.user) {
+        try { localStorage.setItem('nexo:user-fallback', JSON.stringify(data.user)); } catch { /* ignore */ }
         if (setUser) setUser(data.user);
         navigate('/');
       } else {
