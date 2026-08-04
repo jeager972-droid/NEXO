@@ -205,9 +205,15 @@ const Notifications = () => {
       </div>
 
       {notifications.length === 0 ? (
-        <Surface className="p-6">
-          <NexoChatBubble message="¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí." />
-        </Surface>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <p className="text-label text-[var(--nx-text)]">Novedades</p>
+          </div>
+          <Surface className="p-6">
+            <NexoChatBubble message="No hay novedades para mostrar." />
+          </Surface>
+        </div>
       ) : (
         <div className="space-y-3">
           {notifications.map((notif, i) => {
