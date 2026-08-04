@@ -281,27 +281,32 @@ if ($cleanPath === '/dashboard/stats') {
 
         // 5b. Grupos asignados al docente (para el dropdown, independiente de estudiantes)
         $teacherGroups = [];
-        if ($isTeacher) {
-            $tgStmt = $conn->prepare("
-                SELECT DISTINCT ag.group_name
-                FROM schedules sch
-                JOIN academic_groups ag ON ag.group_id = sch.group_id
-                WHERE sch.teacher_user_id = ?
-                ORDER BY ag.group_name
-            ");
-            $tgStmt->execute([$authUser['id']]);
-            $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
-        } else {
-            // Para otros roles, devolver todos los grupos de la institución
-            $tgStmt = $conn->prepare("
-                SELECT DISTINCT group_name
-                FROM academic_groups
-                WHERE school_id = ?
-                ORDER BY group_name
-            ");
-            $tgStmt->execute([$schoolId]);
-            $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
+        try {
+            if ($isTeacher) {
+                $tgStmt = $conn->prepare("
+                    SELECT DISTINCT ag.group_name
+                    FROM schedules sch
+                    JOIN academic_groups ag ON ag.group_id = sch.group_id
+                    WHERE sch.teacher_user_id = ?
+                    ORDER BY ag.group_name
+                ");
+                $tgStmt->execute([$authUser['id']]);
+                $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
+            } else {
+                // Para otros roles, devolver todos los grupos de la institución
+                $tgStmt = $conn->prepare("
+                    SELECT DISTINCT group_name
+                    FROM academic_groups
+                    WHERE school_id = ?
+                    ORDER BY group_name
+                ");
+                $tgStmt->execute([$schoolId]);
+                $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
+            }
             $debugInfo .= " | tg=" . count($teacherGroups) . " inTx4=" . ($conn->inTransaction() ? '1' : '0');
+        } catch (Exception $tgEx) {
+            $debugInfo .= " | TG_ERROR: " . $tgEx->getMessage();
+            $teacherGroups = [];
         }
 
         $response = json_encode([
