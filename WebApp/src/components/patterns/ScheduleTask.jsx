@@ -22,7 +22,7 @@ import { SearchableSelect } from '../ui/SearchableSelect';
 const STORAGE_KEY = 'nexo:schedule-task';
 
 const getShiftFromUser = (user) => {
-  const shift = user?.shift || user?.jornada || '';
+  const shift = user?.work_shift || user?.shift || user?.jornada || '';
   const shiftStr = String(shift).toLowerCase();
   if (shiftStr.includes('mañana') || shiftStr.includes('manana') || shiftStr.includes('morning') || shiftStr === 'am') return 'morning';
   if (shiftStr.includes('tarde') || shiftStr.includes('afternoon') || shiftStr === 'pm') return 'afternoon';
@@ -35,26 +35,30 @@ const isTaskActive = (user) => {
   const shift = getShiftFromUser(user);
   const now = new Date();
   const hour = now.getHours();
-  if (shift === 'morning') return hour >= 13;
-  return hour >= 18;
+  if (shift === 'morning') return hour >= 13 && hour < 24;
+  return hour >= 18 || hour < 5;
 };
 
-const todayKey = () => {
+const taskDateKey = (user) => {
+  const shift = getShiftFromUser(user);
   const d = new Date();
+  if (shift === 'afternoon' && d.getHours() < 5) {
+    d.setDate(d.getDate() - 1);
+  }
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const isTaskDoneToday = () => {
+const isTaskDoneToday = (user) => {
   try {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return data[todayKey()] === true;
+    return data[taskDateKey(user)] === true;
   } catch { return false; }
 };
 
-const markTaskDone = () => {
+const markTaskDone = (user) => {
   try {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    data[todayKey()] = true;
+    data[taskDateKey(user)] = true;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch { /* ignore */ }
 };
@@ -68,7 +72,7 @@ const ScheduleTask = ({ onDismiss }) => {
   const [reminder, setReminder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
-  const [done, setDone] = useState(isTaskDoneToday());
+  const [done, setDone] = useState(isTaskDoneToday(user));
 
   const shift = getShiftFromUser(user);
   const activationTime = getActivationTime(shift);
@@ -125,11 +129,11 @@ const ScheduleTask = ({ onDismiss }) => {
       if (changes.length > 0) {
         await operationsApi.execute('horario', {
           changes,
-          date: todayKey(),
+          date: taskDateKey(user),
         }, '/operations/horario');
       }
 
-      markTaskDone();
+      markTaskDone(user);
       setDone(true);
       setResult({ variant: 'success', message: 'Tarea completada' });
     } catch (err) {

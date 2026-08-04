@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -511,6 +511,13 @@ const Profile = () => {
 
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
 
+  const rawShift = user?.work_shift || profile?.work_shift || '';
+  const shiftStr = String(rawShift).toLowerCase();
+  const isAfternoon = shiftStr.includes('tarde') || shiftStr.includes('afternoon') || shiftStr === 'pm';
+  const isMorning = shiftStr.includes('mañana') || shiftStr.includes('manana') || shiftStr.includes('morning') || shiftStr === 'am';
+  const workShiftLabel = isAfternoon ? 'Jornada tarde' : isMorning ? 'Jornada mañana' : '';
+  const workShiftIcon = isAfternoon ? <Moon size={12} className="text-[var(--nx-text-muted)]" /> : isMorning ? <Sun size={12} className="text-[var(--nx-text-muted)]" /> : null;
+
   if (loadingProfile) {
     return (
       <div className="space-y-6 max-w-3xl">
@@ -542,6 +549,12 @@ const Profile = () => {
         <div>
           <p className="text-h2 text-[var(--nx-text)]">{user?.nombre || 'Usuario'}</p>
           <p className="text-body text-[var(--nx-text-muted)]">{getRoleDisplay(user?.role)?.toLowerCase()}</p>
+          {workShiftLabel && (
+            <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-control bg-[var(--nx-surface-subtle)] px-2 py-0.5">
+              {workShiftIcon}
+              <span className="text-caption text-[var(--nx-text-muted)]">{workShiftLabel}</span>
+            </div>
+          )}
           <Toast toast={photoToast} />
         </div>
       </Card>

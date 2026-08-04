@@ -159,7 +159,7 @@ const AdminDashboard = ({ stats, loading }) => {
   const [showScheduleTask, setShowScheduleTask] = useState(false);
 
   useEffect(() => {
-    if (user?.role === ROLES.COORDINADOR && isTaskActive(user) && !isTaskDoneToday()) {
+    if (user?.role === ROLES.COORDINADOR && isTaskActive(user) && !isTaskDoneToday(user)) {
       setShowScheduleTask(true);
     }
   }, [user]);
