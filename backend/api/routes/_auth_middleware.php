@@ -610,6 +610,20 @@ if (!function_exists('requireAuth')) {
         try {
             $claims = verifyJwtToken($token);
 
+            // FIX (PgBouncer): Iniciar transacción ANTES de cualquier consulta
+            // para que todas las consultas de la request vayan al mismo backend
+            // y set_config(..., true) (transaction-level) persista para RLS.
+            if (!$conn->inTransaction()) {
+                $conn->beginTransaction();
+                register_shutdown_function(function() use ($conn) {
+                    try {
+                        if ($conn->inTransaction()) {
+                            $conn->commit();
+                        }
+                    } catch (Exception $e) { /* silenciar en shutdown */ }
+                });
+            }
+
             $stmt = $conn->prepare("
                 WITH u AS (
                     SELECT u.user_id, u.email, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
@@ -621,22 +635,27 @@ if (!function_exists('requireAuth')) {
                     WHERE u.user_id = ? AND u.deleted_at IS NULL
                     LIMIT 1
                 )
-                SELECT u.*, set_config('app.current_school_id', u.school_id::text, false) AS _cfg1
-                FROM u
+                SELECT u.* FROM u
             ");
             $stmt->execute([$claims['sub']]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$user) {
+                if ($conn->inTransaction()) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
                 http_response_code(401);
                 exit(json_encode(['status' => 'error', 'message' => 'Usuario no encontrado o inactivo']));
             }
 
             $roleName = strtoupper(trim($user['role_name']));
             if (is_array($allowedRoles) && !in_array($roleName, $allowedRoles, true)) {
+                if ($conn->inTransaction()) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
                 http_response_code(403);
                 exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
             }
+
+            // set_config transaction-level: persiste durante toda la transacción
+            $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
+            $stmtCtx->execute([$user['school_id'], $roleName]);
 
             // Fetch permissions
             $permsStmt = $conn->prepare("
@@ -647,25 +666,6 @@ if (!function_exists('requireAuth')) {
             ");
             $permsStmt->execute([$user['role_id']]);
             $permissions = $permsStmt->fetchAll(PDO::FETCH_COLUMN);
-
-            // FIX (PgBouncer): En transaction-pool mode, set_config(..., false)
-            // no persiste entre consultas. Iniciamos una transacción explícita y
-            // usamos set_config(..., true) (transaction-level) para que RLS
-            // funcione en todas las consultas de la request. Un shutdown function
-            // hace commit automáticamente al final.
-            if (!$conn->inTransaction()) {
-                $conn->beginTransaction();
-                $stmtCtx2 = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
-                $stmtCtx2->execute([$user['school_id'], $roleName]);
-
-                register_shutdown_function(function() use ($conn) {
-                    try {
-                        if ($conn->inTransaction()) {
-                            $conn->commit();
-                        }
-                    } catch (Exception $e) { /* silenciar en shutdown */ }
-                });
-            }
 
             return [
                 'id' => $user['user_id'],
