@@ -73,9 +73,15 @@ const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
   }
   if (!events.length) {
     return (
-      <Surface className="p-6">
-        <NexoChatBubble message="No hay nada para mostrar." />
-      </Surface>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+          <p className="text-label text-[var(--nx-text)]">Novedades</p>
+        </div>
+        <Surface className="p-6">
+          <NexoChatBubble message="No hay novedades para mostrar." />
+        </Surface>
+      </div>
     );
   }
   return (

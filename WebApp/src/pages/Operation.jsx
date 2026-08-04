@@ -123,9 +123,15 @@ const Operation = () => {
     <div className="space-y-6">
       {!activeCommand ? (
         filteredCommands.length === 0 ? (
-          <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
-            <NexoChatBubble message="No hay nada para mostrar." />
-          </Surface>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+              <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+              <p className="text-label text-[var(--nx-text)]">Novedades</p>
+            </div>
+            <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
+              <NexoChatBubble message="No hay novedades para mostrar." />
+            </Surface>
+          </div>
         ) : (
           <>
             <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
