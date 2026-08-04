@@ -45,7 +45,15 @@ if ($cleanPath === '/students') {
         }
 
         try {
-            $conn->beginTransaction();
+            // FIX (PgBouncer): requireAuth() ya inició una transacción.
+            // Usamos savepoint para rollback parcial sin romper la transacción principal.
+            $useSavepoint = $conn->inTransaction();
+            $sp = 'sp_student_' . uniqid();
+            if ($useSavepoint) {
+                $conn->exec("SAVEPOINT $sp");
+            } else {
+                $conn->beginTransaction();
+            }
 
             $stmt = $conn->prepare("
                 INSERT INTO students (school_id, first_name, last_name, document_number)
@@ -79,12 +87,20 @@ if ($cleanPath === '/students') {
                 }
             }
 
-            $conn->commit();
+            if ($useSavepoint) {
+                $conn->exec("RELEASE SAVEPOINT $sp");
+            } else {
+                $conn->commit();
+            }
             securityLog('STUDENT_CREATED', "ID:$studentId Doc:$document", $authUser['id'], $schoolId);
             http_response_code(201);
             echo json_encode(['status' => 'ok', 'student_id' => $studentId]);
         } catch (Throwable $e) {
-            $conn->rollBack();
+            if ($useSavepoint ?? false) {
+                $conn->exec("ROLLBACK TO SAVEPOINT $sp");
+            } else {
+                try { $conn->rollBack(); } catch (Exception $ignore) {}
+            }
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Error al registrar estudiante']);
         }

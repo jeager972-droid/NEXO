@@ -109,15 +109,12 @@ function processJob(array $job, PDO $conn): bool {
     $instId = $job['school_id'] ?? null;
     $capturedAt = (int)($data['captured_at'] ?? 0);
 
-    if ($instId) {
-        try {
-            // SECURITY-FIX: prepared statement — $instId viene de Redis (no confiable)
-            $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, false)");
-            $stmtCtx->execute([(string)$instId]);
-        } catch (Exception $e) {
-            logW('CONTEXT_FAIL', $e->getMessage());
-            return false;
-        }
+    // FIX (PgBouncer): set_config(..., false) no persiste entre consultas con
+    // PgBouncer transaction pooling. Cada caso debe usar beginTransaction() +
+    // set_config(..., true) (transaction-level) para que RLS funcione.
+    if (!$instId) {
+        logW('NO_SCHOOL_ID', 'Job sin school_id');
+        return false;
     }
 
     switch ($action) {
@@ -135,16 +132,33 @@ function processJob(array $job, PDO $conn): bool {
             // FIX (SRE-1): Idempotencia vía fingerprint + ON CONFLICT DO NOTHING.
             // Si el worker re-procesa un job (ej. tras GC de zombies), el INSERT
             // es idempotente y no crea duplicados con distinto UUID.
-            $stmt = $conn->prepare(
-                "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
-                 SELECT uuid_generate_v4(),school_id,student_id,
-                        ?,
-                        ?,'PROCESSED',to_timestamp(?),?
-                 FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
-                 ON CONFLICT (event_fingerprint, event_timestamp) DO NOTHING"
-            );
-            $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
-            return $stmt->rowCount() > 0;
+            // FIX (PgBouncer): Transacción explícita + set_config transaction-level
+            // para que RLS filtre students correctamente en el mismo backend.
+            try {
+                $conn->beginTransaction();
+                $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
+                $stmtCtx->execute([(string)$instId]);
+
+                $stmt = $conn->prepare(
+                    "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
+                     SELECT uuid_generate_v4(),school_id,student_id,
+                            ?,
+                            ?,'PROCESSED',to_timestamp(?),?
+                     FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
+                     ON CONFLICT (event_fingerprint, event_timestamp) DO NOTHING"
+                );
+                $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
+                $inserted = $stmt->rowCount() > 0;
+                $conn->commit();
+                if (!$inserted) {
+                    logW('SYNC_NOOP', "doc=$doc evt=$evt — estudiante no encontrado o duplicado");
+                }
+                return $inserted;
+            } catch (Exception $e) {
+                $conn->rollBack();
+                logW('SYNC_FAIL', $e->getMessage());
+                return false;
+            }
 
         case 'REGISTER_STUDENT':
             $schoolId = $instId; $doc = trim($data['doc'] ?? '');
@@ -156,6 +170,10 @@ function processJob(array $job, PDO $conn): bool {
 
             $conn->beginTransaction();
             try {
+                // FIX (PgBouncer): set_config dentro de la transacción
+                $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
+                $stmtCtx->execute([(string)$schoolId]);
+
                 $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
                 $stmt->execute([$schoolId, $doc, $nombre]);
                 $studentId = $stmt->fetchColumn();
@@ -222,14 +240,19 @@ function processJob(array $job, PDO $conn): bool {
         case 'DELETE_STUDENT':
             $doc = trim($data['doc'] ?? ''); $schoolId = $instId;
             if (empty($doc)) return false;
-            if (!empty($schoolId)) {
+            try {
+                $conn->beginTransaction();
+                $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
+                $stmtCtx->execute([(string)$schoolId]);
                 $stmt = $conn->prepare("UPDATE students SET active=FALSE,biometric_hash=NULL WHERE document_number=? AND school_id=? RETURNING student_id");
                 $stmt->execute([$doc, $schoolId]);
-            } else {
-                $stmt = $conn->prepare("UPDATE students SET active=FALSE,biometric_hash=NULL WHERE document_number=? RETURNING student_id");
-                $stmt->execute([$doc]);
+                $conn->commit();
+                return true;
+            } catch (Exception $e) {
+                $conn->rollBack();
+                logW('DELETE_FAIL', $e->getMessage());
+                return false;
             }
-            return true;
 
         default:
             logW('UNKNOWN', $action); return false;

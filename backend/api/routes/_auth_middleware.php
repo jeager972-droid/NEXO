@@ -648,8 +648,24 @@ if (!function_exists('requireAuth')) {
             $permsStmt->execute([$user['role_id']]);
             $permissions = $permsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-            $stmtConfig = $conn->prepare("SELECT set_config('app.current_role', ?, false)");
-            $stmtConfig->execute([$roleName]);
+            // FIX (PgBouncer): En transaction-pool mode, set_config(..., false)
+            // no persiste entre consultas. Iniciamos una transacción explícita y
+            // usamos set_config(..., true) (transaction-level) para que RLS
+            // funcione en todas las consultas de la request. Un shutdown function
+            // hace commit automáticamente al final.
+            if (!$conn->inTransaction()) {
+                $conn->beginTransaction();
+                $stmtCtx2 = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
+                $stmtCtx2->execute([$user['school_id'], $roleName]);
+
+                register_shutdown_function(function() use ($conn) {
+                    try {
+                        if ($conn->inTransaction()) {
+                            $conn->commit();
+                        }
+                    } catch (Exception $e) { /* silenciar en shutdown */ }
+                });
+            }
 
             return [
                 'id' => $user['user_id'],
