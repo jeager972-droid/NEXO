@@ -67,6 +67,12 @@ if ($cleanPath === '/dashboard/stats') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
+        // DEBUG: verificar contexto RLS al inicio del dashboard
+        $debugStmt = $conn->prepare("SELECT current_setting('app.current_school_id', true) as school_id, current_setting('app.current_role', true) as role, count(*) as group_count FROM academic_groups WHERE school_id = current_setting('app.current_school_id', true)::uuid");
+        $debugStmt->execute();
+        $debugRow = $debugStmt->fetch(PDO::FETCH_ASSOC);
+        securityLog('DASHBOARD_RLS_DEBUG', "school_id={$debugRow['school_id']} role={$debugRow['role']} group_count={$debugRow['group_count']} inTx=" . ($conn->inTransaction() ? '1' : '0'));
+
         // Build group filter JOINs if group_name provided
         $groupFilter = '';
         $groupParams = [];
