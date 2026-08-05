@@ -103,24 +103,22 @@ if ($cleanPath === '/dashboard/stats') {
         // conteo porque el estudiante puede regresar.
         // Si no hay exit_time, cualquier SALIDA_% después del último
         // INGRESO_% significa que no está presente.
+        // MULTI-JORNADA: cada estudiante usa el exit_time de su propia
+        // jornada (work_shift) vía subquery correlacionada.
         // ──────────────────────────────────────────────────────────────
-        $exitTime = null;
-        try {
-            $exitStmt = $conn->prepare(
-                "SELECT exit_time FROM school_schedule_config
-                 WHERE school_id = ? AND exit_time IS NOT NULL"
-            );
-            $exitStmt->execute([$schoolId]);
-            $exitTime = $exitStmt->fetchColumn() ?: null;
-        } catch (Exception $e) { /* tabla puede no existir, usar lógica simple */ }
-
-        // Condición SQL adicional para filtrar solo salidas finales
-        $exitTimeCondition = '';
+        // Subquery correlacionada: obtiene exit_time según work_shift del estudiante
+        $exitTimeCondition = " AND be2.event_timestamp >= (
+            (NOW() AT TIME ZONE 'America/Bogota')::date +
+            COALESCE(
+                (SELECT ssc.exit_time FROM school_schedule_config ssc
+                 WHERE ssc.school_id = biometric_events.school_id
+                   AND ssc.work_shift = (SELECT s.work_shift FROM students s WHERE s.student_id = biometric_events.student_id)
+                   AND ssc.exit_time IS NOT NULL
+                 LIMIT 1),
+                '23:59:59'::time
+            ) - INTERVAL '5 minutes'
+        )";
         $exitTimeParams = [];
-        if ($exitTime) {
-            $exitTimeCondition = " AND be2.event_timestamp >= ((NOW() AT TIME ZONE 'America/Bogota')::date + ?::time - INTERVAL '5 minutes')";
-            $exitTimeParams = [$exitTime];
-        }
 
         // CONSOLIDACIÓN: Una sola query con CTEs para todos los COUNTs (presentes, ausentes, alertas, permisos)
         // Esto reduce 4 round-trips a 1 solo round-trip a la DB
@@ -482,23 +480,19 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
         $params = [$fromDate, $toDate, $schoolId];
         if ($groupName) $params[] = $groupName;
 
-        // Lógica de salida final: obtener exit_time de school_schedule_config
-        $detailExitTime = null;
-        try {
-            $detExitStmt = $conn->prepare(
-                "SELECT exit_time FROM school_schedule_config
-                 WHERE school_id = ? AND exit_time IS NOT NULL"
-            );
-            $detExitStmt->execute([$schoolId]);
-            $detailExitTime = $detExitStmt->fetchColumn() ?: null;
-        } catch (Exception $e) { /* tabla puede no existir */ }
-
-        $detailExitCondition = '';
-        $detailExitParams = [];
-        if ($detailExitTime) {
-            $detailExitCondition = " AND be_sal.event_timestamp >= (?::date + ?::time - INTERVAL '5 minutes')";
-            $detailExitParams = [$fromDate, $detailExitTime];
-        }
+        // Lógica de salida final: exit_time por work_shift del estudiante (multi-jornada)
+        $detailExitCondition = " AND be_sal.event_timestamp >= (
+            ?::date +
+            COALESCE(
+                (SELECT ssc.exit_time FROM school_schedule_config ssc
+                 WHERE ssc.school_id = s.school_id
+                   AND ssc.work_shift = s.work_shift
+                   AND ssc.exit_time IS NOT NULL
+                 LIMIT 1),
+                '23:59:59'::time
+            ) - INTERVAL '5 minutes'
+        )";
+        $detailExitParams = [$fromDate];
 
         switch ($category) {
             case 'present':

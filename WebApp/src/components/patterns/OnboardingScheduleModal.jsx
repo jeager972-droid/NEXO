@@ -15,6 +15,7 @@ import { Clock, AlertCircle, Calendar, Coffee, Check, Sun, Moon, Sunset } from '
 import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { SearchableSelect } from '../ui/SearchableSelect';
 import { schoolApi } from '../../api/school';
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -315,7 +316,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                   Bienvenido. Antes de usar el sistema, debe configurar los horarios de la institución.
                 </p>
                 <p className="text-body-sm text-[var(--nx-text-muted)]">
-                  Esta configuración se usa para la detección automática de inasistencias y evasión.
+                  Esta configuración es la base para el funcionamiento del sistema en base a los horarios de la institución.
                 </p>
               </div>
 
@@ -373,38 +374,17 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                 </p>
               </div>
 
-              <div className="space-y-2">
-                {SHIFT_OPTIONS.map((opt) => {
-                  const Icon = opt.icon;
-                  const isSelected = selectedShifts.includes(opt.value);
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        if (isSelected) {
-                          setSelectedShifts(selectedShifts.filter(s => s !== opt.value));
-                        } else {
-                          setSelectedShifts([...selectedShifts, opt.value]);
-                        }
-                      }}
-                      className={`w-full rounded-control border px-4 py-3 flex items-center gap-3 transition-all duration-fast ${
-                        isSelected
-                          ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)]'
-                          : 'border-[var(--nx-border)] hover:border-[var(--nx-border-accent)]'
-                      }`}
-                    >
-                      <div className={`grid h-8 w-8 place-items-center rounded-surface ${isSelected ? 'bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'}`}>
-                        <Icon size={16} />
-                      </div>
-                      <span className="flex-1 text-left text-body font-medium text-[var(--nx-text)]">{opt.label}</span>
-                      <div className={`grid h-5 w-5 place-items-center rounded-full border ${isSelected ? 'border-[var(--nx-accent)] bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : 'border-[var(--nx-border)]'}`}>
-                        {isSelected && <Check size={12} />}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <SearchableSelect
+                label="Jornadas de la institución"
+                required
+                multiple
+                options={SHIFT_OPTIONS}
+                value={selectedShifts}
+                onChange={(vals) => setSelectedShifts(vals || [])}
+                placeholder="Seleccionar jornadas…"
+                searchPlaceholder="Buscar jornada…"
+                emptyText="Sin resultados"
+              />
             </div>
           )}
 
