@@ -182,6 +182,15 @@ bool UareU5300BiometricSensor::openDevice() {
         return false;
     }
 
+    // DEBUG: Log device info para diagnosticar INVALID_PARAMETER
+    LOG_INFO("UareU: query_devices found {} device(s)", devCnt);
+    for (unsigned int i = 0; i < devCnt; ++i) {
+        LOG_INFO("UareU: dev[{}] name='{}' vendor=0x{:04x} product=0x{:04x} product_name='{}'",
+                 i, devInfos[i].name,
+                 devInfos[i].id.vendor_id, devInfos[i].id.product_id,
+                 devInfos[i].descr.product_name);
+    }
+
     DPFPDD_DEV dev = nullptr;
 
     // Re-query + retry loop: si dpfpdd_open falla con DPFPDD_E_INVALID_PARAMETER,
@@ -189,7 +198,13 @@ bool UareU5300BiometricSensor::openDevice() {
     // (condición de carrera USB). Re-ejecutamos query y reintentamos hasta 3 veces.
     constexpr int kMaxOpenRetries = 3;
     for (int attempt = 0; attempt < kMaxOpenRetries; ++attempt) {
-        rc = dpfpdd_open(devInfos[0].name, &dev);
+        // Usar devInfos[0].name si no está vacío, sino intentar con NULL (auto-select)
+        char* openName = devInfos[0].name;
+        if (!openName || openName[0] == '\0') {
+            LOG_WARN("UareU: devInfos[0].name is empty, trying dpfpdd_open with NULL");
+            openName = nullptr;
+        }
+        rc = dpfpdd_open(openName, &dev);
         if (rc == DPFPDD_SUCCESS) {
             break;
         }
