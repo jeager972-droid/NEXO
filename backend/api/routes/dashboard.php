@@ -95,7 +95,9 @@ if ($cleanPath === '/dashboard/stats') {
 
         // CONSOLIDACIÓN: Una sola query con CTEs para todos los COUNTs (presentes, ausentes, alertas, permisos)
         // Esto reduce 4 round-trips a 1 solo round-trip a la DB
-        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? []);
+        // FIX: Si tiene global_view, usar query global (no teacher) aunque tenga teacher_view
+        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
+            && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
         
         if ($isTeacher) {
             // Para docentes: filtro por grupos asignados en schedules
@@ -399,7 +401,8 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     try {
         // Verificar que el docente tenga este grupo asignado (via schedules)
         $validGroup = true;
-        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? []);
+        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
+            && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
         if ($isTeacher) {
             if (!$groupName) {
                 http_response_code(400);
@@ -573,7 +576,8 @@ if ($cleanPath === '/dashboard/events') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? []);
+        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
+            && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
         $isGlobalAdmin = ($userRole === 'RECTOR' || $userRole === 'COORDINATOR');
 
         $events = [];
