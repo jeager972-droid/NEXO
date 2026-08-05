@@ -31,6 +31,12 @@ if (strpos($cleanPath, '/audit/') !== 0) {
 $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
 $schoolId = $authUser['school_id'];
 
+// Fechas de negocio en zona horaria de Bogotá (para queries SQL y comparaciones).
+// Los timestamps de auditoría/logs se mantienen en UTC/server time.
+$bogotaTZ = new DateTimeZone('America/Bogota');
+$bogotaToday = (new DateTime('now', $bogotaTZ))->format('Y-m-d');
+$bogota30DaysAgo = (new DateTime('-30 days', $bogotaTZ))->format('Y-m-d');
+
 /**
  * Emite una respuesta JSON y finaliza la ejecución.
  *
@@ -341,7 +347,7 @@ if ($cleanPath === '/audit/attendance/by-group' && $method === 'GET') {
             LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
             LEFT JOIN biometric_events be ON sga.student_id = be.student_id
                 AND be.school_id = ?
-                AND (be.event_timestamp)::date = (CURRENT_TIMESTAMP)::date
+                AND (be.event_timestamp)::date = (NOW() AT TIME ZONE 'America/Bogota')::date
             WHERE ag.school_id = ?
             GROUP BY ag.group_id, ag.group_name
             ORDER BY ag.group_name
@@ -728,8 +734,8 @@ if ($cleanPath === '/audit/permissions/pending-returns' && $method === 'GET') {
 // Historial permisos
 if ($cleanPath === '/audit/permissions/history' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             (SELECT 'Salida de clase' AS tipo,
                     s.last_name || ' ' || s.first_name AS estudiante,
@@ -899,7 +905,7 @@ if ($cleanPath === '/audit/teacher/classes' && $method === 'GET') {
             LEFT JOIN users u ON sch.teacher_user_id = u.user_id
             LEFT JOIN biometric_events be ON be.schedule_id = sch.schedule_id
                 AND be.event_type LIKE 'INGRESO_%'
-                AND (be.event_timestamp)::date = (CURRENT_TIMESTAMP)::date
+                AND (be.event_timestamp)::date = (NOW() AT TIME ZONE 'America/Bogota')::date
             WHERE sch.teacher_user_id IN (
                 SELECT user_id FROM users WHERE school_id = ? AND role_id IN (
                     SELECT role_id FROM roles WHERE role_name = 'TEACHER'
@@ -1268,8 +1274,8 @@ if ($cleanPath === '/audit/historical/teacher' && $method === 'GET') {
 
 if ($cleanPath === '/audit/historical/attendance' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT be.event_id, be.event_type, be.event_timestamp, s.first_name, s.last_name
             FROM biometric_events be LEFT JOIN students s ON be.student_id = s.student_id
@@ -1283,8 +1289,8 @@ if ($cleanPath === '/audit/historical/attendance' && $method === 'GET') {
 
 if ($cleanPath === '/audit/historical/discipline' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT si.incident_id, si.incident_type, si.severity_level, si.description, si.detected_at, si.resolved, s.first_name, s.last_name
             FROM security_incidents si LEFT JOIN students s ON si.related_student_id = s.student_id
@@ -1298,8 +1304,8 @@ if ($cleanPath === '/audit/historical/discipline' && $method === 'GET') {
 
 if ($cleanPath === '/audit/historical/permissions' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             (SELECT 'class' AS type, authorization_id, exit_time AS event_time, authorization_reason AS reason, created_at FROM class_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?)
             UNION ALL
@@ -1315,8 +1321,8 @@ if ($cleanPath === '/audit/historical/permissions' && $method === 'GET') {
 
 if ($cleanPath === '/audit/historical/messaging' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT tm.twilio_message_id, tm.phone_number, tm.message_content, tm.direction, tm.type_code, tm.delivery_status, tm.sent_at, s.first_name, s.last_name
             FROM twilio_messages tm LEFT JOIN students s ON tm.student_id = s.student_id
@@ -1380,8 +1386,8 @@ if ($cleanPath === '/audit/historical/download' && $method === 'GET') {
 
 if ($cleanPath === '/audit/historical/download-consolidated' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $consolidated = [];
         $stmt = $conn->prepare("SELECT 'attendance' AS section, COUNT(*) AS count FROM biometric_events WHERE school_id = ? AND (event_timestamp)::date BETWEEN ? AND ?");
         $stmt->execute([$schoolId, $from, $to]);
@@ -1406,8 +1412,8 @@ if ($cleanPath === '/audit/historical/download-consolidated' && $method === 'GET
 
 if ($cleanPath === '/audit/consolidated/attendance' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 COUNT(*) FILTER (WHERE event_type LIKE 'INGRESO_%') AS entries,
@@ -1424,8 +1430,8 @@ if ($cleanPath === '/audit/consolidated/attendance' && $method === 'GET') {
 
 if ($cleanPath === '/audit/consolidated/discipline' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 COUNT(*) AS total_incidents,
@@ -1444,8 +1450,8 @@ if ($cleanPath === '/audit/consolidated/discipline' && $method === 'GET') {
 
 if ($cleanPath === '/audit/consolidated/permissions' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 (SELECT COUNT(*) FROM class_exit_authorizations WHERE school_id = ? AND exit_time BETWEEN ? AND ?) AS class_exits,
@@ -1459,8 +1465,8 @@ if ($cleanPath === '/audit/consolidated/permissions' && $method === 'GET') {
 
 if ($cleanPath === '/audit/consolidated/messaging' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 COUNT(*) FILTER (WHERE direction = 'OUTBOUND') AS sent,
@@ -1477,8 +1483,8 @@ if ($cleanPath === '/audit/consolidated/messaging' && $method === 'GET') {
 
 if ($cleanPath === '/audit/consolidated/teacher' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 (SELECT COUNT(*) FROM user_commands WHERE school_id = ? AND executed_at BETWEEN ? AND ? AND executed_by_user_id IN (SELECT user_id FROM users WHERE role_id IN (SELECT role_id FROM roles WHERE role_name = 'TEACHER'))) AS commands,
@@ -1491,8 +1497,8 @@ if ($cleanPath === '/audit/consolidated/teacher' && $method === 'GET') {
 
 if ($cleanPath === '/audit/consolidated/security' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 (SELECT COUNT(*) FROM global_audit_logs WHERE school_id = ? AND created_at BETWEEN ? AND ?) AS audit_logs,
@@ -1507,8 +1513,8 @@ if ($cleanPath === '/audit/consolidated/security' && $method === 'GET') {
 
 if ($cleanPath === '/audit/consolidated/institutional' && $method === 'GET') {
     try {
-        $from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
-        $to   = $_GET['to']   ?? date('Y-m-d');
+        $from = $_GET['from'] ?? $bogota30DaysAgo;
+        $to   = $_GET['to']   ?? $bogotaToday;
         $stmt = $conn->prepare("
             SELECT
                 (SELECT COUNT(*) FROM students WHERE school_id = ? AND deleted_at IS NULL) AS active_students,

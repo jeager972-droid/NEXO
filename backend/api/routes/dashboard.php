@@ -93,6 +93,35 @@ if ($cleanPath === '/dashboard/stats') {
             $groupParams = [$groupName];
         }
 
+        // ──────────────────────────────────────────────────────────────
+        // Lógica de salida final (colegios que NO rotan salones):
+        // Un estudiante que tiene un evento SALIDA_% después de su último
+        // INGRESO_% no debe contar como presente. Si el colegio tiene
+        // school_schedule_config con exit_time, solo se considera "salida
+        // final" si la SALIDA_% ocurre después de (exit_time - 5 min).
+        // Salidas temporales (antes de exit_time - 5 min) no restan del
+        // conteo porque el estudiante puede regresar.
+        // Si no hay exit_time, cualquier SALIDA_% después del último
+        // INGRESO_% significa que no está presente.
+        // ──────────────────────────────────────────────────────────────
+        $exitTime = null;
+        try {
+            $exitStmt = $conn->prepare(
+                "SELECT exit_time FROM school_schedule_config
+                 WHERE school_id = ? AND exit_time IS NOT NULL"
+            );
+            $exitStmt->execute([$schoolId]);
+            $exitTime = $exitStmt->fetchColumn() ?: null;
+        } catch (Exception $e) { /* tabla puede no existir, usar lógica simple */ }
+
+        // Condición SQL adicional para filtrar solo salidas finales
+        $exitTimeCondition = '';
+        $exitTimeParams = [];
+        if ($exitTime) {
+            $exitTimeCondition = " AND be2.event_timestamp >= ((NOW() AT TIME ZONE 'America/Bogota')::date + ?::time - INTERVAL '5 minutes')";
+            $exitTimeParams = [$exitTime];
+        }
+
         // CONSOLIDACIÓN: Una sola query con CTEs para todos los COUNTs (presentes, ausentes, alertas, permisos)
         // Esto reduce 4 round-trips a 1 solo round-trip a la DB
         // FIX: Si tiene global_view, usar query global (no teacher) aunque tenga teacher_view
@@ -116,6 +145,16 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
                       )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM biometric_events be2
+                          WHERE be2.student_id = biometric_events.student_id
+                            AND be2.school_id = biometric_events.school_id
+                            AND be2.event_type LIKE 'SALIDA_%'
+                            AND be2.event_timestamp > biometric_events.event_timestamp
+                            AND be2.event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                            AND be2.event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                            {$exitTimeCondition}
+                      )
                 ),
                 absent_cte AS (
                     SELECT COUNT(*) as cnt
@@ -136,7 +175,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND (detected_at)::date = (CURRENT_TIMESTAMP)::date
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%')
                       AND student_id IN (
                           SELECT sga.student_id FROM student_group_assignments sga
@@ -184,7 +224,7 @@ if ($cleanPath === '/dashboard/stats') {
                     (SELECT cnt FROM late_cte) as late_count
             ";
             $statsParams = array_merge(
-                $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
+                $groupName ? array_merge([$schoolId, $groupName, $authUser['id']], $exitTimeParams) : array_merge([$schoolId, $authUser['id']], $exitTimeParams),
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $authUser['id'], $groupName] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
@@ -201,6 +241,16 @@ if ($cleanPath === '/dashboard/stats') {
                       AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND event_type LIKE 'INGRESO_%'
                       {$groupFilter}
+                      AND NOT EXISTS (
+                          SELECT 1 FROM biometric_events be2
+                          WHERE be2.student_id = biometric_events.student_id
+                            AND be2.school_id = biometric_events.school_id
+                            AND be2.event_type LIKE 'SALIDA_%'
+                            AND be2.event_timestamp > biometric_events.event_timestamp
+                            AND be2.event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                            AND be2.event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                            {$exitTimeCondition}
+                      )
                 ),
                 absent_cte AS (
                     SELECT COUNT(*) as cnt
@@ -213,9 +263,9 @@ if ($cleanPath === '/dashboard/stats') {
                 ),
                 alerts_cte AS (
                     SELECT 
-                        (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND (emitted_at)::date = (CURRENT_TIMESTAMP)::date AND resolved = FALSE)
+                        (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND emitted_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND emitted_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND resolved = FALSE)
                         +
-                        (SELECT COUNT(*) FROM attendance_incidents WHERE school_id = ? AND (detected_at)::date = (CURRENT_TIMESTAMP)::date AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
+                        (SELECT COUNT(*) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
                     as cnt
                 ),
                 perm_cte AS (
@@ -244,7 +294,7 @@ if ($cleanPath === '/dashboard/stats') {
                     (SELECT cnt FROM late_cte) as late_count
             ";
             $statsParams = array_merge(
-                $groupName ? [$schoolId, $groupName] : [$schoolId],
+                $groupName ? array_merge([$schoolId, $groupName], $exitTimeParams) : array_merge([$schoolId], $exitTimeParams),
                 $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId],
                 $groupName ? [$schoolId, $groupName] : [$schoolId],
@@ -389,8 +439,9 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
     $groupName = $_GET['group_name'] ?? '';
     $category = $_GET['category'] ?? '';
-    $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-5 hours'));
-    $toDate = $_GET['to_date'] ?? date('Y-m-d', strtotime('-5 hours'));
+    $bogotaToday = (new DateTime('now', new DateTimeZone('America/Bogota')))->format('Y-m-d');
+    $fromDate = $_GET['from_date'] ?? $bogotaToday;
+    $toDate = $_GET['to_date'] ?? $bogotaToday;
 
     if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late'])) {
         http_response_code(400);
@@ -431,6 +482,24 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
         $params = [$fromDate, $toDate, $schoolId];
         if ($groupName) $params[] = $groupName;
 
+        // Lógica de salida final: obtener exit_time de school_schedule_config
+        $detailExitTime = null;
+        try {
+            $detExitStmt = $conn->prepare(
+                "SELECT exit_time FROM school_schedule_config
+                 WHERE school_id = ? AND exit_time IS NOT NULL"
+            );
+            $detExitStmt->execute([$schoolId]);
+            $detailExitTime = $detExitStmt->fetchColumn() ?: null;
+        } catch (Exception $e) { /* tabla puede no existir */ }
+
+        $detailExitCondition = '';
+        $detailExitParams = [];
+        if ($detailExitTime) {
+            $detailExitCondition = " AND be_sal.event_timestamp >= (?::date + ?::time - INTERVAL '5 minutes')";
+            $detailExitParams = [$fromDate, $detailExitTime];
+        }
+
         switch ($category) {
             case 'present':
                 $stmt = $conn->prepare("
@@ -443,11 +512,33 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                         AND (be.event_timestamp)::date
                             BETWEEN ? AND ?
                     WHERE s.school_id = ? {$groupWhere}
+                    AND NOT EXISTS (
+                        SELECT 1 FROM biometric_events be_sal
+                        WHERE be_sal.student_id = s.student_id
+                          AND be_sal.school_id = s.school_id
+                          AND be_sal.event_type LIKE 'SALIDA_%'
+                          AND be_sal.event_timestamp > (
+                              SELECT MAX(be_ing.event_timestamp)
+                              FROM biometric_events be_ing
+                              WHERE be_ing.student_id = s.student_id
+                                AND be_ing.event_type LIKE 'INGRESO_%'
+                                AND (be_ing.event_timestamp)::date BETWEEN ? AND ?
+                          )
+                          AND (be_sal.event_timestamp)::date BETWEEN ? AND ?
+                          {$detailExitCondition}
+                    )
                     GROUP BY s.student_id, s.first_name, s.last_name, s.document_number, ag.group_name
                     HAVING MAX(be.event_timestamp) IS NOT NULL
                     ORDER BY last_entry DESC
                 ");
-                $stmt->execute($params);
+                $presentParams = [$fromDate, $toDate, $schoolId];
+                if ($groupName) $presentParams[] = $groupName;
+                $presentParams[] = $fromDate;
+                $presentParams[] = $toDate;
+                $presentParams[] = $fromDate;
+                $presentParams[] = $toDate;
+                $presentParams = array_merge($presentParams, $detailExitParams);
+                $stmt->execute($presentParams);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 break;
 
@@ -584,25 +675,45 @@ if ($cleanPath === '/dashboard/events') {
         $limit = 20;
 
         if ($isGlobalAdmin) {
-            // RECTOR/COORDINADOR: ven SOLO eventos importantes (PERMISO, AUTORIZAR_SALIDA, HORARIO, INCIDENTE, DAÑO, SOS, PEDAGOGICA)
-            // + TODOS los seguimientos (ejecutados por coordinadores o ellos mismos)
-            // NO ven citaciones, inasistencias, solicitudes
+            // RECTOR/COORDINADOR: ven SOLO novedades específicas (SOS, SITUACION_CRITICA, INCIDENTE, DAÑO, SEGUIMIENTO)
+            // más EVASION_INTERNA desde attendance_incidents (no está en user_commands).
+            // NO ven permisos, autorizaciones de salida, inasistencias, horarios, ni salidas pedagógicas
+            // Deduplicación: si hay múltiples eventos del mismo tipo para el mismo estudiante en los últimos
+            // 5 minutos, solo se muestra el más reciente (DISTINCT ON + ORDER BY executed_at DESC)
             $stmt = $conn->prepare("
-                SELECT uc.command_type, uc.executed_at, uc.command_payload,
-                       u.first_name as issuer_first, u.last_name as issuer_last,
-                       r.role_name as issuer_role
-                FROM user_commands uc
-                LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
-                LEFT JOIN roles r ON u.role_id = r.role_id
-                WHERE uc.school_id = ?
-                  AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                  AND (
-                    uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'HORARIO', 'INCIDENTE', 'DAÑO', 'SOS', 'PEDAGOGICA', 'SEGUIMIENTO', 'INASISTENCIA')
-                  )
-                ORDER BY uc.executed_at DESC
+                SELECT * FROM (
+                    SELECT * FROM (
+                        SELECT DISTINCT ON (uc.command_type, uc.command_payload->>'student_id')
+                               uc.command_type, uc.executed_at, uc.command_payload,
+                               u.first_name as issuer_first, u.last_name as issuer_last,
+                               r.role_name as issuer_role
+                        FROM user_commands uc
+                        LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
+                        LEFT JOIN roles r ON u.role_id = r.role_id
+                        WHERE uc.school_id = ?
+                          AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                          AND uc.command_type IN ('SOS', 'SITUACION_CRITICA', 'INCIDENTE', 'DAÑO', 'SEGUIMIENTO')
+                        ORDER BY uc.command_type, uc.command_payload->>'student_id', uc.executed_at DESC
+                    ) AS dedup
+
+                    UNION ALL
+
+                    SELECT
+                        'EVASION_INTERNA' AS command_type,
+                        ai.detected_at AS executed_at,
+                        ai.metadata_json AS command_payload,
+                        NULL AS issuer_first,
+                        NULL AS issuer_last,
+                        'SISTEMA' AS issuer_role
+                    FROM attendance_incidents ai
+                    WHERE ai.school_id = ?
+                      AND ai.detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND ai.incident_type = 'EVASION_INTERNA'
+                ) AS combined
+                ORDER BY combined.executed_at DESC
                 LIMIT ?
             ");
-            $stmt->execute([$schoolId, $limit]);
+            $stmt->execute([$schoolId, $schoolId, $limit]);
             $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($isTeacher) {
             // DOCENTE/PSICORIENTADOR: ven SUS comandos (incluyendo SUS citaciones) + comandos importantes de sus grupos
@@ -682,6 +793,9 @@ if ($cleanPath === '/dashboard/events') {
                 case 'DAÑO':
                     $label = $reason ? "Se reportó un daño: {$reason}" : "Se reportó un daño";
                     break;
+                case 'EVASION_INTERNA':
+                    $label = $studentName ? "Se detectó evasión interna de {$studentName}" : "Se detectó una evasión interna";
+                    break;
                 case 'HORARIO':
                     $label = "Se realizó un cambio de horario";
                     break;
@@ -692,7 +806,7 @@ if ($cleanPath === '/dashboard/events') {
             $formattedEvents[] = [
                 'label' => $label,
                 'time' => date('H:i', strtotime($ev['executed_at'])),
-                'type' => in_array(strtoupper($ev['command_type']), ['SOS', 'INCIDENTE']) ? 'alert' : 'default',
+                'type' => in_array(strtoupper($ev['command_type']), ['SOS', 'INCIDENTE', 'EVASION_INTERNA']) ? 'alert' : 'default',
                 'issuer' => $issuerName,
                 'issuer_role' => $issuerRole,
                 'command_type' => $ev['command_type'],

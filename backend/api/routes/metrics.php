@@ -118,7 +118,7 @@ if ($cleanPath === '/metrics') {
     }
 
     try {
-        $bioToday = $conn->query("SELECT COUNT(*) FROM biometric_events WHERE event_timestamp >= CURRENT_DATE")->fetchColumn();
+        $bioToday = $conn->query("SELECT COUNT(*) FROM biometric_events WHERE event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date")->fetchColumn();
         emit('nexo_biometric_events_today', 'gauge', 'Biometric events today', [(int)$bioToday]);
     } catch (Exception $e) {
         emit('nexo_biometric_events_today', 'gauge', 'Biometric events today', [0]);
@@ -138,14 +138,14 @@ if ($cleanPath === '/metrics') {
     }
 
     try {
-        $alertsToday = $conn->query("SELECT COUNT(*) FROM attendance_incidents WHERE detected_at >= CURRENT_DATE AND incident_type LIKE 'RISK_ALERT%'")->fetchColumn();
+        $alertsToday = $conn->query("SELECT COUNT(*) FROM attendance_incidents WHERE detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND incident_type LIKE 'RISK_ALERT%'")->fetchColumn();
         emit('nexo_risk_alerts_today', 'gauge', 'Risk alerts today', [(int)$alertsToday]);
     } catch (Exception $e) {
         emit('nexo_risk_alerts_today', 'gauge', 'Risk alerts today', [0]);
     }
 
     try {
-        $panicCount = $conn->query("SELECT COUNT(*) FROM school_panic_events WHERE triggered_at >= CURRENT_DATE - INTERVAL '30 days'")->fetchColumn();
+        $panicCount = $conn->query("SELECT COUNT(*) FROM school_panic_events WHERE triggered_at >= (NOW() AT TIME ZONE 'America/Bogota')::date - INTERVAL '30 days'")->fetchColumn();
         emit('nexo_panic_events_30d', 'gauge', 'Panic events last 30 days', [(int)$panicCount]);
     } catch (Exception $e) {
         emit('nexo_panic_events_30d', 'gauge', 'Panic events last 30 days', [0]);

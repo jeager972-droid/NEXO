@@ -65,6 +65,14 @@ if (strpos($cleanPath, '/tracking') === 0) {
         }
 
         try {
+            // Validar que el estudiante exista y pertenezca a la escuela
+            $stuCheck = $conn->prepare("SELECT student_id FROM students WHERE student_id = ? AND school_id = ? AND active = TRUE AND deleted_at IS NULL");
+            $stuCheck->execute([$studentId, $schoolId]);
+            if (!$stuCheck->fetchColumn()) {
+                http_response_code(404);
+                exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado o inactivo']));
+            }
+
             // Check if already in tracking
             $checkStmt = $conn->prepare("SELECT tracking_id FROM student_tracking WHERE student_id = ? AND school_id = ? AND status = 'en proceso'");
             $checkStmt->execute([$studentId, $schoolId]);

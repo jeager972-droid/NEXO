@@ -202,6 +202,7 @@ $routeMap = [
     'consultation' => ['consultations.php', 'misc.php'],
     'consultations' => 'consultations.php',
     'tracking' => 'tracking.php',
+    'school' => 'school_config.php',
 ];
 
 // ============================================================================

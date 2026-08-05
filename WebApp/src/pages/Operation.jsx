@@ -31,16 +31,15 @@ import { GRADO_OPTIONS } from '../config/grados';
 import { NexoChatBubble } from '../components/patterns/NexoChat';
 
 const COMMANDS_CATALOG = [
-  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent' },
+  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent' },
   { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'success' },
-  { id: 'sos',         title: 'SOS',                 icon: AlertOctagon,roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'], tone: 'warning' },
   { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent' },
   { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'accent' },
   { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason'], tone: 'success' },
   { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
-  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeRange'], tone: 'success' },
+  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'success' },
   { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
 ];
 
@@ -52,7 +51,8 @@ const CMD_TONE_STYLES = {
 };
 
 const FIELD_LABELS = {
-  group: 'Grupo', student: 'Estudiante', grade: 'Grado', date: 'Fecha', time: 'Hora', timeRange: 'Rango de horas',
+  group: 'Grupo', student: 'Estudiante', grade: 'Grado', date: 'Fecha', time: 'Hora',
+  timeStart: 'Hora de salida', timeEnd: 'Hora de retorno',
   message: 'Mensaje', reason: 'Motivo', location: 'Ubicación', description: 'Descripción',
   targetRole: 'Rol destinatario', targets: 'Destinatarios'
 };
@@ -94,12 +94,7 @@ const Operation = () => {
 
   const userRole = user?.role;
   const filteredCommands = useMemo(() => COMMANDS_CATALOG
-    .filter((cmd) => userRole && cmd.roles.includes(userRole))
-    .sort((a, b) => {
-      if (a.id === 'sos') return 1;
-      if (b.id === 'sos') return -1;
-      return 0;
-    }), [userRole]);
+    .filter((cmd) => userRole && cmd.roles.includes(userRole)), [userRole]);
 
   useEffect(() => {
     const cmdTitle = searchParams.get('cmd');
@@ -242,11 +237,8 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         payload.group_name = form.group;
       }
       if (command.fields.includes('targets')) payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
-      if (command.fields.includes('timeRange')) {
-        const tr = (form.timeRange || '').split('-').map((s) => s.trim());
-        payload.timeStart = tr[0] || null;
-        payload.timeEnd = tr[1] || null;
-      }
+      if (command.fields.includes('timeStart')) payload.timeStart = form.timeStart || null;
+      if (command.fields.includes('timeEnd')) payload.timeEnd = form.timeEnd || null;
 
       if (command.id === 'solicitud') {
         if (!form.message || !form.message.trim()) {
@@ -265,7 +257,6 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
 
       let result;
       switch (command.id) {
-        case 'sos':         result = await operationsApi.sos(payload); break;
         case 'situacion_critica': result = await operationsApi.execute('situacion_critica', payload, '/operations/situacion_critica'); break;
         case 'citar':       result = await operationsApi.citacion(payload); break;
         case 'autorizar':   result = await operationsApi.salida(payload); break;
@@ -371,8 +362,8 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     if (field === 'date') {
       return <Input key={field} type="date" label={FIELD_LABELS[field]} value={form[field] || ''} onChange={(e) => updateField(field, e.target.value)} />;
     }
-    if (field === 'time') {
-      return <Input key={field} type="time" label={FIELD_LABELS[field]} value={form[field] || ''} onChange={(e) => updateField(field, e.target.value)} />;
+    if (field === 'time' || field === 'timeStart' || field === 'timeEnd') {
+      return <Input key={field} type="time" label={FIELD_LABELS[field]} value={form[field] || ''} onChange={(e) => updateField(field, e.target.value)} required />;
     }
     return <Input key={field} label={FIELD_LABELS[field]} value={form[field] || ''} onChange={(e) => updateField(field, e.target.value)} />;
   };
@@ -430,7 +421,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
             <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
               <Button variant="secondary" type="button" onClick={onClose} className="w-full sm:w-auto">Cancelar</Button>
               <Button type="submit" loading={isSubmitting} variant="primary" className="w-full sm:w-auto">
-                {command.id === 'sos' ? 'Enviar alerta' : 'Ejecutar'}
+                {command.id === 'situacion_critica' ? 'Enviar alerta' : 'Ejecutar'}
               </Button>
             </div>
           </form>

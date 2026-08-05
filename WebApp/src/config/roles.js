@@ -87,7 +87,7 @@ export const SIDEBAR_ITEMS = [
  * Cada comando mapea a un flujo FLOW-OPS-* y endpoint /operations/execute.
  */
 import {
-  Calendar, AlertOctagon, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert, FileText, Siren,
+  Calendar, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert, FileText, Siren,
 } from 'lucide-react';
 
 export const OPERATION_COMMANDS = [
@@ -95,8 +95,6 @@ export const OPERATION_COMMANDS = [
   { id: 'citacion', title: 'Citar acudiente', icon: Calendar, roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
   // Autorizar salida — rector, coordinador
   { id: 'salida', title: 'Autorizar salida', icon: ShieldCheck, roles: [ROLES.RECTOR, ROLES.COORDINADOR] },
-  // SOS — todos los institucionales
-  { id: 'sos', title: 'SOS', icon: AlertOctagon, roles: ALL_ROLES },
   // Situación Crítica — todos los roles, avisa a rector y coordinador
   { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: ALL_ROLES },
   // Generar permiso — docente, coordinador, rector

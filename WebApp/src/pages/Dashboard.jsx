@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { trackingApi } from '../api/tracking';
+import { schoolApi } from '../api/school';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -24,6 +25,7 @@ import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 import { ScheduleTask, isTaskActive, isTaskDoneToday } from '../components/patterns/ScheduleTask';
+import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
 
@@ -56,52 +58,75 @@ const TasksEmptyState = ({ loading }) => {
   );
 };
 
+const BIOMETRIC_EVENT_LABELS = {
+  INGRESO_NORMAL: 'Ingreso normal',
+  INGRESO_TARDE: 'Ingreso tarde',
+  CHECK_IN: 'Entrada',
+  CHECK_OUT: 'Salida',
+  LATE_ARRIVAL: 'Llegada tarde',
+  EARLY_EXIT: 'Salida anticipada',
+  WRONG_CLASSROOM: 'Salón incorrecto',
+  EVASION_INTERNA: 'Evasión interna',
+  SPAM_BIOMETRIC: 'Spam biométrico',
+  BIOMETRIC_FAILURE: 'Falla de biometría',
+};
+
 const eventToMessage = (ev) => {
-  const label = ev.label || '';
+  // Limpiar el label de cualquier "group: null" o pares clave-valor crudos del backend
+  let label = ev.label || '';
+  // Si el label contiene pares crudos como "group: null", limpiarlos
+  label = label.replace(/\s*\b\w+:\s*null\b,?/gi, '').replace(/\s*\b\w+:\s*undefined\b,?/gi, '').trim();
+  // Si después de limpiar quedó vacío o solo punctuation, usar el tipo de evento humanizado
+  if (!label || label === '.' || label === ',') {
+    const evType = ev.type || ev.event_type || ev.event_result;
+    label = BIOMETRIC_EVENT_LABELS[evType] || BIOMETRIC_EVENT_LABELS[String(evType)?.toUpperCase()] || evType || 'Novedad';
+  }
+  // Construir grupo: si es null/undefined, omitir o usar "Sin grupo asignado"
+  const group = ev.group || ev.group_name;
+  const groupText = group ? ` del grupo ${formatGroupName(String(group))}` : '';
+  const student = ev.student_name || ev.student;
+  const studentText = student ? ` de ${student}` : '';
   const issuer = ev.issuer ? ` · por ${ev.issuer}` : '';
   const time = ev.time ? ` a las ${ev.time}` : '';
-  return `${label}${time}${issuer}.`;
+  return `${label}${studentText}${groupText}${time}${issuer}.`;
 };
 
 const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
-  if (loading) {
-    return (
-      <Surface className="p-6">
-        <NexoChatSkeleton />
-      </Surface>
-    );
-  }
-  if (!events.length) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-          <p className="text-label text-[var(--nx-text)]">Novedades</p>
-        </div>
+  return (
+    <div className="space-y-4">
+      {/* Barra azul vertical — indicador visual siempre visible */}
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+        <p className="text-label text-[var(--nx-text)]">Novedades</p>
+      </div>
+      {loading ? (
+        <Surface className="p-6">
+          <NexoChatSkeleton />
+        </Surface>
+      ) : !events.length ? (
         <Surface className="p-6">
           <NexoChatBubble message="No hay novedades para mostrar." />
         </Surface>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {events.map((ev, i) => (
-        <Surface key={i} className="p-4">
-          <NexoChatBubble
-            message={eventToMessage(ev)}
-            timestamp={ev.time || 'Ahora'}
-          />
-          {onItemClick && (
-            <button
-              onClick={() => onItemClick(ev)}
-              className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
-            >
-              Ver detalles <ChevronRight size={12} />
-            </button>
-          )}
-        </Surface>
-      ))}
+      ) : (
+        <div className="space-y-3">
+          {events.map((ev, i) => (
+            <Surface key={i} className="p-4">
+              <NexoChatBubble
+                message={eventToMessage(ev)}
+                timestamp={ev.time || 'Ahora'}
+              />
+              {onItemClick && (
+                <button
+                  onClick={() => onItemClick(ev)}
+                  className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
+                >
+                  Ver detalles <ChevronRight size={12} />
+                </button>
+              )}
+            </Surface>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -110,6 +135,8 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -118,7 +145,42 @@ const Dashboard = () => {
       finally { setLoading(false); }
     };
     load();
+
+    // Verificar onboarding solo para RECTOR y COORDINADOR
+    if (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) {
+      const checkOnboarding = async () => {
+        try {
+          const config = await schoolApi.getConfig();
+          setOnboardingRequired(!config.onboarding_completed);
+        } catch (e) {
+          console.error('Onboarding check failed:', e);
+          // Si falla la verificación, no bloquear (mejor permisivo que bloquear por error)
+        } finally {
+          setOnboardingLoading(false);
+        }
+      };
+      checkOnboarding();
+    } else {
+      setOnboardingLoading(false);
+    }
   }, [user]);
+
+  // Onboarding bloqueante para RECTOR/COORDINADOR
+  if (!onboardingLoading && onboardingRequired && (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR)) {
+    return (
+      <OnboardingScheduleModal
+        schoolId={user?.school_id}
+        userId={user?.id}
+        role={user?.role}
+        onCompleted={() => {
+          setOnboardingRequired(false);
+          // Recargar stats después del onboarding
+          setLoading(true);
+          dashboardApi.getStats().then(s => { setStats({ ...EMPTY_STATS, ...s }); }).finally(() => setLoading(false));
+        }}
+      />
+    );
+  }
 
   switch (user?.role) {
     case ROLES.RECTOR:
@@ -443,11 +505,12 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
     }
   };
 
-  const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos) > 0;
+  const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos + (groupStats.late || 0)) > 0;
 
   const cards = [
     { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
     { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
+    { key: 'late',     label: 'Llegadas tarde', value: groupStats?.late   ?? 0, icon: <Clock size={18} strokeWidth={1.75} />,         tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : (groupStats?.late ? 'Ingresos después de hora' : undefined) },
     { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: !hasActivity ? 'No hay estudiantes' : undefined },
     { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'success', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
   ];
@@ -537,9 +600,9 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
           {selectedGroup && (
             groupLoading ? (
-              <SkeletonMetrics count={4} />
+              <SkeletonMetrics count={5} />
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {cards.map((s) => (
                   <StatCard
                     key={s.key}

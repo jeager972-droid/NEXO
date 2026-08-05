@@ -266,6 +266,26 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
     }
 
+    // Validación de presencia del estudiante para operaciones que lo requieren.
+    // Excepciones: 'seguimiento' y 'citacion' pueden hacerse aunque el estudiante no esté presente.
+    // 'sos', 'situacion_critica', 'solicitud', 'daño' no dependen de un estudiante específico.
+    $presenceRequiredActions = ['permiso', 'autorizar_salida', 'pedagogica', 'horario', 'incidente'];
+    if (in_array($action, $presenceRequiredActions)) {
+        $presenceStudentId = $params['student'] ?? $params['student_id'] ?? null;
+        if ($presenceStudentId) {
+            $presentStmt = $conn->prepare("SELECT is_student_present_today(?, ?)");
+            $presentStmt->execute([$schoolId, $presenceStudentId]);
+            $isPresent = (bool)$presentStmt->fetchColumn();
+            if (!$isPresent) {
+                http_response_code(422);
+                exit(json_encode([
+                    'status' => 'error',
+                    'message' => 'El estudiante no está presente en la institución. Esta operación requiere que el estudiante haya registrado ingreso biométrico hoy.',
+                ]));
+            }
+        }
+    }
+
     // Dispatcher de comandos operativos. Cada case inserta/actualiza DB, notifica
     // por Twilio a acudientes/directivos y registra user_commands.
     // Acciones: sos, inasistencia, citacion, autorizar_salida, permiso, solicitud,
@@ -512,9 +532,14 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $citTime = !empty($params['time']) ? trim((string)$params['time']) : '';
                 $citReason = !empty($params['reason']) ? trim((string)$params['reason']) : (!empty($params['message']) ? trim((string)$params['message']) : '');
 
+                // Incluir rol y nombre del remitente en el mensaje WhatsApp
+                $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                $senderRoleDisplay = $role === 'RECTOR' ? 'Rector' : ($role === 'COORDINATOR' ? 'Coordinador' : ($role === 'TEACHER' ? 'Docente' : $role));
+
                 $citMsg = "Citación para {$studentName}.";
                 if ($citTime) $citMsg .= "\nHora: {$citTime}";
                 if ($citReason) $citMsg .= "\nMotivo: {$citReason}";
+                $citMsg .= "\nEnviado por: {$senderRoleDisplay} {$senderName}";
                 $citMsg .= "\n\n1 = Confirmo asistencia a la citación.\n2 = Solicito reagendar la citación.";
                 $deliveryResults = [];
                 $deliveryResults[] = enqueueTwilioJob($target['whatsapp_phone'], $citMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'CITACION');
@@ -572,75 +597,120 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
             case 'permiso':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                if (!$studentId) {
+                    http_response_code(400);
+                    echo json_encode(['status' => 'error', 'message' => 'Estudiante requerido para permiso']);
+                    break;
+                }
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 if ($reason === '') {
-                    $reason = 'PERMISO - generado por sistema NEXO';
+                    http_response_code(400);
+                    echo json_encode(['status' => 'error', 'message' => 'Motivo requerido para permiso']);
+                    break;
                 }
+                $timeStart = trim((string)($params['timeStart'] ?? ''));
+                $timeEnd = trim((string)($params['timeEnd'] ?? ''));
+                if (empty($timeStart) || empty($timeEnd)) {
+                    http_response_code(400);
+                    echo json_encode(['status' => 'error', 'message' => 'Hora de inicio y hora de fin son obligatorias para generar un permiso']);
+                    break;
+                }
+                // Validar formato de hora (HH:MM o HH:MM:SS)
+                foreach ([$timeStart, $timeEnd] as $t) {
+                    if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
+                        http_response_code(400);
+                        echo json_encode(['status' => 'error', 'message' => 'Formato de hora inválido. Use HH:MM']);
+                        break 2;
+                    }
+                }
+                // Validar que el estudiante exista y pertenezca a la escuela
+                $stuCheck = $conn->prepare("SELECT student_id FROM students WHERE student_id = ? AND school_id = ? AND active = TRUE AND deleted_at IS NULL");
+                $stuCheck->execute([$studentId, $schoolId]);
+                if (!$stuCheck->fetchColumn()) {
+                    http_response_code(404);
+                    echo json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado o inactivo']);
+                    break;
+                }
+                // Construir timestamps con zona Bogotá
+                $bogotaToday = (new DateTime('now', new DateTimeZone('America/Bogota')))->format('Y-m-d');
+                try {
+                    $exitTs = new DateTime("$bogotaToday $timeStart", new DateTimeZone('America/Bogota'));
+                    $returnTs = new DateTime("$bogotaToday $timeEnd", new DateTimeZone('America/Bogota'));
+                } catch (Exception $e) {
+                    http_response_code(400);
+                    echo json_encode(['status' => 'error', 'message' => 'Hora inválida']);
+                    break;
+                }
+                // Validar que returnTs sea futuro
+                $nowBogota = new DateTime('now', new DateTimeZone('America/Bogota'));
+                if ($returnTs <= $nowBogota) {
+                    http_response_code(400);
+                    echo json_encode(['status' => 'error', 'message' => 'La hora de retorno debe ser una hora futura']);
+                    break;
+                }
+                // Insertar permiso con horas reales
+                $stmt = $conn->prepare("
+                    INSERT INTO class_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, return_time)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$schoolId, $studentId, $userId, $reason, $exitTs->format('Y-m-d H:i:s'), $returnTs->format('Y-m-d H:i:s')]);
 
-                if ($studentId) {
-                    $stmt = $conn->prepare("
-                        INSERT INTO class_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, return_time)
-                        VALUES (?, ?, ?, ?, NOW(), NOW() + INTERVAL '1 hour')
-                    ");
-                    $stmt->execute([$schoolId, $studentId, $userId, $reason]);
+                // Notificar COORDINADOR vía notificaciones internas
+                $stuMetaStmt = $conn->prepare("
+                    SELECT s.first_name, s.last_name, ag.group_name
+                    FROM students s
+                    LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    WHERE s.student_id = ?
+                    LIMIT 1
+                ");
+                $stuMetaStmt->execute([$studentId]);
+                $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
+                $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
+                $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
+                $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
 
-                    // Notificar COORDINADOR vía notificaciones internas
-                    $stuMetaStmt = $conn->prepare("
-                        SELECT s.first_name, s.last_name, ag.group_name
-                        FROM students s
-                        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
-                        WHERE s.student_id = ?
-                        LIMIT 1
-                    ");
-                    $stuMetaStmt->execute([$studentId]);
-                    $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
-                    $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
-                    $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
-                    $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
+                $meta = json_encode([
+                    'student_id' => $studentId,
+                    'student_name' => trim($studentName),
+                    'group_name' => $groupName,
+                    'teacher_name' => trim($teacherName) ?: $role,
+                    'reason' => $reason,
+                    'time_start' => $params['timeStart'] ?? null,
+                    'time_end' => $params['timeEnd'] ?? null,
+                    'action' => 'permiso',
+                ], JSON_UNESCAPED_UNICODE);
 
-                    $meta = json_encode([
-                        'student_id' => $studentId,
-                        'student_name' => trim($studentName),
-                        'group_name' => $groupName,
-                        'teacher_name' => trim($teacherName) ?: $role,
-                        'reason' => $reason,
-                        'time_start' => $params['timeStart'] ?? null,
-                        'time_end' => $params['timeEnd'] ?? null,
-                        'action' => 'permiso',
-                    ], JSON_UNESCAPED_UNICODE);
+                // FIX: Insertar en attendance_incidents para que aparezca en el dashboard
+                $incStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                    VALUES (uuid_generate_v4(), ?, ?, 'PERMISO', NOW(), ?::jsonb)
+                ");
+                $incStmt->execute([$schoolId, $studentId, $meta]);
 
-                    // FIX: Insertar en attendance_incidents para que aparezca en el dashboard
-                    $incStmt = $conn->prepare("
-                        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
-                        VALUES (uuid_generate_v4(), ?, ?, 'PERMISO', NOW(), ?::jsonb)
-                    ");
-                    $incStmt->execute([$schoolId, $studentId, $meta]);
-
-                    // FIX: Batch INSERT notifications para coordinadores
-                    $coordStmt = $conn->prepare("
-                        SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
-                    ");
-                    $coordStmt->execute([$schoolId]);
-                    $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
-                    if (!empty($coords)) {
-                        $rows = [];
-                        $params = [];
-                        foreach ($coords as $c) {
-                            $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
-                            $params[] = $schoolId;
-                            $params[] = $c['user_id'];
-                            $params[] = 'Permiso';
-                            $params[] = "Se registró un permiso" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
-                            $params[] = $meta;
-                        }
-                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
-                        try {
-                            $conn->prepare($sql)->execute($params);
-                        } catch (Throwable $e) {
-                            error_log("[OPERATIONS] Permiso notification batch insert error: " . $e->getMessage());
-                        }
+                // FIX: Batch INSERT notifications para coordinadores
+                $coordStmt = $conn->prepare("
+                    SELECT user_id FROM users
+                    WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
+                ");
+                $coordStmt->execute([$schoolId]);
+                $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+                if (!empty($coords)) {
+                    $rows = [];
+                    $notifParams = [];
+                    foreach ($coords as $c) {
+                        $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
+                        $notifParams[] = $schoolId;
+                        $notifParams[] = $c['user_id'];
+                        $notifParams[] = 'Permiso';
+                        $notifParams[] = "Se registró un permiso" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
+                        $notifParams[] = $meta;
+                    }
+                    $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                    try {
+                        $conn->prepare($sql)->execute($notifParams);
+                    } catch (Throwable $e) {
+                        error_log("[OPERATIONS] Permiso notification batch insert error: " . $e->getMessage());
                     }
                 }
 
@@ -831,12 +901,14 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
                     $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
                     $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                    $senderRoleDisplay = $role === 'RECTOR' ? 'Rector' : ($role === 'COORDINATOR' ? 'Coordinador' : ($role === 'TEACHER' ? 'Docente' : $role));
 
                     $meta = json_encode([
                         'student_id' => $studentId,
                         'student_name' => trim($studentName),
                         'group_name' => $groupName,
                         'sender_name' => $senderName,
+                        'sender_role' => $senderRoleDisplay,
                         'reason' => $reason,
                         'action' => 'iniciar_seguimiento',
                     ], JSON_UNESCAPED_UNICODE);
@@ -849,17 +921,17 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $psicos = $psicoStmt->fetchAll(PDO::FETCH_ASSOC);
                     if (!empty($psicos)) {
                         $rows = [];
-                        $params = [];
+                        $notifParams = [];
                         foreach ($psicos as $p) {
                             $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
-                            $params[] = $schoolId;
-                            $params[] = $p['user_id'];
-                            $params[] = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderName}. Ver detalles.";
-                            $params[] = $meta;
+                            $notifParams[] = $schoolId;
+                            $notifParams[] = $p['user_id'];
+                            $notifParams[] = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderRoleDisplay} {$senderName}. Ver detalles.";
+                            $notifParams[] = $meta;
                         }
                         $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                         try {
-                            $conn->prepare($sql)->execute($params);
+                            $conn->prepare($sql)->execute($notifParams);
                         } catch (Throwable $e) {
                             error_log("[OPERATIONS] Seguimiento notification batch insert error: " . $e->getMessage());
                         }
@@ -908,7 +980,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                         $dscStmt = $conn->prepare("
                             INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
-                            VALUES (?, ?, CURRENT_DATE, ?, ?, ?, ?)
+                            VALUES (?, ?, (NOW() AT TIME ZONE 'America/Bogota')::date, ?, ?, ?, ?)
                             ON CONFLICT (school_id, group_id, config_date)
                             DO UPDATE SET has_classes = EXCLUDED.has_classes, expected_entry_time = EXCLUDED.expected_entry_time, expected_exit_time = EXCLUDED.expected_exit_time
                         ");

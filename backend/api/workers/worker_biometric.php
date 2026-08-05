@@ -23,6 +23,9 @@
  *   processJob($job, $pdo)
  *        │
  *   ├── SYNC_ATTENDANCE  ──► INSERT biometric_events con fingerprint
+ *   │                        + cruce con class_exit_authorizations ACTIVE
+ *   │                          (metadata_json: permiso_id, exit/return_time,
+ *   │                           reason, event_role RETURN|EXIT_WITH_PERMISSION)
  *   ├── REGISTER_STUDENT ──► INSERT/UPDATE students + acudiente
  *   └── DELETE_STUDENT   ──► UPDATE students SET active=FALSE
  *        │
@@ -145,15 +148,106 @@ function processJob(array $job, PDO $conn): bool {
                 $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$instId) . ", true)");
                 $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
+                // ──────────────────────────────────────────────────────────────
+                // Cruce con permisos activos (class_exit_authorizations).
+                // Si el estudiante tiene un permiso ACTIVE cuya exit_time ya pasó,
+                // se anota en metadata_json del evento biométrico para que el
+                // worker_permission_status pueda marcar COMPLETED (retorno) o
+                // registrar que la salida tiene permiso asociado.
+                //   - INGRESO_* después de exit_time → retorno de permiso (RETURN)
+                //   - SALIDA_*  después de exit_time → salida con permiso (EXIT_WITH_PERMISSION)
+                // No se altera la lógica de inserción del evento; solo se enriquece
+                // el metadata_json.
+                // ──────────────────────────────────────────────────────────────
+                $permisoMetadata = null;
+                $studentId = null;
+
+                $sidStmt = $conn->prepare(
+                    "SELECT student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1"
+                );
+                $sidStmt->execute([$doc, $instId]);
+                $studentId = $sidStmt->fetchColumn();
+
+                // ──────────────────────────────────────────────────────────────
+                // Deduplicación temporal: si existe un evento reciente (dentro de
+                // BIOMETRIC_DEDUP_WINDOW_SECONDS, default 30) del mismo estudiante
+                // y del MISMO event_type, se descarta para evitar que múltiples
+                // huellas en corto tiempo (doble toque, error) generen falsos
+                // INGRESO+SALIDA que el worker de evasión interpretaría como
+                // salida real.
+                //   - Si el último evento es del MISMO tipo → descartar (duplicado).
+                //   - Si el tipo es DIFERENTE (ej: último INGRESO, nuevo SALIDA) →
+                //     es un cambio legítimo de estado, NO se deduplica.
+                //   - Si no hay tipo definido (vacío) → deduplicar (conservador).
+                // Usa el índice idx_biometric_events_school_student_time
+                // (school_id, student_id, event_timestamp DESC).
+                // ──────────────────────────────────────────────────────────────
+                if ($studentId) {
+                    $dedupWindow = getenv('BIOMETRIC_DEDUP_WINDOW_SECONDS');
+                    if ($dedupWindow === false || $dedupWindow === '') {
+                        $dedupWindow = 30;
+                    }
+                    $dedupWindow = max(1, (int)$dedupWindow);
+
+                    $dedupStmt = $conn->prepare(
+                        "SELECT event_type FROM biometric_events
+                         WHERE school_id = ? AND student_id = ?
+                           AND event_timestamp >= NOW() - (? || ' seconds')::interval
+                         ORDER BY event_timestamp DESC
+                         LIMIT 1"
+                    );
+                    $dedupStmt->execute([$instId, $studentId, $dedupWindow]);
+                    $lastEvt = $dedupStmt->fetchColumn();
+
+                    if ($lastEvt !== false
+                        && ($lastEvt === $evt || $evt === '' || $lastEvt === '')) {
+                        error_log("[BIOMETRIC_DEDUP] Discarded duplicate event for student {$studentId} within {$dedupWindow}s window");
+                        $conn->exec("COMMIT");
+                        return true;
+                    }
+                }
+
+                if ($studentId) {
+                    $permStmt = $conn->prepare(
+                        "SELECT authorization_id, exit_time, return_time, authorization_reason
+                         FROM class_exit_authorizations
+                         WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
+                           AND exit_time <= NOW()
+                           AND (return_time IS NULL OR return_time >= NOW())
+                         ORDER BY exit_time DESC LIMIT 1"
+                    );
+                    $permStmt->execute([$instId, $studentId]);
+                    $perm = $permStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($perm) {
+                        $isIngreso = (strpos($evt, 'INGRESO_') === 0);
+                        $permisoEventRole = $isIngreso ? 'RETURN' : 'EXIT_WITH_PERMISSION';
+
+                        $permisoMetadata = [
+                            'permiso_id'          => $perm['authorization_id'],
+                            'permiso_exit_time'   => $perm['exit_time'],
+                            'permiso_return_time' => $perm['return_time'],
+                            'permiso_reason'      => $perm['authorization_reason'],
+                            'permiso_event_role'  => $permisoEventRole,
+                        ];
+
+                        error_log("[BIOMETRIC] Event for student {$studentId} crossed with active permission {$perm['authorization_id']}");
+                    }
+                }
+
+                $metadataJson = $permisoMetadata
+                    ? json_encode($permisoMetadata, JSON_UNESCAPED_UNICODE)
+                    : null;
+
                 $stmt = $conn->prepare(
-                    "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
+                    "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint,metadata_json)
                      SELECT uuid_generate_v4(),school_id,student_id,
                             ?,
-                            ?,'PROCESSED',to_timestamp(?),?
+                            ?,'PROCESSED',to_timestamp(?),?,?::jsonb
                      FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
                      ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                 );
-                $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
+                $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $metadataJson, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
 
                 // Si el evento NO es INGRESO_PUNTUAL, evaluar si es llegada tarde.

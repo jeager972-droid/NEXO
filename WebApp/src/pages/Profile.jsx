@@ -7,13 +7,16 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { Select } from '../components/ui/Select';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Dialog } from '../components/ui/Overlay';
+import { schoolApi } from '../api/school';
+import { ROLES } from '../config/roles';
 import { humanizeError } from '../utils/messages';
 
 const compressImage = (file, maxWidth = 800, quality = 0.85) =>
@@ -407,6 +410,21 @@ const Profile = () => {
     return saved ? parseFloat(saved) : 1;
   });
 
+  // Configuración de horarios institucionales
+  const [schoolConfig, setSchoolConfig] = useState(null);
+  const [schoolConfigLoading, setSchoolConfigLoading] = useState(true);
+  const [schoolConfigEditing, setSchoolConfigEditing] = useState(false);
+  const [schoolConfigSaving, setSchoolConfigSaving] = useState(false);
+  const [schoolConfigToast, setSchoolConfigToast] = useState(null);
+  const [editConfig, setEditConfig] = useState({
+    rotates_classrooms: false,
+    work_shift: 'mañana',
+    entry_time: '',
+    exit_time: '',
+    recess_start_time: '',
+    recess_end_time: '',
+  });
+
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
       if (res.status === 'ok' && res.data) {
@@ -422,7 +440,49 @@ const Profile = () => {
       }
       setLoadingProfile(false);
     }).catch(() => setLoadingProfile(false));
-  }, []);
+
+    // Cargar configuración de horarios si es RECTOR o COORDINADOR
+    if (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) {
+      schoolApi.getConfig().then((res) => {
+        if (res.status === 'ok') {
+          setSchoolConfig(res);
+          if (res.config) {
+            setEditConfig({
+              rotates_classrooms: res.config.rotates_classrooms || false,
+              work_shift: res.config.work_shift || 'mañana',
+              entry_time: res.config.entry_time || '',
+              exit_time: res.config.exit_time || '',
+              recess_start_time: res.config.recess_start_time || '',
+              recess_end_time: res.config.recess_end_time || '',
+            });
+          }
+        }
+      }).catch(() => {}).finally(() => setSchoolConfigLoading(false));
+    } else {
+      setSchoolConfigLoading(false);
+    }
+  }, [user]);
+
+  const handleSaveSchoolConfig = async () => {
+    setSchoolConfigSaving(true);
+    setSchoolConfigToast(null);
+    try {
+      const res = await schoolApi.updateConfig(editConfig);
+      if (res.status === 'ok') {
+        setSchoolConfigToast({ type: 'success', message: 'Configuración actualizada' });
+        setSchoolConfigEditing(false);
+        // Recargar
+        const fresh = await schoolApi.getConfig();
+        if (fresh.status === 'ok') setSchoolConfig(fresh);
+      } else {
+        setSchoolConfigToast({ type: 'error', message: res.message || 'Error al guardar' });
+      }
+    } catch (e) {
+      setSchoolConfigToast({ type: 'error', message: humanizeError(e, 'Error al guardar configuración') });
+    } finally {
+      setSchoolConfigSaving(false);
+    }
+  };
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -633,6 +693,168 @@ const Profile = () => {
 
         <Toast toast={actionToast} />
       </Card>
+
+      {/* ── Configuración de horarios institucionales ── */}
+      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && !schoolConfigLoading && (
+        <Card className="space-y-4 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2">
+                <Settings size={18} className="text-[var(--nx-accent)]" />
+                Configuración de horarios
+              </p>
+              <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
+                Jornada, horas de clase y recesos de la institución
+              </p>
+            </div>
+            {schoolConfig?.onboarding_completed && !schoolConfigEditing && (
+              <Button size="sm" variant="secondary" onClick={() => setSchoolConfigEditing(true)}>
+                Editar
+              </Button>
+            )}
+          </div>
+
+          {schoolConfigToast && (
+            <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
+              schoolConfigToast.type === 'success'
+                ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
+                : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
+            }`}>
+              {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              {schoolConfigToast.message}
+            </div>
+          )}
+
+          {!schoolConfig?.onboarding_completed ? (
+            <div className="rounded-control border border-[var(--nx-border-warning)] bg-[var(--nx-subtle-bg-warning)] px-4 py-3">
+              <p className="text-body-sm text-[var(--nx-warning)]">
+                La configuración de horarios no ha sido completada. Vaya al dashboard para completar el onboarding.
+              </p>
+            </div>
+          ) : !schoolConfigEditing ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                  <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
+                    <Clock size={12} /> Entrada
+                  </p>
+                  <p className="text-body text-[var(--nx-text)] mt-0.5">
+                    {schoolConfig?.config?.entry_time || '—'}
+                  </p>
+                </div>
+                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                  <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
+                    <Clock size={12} /> Salida
+                  </p>
+                  <p className="text-body text-[var(--nx-text)] mt-0.5">
+                    {schoolConfig?.config?.exit_time || '—'}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                  <p className="text-caption text-[var(--nx-text-muted)]">Jornada</p>
+                  <p className="text-body text-[var(--nx-text)] mt-0.5 capitalize">
+                    {schoolConfig?.config?.work_shift || '—'}
+                  </p>
+                </div>
+                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                  <p className="text-caption text-[var(--nx-text-muted)]">Rota salones</p>
+                  <p className="text-body text-[var(--nx-text)] mt-0.5">
+                    {schoolConfig?.config?.rotates_classrooms ? 'Sí' : 'No'}
+                  </p>
+                </div>
+              </div>
+              {schoolConfig?.config?.recess_start_time && (
+                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                  <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
+                    <Coffee size={12} /> Receso
+                  </p>
+                  <p className="text-body text-[var(--nx-text)] mt-0.5">
+                    {schoolConfig.config.recess_start_time} — {schoolConfig.config.recess_end_time}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Select
+                label="Jornada"
+                value={editConfig.work_shift}
+                onChange={(e) => setEditConfig({ ...editConfig, work_shift: e.target.value })}
+                options={[
+                  { value: 'mañana', label: 'Mañana' },
+                  { value: 'tarde', label: 'Tarde' },
+                  { value: 'completa', label: 'Completa' },
+                ]}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Hora de entrada"
+                  type="time"
+                  value={editConfig.entry_time}
+                  onChange={(e) => setEditConfig({ ...editConfig, entry_time: e.target.value })}
+                />
+                <Input
+                  label="Hora de salida"
+                  type="time"
+                  value={editConfig.exit_time}
+                  onChange={(e) => setEditConfig({ ...editConfig, exit_time: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Inicio del receso"
+                  type="time"
+                  value={editConfig.recess_start_time}
+                  onChange={(e) => setEditConfig({ ...editConfig, recess_start_time: e.target.value })}
+                />
+                <Input
+                  label="Fin del receso"
+                  type="time"
+                  value={editConfig.recess_end_time}
+                  onChange={(e) => setEditConfig({ ...editConfig, recess_end_time: e.target.value })}
+                />
+              </div>
+              <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+                <p className="text-label text-[var(--nx-text)] mb-2">¿Rota de salones?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditConfig({ ...editConfig, rotates_classrooms: false })}
+                    className={`flex-1 rounded-control border px-3 py-2 text-body-sm ${
+                      !editConfig.rotates_classrooms
+                        ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
+                        : 'border-[var(--nx-border)] text-[var(--nx-text-muted)]'
+                    }`}
+                  >
+                    No
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditConfig({ ...editConfig, rotates_classrooms: true })}
+                    className={`flex-1 rounded-control border px-3 py-2 text-body-sm ${
+                      editConfig.rotates_classrooms
+                        ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
+                        : 'border-[var(--nx-border)] text-[var(--nx-text-muted)]'
+                    }`}
+                  >
+                    Sí
+                  </button>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button size="sm" variant="secondary" onClick={() => setSchoolConfigEditing(false)} disabled={schoolConfigSaving}>
+                  Cancelar
+                </Button>
+                <Button size="sm" variant="primary" onClick={handleSaveSchoolConfig} loading={schoolConfigSaving}>
+                  Guardar
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* ── Tamaño de fuente ── */}
       <Card className="space-y-4 p-5">

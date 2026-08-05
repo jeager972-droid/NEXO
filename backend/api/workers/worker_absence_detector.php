@@ -83,7 +83,7 @@ function enqueueAbsenceNotification($redis, string $phone, string $studentName, 
  */
 function processSchool(PDO $conn, $redis, string $schoolId): int {
     $detected = 0;
-    $today = date('Y-m-d');
+    $today = (new DateTime('now', new DateTimeZone('America/Bogota')))->format('Y-m-d');
 
     // 1. Obtener grupos con clases hoy
     // Usar daily_schedule_config si existe, si no, asumir que sí hay clases
@@ -160,6 +160,17 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
 
             // Si ya marcó ingreso, no es ausente
             if (in_array($studentId, $presentIds)) continue;
+
+            // 4.5. Verificar si tiene permiso activo (no marcar inasistencia si tiene permiso)
+            $permisoStmt = $conn->prepare("
+                SELECT 1 FROM class_exit_authorizations
+                WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
+                  AND exit_time <= NOW()
+                  AND (return_time IS NULL OR return_time >= NOW())
+                LIMIT 1
+            ");
+            $permisoStmt->execute([$schoolId, $studentId]);
+            if ($permisoStmt->fetchColumn()) continue; // Tiene permiso activo, no es inasistencia
 
             // Determinar hora límite
             $shift = $student['work_shift'] ?? 'mañana';

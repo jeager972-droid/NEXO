@@ -27,12 +27,12 @@ describe('ROLES constants', () => {
 });
 
 describe('getOperationsForRole', () => {
-  it('returns SOS and solicitud for all roles', () => {
+  it('returns situacion_critica and solicitud for all roles', () => {
     const roles = Object.values(ROLES);
     for (const role of roles) {
       const ops = getOperationsForRole(role);
       const ids = ops.map((o) => o.id);
-      expect(ids).toContain('sos');
+      expect(ids).toContain('situacion_critica');
       expect(ids).toContain('solicitud');
     }
   });
@@ -66,7 +66,7 @@ describe('getOperationsForRole', () => {
   it('returns enrolamiento only for SECRETARY', () => {
     // enrolamiento is a sidebar item, not an operation — verify that SECRETARY has unique ops
     const secOps = getOperationsForRole(ROLES.SECRETARIA);
-    expect(secOps.some((o) => o.id === 'sos')).toBe(true);
+    expect(secOps.some((o) => o.id === 'situacion_critica')).toBe(true);
   });
 });
 
