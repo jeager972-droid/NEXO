@@ -360,7 +360,12 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         initial={{ opacity: 0, scale: 0.97, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.2, ease: EASE }}
-        className="relative z-10 w-full max-w-[640px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog max-h-[90vh] overflow-y-auto"
+        className={clsx(
+          'relative z-10 w-full max-w-[640px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog',
+          // En fase 'select' el dropdown del SearchableSelect necesita espacio
+          // sin overflow para no cliparse. En las demás fases, scroll interno.
+          phase === 'select' ? '' : 'max-h-[90vh] overflow-y-auto'
+        )}
       >
         {/* Header — sin botón de cerrar (onboarding obligatorio) */}
         <div className="border-b border-[var(--nx-border)] px-6 py-5">
