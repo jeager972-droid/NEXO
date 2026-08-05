@@ -142,8 +142,8 @@ function processJob(array $job, PDO $conn): bool {
             // pero sin prepared statements.
             try {
                 $conn->exec("BEGIN");
-                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$instId));
-                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$instId) . ", true)");
+                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
                 $stmt = $conn->prepare(
                     "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
@@ -220,8 +220,8 @@ function processJob(array $job, PDO $conn): bool {
             $conn->exec("BEGIN");
             try {
                 // FIX (PgBouncer): SET LOCAL en lugar de set_config con prepare
-                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
-                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$schoolId) . ", true)");
+                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
                 $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
                 $stmt->execute([$schoolId, $doc, $nombre]);
@@ -292,8 +292,8 @@ function processJob(array $job, PDO $conn): bool {
             if (empty($doc)) return false;
             try {
                 $conn->exec("BEGIN");
-                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
-                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$schoolId) . ", true)");
+                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
                 $stmt = $conn->prepare("UPDATE students SET active=FALSE,biometric_hash=NULL WHERE document_number=? AND school_id=? RETURNING student_id");
                 $stmt->execute([$doc, $schoolId]);
                 $conn->exec("COMMIT");

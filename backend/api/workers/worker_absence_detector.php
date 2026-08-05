@@ -102,7 +102,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
 
     // set_config para RLS (session-level, best-effort con PgBouncer)
     try {
-        $conn->exec("SET app.current_school_id = " . $conn->quote($schoolId));
+        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", false)");
     } catch (Exception $ignore) {}
 
     $groupsStmt->execute([$schoolId]);
@@ -199,8 +199,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             // 6. INSERT attendance_incidents
             try {
                 $conn->exec("BEGIN");
-                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote($schoolId));
-                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
                 $incStmt = $conn->prepare("
                     INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)

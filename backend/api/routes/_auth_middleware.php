@@ -649,10 +649,11 @@ if (!function_exists('requireAuth')) {
                 exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
             }
 
-            // SET LOCAL: setea el valor a nivel transacción (equivalente a
-            // set_config(..., true)) pero sin prepared statements.
-            $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$user['school_id']));
-            $conn->exec("SET LOCAL app.current_role = " . $conn->quote($roleName));
+            // set_config transaction-level: persiste durante toda la transacción.
+            // Usamos exec() con set_config() en lugar de SET LOCAL porque
+            // current_role es palabra reservada de PostgreSQL.
+            $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$user['school_id']) . ", true)");
+            $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($roleName) . ", true)");
 
             // Fetch permissions
             $permsStmt = $conn->prepare("

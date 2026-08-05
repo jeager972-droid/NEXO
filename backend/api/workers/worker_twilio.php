@@ -244,8 +244,8 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         try {
             $conn->exec("BEGIN");
             if ($schoolId) {
-                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
-                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$schoolId) . ", true)");
+                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
             }
 
             if (!empty($job['message_id'])) {
@@ -279,8 +279,8 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         try {
             $conn->exec("BEGIN");
             if ($schoolId) {
-                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
-                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$schoolId) . ", true)");
+                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
             }
             if (!empty($job['message_id'])) {
                 $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'FAILED_PERMANENT', metadata_json = ?::jsonb WHERE twilio_message_id = ?");
