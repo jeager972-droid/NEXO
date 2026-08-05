@@ -21,6 +21,7 @@ import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Drawer } from '../components/ui/Overlay';
+import { Badge } from '../components/ui/Badge';
 import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
@@ -669,13 +670,6 @@ function humanizeDetailVal(v) {
   return ENUM_ES_D[s] || ENUM_ES_D[s.toUpperCase()] || s;
 }
 
-const CATEGORY_ICONS = {
-  present: <CheckCircle2 size={18} />,
-  absent: <UserMinus size={18} />,
-  late: <Clock size={18} />,
-  alert: <AlertTriangle size={18} />,
-  permiso: <FileText size={18} />,
-};
 const CATEGORY_SCHEMES = {
   present: 'success',
   absent: 'warning',
@@ -684,15 +678,73 @@ const CATEGORY_SCHEMES = {
   permiso: 'accent',
 };
 
-const renderDetailValue = (category, row) => {
-  const group = row.group_name ? formatGroupName(row.group_name) : '';
+const getInitials = (first, last) => {
+  const f = (first?.[0] || '').toUpperCase();
+  const l = (last?.[0] || '').toUpperCase();
+  return (f + l) || '?';
+};
+
+const getCategoryStatusText = (category) => {
   switch (category) {
-    case 'present': return `${group} · Ingreso ${fmtDetailDate(row.last_entry)}`;
-    case 'absent': return `${group} · Ausente desde ${fmtDetailDate(row.absent_since)}`;
-    case 'late': return `${group} · Llegó ${fmtDetailDate(row.late_at)}`;
-    case 'alert': return `${group} · ${humanizeDetailVal(row.alert_type)} · ${fmtDetailDate(row.alert_at)}`;
-    case 'permiso': return `${group} · ${humanizeDetailVal(row.permiso_type)} · ${row.reason || ''}`;
-    default: return group;
+    case 'present': return 'En clase ahora mismo';
+    case 'absent': return 'Inasistente';
+    case 'late': return 'Llegó tarde';
+    case 'alert': return 'Estudiante en alerta';
+    case 'permiso': return 'En permiso';
+    default: return '';
+  }
+};
+
+const renderProfileFields = (category, row) => {
+  switch (category) {
+    case 'present':
+      return (
+        <div>
+          <p className="text-caption text-[var(--nx-text-muted)]">Último ingreso</p>
+          <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.last_entry)}</p>
+        </div>
+      );
+    case 'absent':
+      return (
+        <div>
+          <p className="text-caption text-[var(--nx-text-muted)]">Ausente desde</p>
+          <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.absent_since)}</p>
+        </div>
+      );
+    case 'late':
+      return (
+        <div>
+          <p className="text-caption text-[var(--nx-text-muted)]">Hora de llegada</p>
+          <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.late_at)}</p>
+        </div>
+      );
+    case 'alert':
+      return (
+        <>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Tipo de alerta</p>
+            <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.alert_type)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Fecha</p>
+            <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.alert_at)}</p>
+          </div>
+        </>
+      );
+    case 'permiso':
+      return (
+        <>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Tipo</p>
+            <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.permiso_type)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Motivo</p>
+            <p className="text-body text-[var(--nx-text)]">{row.reason || '—'}</p>
+          </div>
+        </>
+      );
+    default: return null;
   }
 };
 
@@ -733,6 +785,15 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
   const [trackedStudents, setTrackedStudents] = useState(new Set());
   const [successModal, setSuccessModal] = useState(null); // { studentName }
   const [submitError, setSubmitError] = useState(null);
+  const [profileStudent, setProfileStudent] = useState(null);
+
+  const openStudentProfile = (row) => {
+    setProfileStudent(row);
+  };
+
+  const closeStudentProfile = () => {
+    setProfileStudent(null);
+  };
 
   const handleStartTracking = async (studentId, studentName) => {
     setTrackedStudents(prev => new Set(prev).add(studentId));
@@ -793,23 +854,53 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
           ) : filteredData.length > 0 ? (
             <div className="space-y-2">
               {filteredData.map((row, i) => (
-                <SituationLine
+                <div
                   key={row.student_id || i}
-                  icon={CATEGORY_ICONS[category]}
-                  label={CATEGORY_LABELS[category]?.label || category}
-                  value={`${row.last_name} ${row.first_name}`}
-                  detail={renderDetailValue(category, row)}
-                  scheme={CATEGORY_SCHEMES[category]}
-                  action={category === 'alert' && user?.role !== ROLES.DOCENTE ? (
+                  onClick={() => openStudentProfile(row)}
+                  className="flex items-center gap-3 rounded-control border bg-[var(--nx-surface-card)] p-3 cursor-pointer hover:shadow-low transition-shadow"
+                  style={{
+                    borderLeftWidth: '3px',
+                    borderLeftColor: `var(--nx-${CATEGORY_SCHEMES[category]})`,
+                    borderColor: `var(--nx-border-${CATEGORY_SCHEMES[category]})`,
+                  }}
+                >
+                  {/* Avatar circular con iniciales */}
+                  <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--nx-surface-subtle)] flex items-center justify-center text-caption font-semibold text-[var(--nx-text-muted)]">
+                    {getInitials(row.first_name, row.last_name)}
+                  </div>
+
+                  {/* Nombre y grupo */}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-body-sm font-medium text-[var(--nx-text)] truncate">
+                      {row.last_name} {row.first_name}
+                    </p>
+                    <p className="text-caption text-[var(--nx-text-muted)] truncate">
+                      {row.group_name ? formatGroupName(row.group_name) : 'Sin grupo'}
+                    </p>
+                  </div>
+
+                  {/* Acción de seguimiento para alertas (no docentes) */}
+                  {category === 'alert' && user?.role !== ROLES.DOCENTE && (
                     <button
-                      onClick={() => handleStartTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartTracking(row.student_id, `${row.last_name} ${row.first_name}`);
+                      }}
                       disabled={trackedStudents.has(row.student_id)}
-                      className="text-caption font-semibold text-[var(--nx-accent)] hover:underline"
+                      className="text-caption font-semibold text-[var(--nx-accent)] hover:underline shrink-0 disabled:opacity-60"
                     >
                       {trackedStudents.has(row.student_id) ? 'En seguimiento' : 'Seguir'}
                     </button>
-                  ) : null}
-                />
+                  )}
+
+                  {/* Botón Ver detalles */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openStudentProfile(row); }}
+                    className="flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline shrink-0"
+                  >
+                    Ver detalles <ChevronRight size={12} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
@@ -829,6 +920,51 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
           )}
         </div>
       </Drawer>
+
+      {profileStudent && (
+        <Drawer
+          title="Detalle del estudiante"
+          context={getCategoryStatusText(category)}
+          onClose={closeStudentProfile}
+          size="md"
+        >
+          <div className="p-6 space-y-6">
+            {/* Header */}
+            <div className="flex items-start gap-4">
+              <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--nx-surface-subtle)] flex items-center justify-center text-h3 font-semibold text-[var(--nx-text-muted)]">
+                {getInitials(profileStudent.first_name, profileStudent.last_name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-h2 text-[var(--nx-text)]">
+                  {profileStudent.last_name} {profileStudent.first_name}
+                </h2>
+                <p className="text-body text-[var(--nx-text-muted)]">
+                  {profileStudent.group_name ? formatGroupName(profileStudent.group_name) : 'Sin grupo'}
+                </p>
+                {/* Badge de estatus según categoría */}
+                <div className="mt-2">
+                  <Badge scheme={CATEGORY_SCHEMES[category]} dot>
+                    {getCategoryStatusText(category)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Información específica según categoría */}
+            <div className="space-y-3">
+              <div className="border-b border-[var(--nx-border)] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                  <p className="text-label text-[var(--nx-text)]">Información de la métrica</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {renderProfileFields(category, profileStudent)}
+              </div>
+            </div>
+          </div>
+        </Drawer>
+      )}
 
       <AnimatePresence>
         {successModal && (

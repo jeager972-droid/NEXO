@@ -13,6 +13,7 @@ import { ROLES } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer } from '../components/ui/Overlay';
@@ -484,7 +485,7 @@ const humanizeValue = (v) => {
 };
 
 const formatCellValue = (k, v) => {
-  if (v === null || v === undefined) return '—';
+  if (v === null || v === undefined || v === '') return '—';
   const lower = k.toLowerCase();
   if (lower === 'group_name' || lower === 'group' || lower === 'grupo') {
     return formatGroupName(String(v));
@@ -492,7 +493,26 @@ const formatCellValue = (k, v) => {
   if (lower.includes('date') || lower.includes('_at') || lower.includes('created') || lower.includes('entry') || lower.includes('timestamp') || lower.includes('_time') || lower === 'time') {
     return formatDateEs(v);
   }
-  if (lower === 'event_type' || lower === 'event_result' || lower === 'alert_type' || lower === 'status' || lower === 'risk_level') {
+  // Booleanos humanizados
+  if (v === true || v === 'true' || v === 't') return 'Sí';
+  if (v === false || v === 'false' || v === 'f') return 'No';
+  // Estado con Badge semántico
+  if (lower === 'status' || lower === 'delivery_status') {
+    const raw = String(v);
+    const scheme = raw === 'SENT' || raw === 'DELIVERED' || raw === 'READ' || raw === 'COMPLETED' || raw === 'ACTIVE'
+      ? 'success'
+      : raw === 'FAILED' || raw === 'EXPIRED' || raw === 'INACTIVE'
+        ? 'danger'
+        : 'neutral';
+    return <Badge scheme={scheme} dot>{humanizeValue(v)}</Badge>;
+  }
+  // Nivel de riesgo con Badge
+  if (lower === 'risk_level') {
+    const raw = String(v).toUpperCase();
+    const scheme = raw === 'CRITICAL' || raw === 'HIGH' ? 'danger' : raw === 'MEDIUM' ? 'warning' : 'success';
+    return <Badge scheme={scheme}>{humanizeValue(v)}</Badge>;
+  }
+  if (lower === 'event_type' || lower === 'event_result' || lower === 'alert_type') {
     return humanizeValue(v);
   }
   return String(v);
@@ -513,7 +533,7 @@ const sortRowsAlpha = (rows) => {
 const riskLevelMap = { CRITICAL: 'critico', MEDIUM: 'medio', LOW: 'bajo', HIGH: 'alto' };
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder, loading }) => {
-  const opts = options.map((o) => ({ value: o.id, label: o.name }));
+  const opts = options.map((o) => ({ value: o.value ?? o.id, label: o.label ?? o.name }));
   return (
     <GlobalSearchableSelect
       label={label}
@@ -552,8 +572,13 @@ const TeacherQueryPanel = ({
 }) => {
   const [students, setStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
   const rows = sortRowsAlpha(dynamicData);
   const visibleKeys = rows.length > 0 ? Object.keys(rows[0]).filter((k) => !EXCLUDE_COLS.includes(k)) : [];
+  const visibleRows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  useEffect(() => { setPage(0); }, [dynamicData]);
 
   useEffect(() => {
     if (!selectedGroup) { setStudents([]); setSelectedStudent(''); return; }
@@ -601,23 +626,40 @@ const TeacherQueryPanel = ({
         ) : rows.length === 0 ? (
           <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="No hay nada para mostrar." description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
-          <Surface className="overflow-x-auto p-5">
+          <div className="space-y-3">
             <ExportActions rows={rows} columns={visibleKeys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
-            <table className="w-full min-w-[500px]">
-              <thead>
-                <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                  {visibleKeys.map((k) => <th key={k} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)] whitespace-nowrap">{humanizeColumn(k)}</th>)}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--nx-border)]">
-                {rows.map((row, i) => (
-                  <tr key={i} className="hover:bg-[var(--nx-surface-subtle)]">
-                    {visibleKeys.map((k) => <td key={k} className="px-4 py-3 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[200px] truncate">{formatCellValue(k, row[k])}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Surface>
+            <Surface className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[500px]">
+                  <thead>
+                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                      {visibleKeys.map((k) => (
+                        <th key={k} className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide whitespace-nowrap first:pl-4">{humanizeColumn(k)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--nx-border)]">
+                    {visibleRows.map((row, i) => (
+                      <tr key={i} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
+                        {visibleKeys.map((k) => (
+                          <td key={k} className="px-3 py-2.5 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[240px] truncate first:pl-4">{formatCellValue(k, row[k])}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Surface>
+            {rows.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between text-caption text-[var(--nx-text-muted)]">
+                <span>Mostrando {visibleRows.length} de {rows.length}</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Anterior</Button>
+                  <Button size="sm" variant="secondary" disabled={page * PAGE_SIZE + PAGE_SIZE >= rows.length} onClick={() => setPage((p) => p + 1)}>Siguiente</Button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -722,53 +764,61 @@ export const ConsultationDrawer = ({
               ) : !hasQueried ? (
                 <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="No hay nada para mostrar." description="Selecciona un grupo y un rango de fechas, luego presiona Consultar." />
               ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
-              <Surface className="overflow-x-auto p-5">
+              <div className="space-y-3">
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
-                <table className="w-full min-w-[440px]">
-                  <thead>
-                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                      {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map((h) => <th key={h} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--nx-border)]">
-                    {[...riskStudents].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => (
-                      <tr key={s.student_id} className="hover:bg-[var(--nx-surface-subtle)]">
-                        <td className="px-4 py-3 text-body text-[var(--nx-text)]">{s.last_name} {s.first_name}</td>
-                        <td className="px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">{s.group_name}</td>
-                        <td className="px-4 py-3 text-body font-mono" style={{ color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>{s.risk_score}</td>
-                        <td className="px-4 py-3"><RiskBadge level={riskLevelMap[s.risk_level] || 'bajo'} /></td>
-                        <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Surface>
+                <Surface className="overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[440px]">
+                      <thead>
+                        <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                          {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map((h) => <th key={h} className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide whitespace-nowrap first:pl-4">{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--nx-border)]">
+                        {[...riskStudents].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => (
+                          <tr key={s.student_id} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
+                            <td className="px-3 py-2.5 text-body text-[var(--nx-text)] first:pl-4">{s.last_name} {s.first_name}</td>
+                            <td className="px-3 py-2.5 text-body-sm text-[var(--nx-text-muted)]">{s.group_name}</td>
+                            <td className="px-3 py-2.5 text-body font-mono" style={{ color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>{s.risk_score}</td>
+                            <td className="px-3 py-2.5"><RiskBadge level={riskLevelMap[s.risk_level] || 'bajo'} /></td>
+                            <td className="px-3 py-2.5 text-right">
+                              <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Surface>
+              </div>
             ) : dynamicData.length > 0 ? (
-              <Surface className="overflow-x-auto p-5">
+              <div className="space-y-3">
                 <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
-                <table className="w-full min-w-[500px]">
-                  <thead>
-                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                      {keys.map((k) => <th key={k} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)] whitespace-nowrap">{humanizeColumn(k)}</th>)}
-                      {DETAIL_MODULES.includes(item) && <th className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">Acción</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--nx-border)]">
-                    {sortRowsAlpha(dynamicData).map((row, i) => (
-                      <tr key={i} className="hover:bg-[var(--nx-surface-subtle)]">
-                        {keys.map((k) => <td key={k} className="px-4 py-3 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[200px] truncate">{formatCellValue(k, row[k])}</td>)}
-                        {DETAIL_MODULES.includes(item) && row.student_id && (
-                          <td className="px-4 py-3">
-                            <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver detalles</Button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Surface>
+                <Surface className="overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[500px]">
+                      <thead>
+                        <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                          {keys.map((k) => <th key={k} className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide whitespace-nowrap first:pl-4">{humanizeColumn(k)}</th>)}
+                          {DETAIL_MODULES.includes(item) && <th className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide first:pl-4">Acción</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--nx-border)]">
+                        {sortRowsAlpha(dynamicData).map((row, i) => (
+                          <tr key={i} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
+                            {keys.map((k) => <td key={k} className="px-3 py-2.5 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[240px] truncate first:pl-4">{formatCellValue(k, row[k])}</td>)}
+                            {DETAIL_MODULES.includes(item) && row.student_id && (
+                              <td className="px-3 py-2.5 first:pl-4">
+                                <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver detalles</Button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Surface>
+              </div>
             ) : (
               <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="No hay nada para mostrar." description="No se encontraron registros para este módulo." />
             )}
@@ -781,53 +831,61 @@ export const ConsultationDrawer = ({
             ) : loadingData ? (
               <SkeletonRows count={4} />
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
-              <Surface className="overflow-x-auto p-5">
+              <div className="space-y-3">
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
-                <table className="w-full min-w-[440px]">
-                  <thead>
-                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                      {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map((h) => <th key={h} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--nx-border)]">
-                    {[...riskStudents].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => (
-                      <tr key={s.student_id} className="hover:bg-[var(--nx-surface-subtle)]">
-                        <td className="px-4 py-3 text-body text-[var(--nx-text)]">{s.last_name} {s.first_name}</td>
-                        <td className="px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">{s.group_name}</td>
-                        <td className="px-4 py-3 text-body font-mono" style={{ color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>{s.risk_score}</td>
-                        <td className="px-4 py-3"><RiskBadge level={riskLevelMap[s.risk_level] || 'bajo'} /></td>
-                        <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Surface>
+                <Surface className="overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[440px]">
+                      <thead>
+                        <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                          {['Estudiante', 'Grupo', 'Score', 'Nivel', 'Acción'].map((h) => <th key={h} className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide whitespace-nowrap first:pl-4">{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--nx-border)]">
+                        {[...riskStudents].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => (
+                          <tr key={s.student_id} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
+                            <td className="px-3 py-2.5 text-body text-[var(--nx-text)] first:pl-4">{s.last_name} {s.first_name}</td>
+                            <td className="px-3 py-2.5 text-body-sm text-[var(--nx-text-muted)]">{s.group_name}</td>
+                            <td className="px-3 py-2.5 text-body font-mono" style={{ color: s.risk_score >= 85 ? 'var(--nx-danger)' : 'var(--nx-warning)' }}>{s.risk_score}</td>
+                            <td className="px-3 py-2.5"><RiskBadge level={riskLevelMap[s.risk_level] || 'bajo'} /></td>
+                            <td className="px-3 py-2.5 text-right">
+                              <Button size="sm" variant="quiet" onClick={() => openTracking(s.student_id, `${s.last_name} ${s.first_name}`, null, { risk_score: s.risk_score, absence_count: s.absence_count, late_count: s.late_count })}>Seguimiento</Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Surface>
+              </div>
             ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
-              <Surface className="overflow-x-auto p-5">
+              <div className="space-y-3">
                 <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
-                <table className="w-full min-w-[500px]">
-                  <thead>
-                    <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                      {keys.map((k) => <th key={k} className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">{humanizeColumn(k)}</th>)}
-                      {DETAIL_MODULES.includes(item) && user?.role !== ROLES.DOCENTE && <th className="px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)]">Acción</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--nx-border)]">
-                    {sortRowsAlpha(dynamicData).map((row, i) => (
-                      <tr key={i} className="hover:bg-[var(--nx-surface-subtle)]">
-                        {keys.map((k) => <td key={k} className="px-4 py-3 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[200px] truncate">{formatCellValue(k, row[k])}</td>)}
-                        {DETAIL_MODULES.includes(item) && user?.role !== ROLES.DOCENTE && row.student_id && (
-                          <td className="px-4 py-3">
-                            <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver detalles</Button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Surface>
+                <Surface className="overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[500px]">
+                      <thead>
+                        <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                          {keys.map((k) => <th key={k} className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide whitespace-nowrap first:pl-4">{humanizeColumn(k)}</th>)}
+                          {DETAIL_MODULES.includes(item) && user?.role !== ROLES.DOCENTE && <th className="px-3 py-2 text-caption font-semibold text-[var(--nx-text-muted)] uppercase tracking-wide first:pl-4">Acción</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--nx-border)]">
+                        {sortRowsAlpha(dynamicData).map((row, i) => (
+                          <tr key={i} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
+                            {keys.map((k) => <td key={k} className="px-3 py-2.5 text-body-sm text-[var(--nx-text)] whitespace-nowrap max-w-[240px] truncate first:pl-4">{formatCellValue(k, row[k])}</td>)}
+                            {DETAIL_MODULES.includes(item) && user?.role !== ROLES.DOCENTE && row.student_id && (
+                              <td className="px-3 py-2.5 first:pl-4">
+                                <Button size="sm" variant="quiet" onClick={() => openTracking(row.student_id, `${row.last_name} ${row.first_name}`, row.tracking_id, row.metadata_json)}>Ver detalles</Button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Surface>
+              </div>
             ) : (
               <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="No hay nada para mostrar." description="No se encontraron registros para este módulo." />
             )}

@@ -150,7 +150,7 @@
 
   --nx-border-accent:  oklch(42% 0.040 245);
   --nx-border-success: oklch(42% 0.040 155);
-  --nx-border-warning: oklch(45% 0.040 70);
+  --nx-border-warning: oklch(50% 0.080 70);
   --nx-border-danger:  oklch(42% 0.050 25);
 
   /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
