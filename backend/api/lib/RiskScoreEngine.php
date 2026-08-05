@@ -112,17 +112,25 @@ class RiskScoreEngine
         int $windowDays = self::DEFAULT_WINDOW_DAYS
     ): array {
         // 1. Obtener conteos crudos de la DB (pura persistencia, sin lógica)
+        // Late y absence se cuentan desde attendance_incidents (donde el worker
+        // los inserta). total_events desde biometric_events (todos los ingresos).
         $stmt = $conn->prepare("
             SELECT
-                COUNT(*) FILTER (WHERE event_type LIKE 'INGRESO_TARDE%') AS late_count,
-                COUNT(*) FILTER (WHERE event_type LIKE 'INASISTENCIA%')  AS absence_count,
-                COUNT(*)                                                  AS total_events
-            FROM biometric_events
-            WHERE student_id = ?
-              AND school_id  = ?
-              AND event_timestamp >= NOW() - (? || ' days')::INTERVAL
+                (SELECT COUNT(*) FROM attendance_incidents
+                 WHERE student_id = ? AND school_id = ?
+                   AND incident_type = 'LATE_ARRIVAL'
+                   AND detected_at >= NOW() - (? || ' days')::INTERVAL) AS late_count,
+                (SELECT COUNT(*) FROM attendance_incidents
+                 WHERE student_id = ? AND school_id = ?
+                   AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
+                   AND detected_at >= NOW() - (? || ' days')::INTERVAL) AS absence_count,
+                (SELECT COUNT(*) FROM biometric_events
+                 WHERE student_id = ? AND school_id = ?
+                   AND event_timestamp >= NOW() - (? || ' days')::INTERVAL) AS total_events
         ");
-        $stmt->execute([$studentId, $schoolId, $windowDays]);
+        $stmt->execute([$studentId, $schoolId, $windowDays,
+                        $studentId, $schoolId, $windowDays,
+                        $studentId, $schoolId, $windowDays]);
         $counts = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $lateCount    = (int)($counts['late_count']    ?? 0);

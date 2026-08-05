@@ -156,23 +156,46 @@ function processJob(array $job, PDO $conn): bool {
                 $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
 
-                // Si el evento es INGRESO_TARDE o INGRESO_MADRUGADA, registrar
-                // también un attendance_incident de tipo LATE_ARRIVAL para que
-                // el dashboard lo cuente como métrica de llegada tarde.
-                if ($inserted && (strpos($evt, 'INGRESO_TARDE') === 0 || strpos($evt, 'INGRESO_MADRUGADA') === 0)) {
-                    $lateStmt = $conn->prepare(
-                        "INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
-                         SELECT uuid_generate_v4(), school_id, student_id, 'LATE_ARRIVAL', to_timestamp(?)
-                         FROM students WHERE document_number = ? AND school_id = ?
-                         AND NOT EXISTS (
-                             SELECT 1 FROM attendance_incidents
-                             WHERE student_id = students.student_id
-                               AND school_id = ?
-                               AND (detected_at)::date = (to_timestamp(?))::date
-                               AND incident_type = 'LATE_ARRIVAL'
-                         )"
-                    );
-                    $lateStmt->execute([$capturedAt, $doc, $instId, $instId, $capturedAt]);
+                // Si el evento NO es INGRESO_PUNTUAL, evaluar si es llegada tarde.
+                // Reglas:
+                //   INGRESO_MANANA (7:01-11:00) → LATE_ARRIVAL (siempre, 7:01+ es tarde para mañana)
+                //   INGRESO_MADRUGADA (<6:40) → LATE_ARRIVAL (siempre, muy temprano)
+                //   INGRESO_TARDE (11:30-16:00) → LATE_ARRIVAL solo si el estudiante es
+                //     de jornada mañana/completa (llegó en la tarde cuando debía en la mañana)
+                //   INGRESO_PUNTUAL → no es tarde
+                //   INGRESO_EXTRAORDINARIO → no se clasifica como tarde
+                if ($inserted && $evt !== 'INGRESO_PUNTUAL' && $evt !== 'INGRESO_EXTRAORDINARIO') {
+                    $isLate = false;
+                    if (strpos($evt, 'INGRESO_MANANA') === 0 || strpos($evt, 'INGRESO_MADRUGADA') === 0) {
+                        $isLate = true;
+                    } elseif (strpos($evt, 'INGRESO_TARDE') === 0) {
+                        // Consultar work_shift del estudiante
+                        $shiftStmt = $conn->prepare(
+                            "SELECT work_shift FROM students WHERE document_number = ? AND school_id = ? LIMIT 1"
+                        );
+                        $shiftStmt->execute([$doc, $instId]);
+                        $workShift = $shiftStmt->fetchColumn();
+                        // Si es de jornada mañana o completa, llegar en la tarde es tarde
+                        if ($workShift === 'mañana' || $workShift === 'completa') {
+                            $isLate = true;
+                        }
+                    }
+
+                    if ($isLate) {
+                        $lateStmt = $conn->prepare(
+                            "INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
+                             SELECT uuid_generate_v4(), school_id, student_id, 'LATE_ARRIVAL', to_timestamp(?)
+                             FROM students WHERE document_number = ? AND school_id = ?
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM attendance_incidents
+                                 WHERE student_id = students.student_id
+                                   AND school_id = ?
+                                   AND (detected_at)::date = (to_timestamp(?))::date
+                                   AND incident_type = 'LATE_ARRIVAL'
+                             )"
+                        );
+                        $lateStmt->execute([$capturedAt, $doc, $instId, $instId, $capturedAt]);
+                    }
                 }
 
                 $conn->exec("COMMIT");
