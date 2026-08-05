@@ -22,4 +22,8 @@ export const schoolApi = {
     const response = await client.post('/school/time-blocks', { time_blocks: timeBlocks });
     return response.data;
   },
+  getTimeBlocks: async () => {
+    const response = await client.get('/school/time-blocks');
+    return response.data;
+  },
 };

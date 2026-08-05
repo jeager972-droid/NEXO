@@ -888,3 +888,134 @@ Las siguientes tablas están particionadas por rango (RANGE) en una columna de t
 
 7. **Configuración de qué tipos de eventos aparecen en novedades**: hacer configurable
    qué `command_type` aparecen en el event feed, en lugar de hardcodear la lista.
+
+---
+
+## 33. Notificación de Llegada Tarde al Docente (Iteración 3)
+
+### Flujo
+1. El sensor biométrico detecta un `INGRESO_MANANA`, `INGRESO_MADRUGADA` o `INGRESO_TARDE`
+   (para estudiantes de jornada mañana/completa).
+2. `worker_biometric.php` inserta el incidente `LATE_ARRIVAL` en `attendance_incidents`.
+3. Inmediatamente después, busca el/los docente(s) del grupo del estudiante para el día
+   actual (`EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))`).
+4. Inserta una notificación `ALERT` para cada docente con `metadata_json`:
+   ```json
+   {
+     "action": "late_arrival",
+     "student_id": "uuid",
+     "student_name": "Juan Pérez",
+     "incident_id": "uuid",
+     "actions": [
+       {"id": "justify", "label": "Justificar", "style": "success"},
+       {"id": "no_justify", "label": "No justificar", "style": "danger"}
+     ]
+   }
+   ```
+
+### Acción del docente
+- El docente ve la notificación con 2 botones: **Justificar** (verde) y **No justificar** (rojo).
+- **Justificar**: `POST /notifications/{id}/action` con `{action: 'justify'}`:
+  - Elimina el incidente `LATE_ARRIVAL` de `attendance_incidents`.
+  - Elimina la notificación.
+  - No se genera registro de llegada tarde.
+- **No justificar**: `POST /notifications/{id}/action` con `{action: 'no_justify'}`:
+  - Solo elimina la notificación.
+  - El registro de `LATE_ARRIVAL` se mantiene.
+
+### Endpoint
+- `POST /notifications/{id}/action` — procesa la acción de la notificación.
+  Valida que la notificación pertenezca al usuario autenticado.
+
+---
+
+## 34. Comando: Fusionar Bloque de Clases (Iteración 3)
+
+### Quién puede ejecutarlo
+- Solo **DOCENTE**.
+
+### Qué hace
+- Le indica al sistema que el grupo tiene otra hora de clase en el mismo salón
+  inmediatamente después del bloque actual.
+- La lógica del sensor debe esperar recibir lecturas de huella cada vez que pase
+  un bloque de clase.
+- El sistema **no alerta** que los estudiantes no entraron a la siguiente clase
+  (porque están en el mismo salón).
+
+### Dónde se guarda
+- `daily_schedule_config` con `metadata_json`:
+  ```json
+  {"action": "fusionar_bloque", "reason": "...", "merged": true}
+  ```
+- UPSERT en `daily_schedule_config` para el grupo y fecha de hoy.
+
+### Operación
+- `POST /operations/fusionar_bloque` con `group_name` y `reason`.
+
+---
+
+## 35. Comando: Extender Bloque (Iteración 3)
+
+### Quién puede ejecutarlo
+- **COORDINADOR** y **RECTOR**.
+
+### Qué hace
+- Permite cambiar la hora de fin del bloque actual para **toda la jornada** ese día.
+- Ej: si una hora acaba a las 4:10 pero el coordinador pone 4:50, el sistema
+  entiende que el bloque se extiende hasta 4:50.
+- **Solo aplica para ese día** (no modifica la configuración permanente).
+
+### Dónde se guarda
+- `daily_schedule_config.expected_exit_time` para todos los grupos de la escuela
+  en la fecha de hoy.
+- Si ya existen configs para hoy: `UPDATE expected_exit_time`.
+- Si no existen: `INSERT` para todos los grupos activos con estudiantes.
+
+### Operación
+- `POST /operations/extender_bloque` con `time` (formato HH:MM).
+
+---
+
+## 36. Mejoras de UI/UX (Iteración 3)
+
+### Detalle de métricas (TeacherDetailDrawer)
+- **Antes**: tabla HTML genérica con scroll horizontal.
+- **Ahora**: lista de `SituationLine` (firma visual de NEXO) con:
+  - Icono semántico por categoría (CheckCircle2, UserMinus, Clock, AlertTriangle, FileText).
+  - Scheme de color por categoría (success, warning, danger, accent).
+  - Barra lateral de 3px según categoría.
+  - Botón de seguimiento integrado para alertas.
+  - Sin scroll horizontal, responsive natural.
+  - Drawer size `md` (560px) en lugar de `lg` (720px).
+
+### Notificaciones
+- Botón "Ver detalles" alineado con el texto "NEXO · {hora}" (marginLeft: 56px).
+- Botones de acción (Justificar/No justificar) renderizados cuando
+  `metadata_json.actions` existe.
+
+### Casos activos (Seguimiento)
+- Grid de casos activos con fondo ámbar sutil (`--nx-surface-warning`/30).
+- Bordes ámbar (`--nx-border-warning`) en el contenedor y las Cards.
+
+### Perfil > Configuración de horarios
+- Vista previa siempre visible durante la edición (no se oculta).
+- Jornadas con `rotates_classrooms=true` son clickeables.
+- Al hacer click, se expande un panel con los bloques horarios
+  (`school_time_blocks`) de esa jornada.
+- No se muestra el onboarding completo al editar.
+
+---
+
+## 37. Fix: Duplicación en Dashboard (Iteración 3)
+
+### Problema
+- El dashboard mostraba 7,880 estudiantes inasistentes en lugar de ~50.
+- Causa: JOIN cartesiano con `schedules` (un grupo tiene N schedules por
+  materia/día/bloque) + `COUNT(*)` en lugar de `COUNT(DISTINCT student_id)`.
+- Permisos mostraba 2 cuando solo había 1 (mismo problema).
+
+### Solución
+- Cambiar `COUNT(*)` por `COUNT(DISTINCT student_id)` en todos los CTEs
+  (absent, alerts, perm, late) tanto en la rama docente como global.
+- Agregar `DISTINCT` en los subqueries de `student_id IN (...)` que hacen
+  JOIN con `schedules`.

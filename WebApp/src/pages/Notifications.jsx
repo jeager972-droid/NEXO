@@ -4,7 +4,7 @@
  * Moodboard: mensajes llegados de NEXO — formato chat unificado para todos los roles.
  */
 import { useState, useEffect } from 'react';
-import { Trash2, ChevronRight } from 'lucide-react';
+import { Trash2, ChevronRight, Loader2 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
@@ -82,6 +82,8 @@ const humanizeMessage = (notif) => {
       return `El acudiente${withGroup(student ? ` de ${student}` : '')} pidió reagendar la citación${motive ? `: "${motive}"` : ''}.`;
     case 'salida_no_autorizada':
       return `Se marcó como error la salida autorizada${withGroup(student ? ` de ${student}` : '')}. Verificar de inmediato.`;
+    case 'late_arrival':
+      return `El estudiante ${student || 'un estudiante'} llegó tarde a clase.`;
     default:
       if (message) return message.replace(/\.\s*Ver detalles\.?$/i, '').trim();
       return notif.title || 'Novedad institucional';
@@ -93,7 +95,26 @@ const ACTIONS_WITH_DETAILS = [
   'solicitud', 'incidente', 'citacion_confirmada', 'reagendar_motivo', 'salida_no_autorizada',
 ];
 
-const NotifItem = ({ notif, hasDetails, onClick }) => {
+const NotifItem = ({ notif, hasDetails, onClick, onAction }) => {
+  const meta = parseMeta(notif.metadata_json);
+  const actions = meta?.actions;
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleAction = async (e, actionId) => {
+    e.stopPropagation();
+    const notifId = notif.id ?? notif.notification_id;
+    if (!notifId) return;
+    setActionLoading(true);
+    try {
+      await notificationsApi.executeAction(notifId, actionId);
+      if (onAction) onAction();
+    } catch (err) {
+      console.error('Error al procesar acción de notificación:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const content = (
     <NexoChatBubble
       message={humanizeMessage(notif)}
@@ -113,10 +134,31 @@ const NotifItem = ({ notif, hasDetails, onClick }) => {
       {hasDetails && (
         <button
           onClick={(e) => { e.stopPropagation(); onClick(); }}
-          className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
+          className="mt-2 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
+          style={{ marginLeft: '56px' }}
         >
           Ver detalles <ChevronRight size={12} />
         </button>
+      )}
+      {actions && Array.isArray(actions) && actions.length > 0 && (
+        <div className="mt-3 flex items-center gap-2">
+          {actions.map((act) => {
+            const styleClasses = act.style === 'success'
+              ? 'bg-[var(--nx-surface-success)] text-[color-mix(in_oklch,var(--nx-success)_80%,var(--nx-text))] border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_15%,var(--nx-surface-success))]'
+              : 'bg-[var(--nx-surface-danger)] text-[color-mix(in_oklch,var(--nx-danger)_80%,var(--nx-text))] border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_15%,var(--nx-surface-danger))]';
+            return (
+              <button
+                key={act.id}
+                onClick={(e) => handleAction(e, act.id)}
+                disabled={actionLoading}
+                className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption font-semibold transition-all disabled:opacity-45 ${styleClasses}`}
+              >
+                {actionLoading && <Loader2 size={12} className="animate-spin" />}
+                {act.label}
+              </button>
+            );
+          })}
+        </div>
       )}
     </Surface>
   );
@@ -164,6 +206,18 @@ const Notifications = () => {
 
   const markRead = (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id || n.notification_id === id ? { ...n, read: true } : n)));
+  };
+
+  const refreshNotifications = async () => {
+    try {
+      const data = await notificationsApi.getAll();
+      const arr = Array.isArray(data) ? data : [];
+      setNotifications(arr);
+      sessionStorage.setItem(LAST_COUNT_KEY, String(arr.length));
+      emitCount(0);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const getDetailMessage = (notif, meta) => {
@@ -221,6 +275,7 @@ const Notifications = () => {
                 notif={notif}
                 hasDetails={hasDetails}
                 onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
+                onAction={refreshNotifications}
               />
             );
           })}

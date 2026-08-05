@@ -289,6 +289,61 @@ function processJob(array $job, PDO $conn): bool {
                              )"
                         );
                         $lateStmt->execute([$capturedAt, $doc, $instId, $instId, $capturedAt]);
+
+                        // ───────────────────────────────────────────────────────
+                        // Notificar al docente del grupo del estudiante sobre la
+                        // llegada tarde, con botones Justificar / No Justificar.
+                        // ───────────────────────────────────────────────────────
+                        $incidentId = $conn->query("SELECT incident_id FROM attendance_incidents WHERE student_id = (SELECT student_id FROM students WHERE document_number = " . $conn->quote($doc) . " AND school_id = " . $conn->quote((string)$instId) . ") AND school_id = " . $conn->quote((string)$instId) . " AND incident_type = 'LATE_ARRIVAL' AND (detected_at)::date = (to_timestamp({$capturedAt}))::date ORDER BY detected_at DESC LIMIT 1")->fetchColumn();
+
+                        $studentNameStmt = $conn->prepare("SELECT first_name, last_name, student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
+                        $studentNameStmt->execute([$doc, $instId]);
+                        $studentRow = $studentNameStmt->fetch(PDO::FETCH_ASSOC);
+                        $studentFullName = trim(($studentRow['first_name'] ?? '') . ' ' . ($studentRow['last_name'] ?? ''));
+                        $studentIdForNotif = $studentRow['student_id'] ?? null;
+
+                        if ($studentIdForNotif && $incidentId) {
+                            $teacherStmt = $conn->prepare(
+                                "SELECT sch.teacher_user_id FROM schedules sch
+                                 JOIN student_group_assignments sga ON sga.group_id = sch.group_id AND sga.active = TRUE
+                                 JOIN academic_groups ag ON ag.group_id = sga.group_id
+                                 WHERE sga.student_id = ?
+                                   AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))
+                                   AND sch.school_id = ?"
+                            );
+                            $teacherStmt->execute([$studentIdForNotif, $instId]);
+                            $teacherIds = $teacherStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                            if (!empty($teacherIds)) {
+                                $notifMeta = json_encode([
+                                    'action' => 'late_arrival',
+                                    'student_id' => $studentIdForNotif,
+                                    'student_name' => $studentFullName,
+                                    'incident_id' => $incidentId,
+                                    'actions' => [
+                                        ['id' => 'justify', 'label' => 'Justificar', 'style' => 'success'],
+                                        ['id' => 'no_justify', 'label' => 'No justificar', 'style' => 'danger'],
+                                    ],
+                                ], JSON_UNESCAPED_UNICODE);
+
+                                $notifStmt = $conn->prepare(
+                                    "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json)
+                                     VALUES (?, ?, 'Llegada tarde detectada', ?, 'ALERT', ?::jsonb)"
+                                );
+                                foreach (array_unique($teacherIds) as $teacherUserId) {
+                                    try {
+                                        $notifStmt->execute([
+                                            $instId,
+                                            $teacherUserId,
+                                            "El estudiante {$studentFullName} llegó tarde a clase",
+                                            $notifMeta,
+                                        ]);
+                                    } catch (Exception $ne) {
+                                        logW('NOTIF_LATE_ARRIVAL_INSERT_FAIL', $ne->getMessage());
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

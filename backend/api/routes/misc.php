@@ -268,6 +268,59 @@ if ($cleanPath === '/notifications/clear' && $method === 'POST') {
     exit;
 }
 
+// POST /notifications/{id}/action — Procesar acción sobre una notificación (justify/no_justify).
+if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $notifMatches) && $method === 'POST') {
+    $authUser = requireAuth();
+    $notificationId = $notifMatches[1];
+    $action = trim((string)($input['action'] ?? ''));
+
+    if (!in_array($action, ['justify', 'no_justify'], true)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'Acción no válida. Use justify o no_justify.']);
+        exit;
+    }
+
+    try {
+        // Obtener la notificación y su metadata
+        $stmt = $conn->prepare("
+            SELECT notification_id, user_id, metadata_json
+            FROM notifications
+            WHERE notification_id = ? AND user_id = ?
+        ");
+        $stmt->execute([$notificationId, $authUser['id']]);
+        $notif = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$notif) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Notificación no encontrada']);
+            exit;
+        }
+
+        $meta = json_decode($notif['metadata_json'] ?? '{}', true);
+        $incidentId = $meta['incident_id'] ?? null;
+
+        if ($action === 'justify' && $incidentId) {
+            // Eliminar el incidente de llegada tarde (justificado)
+            $delIncident = $conn->prepare(
+                "DELETE FROM attendance_incidents WHERE incident_id = ?::uuid AND incident_type = 'LATE_ARRIVAL'"
+            );
+            $delIncident->execute([$incidentId]);
+        }
+
+        // En ambos casos (justify y no_justify), eliminar la notificación
+        $delNotif = $conn->prepare("DELETE FROM notifications WHERE notification_id = ? AND user_id = ?");
+        $delNotif->execute([$notificationId, $authUser['id']]);
+
+        securityLog('NOTIFICATION_ACTION', "User:{$authUser['id']} Action:$action Notif:$notificationId");
+        echo json_encode(['status' => 'ok', 'message' => 'Acción procesada correctamente']);
+    } catch (Throwable $e) {
+        securityLog('NOTIFICATION_ACTION_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al procesar la acción']);
+    }
+    exit;
+}
+
 // GET /consultation/search — Búsqueda de estudiantes por nombre o documento.
 if ($cleanPath === '/consultation/search') {
     $authUser = requireAuth();

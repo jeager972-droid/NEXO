@@ -129,9 +129,9 @@ export default function Casos() {
           />
         </Surface>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--nx-surface-warning)]/30 p-4 rounded-surface border border-[var(--nx-border-warning)]">
           {filtered.map((row) => (
-            <Card key={row.tracking_id || row.student_id} asAction tone="warning" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
+            <Card key={row.tracking_id || row.student_id} asAction tone="warning" className="border-[var(--nx-border-warning)]" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>

@@ -9,7 +9,8 @@ import { useAuth } from '../hooks/useAuth';
 import {
   AlertOctagon, ShieldCheck, ShieldAlert,
   Clock, Bus, Calendar, Wrench, Send, UserCheck,
-  ChevronRight, Loader2, FileText, Siren
+  ChevronRight, Loader2, FileText, Siren,
+  GitMerge, Maximize2
 } from 'lucide-react';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
@@ -41,6 +42,8 @@ const COMMANDS_CATALOG = [
   { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
   { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'success' },
   { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
+  { id: 'fusionar_bloque', title: 'Fusionar bloque', icon: GitMerge,   roles: [ROLES.DOCENTE], fields: ['grade', 'group', 'reason'], tone: 'accent' },
+  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['time'], tone: 'warning' },
 ];
 
 const CMD_TONE_STYLES = {
@@ -267,6 +270,8 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         case 'pedagogica':  result = await operationsApi.execute('pedagogica', payload, '/operations/pedagogica'); break;
         case 'horario':     result = await operationsApi.execute('horario', payload, '/operations/horario'); break;
         case 'incidente':   result = await operationsApi.execute('incidente', payload, '/operations/incidente'); break;
+        case 'fusionar_bloque': result = await operationsApi.execute('fusionar_bloque', payload, '/operations/fusionar_bloque'); break;
+        case 'extender_bloque': result = await operationsApi.execute('extender_bloque', payload, '/operations/extender_bloque'); break;
         default: throw new Error('Comando no soportado');
       }
 

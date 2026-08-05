@@ -249,6 +249,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         '/operations/horario' => 'horario',
         '/operations/incidente' => 'incidente',
         '/operations/seguimiento' => 'seguimiento',
+        '/operations/fusionar_bloque' => 'fusionar_bloque',
+        '/operations/extender_bloque' => 'extender_bloque',
     ];
     if (isset($pathMap[$cleanPath])) {
         $action = $pathMap[$cleanPath];
@@ -942,6 +944,130 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 echo json_encode([
                     'status'  => 'ok',
                     'message' => 'Solicitud de seguimiento enviada a psicorientación',
+                ]);
+                break;
+
+            case 'fusionar_bloque':
+                $groupName = trim((string)($params['group'] ?? $params['group_name'] ?? ''));
+                $reason = trim((string)($params['reason'] ?? 'Fusión de bloque de clases'));
+
+                if ($groupName === '') {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => 'El grupo es obligatorio para fusionar bloque']));
+                }
+
+                // Buscar group_id por nombre
+                $grpStmt = $conn->prepare("SELECT group_id FROM academic_groups WHERE group_name = ? AND school_id = ? LIMIT 1");
+                $grpStmt->execute([$groupName, $schoolId]);
+                $groupId = $grpStmt->fetchColumn();
+
+                if (!$groupId) {
+                    http_response_code(404);
+                    exit(json_encode(['status' => 'error', 'message' => 'Grupo no encontrado']));
+                }
+
+                // Obtener horario esperado del grupo para hoy (schedules)
+                $schedStmt = $conn->prepare("
+                    SELECT MIN(start_time) AS entry_time, MAX(end_time) AS exit_time
+                    FROM schedules
+                    WHERE group_id = ? AND school_id = ?
+                      AND day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))
+                ");
+                $schedStmt->execute([$groupId, $schoolId]);
+                $schedRow = $schedStmt->fetch(PDO::FETCH_ASSOC);
+                $expectedEntry = $schedRow['entry_time'] ?? null;
+                $expectedExit = $schedRow['exit_time'] ?? null;
+
+                // UPSERT en daily_schedule_config: marcar como fusionado
+                $dscStmt = $conn->prepare("
+                    INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
+                    VALUES (?, ?, (NOW() AT TIME ZONE 'America/Bogota')::date, TRUE, ?, ?, ?)
+                    ON CONFLICT (school_id, group_id, config_date)
+                    DO UPDATE SET has_classes = TRUE, expected_entry_time = EXCLUDED.expected_entry_time, expected_exit_time = EXCLUDED.expected_exit_time
+                ");
+                $dscStmt->execute([$schoolId, $groupId, $expectedEntry, $expectedExit, $authUser['id']]);
+
+                // Obtener nombre del estudiante si se proporcionó
+                $studentNameForLog = '';
+                $studentIdForLog = $params['student'] ?? $params['student_id'] ?? null;
+                if ($studentIdForLog) {
+                    $snStmt = $conn->prepare("SELECT first_name, last_name FROM students WHERE student_id = ? AND school_id = ? LIMIT 1");
+                    $snStmt->execute([$studentIdForLog, $schoolId]);
+                    $snRow = $snStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($snRow) {
+                        $studentNameForLog = trim($snRow['first_name'] . ' ' . $snRow['last_name']);
+                    }
+                }
+
+                logUserCommand($conn, $schoolId, $userId, $action, array_merge($params, [
+                    'metadata_json' => json_encode([
+                        'action' => 'fusionar_bloque',
+                        'reason' => $reason,
+                        'merged' => true,
+                        'student_name' => $studentNameForLog,
+                    ], JSON_UNESCAPED_UNICODE),
+                ]));
+                securityLog('OPERATION_EXECUTED', "User:$userId Role:$role Action:$action Group:$groupName");
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => 'Bloque de clases fusionado correctamente',
+                    'data' => [
+                        'action' => $action,
+                        'group' => $groupName,
+                        'merged' => true,
+                    ],
+                ]);
+                break;
+
+            case 'extender_bloque':
+                $newExitTime = trim((string)($params['time'] ?? ''));
+                if ($newExitTime === '') {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => 'La nueva hora de fin es obligatoria']));
+                }
+
+                $todayDate = "(NOW() AT TIME ZONE 'America/Bogota')::date";
+
+                // Verificar si ya existen configuraciones para hoy
+                $checkStmt = $conn->prepare("
+                    SELECT COUNT(*) FROM daily_schedule_config
+                    WHERE school_id = ? AND config_date = {$todayDate}
+                ");
+                $checkStmt->execute([$schoolId]);
+                $existingCount = (int)$checkStmt->fetchColumn();
+
+                if ($existingCount > 0) {
+                    // UPDATE existing configs for today
+                    $updStmt = $conn->prepare("
+                        UPDATE daily_schedule_config
+                        SET expected_exit_time = ?::time
+                        WHERE school_id = ? AND config_date = {$todayDate}
+                    ");
+                    $updStmt->execute([$newExitTime, $schoolId]);
+                } else {
+                    // INSERT para todos los grupos activos de la institución
+                    $insStmt = $conn->prepare("
+                        INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
+                        SELECT ?, ag.group_id, {$todayDate}, TRUE, NULL, ?::time, ?
+                        FROM academic_groups ag
+                        WHERE ag.school_id = ?
+                          AND EXISTS (
+                              SELECT 1 FROM student_group_assignments sga
+                              WHERE sga.group_id = ag.group_id AND sga.active = TRUE
+                          )
+                    ");
+                    $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $schoolId]);
+                }
+
+                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                securityLog('OPERATION_EXECUTED', "User:$userId Role:$role Action:$action NewExitTime:$newExitTime");
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => 'Bloque extendido correctamente',
+                    'data' => [
+                        'action' => $action,
+                        'new_exit_time' => $newExitTime,
+                    ],
                 ]);
                 break;
 

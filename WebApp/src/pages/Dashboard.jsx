@@ -669,6 +669,33 @@ function humanizeDetailVal(v) {
   return ENUM_ES_D[s] || ENUM_ES_D[s.toUpperCase()] || s;
 }
 
+const CATEGORY_ICONS = {
+  present: <CheckCircle2 size={18} />,
+  absent: <UserMinus size={18} />,
+  late: <Clock size={18} />,
+  alert: <AlertTriangle size={18} />,
+  permiso: <FileText size={18} />,
+};
+const CATEGORY_SCHEMES = {
+  present: 'success',
+  absent: 'warning',
+  late: 'warning',
+  alert: 'danger',
+  permiso: 'accent',
+};
+
+const renderDetailValue = (category, row) => {
+  const group = row.group_name ? formatGroupName(row.group_name) : '';
+  switch (category) {
+    case 'present': return `${group} · Ingreso ${fmtDetailDate(row.last_entry)}`;
+    case 'absent': return `${group} · Ausente desde ${fmtDetailDate(row.absent_since)}`;
+    case 'late': return `${group} · Llegó ${fmtDetailDate(row.late_at)}`;
+    case 'alert': return `${group} · ${humanizeDetailVal(row.alert_type)} · ${fmtDetailDate(row.alert_at)}`;
+    case 'permiso': return `${group} · ${humanizeDetailVal(row.permiso_type)} · ${row.reason || ''}`;
+    default: return group;
+  }
+};
+
 const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, loading, emptyWarning, onClose }) => {
   const { user } = useAuth();
   const config = CATEGORY_LABELS[category];
@@ -702,23 +729,6 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
         (`${row.last_name} ${row.first_name}`).toLowerCase().includes(searchQuery.toLowerCase())
       )
     : sorted;
-
-  const getColumns = () => {
-    const base = [
-      { key: '_student', label: 'Estudiante' },
-      { key: 'group_name', label: 'Grupo' },
-    ];
-    switch (category) {
-      case 'present':  return [...base, { key: 'last_entry',  label: 'Último ingreso' }];
-      case 'absent':   return [...base, { key: 'absent_since', label: 'Desde' }];
-      case 'late':     return [...base, { key: 'late_at', label: 'Hora de llegada' }];
-      case 'alert':    return [...base, { key: 'alert_type', label: 'Evento' }, { key: 'alert_at', label: 'Fecha' }, user?.role !== ROLES.DOCENTE ? { key: '_action', label: 'Acción' } : null].filter(Boolean);
-      case 'permiso':  return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
-      default:         return base;
-    }
-  };
-
-  const columns = getColumns();
 
   const [trackedStudents, setTrackedStudents] = useState(new Set());
   const [successModal, setSuccessModal] = useState(null); // { studentName }
@@ -756,54 +766,13 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
     }
   };
 
-  const renderCell = (col, row) => {
-    if (col.key === '_student') {
-      return (
-        <span className="font-bold">{row.last_name} {row.first_name}</span>
-      );
-    }
-    if (col.key === '_action') {
-      // Hide tracking button for DOCENTE role
-      if (user?.role === ROLES.DOCENTE) {
-        return null;
-      }
-      const isTracked = trackedStudents.has(row.student_id);
-      return (
-        <button
-          onClick={() => handleStartTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
-          disabled={isTracked}
-          className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors flex items-center justify-end gap-1 w-full ${
-            isTracked
-              ? "text-[var(--nx-success)] bg-[var(--nx-success)]/10"
-              : "text-[var(--nx-accent)] hover:bg-[var(--nx-accent)]/10"
-          }`}
-        >
-          {isTracked ? (
-            <>✓ En Seguimiento</>
-          ) : (
-            <>Empezar Seguimiento</>
-          )}
-        </button>
-      );
-    }
-    const v = row[col.key];
-    if (col.key === 'group_name' || col.key === 'group' || col.key === 'grupo') {
-      return formatGroupName(String(v));
-    }
-    if (v === null || v === undefined) return '—';
-    if (col.key.includes('_at') || col.key.includes('entry') || col.key.includes('since')) {
-      return fmtDetailDate(v);
-    }
-    return humanizeDetailVal(v);
-  };
-
   return (
     <>
       <Drawer
         title={config?.label}
         context={`${filteredData.length} estudiante${filteredData.length !== 1 ? 's' : ''}`}
         onClose={onClose}
-        size="lg"
+        size="md"
       >
         <div className="p-6">
           <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
@@ -822,38 +791,26 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
           {loading ? (
             <SkeletonRows count={5} />
           ) : filteredData.length > 0 ? (
-            <Surface className="overflow-x-auto">
-              <table className="w-full min-w-[440px]">
-                <thead>
-                  <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
-                    {columns.map((col) => (
-                      <th
-                        key={col.key}
-                        className={`px-4 py-3 text-left text-caption font-medium uppercase text-[var(--nx-text-muted)] ${col.key === '_action' ? 'text-right' : ''}`}
-                      >
-                        {col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--nx-border)]">
-                  {filteredData.map((row, i) => (
-                    <tr key={i} className="hover:bg-[var(--nx-surface-subtle)] transition-colors">
-                      {columns.map((col) => (
-                        <td key={col.key} className={`px-4 py-3 text-body text-[var(--nx-text)] whitespace-nowrap ${col.key === '_action' ? 'text-right' : ''}`}>
-                          {renderCell(col, row)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="border-t border-[var(--nx-border)] px-4 py-2">
-                <p className="text-caption text-[var(--nx-text-muted)]">
-                  {filteredData.length} estudiante{filteredData.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </Surface>
+            <div className="space-y-2">
+              {filteredData.map((row, i) => (
+                <SituationLine
+                  key={row.student_id || i}
+                  icon={CATEGORY_ICONS[category]}
+                  value={`${row.last_name} ${row.first_name}`}
+                  detail={renderDetailValue(category, row)}
+                  scheme={CATEGORY_SCHEMES[category]}
+                  action={category === 'alert' && user?.role !== ROLES.DOCENTE ? (
+                    <button
+                      onClick={() => handleStartTracking(row.student_id, `${row.last_name} ${row.first_name}`)}
+                      disabled={trackedStudents.has(row.student_id)}
+                      className="text-caption font-semibold text-[var(--nx-accent)] hover:underline"
+                    >
+                      {trackedStudents.has(row.student_id) ? 'En seguimiento' : 'Seguir'}
+                    </button>
+                  ) : null}
+                />
+              ))}
+            </div>
           ) : (
             <EmptyState
               icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}

@@ -155,29 +155,29 @@ if ($cleanPath === '/dashboard/stats') {
                       )
                 ),
                 absent_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
                       {$groupFilter}
                       AND student_id IN (
-                          SELECT sga.student_id FROM student_group_assignments sga
+                          SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
                       )
                 ),
                 alerts_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%')
                       AND student_id IN (
-                          SELECT sga.student_id FROM student_group_assignments sga
+                          SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
@@ -185,7 +185,7 @@ if ($cleanPath === '/dashboard/stats') {
                       )
                 ),
                 perm_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
@@ -193,14 +193,14 @@ if ($cleanPath === '/dashboard/stats') {
                       AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                       {$groupFilter}
                       AND student_id IN (
-                          SELECT sga.student_id FROM student_group_assignments sga
+                          SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
                       )
                 ),
                 late_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
@@ -208,7 +208,7 @@ if ($cleanPath === '/dashboard/stats') {
                       AND incident_type = 'LATE_ARRIVAL'
                       {$groupFilter}
                       AND student_id IN (
-                          SELECT sga.student_id FROM student_group_assignments sga
+                          SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
@@ -251,23 +251,23 @@ if ($cleanPath === '/dashboard/stats') {
                       )
                 ),
                 absent_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
                       {$groupFilter}
                 ),
                 alerts_cte AS (
-                    SELECT 
+                    SELECT
                         (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND emitted_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND emitted_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND resolved = FALSE)
                         +
-                        (SELECT COUNT(*) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
+                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
                     as cnt
                 ),
                 perm_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
@@ -276,7 +276,7 @@ if ($cleanPath === '/dashboard/stats') {
                       {$groupFilter}
                 ),
                 late_cte AS (
-                    SELECT COUNT(*) as cnt
+                    SELECT COUNT(DISTINCT student_id) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
