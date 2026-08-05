@@ -182,6 +182,24 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
     $configStmt = $conn->prepare("SELECT * FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE ORDER BY work_shift");
     $configStmt->execute([$schoolId]);
     $configs = $configStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Obtener override de daily_schedule_config para hoy (extender_bloque / fusionar_bloque)
+    $dscStmt = $conn->prepare("
+        SELECT dsc.group_id, dsc.expected_exit_time, dsc.metadata_json
+        FROM daily_schedule_config dsc
+        WHERE dsc.school_id = ?
+          AND dsc.config_date = ?::date
+          AND dsc.expected_exit_time IS NOT NULL
+    ");
+    $dscStmt->execute([$schoolId, $todayDate]);
+    $dscOverrides = [];
+    foreach ($dscStmt->fetchAll(PDO::FETCH_ASSOC) as $dsc) {
+        $dscOverrides[$dsc['group_id']] = [
+            'exit_time' => $dsc['expected_exit_time'],
+            'merged' => json_decode($dsc['metadata_json'] ?? '{}', true)['merged'] ?? false,
+        ];
+    }
+
     $conn->exec("COMMIT");
 
     // Si no hay configuración (onboarding no completado), no procesar
@@ -196,6 +214,16 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
         $exitTime = $config['exit_time'];
         $recessStart = $config['recess_start_time'];
         $recessEnd = $config['recess_end_time'];
+
+        // Si hay override de exit_time para hoy (extender_bloque), usarlo
+        $overrideExitTimes = array_column($dscOverrides, 'exit_time');
+        if (!empty($overrideExitTimes)) {
+            // Tomar el exit_time más tarde (la extensión aplica a toda la jornada)
+            $maxExit = max($overrideExitTimes);
+            if ($maxExit > $exitTime) {
+                $exitTime = $maxExit;
+            }
+        }
 
         // Si no hay entry_time o exit_time, saltar esta jornada
         if (!$entryTime || !$exitTime) continue;
@@ -235,9 +263,9 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
 
         // 4. Detectar evasión según modo
         if ($rotatesClassrooms) {
-            $detected += detectEvasionRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config);
+            $detected += detectEvasionRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config, $dscOverrides);
         } else {
-            $detected += detectEvasionNonRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config);
+            $detected += detectEvasionNonRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config, $dscOverrides);
         }
     }
 
@@ -250,7 +278,7 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
  * El estudiante marca INGRESO al entrar. Si marca nuevamente, es SALIDA.
  * Sin permiso: alerta a los 15 min. Con permiso: alerta 5 min después de expirar.
  */
-function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config): int {
+function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config, array $dscOverrides = []): int {
     $detected = 0;
 
     // Obtener estudiantes que ingresaron hoy y luego salieron (segundo evento biométrico)
@@ -280,6 +308,18 @@ function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $t
         // Si ya tiene alerta de evasión hoy, skip
         if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
 
+        // Verificar si el estudiante está en un grupo con bloque fusionado (fusionar_bloque)
+        if (!empty($dscOverrides)) {
+            $groupStmt = $conn->prepare("
+                SELECT sga.group_id FROM student_group_assignments sga
+                WHERE sga.student_id = ? AND sga.active = TRUE LIMIT 1
+            ");
+            $groupStmt->execute([$studentId]);
+            $groupId = $groupStmt->fetchColumn();
+            if ($groupId && isset($dscOverrides[$groupId]) && $dscOverrides[$groupId]['merged']) {
+                continue; // Bloque fusionado, no alertar
+            }
+        }
         // El último evento es la "salida"
         $lastEventTime = new DateTime($student['last_event_time'], new DateTimeZone('UTC'));
         $lastEventTime->setTimezone(new DateTimeZone('America/Bogota'));
@@ -386,7 +426,7 @@ function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $t
  * Si el estudiante no marca ingreso en la siguiente clase dentro de esos 10 min,
  * se considera evasión.
  */
-function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config): int {
+function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config, array $dscOverrides = []): int {
     $detected = 0;
     $dayOfWeek = (int)$nowBogota->format('N');
 
@@ -442,6 +482,19 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
             $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
 
             if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
+
+            // Verificar si el grupo del estudiante tiene bloque fusionado (fusionar_bloque)
+            if (!empty($dscOverrides)) {
+                $groupStmt = $conn->prepare("
+                    SELECT sga.group_id FROM student_group_assignments sga
+                    WHERE sga.student_id = ? AND sga.active = TRUE LIMIT 1
+                ");
+                $groupStmt->execute([$studentId]);
+                $groupId = $groupStmt->fetchColumn();
+                if ($groupId && isset($dscOverrides[$groupId]) && $dscOverrides[$groupId]['merged']) {
+                    continue; // Bloque fusionado, no alertar
+                }
+            }
 
             // Verificar si marcó ingreso en el siguiente bloque (dentro del margen)
             $nextCheck = $conn->prepare("

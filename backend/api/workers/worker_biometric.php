@@ -276,6 +276,40 @@ function processJob(array $job, PDO $conn): bool {
                     }
 
                     if ($isLate) {
+                        // Verificar contra el horario configurado del grupo del estudiante.
+                        // daily_schedule_config.expected_entry_time (sobrescrito por coordinador
+                        // para un día específico) tiene prioridad; si no existe, se usa
+                        // school_schedule_config.entry_time de la jornada del estudiante.
+                        // Si el evento está dentro de expected_entry_time + 10 min de tolerancia,
+                        // no se considera llegada tarde.
+                        $scheduleStmt = $conn->prepare("
+                            SELECT dsc.expected_entry_time, ssc.entry_time
+                            FROM students s
+                            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                            LEFT JOIN daily_schedule_config dsc ON dsc.group_id = sga.group_id
+                                AND dsc.config_date = (NOW() AT TIME ZONE 'America/Bogota')::date
+                                AND dsc.school_id = ?
+                            LEFT JOIN school_schedule_config ssc ON ssc.school_id = s.school_id
+                                AND ssc.work_shift = s.work_shift
+                                AND ssc.entry_time IS NOT NULL
+                            WHERE s.document_number = ? AND s.school_id = ?
+                            LIMIT 1
+                        ");
+                        $scheduleStmt->execute([$instId, $doc, $instId]);
+                        $scheduleRow = $scheduleStmt->fetch(PDO::FETCH_ASSOC);
+
+                        $expectedEntry = $scheduleRow['expected_entry_time'] ?? $scheduleRow['entry_time'] ?? null;
+                        if ($expectedEntry) {
+                            // Comparar hora del evento contra expected_entry_time + 10 min de tolerancia
+                            $eventTime = date('H:i:s', $capturedAt);
+                            $tolerance = date('H:i:s', strtotime($expectedEntry . ' +10 minutes'));
+                            if ($eventTime <= $tolerance) {
+                                $isLate = false; // Dentro de la tolerancia, no es tarde
+                            }
+                        }
+                    }
+
+                    if ($isLate) {
                         $lateStmt = $conn->prepare(
                             "INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
                              SELECT uuid_generate_v4(), school_id, student_id, 'LATE_ARRIVAL', to_timestamp(?)

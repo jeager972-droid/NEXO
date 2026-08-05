@@ -979,13 +979,18 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $expectedExit = $schedRow['exit_time'] ?? null;
 
                 // UPSERT en daily_schedule_config: marcar como fusionado
+                $dscMeta = json_encode([
+                    'action' => 'fusionar_bloque',
+                    'reason' => $reason,
+                    'merged' => true,
+                ], JSON_UNESCAPED_UNICODE);
                 $dscStmt = $conn->prepare("
-                    INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
-                    VALUES (?, ?, (NOW() AT TIME ZONE 'America/Bogota')::date, TRUE, ?, ?, ?)
+                    INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id, metadata_json)
+                    VALUES (?, ?, (NOW() AT TIME ZONE 'America/Bogota')::date, TRUE, ?, ?, ?, ?::jsonb)
                     ON CONFLICT (school_id, group_id, config_date)
-                    DO UPDATE SET has_classes = TRUE, expected_entry_time = EXCLUDED.expected_entry_time, expected_exit_time = EXCLUDED.expected_exit_time
+                    DO UPDATE SET has_classes = TRUE, expected_entry_time = EXCLUDED.expected_entry_time, expected_exit_time = EXCLUDED.expected_exit_time, metadata_json = EXCLUDED.metadata_json
                 ");
-                $dscStmt->execute([$schoolId, $groupId, $expectedEntry, $expectedExit, $authUser['id']]);
+                $dscStmt->execute([$schoolId, $groupId, $expectedEntry, $expectedExit, $authUser['id'], $dscMeta]);
 
                 // Obtener nombre del estudiante si se proporcionó
                 $studentNameForLog = '';

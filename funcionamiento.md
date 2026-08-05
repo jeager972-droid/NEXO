@@ -1019,3 +1019,67 @@ Las siguientes tablas están particionadas por rango (RANGE) en una columna de t
   (absent, alerts, perm, late) tanto en la rama docente como global.
 - Agregar `DISTINCT` en los subqueries de `student_id IN (...)` que hacen
   JOIN con `schedules`.
+
+---
+
+## 38. Integración End-to-End de Horarios (Iteración 3)
+
+### daily_schedule_config como override por día
+- `daily_schedule_config` ahora tiene columna `metadata_json` (JSONB).
+- Cuando existe una fila para un grupo y fecha específica, sus valores
+  **sobrescriben** los de `school_schedule_config`:
+  - `expected_entry_time` → override de `school_schedule_config.entry_time`
+  - `expected_exit_time` → override de `school_schedule_config.exit_time`
+  - `has_classes=FALSE` → no hay clases ese día (no se detectan ausentes)
+  - `metadata_json.merged=true` → bloques fusionados (no alertar evasión)
+
+### Workers que respetan daily_schedule_config
+
+#### worker_absence_detector.php
+- Ya consultaba `has_classes` y `expected_entry_time` (sin cambios).
+- No necesita `expected_exit_time` (detecta por hora de entrada + 10 min).
+
+#### worker_biometric.php
+- **ANTES**: Detectaba llegadas tarde con lógica hardcoded (INGRESO_MANANA
+  siempre tarde, INGRESO_TARDE tarde si jornada mañana/completa).
+- **AHORA**: Después de la clasificación hardcoded, verifica contra
+  `daily_schedule_config.expected_entry_time` (prioridad) o
+  `school_schedule_config.entry_time` (fallback). Si el evento está dentro
+  de `expected_entry_time + 10 min`, NO se marca tarde.
+- Usa `RETURNING incident_id` en el INSERT de LATE_ARRIVAL (race-safe).
+
+#### worker_evasion_detector.php
+- **ANTES**: Solo usaba `school_schedule_config.exit_time` para determinar
+  fin de jornada.
+- **AHORA**:
+  1. Consulta `daily_schedule_config` para hoy al inicio.
+  2. Si hay `expected_exit_time` override (extender_bloque), usa el valor
+     más tarde como `exit_time` para toda la jornada.
+  3. En `detectEvasionRotating` y `detectEvasionNonRotating`, verifica
+     `metadata_json.merged=true` por grupo. Si el grupo tiene bloques
+     fusionados, **no alerta evasión** (el grupo tiene otra clase en el
+     mismo salón).
+
+### Dashboard (dashboard.php)
+- `exitTimeCondition` ahora usa COALESCE con 3 niveles:
+  1. `daily_schedule_config.expected_exit_time` (override del día)
+  2. `school_schedule_config.exit_time` (horario permanente)
+  3. `'23:59:59'::time` (fallback)
+- Event feed incluye `FUSIONAR_BLOQUE` y `EXTENDER_BLOQUE` en el switch
+  de formateo de eventos.
+
+### Comando fusionar_bloque (operations.php)
+- Guarda `metadata_json` con `{action, reason, merged:true}` en
+  `daily_schedule_config` (no solo en `user_commands`).
+
+### Funciones SQL de riesgo
+- `fn_calculate_student_risk` y `fn_recalculate_school_metrics` ahora usan
+  `(NOW() AT TIME ZONE 'America/Bogota')` en lugar de `NOW()` para las
+  ventanas de 30 días.
+
+### Permisos en DB
+- `operations.fusionar_bloque`: asignado a TEACHER.
+- `operations.extender_bloque`: asignado a RECTOR y COORDINATOR.
+- Ambos permisos agregados a `nexo_full_migration.sql` y `nexo_seed.sql`.
+- **Requiere ejecutar migración** en la DB de producción para que los
+  permisos existan.

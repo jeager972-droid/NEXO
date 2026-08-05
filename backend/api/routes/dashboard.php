@@ -110,6 +110,15 @@ if ($cleanPath === '/dashboard/stats') {
         $exitTimeCondition = " AND be2.event_timestamp >= (
             (NOW() AT TIME ZONE 'America/Bogota')::date +
             COALESCE(
+                (SELECT dsc.expected_exit_time FROM daily_schedule_config dsc
+                 WHERE dsc.school_id = biometric_events.school_id
+                   AND dsc.group_id = (
+                       SELECT sga.group_id FROM student_group_assignments sga
+                       WHERE sga.student_id = biometric_events.student_id AND sga.active = TRUE LIMIT 1
+                   )
+                   AND dsc.config_date = (NOW() AT TIME ZONE 'America/Bogota')::date
+                   AND dsc.expected_exit_time IS NOT NULL
+                 LIMIT 1),
                 (SELECT ssc.exit_time FROM school_schedule_config ssc
                  WHERE ssc.school_id = biometric_events.school_id
                    AND ssc.work_shift = (SELECT s.work_shift FROM students s WHERE s.student_id = biometric_events.student_id)
@@ -792,6 +801,13 @@ if ($cleanPath === '/dashboard/events') {
                     break;
                 case 'HORARIO':
                     $label = "Se realizó un cambio de horario";
+                    break;
+                case 'FUSIONAR_BLOQUE':
+                    $label = $reason ? "Se fusionó bloque de clases: {$reason}" : "Se fusionó bloque de clases";
+                    break;
+                case 'EXTENDER_BLOQUE':
+                    $newTime = $payload['new_exit_time'] ?? $payload['time'] ?? '';
+                    $label = $newTime ? "Se extendió bloque hasta las {$newTime}" : "Se extendió bloque de clases";
                     break;
                 default:
                     $label = $ev['command_type'];
