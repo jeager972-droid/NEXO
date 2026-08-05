@@ -19,6 +19,7 @@ import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { SearchableSelect } from '../ui/SearchableSelect';
+import { TimeInput12h } from '../ui/TimeInput12h';
 import { schoolApi } from '../../api/school';
 import { humanizeError } from '../../utils/messages';
 
@@ -428,21 +429,19 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
               {jornadaSubStep === 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input
+                    <TimeInput12h
                       label="Hora de entrada"
-                      type="time"
                       required
                       value={jornadas[currentJornadaIdx].entry_time}
-                      onChange={(e) => updateJornada(currentJornadaIdx, 'entry_time', e.target.value)}
-                      leftIcon={<Clock size={16} />}
+                      onChange={(v) => updateJornada(currentJornadaIdx, 'entry_time', v)}
+                      leftIcon={Clock}
                     />
-                    <Input
+                    <TimeInput12h
                       label="Hora de salida"
-                      type="time"
                       required
                       value={jornadas[currentJornadaIdx].exit_time}
-                      onChange={(e) => updateJornada(currentJornadaIdx, 'exit_time', e.target.value)}
-                      leftIcon={<Clock size={16} />}
+                      onChange={(v) => updateJornada(currentJornadaIdx, 'exit_time', v)}
+                      leftIcon={Clock}
                     />
                   </div>
 
@@ -485,19 +484,17 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                       <p className="text-caption">Receso</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <Input
+                      <TimeInput12h
                         label="Inicio del receso"
-                        type="time"
                         value={jornadas[currentJornadaIdx].recess_start_time}
-                        onChange={(e) => updateJornada(currentJornadaIdx, 'recess_start_time', e.target.value)}
-                        leftIcon={<Clock size={16} />}
+                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_start_time', v)}
+                        leftIcon={Clock}
                       />
-                      <Input
+                      <TimeInput12h
                         label="Fin del receso"
-                        type="time"
                         value={jornadas[currentJornadaIdx].recess_end_time}
-                        onChange={(e) => updateJornada(currentJornadaIdx, 'recess_end_time', e.target.value)}
-                        leftIcon={<Clock size={16} />}
+                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_end_time', v)}
+                        leftIcon={Clock}
                       />
                     </div>
                   </div>
@@ -531,17 +528,15 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                             {bIdx + 1}
                           </span>
                           <div className="grid flex-1 grid-cols-2 gap-3">
-                            <Input
+                            <TimeInput12h
                               label="Inicio"
-                              type="time"
                               value={block.start_time}
-                              onChange={(e) => updateBlock(currentJornadaIdx, bIdx, 'start_time', e.target.value)}
+                              onChange={(v) => updateBlock(currentJornadaIdx, bIdx, 'start_time', v)}
                             />
-                            <Input
+                            <TimeInput12h
                               label="Fin"
-                              type="time"
                               value={block.end_time}
-                              onChange={(e) => updateBlock(currentJornadaIdx, bIdx, 'end_time', e.target.value)}
+                              onChange={(v) => updateBlock(currentJornadaIdx, bIdx, 'end_time', v)}
                             />
                           </div>
                         </div>
