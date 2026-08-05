@@ -329,10 +329,11 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
 // ── Docente / Psicorientador ──────────────────────────────────────────────────
 
 const CATEGORY_LABELS = {
-  present:  { label: 'Presentes',    accent: 'var(--nx-accent)', icon: Users },
-  absent:   { label: 'Inasistentes', accent: 'var(--nx-accent)', icon: UserMinus },
-  alert:    { label: 'Alertas',      accent: 'var(--nx-danger)', icon: AlertTriangle },
-  permiso:  { label: 'Permisos',     accent: 'var(--nx-success)', icon: Activity },
+  present:  { label: 'Presentes',      accent: 'var(--nx-accent)', icon: Users },
+  absent:   { label: 'Inasistentes',   accent: 'var(--nx-accent)', icon: UserMinus },
+  late:     { label: 'Llegadas tarde', accent: 'var(--nx-warning)', icon: Clock },
+  alert:    { label: 'Alertas',        accent: 'var(--nx-danger)', icon: AlertTriangle },
+  permiso:  { label: 'Permisos',       accent: 'var(--nx-success)', icon: Activity },
 };
 
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
@@ -647,6 +648,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
     switch (category) {
       case 'present':  return [...base, { key: 'last_entry',  label: 'Último ingreso' }];
       case 'absent':   return [...base, { key: 'absent_since', label: 'Desde' }];
+      case 'late':     return [...base, { key: 'late_at', label: 'Hora de llegada' }];
       case 'alert':    return [...base, { key: 'alert_type', label: 'Evento' }, { key: 'alert_at', label: 'Fecha' }, user?.role !== ROLES.DOCENTE ? { key: '_action', label: 'Acción' } : null].filter(Boolean);
       case 'permiso':  return [...base, { key: 'permiso_type', label: 'Tipo' }, { key: 'permiso_at', label: 'Fecha' }, { key: 'reason', label: 'Motivo' }];
       default:         return base;

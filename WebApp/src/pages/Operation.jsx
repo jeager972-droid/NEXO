@@ -323,7 +323,11 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
       return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.group || ''} onChange={(v) => { updateField('group', v); updateField('student', ''); }} placeholder="— Seleccionar grupo —" searchPlaceholder="Buscar grupo…" clearable />;
     }
     if (field === 'student') {
-      const options = filteredStudents.map((s) => ({ value: s.student_id || s.id, label: `${s.last_name || ''} ${s.first_name || ''}`.trim() || s.student_id }));
+      const options = filteredStudents.map((s) => ({
+        value: s.student_id || s.id,
+        label: `${s.last_name || ''} ${s.first_name || ''}`.trim() || s.student_id,
+        sublabel: (s.group_name || s.group) ? formatGroupName(s.group_name || s.group) : (s.document_number ? `Doc: ${s.document_number}` : '')
+      }));
       return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.student || ''} onChange={(v) => updateField('student', v)} placeholder="— Seleccionar estudiante —" searchPlaceholder="Buscar estudiante…" clearable />;
     }
     if (field === 'targetRole') {

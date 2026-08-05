@@ -459,7 +459,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     break;
                 }
 
-                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                // Enriquecer params con student_name para el event feed
+                $logParams = $params;
+                if ($studentId) {
+                    $logParams['student_name'] = $studentName;
+                }
+                logUserCommand($conn, $schoolId, $userId, $action, $logParams);
                 echo json_encode(['status' => 'ok', 'message' => 'Inasistencia reportada al acudiente', 'delivery' => $deliveryResults]);
                 break;
 
@@ -554,7 +559,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     securityLog('TWILIO_CONV_REDIS_SKIP', $e->getMessage());
                 }
 
-                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                // Enriquecer params con student_name para el event feed
+                $logParams = $params;
+                if ($studentId && $target) {
+                    $logParams['student_name'] = trim(($target['first_name'] ?? '') . ' ' . ($target['last_name'] ?? ''));
+                }
+                logUserCommand($conn, $schoolId, $userId, $action, $logParams);
                 $resp = json_encode(['status' => 'ok', 'message' => 'Citación encolada para envío. Puede tardar unos segundos.', 'delivery' => $deliveryResults]);
                 securityLog('CITACION_RESPONSE', "HTTP 200 | $resp");
                 echo $resp;
@@ -634,7 +644,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                // Enriquecer params con student_name para el event feed
+                $logParams = $params;
+                if ($studentId && !empty($stuMeta)) {
+                    $logParams['student_name'] = trim($studentName);
+                    $logParams['group_name'] = $groupName;
+                }
+                logUserCommand($conn, $schoolId, $userId, $action, $logParams);
                 echo json_encode([
                     'status'  => 'ok',
                     'message' => 'Permiso generado correctamente',
@@ -753,7 +769,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
-                logUserCommand($conn, $schoolId, $userId, $action, $params);
+                // Enriquecer params con student_name para el event feed
+                $logParams = $params;
+                if ($studentId && !empty($stuMeta)) {
+                    $logParams['student_name'] = trim($studentName);
+                    $logParams['group_name'] = $groupName;
+                }
+                logUserCommand($conn, $schoolId, $userId, $action, $logParams);
                 echo json_encode([
                     'status'  => 'ok',
                     'message' => 'Salida autorizada correctamente',

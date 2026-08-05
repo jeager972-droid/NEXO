@@ -188,7 +188,12 @@ export const SearchableSelect = ({
                             {isSelected && <Check size={12} />}
                           </span>
                         )}
-                        <span className="flex-1 truncate">{opt.label}</span>
+                        <span className="flex-1 truncate">
+                          {opt.label}
+                          {opt.sublabel && (
+                            <span className="ml-2 text-caption text-[var(--nx-text-muted)]">({opt.sublabel})</span>
+                          )}
+                        </span>
                         {!multiple && isSelected && <Check size={14} className="shrink-0" />}
                       </button>
                     );
