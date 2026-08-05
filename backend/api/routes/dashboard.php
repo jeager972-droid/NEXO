@@ -545,7 +545,7 @@ if ($cleanPath === '/dashboard/events') {
                 WHERE uc.school_id = ?
                   AND uc.executed_at >= CURRENT_DATE
                   AND (
-                    uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'HORARIO', 'INCIDENTE', 'DAÑO', 'SOS', 'PEDAGOGICA', 'SEGUIMIENTO')
+                    uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'HORARIO', 'INCIDENTE', 'DAÑO', 'SOS', 'PEDAGOGICA', 'SEGUIMIENTO', 'INASISTENCIA')
                   )
                 ORDER BY uc.executed_at DESC
                 LIMIT ?

@@ -121,12 +121,35 @@ CREATE INDEX IF NOT EXISTS idx_staff_user ON staff_records(user_id);
 CREATE TABLE IF NOT EXISTS guardians (guardian_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), user_id UUID UNIQUE NOT NULL REFERENCES users(user_id), whatsapp_phone VARCHAR(30) NOT NULL, emergency_contact BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS students (student_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), document_number VARCHAR(30) NOT NULL, first_name VARCHAR(120) NOT NULL, last_name VARCHAR(120) NOT NULL, birth_date DATE, biometric_hash TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ, CONSTRAINT uq_students_school_document UNIQUE (school_id, document_number));
 CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS work_shift VARCHAR(50) DEFAULT 'mañana';
+COMMENT ON COLUMN students.work_shift IS 'mañana, tarde, completa. Usado para detección automática de ausentes por jornada';
 CREATE TABLE IF NOT EXISTS guardian_student_relationships (relationship_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), guardian_id UUID NOT NULL REFERENCES guardians(guardian_id), student_id UUID NOT NULL REFERENCES students(student_id), relationship_type VARCHAR(80), primary_guardian BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS academic_groups (group_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), group_name VARCHAR(120) NOT NULL, grade_level VARCHAR(50), academic_year INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS student_group_assignments (assignment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), student_id UUID NOT NULL REFERENCES students(student_id), group_id UUID NOT NULL REFERENCES academic_groups(group_id), active BOOLEAN NOT NULL DEFAULT TRUE, start_date DATE, end_date DATE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS classrooms (classroom_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), classroom_name VARCHAR(120) NOT NULL, building VARCHAR(120), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS subjects (subject_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), subject_name VARCHAR(120) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS schedules (schedule_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), group_id UUID NOT NULL REFERENCES academic_groups(group_id), classroom_id UUID NOT NULL REFERENCES classrooms(classroom_id), teacher_user_id UUID NOT NULL REFERENCES users(user_id), subject_id UUID NOT NULL REFERENCES subjects(subject_id), day_of_week INTEGER NOT NULL, block_number INTEGER NOT NULL, start_time TIME NOT NULL, end_time TIME NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS daily_schedule_config (
+    config_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id UUID NOT NULL REFERENCES schools(school_id),
+    group_id UUID NOT NULL REFERENCES academic_groups(group_id),
+    config_date DATE NOT NULL,
+    has_classes BOOLEAN NOT NULL DEFAULT TRUE,
+    expected_entry_time TIME,
+    expected_exit_time TIME,
+    created_by_user_id UUID REFERENCES users(user_id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(school_id, group_id, config_date)
+);
+ALTER TABLE daily_schedule_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS dsc_select ON daily_schedule_config;
+CREATE POLICY dsc_select ON daily_schedule_config FOR SELECT USING(school_id = get_current_school_id());
+DROP POLICY IF EXISTS dsc_insert ON daily_schedule_config;
+CREATE POLICY dsc_insert ON daily_schedule_config FOR INSERT WITH CHECK(school_id = get_current_school_id());
+DROP POLICY IF EXISTS dsc_update ON daily_schedule_config;
+CREATE POLICY dsc_update ON daily_schedule_config FOR UPDATE USING(school_id = get_current_school_id());
+DROP POLICY IF EXISTS dsc_delete ON daily_schedule_config;
+CREATE POLICY dsc_delete ON daily_schedule_config FOR DELETE USING(school_id = get_current_school_id());
 CREATE TABLE IF NOT EXISTS edge_devices (device_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), classroom_id UUID REFERENCES classrooms(classroom_id), device_name VARCHAR(120) NOT NULL, public_key TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, last_sync_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS biometric_events (event_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID, device_id UUID NOT NULL, classroom_id UUID, schedule_id UUID, event_type VARCHAR(120) NOT NULL, event_result VARCHAR(120) NOT NULL, confidence_score NUMERIC(5,2), sync_hash TEXT, event_signature TEXT, event_fingerprint VARCHAR(64), event_timestamp TIMESTAMPTZ NOT NULL, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(event_id, event_timestamp)) PARTITION BY RANGE(event_timestamp);
 CREATE TABLE IF NOT EXISTS notifications (notification_id UUID DEFAULT uuid_generate_v4() PRIMARY KEY, school_id UUID NOT NULL, user_id UUID NOT NULL, title VARCHAR(200) NOT NULL, message TEXT NOT NULL, type VARCHAR(50) NOT NULL DEFAULT 'INFO', metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
@@ -389,9 +412,10 @@ CREATE POLICY guardians_update ON guardians FOR UPDATE USING(EXISTS(SELECT 1 FRO
 CREATE POLICY guardians_delete ON guardians FOR DELETE USING(EXISTS(SELECT 1 FROM users u WHERE u.user_id = guardians.user_id AND u.school_id = get_current_school_id()));
 
 ALTER TABLE school_panic_events ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS spe_select ON school_panic_events; DROP POLICY IF EXISTS spe_insert ON school_panic_events; DROP POLICY IF EXISTS spe_delete ON school_panic_events;
+DROP POLICY IF EXISTS spe_select ON school_panic_events; DROP POLICY IF EXISTS spe_insert ON school_panic_events; DROP POLICY IF EXISTS spe_update ON school_panic_events; DROP POLICY IF EXISTS spe_delete ON school_panic_events;
 CREATE POLICY spe_select ON school_panic_events FOR SELECT USING(school_id = get_current_school_id());
 CREATE POLICY spe_insert ON school_panic_events FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY spe_update ON school_panic_events FOR UPDATE USING(school_id = get_current_school_id());
 CREATE POLICY spe_delete ON school_panic_events FOR DELETE USING(school_id = get_current_school_id());
 
 ALTER TABLE student_tracking ENABLE ROW LEVEL SECURITY;

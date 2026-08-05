@@ -68,7 +68,11 @@ static bool configureUareuEnvironment() {
         nullptr
     };
     for (const char** p = plugins; *p; ++p) {
-        dlopen(*p, RTLD_NOW | RTLD_GLOBAL);
+        void* handle = dlopen(*p, RTLD_NOW | RTLD_GLOBAL);
+        if (!handle) {
+            const char* err = dlerror();
+            LOG_WARN("UareU: dlopen failed for plugin '{}': {}", *p, err ? err : "unknown error");
+        }
     }
     return true;
 }
@@ -142,6 +146,18 @@ void UareU5300BiometricSensor::setLastError(const std::string& msg) {
 }
 
 std::string UareU5300BiometricSensor::dpErrorString(int err) {
+    switch (err) {
+        case DPFPDD_E_INVALID_PARAMETER:
+            return "Invalid parameter (no reader with this name)";
+        case DPFPDD_E_DEVICE_BUSY:
+            return "Device busy (already opened by another process)";
+        case DPFPDD_E_DEVICE_FAILURE:
+            return "Device failure";
+        case DPFPDD_E_FAILURE:
+            return "General failure";
+        default:
+            break;
+    }
     unsigned int uerr = static_cast<unsigned int>(err);
     std::ostringstream oss;
     oss << "DP error 0x" << std::hex << uerr;
@@ -167,38 +183,72 @@ bool UareU5300BiometricSensor::openDevice() {
     }
 
     DPFPDD_DEV dev = nullptr;
-    rc = dpfpdd_open(devInfos[0].name, &dev);
-    if (rc == DPFPDD_SUCCESS) {
-        m_device = dev;
-        m_isReady = true;
 
-        // Read first supported resolution, like UareUCaptureOnly does.
-        unsigned int capsSize = sizeof(DPFPDD_DEV_CAPS);
-        std::vector<unsigned char> capsBuf(capsSize);
-        while (true) {
-            DPFPDD_DEV_CAPS* pCaps = reinterpret_cast<DPFPDD_DEV_CAPS*>(capsBuf.data());
-            pCaps->size = capsSize;
-            int capRc = dpfpdd_get_device_capabilities(dev, pCaps);
-            if (capRc == DPFPDD_SUCCESS) {
-                if (pCaps->resolution_cnt > 0) {
-                    m_dpi = pCaps->resolutions[0];
-                }
-                break;
-            }
-            if (capRc == DPFPDD_E_MORE_DATA && pCaps->size > capsSize) {
-                capsSize = pCaps->size;
-                capsBuf.resize(capsSize);
-                continue;
-            }
+    // Re-query + retry loop: si dpfpdd_open falla con DPFPDD_E_INVALID_PARAMETER,
+    // es probable que el nombre obtenido por query_devices ya no sea válido
+    // (condición de carrera USB). Re-ejecutamos query y reintentamos hasta 3 veces.
+    constexpr int kMaxOpenRetries = 3;
+    for (int attempt = 0; attempt < kMaxOpenRetries; ++attempt) {
+        rc = dpfpdd_open(devInfos[0].name, &dev);
+        if (rc == DPFPDD_SUCCESS) {
             break;
         }
 
-        LOG_INFO("U.are.U 5300 opened: {}", devInfos[0].name);
-        return true;
+        if (rc != DPFPDD_E_INVALID_PARAMETER || attempt + 1 >= kMaxOpenRetries) {
+            setLastError("dpfpdd_open failed: " + dpErrorString(rc));
+            return false;
+        }
+
+        LOG_WARN("UareU: dpfpdd_open attempt {}/{} failed with INVALID_PARAMETER, "
+                 "re-querying devices after 500ms", attempt + 1, kMaxOpenRetries);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        devCnt = 1;
+        devInfos.assign(devCnt, DPFPDD_DEV_INFO{});
+        for (auto& info : devInfos) info.size = sizeof(DPFPDD_DEV_INFO);
+        rc = dpfpdd_query_devices(&devCnt, devInfos.data());
+        if (rc == DPFPDD_E_MORE_DATA) {
+            devInfos.resize(devCnt);
+            for (auto& info : devInfos) info.size = sizeof(DPFPDD_DEV_INFO);
+            rc = dpfpdd_query_devices(&devCnt, devInfos.data());
+        }
+        if (rc != DPFPDD_SUCCESS || devCnt == 0) {
+            setLastError("dpfpdd_query_devices (re-query) failed: " + dpErrorString(rc));
+            return false;
+        }
     }
 
-    setLastError("dpfpdd_open failed: " + dpErrorString(rc));
-    return false;
+    if (rc != DPFPDD_SUCCESS || !dev) {
+        setLastError("dpfpdd_open failed: " + dpErrorString(rc));
+        return false;
+    }
+
+    m_device = dev;
+    m_isReady = true;
+
+    // Read first supported resolution, like UareUCaptureOnly does.
+    unsigned int capsSize = sizeof(DPFPDD_DEV_CAPS);
+    std::vector<unsigned char> capsBuf(capsSize);
+    while (true) {
+        DPFPDD_DEV_CAPS* pCaps = reinterpret_cast<DPFPDD_DEV_CAPS*>(capsBuf.data());
+        pCaps->size = capsSize;
+        int capRc = dpfpdd_get_device_capabilities(dev, pCaps);
+        if (capRc == DPFPDD_SUCCESS) {
+            if (pCaps->resolution_cnt > 0) {
+                m_dpi = pCaps->resolutions[0];
+            }
+            break;
+        }
+        if (capRc == DPFPDD_E_MORE_DATA && pCaps->size > capsSize) {
+            capsSize = pCaps->size;
+            capsBuf.resize(capsSize);
+            continue;
+        }
+        break;
+    }
+
+    LOG_INFO("U.are.U 5300 opened: {}", devInfos[0].name);
+    return true;
 }
 
 void UareU5300BiometricSensor::closeDevice() {
@@ -253,8 +303,25 @@ NexoResult<void> UareU5300BiometricSensor::initialize() {
     }
     m_libInitialized = true;
 
-    if (!openDevice()) {
-        return NexoResult<void>::fail(NexoError::SensorError, m_lastError);
+    // Reintentar openDevice() hasta 3 veces con sleep de 1s entre intentos.
+    // El lector USB puede no estar listo inmediatamente tras dpfpdd_init().
+    {
+        bool opened = false;
+        constexpr int kMaxInitRetries = 3;
+        for (int attempt = 0; attempt < kMaxInitRetries; ++attempt) {
+            if (openDevice()) {
+                opened = true;
+                break;
+            }
+            if (attempt + 1 < kMaxInitRetries) {
+                LOG_WARN("UareU: openDevice attempt {}/{} failed ({}), retrying in 1s",
+                         attempt + 1, kMaxInitRetries, m_lastError);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }
+        if (!opened) {
+            return NexoResult<void>::fail(NexoError::SensorError, m_lastError);
+        }
     }
 
     if (!selectEngine(m_device)) {

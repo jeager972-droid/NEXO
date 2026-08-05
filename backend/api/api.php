@@ -180,69 +180,6 @@ $input = json_decode($rawBody, true) ?: [];
 // operations.php se carga siempre para exponer helpers Twilio a otras rutas.
 require_once __DIR__ . '/routes/operations.php';
 
-// ============================================================================
-// DEBUG TEMPORAL: Simular lo que hace el worker_biometric para diagnosticar
-// ============================================================================
-if ($cleanPath === '/debug/worker' && $method === 'GET') {
-    header('Content-Type: application/json; charset=utf-8');
-    $schoolId = $_GET['school_id'] ?? 'a3333333-3333-3333-3333-333333333333';
-    $doc = $_GET['doc'] ?? '1234567890';
-    $results = [];
-
-    try {
-        // 1. Sin transacción, sin RLS context
-        $stmt = $conn->prepare("SELECT student_id, first_name, last_name, document_number, school_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
-        $stmt->execute([$doc, $schoolId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $results['no_tx_no_rls'] = $row ? "FOUND: {$row['first_name']} school={$row['school_id']}" : 'NOT FOUND';
-
-        // 2. Con transacción + set_config (como el worker)
-        $conn->beginTransaction();
-        $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
-        $stmtCtx->execute([$schoolId]);
-
-        // Verificar contexto
-        $stmtCheck = $conn->prepare("SELECT current_setting('app.current_school_id', true) as sid, current_setting('app.current_role', true) as role");
-        $stmtCheck->execute();
-        $ctx = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-        $results['ctx_in_tx'] = "school_id={$ctx['sid']} role={$ctx['role']}";
-
-        // Buscar estudiante con RLS
-        $stmt2 = $conn->prepare("SELECT student_id, first_name, last_name FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
-        $stmt2->execute([$doc, $schoolId]);
-        $row2 = $stmt2->fetch(PDO::FETCH_ASSOC);
-        $results['with_tx_rls'] = $row2 ? "FOUND: {$row2['first_name']} id={$row2['student_id']}" : 'NOT FOUND (RLS filtered)';
-
-        // Intentar INSERT como el worker
-        $evt = 'INGRESO_MANANA';
-        $capturedAt = time();
-        $deviceId = '49e0ce3c-9289-4d32-a2f7-fb6500f31c4a';
-        $fingerprint = hash('sha256', implode(':', [$schoolId, $doc, $evt, (string)$capturedAt]));
-
-        $stmt3 = $conn->prepare(
-            "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
-             SELECT uuid_generate_v4(),school_id,student_id,
-                    ?,
-                    ?,'PROCESSED',to_timestamp(?),?
-             FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
-             ON CONFLICT (event_fingerprint, event_timestamp) DO NOTHING"
-        );
-        $stmt3->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $schoolId]);
-        $results['insert_rowCount'] = $stmt3->rowCount();
-        $results['insert_error'] = $stmt3->errorInfo()[2] ?? 'none';
-
-        $conn->rollBack(); // Deshacer para no duplicar
-        $results['status'] = 'ok';
-    } catch (Exception $e) {
-        $results['status'] = 'error';
-        $results['error'] = $e->getMessage();
-        try { $conn->rollBack(); } catch (Exception $ignore) {}
-    }
-
-    echo json_encode($results, JSON_PRETTY_PRINT);
-    exit;
-}
-
 $prefix = explode('/', trim($cleanPath, '/'))[0];
 $routeMap = [
     'auth' => 'auth.php',
@@ -262,7 +199,7 @@ $routeMap = [
     'metrics' => 'metrics.php',
     'telemetry' => 'telemetry.php',
     'users' => 'users.php',
-    'consultation' => 'consultations.php',
+    'consultation' => ['consultations.php', 'misc.php'],
     'consultations' => 'consultations.php',
     'tracking' => 'tracking.php',
 ];
@@ -447,6 +384,7 @@ if ($cleanPath === '/health' || $cleanPath === '/health/workers') {
         $workers = [
             'twilio_worker' => 'worker:twilio:last_heartbeat',
             'biometric_worker' => 'worker:biometric:last_heartbeat',
+            'absence_detector_worker' => 'worker:absence_detector:last_heartbeat',
         ];
         if (getenv('AUDIT_WORKER_ENABLED') === '1') {
             $workers['audit_worker'] = 'worker:audit:last_heartbeat';

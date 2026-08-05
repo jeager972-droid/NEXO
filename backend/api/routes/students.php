@@ -38,6 +38,7 @@ if ($cleanPath === '/students') {
         $lastName   = trim($input['last_name']  ?? '');
         $document   = trim($input['document']   ?? '');
         $groupName  = trim($input['grade']      ?? '');
+        $workShift  = trim($input['work_shift'] ?? 'mañana');
 
         if (!$firstName || !$lastName || !$document) {
             http_response_code(400);
@@ -56,15 +57,16 @@ if ($cleanPath === '/students') {
             }
 
             $stmt = $conn->prepare("
-                INSERT INTO students (school_id, first_name, last_name, document_number)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO students (school_id, first_name, last_name, document_number, work_shift)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (school_id, document_number) DO UPDATE
                   SET first_name = EXCLUDED.first_name,
                       last_name  = EXCLUDED.last_name,
+                      work_shift = EXCLUDED.work_shift,
                       deleted_at = NULL
                 RETURNING student_id
             ");
-            $stmt->execute([$schoolId, $firstName, $lastName, $document]);
+            $stmt->execute([$schoolId, $firstName, $lastName, $document, $workShift]);
             $studentId = $stmt->fetchColumn();
 
             if ($groupName) {

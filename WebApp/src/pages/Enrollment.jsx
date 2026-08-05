@@ -34,7 +34,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [saveError, setSaveError] = useState('');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    nombres: '', apellidos: '', documento: '',
+    nombres: '', apellidos: '', documento: '', jornada: 'mañana',
     acudienteNombre: '', acudienteApellidos: '', acudienteDocumento: '', acudienteCelular: '',
     grado: '', grupo: '',
   });
@@ -61,6 +61,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     try {
       await studentsApi.create({
         first_name: form.nombres, last_name: form.apellidos, document: form.documento,
+        work_shift: form.jornada,
         grade: form.grado, group: form.grupo,
         guardian_name: `${form.acudienteNombre} ${form.acudienteApellidos}`,
         guardian_document: form.acudienteDocumento, guardian_phone: form.acudienteCelular,
@@ -147,6 +148,18 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                 <Input label="Nombres" value={form.nombres} onChange={set('nombres')} placeholder="Ej. Juan Carlos" />
                 <Input label="Apellidos" value={form.apellidos} onChange={set('apellidos')} placeholder="Ej. Pérez Torres" />
                 <Input label="Número de documento" value={form.documento} onChange={set('documento')} placeholder="12345678" />
+                <div className="space-y-1.5">
+                  <label className="text-label text-[var(--nx-text)]">Jornada</label>
+                  <select
+                    value={form.jornada}
+                    onChange={set('jornada')}
+                    className="w-full rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-2.5 text-body text-[var(--nx-text)] outline-none focus:border-[var(--nx-accent)]"
+                  >
+                    <option value="mañana">Mañana</option>
+                    <option value="tarde">Tarde</option>
+                    <option value="completa">Completa</option>
+                  </select>
+                </div>
               </>
             )}
             {step === 2 && (

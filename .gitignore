@@ -56,3 +56,5 @@ venv/
 .env*.local
 *.zip
 .aider*
+.agents/
+.obsidian/

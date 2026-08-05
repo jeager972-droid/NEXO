@@ -425,6 +425,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentName = trim($target['first_name'] . ' ' . $target['last_name']);
                 $reason = !empty($params['reason']) ? filter_var($params['reason'], FILTER_SANITIZE_SPECIAL_CHARS) : 'Inasistencia reportada';
 
+                // Registrar la inasistencia en attendance_incidents para que el dashboard la cuente
+                $incStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
+                    VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA', NOW())
+                ");
+                $incStmt->execute([$schoolId, $studentId]);
+
                 $inasistMsg = "📋 *NEXO — Reporte de Inasistencia*\n\nEstudiante: {$studentName}\nMotivo: {$reason}\n\nSi tiene alguna duda o justificación, por favor contáctese con la institución.";
                 $deliveryResults = [];
                 $deliveryResults[] = enqueueTwilioJob($target['whatsapp_phone'], $inasistMsg, $schoolId, $studentId, $target['guardian_id'], $userId, 'INASISTENCIA');
@@ -862,21 +869,28 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $incStmt->execute([$schoolId, $studentId, strtoupper($action)]);
                 }
 
-                if ($action === 'horario' && !empty($params['group'])) {
-                    $groupName = filter_var($params['group'], FILTER_SANITIZE_SPECIAL_CHARS);
-                    $groupStmt = $conn->prepare("
-                        SELECT DISTINCT g.whatsapp_phone
-                        FROM guardians g
-                        JOIN guardian_student_relationships gsr ON g.guardian_id = gsr.guardian_id AND gsr.primary_guardian = TRUE
-                        JOIN student_group_assignments sga ON gsr.student_id = sga.student_id AND sga.active = TRUE
-                        JOIN academic_groups ag ON sga.group_id = ag.group_id AND ag.group_name = ? AND ag.school_id = ?
-                    ");
-                    $groupStmt->execute([$groupName, $schoolId]);
-                    $msg = "\xF0\x9F\x93\xA2 *NEXO*\n\nHubo un *cambio de horario* para el grupo *" . $groupName . "*.\n\nPor favor esté atento a la hora de llegada de su estudiante. Detalle: {$reason}";
-                    while ($gRow = $groupStmt->fetch(PDO::FETCH_ASSOC)) {
-                        if (!empty($gRow['whatsapp_phone'])) {
-                            enqueueTwilioJob($gRow['whatsapp_phone'], $msg, $schoolId, null, null, $userId, 'HORARIO');
-                        }
+                if ($action === 'horario') {
+                    // Persistir configuración de jornada (ScheduleTask) en daily_schedule_config
+                    $changes = $params['changes'] ?? [];
+                    foreach ($changes as $change) {
+                        $groupName = $change['group'] ?? '';
+                        $noClasses = $change['no_classes'] ?? false;
+                        $entryTime = $change['entry_time'] ?? null;
+                        $exitTime = $change['exit_time'] ?? null;
+
+                        // Buscar group_id por nombre
+                        $grpStmt = $conn->prepare("SELECT group_id FROM academic_groups WHERE group_name = ? AND school_id = ? LIMIT 1");
+                        $grpStmt->execute([$groupName, $schoolId]);
+                        $groupId = $grpStmt->fetchColumn();
+                        if (!$groupId) continue;
+
+                        $dscStmt = $conn->prepare("
+                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
+                            VALUES (?, ?, CURRENT_DATE, ?, ?, ?, ?)
+                            ON CONFLICT (school_id, group_id, config_date)
+                            DO UPDATE SET has_classes = EXCLUDED.has_classes, expected_entry_time = EXCLUDED.expected_entry_time, expected_exit_time = EXCLUDED.expected_exit_time
+                        ");
+                        $dscStmt->execute([$schoolId, $groupId, !$noClasses, $entryTime, $exitTime, $authUser['id']]);
                     }
                 }
 
