@@ -202,7 +202,7 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
                 (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
                  recess_start_time, recess_end_time, onboarding_completed,
                  onboarding_completed_by, onboarding_completed_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+            VALUES (?, ?::boolean, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
         ");
 
         $blockStmt = $conn->prepare("
@@ -298,7 +298,7 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
                     (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
                      recess_start_time, recess_end_time, onboarding_completed,
                      onboarding_completed_by, onboarding_completed_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+                VALUES (?, ?::boolean, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
             ");
 
             $blockStmt = $conn->prepare("

@@ -9,6 +9,9 @@
  *   Fase 3: Para CADA jornada: entrada/salida, ¿rota salones?, receso
  *           Si rota: sub-paso para bloques horarios
  *   Fase 4: Revisión y guardado
+ *
+ * Persistencia: el estado se guarda en localStorage para que al refrescar
+ * no se pierda el progreso del formulario.
  */
 import { useState, useEffect, useMemo } from 'react';
 import { Clock, AlertCircle, Calendar, Coffee, Check, Sun, Moon, Sunset } from 'lucide-react';
@@ -16,9 +19,12 @@ import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { SearchableSelect } from '../ui/SearchableSelect';
+import { TimePicker12h } from '../ui/TimePicker12h';
 import { schoolApi } from '../../api/school';
+import { humanizeError } from '../../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
+const STORAGE_KEY = 'nexo:onboarding-schedule';
 
 const SHIFT_OPTIONS = [
   { value: 'mañana', label: 'Mañana', icon: Sun },
@@ -38,23 +44,54 @@ const DEFAULT_JORNADA = () => ({
   blocks: [],
 });
 
+/** Carga el estado desde localStorage o retorna null */
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return null;
+    return data;
+  } catch { return null; }
+}
+
+/** Guarda el estado en localStorage */
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch { /* ignore quota errors */ }
+}
+
+/** Limpia el estado de localStorage */
+function clearSavedState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+}
+
 export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted }) => {
+  // Restaurar estado desde localStorage
+  const saved = useMemo(() => loadSavedState(), []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Fase: 'multi' → 'select' → 'jornada' → 'review'
-  const [phase, setPhase] = useState('multi');
+  const [phase, setPhase] = useState(saved?.phase || 'multi');
 
   // Fase 'multi': ¿hay más de una jornada?
-  const [hasMultipleShifts, setHasMultipleShifts] = useState(null);
+  const [hasMultipleShifts, setHasMultipleShifts] = useState(saved?.hasMultipleShifts ?? null);
 
   // Fase 'select': qué jornadas existen
-  const [selectedShifts, setSelectedShifts] = useState([]);
+  const [selectedShifts, setSelectedShifts] = useState(saved?.selectedShifts || []);
 
   // Fase 'jornada': configuración por jornada
-  const [jornadas, setJornadas] = useState([]);
-  const [currentJornadaIdx, setCurrentJornadaIdx] = useState(0);
-  const [jornadaSubStep, setJornadaSubStep] = useState(0); // 0=config general, 1=bloques (si rota)
+  const [jornadas, setJornadas] = useState(saved?.jornadas || []);
+  const [currentJornadaIdx, setCurrentJornadaIdx] = useState(saved?.currentJornadaIdx || 0);
+  const [jornadaSubStep, setJornadaSubStep] = useState(saved?.jornadaSubStep || 0);
+
+  // Persistir estado en localStorage cada vez que cambie
+  useEffect(() => {
+    saveState({ phase, hasMultipleShifts, selectedShifts, jornadas, currentJornadaIdx, jornadaSubStep });
+  }, [phase, hasMultipleShifts, selectedShifts, jornadas, currentJornadaIdx, jornadaSubStep]);
 
   // Inicializar bloques cuando cambia numBlocks o rotates de la jornada actual
   useEffect(() => {
@@ -76,12 +113,11 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
 
   // Calcular total de pasos y paso actual para la barra de progreso
   const { totalSteps, currentStep } = useMemo(() => {
-    let total = 1; // fase 'multi'
-    if (hasMultipleShifts === true) total += 1; // fase 'select'
-    // fase 'jornada': 1 paso por jornada (no rota) o 2 pasos (rota)
+    let total = 1;
+    if (hasMultipleShifts === true) total += 1;
     const jornadaSteps = jornadas.reduce((acc, j) => acc + (j.rotates_classrooms ? 2 : 1), 0);
     total += jornadaSteps;
-    if (jornadas.length > 0) total += 1; // fase 'review'
+    if (jornadas.length > 0) total += 1;
 
     let current = 1;
     if (phase === 'multi') current = 1;
@@ -120,10 +156,8 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
       const j = jornadas[currentJornadaIdx];
       if (!j) return false;
       if (jornadaSubStep === 1) {
-        // Validar bloques
         return j.blocks.length > 0 && j.blocks.every(b => b.start_time && b.end_time);
       }
-      // Sub-step 0: config general
       if (!j.entry_time || !j.exit_time) return false;
       if (j.recess_start_time && !j.recess_end_time) return false;
       if (j.recess_end_time && !j.recess_start_time) return false;
@@ -137,7 +171,6 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
     setError('');
     if (phase === 'multi') {
       if (hasMultipleShifts === false) {
-        // Una sola jornada: preseleccionar 'mañana' y ir directo a configurar
         const shifts = ['mañana'];
         setSelectedShifts(shifts);
         setJornadas(shifts.map(s => ({ ...DEFAULT_JORNADA(), work_shift: s })));
@@ -163,11 +196,9 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
     if (phase === 'jornada') {
       const j = jornadas[currentJornadaIdx];
       if (jornadaSubStep === 0 && j.rotates_classrooms) {
-        // Ir a sub-paso de bloques
         setJornadaSubStep(1);
         return;
       }
-      // Avanzar a la siguiente jornada o a revisión
       if (currentJornadaIdx < jornadas.length - 1) {
         setCurrentJornadaIdx(currentJornadaIdx + 1);
         setJornadaSubStep(0);
@@ -189,7 +220,6 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
       return;
     }
     if (phase === 'review') {
-      // Volver a la última jornada
       const lastIdx = jornadas.length - 1;
       setCurrentJornadaIdx(lastIdx);
       setJornadaSubStep(jornadas[lastIdx].rotates_classrooms ? 1 : 0);
@@ -198,17 +228,14 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
     }
     if (phase === 'jornada') {
       if (jornadaSubStep === 1) {
-        // Volver al sub-paso de config general de la misma jornada
         setJornadaSubStep(0);
         return;
       }
-      // Sub-step 0: volver a la jornada anterior o a fase anterior
       if (currentJornadaIdx > 0) {
         const prevIdx = currentJornadaIdx - 1;
         setCurrentJornadaIdx(prevIdx);
         setJornadaSubStep(jornadas[prevIdx].rotates_classrooms ? 1 : 0);
       } else {
-        // Volver a 'select' o 'multi'
         if (hasMultipleShifts === true) {
           setPhase('select');
         } else {
@@ -240,13 +267,13 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
       };
       const result = await schoolApi.completeOnboarding(payload);
       if (result.status === 'ok') {
+        clearSavedState();
         onCompleted?.(result);
       } else {
-        setError(result.message || 'Error al guardar configuración');
+        setError(humanizeError(result, 'No se pudo guardar la configuración.'));
       }
     } catch (e) {
-      const msg = e?.response?.data?.message || e.message || 'Error de conexión';
-      setError(msg);
+      setError(humanizeError(e, 'No se pudo guardar la configuración. Verifica tu conexión e inténtalo de nuevo.'));
     } finally {
       setLoading(false);
     }
@@ -271,10 +298,10 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         initial={{ opacity: 0, scale: 0.97, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.2, ease: EASE }}
-        className="relative z-10 w-full max-w-[640px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog max-h-[90vh] overflow-y-auto"
+        className="relative z-10 w-full max-w-[640px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog max-h-[95vh] flex flex-col"
       >
         {/* Header — sin botón de cerrar (onboarding obligatorio) */}
-        <div className="border-b border-[var(--nx-border)] px-6 py-5">
+        <div className="border-b border-[var(--nx-border)] px-6 py-5 shrink-0">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-surface bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
               <Calendar size={20} strokeWidth={1.75} />
@@ -299,8 +326,8 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
           </div>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-5 space-y-5">
+        {/* Body — scrollable, crece con el contenido */}
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           {error && (
             <div className="flex items-start gap-2 rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3">
               <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--nx-danger)]" />
@@ -402,21 +429,19 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
               {jornadaSubStep === 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input
+                    <TimePicker12h
                       label="Hora de entrada"
-                      type="time"
                       required
                       value={jornadas[currentJornadaIdx].entry_time}
-                      onChange={(e) => updateJornada(currentJornadaIdx, 'entry_time', e.target.value)}
-                      leftIcon={<Clock size={16} />}
+                      onChange={(v) => updateJornada(currentJornadaIdx, 'entry_time', v)}
+                      leftIcon={Clock}
                     />
-                    <Input
+                    <TimePicker12h
                       label="Hora de salida"
-                      type="time"
                       required
                       value={jornadas[currentJornadaIdx].exit_time}
-                      onChange={(e) => updateJornada(currentJornadaIdx, 'exit_time', e.target.value)}
-                      leftIcon={<Clock size={16} />}
+                      onChange={(v) => updateJornada(currentJornadaIdx, 'exit_time', v)}
+                      leftIcon={Clock}
                     />
                   </div>
 
@@ -456,22 +481,20 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                   <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-4 space-y-3">
                     <div className="flex items-center gap-2 text-[var(--nx-text-muted)]">
                       <Coffee size={16} />
-                      <p className="text-caption">Receso / Almuerzo (opcional)</p>
+                      <p className="text-caption">Receso</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <Input
+                      <TimePicker12h
                         label="Inicio del receso"
-                        type="time"
                         value={jornadas[currentJornadaIdx].recess_start_time}
-                        onChange={(e) => updateJornada(currentJornadaIdx, 'recess_start_time', e.target.value)}
-                        leftIcon={<Clock size={16} />}
+                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_start_time', v)}
+                        leftIcon={Clock}
                       />
-                      <Input
+                      <TimePicker12h
                         label="Fin del receso"
-                        type="time"
                         value={jornadas[currentJornadaIdx].recess_end_time}
-                        onChange={(e) => updateJornada(currentJornadaIdx, 'recess_end_time', e.target.value)}
-                        leftIcon={<Clock size={16} />}
+                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_end_time', v)}
+                        leftIcon={Clock}
                       />
                     </div>
                   </div>
@@ -505,17 +528,15 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                             {bIdx + 1}
                           </span>
                           <div className="grid flex-1 grid-cols-2 gap-3">
-                            <Input
+                            <TimePicker12h
                               label="Inicio"
-                              type="time"
                               value={block.start_time}
-                              onChange={(e) => updateBlock(currentJornadaIdx, bIdx, 'start_time', e.target.value)}
+                              onChange={(v) => updateBlock(currentJornadaIdx, bIdx, 'start_time', v)}
                             />
-                            <Input
+                            <TimePicker12h
                               label="Fin"
-                              type="time"
                               value={block.end_time}
-                              onChange={(e) => updateBlock(currentJornadaIdx, bIdx, 'end_time', e.target.value)}
+                              onChange={(v) => updateBlock(currentJornadaIdx, bIdx, 'end_time', v)}
                             />
                           </div>
                         </div>
@@ -559,8 +580,8 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-[var(--nx-border)] px-6 py-4">
+        {/* Footer — fijo abajo */}
+        <div className="flex items-center justify-between border-t border-[var(--nx-border)] px-6 py-4 shrink-0">
           <Button
             variant="secondary"
             onClick={handleBack}
