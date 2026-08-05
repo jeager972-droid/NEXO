@@ -335,7 +335,9 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         setError(humanizeError(result, 'No se pudo guardar la configuración.'));
       }
     } catch (e) {
-      setError(humanizeError(e, 'No se pudo guardar la configuración. Verifica tu conexión e inténtalo de nuevo.'));
+      console.error('[Onboarding] Error al guardar:', e);
+      const raw = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
+      setError(`Error al guardar: ${raw}`);
     } finally {
       setLoading(false);
     }
