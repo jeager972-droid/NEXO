@@ -43,10 +43,10 @@ function logE(string $e, string $m = ''): void {
 function processSchoolPermissions(PDO $conn, string $schoolId): int {
     $updated = 0;
 
-    // set_config para RLS
-    try {
-        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", false)");
-    } catch (Exception $ignore) {}
+    // set_config para RLS (transaction-level para PgBouncer)
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
     // Obtener todos los permisos ACTIVE de esta escuela
     $stmt = $conn->prepare("
@@ -124,6 +124,7 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
         }
     }
 
+    $conn->exec("COMMIT");
     return $updated;
 }
 

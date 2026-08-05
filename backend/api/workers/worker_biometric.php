@@ -286,16 +286,16 @@ function processJob(array $job, PDO $conn): bool {
                                    AND school_id = ?
                                    AND (detected_at)::date = (to_timestamp(?))::date
                                    AND incident_type = 'LATE_ARRIVAL'
-                             )"
+                             )
+                             RETURNING incident_id"
                         );
                         $lateStmt->execute([$capturedAt, $doc, $instId, $instId, $capturedAt]);
+                        $incidentId = $lateStmt->fetchColumn();
 
                         // ───────────────────────────────────────────────────────
                         // Notificar al docente del grupo del estudiante sobre la
                         // llegada tarde, con botones Justificar / No Justificar.
                         // ───────────────────────────────────────────────────────
-                        $incidentId = $conn->query("SELECT incident_id FROM attendance_incidents WHERE student_id = (SELECT student_id FROM students WHERE document_number = " . $conn->quote($doc) . " AND school_id = " . $conn->quote((string)$instId) . ") AND school_id = " . $conn->quote((string)$instId) . " AND incident_type = 'LATE_ARRIVAL' AND (detected_at)::date = (to_timestamp({$capturedAt}))::date ORDER BY detected_at DESC LIMIT 1")->fetchColumn();
-
                         $studentNameStmt = $conn->prepare("SELECT first_name, last_name, student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
                         $studentNameStmt->execute([$doc, $instId]);
                         $studentRow = $studentNameStmt->fetch(PDO::FETCH_ASSOC);

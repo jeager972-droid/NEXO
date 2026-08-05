@@ -100,10 +100,10 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         ORDER BY ag.group_name
     ");
 
-    // set_config para RLS (session-level, best-effort con PgBouncer)
-    try {
-        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", false)");
-    } catch (Exception $ignore) {}
+    // set_config para RLS (transaction-level para PgBouncer)
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -115,6 +115,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     foreach ($shiftConfigStmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
         $shiftConfigs[$sc['work_shift']] = $sc['entry_time'];
     }
+    $conn->exec("COMMIT");
 
     foreach ($groups as $group) {
         if (!$group['has_classes']) continue;

@@ -796,6 +796,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                 <SituationLine
                   key={row.student_id || i}
                   icon={CATEGORY_ICONS[category]}
+                  label={CATEGORY_LABELS[category]?.label || category}
                   value={`${row.last_name} ${row.first_name}`}
                   detail={renderDetailValue(category, row)}
                   scheme={CATEGORY_SCHEMES[category]}

@@ -88,6 +88,8 @@ INSERT INTO permissions(permission_id, permission_code, description) VALUES
     (gen_random_uuid(),'operations.horario','Notify group schedule change'),
     (gen_random_uuid(),'operations.incidente','Report disciplinary incident'),
     (gen_random_uuid(),'operations.seguimiento','Request counselor tracking'),
+    (gen_random_uuid(),'operations.fusionar_bloque','Merge class blocks for sensor logic'),
+    (gen_random_uuid(),'operations.extender_bloque','Extend current block end time for the day'),
     (gen_random_uuid(),'operations.situacion_critica','Report critical situation to rector and coordinator'),
     (gen_random_uuid(),'consultations.teacher_view','View queries filtered by assigned groups'),
     (gen_random_uuid(),'consultations.global_view','View all institution queries'),
@@ -119,7 +121,7 @@ BEGIN
     INSERT INTO role_permissions(role_permission_id,role_id,permission_id) VALUES(gen_random_uuid(),v_r,v_p) ON CONFLICT DO NOTHING;
   END LOOP;
   SELECT role_id INTO v_r FROM roles WHERE role_name='TEACHER' LIMIT 1;
-  FOR v_p IN SELECT permission_id FROM permissions p WHERE p.permission_code IN ('dashboard.teacher_view','operations.inasistencia','operations.citacion','operations.permiso','operations.pedagogica','operations.horario','operations.incidente','operations.seguimiento','operations.situacion_critica','consultations.teacher_view','reports.preview','students.view','behavior.view_risk') LOOP
+  FOR v_p IN SELECT permission_id FROM permissions p WHERE p.permission_code IN ('dashboard.teacher_view','operations.inasistencia','operations.citacion','operations.permiso','operations.pedagogica','operations.horario','operations.incidente','operations.seguimiento','operations.fusionar_bloque','operations.situacion_critica','consultations.teacher_view','reports.preview','students.view','behavior.view_risk') LOOP
     INSERT INTO role_permissions(role_permission_id,role_id,permission_id) VALUES(gen_random_uuid(),v_r,v_p) ON CONFLICT DO NOTHING;
   END LOOP;
   SELECT role_id INTO v_r FROM roles WHERE role_name='SECRETARY' LIMIT 1;

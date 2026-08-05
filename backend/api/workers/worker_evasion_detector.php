@@ -173,15 +173,16 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
     $todayDate = $nowBogota->format('Y-m-d');
     $currentTimeStr = $nowBogota->format('H:i:s');
 
-    // set_config para RLS
-    try {
-        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", false)");
-    } catch (Exception $ignore) {}
+    // set_config para RLS (transaction-level para PgBouncer)
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
     // 1. Obtener configuración institucional (multi-jornada: puede haber varias filas)
     $configStmt = $conn->prepare("SELECT * FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE ORDER BY work_shift");
     $configStmt->execute([$schoolId]);
     $configs = $configStmt->fetchAll(PDO::FETCH_ASSOC);
+    $conn->exec("COMMIT");
 
     // Si no hay configuración (onboarding no completado), no procesar
     if (empty($configs)) {

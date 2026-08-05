@@ -138,7 +138,7 @@ if ($cleanPath === '/dashboard/stats') {
                       AND event_type LIKE 'INGRESO_%'
                       {$groupFilter}
                       AND student_id IN (
-                          SELECT sga.student_id FROM student_group_assignments sga
+                          SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
