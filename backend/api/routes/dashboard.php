@@ -106,8 +106,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(DISTINCT student_id) as cnt
                     FROM biometric_events
                     WHERE school_id = ?
-                      AND event_timestamp >= CURRENT_DATE 
-                      AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day')
+                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND event_type LIKE 'INGRESO_%'
                       {$groupFilter}
                       AND student_id IN (
@@ -121,8 +121,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE 
-                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
                       {$groupFilter}
                       AND student_id IN (
@@ -150,8 +150,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE
-                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                       {$groupFilter}
                       AND student_id IN (
@@ -165,8 +165,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE
-                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type = 'LATE_ARRIVAL'
                       {$groupFilter}
                       AND student_id IN (
@@ -197,8 +197,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(DISTINCT student_id) as cnt
                     FROM biometric_events
                     WHERE school_id = ?
-                      AND event_timestamp >= CURRENT_DATE 
-                      AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day')
+                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND event_type LIKE 'INGRESO_%'
                       {$groupFilter}
                 ),
@@ -206,8 +206,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE 
-                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
                       {$groupFilter}
                 ),
@@ -222,8 +222,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE
-                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                       {$groupFilter}
                 ),
@@ -231,8 +231,8 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE
-                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type = 'LATE_ARRIVAL'
                       {$groupFilter}
                 )
@@ -270,7 +270,7 @@ if ($cleanPath === '/dashboard/stats') {
                 TO_CHAR(generated_at, 'HH24:MI') as time
                 FROM report_exports
                 WHERE school_id = ?
-                  AND generated_at >= CURRENT_DATE AND generated_at < (CURRENT_DATE + INTERVAL '1 day')
+                  AND generated_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND generated_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                 LIMIT 5
             ");
             $tasksStmt->execute([$schoolId]);
@@ -389,8 +389,8 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
     $groupName = $_GET['group_name'] ?? '';
     $category = $_GET['category'] ?? '';
-    $fromDate = $_GET['from_date'] ?? gmdate('Y-m-d');
-    $toDate = $_GET['to_date'] ?? gmdate('Y-m-d');
+    $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-5 hours'));
+    $toDate = $_GET['to_date'] ?? date('Y-m-d', strtotime('-5 hours'));
 
     if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late'])) {
         http_response_code(400);
@@ -595,7 +595,7 @@ if ($cleanPath === '/dashboard/events') {
                 LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
                 LEFT JOIN roles r ON u.role_id = r.role_id
                 WHERE uc.school_id = ?
-                  AND uc.executed_at >= CURRENT_DATE
+                  AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                   AND (
                     uc.command_type IN ('PERMISO', 'AUTORIZAR_SALIDA', 'HORARIO', 'INCIDENTE', 'DAÑO', 'SOS', 'PEDAGOGICA', 'SEGUIMIENTO', 'INASISTENCIA')
                   )
@@ -615,7 +615,7 @@ if ($cleanPath === '/dashboard/events') {
                 LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
                 LEFT JOIN roles r ON u.role_id = r.role_id
                 WHERE uc.school_id = ?
-                  AND uc.executed_at >= CURRENT_DATE
+                  AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                   AND uc.executed_by_user_id = ?
                 ORDER BY uc.executed_at DESC
                 LIMIT ?
@@ -633,7 +633,7 @@ if ($cleanPath === '/dashboard/events') {
                 LEFT JOIN roles r ON u.role_id = r.role_id
                 WHERE uc.school_id = ?
                   AND uc.executed_by_user_id = ?
-                  AND uc.executed_at >= CURRENT_DATE
+                  AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                 ORDER BY uc.executed_at DESC
                 LIMIT ?
             ");

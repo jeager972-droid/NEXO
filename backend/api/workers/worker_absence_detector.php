@@ -94,7 +94,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         FROM academic_groups ag
         LEFT JOIN daily_schedule_config dsc
           ON dsc.group_id = ag.group_id
-          AND dsc.config_date = CURRENT_DATE
+          AND dsc.config_date = (NOW() AT TIME ZONE 'America/Bogota')::date
           AND dsc.school_id = ag.school_id
         WHERE ag.school_id = ?
         ORDER BY ag.group_name
@@ -140,8 +140,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             SELECT DISTINCT student_id
             FROM biometric_events
             WHERE school_id = ?
-              AND event_timestamp >= CURRENT_DATE
-              AND event_timestamp < (CURRENT_DATE + INTERVAL '1 day')
+              AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
+              AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
               AND event_type LIKE 'INGRESO_%'
               AND student_id IN (
                   SELECT sga2.student_id FROM student_group_assignments sga2
@@ -188,8 +188,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             $checkStmt = $conn->prepare("
                 SELECT 1 FROM attendance_incidents
                 WHERE student_id = ? AND school_id = ?
-                  AND detected_at >= CURRENT_DATE
-                  AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                  AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                  AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                   AND incident_type = 'INASISTENCIA'
                 LIMIT 1
             ");
