@@ -19,7 +19,6 @@ import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { SearchableSelect } from '../ui/SearchableSelect';
-import { TimePicker12h } from '../ui/TimePicker12h';
 import { schoolApi } from '../../api/school';
 import { humanizeError } from '../../utils/messages';
 
@@ -298,10 +297,10 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         initial={{ opacity: 0, scale: 0.97, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.2, ease: EASE }}
-        className="relative z-10 w-full max-w-[640px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog max-h-[95vh] flex flex-col"
+        className="relative z-10 w-full max-w-[680px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog max-h-[95vh] overflow-y-auto"
       >
         {/* Header — sin botón de cerrar (onboarding obligatorio) */}
-        <div className="border-b border-[var(--nx-border)] px-6 py-5 shrink-0">
+        <div className="border-b border-[var(--nx-border)] px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-surface bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
               <Calendar size={20} strokeWidth={1.75} />
@@ -327,7 +326,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         </div>
 
         {/* Body — scrollable, crece con el contenido */}
-        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-5">
           {error && (
             <div className="flex items-start gap-2 rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3">
               <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--nx-danger)]" />
@@ -429,19 +428,21 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
               {jornadaSubStep === 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
-                    <TimePicker12h
+                    <Input
                       label="Hora de entrada"
+                      type="time"
                       required
                       value={jornadas[currentJornadaIdx].entry_time}
-                      onChange={(v) => updateJornada(currentJornadaIdx, 'entry_time', v)}
-                      leftIcon={Clock}
+                      onChange={(e) => updateJornada(currentJornadaIdx, 'entry_time', e.target.value)}
+                      leftIcon={<Clock size={16} />}
                     />
-                    <TimePicker12h
+                    <Input
                       label="Hora de salida"
+                      type="time"
                       required
                       value={jornadas[currentJornadaIdx].exit_time}
-                      onChange={(v) => updateJornada(currentJornadaIdx, 'exit_time', v)}
-                      leftIcon={Clock}
+                      onChange={(e) => updateJornada(currentJornadaIdx, 'exit_time', e.target.value)}
+                      leftIcon={<Clock size={16} />}
                     />
                   </div>
 
@@ -484,17 +485,19 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                       <p className="text-caption">Receso</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <TimePicker12h
+                      <Input
                         label="Inicio del receso"
+                        type="time"
                         value={jornadas[currentJornadaIdx].recess_start_time}
-                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_start_time', v)}
-                        leftIcon={Clock}
+                        onChange={(e) => updateJornada(currentJornadaIdx, 'recess_start_time', e.target.value)}
+                        leftIcon={<Clock size={16} />}
                       />
-                      <TimePicker12h
+                      <Input
                         label="Fin del receso"
+                        type="time"
                         value={jornadas[currentJornadaIdx].recess_end_time}
-                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_end_time', v)}
-                        leftIcon={Clock}
+                        onChange={(e) => updateJornada(currentJornadaIdx, 'recess_end_time', e.target.value)}
+                        leftIcon={<Clock size={16} />}
                       />
                     </div>
                   </div>
@@ -528,15 +531,17 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
                             {bIdx + 1}
                           </span>
                           <div className="grid flex-1 grid-cols-2 gap-3">
-                            <TimePicker12h
+                            <Input
                               label="Inicio"
+                              type="time"
                               value={block.start_time}
-                              onChange={(v) => updateBlock(currentJornadaIdx, bIdx, 'start_time', v)}
+                              onChange={(e) => updateBlock(currentJornadaIdx, bIdx, 'start_time', e.target.value)}
                             />
-                            <TimePicker12h
+                            <Input
                               label="Fin"
+                              type="time"
                               value={block.end_time}
-                              onChange={(v) => updateBlock(currentJornadaIdx, bIdx, 'end_time', v)}
+                              onChange={(e) => updateBlock(currentJornadaIdx, bIdx, 'end_time', e.target.value)}
                             />
                           </div>
                         </div>
@@ -581,7 +586,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         </div>
 
         {/* Footer — fijo abajo */}
-        <div className="flex items-center justify-between border-t border-[var(--nx-border)] px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between border-t border-[var(--nx-border)] px-6 py-4">
           <Button
             variant="secondary"
             onClick={handleBack}
