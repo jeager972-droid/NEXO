@@ -197,14 +197,8 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
         $conn->prepare("DELETE FROM school_schedule_config WHERE school_id = ?")->execute([$schoolId]);
 
         // Insertar cada jornada
-        $upsertStmt = $conn->prepare("
-            INSERT INTO school_schedule_config
-                (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
-                 recess_start_time, recess_end_time, onboarding_completed,
-                 onboarding_completed_by, onboarding_completed_at, updated_at)
-            VALUES (?, ?::boolean, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
-        ");
-
+        // Nota: rotates_classrooms se pasa como literal SQL (TRUE/FALSE) porque
+        // PDO_PGSQL convierte false de PHP a string vacío, y ''::boolean falla.
         $blockStmt = $conn->prepare("
             INSERT INTO school_time_blocks (school_id, work_shift, block_number, block_name, start_time, end_time)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -219,8 +213,15 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
             $recessEnd = trim((string)($j['recess_end_time'] ?? ''));
             $blocks = $j['time_blocks'] ?? [];
 
+            $upsertStmt = $conn->prepare("
+                INSERT INTO school_schedule_config
+                    (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
+                     recess_start_time, recess_end_time, onboarding_completed,
+                     onboarding_completed_by, onboarding_completed_at, updated_at)
+                VALUES (?, " . ($rotates ? 'TRUE' : 'FALSE') . ", ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+            ");
             $upsertStmt->execute([
-                $schoolId, $rotates, $shift, $entryTime, $exitTime,
+                $schoolId, $shift, $entryTime, $exitTime,
                 $recessStart ?: null, $recessEnd ?: null,
                 $userId
             ]);
@@ -293,14 +294,6 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
             $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ?")->execute([$schoolId]);
             $conn->prepare("DELETE FROM school_schedule_config WHERE school_id = ?")->execute([$schoolId]);
 
-            $upsertStmt = $conn->prepare("
-                INSERT INTO school_schedule_config
-                    (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
-                     recess_start_time, recess_end_time, onboarding_completed,
-                     onboarding_completed_by, onboarding_completed_at, updated_at)
-                VALUES (?, ?::boolean, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
-            ");
-
             $blockStmt = $conn->prepare("
                 INSERT INTO school_time_blocks (school_id, work_shift, block_number, block_name, start_time, end_time)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -308,9 +301,16 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
 
             foreach ($jornadas as $j) {
                 $shift = trim((string)$j['work_shift']);
+                $rotates = (bool)($j['rotates_classrooms'] ?? false);
+                $upsertStmt = $conn->prepare("
+                    INSERT INTO school_schedule_config
+                        (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
+                         recess_start_time, recess_end_time, onboarding_completed,
+                         onboarding_completed_by, onboarding_completed_at, updated_at)
+                    VALUES (?, " . ($rotates ? 'TRUE' : 'FALSE') . ", ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+                ");
                 $upsertStmt->execute([
                     $schoolId,
-                    (bool)($j['rotates_classrooms'] ?? false),
                     $shift,
                     trim((string)$j['entry_time']),
                     trim((string)$j['exit_time']),
@@ -338,12 +338,17 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
             $params = [];
 
             $fieldMap = [
-                'rotates_classrooms' => isset($input['rotates_classrooms']) ? (bool)$input['rotates_classrooms'] : null,
                 'entry_time' => isset($input['entry_time']) ? trim((string)$input['entry_time']) : null,
                 'exit_time' => isset($input['exit_time']) ? trim((string)$input['exit_time']) : null,
                 'recess_start_time' => isset($input['recess_start_time']) ? trim((string)$input['recess_start_time']) : null,
                 'recess_end_time' => isset($input['recess_end_time']) ? trim((string)$input['recess_end_time']) : null,
             ];
+
+            // rotates_classrooms se maneja aparte: literal SQL TRUE/FALSE
+            // (PDO convierte false de PHP a string vacío, que falla como boolean)
+            if (isset($input['rotates_classrooms'])) {
+                $sets[] = "rotates_classrooms = " . ((bool)$input['rotates_classrooms'] ? 'TRUE' : 'FALSE');
+            }
 
             foreach ($fieldMap as $col => $val) {
                 if ($val !== null) {
