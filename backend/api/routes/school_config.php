@@ -7,19 +7,19 @@
  * RESPONSABILIDAD DEL ARCHIVO
  * ----------------------------
  * Expone endpoints para el onboarding obligatorio de horarios y la edición
- * posterior de la configuración institucional:
+ * posterior de la configuración institucional. Soporta múltiples jornadas
+ * (mañana, tarde, noche, etc.) por institución, cada una con sus propios
+ * horarios, recesos y bloques.
  *
- *   - GET  /school/config            : Retorna la configuración actual + estado
- *                                      de onboarding. Si no existe, retorna
- *                                      onboarding_completed=FALSE.
+ *   - GET  /school/config            : Retorna la configuración actual (array
+ *                                      de jornadas) + estado de onboarding.
  *   - POST /school/onboarding        : Crea/actualiza la configuración de
- *                                      horarios y marca onboarding_completed=TRUE.
+ *                                      horarios para todas las jornadas y marca
+ *                                      onboarding_completed=TRUE.
  *                                      Solo RECTOR y COORDINATOR.
  *   - PUT  /school/config            : Actualiza la configuración (post-onboarding).
- *                                      Solo RECTOR y COORDINATOR.
- *   - GET  /school/time-blocks       : Lista los bloques horarios.
+ *   - GET  /school/time-blocks       : Lista los bloques horarios (todas las jornadas).
  *   - POST /school/time-blocks       : Reemplaza los bloques horarios (bulk).
- *                                      Solo RECTOR y COORDINATOR.
  *
  * DEPENDENCIAS
  * ------------
@@ -45,43 +45,53 @@ if ($cleanPath === '/school/config' && $method === 'GET') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        // Configuración principal
-        $stmt = $conn->prepare("SELECT * FROM school_schedule_config WHERE school_id = ?");
+        // Configuración por jornada (puede haber múltiples filas)
+        $stmt = $conn->prepare("SELECT * FROM school_schedule_config WHERE school_id = ? ORDER BY work_shift");
         $stmt->execute([$schoolId]);
-        $config = $stmt->fetch(PDO::FETCH_ASSOC);
+        $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Bloques horarios
+        // Bloques horarios (todas las jornadas)
         $blocksStmt = $conn->prepare("
-            SELECT block_number, block_name, start_time, end_time
+            SELECT work_shift, block_number, block_name, start_time, end_time
             FROM school_time_blocks
             WHERE school_id = ?
-            ORDER BY block_number
+            ORDER BY work_shift, block_number
         ");
         $blocksStmt->execute([$schoolId]);
         $blocks = $blocksStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Formatear bloques (TIME a string HH:MM)
-        $formattedBlocks = array_map(function($b) {
-            return [
+        // Agrupar bloques por work_shift
+        $blocksByShift = [];
+        foreach ($blocks as $b) {
+            $shift = $b['work_shift'];
+            if (!isset($blocksByShift[$shift])) $blocksByShift[$shift] = [];
+            $blocksByShift[$shift][] = [
                 'block_number' => (int)$b['block_number'],
                 'block_name' => $b['block_name'],
                 'start_time' => substr($b['start_time'], 0, 5),
                 'end_time' => substr($b['end_time'], 0, 5),
             ];
-        }, $blocks);
+        }
+
+        // Formatear configs
+        $formattedConfigs = array_map(function($c) use ($blocksByShift) {
+            return [
+                'work_shift' => $c['work_shift'],
+                'rotates_classrooms' => (bool)$c['rotates_classrooms'],
+                'entry_time' => $c['entry_time'] ? substr($c['entry_time'], 0, 5) : null,
+                'exit_time' => $c['exit_time'] ? substr($c['exit_time'], 0, 5) : null,
+                'recess_start_time' => $c['recess_start_time'] ? substr($c['recess_start_time'], 0, 5) : null,
+                'recess_end_time' => $c['recess_end_time'] ? substr($c['recess_end_time'], 0, 5) : null,
+                'time_blocks' => $blocksByShift[$c['work_shift']] ?? [],
+            ];
+        }, $configs);
 
         $response = [
             'status' => 'ok',
-            'onboarding_completed' => (bool)($config['onboarding_completed'] ?? false),
-            'config' => $config ? [
-                'rotates_classrooms' => (bool)$config['rotates_classrooms'],
-                'work_shift' => $config['work_shift'],
-                'entry_time' => $config['entry_time'] ? substr($config['entry_time'], 0, 5) : null,
-                'exit_time' => $config['exit_time'] ? substr($config['exit_time'], 0, 5) : null,
-                'recess_start_time' => $config['recess_start_time'] ? substr($config['recess_start_time'], 0, 5) : null,
-                'recess_end_time' => $config['recess_end_time'] ? substr($config['recess_end_time'], 0, 5) : null,
-            ] : null,
-            'time_blocks' => $formattedBlocks,
+            'onboarding_completed' => !empty($configs) && (bool)$configs[0]['onboarding_completed'],
+            'configs' => $formattedConfigs,
+            'config' => $formattedConfigs[0] ?? null, // retrocompatibilidad
+            'time_blocks' => $blocksByShift,
         ];
 
         echo json_encode($response);
@@ -94,7 +104,7 @@ if ($cleanPath === '/school/config' && $method === 'GET') {
 }
 
 // ============================================================================
-// POST /school/onboarding — Onboarding obligatorio de horarios
+// POST /school/onboarding — Onboarding obligatorio de horarios (multi-jornada)
 // ============================================================================
 if ($cleanPath === '/school/onboarding' && $method === 'POST') {
     $authUser = requireAuth();
@@ -109,44 +119,68 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
         exit(json_encode(['status' => 'error', 'message' => 'Solo rector y coordinador pueden configurar los horarios']));
     }
 
-    $rotatesClassrooms = (bool)($input['rotates_classrooms'] ?? false);
-    $workShift = trim((string)($input['work_shift'] ?? 'mañana'));
-    $entryTime = trim((string)($input['entry_time'] ?? ''));
-    $exitTime = trim((string)($input['exit_time'] ?? ''));
-    $recessStartTime = trim((string)($input['recess_start_time'] ?? ''));
-    $recessEndTime = trim((string)($input['recess_end_time'] ?? ''));
-    $timeBlocks = $input['time_blocks'] ?? [];
+    // Aceptar formato nuevo (jornadas array) o formato antiguo (campos planos)
+    $jornadas = $input['jornadas'] ?? null;
 
-    // Validaciones
-    if (!in_array($workShift, ['mañana', 'tarde', 'completa'])) {
-        http_response_code(400);
-        exit(json_encode(['status' => 'error', 'message' => 'Jornada inválida. Debe ser: mañana, tarde o completa']));
+    if (!$jornadas) {
+        // Formato legacy: convertir a array de una sola jornada
+        $workShift = trim((string)($input['work_shift'] ?? 'mañana'));
+        $jornadas = [[
+            'work_shift' => $workShift,
+            'rotates_classrooms' => (bool)($input['rotates_classrooms'] ?? false),
+            'entry_time' => trim((string)($input['entry_time'] ?? '')),
+            'exit_time' => trim((string)($input['exit_time'] ?? '')),
+            'recess_start_time' => trim((string)($input['recess_start_time'] ?? '')),
+            'recess_end_time' => trim((string)($input['recess_end_time'] ?? '')),
+            'time_blocks' => $input['time_blocks'] ?? [],
+        ]];
     }
-    if (empty($entryTime) || empty($exitTime)) {
+
+    if (empty($jornadas) || !is_array($jornadas)) {
         http_response_code(400);
-        exit(json_encode(['status' => 'error', 'message' => 'Hora de entrada y salida son obligatorias']));
+        exit(json_encode(['status' => 'error', 'message' => 'Debe enviar al menos una jornada']));
     }
-    foreach ([$entryTime, $exitTime] as $t) {
-        if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
+
+    $validShifts = ['mañana', 'tarde', 'noche', 'completa'];
+
+    // Validar cada jornada
+    foreach ($jornadas as $i => $j) {
+        $shift = trim((string)($j['work_shift'] ?? ''));
+        $entryTime = trim((string)($j['entry_time'] ?? ''));
+        $exitTime = trim((string)($j['exit_time'] ?? ''));
+        $recessStart = trim((string)($j['recess_start_time'] ?? ''));
+        $recessEnd = trim((string)($j['recess_end_time'] ?? ''));
+        $rotates = (bool)($j['rotates_classrooms'] ?? false);
+        $blocks = $j['time_blocks'] ?? [];
+
+        if (!in_array($shift, $validShifts)) {
             http_response_code(400);
-            exit(json_encode(['status' => 'error', 'message' => 'Formato de hora inválido. Use HH:MM']));
+            exit(json_encode(['status' => 'error', 'message' => "Jornada inválida en posición $i: $shift. Debe ser: " . implode(', ', $validShifts)]));
         }
-    }
-    // Recess opcional pero si viene uno, debe venir el otro
-    if (($recessStartTime && !$recessEndTime) || (!$recessStartTime && $recessEndTime)) {
-        http_response_code(400);
-        exit(json_encode(['status' => 'error', 'message' => 'Debe especificar inicio y fin del receso, o ninguno']));
-    }
-    // Si rota salones, debe enviar bloques horarios
-    if ($rotatesClassrooms) {
-        if (empty($timeBlocks) || !is_array($timeBlocks)) {
+        if (empty($entryTime) || empty($exitTime)) {
             http_response_code(400);
-            exit(json_encode(['status' => 'error', 'message' => 'Si el colegio rota de salones, debe definir los bloques horarios']));
+            exit(json_encode(['status' => 'error', 'message' => "Hora de entrada y salida son obligatorias para jornada: $shift"]));
         }
-        foreach ($timeBlocks as $b) {
-            if (empty($b['start_time']) || empty($b['end_time'])) {
+        foreach ([$entryTime, $exitTime] as $t) {
+            if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
                 http_response_code(400);
-                exit(json_encode(['status' => 'error', 'message' => 'Cada bloque horario debe tener hora de inicio y fin']));
+                exit(json_encode(['status' => 'error', 'message' => "Formato de hora inválido en jornada $shift. Use HH:MM"]));
+            }
+        }
+        if (($recessStart && !$recessEnd) || (!$recessStart && $recessEnd)) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => "Debe especificar inicio y fin del receso, o ninguno, en jornada: $shift"]));
+        }
+        if ($rotates) {
+            if (empty($blocks) || !is_array($blocks)) {
+                http_response_code(400);
+                exit(json_encode(['status' => 'error', 'message' => "Si la jornada $shift rota de salones, debe definir los bloques horarios"]));
+            }
+            foreach ($blocks as $b) {
+                if (empty($b['start_time']) || empty($b['end_time'])) {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => "Cada bloque horario en jornada $shift debe tener hora de inicio y fin"]));
+                }
             }
         }
     }
@@ -158,67 +192,68 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
         $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
         $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($role) . ", true)");
 
-        // Upsert configuración
+        // Limpiar configuración y bloques existentes
+        $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ?")->execute([$schoolId]);
+        $conn->prepare("DELETE FROM school_schedule_config WHERE school_id = ?")->execute([$schoolId]);
+
+        // Insertar cada jornada
         $upsertStmt = $conn->prepare("
             INSERT INTO school_schedule_config
                 (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
                  recess_start_time, recess_end_time, onboarding_completed,
                  onboarding_completed_by, onboarding_completed_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
-            ON CONFLICT (school_id)
-            DO UPDATE SET
-                rotates_classrooms = EXCLUDED.rotates_classrooms,
-                work_shift = EXCLUDED.work_shift,
-                entry_time = EXCLUDED.entry_time,
-                exit_time = EXCLUDED.exit_time,
-                recess_start_time = EXCLUDED.recess_start_time,
-                recess_end_time = EXCLUDED.recess_end_time,
-                onboarding_completed = TRUE,
-                onboarding_completed_by = EXCLUDED.onboarding_completed_by,
-                onboarding_completed_at = NOW(),
-                updated_at = NOW()
         ");
-        $upsertStmt->execute([
-            $schoolId, $rotatesClassrooms, $workShift, $entryTime, $exitTime,
-            $recessStartTime ?: null, $recessEndTime ?: null,
-            $userId
-        ]);
 
-        // Actualizar schools.onboarding_completed
-        $schoolStmt = $conn->prepare("UPDATE schools SET onboarding_completed = TRUE WHERE school_id = ?");
-        $schoolStmt->execute([$schoolId]);
+        $blockStmt = $conn->prepare("
+            INSERT INTO school_time_blocks (school_id, work_shift, block_number, block_name, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
 
-        // Si rota salones, reemplazar bloques horarios
-        if ($rotatesClassrooms && !empty($timeBlocks)) {
-            // Limpiar bloques existentes
-            $delStmt = $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ?");
-            $delStmt->execute([$schoolId]);
+        foreach ($jornadas as $j) {
+            $shift = trim((string)$j['work_shift']);
+            $rotates = (bool)($j['rotates_classrooms'] ?? false);
+            $entryTime = trim((string)$j['entry_time']);
+            $exitTime = trim((string)$j['exit_time']);
+            $recessStart = trim((string)($j['recess_start_time'] ?? ''));
+            $recessEnd = trim((string)($j['recess_end_time'] ?? ''));
+            $blocks = $j['time_blocks'] ?? [];
 
-            // Insertar nuevos bloques
-            $blockStmt = $conn->prepare("
-                INSERT INTO school_time_blocks (school_id, block_number, block_name, start_time, end_time)
-                VALUES (?, ?, ?, ?, ?)
-            ");
-            foreach ($timeBlocks as $i => $b) {
-                $blockNum = (int)($b['block_number'] ?? ($i + 1));
-                $blockStmt->execute([
-                    $schoolId,
-                    $blockNum,
-                    $b['block_name'] ?? null,
-                    $b['start_time'],
-                    $b['end_time']
-                ]);
+            $upsertStmt->execute([
+                $schoolId, $rotates, $shift, $entryTime, $exitTime,
+                $recessStart ?: null, $recessEnd ?: null,
+                $userId
+            ]);
+
+            if ($rotates && !empty($blocks)) {
+                foreach ($blocks as $i => $b) {
+                    $blockNum = (int)($b['block_number'] ?? ($i + 1));
+                    $blockStmt->execute([
+                        $schoolId,
+                        $shift,
+                        $blockNum,
+                        $b['block_name'] ?? null,
+                        $b['start_time'],
+                        $b['end_time']
+                    ]);
+                }
             }
         }
 
+        // Marcar onboarding completado en schools
+        $schoolStmt = $conn->prepare("UPDATE schools SET onboarding_completed = TRUE WHERE school_id = ?");
+        $schoolStmt->execute([$schoolId]);
+
         $conn->exec("COMMIT");
 
-        securityLog('ONBOARDING_COMPLETED', "School: $schoolId, By: $userId ($role), Rotates: " . ($rotatesClassrooms ? 'YES' : 'NO'));
+        $shiftNames = array_map(fn($j) => $j['work_shift'], $jornadas);
+        securityLog('ONBOARDING_COMPLETED', "School: $schoolId, By: $userId ($role), Jornadas: " . implode(', ', $shiftNames));
 
         echo json_encode([
             'status' => 'ok',
             'message' => 'Configuración de horarios guardada correctamente',
             'onboarding_completed' => true,
+            'jornadas' => $shiftNames,
         ]);
     } catch (Exception $e) {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
@@ -230,7 +265,7 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
 }
 
 // ============================================================================
-// PUT /school/config — Actualizar configuración (post-onboarding)
+// PUT /school/config — Actualizar configuración (post-onboarding, multi-jornada)
 // ============================================================================
 if ($cleanPath === '/school/config' && $method === 'PUT') {
     $authUser = requireAuth();
@@ -243,17 +278,8 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
         exit(json_encode(['status' => 'error', 'message' => 'Solo rector y coordinador pueden editar la configuración']));
     }
 
-    $rotatesClassrooms = isset($input['rotates_classrooms']) ? (bool)$input['rotates_classrooms'] : null;
-    $workShift = isset($input['work_shift']) ? trim((string)$input['work_shift']) : null;
-    $entryTime = isset($input['entry_time']) ? trim((string)$input['entry_time']) : null;
-    $exitTime = isset($input['exit_time']) ? trim((string)$input['exit_time']) : null;
-    $recessStartTime = isset($input['recess_start_time']) ? trim((string)$input['recess_start_time']) : null;
-    $recessEndTime = isset($input['recess_end_time']) ? trim((string)$input['recess_end_time']) : null;
-
-    if ($workShift !== null && !in_array($workShift, ['mañana', 'tarde', 'completa'])) {
-        http_response_code(400);
-        exit(json_encode(['status' => 'error', 'message' => 'Jornada inválida']));
-    }
+    // Aceptar formato nuevo (jornadas array) o campos individuales
+    $jornadas = $input['jornadas'] ?? null;
 
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
@@ -262,29 +288,74 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
         $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
         $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($role) . ", true)");
 
-        // Construir SET dinámico solo con campos proporcionados
-        $sets = ['updated_at = NOW()'];
-        $params = [];
+        if ($jornadas && is_array($jornadas)) {
+            // Reemplazar todas las jornadas
+            $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ?")->execute([$schoolId]);
+            $conn->prepare("DELETE FROM school_schedule_config WHERE school_id = ?")->execute([$schoolId]);
 
-        $fieldMap = [
-            'rotates_classrooms' => $rotatesClassrooms,
-            'work_shift' => $workShift,
-            'entry_time' => $entryTime,
-            'exit_time' => $exitTime,
-            'recess_start_time' => $recessStartTime,
-            'recess_end_time' => $recessEndTime,
-        ];
+            $upsertStmt = $conn->prepare("
+                INSERT INTO school_schedule_config
+                    (school_id, rotates_classrooms, work_shift, entry_time, exit_time,
+                     recess_start_time, recess_end_time, onboarding_completed,
+                     onboarding_completed_by, onboarding_completed_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+            ");
 
-        foreach ($fieldMap as $col => $val) {
-            if ($val !== null) {
-                $sets[] = "$col = ?";
-                $params[] = $val;
+            $blockStmt = $conn->prepare("
+                INSERT INTO school_time_blocks (school_id, work_shift, block_number, block_name, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+
+            foreach ($jornadas as $j) {
+                $shift = trim((string)$j['work_shift']);
+                $upsertStmt->execute([
+                    $schoolId,
+                    (bool)($j['rotates_classrooms'] ?? false),
+                    $shift,
+                    trim((string)$j['entry_time']),
+                    trim((string)$j['exit_time']),
+                    !empty($j['recess_start_time']) ? trim((string)$j['recess_start_time']) : null,
+                    !empty($j['recess_end_time']) ? trim((string)$j['recess_end_time']) : null,
+                    $userId
+                ]);
+
+                if (!empty($j['rotates_classrooms']) && !empty($j['time_blocks'])) {
+                    foreach ($j['time_blocks'] as $i => $b) {
+                        $blockStmt->execute([
+                            $schoolId,
+                            $shift,
+                            (int)($b['block_number'] ?? ($i + 1)),
+                            $b['block_name'] ?? null,
+                            $b['start_time'],
+                            $b['end_time']
+                        ]);
+                    }
+                }
             }
-        }
+        } else {
+            // Formato legacy: actualizar campos individuales de la primera jornada
+            $sets = ['updated_at = NOW()'];
+            $params = [];
 
-        $params[] = $schoolId;
-        $updateStmt = $conn->prepare("UPDATE school_schedule_config SET " . implode(', ', $sets) . " WHERE school_id = ?");
-        $updateStmt->execute($params);
+            $fieldMap = [
+                'rotates_classrooms' => isset($input['rotates_classrooms']) ? (bool)$input['rotates_classrooms'] : null,
+                'entry_time' => isset($input['entry_time']) ? trim((string)$input['entry_time']) : null,
+                'exit_time' => isset($input['exit_time']) ? trim((string)$input['exit_time']) : null,
+                'recess_start_time' => isset($input['recess_start_time']) ? trim((string)$input['recess_start_time']) : null,
+                'recess_end_time' => isset($input['recess_end_time']) ? trim((string)$input['recess_end_time']) : null,
+            ];
+
+            foreach ($fieldMap as $col => $val) {
+                if ($val !== null) {
+                    $sets[] = "$col = ?";
+                    $params[] = $val;
+                }
+            }
+
+            $params[] = $schoolId;
+            $updateStmt = $conn->prepare("UPDATE school_schedule_config SET " . implode(', ', $sets) . " WHERE school_id = ?");
+            $updateStmt->execute($params);
+        }
 
         $conn->exec("COMMIT");
 
@@ -299,7 +370,44 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
 }
 
 // ============================================================================
-// POST /school/time-blocks — Reemplazar bloques horarios (bulk)
+// GET /school/time-blocks — Lista los bloques horarios (todas las jornadas)
+// ============================================================================
+if ($cleanPath === '/school/time-blocks' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $stmt = $conn->prepare("
+            SELECT work_shift, block_number, block_name, start_time, end_time
+            FROM school_time_blocks
+            WHERE school_id = ?
+            ORDER BY work_shift, block_number
+        ");
+        $stmt->execute([$schoolId]);
+        $blocks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $formatted = array_map(function($b) {
+            return [
+                'work_shift' => $b['work_shift'],
+                'block_number' => (int)$b['block_number'],
+                'block_name' => $b['block_name'],
+                'start_time' => substr($b['start_time'], 0, 5),
+                'end_time' => substr($b['end_time'], 0, 5),
+            ];
+        }, $blocks);
+
+        echo json_encode(['status' => 'ok', 'time_blocks' => $formatted]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener bloques horarios']);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /school/time-blocks — Reemplazar bloques horarios (bulk, multi-jornada)
 // ============================================================================
 if ($cleanPath === '/school/time-blocks' && $method === 'POST') {
     $authUser = requireAuth();
@@ -324,19 +432,27 @@ if ($cleanPath === '/school/time-blocks' && $method === 'POST') {
         $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
         $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($role) . ", true)");
 
-        // Limpiar existentes
-        $delStmt = $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ?");
-        $delStmt->execute([$schoolId]);
+        // Si viene work_shift en el payload, solo limpiar esa jornada
+        $shiftFilter = isset($input['work_shift']) ? trim((string)$input['work_shift']) : null;
 
-        // Insertar nuevos
+        if ($shiftFilter) {
+            $delStmt = $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ? AND work_shift = ?");
+            $delStmt->execute([$schoolId, $shiftFilter]);
+        } else {
+            $delStmt = $conn->prepare("DELETE FROM school_time_blocks WHERE school_id = ?");
+            $delStmt->execute([$schoolId]);
+        }
+
         $blockStmt = $conn->prepare("
-            INSERT INTO school_time_blocks (school_id, block_number, block_name, start_time, end_time)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO school_time_blocks (school_id, work_shift, block_number, block_name, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?, ?)
         ");
         foreach ($timeBlocks as $i => $b) {
             $blockNum = (int)($b['block_number'] ?? ($i + 1));
+            $shift = isset($b['work_shift']) ? trim((string)$b['work_shift']) : ($shiftFilter ?? 'mañana');
             $blockStmt->execute([
                 $schoolId,
+                $shift,
                 $blockNum,
                 $b['block_name'] ?? null,
                 $b['start_time'],

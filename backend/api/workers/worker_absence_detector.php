@@ -108,6 +108,14 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Obtener entry_time por jornada desde school_schedule_config (multi-jornada)
+    $shiftConfigStmt = $conn->prepare("SELECT work_shift, entry_time FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE");
+    $shiftConfigStmt->execute([$schoolId]);
+    $shiftConfigs = [];
+    foreach ($shiftConfigStmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
+        $shiftConfigs[$sc['work_shift']] = $sc['entry_time'];
+    }
+
     foreach ($groups as $group) {
         if (!$group['has_classes']) continue;
 
@@ -178,11 +186,19 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
                 // Usar horario configurado por coordinador + 10 min de tolerancia
                 $entryTime = strtotime($expectedEntry);
                 $limitMinutes = (int)date('H', $entryTime) * 60 + (int)date('i', $entryTime) + 10;
+            } elseif (isset($shiftConfigs[$shift])) {
+                // Usar entry_time de school_schedule_config para esta jornada + 10 min
+                $cfgEntry = $shiftConfigs[$shift];
+                $entryTs = strtotime($cfgEntry);
+                $limitMinutes = (int)date('H', $entryTs) * 60 + (int)date('i', $entryTs) + 10;
             } else {
-                // Defaults según jornada
+                // Defaults hardcoded según jornada
                 switch ($shift) {
                     case 'tarde':
                         $limitMinutes = 12 * 60 + 10; // 12:10
+                        break;
+                    case 'noche':
+                        $limitMinutes = 18 * 60 + 10; // 18:10
                         break;
                     case 'completa':
                     case 'mañana':

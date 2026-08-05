@@ -410,20 +410,13 @@ const Profile = () => {
     return saved ? parseFloat(saved) : 1;
   });
 
-  // Configuración de horarios institucionales
+  // Configuración de horarios institucionales (multi-jornada)
   const [schoolConfig, setSchoolConfig] = useState(null);
   const [schoolConfigLoading, setSchoolConfigLoading] = useState(true);
   const [schoolConfigEditing, setSchoolConfigEditing] = useState(false);
   const [schoolConfigSaving, setSchoolConfigSaving] = useState(false);
   const [schoolConfigToast, setSchoolConfigToast] = useState(null);
-  const [editConfig, setEditConfig] = useState({
-    rotates_classrooms: false,
-    work_shift: 'mañana',
-    entry_time: '',
-    exit_time: '',
-    recess_start_time: '',
-    recess_end_time: '',
-  });
+  const [editJornadas, setEditJornadas] = useState([]);
 
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
@@ -446,16 +439,17 @@ const Profile = () => {
       schoolApi.getConfig().then((res) => {
         if (res.status === 'ok') {
           setSchoolConfig(res);
-          if (res.config) {
-            setEditConfig({
-              rotates_classrooms: res.config.rotates_classrooms || false,
-              work_shift: res.config.work_shift || 'mañana',
-              entry_time: res.config.entry_time || '',
-              exit_time: res.config.exit_time || '',
-              recess_start_time: res.config.recess_start_time || '',
-              recess_end_time: res.config.recess_end_time || '',
-            });
-          }
+          // Mapear configs (array multi-jornada) al estado de edición
+          const configs = res.configs || (res.config ? [res.config] : []);
+          setEditJornadas(configs.map(c => ({
+            work_shift: c.work_shift || 'mañana',
+            rotates_classrooms: c.rotates_classrooms || false,
+            entry_time: c.entry_time || '',
+            exit_time: c.exit_time || '',
+            recess_start_time: c.recess_start_time || '',
+            recess_end_time: c.recess_end_time || '',
+            time_blocks: c.time_blocks || [],
+          })));
         }
       }).catch(() => {}).finally(() => setSchoolConfigLoading(false));
     } else {
@@ -467,13 +461,25 @@ const Profile = () => {
     setSchoolConfigSaving(true);
     setSchoolConfigToast(null);
     try {
-      const res = await schoolApi.updateConfig(editConfig);
+      const res = await schoolApi.updateConfig({ jornadas: editJornadas });
       if (res.status === 'ok') {
         setSchoolConfigToast({ type: 'success', message: 'Configuración actualizada' });
         setSchoolConfigEditing(false);
         // Recargar
         const fresh = await schoolApi.getConfig();
-        if (fresh.status === 'ok') setSchoolConfig(fresh);
+        if (fresh.status === 'ok') {
+          setSchoolConfig(fresh);
+          const configs = fresh.configs || (fresh.config ? [fresh.config] : []);
+          setEditJornadas(configs.map(c => ({
+            work_shift: c.work_shift || 'mañana',
+            rotates_classrooms: c.rotates_classrooms || false,
+            entry_time: c.entry_time || '',
+            exit_time: c.exit_time || '',
+            recess_start_time: c.recess_start_time || '',
+            recess_end_time: c.recess_end_time || '',
+            time_blocks: c.time_blocks || [],
+          })));
+        }
       } else {
         setSchoolConfigToast({ type: 'error', message: res.message || 'Error al guardar' });
       }
@@ -482,6 +488,10 @@ const Profile = () => {
     } finally {
       setSchoolConfigSaving(false);
     }
+  };
+
+  const updateEditJornada = (idx, field, value) => {
+    setEditJornadas(prev => prev.map((j, i) => i === idx ? { ...j, [field]: value } : j));
   };
 
   const handleFileChange = async (e) => {
@@ -732,117 +742,107 @@ const Profile = () => {
               </p>
             </div>
           ) : !schoolConfigEditing ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                  <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
-                    <Clock size={12} /> Entrada
+            <div className="space-y-4">
+              {(schoolConfig?.configs || (schoolConfig?.config ? [schoolConfig.config] : [])).map((cfg, idx) => (
+                <div key={idx} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3 space-y-3">
+                  <p className="text-label text-[var(--nx-accent)] font-semibold capitalize">
+                    Jornada: {cfg.work_shift || '—'}
                   </p>
-                  <p className="text-body text-[var(--nx-text)] mt-0.5">
-                    {schoolConfig?.config?.entry_time || '—'}
-                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
+                        <Clock size={12} /> Entrada
+                      </p>
+                      <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.entry_time || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
+                        <Clock size={12} /> Salida
+                      </p>
+                      <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.exit_time || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-caption text-[var(--nx-text-muted)]">Rota salones</p>
+                      <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.rotates_classrooms ? 'Sí' : 'No'}</p>
+                    </div>
+                    {cfg.recess_start_time && (
+                      <div>
+                        <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
+                          <Coffee size={12} /> Receso
+                        </p>
+                        <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.recess_start_time} — {cfg.recess_end_time}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                  <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
-                    <Clock size={12} /> Salida
-                  </p>
-                  <p className="text-body text-[var(--nx-text)] mt-0.5">
-                    {schoolConfig?.config?.exit_time || '—'}
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                  <p className="text-caption text-[var(--nx-text-muted)]">Jornada</p>
-                  <p className="text-body text-[var(--nx-text)] mt-0.5 capitalize">
-                    {schoolConfig?.config?.work_shift || '—'}
-                  </p>
-                </div>
-                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                  <p className="text-caption text-[var(--nx-text-muted)]">Rota salones</p>
-                  <p className="text-body text-[var(--nx-text)] mt-0.5">
-                    {schoolConfig?.config?.rotates_classrooms ? 'Sí' : 'No'}
-                  </p>
-                </div>
-              </div>
-              {schoolConfig?.config?.recess_start_time && (
-                <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                  <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
-                    <Coffee size={12} /> Receso
-                  </p>
-                  <p className="text-body text-[var(--nx-text)] mt-0.5">
-                    {schoolConfig.config.recess_start_time} — {schoolConfig.config.recess_end_time}
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
           ) : (
             <div className="space-y-4">
-              <Select
-                label="Jornada"
-                value={editConfig.work_shift}
-                onChange={(e) => setEditConfig({ ...editConfig, work_shift: e.target.value })}
-                options={[
-                  { value: 'mañana', label: 'Mañana' },
-                  { value: 'tarde', label: 'Tarde' },
-                  { value: 'completa', label: 'Completa' },
-                ]}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Hora de entrada"
-                  type="time"
-                  value={editConfig.entry_time}
-                  onChange={(e) => setEditConfig({ ...editConfig, entry_time: e.target.value })}
-                />
-                <Input
-                  label="Hora de salida"
-                  type="time"
-                  value={editConfig.exit_time}
-                  onChange={(e) => setEditConfig({ ...editConfig, exit_time: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Inicio del receso"
-                  type="time"
-                  value={editConfig.recess_start_time}
-                  onChange={(e) => setEditConfig({ ...editConfig, recess_start_time: e.target.value })}
-                />
-                <Input
-                  label="Fin del receso"
-                  type="time"
-                  value={editConfig.recess_end_time}
-                  onChange={(e) => setEditConfig({ ...editConfig, recess_end_time: e.target.value })}
-                />
-              </div>
-              <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                <p className="text-label text-[var(--nx-text)] mb-2">¿Rota de salones?</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditConfig({ ...editConfig, rotates_classrooms: false })}
-                    className={`flex-1 rounded-control border px-3 py-2 text-body-sm ${
-                      !editConfig.rotates_classrooms
-                        ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
-                        : 'border-[var(--nx-border)] text-[var(--nx-text-muted)]'
-                    }`}
-                  >
-                    No
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditConfig({ ...editConfig, rotates_classrooms: true })}
-                    className={`flex-1 rounded-control border px-3 py-2 text-body-sm ${
-                      editConfig.rotates_classrooms
-                        ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
-                        : 'border-[var(--nx-border)] text-[var(--nx-text-muted)]'
-                    }`}
-                  >
-                    Sí
-                  </button>
+              {editJornadas.map((j, idx) => (
+                <div key={idx} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3 space-y-3">
+                  <p className="text-label text-[var(--nx-accent)] font-semibold capitalize">
+                    Jornada: {j.work_shift}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Hora de entrada"
+                      type="time"
+                      value={j.entry_time}
+                      onChange={(e) => updateEditJornada(idx, 'entry_time', e.target.value)}
+                    />
+                    <Input
+                      label="Hora de salida"
+                      type="time"
+                      value={j.exit_time}
+                      onChange={(e) => updateEditJornada(idx, 'exit_time', e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Inicio del receso"
+                      type="time"
+                      value={j.recess_start_time}
+                      onChange={(e) => updateEditJornada(idx, 'recess_start_time', e.target.value)}
+                    />
+                    <Input
+                      label="Fin del receso"
+                      type="time"
+                      value={j.recess_end_time}
+                      onChange={(e) => updateEditJornada(idx, 'recess_end_time', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-label text-[var(--nx-text)] mb-2">¿Rota de salones?</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateEditJornada(idx, 'rotates_classrooms', false)}
+                        className={`flex-1 rounded-control border px-3 py-2 text-body-sm ${
+                          !j.rotates_classrooms
+                            ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
+                            : 'border-[var(--nx-border)] text-[var(--nx-text-muted)]'
+                        }`}
+                      >
+                        No
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateEditJornada(idx, 'rotates_classrooms', true)}
+                        className={`flex-1 rounded-control border px-3 py-2 text-body-sm ${
+                          j.rotates_classrooms
+                            ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
+                            : 'border-[var(--nx-border)] text-[var(--nx-text-muted)]'
+                        }`}
+                      >
+                        Sí
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
               <div className="flex justify-end gap-3">
                 <Button size="sm" variant="secondary" onClick={() => setSchoolConfigEditing(false)} disabled={schoolConfigSaving}>
                   Cancelar

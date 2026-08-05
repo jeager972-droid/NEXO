@@ -178,66 +178,66 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
         $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", false)");
     } catch (Exception $ignore) {}
 
-    // 1. Obtener configuración institucional
-    $configStmt = $conn->prepare("SELECT * FROM school_schedule_config WHERE school_id = ?");
+    // 1. Obtener configuración institucional (multi-jornada: puede haber varias filas)
+    $configStmt = $conn->prepare("SELECT * FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE ORDER BY work_shift");
     $configStmt->execute([$schoolId]);
-    $config = $configStmt->fetch(PDO::FETCH_ASSOC);
+    $configs = $configStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Si no hay configuración (onboarding no completado), no procesar
-    if (!$config || !$config['onboarding_completed']) {
+    if (empty($configs)) {
         return 0;
     }
 
-    $rotatesClassrooms = (bool)$config['rotates_classrooms'];
-    $entryTime = $config['entry_time'];
-    $exitTime = $config['exit_time'];
-    $recessStart = $config['recess_start_time'];
-    $recessEnd = $config['recess_end_time'];
+    // Procesar cada jornada activa
+    foreach ($configs as $config) {
+        $rotatesClassrooms = (bool)$config['rotates_classrooms'];
+        $entryTime = $config['entry_time'];
+        $exitTime = $config['exit_time'];
+        $recessStart = $config['recess_start_time'];
+        $recessEnd = $config['recess_end_time'];
 
-    // Si no hay entry_time o exit_time, no procesar
-    if (!$entryTime || !$exitTime) return 0;
+        // Si no hay entry_time o exit_time, saltar esta jornada
+        if (!$entryTime || !$exitTime) continue;
 
-    // 2. Verificar si estamos dentro de la jornada escolar
-    $entryTs = DateTime::createFromFormat('H:i:s', $entryTime, new DateTimeZone('America/Bogota'));
-    $exitTs = DateTime::createFromFormat('H:i:s', $exitTime, new DateTimeZone('America/Bogota'));
-    if (!$entryTs || !$exitTs) return 0;
+        // 2. Verificar si estamos dentro de esta jornada escolar
+        $entryTs = DateTime::createFromFormat('H:i:s', $entryTime, new DateTimeZone('America/Bogota'));
+        $exitTs = DateTime::createFromFormat('H:i:s', $exitTime, new DateTimeZone('America/Bogota'));
+        if (!$entryTs || !$exitTs) continue;
 
-    // 5 minutos antes de exit_time: permitir salida final, no detectar evasión
-    $exitThreshold = clone $exitTs;
-    $exitThreshold->sub(new DateInterval('PT5M'));
-    if ($nowBogota >= $exitThreshold) {
-        // Estamos en los últimos 5 minutos o después de salida: no detectar evasión
-        return 0;
-    }
+        // 5 minutos antes de exit_time: permitir salida final, no detectar evasión
+        $exitThreshold = clone $exitTs;
+        $exitThreshold->sub(new DateInterval('PT5M'));
+        if ($nowBogota >= $exitThreshold) continue;
 
-    // Antes de entry_time: no detectar evasión
-    $entryTsToday = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $entryTime", new DateTimeZone('America/Bogota'));
-    if ($nowBogota < $entryTsToday) return 0;
+        // Antes de entry_time: no detectar evasión en esta jornada
+        $entryTsToday = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $entryTime", new DateTimeZone('America/Bogota'));
+        if ($nowBogota < $entryTsToday) continue;
 
-    // 3. Verificar si estamos en receso
-    $inRecess = false;
-    if ($recessStart && $recessEnd) {
-        $recessStartTs = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $recessStart", new DateTimeZone('America/Bogota'));
-        $recessEndTs = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $recessEnd", new DateTimeZone('America/Bogota'));
-        if ($nowBogota >= $recessStartTs && $nowBogota <= $recessEndTs) {
-            $inRecess = true;
+        // 3. Verificar si estamos en receso
+        $inRecess = false;
+        if ($recessStart && $recessEnd) {
+            $recessStartTs = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $recessStart", new DateTimeZone('America/Bogota'));
+            $recessEndTs = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $recessEnd", new DateTimeZone('America/Bogota'));
+            if ($nowBogota >= $recessStartTs && $nowBogota <= $recessEndTs) {
+                $inRecess = true;
+            }
+            // 10 minutos después del receso: verificar que todos hayan vuelto
+            $recessEndPlus10 = clone $recessEndTs;
+            $recessEndPlus10->add(new DateInterval('PT10M'));
+            if ($nowBogota > $recessEndTs && $nowBogota <= $recessEndPlus10) {
+                // Verificar estudiantes que no volvieron del receso
+                $detected += checkRecessReturn($conn, $redis, $schoolId, $todayDate, $recessStart, $recessEnd);
+            }
         }
-        // 10 minutos después del receso: verificar que todos hayan vuelto
-        $recessEndPlus10 = clone $recessEndTs;
-        $recessEndPlus10->add(new DateInterval('PT10M'));
-        if ($nowBogota > $recessEndTs && $nowBogota <= $recessEndPlus10) {
-            // Verificar estudiantes que no volvieron del receso
-            $detected += checkRecessReturn($conn, $redis, $schoolId, $todayDate, $recessStart, $recessEnd);
+
+        if ($inRecess) continue; // En receso no se detecta evasión en esta jornada
+
+        // 4. Detectar evasión según modo
+        if ($rotatesClassrooms) {
+            $detected += detectEvasionRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config);
+        } else {
+            $detected += detectEvasionNonRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config);
         }
-    }
-
-    if ($inRecess) return $detected; // En receso no se detecta evasión
-
-    // 4. Detectar evasión según modo
-    if ($rotatesClassrooms) {
-        $detected += detectEvasionRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config);
-    } else {
-        $detected += detectEvasionNonRotating($conn, $redis, $schoolId, $todayDate, $nowBogota, $config);
     }
 
     return $detected;
@@ -389,14 +389,15 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
     $detected = 0;
     $dayOfWeek = (int)$nowBogota->format('N');
 
-    // Obtener bloques horarios de la institución
+    // Obtener bloques horarios de la institución para esta jornada
+    $workShift = $config['work_shift'] ?? 'mañana';
     $blocksStmt = $conn->prepare("
         SELECT block_number, start_time, end_time, block_name
         FROM school_time_blocks
-        WHERE school_id = ?
+        WHERE school_id = ? AND work_shift = ?
         ORDER BY block_number
     ");
-    $blocksStmt->execute([$schoolId]);
+    $blocksStmt->execute([$schoolId, $workShift]);
     $blocks = $blocksStmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (count($blocks) < 2) return 0; // Necesita al menos 2 bloques para detectar evasión
