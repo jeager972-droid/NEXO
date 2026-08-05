@@ -56,10 +56,10 @@
   --nx-subtle-bg-warning: color-mix(in oklch, var(--nx-warning) var(--nx-subtle-mix-w), var(--nx-tint-base));
   --nx-subtle-bg-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-subtle-mix), var(--nx-tint-base));
 
-  --nx-border-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-border-mix), var(--nx-border));
-  --nx-border-success: color-mix(in oklch, var(--nx-success) var(--nx-border-mix), var(--nx-border));
-  --nx-border-warning: color-mix(in oklch, var(--nx-warning) var(--nx-border-mix), var(--nx-border));
-  --nx-border-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-border-mix), var(--nx-border));
+  --nx-border-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-border-mix), oklch(88% 0 0));
+  --nx-border-success: color-mix(in oklch, var(--nx-success) var(--nx-border-mix), oklch(88% 0 0));
+  --nx-border-warning: color-mix(in oklch, var(--nx-warning) 50%, oklch(88% 0 0));
+  --nx-border-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-border-mix), oklch(88% 0 0));
 
   /* Ring de foco de campo — moodboard: 3px al 12% */
   --nx-ring:          0 0 0 3px color-mix(in oklch, var(--nx-accent) var(--nx-state-mix), transparent);
