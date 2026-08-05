@@ -716,7 +716,16 @@ bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
         auto cacheRes = sensor->addTemplate(huellaId, est.template_huella);
         if (cacheRes) {
             sqlite3_exec(db.getDB(), "COMMIT;", nullptr, nullptr, nullptr);
-            LOG_INFO("Student enrolled: {} ({})", nombre, doc);
+            LOG_INFO("Estudiante enrolado localmente: doc={} nombre={}", doc, nombre);
+
+            // Sincronizar con cloud (best-effort, no bloquea el enrolamiento local)
+            auto& cloud = CloudManager::getInstance();
+            bool syncOk = cloud.registerStudent(doc, nombre, tel, "", "", "");
+            if (!syncOk) {
+                LOG_WARN("Enrolamiento local OK pero sync cloud falló. Se reintentará en próximo sync cycle.");
+            } else {
+                LOG_INFO("Enrolamiento sincronizado con cloud: doc={}", doc);
+            }
             return true;
         }
         sqlite3_exec(db.getDB(), "ROLLBACK;", nullptr, nullptr, nullptr);

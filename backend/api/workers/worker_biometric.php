@@ -56,7 +56,10 @@ declare(ticks=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../redis.php';
 
-// Configurar rol de sistema para workers (no bypass, usa school_id por contexto)
+// Configurar rol de sistema para workers.
+// Nota: con PgBouncer transaction pooling, set_config(..., false) se pierde
+// entre conexiones. El rol real se setea con SET LOCAL dentro de cada
+// transacción en processJob(). Este set inicial es best-effort.
 try {
     $pdo->query("SELECT set_config('app.current_role', 'SYSTEM_WORKER', false)");
 } catch (PDOException $e) {
@@ -132,12 +135,15 @@ function processJob(array $job, PDO $conn): bool {
             // FIX (SRE-1): Idempotencia vía fingerprint + ON CONFLICT DO NOTHING.
             // Si el worker re-procesa un job (ej. tras GC de zombies), el INSERT
             // es idempotente y no crea duplicados con distinto UUID.
-            // FIX (PgBouncer): Transacción explícita + set_config transaction-level
-            // para que RLS filtre students correctamente en el mismo backend.
+            // FIX (PgBouncer): Usar exec("BEGIN") + SET LOCAL en lugar de
+            // PDO::beginTransaction() + prepare(set_config). PDO con EMULATE_PREPARES
+            // puede no manejar correctamente el estado de transacción con PgBouncer
+            // transaction pooling. SET LOCAL es equivalente a set_config(..., true)
+            // pero sin prepared statements.
             try {
-                $conn->beginTransaction();
-                $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
-                $stmtCtx->execute([(string)$instId]);
+                $conn->exec("BEGIN");
+                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$instId));
+                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
 
                 $stmt = $conn->prepare(
                     "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
@@ -149,13 +155,13 @@ function processJob(array $job, PDO $conn): bool {
                 );
                 $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
-                $conn->commit();
+                $conn->exec("COMMIT");
                 if (!$inserted) {
                     logW('SYNC_NOOP', "doc=$doc evt=$evt — estudiante no encontrado o duplicado");
                 }
                 return $inserted;
             } catch (Exception $e) {
-                $conn->rollBack();
+                try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
                 logW('SYNC_FAIL', $e->getMessage());
                 return false;
             }
@@ -168,11 +174,11 @@ function processJob(array $job, PDO $conn): bool {
             $parentName = trim($data['parent_name'] ?? '');
             if (empty($schoolId) || empty($doc) || empty($nombre)) return false;
 
-            $conn->beginTransaction();
+            $conn->exec("BEGIN");
             try {
-                // FIX (PgBouncer): set_config dentro de la transacción
-                $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
-                $stmtCtx->execute([(string)$schoolId]);
+                // FIX (PgBouncer): SET LOCAL en lugar de set_config con prepare
+                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
+                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
 
                 $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
                 $stmt->execute([$schoolId, $doc, $nombre]);
@@ -232,24 +238,25 @@ function processJob(array $job, PDO $conn): bool {
                     }
 
                 }
-                $conn->commit(); return true;
+                $conn->exec("COMMIT"); return true;
             } catch (Exception $e) {
-                $conn->rollBack(); throw $e;
+                try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+                throw $e;
             }
 
         case 'DELETE_STUDENT':
             $doc = trim($data['doc'] ?? ''); $schoolId = $instId;
             if (empty($doc)) return false;
             try {
-                $conn->beginTransaction();
-                $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
-                $stmtCtx->execute([(string)$schoolId]);
+                $conn->exec("BEGIN");
+                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
+                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
                 $stmt = $conn->prepare("UPDATE students SET active=FALSE,biometric_hash=NULL WHERE document_number=? AND school_id=? RETURNING student_id");
                 $stmt->execute([$doc, $schoolId]);
-                $conn->commit();
+                $conn->exec("COMMIT");
                 return true;
             } catch (Exception $e) {
-                $conn->rollBack();
+                try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
                 logW('DELETE_FAIL', $e->getMessage());
                 return false;
             }

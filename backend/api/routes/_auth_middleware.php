@@ -611,9 +611,9 @@ if (!function_exists('requireAuth')) {
             $claims = verifyJwtToken($token);
 
             // FIX (PgBouncer): En transaction-pool mode, set_config(..., false)
-            // no persiste entre consultas. Usamos beginTransaction() + set_config
-            // transaction-level. PgBouncer mantiene la misma conexión durante
-            // la transacción.
+            // no persiste entre consultas. Usamos beginTransaction() + SET LOCAL
+            // (equivalente a set_config(..., true)) para que RLS funcione.
+            // SET LOCAL con exec() evita problemas con EMULATE_PREPARES.
             $startedTx = false;
             if (!$conn->inTransaction()) {
                 $conn->beginTransaction();
@@ -649,9 +649,10 @@ if (!function_exists('requireAuth')) {
                 exit(json_encode(['status' => 'error', 'message' => 'Acceso restringido']));
             }
 
-            // set_config transaction-level: persiste durante toda la transacción
-            $stmtCtx = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', ?, true)");
-            $stmtCtx->execute([$user['school_id'], $roleName]);
+            // SET LOCAL: setea el valor a nivel transacción (equivalente a
+            // set_config(..., true)) pero sin prepared statements.
+            $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$user['school_id']));
+            $conn->exec("SET LOCAL app.current_role = " . $conn->quote($roleName));
 
             // Fetch permissions
             $permsStmt = $conn->prepare("

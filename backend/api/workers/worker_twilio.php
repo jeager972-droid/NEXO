@@ -214,16 +214,9 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     $retries      = (int)($job['retries'] ?? 0);
 
     if ($schoolId) {
-        try {
-            // SECURITY-FIX: prepared statements — $schoolId viene de Redis (no confiable)
-            $stmtSchool = $conn->prepare("SELECT set_config('app.current_school_id', ?, false)");
-            $stmtSchool->execute([(string)$schoolId]);
-            $stmtRole = $conn->prepare("SELECT set_config('app.current_role', ?, false)");
-            $stmtRole->execute(['SYSTEM_WORKER']);
-        } catch (Exception $e) {
-            securityLog('WORKER_CONTEXT_SET_FAIL', $e->getMessage());
-            return;
-        }
+        // Nota: El contexto RLS se setea con SET LOCAL dentro de transacción
+        // justo antes de las queries, no aquí. Con PgBouncer transaction
+        // pooling, set_config(..., false) se pierde entre conexiones.
     }
 
     // FIX: Dedup por número+contenido en ventana de 30s para evitar envenenamiento de cola
@@ -246,21 +239,30 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     if ($send['ok']) {
         // Marcar dedup para evitar duplicados por 30 segundos
         $redis->setex($dedupKey, 30, '1');
-        
-        if (!empty($job['message_id'])) {
-            try {
+
+        // FIX (PgBouncer): SET LOCAL dentro de transacción para RLS
+        try {
+            $conn->exec("BEGIN");
+            if ($schoolId) {
+                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
+                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+            }
+
+            if (!empty($job['message_id'])) {
                 $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'SENT', provider_message_sid = ?, metadata_json = ?::jsonb WHERE twilio_message_id = ?");
                 $upd->execute([$send['sid'], json_encode(['action' => 'worker_sent'], JSON_UNESCAPED_UNICODE), $job['message_id']]);
-            } catch (Exception $e) {
-                securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
-                throw $e; // Escalar al catch externo para forzar restart del supervisor
+            } else {
+                logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
+                    ['action' => 'worker_sent'],
+                    $studentId, $guardianId, $senderUserId, $send['sid'], 'SENT');
             }
-        } else {
-            logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
-                ['action' => 'worker_sent'],
-                $studentId, $guardianId, $senderUserId, $send['sid'], 'SENT');
+            $conn->exec("COMMIT");
+        } catch (Exception $e) {
+            try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+            securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
+            throw $e;
         }
-        
+
         securityLog('TWILIO_WORKER_SENT', "SID: {$send['sid']} To: $to");
         return;
     }
@@ -273,18 +275,26 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         $redis->zAdd($delayQueue, $nextTry, json_encode($job, JSON_UNESCAPED_UNICODE));
         securityLog('TWILIO_WORKER_RETRY', "To: $to Retry: {$job['retries']} Delay: {$delayMs}ms Error: {$send['error']}");
     } else {
-        if (!empty($job['message_id'])) {
-            try {
+        // FIX (PgBouncer): SET LOCAL dentro de transacción para RLS
+        try {
+            $conn->exec("BEGIN");
+            if ($schoolId) {
+                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote((string)$schoolId));
+                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
+            }
+            if (!empty($job['message_id'])) {
                 $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'FAILED_PERMANENT', metadata_json = ?::jsonb WHERE twilio_message_id = ?");
                 $upd->execute([json_encode(['action' => 'worker_failed', 'error' => $send['error']], JSON_UNESCAPED_UNICODE), $job['message_id']]);
-            } catch (Exception $e) {
-                securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
-                throw $e; // Escalar al catch externo para forzar restart del supervisor
+            } else {
+                logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
+                    ['action' => 'worker_failed', 'error' => $send['error']],
+                    $studentId, $guardianId, $senderUserId, null, 'FAILED_PERMANENT');
             }
-        } else {
-            logTwilioMessage($conn, $schoolId, $typeCode, 'OUTBOUND', $to, $body,
-                ['action' => 'worker_failed', 'error' => $send['error']],
-                $studentId, $guardianId, $senderUserId, null, 'FAILED_PERMANENT');
+            $conn->exec("COMMIT");
+        } catch (Exception $e) {
+            try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+            securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
+            throw $e;
         }
         securityLog('TWILIO_WORKER_DEAD_LETTER', "To: $to Error: {$send['error']}");
     }

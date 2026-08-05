@@ -100,9 +100,10 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         ORDER BY ag.group_name
     ");
 
-    // set_config para RLS
-    $ctxStmt = $conn->prepare("SELECT set_config('app.current_school_id', ?, false)");
-    $ctxStmt->execute([$schoolId]);
+    // set_config para RLS (session-level, best-effort con PgBouncer)
+    try {
+        $conn->exec("SET app.current_school_id = " . $conn->quote($schoolId));
+    } catch (Exception $ignore) {}
 
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -197,16 +198,16 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
 
             // 6. INSERT attendance_incidents
             try {
-                $conn->beginTransaction();
-                $ctxStmt2 = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'SYSTEM_WORKER', true)");
-                $ctxStmt2->execute([$schoolId]);
+                $conn->exec("BEGIN");
+                $conn->exec("SET LOCAL app.current_school_id = " . $conn->quote($schoolId));
+                $conn->exec("SET LOCAL app.current_role = 'SYSTEM_WORKER'");
 
                 $incStmt = $conn->prepare("
                     INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
                     VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA', NOW())
                 ");
                 $incStmt->execute([$schoolId, $studentId]);
-                $conn->commit();
+                $conn->exec("COMMIT");
                 $detected++;
 
                 $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
@@ -225,7 +226,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
                     );
                 }
             } catch (Exception $e) {
-                try { $conn->rollBack(); } catch (Exception $ignore) {}
+                try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
                 logA('INSERT_FAIL', "student={$student['student_id']} error=" . $e->getMessage());
             }
         }
