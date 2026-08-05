@@ -78,7 +78,7 @@ const TimeField = ({ label, value, onChange, required, leftIcon: Icon }) => {
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
           className={clsx(
-            fieldClass, 'absolute inset-0 h-12',
+            fieldClass, 'absolute inset-0 h-12 bg-transparent',
             Icon ? 'pl-11' : 'pl-4', 'pr-4',
             'text-transparent caret-transparent cursor-pointer'
           )}
@@ -349,7 +349,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -360,7 +360,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
         initial={{ opacity: 0, scale: 0.97, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.2, ease: EASE }}
-        className="relative z-10 w-full max-w-[680px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog max-h-[95vh] overflow-y-auto"
+        className="relative z-10 w-full max-w-[680px] rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-dialog my-auto"
       >
         {/* Header — sin botón de cerrar (onboarding obligatorio) */}
         <div className="border-b border-[var(--nx-border)] px-6 py-5">
