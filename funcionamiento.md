@@ -1083,3 +1083,86 @@ Las siguientes tablas están particionadas por rango (RANGE) en una columna de t
 - Ambos permisos agregados a `nexo_full_migration.sql` y `nexo_seed.sql`.
 - **Requiere ejecutar migración** en la DB de producción para que los
   permisos existan.
+
+---
+
+## 39. Iteración 3 — UI/UX, Consultations, Migration SQL (2026-08-05)
+
+### Bordes verdes → ámbar en command buttons
+- `Operation.jsx`: comandos `autorizar`, `pedagogica`, `permiso`
+  cambiados de `tone="success"` (verde) a `tone="warning"` (ámbar) para
+  coherencia visual con el resto de la paleta de advertencia.
+- `index.css` dark mode: `--nx-border-warning` croma `0.040` → `0.080`
+  para que el ámbar no se vea verdoso/grisáceo en dark mode.
+
+### TeacherDetailDrawer rediseñado (Dashboard.jsx)
+- Reemplazadas las `SituationLine` por cards compactas:
+  - Interior blanco (`bg-[var(--nx-surface-card)]`)
+  - Borde del color de la métrica (ámbar para tardanzas, rojo para
+    inasistencias, etc.) + borde izquierdo de 3px
+  - Avatar circular con iniciales del estudiante
+  - Nombre + grupo en layout compacto
+  - Botón "Ver detalles" con `ChevronRight` que abre un Drawer de perfil
+- Drawer de perfil del estudiante:
+  - Header con avatar grande (64px), nombre, grupo
+  - `Badge` con dot mostrando el estatus: "En clase ahora mismo",
+    "Inasistente", "Llegó tarde", "Estudiante en alerta", "En permiso"
+  - Sección "Información de la métrica" con campos específicos según
+    categoría (último ingreso, ausente desde, hora de llegada, tipo de
+    alerta, motivo de permiso, etc.)
+- Botón "Seguir" preservado para alertas (no docentes).
+- Funciones auxiliares: `getInitials`, `getCategoryStatusText`,
+  `renderProfileFields`.
+- `CATEGORY_ICONS` y `renderDetailValue` eliminados (sin uso).
+
+### Consultations arreglado + rediseñado (ConsultationDrawer.jsx)
+- **Fix pantalla en blanco**: el wrapper `SearchableSelect` usaba
+  `o.id`/`o.name` pero las opciones (`GRADO_OPTIONS`, `groupOptions`,
+  `studentOptions`) tienen `o.value`/`o.label`. Corregido a
+  `o.value ?? o.id` / `o.label ?? o.name` para soportar ambos formatos.
+- **Tabla compacta**: headers `uppercase tracking-wide font-semibold`,
+  padding `py-2.5` (antes `py-3`/`py-4`), hover sutil
+  `transition-colors`, `first:pl-4` para alinear primera columna.
+- **Paginación simple**: cada 50 filas, con botones Anterior/Siguiente
+  y contador "Mostrando X de Y". Reset automático al cambiar
+  `dynamicData`.
+- **Humanización de celdas** (`formatCellValue`):
+  - Vacíos → `—`
+  - Booleanos → `Sí`/`No`
+  - `status`/`delivery_status` → `<Badge>` semántico (success para
+    SENT/DELIVERED/READ, danger para FAILED/EXPIRED)
+  - `risk_level` → `<Badge>` (danger para CRITICAL/HIGH, warning para
+    MEDIUM, success para LOW)
+- `ExportActions` reubicado fuera del `Surface` para mejor jerarquía.
+- Estilo compacto aplicado a todas las tablas (teacher, admin,
+  coordinador, análisis de riesgo).
+
+### Migration SQL para producción (migration_iteracion3.sql)
+Archivo: `backend/api/sql/migration_iteracion3.sql`
+
+Ejecutado en producción el 2026-08-05 con éxito:
+- `ALTER TABLE`: columna `metadata_json` (JSONB) agregada a
+  `daily_schedule_config`.
+- `INSERT 0 2`: permisos `operations.fusionar_bloque` y
+  `operations.extender_bloque` insertados.
+- `INSERT 0 1` x2: asignación de roles (fusionar_bloque → TEACHER,
+  extender_bloque → RECTOR + COORDINATOR).
+- `CREATE FUNCTION` x2: `fn_calculate_student_risk` y
+  `fn_recalculate_school_metrics` recreadas con timezone
+  `America/Bogota`.
+
+### Commits
+- `c3b1fe1`: integración end-to-end de horarios con
+  `daily_schedule_config` (commit anterior, pushado en esta iteración).
+- `511b1d4`: bordes ámbar, métricas compactas, consultas, SQL migration.
+- Ambos pushados a `origin/main` el 2026-08-05.
+
+### Estado final
+- Dashboard: métricas con cards compactas blancas + borde color métrica
+  + perfil del estudiante con estatus.
+- Consultations: funcional (no más pantalla en blanco) + tabla compacta
+  + paginación + humanización.
+- Operation: command buttons con tone ámbar coherente.
+- DB: migración ejecutada, permisos y funciones actualizadas.
+- Workers: integración con `daily_schedule_config` completa (commit
+  anterior).
