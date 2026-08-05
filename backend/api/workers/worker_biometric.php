@@ -151,7 +151,7 @@ function processJob(array $job, PDO $conn): bool {
                             ?,
                             ?,'PROCESSED',to_timestamp(?),?
                      FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
-                     ON CONFLICT (event_fingerprint, event_timestamp) DO NOTHING"
+                     ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                 );
                 $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
