@@ -155,6 +155,26 @@ function processJob(array $job, PDO $conn): bool {
                 );
                 $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
+
+                // Si el evento es INGRESO_TARDE o INGRESO_MADRUGADA, registrar
+                // también un attendance_incident de tipo LATE_ARRIVAL para que
+                // el dashboard lo cuente como métrica de llegada tarde.
+                if ($inserted && (strpos($evt, 'INGRESO_TARDE') === 0 || strpos($evt, 'INGRESO_MADRUGADA') === 0)) {
+                    $lateStmt = $conn->prepare(
+                        "INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
+                         SELECT uuid_generate_v4(), school_id, student_id, 'LATE_ARRIVAL', to_timestamp(?)
+                         FROM students WHERE document_number = ? AND school_id = ?
+                         AND NOT EXISTS (
+                             SELECT 1 FROM attendance_incidents
+                             WHERE student_id = students.student_id
+                               AND school_id = ?
+                               AND (detected_at)::date = (to_timestamp(?))::date
+                               AND incident_type = 'LATE_ARRIVAL'
+                         )"
+                    );
+                    $lateStmt->execute([$capturedAt, $doc, $instId, $instId, $capturedAt]);
+                }
+
                 $conn->exec("COMMIT");
                 if (!$inserted) {
                     logW('SYNC_NOOP', "doc=$doc evt=$evt — estudiante no encontrado o duplicado");

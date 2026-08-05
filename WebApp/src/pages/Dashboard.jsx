@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck
+  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -28,9 +28,9 @@ import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
 
 const EMPTY_STATS = {
-  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0,
+  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0, lateCount: 0,
   pendingTasks: [], studentsByGroup: {}, teacherGroups: [],
-  groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, outside: 0 },
+  groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, late: 0, outside: 0 },
 };
 
 const TasksEmptyState = ({ loading }) => {
@@ -193,10 +193,11 @@ const AdminDashboard = ({ stats, loading }) => {
   };
 
   const kpis = [
-    { key: 'present',  label: 'Presentes',    value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
-    { key: 'absent',   label: 'Inasistentes', value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: stats.absentCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Sin registro de entrada' },
-    { key: 'alert',    label: 'Alertas',      value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: stats.alertsCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Requieren atención' },
-    { key: 'permiso',  label: 'Permisos',     value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
+    { key: 'present',  label: 'Presentes',      value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
+    { key: 'absent',   label: 'Inasistentes',   value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: stats.absentCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Sin registro de entrada' },
+    { key: 'late',     label: 'Llegadas tarde', value: stats.lateCount,    icon: <Clock size={18} strokeWidth={1.75} />,         tone: 'warning', statusText: stats.lateCount === 0 ? 'Sin llegadas tarde' : 'Ingresos después de hora' },
+    { key: 'alert',    label: 'Alertas',        value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: stats.alertsCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Requieren atención' },
+    { key: 'permiso',  label: 'Permisos',       value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
   ];
 
   useEffect(() => {
@@ -222,9 +223,9 @@ const AdminDashboard = ({ stats, loading }) => {
         <ScheduleTask onDismiss={() => setShowScheduleTask(false)} />
       )}
       {loading ? (
-        <SkeletonMetrics count={4} />
+        <SkeletonMetrics count={5} />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {kpis.map((k) => (
             <StatCard
               key={k.key}

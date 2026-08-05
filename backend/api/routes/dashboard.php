@@ -148,7 +148,7 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE 
+                      AND detected_at >= CURRENT_DATE
                       AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
                       AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                       {$groupFilter}
@@ -158,17 +158,34 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
                       )
+                ),
+                late_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND detected_at >= CURRENT_DATE
+                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND incident_type = 'LATE_ARRIVAL'
+                      {$groupFilter}
+                      AND student_id IN (
+                          SELECT sga.student_id FROM student_group_assignments sga
+                          JOIN academic_groups ag ON ag.group_id = sga.group_id
+                          JOIN schedules sch ON sch.group_id = ag.group_id
+                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                      )
                 )
-                SELECT 
+                SELECT
                     (SELECT cnt FROM present_cte) as present_count,
                     (SELECT cnt FROM absent_cte) as absent_count,
                     (SELECT cnt FROM alerts_cte) as alerts_count,
-                    (SELECT cnt FROM perm_cte) as perm_count
+                    (SELECT cnt FROM perm_cte) as perm_count,
+                    (SELECT cnt FROM late_cte) as late_count
             ";
             $statsParams = array_merge(
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $authUser['id'], $groupName] : [$schoolId, $authUser['id']],
+                $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']]
             );
         } else {
@@ -203,21 +220,32 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(*) as cnt
                     FROM attendance_incidents
                     WHERE school_id = ?
-                      AND detected_at >= CURRENT_DATE 
+                      AND detected_at >= CURRENT_DATE
                       AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
                       AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
                       {$groupFilter}
+                ),
+                late_cte AS (
+                    SELECT COUNT(*) as cnt
+                    FROM attendance_incidents
+                    WHERE school_id = ?
+                      AND detected_at >= CURRENT_DATE
+                      AND detected_at < (CURRENT_DATE + INTERVAL '1 day')
+                      AND incident_type = 'LATE_ARRIVAL'
+                      {$groupFilter}
                 )
-                SELECT 
+                SELECT
                     (SELECT cnt FROM present_cte) as present_count,
                     (SELECT cnt FROM absent_cte) as absent_count,
                     (SELECT cnt FROM alerts_cte) as alerts_count,
-                    (SELECT cnt FROM perm_cte) as perm_count
+                    (SELECT cnt FROM perm_cte) as perm_count,
+                    (SELECT cnt FROM late_cte) as late_count
             ";
             $statsParams = array_merge(
                 $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId],
+                $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $groupName] : [$schoolId]
             );
         }
@@ -231,6 +259,7 @@ if ($cleanPath === '/dashboard/stats') {
         $absentCount = (int)($statsRow['absent_count'] ?? 0);
         $alertsCount = (int)($statsRow['alerts_count'] ?? 0);
         $permCount = (int)($statsRow['perm_count'] ?? 0);
+        $lateCount = (int)($statsRow['late_count'] ?? 0);
 
         // 4. Tareas pendientes (Reportes) (Bogotá TZ) — no filtrar por grupo
         try {
@@ -315,6 +344,7 @@ if ($cleanPath === '/dashboard/stats') {
             'absentCount' => (int)$absentCount,
             'alertsCount' => (int)$alertsCount,
             'permCount' => (int)$permCount,
+            'lateCount' => (int)$lateCount,
             'pendingTasks' => $pendingTasks,
             'studentsByGroup' => $studentsByGroup,
             '_debug' => $debugInfo ?? 'no-debug',
@@ -323,7 +353,8 @@ if ($cleanPath === '/dashboard/stats') {
                 'present' => (int)$presentCount,
                 'absent' => (int)$absentCount,
                 'alerts' => (int)$alertsCount,
-                'permisos' => (int)$permCount
+                'permisos' => (int)$permCount,
+                'late' => (int)$lateCount
             ]
         ]);
 
@@ -359,7 +390,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     $fromDate = $_GET['from_date'] ?? gmdate('Y-m-d');
     $toDate = $_GET['to_date'] ?? gmdate('Y-m-d');
 
-    if (!in_array($category, ['present', 'absent', 'alert', 'permiso'])) {
+    if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late'])) {
         http_response_code(400);
         echo json_encode(['status' => 'error', 'message' => 'Category requerida']);
         exit;
@@ -492,6 +523,23 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                             BETWEEN ? AND ?
                     WHERE s.school_id = ? {$groupWhere}
                     ORDER BY permiso_at DESC
+                ");
+                $stmt->execute($params);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                break;
+
+            case 'late':
+                $stmt = $conn->prepare("
+                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
+                           ag.group_name, ai.detected_at as late_at
+                    FROM students s
+                    {$groupJoin}
+                    JOIN attendance_incidents ai ON ai.student_id = s.student_id
+                        AND ai.incident_type = 'LATE_ARRIVAL'
+                        AND (ai.detected_at)::date
+                            BETWEEN ? AND ?
+                    WHERE s.school_id = ? {$groupWhere}
+                    ORDER BY late_at DESC
                 ");
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
