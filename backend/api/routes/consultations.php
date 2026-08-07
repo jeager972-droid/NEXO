@@ -645,9 +645,16 @@ if ($cleanPath === '/consultations/query') {
                 $gFilter = $groupName ? " AND s.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
                 $sFilter = $studentId ? " AND s.student_id = ?" : "";
                 $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type, s.student_id, ai.metadata_json
+                    SELECT s.first_name, s.last_name, s.student_id, s.document_number,
+                           ai.detected_at, ai.incident_type, ai.metadata_json,
+                           ag.group_name, ag.grade_level,
+                           ai.metadata_json->>'classroom' as classroom,
+                           ai.metadata_json->>'detected_by' as detected_by,
+                           ai.metadata_json->>'expected_classroom' as expected_classroom
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
+                    LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
                     WHERE ai.school_id = ? AND ai.incident_type IN ('EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION')
                       AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
                       {$gFilter}
@@ -655,7 +662,7 @@ if ($cleanPath === '/consultations/query') {
                       {$teacherGroupFilter}
                       {$gradeFilter}
                     ORDER BY ai.detected_at DESC
-                    LIMIT 50
+                    LIMIT 500
                 ");
                 $params = [$schoolId, $fromDate, $toDate];
                 if ($groupName) $params[] = $groupName;
@@ -663,7 +670,13 @@ if ($cleanPath === '/consultations/query') {
                 if ($grade) $params[] = $grade;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo'];
+                $columns = [
+                    'first_name' => 'Nombre', 'last_name' => 'Apellido',
+                    'document_number' => 'Documento', 'group_name' => 'Grupo',
+                    'grade_level' => 'Grado', 'detected_at' => 'Fecha/Hora',
+                    'incident_type' => 'Tipo', 'classroom' => 'Salón',
+                    'expected_classroom' => 'Salón esperado', 'detected_by' => 'Detectado por'
+                ];
                 break;
 
             case 'sos_emitted':

@@ -434,6 +434,13 @@ const COLUMN_LABELS_ES = {
   sensor_manufacturer: 'Fabricante del sensor',
   sensor_model: 'Modelo del sensor',
   sensor_serial: 'Número de serie del sensor',
+  detected_at: 'Fecha/Hora',
+  incident_type: 'Tipo',
+  classroom: 'Salón',
+  expected_classroom: 'Salón esperado',
+  detected_by: 'Detectado por',
+  evasion_type: 'Tipo de evasión',
+  evasion_at: 'Fecha de evasión',
 };
 
 const EVENT_TRANSLATIONS = {
@@ -442,6 +449,8 @@ const EVENT_TRANSLATIONS = {
   LATE_ARRIVAL: 'Llegada tarde',
   EARLY_EXIT: 'Salida temprana',
   EVASION_INTERNA: 'Evasión interna',
+  EVASION: 'Evasión',
+  CLASSROOM_EVASION: 'Evasión de aula',
   SPAM_BIOMETRIC: 'Spam biométrico',
   BIOMETRIC_FAILURE: 'Falla biométrica',
   UNAUTHORIZED_ABSENCE: 'Fuga',

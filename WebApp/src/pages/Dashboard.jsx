@@ -8,12 +8,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock
+  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock, DoorOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
 import { trackingApi } from '../api/tracking';
-import { schoolApi } from '../api/school';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -26,12 +25,11 @@ import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 import { ScheduleTask, isTaskActive, isTaskDoneToday } from '../components/patterns/ScheduleTask';
-import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
 
 const EMPTY_STATS = {
-  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0, lateCount: 0,
+  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0, lateCount: 0, evasionCount: 0,
   pendingTasks: [], studentsByGroup: {}, teacherGroups: [],
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, late: 0, outside: 0 },
 };
@@ -136,8 +134,6 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
-  const [onboardingRequired, setOnboardingRequired] = useState(false);
-  const [onboardingLoading, setOnboardingLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -146,42 +142,7 @@ const Dashboard = () => {
       finally { setLoading(false); }
     };
     load();
-
-    // Verificar onboarding solo para RECTOR y COORDINADOR
-    if (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) {
-      const checkOnboarding = async () => {
-        try {
-          const config = await schoolApi.getConfig();
-          setOnboardingRequired(!config.onboarding_completed);
-        } catch (e) {
-          console.error('Onboarding check failed:', e);
-          // Si falla la verificación, no bloquear (mejor permisivo que bloquear por error)
-        } finally {
-          setOnboardingLoading(false);
-        }
-      };
-      checkOnboarding();
-    } else {
-      setOnboardingLoading(false);
-    }
   }, [user]);
-
-  // Onboarding bloqueante para RECTOR/COORDINADOR
-  if (!onboardingLoading && onboardingRequired && (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR)) {
-    return (
-      <OnboardingScheduleModal
-        schoolId={user?.school_id}
-        userId={user?.id}
-        role={user?.role}
-        onCompleted={() => {
-          setOnboardingRequired(false);
-          // Recargar stats después del onboarding
-          setLoading(true);
-          dashboardApi.getStats().then(s => { setStats({ ...EMPTY_STATS, ...s }); }).finally(() => setLoading(false));
-        }}
-      />
-    );
-  }
 
   switch (user?.role) {
     case ROLES.RECTOR:
@@ -261,6 +222,7 @@ const AdminDashboard = ({ stats, loading }) => {
     { key: 'late',     label: 'Llegadas tarde', value: stats.lateCount,    icon: <Clock size={18} strokeWidth={1.75} />,         tone: 'warning', statusText: stats.lateCount === 0 ? 'Sin llegadas tarde' : 'Ingresos después de hora' },
     { key: 'alert',    label: 'Alertas',        value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: stats.alertsCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Requieren atención' },
     { key: 'permiso',  label: 'Permisos',       value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
+    { key: 'evasion',  label: 'Evasiones',      value: stats.evasionCount, icon: <DoorOpen size={18} strokeWidth={1.75} />,     tone: 'danger',  statusText: stats.evasionCount === 0 ? 'Sin evasiones hoy' : 'Estudiantes evadieron hoy' },
   ];
 
   useEffect(() => {
@@ -286,9 +248,9 @@ const AdminDashboard = ({ stats, loading }) => {
         <ScheduleTask onDismiss={() => setShowScheduleTask(false)} />
       )}
       {loading ? (
-        <SkeletonMetrics count={5} />
+        <SkeletonMetrics count={6} />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           {kpis.map((k) => (
             <StatCard
               key={k.key}
@@ -397,6 +359,7 @@ const CATEGORY_LABELS = {
   late:     { label: 'Llegadas tarde', accent: 'var(--nx-warning)', icon: Clock },
   alert:    { label: 'Alertas',        accent: 'var(--nx-danger)', icon: AlertTriangle },
   permiso:  { label: 'Permisos',       accent: 'var(--nx-success)', icon: Activity },
+  evasion:  { label: 'Evasiones',      accent: 'var(--nx-danger)', icon: DoorOpen },
 };
 
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
@@ -676,6 +639,7 @@ const CATEGORY_SCHEMES = {
   late: 'warning',
   alert: 'danger',
   permiso: 'accent',
+  evasion: 'danger',
 };
 
 const getInitials = (first, last) => {
@@ -691,6 +655,7 @@ const getCategoryStatusText = (category) => {
     case 'late': return 'Llegó tarde';
     case 'alert': return 'Estudiante en alerta';
     case 'permiso': return 'En permiso';
+    case 'evasion': return 'Evasión detectada';
     default: return '';
   }
 };
@@ -741,6 +706,23 @@ const renderProfileFields = (category, row) => {
           <div>
             <p className="text-caption text-[var(--nx-text-muted)]">Motivo</p>
             <p className="text-body text-[var(--nx-text)]">{row.reason || '—'}</p>
+          </div>
+        </>
+      );
+    case 'evasion':
+      return (
+        <>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Tipo de evasión</p>
+            <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.evasion_type)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Detectada</p>
+            <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.evasion_at)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-[var(--nx-text-muted)]">Salón</p>
+            <p className="text-body text-[var(--nx-text)]">{row.classroom || '—'}</p>
           </div>
         </>
       );
@@ -880,7 +862,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                   </div>
 
                   {/* Acción de seguimiento para alertas (no docentes) */}
-                  {category === 'alert' && user?.role !== ROLES.DOCENTE && (
+                  {(category === 'alert' || category === 'evasion') && user?.role !== ROLES.DOCENTE && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

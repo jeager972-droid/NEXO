@@ -12,6 +12,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { notificationsApi } from '../api/notifications';
+import { schoolApi } from '../api/school';
+import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { NavLink } from 'react-router-dom';
 
 const getGreeting = () => {
@@ -26,6 +28,8 @@ const Layout = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
@@ -68,12 +72,43 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  useEffect(() => {
+    if (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) {
+      const checkOnboarding = async () => {
+        try {
+          const config = await schoolApi.getConfig();
+          setOnboardingRequired(!config.onboarding_completed);
+        } catch (e) {
+          console.error('Onboarding check failed:', e);
+        } finally {
+          setOnboardingLoading(false);
+        }
+      };
+      checkOnboarding();
+    } else {
+      setOnboardingLoading(false);
+    }
+  }, [user]);
+
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
   const greeting = useMemo(() => getGreeting(), []);
   const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
   const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
+
+  if (!onboardingLoading && onboardingRequired && (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR)) {
+    return (
+      <OnboardingScheduleModal
+        schoolId={user?.school_id}
+        userId={user?.id}
+        role={user?.role}
+        onCompleted={() => {
+          setOnboardingRequired(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)]">
