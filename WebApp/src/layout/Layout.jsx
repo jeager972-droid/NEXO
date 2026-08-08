@@ -117,9 +117,9 @@ const Layout = () => {
         <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
       )}
 
-      <div className="flex flex-col min-w-0 lg:pl-[200px]">
+      <div className="flex flex-col min-w-0 lg:pl-[220px]">
         {/* Topbar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 lg:px-8" style={{ height: '72px' }}>
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 lg:px-8" style={{ height: '72px' }}>
           <div className="flex items-center gap-3 min-w-0">
             {(!noSidebar) && (
               <button

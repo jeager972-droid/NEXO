@@ -24,7 +24,7 @@ const NavItem = ({ item, onClick, showNotifDot }) => {
         `group flex items-center gap-3 px-4 py-3 mx-3 rounded-control text-body font-medium transition-all duration-fast ` +
         (isActive
           ? 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
-          : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]')
+          : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface)] hover:text-[var(--nx-text)]')
       }
     >
       <Icon size={20} strokeWidth={1.75} className="shrink-0" />
@@ -80,10 +80,10 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--nx-surface)] border-r border-[var(--nx-border)]
+          fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--nx-surface-subtle)] border-r border-[var(--nx-border)]
           transition-transform duration-200 ease-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
-          w-[200px]
+          w-[220px]
         `}
         aria-label="Navegación principal"
       >
@@ -133,13 +133,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         <div className="p-3 border-t border-[var(--nx-border)] space-y-2">
           <button
             onClick={toggleDarkMode}
-            className="flex items-center gap-3 w-full px-3 py-2 rounded-control text-body-sm text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors duration-fast"
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-control text-body-sm text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface)] transition-colors duration-fast"
           >
             {darkMode ? <Sun size={16} /> : <Moon size={16} />}
             <span>{darkMode ? 'Modo claro' : 'Modo oscuro'}</span>
           </button>
 
-          <div className="flex items-center gap-2.5 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-2.5 py-2">
+          <div className="flex items-center gap-2.5 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-2.5 py-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-control bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-xs font-bold shrink-0">
               {user?.profile_photo_url ? <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" /> : initial}
             </div>
@@ -150,7 +150,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <button
               onClick={logout}
               title="Cerrar sesión"
-              className="p-1.5 text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)] rounded-control hover:bg-[var(--nx-surface)] transition-colors duration-fast shrink-0"
+              className="p-1.5 text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)] rounded-control hover:bg-[var(--nx-surface-subtle)] transition-colors duration-fast shrink-0"
             >
               <LogOut size={16} />
             </button>
