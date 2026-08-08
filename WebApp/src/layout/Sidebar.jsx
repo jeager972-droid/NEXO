@@ -83,7 +83,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--nx-surface)] border-r border-[var(--nx-border)]
           transition-transform duration-200 ease-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
-          w-[200px] lg:w-[var(--nx-sidebar)]
+          w-[200px]
         `}
         aria-label="Navegación principal"
       >
@@ -130,7 +130,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         </nav>
 
         {/* Footer: theme + user */}
-        <div className="p-3 lg:p-4 border-t border-[var(--nx-border)] space-y-2">
+        <div className="p-3 border-t border-[var(--nx-border)] space-y-2">
           <button
             onClick={toggleDarkMode}
             className="flex items-center gap-3 w-full px-3 py-2 rounded-control text-body-sm text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors duration-fast"
