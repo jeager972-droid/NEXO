@@ -295,22 +295,19 @@ const AdminDashboard = ({ stats, loading }) => {
                   onClick={() => openDetail(k.key)}
                 />
               </div>
-              {/* Móvil: card ancha y compacta (horizontal) */}
+              {/* Móvil: card ancha y muy compacta (solo icono + número + label) */}
               <button
                 type="button"
                 onClick={() => openDetail(k.key)}
-                className="md:hidden nx-pressable flex items-center gap-3 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] p-3 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
+                className="md:hidden nx-pressable flex items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
                   {k.icon}
                 </span>
-                <span className="nx-tnum text-h3 text-[var(--nx-text)]">
+                <span className="nx-tnum text-body text-[var(--nx-text)]">
                   {typeof k.value === 'number' ? k.value.toLocaleString('es-CO') : k.value}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{k.label}</p>
-                  {k.statusText && <p className="text-caption text-[var(--nx-text-muted)] truncate">{k.statusText}</p>}
-                </div>
+                <span className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{k.label}</span>
               </button>
             </div>
           ))}
