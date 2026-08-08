@@ -1,7 +1,7 @@
 # NEXO — Estado del Sistema y Pendientes
 
-> **Última actualización:** 2026-08-06
-> **Estado general:** Iteración 3 completada y desplegada en producción.
+> **Última actualización:** 2026-08-08
+> **Estado general:** Iteración 3 completada. Commit `c7f5de0` resolvió 4 pendientes.
 
 ---
 
@@ -35,31 +35,29 @@ worker de evasión interpretaría la "SALIDA" como una evasión real.
 
 ---
 
-## Lo que ya está hecho (iteraciones 1-3)
+## Lo que ya está hecho (iteraciones 1-3 + commit c7f5de0)
 
 | Módulo | Estado | Detalle |
 |--------|--------|---------|
-| Dashboard | Done | Métricas sin duplicación, cards compactas con perfil |
-| Consultations | Done | Arreglada, tabla compacta con paginación |
+| Dashboard | Done | Métricas sin duplicación, cards compactas con perfil, StatCard de evasiones |
+| Consultations | Done | Arreglada, tabla compacta con paginación, evasión con más columnas |
 | Operation | Done | 12 comandos incluyendo fusionar/extender bloque |
 | Notifications | Done | Llegada tarde con Justificar/No Justificar |
 | Workers | Done | Integración con daily_schedule_config |
 | DB Migration | Done | Ejecutada en producción (metadata_json, permisos, funciones) |
 | UI/UX | Done | Bordes ámbar, casos activos con fondo ámbar |
 | Deduplicación biométrica | Done | 30s window configurable |
+| Purge de notificaciones | Done (c7f5de0) | `worker_notification_purge.php` — cron o daemon, >30 días |
+| Onboarding en todas las rutas | Done (c7f5de0) | Movido de Dashboard.jsx al Layout.jsx |
+| student_tracking timezone Bogotá | Done (c7f5de0) | Migration `2026-20-fix-student-tracking-timezone.sql` |
+| Dashboard de evasión | Done (c7f5de0) | StatCard + evasion_cte + categoría 'evasion' en TeacherDetailDrawer |
+| Reportes de evasión (Consultations) | Parcial (c7f5de0) | Query mejorada con más columnas, LIMIT 500, traducciones |
 
 ---
 
 ## Pendientes
 
-### 1. Purge automático de notificaciones
-**Problema:** Las notificaciones se acumulan indefinidamente en la DB.
-**Solución:** Crear un worker o pg_cron job que elimine notificaciones de
-más de 30 días automáticamente.
-**Prioridad:** Media
-**Archivos:** Nuevo worker `worker_notification_purge.php` o pg_cron job.
-
-### 2. Incluir EVASION_INTERNA en risk_score
+### 1. Incluir EVASION_INTERNA en risk_score
 **Problema:** `fn_calculate_student_risk` cuenta tardanzas (x5) y
 inasistencias (x15) pero NO evasiones. Un estudiante que se evade
 frecuentemente no sube su score de riesgo.
@@ -69,44 +67,7 @@ y sumarlas al score (ej: x10 por evasión).
 **Archivos:** `backend/api/sql/nexo_full_migration.sql`,
 `backend/api/sql/migration_iteracion3.sql`.
 
-### 3. Onboarding en todas las rutas
-**Problema:** El onboarding solo se verifica en el Dashboard. Si un
-RECTOR/COORDINADOR entra directamente a `/operacion` sin pasar por el
-dashboard, no verá el modal.
-**Solución:** Mover la verificación de onboarding al Layout (componente
-padre de todas las rutas autenticadas).
-**Prioridad:** Media
-**Archivos:** `WebApp/src/components/layout/Layout.jsx` (o equivalente).
-
-### 4. student_tracking con timezone Bogotá
-**Problema:** `student_tracking` y `student_tracking_notes` usan
-`CURRENT_TIMESTAMP` que depende del timezone del servidor. Si el servidor
-no está en America/Bogota, las fechas de seguimiento quedan mal.
-**Solución:** Cambiar `CURRENT_TIMESTAMP` por
-`NOW() AT TIME ZONE 'America/Bogota'` en los defaults.
-**Prioridad:** Baja (si el servidor ya está en hora Colombia)
-**Archivos:** `backend/api/sql/nexo_full_migration.sql`.
-
-### 5. Dashboard de evasión
-**Problema:** No hay conteo de evasiones del día en las StatCards del
-dashboard. Los rectores/coordinadores no ven cuántos estudiantes se
-evadieron hoy de un vistazo.
-**Solución:** Agregar una StatCard de evasiones con click → lista de
-estudiantes evadidos (similar a inasistentes/tardanzas).
-**Prioridad:** Media
-**Archivos:** `backend/api/routes/dashboard.php`,
-`WebApp/src/pages/Dashboard.jsx`.
-
-### 6. Reportes históricos de evasión
-**Problema:** No hay reportes históricos de evasión por
-estudiante/grupo/fecha. Solo se ve en tiempo real.
-**Solución:** Agregar módulo de evasión a Consultations con filtros por
-rango de fechas, grupo, estudiante. Exportable a Excel/PDF.
-**Prioridad:** Media
-**Archivos:** `backend/api/routes/consultations.php`,
-`WebApp/src/pages/ConsultationDrawer.jsx`.
-
-### 7. Configuración de tipos de eventos en novedades
+### 2. Configuración de tipos de eventos en novedades
 **Problema:** El event feed del dashboard hardcodea qué `command_type`
 aparecen. No es configurable por institución.
 **Solución:** Hacer configurable qué tipos de eventos aparecen en el
@@ -114,6 +75,31 @@ event feed, almacenado en `school_settings` o similar.
 **Prioridad:** Baja
 **Archivos:** `backend/api/routes/dashboard.php`,
 `WebApp/src/pages/Dashboard.jsx`.
+
+### 3. Ejecutar migration student_tracking timezone en producción
+**Problema:** La migration `2026-20-fix-student-tracking-timezone.sql`
+fue creada pero necesita ejecutarse en la DB de producción.
+**Solución:** Ejecutar con psql:
+```bash
+psql -U <usuario> -d <database> -f backend/api/sql/2026-20-fix-student-tracking-timezone.sql
+```
+**Prioridad:** Baja (si el servidor ya está en hora Colombia)
+**Archivos:** `backend/api/sql/2026-20-fix-student-tracking-timezone.sql`.
+
+### 4. Configurar cron del worker_notification_purge
+**Problema:** El worker `worker_notification_purge.php` fue creado pero
+necesita configurarse en el cron/supervisor del servidor de producción.
+**Solución:** Agregar al crontab:
+```
+0 3 * * * php /path/to/backend/api/workers/worker_notification_purge.php
+```
+O como daemon en supervisor:
+```
+[program:nexo-worker-notification-purge]
+command=php /path/to/worker_notification_purge.php --daemon
+```
+**Prioridad:** Media
+**Archivos:** `backend/api/workers/worker_notification_purge.php`.
 
 ---
 
