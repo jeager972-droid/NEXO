@@ -14,7 +14,7 @@
  * no se pierda el progreso del formulario.
  */
 import { useState, useEffect, useMemo, useId } from 'react';
-import { Clock, AlertCircle, Calendar, Coffee, Check, Sun, Moon, Sunset } from 'lucide-react';
+import { Clock, AlertCircle, Calendar, Coffee, Check, Sun, Moon, Sunset, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import { Button } from '../ui/Button';
@@ -129,7 +129,8 @@ function clearSavedState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 }
 
-export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted }) => {
+export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, onCancel, mode = 'onboarding' }) => {
+  const isEditMode = mode === 'edit';
   // Restaurar estado desde localStorage
   const saved = useMemo(() => loadSavedState(), []);
 
@@ -369,18 +370,33 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
           phase === 'select' ? '' : 'max-h-[90vh] overflow-y-auto'
         )}
       >
-        {/* Header — sin botón de cerrar (onboarding obligatorio) */}
+        {/* Header — con botón de cerrar en modo edición */}
         <div className="border-b border-[var(--nx-border)] px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-surface bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
               <Calendar size={20} strokeWidth={1.75} />
             </div>
-            <div>
-              <h2 className="text-h3 text-[var(--nx-text)]">Configuración de Horarios</h2>
+            <div className="flex-1">
+              <h2 className="text-h3 text-[var(--nx-text)]">
+                {isEditMode ? 'Cambiar Configuración de Horarios' : 'Configuración de Horarios'}
+              </h2>
               <p className="text-body-sm text-[var(--nx-text-muted)]">
-                Paso {currentStep} de {totalSteps} — {phaseTitle[phase]}
+                {isEditMode
+                  ? `Modifique los horarios — Paso ${currentStep} de ${totalSteps} — ${phaseTitle[phase]}`
+                  : `Paso ${currentStep} de ${totalSteps} — ${phaseTitle[phase]}`
+                }
               </p>
             </div>
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="grid h-9 w-9 place-items-center rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)] transition-colors"
+                aria-label="Cancelar"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
           {/* Progress bar */}
           <div className="mt-4 flex gap-1.5">
@@ -651,20 +667,31 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted })
 
         {/* Footer — fijo abajo */}
         <div className="flex items-center justify-between border-t border-[var(--nx-border)] px-6 py-4">
-          <Button
-            variant="secondary"
-            onClick={handleBack}
-            disabled={phase === 'multi' || loading}
-          >
-            Atrás
-          </Button>
+          <div className="flex gap-2">
+            {isEditMode && (
+              <Button
+                variant="ghost"
+                onClick={onCancel}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={handleBack}
+              disabled={phase === 'multi' || loading}
+            >
+              Atrás
+            </Button>
+          </div>
           <Button
             variant="primary"
             onClick={handleNext}
             loading={loading}
             disabled={!canProceed()}
           >
-            {phase === 'review' ? 'Guardar y finalizar' : 'Continuar'}
+            {phase === 'review' ? (isEditMode ? 'Guardar cambios' : 'Guardar y finalizar') : 'Continuar'}
           </Button>
         </div>
       </motion.div>
