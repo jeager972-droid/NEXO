@@ -299,7 +299,7 @@ const AdminDashboard = ({ stats, loading }) => {
               <button
                 type="button"
                 onClick={() => openDetail(k.key)}
-                className="md:hidden nx-pressable flex items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
+                className="md:hidden nx-pressable flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
               >
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
                   {k.icon}
