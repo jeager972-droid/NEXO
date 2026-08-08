@@ -10,7 +10,7 @@ import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { auditApi } from '../api/audit';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, ChevronLeft, BookOpen, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen, Siren, Wrench, FolderHeart } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen, Siren, Wrench, FolderHeart } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
@@ -122,7 +122,6 @@ const AUDIT_MODULES = {
 
 const TONE_STYLES = {
   accent:  { bg: 'bg-[var(--nx-surface-accent)]', icon: 'bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-border-accent)]' },
-  success: { bg: 'bg-[var(--nx-surface-success)]', icon: 'bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-border-success)]' },
   warning: { bg: 'bg-[var(--nx-surface-warning)]', icon: 'bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-border-warning)]' },
   danger:  { bg: 'bg-[var(--nx-surface-danger)]', icon: 'bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-border-danger)]' },
 };
@@ -292,32 +291,39 @@ const Consultation = () => {
   }
 
   // ── Definición de módulos por rol con tonos de color e iconos de submódulos ──
+  // Orden por color: accent (azul) → warning (naranja) → danger (rojo)
   const rbacModules = {
     [ROLES.DOCENTE]: [
       {
-        title: 'Mis Clases',
-        icon: BookOpen,
+        title: 'Permisos y Citaciones',
+        icon: ShieldCheck,
         tone: 'accent',
+        items: [
+          { label: 'Estudiantes con Permiso', icon: ShieldCheck },
+          { label: 'Citaciones', icon: Send },
+          { label: 'Inasistencias Justificadas', icon: ShieldCheck },
+        ]
+      },
+      {
+        title: 'Asistencia',
+        icon: Clock,
+        tone: 'warning',
         items: [
           { label: 'Llegadas Tarde', icon: Clock },
           { label: 'Inasistencias', icon: UserX },
-          { label: 'Inasistencias Justificadas', icon: ShieldCheck },
           { label: 'Estudiantes Ausentes', icon: UserMinus },
+        ]
+      },
+      {
+        title: 'Incidentes',
+        icon: AlertTriangle,
+        tone: 'danger',
+        items: [
           { label: 'Estudiantes fuera del salón', icon: DoorOpen },
-          { label: 'Estudiantes con Permiso', icon: ShieldCheck },
-          { label: 'Citaciones', icon: Send },
         ]
       }
     ],
     [ROLES.PSICORIENTADOR]: [
-      {
-        title: 'Análisis de Riesgo',
-        icon: ShieldAlert,
-        tone: 'danger',
-        items: [
-          { label: 'Análisis de Riesgo', icon: AlertTriangle },
-        ]
-      },
       {
         title: 'Seguimientos',
         icon: FileText,
@@ -325,19 +331,34 @@ const Consultation = () => {
         items: [
           { label: 'Seguimientos completados', icon: ClipboardList },
         ]
+      },
+      {
+        title: 'Análisis de Riesgo',
+        icon: ShieldAlert,
+        tone: 'danger',
+        items: [
+          { label: 'Análisis de Riesgo', icon: AlertTriangle },
+        ]
       }
     ],
     [ROLES.COORDINADOR]: [
       {
-        title: 'Reportes de Asistencia',
-        icon: Activity,
+        title: 'Permisos y Salidas',
+        icon: ShieldCheck,
         tone: 'accent',
         items: [
-          { label: 'Inasistencias', icon: UserX },
           { label: 'Inasistencias Justificadas', icon: ShieldCheck },
-          { label: 'Llegadas Tarde', icon: Clock },
           { label: 'Salidas Pedagógicas', icon: CalendarDays },
           { label: 'Permisos', icon: ShieldCheck },
+        ]
+      },
+      {
+        title: 'Asistencia',
+        icon: Activity,
+        tone: 'warning',
+        items: [
+          { label: 'Inasistencias', icon: UserX },
+          { label: 'Llegadas Tarde', icon: Clock },
         ]
       },
       {
@@ -356,15 +377,22 @@ const Consultation = () => {
     ],
     [ROLES.RECTOR]: [
       {
-        title: 'Reportes de Asistencia',
-        icon: Activity,
+        title: 'Permisos y Salidas',
+        icon: ShieldCheck,
         tone: 'accent',
         items: [
-          { label: 'Inasistencias', icon: UserX },
           { label: 'Inasistencias Justificadas', icon: ShieldCheck },
-          { label: 'Llegadas Tarde', icon: Clock },
           { label: 'Salidas Pedagógicas', icon: CalendarDays },
           { label: 'Permisos', icon: ShieldCheck },
+        ]
+      },
+      {
+        title: 'Asistencia',
+        icon: Activity,
+        tone: 'warning',
+        items: [
+          { label: 'Inasistencias', icon: UserX },
+          { label: 'Llegadas Tarde', icon: Clock },
         ]
       },
       {

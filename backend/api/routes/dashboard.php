@@ -184,7 +184,7 @@ if ($cleanPath === '/dashboard/stats') {
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
-                      AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%')
+                      AND (incident_type IN ('EARLY_EXIT', 'EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%')
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
@@ -222,35 +222,18 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN schedules sch ON sch.group_id = ag.group_id
                           WHERE sch.teacher_user_id = ? AND sga.active = TRUE
                       )
-                ),
-                evasion_cte AS (
-                    SELECT COUNT(DISTINCT student_id) as cnt
-                    FROM attendance_incidents
-                    WHERE school_id = ?
-                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
-                      AND incident_type IN ('EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION')
-                      {$groupFilter}
-                      AND student_id IN (
-                          SELECT DISTINCT sga.student_id FROM student_group_assignments sga
-                          JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
-                      )
                 )
                 SELECT
                     (SELECT cnt FROM present_cte) as present_count,
                     (SELECT cnt FROM absent_cte) as absent_count,
                     (SELECT cnt FROM alerts_cte) as alerts_count,
                     (SELECT cnt FROM perm_cte) as perm_count,
-                    (SELECT cnt FROM late_cte) as late_count,
-                    (SELECT cnt FROM evasion_cte) as evasion_count
+                    (SELECT cnt FROM late_cte) as late_count
             ";
             $statsParams = array_merge(
                 $groupName ? array_merge([$schoolId, $groupName, $authUser['id']], $exitTimeParams) : array_merge([$schoolId, $authUser['id']], $exitTimeParams),
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $authUser['id'], $groupName] : [$schoolId, $authUser['id']],
-                $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']],
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']]
             );
@@ -289,7 +272,7 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT
                         (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND emitted_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND emitted_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND resolved = FALSE)
                         +
-                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA', 'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE', 'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
+                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('EARLY_EXIT', 'EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
                     as cnt
                 ),
                 perm_cte AS (
@@ -309,29 +292,18 @@ if ($cleanPath === '/dashboard/stats') {
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type = 'LATE_ARRIVAL'
                       {$groupFilter}
-                ),
-                evasion_cte AS (
-                    SELECT COUNT(DISTINCT student_id) as cnt
-                    FROM attendance_incidents
-                    WHERE school_id = ?
-                      AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                      AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
-                      AND incident_type IN ('EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION')
-                      {$groupFilter}
                 )
                 SELECT
                     (SELECT cnt FROM present_cte) as present_count,
                     (SELECT cnt FROM absent_cte) as absent_count,
                     (SELECT cnt FROM alerts_cte) as alerts_count,
                     (SELECT cnt FROM perm_cte) as perm_count,
-                    (SELECT cnt FROM late_cte) as late_count,
-                    (SELECT cnt FROM evasion_cte) as evasion_count
+                    (SELECT cnt FROM late_cte) as late_count
             ";
             $statsParams = array_merge(
                 $groupName ? array_merge([$schoolId, $groupName], $exitTimeParams) : array_merge([$schoolId], $exitTimeParams),
                 $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId],
-                $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $groupName] : [$schoolId],
                 $groupName ? [$schoolId, $groupName] : [$schoolId]
             );
@@ -347,7 +319,6 @@ if ($cleanPath === '/dashboard/stats') {
         $alertsCount = (int)($statsRow['alerts_count'] ?? 0);
         $permCount = (int)($statsRow['perm_count'] ?? 0);
         $lateCount = (int)($statsRow['late_count'] ?? 0);
-        $evasionCount = (int)($statsRow['evasion_count'] ?? 0);
 
         // 4. Tareas pendientes (Reportes) (Bogotá TZ) — no filtrar por grupo
         try {
@@ -433,7 +404,6 @@ if ($cleanPath === '/dashboard/stats') {
             'alertsCount' => (int)$alertsCount,
             'permCount' => (int)$permCount,
             'lateCount' => (int)$lateCount,
-            'evasionCount' => (int)$evasionCount,
             'pendingTasks' => $pendingTasks,
             'studentsByGroup' => $studentsByGroup,
             '_debug' => $debugInfo ?? 'no-debug',
@@ -480,7 +450,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     $fromDate = $_GET['from_date'] ?? $bogotaToday;
     $toDate = $_GET['to_date'] ?? $bogotaToday;
 
-    if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late', 'evasion'])) {
+    if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late'])) {
         http_response_code(400);
         echo json_encode(['status' => 'error', 'message' => 'Category requerida']);
         exit;
@@ -596,19 +566,20 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                 $stmt = $conn->prepare("
                     SELECT ai.incident_id, ai.incident_type as alert_type, ai.detected_at as alert_at, ai.student_id,
                            s.first_name, s.last_name, s.document_number,
-                           STRING_AGG(DISTINCT ag.group_name, ', ') as group_name
+                           STRING_AGG(DISTINCT ag.group_name, ', ') as group_name,
+                           ai.metadata_json->>'classroom' as classroom,
+                           ai.metadata_json->>'detected_by' as detected_by
                     FROM students s
                     {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
-                        AND (ai.incident_type IN ('LATE_ARRIVAL', 'EARLY_EXIT', 'EVASION_INTERNA',
-                                                  'LATE:ARRIVAL', 'EARLY:DEPARTURE', 'EARLY_DEPARTURE',
-                                                  'UNAUTHORIZED_ABSENCE', 'UNAUTHORIZED:ABSENCE',
+                        AND (ai.incident_type IN ('EARLY_EXIT', 'EVASION', 'EVASION_INTERNA',
+                                                  'CLASSROOM_EVASION',
                                                   'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC', 'SOS')
                              OR ai.incident_type LIKE 'RISK_ALERT%')
                         AND (ai.detected_at)::date
                             BETWEEN ? AND ?
                     WHERE s.school_id = ? {$groupWhere}
-                    GROUP BY ai.incident_id, ai.incident_type, ai.detected_at, ai.student_id, s.first_name, s.last_name, s.document_number
+                    GROUP BY ai.incident_id, ai.incident_type, ai.detected_at, ai.student_id, s.first_name, s.last_name, s.document_number, ai.metadata_json
                     ORDER BY ai.detected_at DESC
                 ");
                 $stmt->execute($params);
@@ -667,26 +638,6 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                             BETWEEN ? AND ?
                     WHERE s.school_id = ? {$groupWhere}
                     ORDER BY late_at DESC
-                ");
-                $stmt->execute($params);
-                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                break;
-
-            case 'evasion':
-                $stmt = $conn->prepare("
-                    SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
-                           ag.group_name, ai.incident_type as evasion_type,
-                           ai.detected_at as evasion_at,
-                           ai.metadata_json->>'classroom' as classroom,
-                           ai.metadata_json->>'detected_by' as detected_by
-                    FROM students s
-                    {$groupJoin}
-                    JOIN attendance_incidents ai ON ai.student_id = s.student_id
-                        AND ai.incident_type IN ('EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION')
-                        AND (ai.detected_at)::date
-                            BETWEEN ? AND ?
-                    WHERE s.school_id = ? {$groupWhere}
-                    ORDER BY ai.detected_at DESC
                 ");
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);

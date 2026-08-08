@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock, DoorOpen
+  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -29,7 +29,7 @@ import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
 
 const EMPTY_STATS = {
-  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0, lateCount: 0, evasionCount: 0,
+  presentCount: 0, absentCount: 0, alertsCount: 0, permCount: 0, lateCount: 0,
   pendingTasks: [], studentsByGroup: {}, teacherGroups: [],
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, late: 0, outside: 0 },
 };
@@ -217,12 +217,14 @@ const AdminDashboard = ({ stats, loading }) => {
   };
 
   const kpis = [
-    { key: 'present',  label: 'Presentes',      value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
-    { key: 'absent',   label: 'Inasistentes',   value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: stats.absentCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Sin registro de entrada' },
-    { key: 'late',     label: 'Llegadas tarde', value: stats.lateCount,    icon: <Clock size={18} strokeWidth={1.75} />,         tone: 'warning', statusText: stats.lateCount === 0 ? 'Sin llegadas tarde' : 'Ingresos después de hora' },
-    { key: 'alert',    label: 'Alertas',        value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: stats.alertsCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Requieren atención' },
-    { key: 'permiso',  label: 'Permisos',       value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'success', statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
-    { key: 'evasion',  label: 'Evasiones',      value: stats.evasionCount, icon: <DoorOpen size={18} strokeWidth={1.75} />,     tone: 'danger',  statusText: stats.evasionCount === 0 ? 'Sin evasiones hoy' : 'Estudiantes evadieron hoy' },
+    // Bloque 1: Azul (presentes + permisos)
+    { key: 'present',  label: 'Presentes',      value: stats.presentCount, icon: <CheckCircle2 size={18} strokeWidth={1.75} />, tone: 'accent',  statusText: stats.presentCount === 0 ? 'Sin ingresos registrados' : 'En clase ahora' },
+    { key: 'permiso',  label: 'Permisos',       value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,    tone: 'accent',  statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
+    // Bloque 2: Naranja (inasistentes + tardanzas)
+    { key: 'absent',   label: 'Inasistentes',   value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,  tone: 'warning', statusText: stats.absentCount === 0 ? 'Sin inasistencias' : 'No registraron ingreso' },
+    { key: 'late',     label: 'Llegadas tarde',  value: stats.lateCount,    icon: <Clock size={18} strokeWidth={1.75} />,      tone: 'warning', statusText: stats.lateCount === 0 ? 'Sin llegadas tarde' : 'Ingresos después de hora' },
+    // Bloque 3: Rojo (alertas + evasiones fusionadas)
+    { key: 'alert',    label: 'Alertas',        value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger', statusText: stats.alertsCount === 0 ? 'Sin alertas' : 'Requieren atención' },
   ];
 
   useEffect(() => {
@@ -248,20 +250,51 @@ const AdminDashboard = ({ stats, loading }) => {
         <ScheduleTask onDismiss={() => setShowScheduleTask(false)} />
       )}
       {loading ? (
-        <SkeletonMetrics count={6} />
+        <SkeletonMetrics count={5} />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          {kpis.map((k) => (
-            <StatCard
-              key={k.key}
-              icon={k.icon}
-              label={k.label}
-              value={k.value}
-              tone={k.tone}
-              statusText={k.statusText}
-              onClick={() => openDetail(k.key)}
-            />
-          ))}
+        <div className="space-y-4">
+          {/* Bloque 1: Azul — Presentes + Permisos */}
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+            {kpis.filter(k => k.tone === 'accent').map((k) => (
+              <StatCard
+                key={k.key}
+                icon={k.icon}
+                label={k.label}
+                value={k.value}
+                tone={k.tone}
+                statusText={k.statusText}
+                onClick={() => openDetail(k.key)}
+              />
+            ))}
+          </div>
+          {/* Bloque 2: Naranja — Inasistentes + Llegadas tarde */}
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+            {kpis.filter(k => k.tone === 'warning').map((k) => (
+              <StatCard
+                key={k.key}
+                icon={k.icon}
+                label={k.label}
+                value={k.value}
+                tone={k.tone}
+                statusText={k.statusText}
+                onClick={() => openDetail(k.key)}
+              />
+            ))}
+          </div>
+          {/* Bloque 3: Rojo — Alertas (incluye evasiones) */}
+          <div className="grid grid-cols-1 gap-4">
+            {kpis.filter(k => k.tone === 'danger').map((k) => (
+              <StatCard
+                key={k.key}
+                icon={k.icon}
+                label={k.label}
+                value={k.value}
+                tone={k.tone}
+                statusText={k.statusText}
+                onClick={() => openDetail(k.key)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -358,8 +391,7 @@ const CATEGORY_LABELS = {
   absent:   { label: 'Inasistentes',   accent: 'var(--nx-accent)', icon: UserMinus },
   late:     { label: 'Llegadas tarde', accent: 'var(--nx-warning)', icon: Clock },
   alert:    { label: 'Alertas',        accent: 'var(--nx-danger)', icon: AlertTriangle },
-  permiso:  { label: 'Permisos',       accent: 'var(--nx-success)', icon: Activity },
-  evasion:  { label: 'Evasiones',      accent: 'var(--nx-danger)', icon: DoorOpen },
+  permiso:  { label: 'Permisos',       accent: 'var(--nx-accent)', icon: Activity },
 };
 
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
@@ -639,7 +671,6 @@ const CATEGORY_SCHEMES = {
   late: 'warning',
   alert: 'danger',
   permiso: 'accent',
-  evasion: 'danger',
 };
 
 const getInitials = (first, last) => {
@@ -655,7 +686,6 @@ const getCategoryStatusText = (category) => {
     case 'late': return 'Llegó tarde';
     case 'alert': return 'Estudiante en alerta';
     case 'permiso': return 'En permiso';
-    case 'evasion': return 'Evasión detectada';
     default: return '';
   }
 };
@@ -694,6 +724,18 @@ const renderProfileFields = (category, row) => {
             <p className="text-caption text-[var(--nx-text-muted)]">Fecha</p>
             <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.alert_at)}</p>
           </div>
+          {row.classroom && (
+            <div>
+              <p className="text-caption text-[var(--nx-text-muted)]">Salón</p>
+              <p className="text-body text-[var(--nx-text)]">{row.classroom}</p>
+            </div>
+          )}
+          {row.detected_by && (
+            <div>
+              <p className="text-caption text-[var(--nx-text-muted)]">Detectado por</p>
+              <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.detected_by)}</p>
+            </div>
+          )}
         </>
       );
     case 'permiso':
@@ -706,23 +748,6 @@ const renderProfileFields = (category, row) => {
           <div>
             <p className="text-caption text-[var(--nx-text-muted)]">Motivo</p>
             <p className="text-body text-[var(--nx-text)]">{row.reason || '—'}</p>
-          </div>
-        </>
-      );
-    case 'evasion':
-      return (
-        <>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Tipo de evasión</p>
-            <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.evasion_type)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Detectada</p>
-            <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.evasion_at)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Salón</p>
-            <p className="text-body text-[var(--nx-text)]">{row.classroom || '—'}</p>
           </div>
         </>
       );
@@ -862,7 +887,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                   </div>
 
                   {/* Acción de seguimiento para alertas (no docentes) */}
-                  {(category === 'alert' || category === 'evasion') && user?.role !== ROLES.DOCENTE && (
+                  {category === 'alert' && user?.role !== ROLES.DOCENTE && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
