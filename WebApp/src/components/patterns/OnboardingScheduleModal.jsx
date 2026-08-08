@@ -425,10 +425,14 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
             <div className="space-y-5">
               <div>
                 <p className="text-body text-[var(--nx-text)] mb-1">
-                  Bienvenido. Antes de usar el sistema, debe configurar los horarios de la institución.
+                  {isEditMode
+                    ? 'Modifique los horarios de la institución según sea necesario.'
+                    : 'Bienvenido. Antes de usar el sistema, debe configurar los horarios de la institución.'}
                 </p>
                 <p className="text-body-sm text-[var(--nx-text-muted)]">
-                  Esta configuración es la base para el funcionamiento del sistema en base a los horarios de la institución.
+                  {isEditMode
+                    ? 'Los cambios se aplicarán inmediatamente al guardar.'
+                    : 'Esta configuración es la base para el funcionamiento del sistema en base a los horarios de la institución.'}
                 </p>
               </div>
 

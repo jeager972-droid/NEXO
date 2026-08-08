@@ -281,25 +281,38 @@ const AdminDashboard = ({ stats, loading }) => {
               />
             ))}
           </div>
-          {/* Bloque 3: Rojo — Alertas (incluye evasiones) — card ancha y compacta */}
+          {/* Bloque 3: Rojo — Alertas (incluye evasiones) */}
           {kpis.filter(k => k.tone === 'danger').map((k) => (
-            <button
-              key={k.key}
-              type="button"
-              onClick={() => openDetail(k.key)}
-              className="nx-pressable flex items-center gap-4 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] p-4 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
-            >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
-                {k.icon}
-              </span>
-              <span className="nx-tnum text-metric text-[var(--nx-text)]">
-                {typeof k.value === 'number' ? k.value.toLocaleString('es-CO') : k.value}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{k.label}</p>
-                {k.statusText && <p className="text-body-sm text-[var(--nx-text-muted)] truncate">{k.statusText}</p>}
+            <div key={k.key}>
+              {/* Desktop: card normal (StatCard vertical) */}
+              <div className="hidden md:block">
+                <StatCard
+                  icon={k.icon}
+                  label={k.label}
+                  value={k.value}
+                  tone={k.tone}
+                  statusText={k.statusText}
+                  onClick={() => openDetail(k.key)}
+                />
               </div>
-            </button>
+              {/* Móvil: card ancha y compacta (horizontal) */}
+              <button
+                type="button"
+                onClick={() => openDetail(k.key)}
+                className="md:hidden nx-pressable flex items-center gap-3 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] p-3 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
+                  {k.icon}
+                </span>
+                <span className="nx-tnum text-h3 text-[var(--nx-text)]">
+                  {typeof k.value === 'number' ? k.value.toLocaleString('es-CO') : k.value}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{k.label}</p>
+                  {k.statusText && <p className="text-caption text-[var(--nx-text-muted)] truncate">{k.statusText}</p>}
+                </div>
+              </button>
+            </div>
           ))}
         </div>
       )}
