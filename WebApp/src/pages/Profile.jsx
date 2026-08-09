@@ -745,22 +745,14 @@ const Profile = () => {
             </div>
           )}
 
-          {!schoolConfig?.onboarding_completed ? (
-            <div className="rounded-control border border-[var(--nx-border-warning)] bg-[var(--nx-subtle-bg-warning)] px-4 py-3">
-              <p className="text-body-sm text-[var(--nx-warning)]">
-                La configuración de horarios no ha sido completada. Vaya al dashboard para completar el onboarding.
-              </p>
-            </div>
-          ) : (
-            <button
-              onClick={() => setScheduleDrawerOpen(true)}
-              className="flex w-full items-center gap-3 text-left"
-            >
-              <Settings size={18} className="text-[var(--nx-accent)] shrink-0" />
-              <p className="text-h3 text-[var(--nx-text)]">Configuración de horarios</p>
-              <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
-            </button>
-          )}
+          <button
+            onClick={() => setScheduleDrawerOpen(true)}
+            className="flex w-full items-center gap-3 text-left"
+          >
+            <Settings size={18} className="text-[var(--nx-accent)] shrink-0" />
+            <p className="text-h3 text-[var(--nx-text)]">Configuración de horarios</p>
+            <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
+          </button>
         </Card>
       )}
 

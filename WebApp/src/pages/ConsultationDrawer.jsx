@@ -611,9 +611,6 @@ const TeacherQueryPanel = ({
   return (
     <div className="flex flex-col">
       <Surface className="border-b border-[var(--nx-border)] p-6 space-y-5 rounded-none">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-h3 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>{item}</p>
-        </div>
         <div className="space-y-3">
           <SearchableSelect label="Grado" placeholder="Seleccionar grado…" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedGroup(''); setSelectedStudent(''); }} />
           <SearchableSelect label="Grupo" placeholder="Seleccionar grupo…" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
@@ -707,9 +704,6 @@ const AdminFilterPanel = ({
 
   return (
     <Surface className="border-b border-[var(--nx-border)] p-6 space-y-5 rounded-none">
-      <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-        <p className="text-h3 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>Filtros</p>
-      </div>
       <div className="space-y-3">
         <SearchableSelect label="Grado" placeholder="Todos los grados" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedGroup(''); setSelectedStudent(''); }} />
         <SearchableSelect label="Grupo" placeholder="Todos los grupos" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
