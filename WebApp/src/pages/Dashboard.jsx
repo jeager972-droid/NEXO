@@ -253,6 +253,11 @@ const AdminDashboard = ({ stats, loading }) => {
         <SkeletonMetrics count={5} />
       ) : (
         <div className="space-y-4">
+          {/* Encabezado de sección — presencia estudiantil en tiempo real */}
+          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+            <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+          </div>
           {/* Bloque 1: Azul — Presentes + Permisos */}
           <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
             {kpis.filter(k => k.tone === 'accent').map((k) => (
@@ -356,6 +361,10 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+        <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
+      </div>
       <TasksEmptyState loading={parentLoading} />
       <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>
@@ -385,12 +394,16 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+        <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+      </div>
       {parentLoading ? (
         <SkeletonMetrics count={4} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Estudiantes" value={Object.keys(stats?.studentsByGroup || {}).length} tone="accent" />
-          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="success" />
+          <StatCard icon={<FileText size={18} strokeWidth={1.75} />} label="Permisos" value={stats?.permCount ?? 0} tone="accent" />
           <StatCard icon={<AlertTriangle size={18} strokeWidth={1.75} />} label="Alertas" value={stats?.alertsCount ?? 0} tone="danger" />
           <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Seguimientos" value={0} tone="warning" />
         </div>
@@ -520,11 +533,14 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const hasActivity = groupStats && (groupStats.present + groupStats.absent + groupStats.alerts + groupStats.permisos + (groupStats.late || 0)) > 0;
 
   const cards = [
+    // Bloque 1: Azul (presentes + permisos)
     { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
+    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'accent',  statusText: !hasActivity ? 'No hay estudiantes' : undefined },
+    // Bloque 2: Naranja (inasistentes + tardanzas)
     { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
     { key: 'late',     label: 'Llegadas tarde', value: groupStats?.late   ?? 0, icon: <Clock size={18} strokeWidth={1.75} />,         tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : (groupStats?.late ? 'Ingresos después de hora' : undefined) },
+    // Bloque 3: Rojo (alertas)
     { key: 'alert',    label: 'Alertas',      value: groupStats?.alerts   ?? 0, icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger',  statusText: !hasActivity ? 'No hay estudiantes' : undefined },
-    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'success', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
   ];
 
   return (
@@ -614,16 +630,69 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             groupLoading ? (
               <SkeletonMetrics count={5} />
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {cards.map((s) => (
-                  <StatCard
-                    key={s.key}
-                    icon={s.icon}
-                    label={s.label}
-                    value={s.value}
-                    tone={s.tone}
-                    onClick={() => openDetail(s.key)}
-                  />
+              <div className="space-y-4">
+                {/* Encabezado de sección — presencia estudiantil en tiempo real */}
+                <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+                  <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                  <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+                </div>
+                {/* Bloque 1: Azul — Presentes + Permisos */}
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                  {cards.filter(s => s.tone === 'accent').map((s) => (
+                    <StatCard
+                      key={s.key}
+                      icon={s.icon}
+                      label={s.label}
+                      value={s.value}
+                      tone={s.tone}
+                      statusText={s.statusText}
+                      onClick={() => openDetail(s.key)}
+                    />
+                  ))}
+                </div>
+                {/* Bloque 2: Naranja — Inasistentes + Llegadas tarde */}
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                  {cards.filter(s => s.tone === 'warning').map((s) => (
+                    <StatCard
+                      key={s.key}
+                      icon={s.icon}
+                      label={s.label}
+                      value={s.value}
+                      tone={s.tone}
+                      statusText={s.statusText}
+                      onClick={() => openDetail(s.key)}
+                    />
+                  ))}
+                </div>
+                {/* Bloque 3: Rojo — Alertas */}
+                {cards.filter(s => s.tone === 'danger').map((s) => (
+                  <div key={s.key}>
+                    {/* Desktop: card normal */}
+                    <div className="hidden md:block">
+                      <StatCard
+                        icon={s.icon}
+                        label={s.label}
+                        value={s.value}
+                        tone={s.tone}
+                        statusText={s.statusText}
+                        onClick={() => openDetail(s.key)}
+                      />
+                    </div>
+                    {/* Móvil: card ancha y compacta */}
+                    <button
+                      type="button"
+                      onClick={() => openDetail(s.key)}
+                      className="md:hidden nx-pressable flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
+                        {s.icon}
+                      </span>
+                      <span className="nx-tnum text-body text-[var(--nx-text)]">
+                        {typeof s.value === 'number' ? s.value.toLocaleString('es-CO') : s.value}
+                      </span>
+                      <span className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{s.label}</span>
+                    </button>
+                  </div>
                 ))}
               </div>
             )
@@ -1069,6 +1138,10 @@ const StaffDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+        <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
+      </div>
       <TasksEmptyState loading={parentLoading} />
       <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
     </div>

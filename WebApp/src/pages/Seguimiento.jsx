@@ -132,12 +132,12 @@ export default function Casos() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--nx-surface-warning)]/30 p-4 rounded-surface border border-[var(--nx-border-warning)]">
           {filtered.map((row) => (
             <Card key={row.tracking_id || row.student_id} asAction tone="warning" className="border-[var(--nx-border-warning)] bg-[var(--nx-surface-warning)]" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-h3 text-[var(--nx-text)]">{row.last_name} {row.first_name}</p>
-                  <p className="text-body-sm text-[var(--nx-text-muted)]">{formatGroupName(row.group_name) || 'Sin grupo'}</p>
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-h3 text-[var(--nx-text)] truncate" style={{ fontWeight: 620 }}>{row.last_name} {row.first_name}</p>
+                  <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{formatGroupName(row.group_name) || 'Sin grupo'}</p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]">
                   <AlertTriangle size={20} />
                 </div>
               </div>

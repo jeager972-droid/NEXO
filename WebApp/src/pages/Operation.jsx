@@ -36,14 +36,14 @@ const COMMANDS_CATALOG = [
   { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent' },
   { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent' },
   { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'accent' },
-  { id: 'fusionar_bloque', title: 'Fusionar bloque', icon: GitMerge,   roles: [ROLES.DOCENTE], fields: ['grade', 'group', 'reason'], tone: 'accent' },
+  { id: 'fusionar_bloque', title: 'Fusionar bloque', icon: GitMerge,   roles: [ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'accent' },
   // ── Naranja (warning) — acciones de advertencia/precaución ──
   { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning' },
   { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO], fields: ['location', 'description'], tone: 'warning' },
   { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason'], tone: 'warning' },
   { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
   { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'warning' },
-  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['time'], tone: 'warning' },
+  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group'], tone: 'warning' },
   // ── Rojo (danger) — acciones críticas/emergencias ──
   { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger' },

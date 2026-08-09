@@ -14,7 +14,7 @@
  * no se pierda el progreso del formulario.
  */
 import { useState, useEffect, useMemo, useId } from 'react';
-import { Clock, AlertCircle, Calendar, Coffee, Check, Sun, Moon, Sunset, X } from 'lucide-react';
+import { Clock, AlertCircle, Calendar, Coffee, Check, Sun, Moon, Sunset, X, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import { Button } from '../ui/Button';
@@ -102,6 +102,7 @@ const DEFAULT_JORNADA = () => ({
   exit_time: '',
   recess_start_time: '',
   recess_end_time: '',
+  recesses: [{ start: '', end: '' }],
   numBlocks: 6,
   blocks: [],
 });
@@ -313,20 +314,25 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
     setError('');
     try {
       const payload = {
-        jornadas: jornadas.map(j => ({
-          work_shift: j.work_shift,
-          rotates_classrooms: j.rotates_classrooms,
-          entry_time: j.entry_time,
-          exit_time: j.exit_time,
-          recess_start_time: j.recess_start_time || null,
-          recess_end_time: j.recess_end_time || null,
-          time_blocks: j.rotates_classrooms ? j.blocks.map(b => ({
-            block_number: b.block_number,
-            block_name: b.block_name,
-            start_time: b.start_time,
-            end_time: b.end_time,
-          })) : [],
-        })),
+        jornadas: jornadas.map(j => {
+          const recesses = (j.recesses || []).filter(r => r.start && r.end);
+          const firstRecess = recesses[0];
+          return {
+            work_shift: j.work_shift,
+            rotates_classrooms: j.rotates_classrooms,
+            entry_time: j.entry_time,
+            exit_time: j.exit_time,
+            recess_start_time: firstRecess?.start || j.recess_start_time || null,
+            recess_end_time: firstRecess?.end || j.recess_end_time || null,
+            recesses: recesses.length > 0 ? recesses : undefined,
+            time_blocks: j.rotates_classrooms ? j.blocks.map(b => ({
+              block_number: b.block_number,
+              block_name: b.block_name,
+              start_time: b.start_time,
+              end_time: b.end_time,
+            })) : [],
+          };
+        }),
       };
       const result = await schoolApi.completeOnboarding(payload);
       if (result.status === 'ok') {
@@ -568,24 +574,62 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
                   </div>
 
                   <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-4 space-y-3">
-                    <div className="flex items-center gap-2 text-[var(--nx-text-muted)]">
-                      <Coffee size={16} />
-                      <p className="text-caption">Receso</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[var(--nx-text-muted)]">
+                        <Coffee size={16} />
+                        <p className="text-caption">Recesos</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const j = jornadas[currentJornadaIdx];
+                          const recesses = [...(j.recesses || []), { start: '', end: '' }];
+                          updateJornada(currentJornadaIdx, 'recesses', recesses);
+                        }}
+                        className="flex items-center gap-1 rounded-control bg-[var(--nx-subtle-bg-accent)] px-2.5 py-1.5 text-caption font-medium text-[var(--nx-accent)] hover:bg-[color-mix(in_oklch,var(--nx-accent)_15%,var(--nx-surface-subtle))] transition-colors"
+                      >
+                        <Plus size={14} /> Agregar receso
+                      </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <TimeField
-                        label="Inicio del receso"
-                        value={jornadas[currentJornadaIdx].recess_start_time}
-                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_start_time', v)}
-                        leftIcon={Clock}
-                      />
-                      <TimeField
-                        label="Fin del receso"
-                        value={jornadas[currentJornadaIdx].recess_end_time}
-                        onChange={(v) => updateJornada(currentJornadaIdx, 'recess_end_time', v)}
-                        leftIcon={Clock}
-                      />
-                    </div>
+                    {(jornadas[currentJornadaIdx].recesses || []).map((recess, rIdx) => (
+                      <div key={rIdx} className="flex items-end gap-3">
+                        <div className="grid grid-cols-2 gap-4 flex-1">
+                          <TimeField
+                            label={rIdx === 0 ? 'Inicio' : `Receso ${rIdx + 1} — Inicio`}
+                            value={recess.start}
+                            onChange={(v) => {
+                              const recesses = [...(jornadas[currentJornadaIdx].recesses || [])];
+                              recesses[rIdx] = { ...recesses[rIdx], start: v };
+                              updateJornada(currentJornadaIdx, 'recesses', recesses);
+                            }}
+                            leftIcon={Clock}
+                          />
+                          <TimeField
+                            label="Fin"
+                            value={recess.end}
+                            onChange={(v) => {
+                              const recesses = [...(jornadas[currentJornadaIdx].recesses || [])];
+                              recesses[rIdx] = { ...recesses[rIdx], end: v };
+                              updateJornada(currentJornadaIdx, 'recesses', recesses);
+                            }}
+                            leftIcon={Clock}
+                          />
+                        </div>
+                        {(jornadas[currentJornadaIdx].recesses || []).length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const recesses = (jornadas[currentJornadaIdx].recesses || []).filter((_, i) => i !== rIdx);
+                              updateJornada(currentJornadaIdx, 'recesses', recesses);
+                            }}
+                            className="shrink-0 pb-2.5 text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)] transition-colors"
+                            aria-label="Eliminar receso"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
@@ -660,7 +704,13 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
                       <li>Entrada: <strong>{j.entry_time}</strong> — Salida: <strong>{j.exit_time}</strong></li>
                       <li>Rota salones: <strong>{j.rotates_classrooms ? 'Sí' : 'No'}</strong></li>
                       {j.rotates_classrooms && <li>Bloques: <strong>{j.blocks.length}</strong></li>}
-                      {j.recess_start_time && <li>Receso: <strong>{j.recess_start_time} - {j.recess_end_time}</strong></li>}
+                      {(j.recesses || []).filter(r => r.start && r.end).length > 0 ? (
+                        (j.recesses || []).filter(r => r.start && r.end).map((r, ri) => (
+                          <li key={ri}>Receso {ri + 1}: <strong>{r.start} - {r.end}</strong></li>
+                        ))
+                      ) : j.recess_start_time ? (
+                        <li>Receso: <strong>{j.recess_start_time} - {j.recess_end_time}</strong></li>
+                      ) : null}
                     </ul>
                   </div>
                 ))}

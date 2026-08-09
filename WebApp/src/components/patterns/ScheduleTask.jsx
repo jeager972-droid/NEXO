@@ -183,20 +183,15 @@ const ScheduleTask = ({ onDismiss }) => {
 
   return (
     <Surface className="p-5 space-y-4 border-[var(--nx-border-warning)]">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3 w-full">
-          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-warning)]" />
-          <div className="flex-1">
-            <p className="text-label text-[var(--nx-text)]">Tarea obligatoria</p>
-            <p className="text-h3 text-[var(--nx-text)] mt-1">Asignar cambios de horario del día</p>
-            <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
-              Marca los grupos que tienen horario distinto hoy. Las casillas vacías significan horario regular.
-              Esta tarea se activa a partir de las {activationTime} para el día siguiente.
-            </p>
-          </div>
-          <button onClick={onDismiss} className="p-1 text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] shrink-0">
-            <X size={18} />
-          </button>
+      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
+        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-warning)]" />
+        <div className="flex-1">
+          <p className="text-label text-[var(--nx-text)]">Tarea obligatoria</p>
+          <p className="text-h3 text-[var(--nx-text)] mt-1">Asignar cambios de horario del día</p>
+          <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
+            Marca los grupos que tienen horario distinto hoy. Las casillas vacías significan horario regular.
+            Esta tarea se activa a partir de las {activationTime} para el día siguiente.
+          </p>
         </div>
       </div>
 

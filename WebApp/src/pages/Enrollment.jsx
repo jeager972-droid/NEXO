@@ -34,7 +34,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [saveError, setSaveError] = useState('');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    nombres: '', apellidos: '', documento: '', jornada: 'mañana',
+    nombres: '', apellidos: '', documento: '', jornada: '',
     acudienteNombre: '', acudienteApellidos: '', acudienteDocumento: '', acudienteCelular: '',
     grado: '', grupo: '',
   });

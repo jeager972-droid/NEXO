@@ -146,7 +146,9 @@ const Consultation = () => {
 
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState(() => {
+    try { return localStorage.getItem('nexo:consultation:selected-grade') || ''; } catch { return ''; }
+  });
   const [fromDate, setFromDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return localDateStr(d); });
   const [toDate, setToDate] = useState(() => localDateStr());
   const [hasQueried, setHasQueried] = useState(false);
@@ -164,6 +166,20 @@ const Consultation = () => {
     const mod = searchParams.get('mod');
     if (mod) setActiveItem(mod);
   }, [searchParams]);
+
+  // Persistir solo el grado, no grupo ni estudiante
+  useEffect(() => {
+    try {
+      if (selectedGrade) localStorage.setItem('nexo:consultation:selected-grade', selectedGrade);
+      else localStorage.removeItem('nexo:consultation:selected-grade');
+    } catch { /* ignore */ }
+  }, [selectedGrade]);
+
+  // Al cambiar de módulo, limpiar grupo y estudiante (grado persiste)
+  useEffect(() => {
+    setSelectedGroup('');
+    setSelectedStudent('');
+  }, [activeItem]);
 
   const isTeacherModule = activeItem && TEACHER_MODULES.includes(activeItem);
   const isFilterRole = isTeacherModule || user?.role === ROLES.SECRETARIA || user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
