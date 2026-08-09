@@ -125,11 +125,6 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
         size="md"
       >
         <div className="p-6 space-y-6">
-          {/* Nombre del estudiante centrado con jerarquía */}
-          <div className="text-center pb-4 border-b border-[var(--nx-border)]">
-            <h1 className="text-h2 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>{studentName || 'Seguimiento'}</h1>
-          </div>
-
           {metadata?.risk_score && (
             <div className="flex items-center justify-center gap-3">
               <RiskBadge level={scoreToLevel(metadata.risk_score)} />
