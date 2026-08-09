@@ -140,8 +140,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             {step === 1 && (
               <>
                 <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
                     <p className="text-label text-[var(--nx-text)]">Datos del alumno</p>
                   </div>
                 </div>
@@ -165,8 +164,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             {step === 2 && (
               <>
                 <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
                     <p className="text-label text-[var(--nx-text)]">Datos del acudiente</p>
                   </div>
                 </div>
@@ -312,9 +310,10 @@ const StudentProfileDrawer = ({ student, onClose }) => {
       size="md"
     >
       <div className="p-6 space-y-6">
-        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-          <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
+        <div className="border-b border-[var(--nx-border)] pb-3">
+          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+            <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <StudentAvatar student={student} size="lg" />

@@ -611,12 +611,8 @@ const TeacherQueryPanel = ({
   return (
     <div className="flex flex-col">
       <Surface className="border-b border-[var(--nx-border)] p-6 space-y-5 rounded-none">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <p className="text-h3 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>{item}</p>
-          </div>
-          <p className="text-body-sm text-[var(--nx-text-muted)] ml-3">Selecciona los filtros para consultar la información</p>
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <p className="text-h3 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>{item}</p>
         </div>
         <div className="space-y-3">
           <SearchableSelect label="Grado" placeholder="Seleccionar grado…" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedGroup(''); setSelectedStudent(''); }} />
@@ -708,12 +704,8 @@ const AdminFilterPanel = ({
 
   return (
     <Surface className="border-b border-[var(--nx-border)] p-6 space-y-5 rounded-none">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-          <p className="text-h3 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>Filtros de consulta</p>
-        </div>
-        <p className="text-body-sm text-[var(--nx-text-muted)] ml-3">Selecciona los filtros para consultar la información</p>
+      <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+        <p className="text-h3 text-[var(--nx-text)]" style={{ fontWeight: 620 }}>Filtros</p>
       </div>
       <div className="space-y-3">
         <SearchableSelect label="Grado" placeholder="Todos los grados" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedGroup(''); setSelectedStudent(''); }} />
@@ -753,8 +745,8 @@ export const ConsultationDrawer = ({
   return (
     <>
       <Drawer
-        title={showFilters ? 'Consulta de datos institucionales' : item}
-        context={showFilters ? item : undefined}
+        title={item}
+        context={undefined}
         onClose={onClose}
         size="lg"
       >

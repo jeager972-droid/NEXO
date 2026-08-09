@@ -93,10 +93,10 @@ const eventToMessage = (ev) => {
 const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
   return (
     <div className="space-y-4">
-      {/* Barra azul vertical — indicador visual siempre visible */}
-      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-        <p className="text-label text-[var(--nx-text)]">Novedades</p>
+      <div className="border-b border-[var(--nx-border)] pb-3">
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <p className="text-label text-[var(--nx-text)]">Novedades</p>
+        </div>
       </div>
       {loading ? (
         <Surface className="p-6">
@@ -253,10 +253,10 @@ const AdminDashboard = ({ stats, loading }) => {
         <SkeletonMetrics count={5} />
       ) : (
         <div className="space-y-4">
-          {/* Encabezado de sección — presencia estudiantil en tiempo real */}
-          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+          <div className="border-b border-[var(--nx-border)] pb-3">
+            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+              <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+            </div>
           </div>
           {/* Bloque 1: Azul — Presentes + Permisos */}
           <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
@@ -361,9 +361,10 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-        <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
+      <div className="border-b border-[var(--nx-border)] pb-3">
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
+        </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
       <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
@@ -394,9 +395,10 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-        <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+      <div className="border-b border-[var(--nx-border)] pb-3">
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+        </div>
       </div>
       {parentLoading ? (
         <SkeletonMetrics count={4} />
@@ -562,8 +564,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               onClick={() => setGroupOpen((v) => !v)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+              <div className="flex items-center gap-3 border-l-2 border-[var(--nx-accent)] pl-3">
                 <div>
                   <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
                   <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup ? formatGroupName(selectedGroup) : 'Elegir grupo'}</p>
@@ -631,10 +632,10 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               <SkeletonMetrics count={5} />
             ) : (
               <div className="space-y-4">
-                {/* Encabezado de sección — presencia estudiantil en tiempo real */}
-                <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-                  <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-                  <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+                <div className="border-b border-[var(--nx-border)] pb-3">
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                    <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
+                  </div>
                 </div>
                 {/* Bloque 1: Azul — Presentes + Permisos */}
                 <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
@@ -928,9 +929,10 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
         size="md"
       >
         <div className="p-6">
-          <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <p className="text-label text-[var(--nx-text)]">{groupName}</p>
+          <div className="mb-5 border-b border-[var(--nx-border)] pb-3">
+            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+              <p className="text-label text-[var(--nx-text)]">{groupName}</p>
+            </div>
           </div>
           <div className="mb-4">
             <Input
@@ -1045,8 +1047,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
             {/* Información específica según categoría */}
             <div className="space-y-3">
               <div className="border-b border-[var(--nx-border)] pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-5 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+                <div className="border-l-2 border-[var(--nx-accent)] pl-3">
                   <p className="text-label text-[var(--nx-text)]">Información de la métrica</p>
                 </div>
               </div>
@@ -1138,9 +1139,10 @@ const StaffDashboard = ({ stats, loading: parentLoading }) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-        <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
+      <div className="border-b border-[var(--nx-border)] pb-3">
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
+        </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
       <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />

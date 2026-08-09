@@ -475,13 +475,10 @@ const Consultation = () => {
           <Button variant="secondary" size="sm" onClick={goBackToSubmodules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <h2 className="text-h2 text-[var(--nx-text)]">{activeModule || 'Consulta'}</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <p className="text-label text-[var(--nx-text-muted)]">{activeItem}</p>
+          <div className="border-b border-[var(--nx-border)] pb-3">
+            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+              <h2 className="text-h2 text-[var(--nx-text)]">{activeModule || 'Consulta'}</h2>
+            </div>
           </div>
         </div>
         <ConsultationDrawer
@@ -524,17 +521,14 @@ const Consultation = () => {
           <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-            <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-            <p className="text-label text-[var(--nx-text-muted)]">Submódulos</p>
+          <div className="border-b border-[var(--nx-border)] pb-3">
+            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+              <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
+            </div>
           </div>
         </div>
         <Input
-          placeholder="Filtrar submódulos…"
+          placeholder="Filtrar…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
@@ -572,9 +566,10 @@ const Consultation = () => {
   // ── Nivel 1: Grid de módulos ──
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-        <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-        <h1 className="text-h1 text-[var(--nx-text)]">Consultas</h1>
+      <div className="border-b border-[var(--nx-border)] pb-3">
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <h1 className="text-h1 text-[var(--nx-text)]">Consultas</h1>
+        </div>
       </div>
       <Input
         placeholder="Filtrar módulos…"
@@ -601,9 +596,6 @@ const Consultation = () => {
                   <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                 </div>
                 <p className="mt-4 text-h3 text-[var(--nx-text)]">{mod.title}</p>
-                <p className="mt-1 text-caption text-[var(--nx-text-muted)]">
-                  {mod.items.length} {mod.items.length === 1 ? 'submódulo' : 'submódulos'}
-                </p>
               </button>
             );
           })}

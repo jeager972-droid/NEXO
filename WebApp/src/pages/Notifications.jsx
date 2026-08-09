@@ -241,22 +241,18 @@ const Notifications = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-          <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-          <p className="text-label text-[var(--nx-text)]">Notificaciones</p>
-        </div>
-        {notifications.length > 0 && (
+      {notifications.length > 0 && (
+        <div className="flex justify-end">
           <button
             onClick={handleClear}
             disabled={clearing}
-            className="mt-2 flex items-center gap-1 text-label text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
+            className="flex items-center gap-1 text-label text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
           >
             <Trash2 size={14} />
             Vaciar
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {notifications.length === 0 ? (
         <Surface className="p-6">
@@ -291,8 +287,7 @@ const Notifications = () => {
             size="sm"
           >
             <div className="p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="h-4 w-0.5 rounded-full bg-[var(--nx-accent)]" />
+              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
                 <p className="text-label text-[var(--nx-text-muted)]">Detalles</p>
               </div>
               <div className="space-y-3">

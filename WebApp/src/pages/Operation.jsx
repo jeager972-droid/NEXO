@@ -124,9 +124,10 @@ const Operation = () => {
       {!activeCommand ? (
         filteredCommands.length === 0 ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-              <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-              <p className="text-label text-[var(--nx-text)]">Novedades</p>
+            <div className="border-b border-[var(--nx-border)] pb-3">
+              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                <p className="text-label text-[var(--nx-text)]">Novedades</p>
+              </div>
             </div>
             <Surface className="p-6" style={{ backgroundColor: 'oklch(97% 0.006 80)' }}>
               <NexoChatBubble message="No hay novedades para mostrar." />
@@ -134,9 +135,10 @@ const Operation = () => {
           </div>
         ) : (
           <>
-            <div className="mb-5 flex items-center gap-2 border-b border-[var(--nx-border)] pb-3">
-              <div className="h-6 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-              <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
+            <div className="mb-5 border-b border-[var(--nx-border)] pb-3">
+              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                <p className="text-label text-[var(--nx-text)]">Atajos disponibles</p>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredCommands.map((cmd) => {
