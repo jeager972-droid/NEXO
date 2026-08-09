@@ -543,6 +543,9 @@ const Enrollment = () => {
         </Surface>
       ) : (
         <>
+          <p className="text-body-sm text-[var(--nx-text-muted)]">
+            Se encontraron {sortedStudents.length} resultado{sortedStudents.length !== 1 ? 's' : ''}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedStudents.map((s, i) => (
               <motion.div

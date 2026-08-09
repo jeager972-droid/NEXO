@@ -70,7 +70,7 @@ const BIOMETRIC_EVENT_LABELS = {
   BIOMETRIC_FAILURE: 'Falla de biometría',
 };
 
-const eventToMessage = (ev) => {
+const eventToMessage = (ev, currentUserName) => {
   // Limpiar el label de cualquier "group: null" o pares clave-valor crudos del backend
   let label = ev.label || '';
   // Si el label contiene pares crudos como "group: null", limpiarlos
@@ -85,12 +85,15 @@ const eventToMessage = (ev) => {
   const groupText = group ? ` del grupo ${formatGroupName(String(group))}` : '';
   const student = ev.student_name || ev.student;
   const studentText = student ? ` de ${student}` : '';
-  const issuer = ev.issuer ? ` · por ${ev.issuer}` : '';
+  // Omitir "por X" si el issuer es el propio usuario
+  const issuerRaw = ev.issuer || '';
+  const isSelf = currentUserName && issuerRaw && issuerRaw.toLowerCase().includes(currentUserName.toLowerCase());
+  const issuer = issuerRaw && !isSelf ? ` · por ${issuerRaw}` : '';
   const time = ev.time ? ` a las ${ev.time}` : '';
   return `${label}${studentText}${groupText}${time}${issuer}.`;
 };
 
-const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
+const StreamList = ({ events, loading, showIssuer, onItemClick, currentUserName }) => {
   return (
     <div className="space-y-4">
       <div className="border-b border-[var(--nx-border)] pb-3">
@@ -111,7 +114,7 @@ const StreamList = ({ events, loading, showIssuer, onItemClick }) => {
           {events.map((ev, i) => (
             <Surface key={i} className="p-4">
               <NexoChatBubble
-                message={eventToMessage(ev)}
+                message={eventToMessage(ev, currentUserName)}
                 timestamp={ev.time || 'Ahora'}
               />
               {onItemClick && (
@@ -319,7 +322,7 @@ const AdminDashboard = ({ stats, loading }) => {
         </div>
       )}
 
-      <StreamList events={stream} loading={eventsLoading} showIssuer />
+      <StreamList events={stream} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
 
       <AnimatePresence>
         {activeCategory && (
@@ -341,6 +344,7 @@ const AdminDashboard = ({ stats, loading }) => {
 // ── Secretaria ────────────────────────────────────────────────────────────────
 
 const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -367,7 +371,7 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
     </div>
   );
 };
@@ -375,6 +379,7 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 // ── Psicorientador ────────────────────────────────────────────────────────────
 
 const CounselorDashboard = ({ stats, loading: parentLoading }) => {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -410,7 +415,7 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
           <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Seguimientos" value={0} tone="warning" />
         </div>
       )}
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
     </div>
   );
 };
@@ -699,7 +704,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             )
           )}
 
-          <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
+          <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
 
           <AnimatePresence>
             {activeCategory && (
@@ -1018,24 +1023,26 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
       {profileStudent && (
         <Drawer
           title="Detalle del estudiante"
-          context={getCategoryStatusText(category)}
           onClose={closeStudentProfile}
           size="md"
         >
           <div className="p-6 space-y-6">
-            {/* Header */}
-            <div className="flex items-start gap-4">
-              <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--nx-surface-subtle)] flex items-center justify-center text-h3 font-semibold text-[var(--nx-text-muted)]">
+            <div className="border-b border-[var(--nx-border)] pb-3">
+              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--nx-subtle-bg-accent)] flex items-center justify-center text-h2 font-semibold text-[var(--nx-accent)]">
                 {getInitials(profileStudent.first_name, profileStudent.last_name)}
               </div>
               <div className="min-w-0 flex-1">
-                <h2 className="text-h2 text-[var(--nx-text)]">
+                <p className="text-h2 text-[var(--nx-text)]">
                   {profileStudent.last_name} {profileStudent.first_name}
-                </h2>
-                <p className="text-body text-[var(--nx-text-muted)]">
+                </p>
+                <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">
                   {profileStudent.group_name ? formatGroupName(profileStudent.group_name) : 'Sin grupo'}
                 </p>
-                {/* Badge de estatus según categoría */}
                 <div className="mt-2">
                   <Badge scheme={CATEGORY_SCHEMES[category]} dot>
                     {getCategoryStatusText(category)}
@@ -1043,6 +1050,19 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                 </div>
               </div>
             </div>
+
+            <Surface className="divide-y divide-[var(--nx-border)]">
+              {[
+                { label: 'Documento', value: profileStudent.document || profileStudent.documento || '—' },
+                { label: 'Grupo', value: profileStudent.group_name ? formatGroupName(profileStudent.group_name) : '—' },
+                { label: 'Estado actual', value: getCategoryStatusText(category) },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
+                  <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
+                  <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
+                </div>
+              ))}
+            </Surface>
 
             {/* Información específica según categoría */}
             <div className="space-y-3">
@@ -1119,6 +1139,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
 const StaffDashboard = ({ stats, loading: parentLoading }) => {
+  const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -1145,7 +1166,7 @@ const StaffDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer />
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
     </div>
   );
 };

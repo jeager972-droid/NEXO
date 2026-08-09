@@ -471,15 +471,13 @@ const Consultation = () => {
   if (activeItem) {
     return (
       <div className="space-y-6">
-        <div className="space-y-3">
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
+          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+            <p className="text-label text-[var(--nx-text)]">{activeModule || 'Consulta'}</p>
+          </div>
           <Button variant="secondary" size="sm" onClick={goBackToSubmodules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <div className="border-b border-[var(--nx-border)] pb-3">
-            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-              <h2 className="text-h2 text-[var(--nx-text)]">{activeModule || 'Consulta'}</h2>
-            </div>
-          </div>
         </div>
         <ConsultationDrawer
           item={activeItem}
@@ -517,15 +515,13 @@ const Consultation = () => {
     );
     return (
       <div className="space-y-6">
-        <div className="space-y-3">
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
+          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+            <p className="text-label text-[var(--nx-text)]">{currentModule.title}</p>
+          </div>
           <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <div className="border-b border-[var(--nx-border)] pb-3">
-            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-              <h2 className="text-h2 text-[var(--nx-text)]">{currentModule.title}</h2>
-            </div>
-          </div>
         </div>
         <Input
           placeholder="Filtrar…"
@@ -568,7 +564,7 @@ const Consultation = () => {
     <div className="space-y-6">
       <div className="border-b border-[var(--nx-border)] pb-3">
         <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <h1 className="text-h1 text-[var(--nx-text)]">Consultas</h1>
+          <p className="text-label text-[var(--nx-text)]">Consultas</p>
         </div>
       </div>
       <Input

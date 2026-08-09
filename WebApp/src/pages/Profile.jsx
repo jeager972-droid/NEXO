@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -733,26 +733,9 @@ const Profile = () => {
 
       {/* ── Configuración de horarios institucionales ── */}
       {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && !schoolConfigLoading && (
-        <Card className="space-y-4 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-h3 text-[var(--nx-text)] flex items-center gap-2">
-                <Settings size={18} className="text-[var(--nx-accent)]" />
-                Configuración de horarios
-              </p>
-              <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
-                Jornada, horas de clase y recesos de la institución
-              </p>
-            </div>
-            {schoolConfig?.onboarding_completed && (
-              <Button size="sm" variant="secondary" onClick={() => setScheduleDrawerOpen(true)}>
-                Ajustes de horario
-              </Button>
-            )}
-          </div>
-
+        <Card className="p-5">
           {schoolConfigToast && (
-            <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
+            <div className={`mb-4 flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
               schoolConfigToast.type === 'success'
                 ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
                 : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
@@ -769,9 +752,14 @@ const Profile = () => {
               </p>
             </div>
           ) : (
-            <p className="text-body-sm text-[var(--nx-text-muted)]">
-              Los horarios están configurados. Presiona &ldquo;Ajustes de horario&rdquo; para ver o modificar.
-            </p>
+            <button
+              onClick={() => setScheduleDrawerOpen(true)}
+              className="flex w-full items-center gap-3 text-left"
+            >
+              <Settings size={18} className="text-[var(--nx-accent)] shrink-0" />
+              <p className="text-h3 text-[var(--nx-text)]">Configuración de horarios</p>
+              <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
+            </button>
           )}
         </Card>
       )}

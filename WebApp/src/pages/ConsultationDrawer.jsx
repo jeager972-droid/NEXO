@@ -637,6 +637,9 @@ const TeacherQueryPanel = ({
           <EmptyState icon={<Search size={32} className="text-[var(--nx-text-muted)]" />} title="Sin registros" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
           <div className="space-y-3">
+            <p className="text-body-sm text-[var(--nx-text-muted)]">
+              Se encontraron {rows.length} resultado{rows.length !== 1 ? 's' : ''}
+            </p>
             <ExportActions rows={rows} columns={visibleKeys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
             <Surface className="overflow-hidden">
               <div className="overflow-x-auto">
@@ -776,6 +779,9 @@ export const ConsultationDrawer = ({
                 <EmptyState icon={<Search size={32} className="text-[var(--nx-text-muted)]" />} title="Sin resultados aún" description="Selecciona un grupo y un rango de fechas, luego presiona Consultar." />
               ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <div className="space-y-3">
+                <p className="text-body-sm text-[var(--nx-text-muted)]">
+                  Se encontraron {riskStudents.length} resultado{riskStudents.length !== 1 ? 's' : ''}
+                </p>
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -804,6 +810,9 @@ export const ConsultationDrawer = ({
               </div>
             ) : dynamicData.length > 0 ? (
               <div className="space-y-3">
+                <p className="text-body-sm text-[var(--nx-text-muted)]">
+                  Se encontraron {dynamicData.length} resultado{dynamicData.length !== 1 ? 's' : ''}
+                </p>
                 <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -843,6 +852,9 @@ export const ConsultationDrawer = ({
               <SkeletonRows count={4} />
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <div className="space-y-3">
+                <p className="text-body-sm text-[var(--nx-text-muted)]">
+                  Se encontraron {riskStudents.length} resultado{riskStudents.length !== 1 ? 's' : ''}
+                </p>
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -871,6 +883,9 @@ export const ConsultationDrawer = ({
               </div>
             ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
               <div className="space-y-3">
+                <p className="text-body-sm text-[var(--nx-text-muted)]">
+                  Se encontraron {dynamicData.length} resultado{dynamicData.length !== 1 ? 's' : ''}
+                </p>
                 <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
