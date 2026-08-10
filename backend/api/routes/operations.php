@@ -498,7 +498,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     break;
                 }
 
-                $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? []);
+                $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
+                    && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
                 if ($isTeacher) {
                     $valStmt = $conn->prepare("
                         SELECT 1 FROM student_group_assignments sga

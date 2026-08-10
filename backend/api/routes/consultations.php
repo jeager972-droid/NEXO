@@ -52,8 +52,11 @@ if ($cleanPath === '/consultations/query') {
     }
 
     // Helper: validar que el docente/psicorientador tenga asignado el grupo
+    // Los roles con global_view (rector, coordinador, secretaria) bypassan la validación
     $teacherGroupFilter = '';
-    $isTeacher = in_array('consultations.teacher_view', $authUser['permissions'] ?? []);
+    $hasGlobalView = in_array('consultations.global_view', $authUser['permissions'] ?? []);
+    $isTeacher = in_array('consultations.teacher_view', $authUser['permissions'] ?? [])
+        && !$hasGlobalView;
     if ($isTeacher) {
         if ($groupName) {
             $checkStmt = $conn->prepare("
