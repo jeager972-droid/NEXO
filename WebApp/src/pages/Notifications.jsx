@@ -241,8 +241,11 @@ const Notifications = () => {
 
   return (
     <div className="space-y-6">
-      {notifications.length > 0 && (
-        <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
+        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+          <p className="text-label text-[var(--nx-text)]">Notificaciones</p>
+        </div>
+        {notifications.length > 0 && (
           <button
             onClick={handleClear}
             disabled={clearing}
@@ -251,8 +254,8 @@ const Notifications = () => {
             <Trash2 size={14} />
             Vaciar
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {notifications.length === 0 ? (
         <Surface className="p-6">
