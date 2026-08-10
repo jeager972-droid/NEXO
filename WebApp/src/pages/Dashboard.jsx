@@ -261,9 +261,9 @@ const AdminDashboard = ({ stats, loading }) => {
               <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
             </div>
           </div>
-          {/* PC: todas en una fila. Mobile: 2x2 normales + Alertas como barra larga abajo */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            {kpis.filter(k => k.tone !== 'danger').map((k) => (
+          {/* PC: todas en una fila */}
+          <div className="hidden md:grid md:grid-cols-6 gap-4">
+            {kpis.map((k) => (
               <StatCard
                 key={k.key}
                 icon={k.icon}
@@ -274,33 +274,37 @@ const AdminDashboard = ({ stats, loading }) => {
                 onClick={() => openDetail(k.key)}
               />
             ))}
-            {/* Alertas: card normal en PC, barra compacta en mobile */}
-            {kpis.filter(k => k.tone === 'danger').map((k) => (
-              <div key={k.key}>
-                <div className="hidden md:block">
-                  <StatCard
-                    icon={k.icon}
-                    label={k.label}
-                    value={k.value}
-                    tone={k.tone}
-                    statusText={k.statusText}
-                    onClick={() => openDetail(k.key)}
-                  />
-                </div>
-                <button
-                  type="button"
+          </div>
+          {/* Mobile: 2x2 normales + Alertas como barra larga abajo */}
+          <div className="md:hidden space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {kpis.filter(k => k.tone !== 'danger').map((k) => (
+                <StatCard
+                  key={k.key}
+                  icon={k.icon}
+                  label={k.label}
+                  value={k.value}
+                  tone={k.tone}
+                  statusText={k.statusText}
                   onClick={() => openDetail(k.key)}
-                  className="md:hidden nx-pressable flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
-                >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
-                    {k.icon}
-                  </span>
-                  <span className="nx-tnum text-body text-[var(--nx-text)]">
-                    {typeof k.value === 'number' ? k.value.toLocaleString('es-CO') : k.value}
-                  </span>
-                  <span className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{k.label}</span>
-                </button>
-              </div>
+                />
+              ))}
+            </div>
+            {kpis.filter(k => k.tone === 'danger').map((k) => (
+              <button
+                key={k.key}
+                type="button"
+                onClick={() => openDetail(k.key)}
+                className="nx-pressable flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
+                  {k.icon}
+                </span>
+                <span className="nx-tnum text-body text-[var(--nx-text)]">
+                  {typeof k.value === 'number' ? k.value.toLocaleString('es-CO') : k.value}
+                </span>
+                <span className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{k.label}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -626,8 +630,9 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                     <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {cards.filter(s => s.tone !== 'danger').map((s) => (
+                {/* PC: todas en una fila */}
+                <div className="hidden md:grid md:grid-cols-5 gap-4">
+                  {cards.map((s) => (
                     <StatCard
                       key={s.key}
                       icon={s.icon}
@@ -638,32 +643,37 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
                       onClick={() => openDetail(s.key)}
                     />
                   ))}
-                  {cards.filter(s => s.tone === 'danger').map((s) => (
-                    <div key={s.key}>
-                      <div className="hidden md:block">
-                        <StatCard
-                          icon={s.icon}
-                          label={s.label}
-                          value={s.value}
-                          tone={s.tone}
-                          statusText={s.statusText}
-                          onClick={() => openDetail(s.key)}
-                        />
-                      </div>
-                      <button
-                        type="button"
+                </div>
+                {/* Mobile: 2x2 normales + Alertas como barra larga abajo */}
+                <div className="md:hidden space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    {cards.filter(s => s.tone !== 'danger').map((s) => (
+                      <StatCard
+                        key={s.key}
+                        icon={s.icon}
+                        label={s.label}
+                        value={s.value}
+                        tone={s.tone}
+                        statusText={s.statusText}
                         onClick={() => openDetail(s.key)}
-                        className="md:hidden nx-pressable flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
-                      >
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
-                          {s.icon}
-                        </span>
-                        <span className="nx-tnum text-body text-[var(--nx-text)]">
-                          {typeof s.value === 'number' ? s.value.toLocaleString('es-CO') : s.value}
-                        </span>
-                        <span className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{s.label}</span>
-                      </button>
-                    </div>
+                      />
+                    ))}
+                  </div>
+                  {cards.filter(s => s.tone === 'danger').map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => openDetail(s.key)}
+                      className="nx-pressable flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] px-3 py-2 text-left cursor-pointer hover:shadow-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--nx-canvas)]"
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-danger)] text-[color-mix(in_oklch,var(--nx-danger)_72%,var(--nx-icon-mix))]">
+                        {s.icon}
+                      </span>
+                      <span className="nx-tnum text-body text-[var(--nx-text)]">
+                        {typeof s.value === 'number' ? s.value.toLocaleString('es-CO') : s.value}
+                      </span>
+                      <span className="text-caption font-medium uppercase text-[var(--nx-text-muted)]">{s.label}</span>
+                    </button>
                   ))}
                 </div>
               </div>
