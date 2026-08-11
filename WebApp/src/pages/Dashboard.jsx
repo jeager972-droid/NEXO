@@ -262,7 +262,7 @@ const AdminDashboard = ({ stats, loading }) => {
             </div>
           </div>
           {/* PC: todas en una fila */}
-          <div className="hidden md:grid md:grid-cols-6 gap-4">
+          <div className="hidden md:grid md:grid-cols-5 gap-4">
             {kpis.map((k) => (
               <StatCard
                 key={k.key}
