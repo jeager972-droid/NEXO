@@ -31,34 +31,39 @@
   --nx-icon-mix:      black;
   --nx-tint-base:     transparent;
 
-  /* Light theme: solid pastel/matte oklch colors — NO color-mix, same approach as dark */
-  /* Per-tone surfaces — pastel, calm, high luminosity + low chroma */
-  --nx-surface-accent:  oklch(94% 0.030 245);
-  --nx-surface-success: oklch(94% 0.030 155);
-  --nx-surface-warning: oklch(95% 0.035 70);
-  --nx-surface-danger:  oklch(94% 0.035 25);
+  /* State mix opacities — light theme (pastel, calm) */
+  --nx-state-mix:     14%;
+  --nx-state-mix-w:   16%;
+  --nx-icon-mix-pct:  18%;
+  --nx-icon-mix-w:    20%;
+  --nx-subtle-mix:    10%;
+  --nx-subtle-mix-w:  13%;
+  --nx-border-mix:    35%;
 
-  /* Icon tiles — slightly more saturated than surface, still pastel */
-  --nx-icon-bg-accent:  oklch(90% 0.045 245);
-  --nx-icon-bg-success: oklch(90% 0.045 155);
-  --nx-icon-bg-warning: oklch(92% 0.050 70);
-  --nx-icon-bg-danger:  oklch(90% 0.050 25);
+  /* Per-tone surfaces — color-mix in light, solid oklch in dark */
+  --nx-surface-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-state-mix), var(--nx-tone-mix));
+  --nx-surface-success: color-mix(in oklch, var(--nx-success) var(--nx-state-mix), var(--nx-tone-mix));
+  --nx-surface-warning: color-mix(in oklch, var(--nx-warning) var(--nx-state-mix-w), var(--nx-tone-mix));
+  --nx-surface-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-state-mix), var(--nx-tone-mix));
 
-  /* Subtle backgrounds — very light pastel for badges, hovers, avatars */
-  --nx-subtle-bg-accent:  oklch(95% 0.020 245);
-  --nx-subtle-bg-success: oklch(95% 0.020 155);
-  --nx-subtle-bg-warning: oklch(96% 0.025 70);
-  --nx-subtle-bg-danger:  oklch(95% 0.025 25);
+  --nx-icon-bg-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-icon-mix-pct), var(--nx-tint-base));
+  --nx-icon-bg-success: color-mix(in oklch, var(--nx-success) var(--nx-icon-mix-pct), var(--nx-tint-base));
+  --nx-icon-bg-warning: color-mix(in oklch, var(--nx-warning) var(--nx-icon-mix-w), var(--nx-tint-base));
+  --nx-icon-bg-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-icon-mix-pct), var(--nx-tint-base));
 
-  /* Tinted borders — keep border identity per tone */
-  --nx-border-accent:  oklch(82% 0.040 245);
-  --nx-border-success: oklch(82% 0.040 155);
-  --nx-border-warning: oklch(84% 0.050 70);
-  --nx-border-danger:  oklch(82% 0.050 25);
+  --nx-subtle-bg-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-subtle-mix), var(--nx-tint-base));
+  --nx-subtle-bg-success: color-mix(in oklch, var(--nx-success) var(--nx-subtle-mix), var(--nx-tint-base));
+  --nx-subtle-bg-warning: color-mix(in oklch, var(--nx-warning) var(--nx-subtle-mix-w), var(--nx-tint-base));
+  --nx-subtle-bg-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-subtle-mix), var(--nx-tint-base));
+
+  --nx-border-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-border-mix), var(--nx-border));
+  --nx-border-success: color-mix(in oklch, var(--nx-success) var(--nx-border-mix), var(--nx-border));
+  --nx-border-warning: color-mix(in oklch, var(--nx-warning) 50%, oklch(88% 0 0));
+  --nx-border-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-border-mix), var(--nx-border));
 
   /* Ring de foco de campo — moodboard: 3px al 12% */
-  --nx-ring:          0 0 0 3px oklch(48% 0.115 245 / 0.35);
-  --nx-ring-danger:   0 0 0 3px oklch(52% 0.175 25 / 0.35);
+  --nx-ring:          0 0 0 3px color-mix(in oklch, var(--nx-accent) var(--nx-state-mix), transparent);
+  --nx-ring-danger:   0 0 0 3px color-mix(in oklch, var(--nx-danger) var(--nx-state-mix), transparent);
 
   /* Shell */
   --nx-sidebar:       264px;
