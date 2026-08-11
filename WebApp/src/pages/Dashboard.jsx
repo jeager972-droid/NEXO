@@ -429,6 +429,7 @@ const localDateStr = (date = new Date()) => {
 const GROUP_KEY = 'nexo:teacher:selected-group';
 
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
+  const { user } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState(() => {
     try { return localStorage.getItem(GROUP_KEY) || ''; } catch { return ''; }
   });
