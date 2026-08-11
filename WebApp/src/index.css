@@ -101,21 +101,22 @@
 
 /* ── Dark theme overrides ── */
 .dark {
-  --nx-canvas:        oklch(18% 0.008 245);
-  --nx-surface:       oklch(22% 0.009 245);
-  --nx-surface-subtle: oklch(26% 0.010 245);
-  --nx-text:          oklch(94% 0.007 245);
-  --nx-text-muted:    oklch(72% 0.012 245);
-  --nx-border:        oklch(35% 0.012 245);
+  --nx-canvas:         oklch(14% 0.006 245);
+  --nx-surface:        oklch(18% 0.008 245);
+  --nx-surface-subtle: oklch(24% 0.009 245);
+  --nx-surface-card:   oklch(21% 0.009 245);
+  --nx-text:           oklch(94% 0.007 245);
+  --nx-text-muted:     oklch(72% 0.012 245);
+  --nx-border:         oklch(32% 0.012 245);
 
-  /* Semantic colors: brighter & more saturated than light mode so they pop on dark surfaces */
-  --nx-accent:        oklch(72% 0.14 245);
-  --nx-accent-strong: oklch(78% 0.12 245);
+  /* Semantic colors: muted, matte, premium — Linear/GitHub Dark vibe */
+  --nx-accent:        oklch(65% 0.06 245);
+  --nx-accent-strong: oklch(70% 0.05 245);
   --nx-accent-text:   oklch(18% 0.008 245);
-  --nx-success:       oklch(74% 0.16 155);
-  --nx-warning:       oklch(78% 0.15 70);
-  --nx-danger:        oklch(72% 0.19 25);
-  --nx-danger-strong: oklch(78% 0.17 25);
+  --nx-success:       oklch(65% 0.07 155);
+  --nx-warning:       oklch(70% 0.07 70);
+  --nx-danger:        oklch(65% 0.08 25);
+  --nx-danger-strong: oklch(70% 0.07 25);
   --nx-on-solid:      oklch(18% 0.008 245);
 
   /* Dark mode: solid dark pastel colors — NO mixing, colors overlay directly */
@@ -130,32 +131,32 @@
   --nx-subtle-mix-w:  24%;
   --nx-border-mix:    55%;
 
-  /* Solid dark pastel surfaces — predominate, never blend */
-  --nx-surface-accent:  oklch(30% 0.07 245);
-  --nx-surface-success: oklch(30% 0.07 155);
-  --nx-surface-warning: oklch(33% 0.07 70);
-  --nx-surface-danger:  oklch(30% 0.08 25);
+  /* Muted dark pastel surfaces — low chroma, matte, premium (Linear/GitHub Dark vibe) */
+  --nx-surface-accent:  oklch(26% 0.020 245);
+  --nx-surface-success: oklch(26% 0.020 155);
+  --nx-surface-warning: oklch(28% 0.020 70);
+  --nx-surface-danger:  oklch(26% 0.025 25);
 
-  --nx-icon-bg-accent:  oklch(26% 0.06 245);
-  --nx-icon-bg-success: oklch(26% 0.06 155);
-  --nx-icon-bg-warning: oklch(28% 0.06 70);
-  --nx-icon-bg-danger:  oklch(26% 0.07 25);
+  --nx-icon-bg-accent:  oklch(23% 0.025 245);
+  --nx-icon-bg-success: oklch(23% 0.025 155);
+  --nx-icon-bg-warning: oklch(25% 0.025 70);
+  --nx-icon-bg-danger:  oklch(23% 0.030 25);
 
-  --nx-subtle-bg-accent:  oklch(23% 0.04 245);
-  --nx-subtle-bg-success: oklch(23% 0.04 155);
-  --nx-subtle-bg-warning: oklch(25% 0.04 70);
-  --nx-subtle-bg-danger:  oklch(23% 0.045 25);
+  --nx-subtle-bg-accent:  oklch(20% 0.015 245);
+  --nx-subtle-bg-success: oklch(20% 0.015 155);
+  --nx-subtle-bg-warning: oklch(22% 0.015 70);
+  --nx-subtle-bg-danger:  oklch(20% 0.020 25);
 
-  --nx-border-accent:  oklch(52% 0.11 245);
-  --nx-border-success: oklch(52% 0.11 155);
-  --nx-border-warning: oklch(56% 0.11 70);
-  --nx-border-danger:  oklch(52% 0.13 25);
+  --nx-border-accent:  oklch(42% 0.040 245);
+  --nx-border-success: oklch(42% 0.040 155);
+  --nx-border-warning: oklch(50% 0.080 70);
+  --nx-border-danger:  oklch(42% 0.050 25);
 
   /* En oscuro la elevación es luminosidad + borde, no sombra negra pesada */
-  --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.20);
-  --nx-shadow-medium: 0 2px 8px -1px oklch(0% 0 0 / 0.28);
-  --nx-shadow-high:   0 8px 24px -4px oklch(0% 0 0 / 0.34);
-  --nx-shadow-dialog: 0 12px 40px -8px oklch(0% 0 0 / 0.44);
+  --nx-shadow-low:    0 1px 2px 0 oklch(0% 0 0 / 0.12);
+  --nx-shadow-medium: 0 2px 6px -1px oklch(0% 0 0 / 0.18), 0 1px 3px -1px oklch(0% 0 0 / 0.12);
+  --nx-shadow-high:   0 6px 20px -4px oklch(0% 0 0 / 0.24), 0 3px 10px -4px oklch(0% 0 0 / 0.16);
+  --nx-shadow-dialog: 0 12px 36px -8px oklch(0% 0 0 / 0.30), 0 4px 14px -4px oklch(0% 0 0 / 0.20);
 }
 
 body {
