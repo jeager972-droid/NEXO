@@ -11,9 +11,8 @@
 :root {
   /* Color */
   --nx-canvas:        oklch(100% 0 0);
-  --nx-surface:       oklch(99% 0.004 245);
-  --nx-surface-subtle: oklch(96% 0.009 245);
-  --nx-surface-card:  oklch(99% 0.004 245);
+  --nx-surface:       oklch(100% 0 0);
+  --nx-surface-subtle: oklch(97% 0.006 245);
   --nx-text:          oklch(23% 0.018 245);
   --nx-text-muted:    oklch(48% 0.018 245);
   --nx-border:        oklch(88% 0.010 245);
@@ -58,7 +57,7 @@
 
   --nx-border-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-border-mix), var(--nx-border));
   --nx-border-success: color-mix(in oklch, var(--nx-success) var(--nx-border-mix), var(--nx-border));
-  --nx-border-warning: color-mix(in oklch, var(--nx-warning) 50%, oklch(88% 0 0));
+  --nx-border-warning: color-mix(in oklch, var(--nx-warning) var(--nx-border-mix), var(--nx-border));
   --nx-border-danger:  color-mix(in oklch, var(--nx-danger) var(--nx-border-mix), var(--nx-border));
 
   /* Ring de foco de campo — moodboard: 3px al 12% */
@@ -74,11 +73,11 @@
   --nx-radius-surface: 12px;
   --nx-radius-panel:   16px;
 
-  /* Shadows — soft, premium elevation */
-  --nx-shadow-low:    0 1px 2px 0 oklch(23% 0.018 245 / 0.05);
-  --nx-shadow-medium: 0 2px 8px -1px oklch(23% 0.018 245 / 0.07), 0 1px 3px -1px oklch(23% 0.018 245 / 0.05);
-  --nx-shadow-high:   0 8px 24px -4px oklch(23% 0.018 245 / 0.09), 0 4px 12px -4px oklch(23% 0.018 245 / 0.06);
-  --nx-shadow-dialog: 0 12px 40px -8px oklch(23% 0.018 245 / 0.14), 0 4px 16px -4px oklch(23% 0.018 245 / 0.07);
+  /* Shadows */
+  --nx-shadow-low:    0 1px 2px 0 oklch(23% 0.018 245 / 0.04);
+  --nx-shadow-medium: 0 2px 8px -1px oklch(23% 0.018 245 / 0.06), 0 1px 3px -1px oklch(23% 0.018 245 / 0.04);
+  --nx-shadow-high:   0 8px 24px -4px oklch(23% 0.018 245 / 0.08), 0 4px 12px -4px oklch(23% 0.018 245 / 0.05);
+  --nx-shadow-dialog: 0 12px 40px -8px oklch(23% 0.018 245 / 0.12), 0 4px 16px -4px oklch(23% 0.018 245 / 0.06);
 
   /* Motion */
   --nx-ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
