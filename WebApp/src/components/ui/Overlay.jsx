@@ -72,7 +72,7 @@ export const Drawer = ({
             {context && (
               <p className="mb-1 text-eyebrow uppercase text-[var(--nx-text-muted)]">{context}</p>
             )}
-            <h2 className="truncate text-h3 text-[var(--nx-text)]">{title}</h2>
+            <h2 className="truncate text-h3 text-[var(--nx-text)] border-l-2 border-[var(--nx-accent)] pl-3">{title}</h2>
           </div>
           <IconButton label="Cerrar panel" onClick={onClose} size="sm">
             <X size={18} aria-hidden />

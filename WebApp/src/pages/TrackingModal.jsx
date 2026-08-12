@@ -143,10 +143,8 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
           ) : (
             <>
               <Surface className="p-4">
-                <div className="flex items-center gap-1.5 text-caption">
-                  <div className="h-3 w-0.5 rounded-full bg-[var(--nx-accent)]" />
-                  <span className="text-[var(--nx-text-muted)]">Estado</span>
-                  <span className="font-medium text-[var(--nx-text)]">{details?.status === 'active' ? 'Activo' : details?.status || 'Activo'}</span>
+                <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                  <span className="font-medium text-[var(--nx-text)] text-caption">{details?.status === 'active' ? 'En proceso' : details?.status === 'resuelto' ? 'Resuelto' : details?.status || 'En proceso'}</span>
                 </div>
                 {details?.created_at && <p className="text-caption text-[var(--nx-text-muted)] mt-1.5 flex items-center gap-1"><CalendarDays size={12} /> Iniciado {new Date(details.created_at).toLocaleDateString('es-CO')}</p>}
               </Surface>
