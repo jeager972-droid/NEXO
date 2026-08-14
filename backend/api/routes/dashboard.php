@@ -660,167 +660,99 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
 // ============================================================================
 // GET /dashboard/events
-// Params: none (filtered by role automatically)
+// Params: none (filtered by user's notifications automatically)
 // ============================================================================
 if ($cleanPath === '/dashboard/events') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];
     $userId = $authUser['id'];
-    $userRole = strtoupper($authUser['role'] ?? '');
 
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
-            && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
-        $isGlobalAdmin = ($userRole === 'RECTOR' || $userRole === 'COORDINATOR');
-
-        $events = [];
-        $limit = 20;
-
-        if ($isGlobalAdmin) {
-            // RECTOR/COORDINADOR: ven SOLO novedades específicas (SOS, SITUACION_CRITICA, INCIDENTE, DAÑO, SEGUIMIENTO)
-            // más EVASION_INTERNA desde attendance_incidents (no está en user_commands).
-            // NO ven permisos, autorizaciones de salida, inasistencias, horarios, ni salidas pedagógicas
-            // Deduplicación: si hay múltiples eventos del mismo tipo para el mismo estudiante en los últimos
-            // 5 minutos, solo se muestra el más reciente (DISTINCT ON + ORDER BY executed_at DESC)
-            $stmt = $conn->prepare("
-                SELECT * FROM (
-                    SELECT * FROM (
-                        SELECT DISTINCT ON (uc.command_type, uc.command_payload->>'student_id')
-                               uc.command_type, uc.executed_at, uc.command_payload,
-                               u.first_name as issuer_first, u.last_name as issuer_last,
-                               r.role_name as issuer_role
-                        FROM user_commands uc
-                        LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
-                        LEFT JOIN roles r ON u.role_id = r.role_id
-                        WHERE uc.school_id = ?
-                          AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                          AND uc.command_type IN ('SOS', 'SITUACION_CRITICA', 'INCIDENTE', 'DAÑO', 'SEGUIMIENTO')
-                        ORDER BY uc.command_type, uc.command_payload->>'student_id', uc.executed_at DESC
-                    ) AS dedup
-
-                    UNION ALL
-
-                    SELECT
-                        'EVASION_INTERNA' AS command_type,
-                        ai.detected_at AS executed_at,
-                        ai.metadata_json AS command_payload,
-                        NULL AS issuer_first,
-                        NULL AS issuer_last,
-                        'SISTEMA' AS issuer_role
-                    FROM attendance_incidents ai
-                    WHERE ai.school_id = ?
-                      AND ai.detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                      AND ai.incident_type = 'EVASION_INTERNA'
-                ) AS combined
-                ORDER BY combined.executed_at DESC
-                LIMIT ?
-            ");
-            $stmt->execute([$schoolId, $schoolId, $limit]);
-            $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } elseif ($isTeacher) {
-            // DOCENTE/PSICORIENTADOR: ven SUS comandos (incluyendo SUS citaciones) + comandos importantes de sus grupos
-            // Simplificado para evitar errores 500
-            $stmt = $conn->prepare("
-                SELECT uc.command_type, uc.executed_at, uc.command_payload,
-                       u.first_name as issuer_first, u.last_name as issuer_last,
-                       r.role_name as issuer_role
-                FROM user_commands uc
-                LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
-                LEFT JOIN roles r ON u.role_id = r.role_id
-                WHERE uc.school_id = ?
-                  AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                  AND uc.executed_by_user_id = ?
-                ORDER BY uc.executed_at DESC
-                LIMIT ?
-            ");
-            $stmt->execute([$schoolId, $userId, $limit]);
-            $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            // OTROS ROLES: solo ven sus propios comandos
-            $stmt = $conn->prepare("
-                SELECT uc.command_type, uc.executed_at, uc.command_payload,
-                       u.first_name as issuer_first, u.last_name as issuer_last,
-                       r.role_name as issuer_role
-                FROM user_commands uc
-                LEFT JOIN users u ON u.user_id = uc.executed_by_user_id
-                LEFT JOIN roles r ON u.role_id = r.role_id
-                WHERE uc.school_id = ?
-                  AND uc.executed_by_user_id = ?
-                  AND uc.executed_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                ORDER BY uc.executed_at DESC
-                LIMIT ?
-            ");
-            $stmt->execute([$schoolId, $userId, $limit]);
-            $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        }
+        // Las novedades se obtienen de la tabla notifications del usuario actual.
+        // Solo se muestran las 6 acciones configurables:
+        // situacion_critica, permiso, autorizar_salida, pedagogica, iniciar_seguimiento, daño
+        // Cada usuario ve las notificaciones que le fueron enviadas.
+        // Deduplicación: si hay múltiples notificaciones del mismo action+student_id hoy,
+        // solo se muestra la más reciente.
+        $stmt = $conn->prepare("
+            SELECT * FROM (
+                SELECT DISTINCT ON (n.metadata_json->>'action', n.metadata_json->>'student_id')
+                       n.notification_id,
+                       n.title,
+                       n.message,
+                       n.type,
+                       n.metadata_json,
+                       n.created_at,
+                       TO_CHAR(n.created_at, 'HH24:MI') AS time
+                FROM notifications n
+                WHERE n.user_id = ?
+                  AND n.school_id = ?
+                  AND n.created_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                  AND n.metadata_json->>'action' IN (
+                      'situacion_critica', 'permiso', 'autorizar_salida',
+                      'pedagogica', 'iniciar_seguimiento', 'daño'
+                  )
+                ORDER BY n.metadata_json->>'action', n.metadata_json->>'student_id', n.created_at DESC
+            ) AS dedup
+            ORDER BY dedup.created_at DESC
+            LIMIT 20
+        ");
+        $stmt->execute([$userId, $schoolId]);
+        $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Formatear eventos para el frontend
         $formattedEvents = [];
         foreach ($events as $ev) {
-            $payload = json_decode($ev['command_payload'], true);
-            $reason = $payload['reason'] ?? $payload['message'] ?? $payload['description'] ?? '';
+            $payload = json_decode($ev['metadata_json'], true);
             $studentName = $payload['student_name'] ?? '';
-            $issuerName = trim($ev['issuer_first'] . ' ' . $ev['issuer_last']);
-            $issuerRole = $ev['issuer_role'] ?? '';
+            $reason = $payload['reason'] ?? $payload['message'] ?? '';
+            $groupName = $payload['group_name'] ?? '';
+            $reporterName = $payload['reporter_name'] ?? $payload['sender_name'] ?? '';
+            $location = $payload['location'] ?? '';
+            $action = $payload['action'] ?? '';
 
             $label = '';
-            switch (strtoupper($ev['command_type'])) {
-                case 'PERMISO':
-                    $label = $studentName ? "Se registró un permiso para {$studentName}" : "Se registró un permiso";
+            switch ($action) {
+                case 'situacion_critica':
+                    $label = "Se reportó una situación crítica";
+                    if ($reporterName) $label .= " por {$reporterName}";
+                    if ($location && $location !== 'No especificada' && $location !== 'Ubicación no definida') $label .= ". Ubicación: {$location}";
                     break;
-                case 'AUTORIZAR_SALIDA':
-                    $label = $studentName ? "Se autorizó una salida para {$studentName}" : "Se autorizó una salida";
+                case 'permiso':
+                    $label = "Se registró un permiso";
+                    if ($studentName) $label .= " para {$studentName}";
                     break;
-                case 'SOS':
-                    $label = "Se emitió una alerta SOS";
+                case 'autorizar_salida':
+                    $label = "Se autorizó una salida";
+                    if ($studentName) $label .= " para {$studentName}";
                     break;
-                case 'CITACION':
-                    $label = $studentName ? "Se envió una citación para {$studentName}" : "Se envió una citación";
+                case 'pedagogica':
+                    $label = "Se programó una salida pedagógica";
+                    if ($groupName) $label .= " para el grupo {$groupName}";
                     break;
-                case 'INASISTENCIA':
-                    $label = $studentName ? "Se registró inasistencia de {$studentName}" : "Se registró una inasistencia";
+                case 'iniciar_seguimiento':
+                    $label = "Se inició un seguimiento";
+                    if ($studentName) $label .= " para {$studentName}";
                     break;
-                case 'INCIDENTE':
-                    $label = $reason ? "Se reportó un incidente: {$reason}" : "Se reportó un incidente";
-                    break;
-                case 'PEDAGOGICA':
-                    $label = $reason ? "Se programó una salida pedagógica: {$reason}" : "Se programó una salida pedagógica";
-                    break;
-                case 'SEGUIMIENTO':
-                    $label = $studentName ? "Se inició seguimiento para {$studentName}" : "Se inició un seguimiento";
-                    break;
-                case 'SOLICITUD':
-                    $label = "Se envió una solicitud interna";
-                    break;
-                case 'DAÑO':
-                    $label = $reason ? "Se reportó un daño: {$reason}" : "Se reportó un daño";
-                    break;
-                case 'EVASION_INTERNA':
-                    $label = $studentName ? "Se detectó evasión interna de {$studentName}" : "Se detectó una evasión interna";
-                    break;
-                case 'HORARIO':
-                    $label = "Se realizó un cambio de horario";
-                    break;
-                case 'FUSIONAR_BLOQUE':
-                    $label = $reason ? "Se fusionó bloque de clases: {$reason}" : "Se fusionó bloque de clases";
-                    break;
-                case 'EXTENDER_BLOQUE':
-                    $newTime = $payload['new_exit_time'] ?? $payload['time'] ?? '';
-                    $label = $newTime ? "Se extendió bloque hasta las {$newTime}" : "Se extendió bloque de clases";
+                case 'daño':
+                    $label = "Se reportó un daño";
+                    if ($reason) $label .= ": {$reason}";
                     break;
                 default:
-                    $label = $ev['command_type'];
+                    $label = $ev['title'] ?? $action;
             }
 
+            $isAlert = in_array($action, ['situacion_critica', 'daño']);
+
             $formattedEvents[] = [
+                'id' => $ev['notification_id'],
                 'label' => $label,
-                'time' => date('H:i', strtotime($ev['executed_at'])),
-                'type' => in_array(strtoupper($ev['command_type']), ['SOS', 'INCIDENTE', 'EVASION_INTERNA']) ? 'alert' : 'default',
-                'issuer' => $issuerName,
-                'issuer_role' => $issuerRole,
-                'command_type' => $ev['command_type'],
+                'time' => $ev['time'],
+                'type' => $isAlert ? 'alert' : 'default',
+                'action' => $action,
+                'has_details' => true,
             ];
         }
 

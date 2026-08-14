@@ -6,3 +6,6 @@
 
 # Crear partición mensual para biometric_events - Día 1 de cada mes a las 3 AM UTC
 0 3 1 * * /var/www/html/infra/scripts/create_monthly_partition.sh >> /var/www/html/infra/logs/partition_creation.log 2>&1
+
+# Purgar notificaciones con más de 30 días de antigüedad - Todos los días a las 4 AM UTC
+0 4 * * * php /var/www/html/workers/worker_notification_purge.php >> /var/www/html/infra/logs/notification_purge.log 2>&1
