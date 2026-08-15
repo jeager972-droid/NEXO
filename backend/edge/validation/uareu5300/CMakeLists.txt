@@ -36,8 +36,6 @@ set(UAREU_SDK_LIBS
     ${UAREU_SDK_LIB_DIR_ABS}/libdpfpdd_ptapi.so
     ${UAREU_SDK_LIB_DIR_ABS}/libdpfr6.so
     ${UAREU_SDK_LIB_DIR_ABS}/libdpfr7.so
-    ${UAREU_SDK_LIB_DIR_ABS}/libnex_sdk.so
-    ${UAREU_SDK_LIB_DIR_ABS}/libtfm.so
 )
 target_link_libraries(uareu5300_validation ${UAREU_SDK_LIBS} pthread dl)
 

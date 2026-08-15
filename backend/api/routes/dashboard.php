@@ -12,8 +12,8 @@
  *                                           caché Redis agresiva (TTL 30s).
  *   - GET /dashboard/teacher-group-detail : desglose de estudiantes por estado
  *                                           dentro de los grupos del docente.
- *   - GET /dashboard/events             : eventos recientes de user_commands
- *                                           filtrados por rol.
+ *   - GET /dashboard/events             : novedades recientes de notifications
+ *                                           del usuario autenticado (6 acciones).
  *
  * USO DE REDIS AQUÍ
  * -----------------
