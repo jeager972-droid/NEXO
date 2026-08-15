@@ -40,6 +40,11 @@ foreach ($required as $key => $desc) {
     }
 }
 
+$aesKey = getenv('NEXO_AES_KEY');
+if ($aesKey !== false && trim($aesKey) !== '' && strlen($aesKey) !== 32) {
+    $missing[] = 'NEXO_AES_KEY (debe tener exactamente 32 bytes)';
+}
+
 // Redis puede configurarse con REDIS_URL (prioridad) o con REDISHOST.
 $redisUrl  = getenv('REDIS_URL');
 $redisHost = getenv('REDISHOST');
@@ -55,6 +60,18 @@ $hasRS256   = ($jwtPrivate !== false && trim($jwtPrivate) !== '') && ($jwtPublic
 $hasHMAC    = ($jwtSecret !== false && trim($jwtSecret) !== '');
 if (!$hasRS256 && !$hasHMAC) {
     $missing[] = 'JWT_PRIVATE_KEY + JWT_PUBLIC_KEY (RS256) o JWT_SECRET (HS256) — se necesita al menos un método de firma JWT';
+}
+
+// HMAC secret para cadena de auditoría (VF-017)
+$hmacSecret = getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET');
+if ($hmacSecret === false || trim($hmacSecret) === '' || trim($hmacSecret) === 'default-secret-change-me') {
+    $missing[] = 'APP_NEXO_HMAC_SECRET (secret para cadena de auditoría HMAC — no debe ser default)';
+}
+
+// Metrics secret para /metrics (VF-017)
+$metricsSecret = getenv('METRICS_SECRET_KEY');
+if ($metricsSecret === false || trim($metricsSecret) === '') {
+    $missing[] = 'METRICS_SECRET_KEY (secret para autenticación de /metrics)';
 }
 
 // Validación opcional pero recomendada

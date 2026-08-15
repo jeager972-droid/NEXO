@@ -65,11 +65,13 @@ function enqueueAbsenceNotification($redis, string $phone, string $studentName, 
     try {
         $payload = json_encode([
             'to' => $phone,
-            'message' => $msg,
+            'body' => $msg,
             'school_id' => $schoolId,
             'student_id' => $studentId,
-            'user_id' => $userId,
+            'sender_user_id' => $userId,
             'type_code' => 'INASISTENCIA',
+            'retries' => 0,
+            'created_at' => time(),
         ], JSON_UNESCAPED_UNICODE);
         $redis->rPush('queue:twilio', $payload);
         $redis->expire('queue:twilio', 86400);
@@ -85,6 +87,17 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     $detected = 0;
     $today = (new DateTime('now', new DateTimeZone('America/Bogota')))->format('Y-m-d');
 
+    // FIX (RLS): Toda la lógica de processSchool va dentro de UNA sola transacción
+    // con RLS context seteado. Esto garantiza que el check de dedup
+    // (attendance_incidents) y todas las queries sobre students, biometric_events,
+    // class_exit_authorizations vean los datos de la escuela correcta.
+    // Antes, el RLS context se perdía tras COMMIT, causando que el check de dedup
+    // no viera filas insertadas → re-inserción infinita → flood de Twilio.
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+
+    try {
     // 1. Obtener grupos con clases hoy
     // Usar daily_schedule_config si existe, si no, asumir que sí hay clases
     $groupsStmt = $conn->prepare("
@@ -100,11 +113,6 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         ORDER BY ag.group_name
     ");
 
-    // set_config para RLS (transaction-level para PgBouncer)
-    $conn->exec("BEGIN");
-    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
-    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
-
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -115,7 +123,6 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     foreach ($shiftConfigStmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
         $shiftConfigs[$sc['work_shift']] = $sc['entry_time'];
     }
-    $conn->exec("COMMIT");
 
     foreach ($groups as $group) {
         if (!$group['has_classes']) continue;
@@ -213,6 +220,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             if ($currentMinutes < $limitMinutes) continue;
 
             // 5. Verificar si ya existe un incidente de inasistencia hoy
+            // FIX (RLS): Ahora este check corre DENTRO de la transacción con RLS
+            // context, así puede ver las filas insertadas en iteraciones anteriores.
             $checkStmt = $conn->prepare("
                 SELECT 1 FROM attendance_incidents
                 WHERE student_id = ? AND school_id = ?
@@ -224,40 +233,36 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             $checkStmt->execute([$studentId, $schoolId]);
             if ($checkStmt->fetchColumn()) continue; // Ya registrado
 
-            // 6. INSERT attendance_incidents
-            try {
-                $conn->exec("BEGIN");
-                $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
-                $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+            // 6. INSERT attendance_incidents (mismo contexto RLS, misma transacción)
+            $incStmt = $conn->prepare("
+                INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
+                VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA', NOW())
+            ");
+            $incStmt->execute([$schoolId, $studentId]);
+            $detected++;
 
-                $incStmt = $conn->prepare("
-                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
-                    VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA', NOW())
-                ");
-                $incStmt->execute([$schoolId, $studentId]);
-                $conn->exec("COMMIT");
-                $detected++;
+            $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
+            logA('ABSENCE_DETECTED', "school=$schoolId group=$groupName student=$studentName doc={$student['document_number']} shift=$shift");
 
-                $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
-                logA('ABSENCE_DETECTED', "school=$schoolId group=$groupName student=$studentName doc={$student['document_number']} shift=$shift");
-
-                // 7. Notificar al acudiente
-                if (!empty($student['guardian_phone'])) {
-                    enqueueAbsenceNotification(
-                        $redis,
-                        $student['guardian_phone'],
-                        $studentName,
-                        $groupName,
-                        $schoolId,
-                        $studentId,
-                        'SYSTEM'
-                    );
-                }
-            } catch (Exception $e) {
-                try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
-                logA('INSERT_FAIL', "student={$student['student_id']} error=" . $e->getMessage());
+            // 7. Notificar al acudiente (fuera de la transacción DB, pero después del INSERT confirmado)
+            if (!empty($student['guardian_phone'])) {
+                enqueueAbsenceNotification(
+                    $redis,
+                    $student['guardian_phone'],
+                    $studentName,
+                    $groupName,
+                    $schoolId,
+                    $studentId,
+                    'SYSTEM'
+                );
             }
         }
+    }
+
+    $conn->exec("COMMIT");
+    } catch (Exception $e) {
+        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+        logA('PROCESS_SCHOOL_FAIL', "school=$schoolId error=" . $e->getMessage());
     }
 
     return $detected;
@@ -280,7 +285,16 @@ if ($runMode === 'cron') {
 
         $total = 0;
         foreach ($schools as $schoolId) {
-            $total += processSchool($pdo, $redis, $schoolId);
+            $lockKey = "lock:absence_detector:$schoolId";
+            if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                logA('LOCK_SKIP', "school=$schoolId already locked by another instance");
+                continue;
+            }
+            try {
+                $total += processSchool($pdo, $redis, $schoolId);
+            } finally {
+                $redis->del($lockKey);
+            }
         }
         logA('CRON_DONE', "schools=" . count($schools) . " absences=$total");
         exit(0);
@@ -314,7 +328,15 @@ while (!$shutdown) {
 
             $total = 0;
             foreach ($schools as $schoolId) {
-                $total += processSchool($pdo, $redis, $schoolId);
+                $lockKey = "lock:absence_detector:$schoolId";
+                if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                    continue;
+                }
+                try {
+                    $total += processSchool($pdo, $redis, $schoolId);
+                } finally {
+                    $redis->del($lockKey);
+                }
             }
             if ($total > 0) {
                 logA('DETECTED', "absences=$total");

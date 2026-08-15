@@ -288,6 +288,36 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         }
     }
 
+    // VF-012: Idempotency-Key — prevenir duplicados por reintentos del cliente
+    $idempotencyKey = $_SERVER['HTTP_X_IDEMPOTENCY_KEY'] ?? '';
+    $idemRedis = getRedisConnection();
+    $idemRedisKey = null;
+    if ($idempotencyKey !== '' && $idemRedis) {
+        $idemRedisKey = "idem:ops:{$userId}:{$action}:" . hash('sha256', $idempotencyKey);
+        $cached = $idemRedis->get($idemRedisKey);
+        if ($cached !== false) {
+            // Retornar respuesta cacheada del primer procesamiento
+            $cachedData = json_decode($cached, true);
+            http_response_code($cachedData['code'] ?? 200);
+            exit(json_encode($cachedData['body'] ?? ['status' => 'ok']));
+        }
+        // Marcar como en proceso (TTL corto para auto-recovery si el proceso muere)
+        $idemRedis->setex($idemRedisKey . ':lock', 30, '1');
+        // Capturar output para cachear la respuesta
+        ob_start();
+        register_shutdown_function(function() use ($idemRedis, $idemRedisKey) {
+            $output = ob_get_clean();
+            if ($output !== false && $output !== '') {
+                $code = http_response_code();
+                $decoded = json_decode($output, true);
+                $cacheBody = $decoded !== null ? $decoded : ['status' => 'ok', 'raw' => $output];
+                $idemRedis->setex($idemRedisKey, 86400, json_encode(['code' => $code, 'body' => $cacheBody]));
+                $idemRedis->del($idemRedisKey . ':lock');
+            }
+            echo $output;
+        });
+    }
+
     // Dispatcher de comandos operativos. Cada case inserta/actualiza DB, notifica
     // por Twilio a acudientes/directivos y registra user_commands.
     // Acciones: sos, inasistencia, citacion, autorizar_salida, permiso, solicitud,
@@ -1032,11 +1062,13 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     exit(json_encode(['status' => 'error', 'message' => 'La nueva hora de fin es obligatoria']));
                 }
 
+                // VF-021: Soportar filtrado por group_name (grupo específico a extender)
+                $groupName = trim((string)($params['group_name'] ?? $params['group'] ?? ''));
                 $todayDate = "(NOW() AT TIME ZONE 'America/Bogota')::date";
 
                 // Verificar si ya existen configuraciones para hoy
                 $checkStmt = $conn->prepare("
-                    SELECT COUNT(*) FROM daily_schedule_config
+                    SELECT COUNT(*) FROM daily_schedule_config dsc
                     WHERE school_id = ? AND config_date = {$todayDate}
                 ");
                 $checkStmt->execute([$schoolId]);
@@ -1044,25 +1076,54 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 if ($existingCount > 0) {
                     // UPDATE existing configs for today
-                    $updStmt = $conn->prepare("
-                        UPDATE daily_schedule_config
-                        SET expected_exit_time = ?::time
-                        WHERE school_id = ? AND config_date = {$todayDate}
-                    ");
-                    $updStmt->execute([$newExitTime, $schoolId]);
+                    if ($groupName !== '') {
+                        // VF-021: Filtrar por group_name si se especifica
+                        $updStmt = $conn->prepare("
+                            UPDATE daily_schedule_config
+                            SET expected_exit_time = ?::time
+                            WHERE school_id = ? AND config_date = {$todayDate}
+                              AND group_id IN (
+                                  SELECT group_id FROM academic_groups
+                                  WHERE school_id = ? AND group_name = ?
+                              )
+                        ");
+                        $updStmt->execute([$newExitTime, $schoolId, $schoolId, $groupName]);
+                    } else {
+                        $updStmt = $conn->prepare("
+                            UPDATE daily_schedule_config
+                            SET expected_exit_time = ?::time
+                            WHERE school_id = ? AND config_date = {$todayDate}
+                        ");
+                        $updStmt->execute([$newExitTime, $schoolId]);
+                    }
                 } else {
                     // INSERT para todos los grupos activos de la institución
-                    $insStmt = $conn->prepare("
-                        INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
-                        SELECT ?, ag.group_id, {$todayDate}, TRUE, NULL, ?::time, ?
-                        FROM academic_groups ag
-                        WHERE ag.school_id = ?
-                          AND EXISTS (
-                              SELECT 1 FROM student_group_assignments sga
-                              WHERE sga.group_id = ag.group_id AND sga.active = TRUE
-                          )
-                    ");
-                    $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $schoolId]);
+                    if ($groupName !== '') {
+                        $insStmt = $conn->prepare("
+                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
+                            SELECT ?, ag.group_id, {$todayDate}, TRUE, NULL, ?::time, ?
+                            FROM academic_groups ag
+                            WHERE ag.school_id = ?
+                              AND ag.group_name = ?
+                              AND EXISTS (
+                                  SELECT 1 FROM student_group_assignments sga
+                                  WHERE sga.group_id = ag.group_id AND sga.active = TRUE
+                              )
+                        ");
+                        $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $schoolId, $groupName]);
+                    } else {
+                        $insStmt = $conn->prepare("
+                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
+                            SELECT ?, ag.group_id, {$todayDate}, TRUE, NULL, ?::time, ?
+                            FROM academic_groups ag
+                            WHERE ag.school_id = ?
+                              AND EXISTS (
+                                  SELECT 1 FROM student_group_assignments sga
+                                  WHERE sga.group_id = ag.group_id AND sga.active = TRUE
+                              )
+                        ");
+                        $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $schoolId]);
+                    }
                 }
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);

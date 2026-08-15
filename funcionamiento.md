@@ -690,7 +690,13 @@ un evento `INGRESO_%` en `biometric_events` hoy (Bogotá). Si no, devuelve error
   `user_commands`, `sos_alerts`, `security_incidents`, `student_tracking`,
   `student_tracking_notes`, `twilio_messages`, `internal_messages`, `edge_devices`,
   `academic_groups`, `schedules`, `daily_schedule_config`, `student_behavior_metrics`,
-  `school_schedule_config`, `school_time_blocks`, `report_exports`, `staff_records`.
+  `school_schedule_config`, `school_time_blocks`, `report_exports`, `staff_records`,
+  `classrooms`, `student_record_audit`, `global_audit_logs`.
+- **VF-001 (resuelto 2026-08):** Se añadió RLS a 10 tablas que no la tenían:
+  `staff_records`, `academic_groups`, `classrooms`, `security_incidents`,
+  `school_exit_authorizations`, `class_exit_authorizations`, `student_record_audit`,
+  `report_exports`, `student_tracking`, `internal_messages`.
+  Migration: `2026-21-rls-missing-tables.sql`.
 
 ### Tablas SIN RLS (globales)
 - `schools`, `roles`, `permissions`, `role_permissions`, `departments`, `municipalities`,

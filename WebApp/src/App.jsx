@@ -5,6 +5,8 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import { NotificationProvider } from './context/NotificationContext';
+import { initTelemetry } from './api/telemetry';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Layout from './layout/Layout';
 import { ROLES } from './config/roles';
@@ -65,6 +67,11 @@ function App() {
     setupDeepLink();
   }, [navigate]);
 
+  useEffect(() => {
+    const stopTelemetry = initTelemetry();
+    return () => { if (typeof stopTelemetry === 'function') stopTelemetry(); };
+  }, []);
+
   return (
     <Suspense fallback={
       <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--nx-canvas)]">
@@ -80,35 +87,37 @@ function App() {
         </Routes>
       )}
 
-      <div className="min-h-screen">
-          <Routes>
-            <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-            <Route path="/unauthorized" element={<Unauthorized />} />
+      <NotificationProvider>
+        <div className="min-h-screen">
+            <Routes>
+              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+              <Route path="/unauthorized" element={<Unauthorized />} />
 
-            <Route element={<ProtectedRoute />}>
-              <Route element={<Layout />}>
-                <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-                <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
-                <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
-                <Route path="/perfil" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                  <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
+                  <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
+                  <Route path="/perfil" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
 
-                <Route path="/consulta" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}>
-                  <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
-                </Route>
-                <Route path="/casos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR]} />}>
-                  <Route index element={<ErrorBoundary><Casos /></ErrorBoundary>} />
-                </Route>
-                <Route path="/enrolamiento" element={<ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />}>
-                  <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
+                  <Route path="/consulta" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}>
+                    <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
+                  </Route>
+                  <Route path="/casos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR]} />}>
+                    <Route index element={<ErrorBoundary><Casos /></ErrorBoundary>} />
+                  </Route>
+                  <Route path="/enrolamiento" element={<ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />}>
+                    <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
+                  </Route>
                 </Route>
               </Route>
-            </Route>
 
-            <Route path="/descargas" element={<Downloads />} />
-            <Route path="/auditoria" element={<Navigate to="/consulta" replace />} />
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-      </div>
+              <Route path="/descargas" element={<Downloads />} />
+              <Route path="/auditoria" element={<Navigate to="/consulta" replace />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+        </div>
+      </NotificationProvider>
       {!isInstallRoute && <PwaInstallPrompt />}
     </Suspense>
   );

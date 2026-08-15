@@ -10,10 +10,9 @@ export const authApi = {
   login: async (email, password) => {
     // Si estamos en desarrollo local, Vite usa el proxy o la URL directa.
     // Asegurémonos de que el path sea limpio.
-    const response = await client.post('/auth/login', { 
-      email: email.trim(), 
-      password: password,
-      action: 'LOGIN'
+    const response = await client.post('/auth/login', {
+      email: email.trim(),
+      password: password
     });
     return response.data;
   },
@@ -27,6 +26,11 @@ export const authApi = {
   },
   getMe: async () => {
     const response = await client.get('/auth/me');
+    return response.data;
+  },
+  // VF-009: Refresh token endpoint
+  refresh: async (refreshToken) => {
+    const response = await client.post('/auth/refresh', { refresh_token: refreshToken });
     return response.data;
   },
 };

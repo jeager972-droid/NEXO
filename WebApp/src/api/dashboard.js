@@ -7,9 +7,10 @@
 import client from './client';
 
 export const dashboardApi = {
-  getStats: async (groupName = '') => {
+  getStats: async (groupName = '', config = {}) => {
     const response = await client.get('/dashboard/stats', {
-      params: { group_name: groupName }
+      params: { group_name: groupName },
+      ...config,
     });
     return response.data;
   },

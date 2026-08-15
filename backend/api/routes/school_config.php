@@ -260,7 +260,7 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('ONBOARDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar configuración: ' . $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración. Contacte al administrador.']);
     }
     exit;
 }

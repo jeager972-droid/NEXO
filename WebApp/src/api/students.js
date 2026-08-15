@@ -38,13 +38,13 @@ export const studentsApi = {
       hasMore: payload?.meta?.has_more ?? false,
     };
   },
-  getAllPaginated: async (search = '') => {
+  getAllPaginated: async (search = '', { maxPages = 20, onProgress } = {}) => {
     const seen = new Set();
     const all = [];
     let lastId = '';
     let hasMore = true;
     let iterations = 0;
-    while (hasMore && iterations < 50) {
+    while (hasMore && iterations < maxPages) {
       const batch = await studentsApi.getAll({ last_id: lastId, limit: 100, search });
       if (batch.students.length === 0) break;
       for (const s of batch.students) {
@@ -56,6 +56,12 @@ export const studentsApi = {
       lastId = batch.lastId;
       hasMore = batch.hasMore;
       iterations++;
+      if (typeof onProgress === 'function') {
+        onProgress({ loaded: all.length, pages: iterations, hasMore });
+      }
+    }
+    if (hasMore && iterations >= maxPages) {
+      all.truncated = true;
     }
     return all;
   },

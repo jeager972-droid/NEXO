@@ -296,6 +296,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
             securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
             throw $e;
         }
+        $redis->rPush('queue:twilio:dlq', json_encode($job, JSON_UNESCAPED_UNICODE));
         securityLog('TWILIO_WORKER_DEAD_LETTER', "To: $to Error: {$send['error']}");
     }
 }
@@ -328,7 +329,17 @@ $rateLimit = max(1, (int)(getenv('TWILIO_RATE_LIMIT') ?: 10)); // mensajes por s
 $sendDelay = 1.0 / $rateLimit;
 $lastSend = microtime(true) - $sendDelay;
 
-securityLog('TWILIO_WORKER_START', "Worker initialized. Rate: {$rateLimit}/s | Queues: {$mainQueue}, {$delayQueue}");
+// FIX (CIRCUIT BREAKER): Límite absoluto de envíos por hora para prevenir
+// flood runaway. Si se supera, el worker entra en modo "tripped": deja de
+// procesar jobs, espera a la siguiente ventana horaria, y resetea. Los jobs
+// quedan en la cola (no se pierden) y se procesan en la siguiente ventana.
+// Configurable vía TWILIO_MAX_SENDS_PER_HOUR (default: 500).
+// VF-022: Contador distribuido en Redis para que múltiples instancias
+// respeten el límite global, no por-instancia.
+$maxSendsPerHour = max(1, (int)(getenv('TWILIO_MAX_SENDS_PER_HOUR') ?: 500));
+$redisHourKey = 'twilio:sends:hour:' . date('YmdH'); // Clave rotativa por hora
+
+securityLog('TWILIO_WORKER_START', "Worker initialized. Rate: {$rateLimit}/s | Max/hour: {$maxSendsPerHour} (distributed) | Queues: {$mainQueue}, {$delayQueue}");
 
 $shutdown = false;
 $iterations = 0;
@@ -339,6 +350,21 @@ while (!$shutdown) {
     try {
         pcntl_signal_dispatch();
 
+        // VF-022: Circuit breaker distribuido via Redis
+        $currentHourKey = 'twilio:sends:hour:' . date('YmdH');
+        // Resetear clave si cambió la hora
+        if ($currentHourKey !== $redisHourKey) {
+            $redisHourKey = $currentHourKey;
+        }
+
+        // VF-022: Verificar límite global en Redis
+        $globalSends = (int)$redis->get($redisHourKey);
+        if ($globalSends >= $maxSendsPerHour) {
+            securityLog('TWILIO_CIRCUIT_BREAKER_TRIPPED', "global_sends={$globalSends} >= max={$maxSendsPerHour}. Pausing 60s.");
+            sleep(60);
+            continue;
+        }
+
         // 1. Reintentar trabajos atrasados
         $now = microtime(true);
         $delayed = $redis->zRangeByScore($delayQueue, 0, $now, ['limit' => [0, 1]]);
@@ -348,6 +374,9 @@ while (!$shutdown) {
             $job = json_decode($jobJson, true);
             if ($job) {
                 processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+                // VF-022: Incrementar contador distribuido en Redis (atómico)
+                $newCount = $redis->incr($redisHourKey);
+                if ($newCount === 1) $redis->expire($redisHourKey, 7200); // TTL 2h
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
             }
             continue;
@@ -359,12 +388,17 @@ while (!$shutdown) {
             $job = json_decode($result[1], true);
             if ($job) {
                 processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+                // VF-022: Incrementar contador distribuido en Redis (atómico)
+                $newCount = $redis->incr($redisHourKey);
+                if ($newCount === 1) $redis->expire($redisHourKey, 7200); // TTL 2h
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
             }
         }
     } catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());
-        exit(1); // Let supervisor restart with backoff
+        try { $redis = getRedisConnection(); } catch (Exception $re) { sleep(5); continue; }
+        if (!$redis) { sleep(5); continue; }
+        continue;
     }
 
     // FIX: Forzar GC y monitorear memoria en vez de matar el proceso

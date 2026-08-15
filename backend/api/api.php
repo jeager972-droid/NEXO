@@ -177,6 +177,47 @@ $cleanPath = '/' . $cleanPath;
 $rawBody = file_get_contents('php://input');
 $input = json_decode($rawBody, true) ?: [];
 
+// ============================================================================
+// Rate limiting específico para endpoints sensibles.
+// ============================================================================
+$sensitiveRateLimits = [
+    '/auth/verify-2fa'         => ['max' => 10, 'window' => 300,  'scope' => 'ip'],
+    '/users/send-verification' => ['max' => 5,  'window' => 600,  'scope' => 'user'],
+    '/contacto'                => ['max' => 3,  'window' => 3600, 'scope' => 'ip'],
+];
+if (isset($sensitiveRateLimits[$cleanPath])) {
+    $rlConfig = $sensitiveRateLimits[$cleanPath];
+    try {
+        $redis = getRedisConnection();
+        if ($redis) {
+            $ip = getRealClientIp();
+            $rlKey = "rl:sensitive:" . md5($cleanPath) . ":";
+            if ($rlConfig['scope'] === 'user') {
+                $bearer = extractBearerToken();
+                $userId = null;
+                if ($bearer) {
+                    try {
+                        $claims = verifyJwtToken($bearer);
+                        $userId = $claims['sub'] ?? null;
+                    } catch (Exception $e) {}
+                }
+                $rlKey .= $userId ? "u:{$userId}" : "ip:" . md5($ip);
+            } else {
+                $rlKey .= "ip:" . md5($ip);
+            }
+            $hits = $redis->incr($rlKey);
+            if ($hits === 1) $redis->expire($rlKey, $rlConfig['window']);
+            if ($hits > $rlConfig['max']) {
+                http_response_code(429);
+                securityLog('RATE_LIMIT_EXCEEDED', "Sensitive endpoint: $cleanPath Hits: $hits IP: $ip");
+                exit(json_encode(['status' => 'error', 'message' => 'Too many requests']));
+            }
+        }
+    } catch (Exception $e) {
+        securityLog('RATE_LIMIT_REDIS_DOWN', 'Sensitive endpoint Redis unavailable, allowing request');
+    }
+}
+
 // operations.php se carga siempre para exponer helpers Twilio a otras rutas.
 require_once __DIR__ . '/routes/operations.php';
 
@@ -269,7 +310,7 @@ if (isset($input['payload'])) {
 
 
             $instId = (string)$realSchoolId;
-            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+            $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
             $stmtConfig->execute([$instId]);
 
 

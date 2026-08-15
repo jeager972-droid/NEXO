@@ -129,8 +129,18 @@ if ($cleanPath === '/students') {
             $params[] = $groupName;
         }
 
+        $grade = trim($_GET['grade'] ?? '');
+        if ($grade !== '') {
+            $whereClauses[] = "s.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.grade_level = ? AND sga.active = TRUE)";
+            $params[] = $grade;
+        }
+
+        $lastId = trim($_GET['last_id'] ?? '');
         $lastCreatedAt = trim($_GET['last_created_at'] ?? '');
-        if ($lastCreatedAt !== '') {
+        if ($lastId !== '') {
+            $whereClauses[] = 's.student_id < ?';
+            $params[] = $lastId;
+        } elseif ($lastCreatedAt !== '') {
             $whereClauses[] = 's.created_at < ?';
             $params[] = $lastCreatedAt;
         }
@@ -175,6 +185,7 @@ if ($cleanPath === '/students') {
             'meta'   => [
                 'limit'           => $limit,
                 'last_created_at' => $lastRow ? $lastRow['created_at'] : null,
+                'last_id'         => $lastRow ? $lastRow['id'] : null,
                 'has_more'        => count($students) === $limit,
             ]
         ]);

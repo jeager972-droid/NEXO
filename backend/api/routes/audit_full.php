@@ -68,11 +68,13 @@ function auditError($msg, $code = 500) {
  * @param mixed $value Valor a validar.
  * @return bool True si es UUID v4.
  */
-function isValidUUID($value) {
-    return (bool) preg_match(
-        '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
-        (string) $value
-    );
+if (!function_exists('isValidUUID')) {
+    function isValidUUID($value) {
+        return (bool) preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+            (string) $value
+        );
+    }
 }
 
 /**

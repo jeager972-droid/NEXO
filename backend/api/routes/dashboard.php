@@ -67,18 +67,23 @@ if ($cleanPath === '/dashboard/stats') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        // DEBUG: verificar contexto RLS al inicio del dashboard
-        $debugStmt = $conn->prepare("SELECT current_setting('app.current_school_id', true) as school_id, current_setting('app.current_role', true) as role, count(*) as group_count FROM academic_groups WHERE school_id = current_setting('app.current_school_id', true)::uuid");
-        $debugStmt->execute();
-        $debugRow = $debugStmt->fetch(PDO::FETCH_ASSOC);
-        $debugInfo = "school_id={$debugRow['school_id']} role={$debugRow['role']} group_count={$debugRow['group_count']} inTx=" . ($conn->inTransaction() ? '1' : '0');
-        securityLog('DASHBOARD_RLS_DEBUG', $debugInfo);
+        // VF-020: Debug queries gateadas tras APP_ENV=development
+        $isDev = getenv('APP_ENV') === 'development';
+        $debugInfo = '';
+        if ($isDev) {
+            // DEBUG: verificar contexto RLS al inicio del dashboard
+            $debugStmt = $conn->prepare("SELECT current_setting('app.current_school_id', true) as school_id, current_setting('app.current_role', true) as role, count(*) as group_count FROM academic_groups WHERE school_id = current_setting('app.current_school_id', true)::uuid");
+            $debugStmt->execute();
+            $debugRow = $debugStmt->fetch(PDO::FETCH_ASSOC);
+            $debugInfo = "school_id={$debugRow['school_id']} role={$debugRow['role']} group_count={$debugRow['group_count']} inTx=" . ($conn->inTransaction() ? '1' : '0');
+            securityLog('DASHBOARD_RLS_DEBUG', $debugInfo);
 
-        // DEBUG: también probar sin RLS
-        $debugStmt2 = $conn->prepare("SELECT count(*) as total_groups FROM academic_groups WHERE school_id = ?");
-        $debugStmt2->execute([$schoolId]);
-        $debugRow2 = $debugStmt2->fetch(PDO::FETCH_ASSOC);
-        $debugInfo .= " | direct_count={$debugRow2['total_groups']}";
+            // DEBUG: también probar sin RLS
+            $debugStmt2 = $conn->prepare("SELECT count(*) as total_groups FROM academic_groups WHERE school_id = ?");
+            $debugStmt2->execute([$schoolId]);
+            $debugRow2 = $debugStmt2->fetch(PDO::FETCH_ASSOC);
+            $debugInfo .= " | direct_count={$debugRow2['total_groups']}";
+        }
 
         // Build group filter JOINs if group_name provided
         $groupFilter = '';
@@ -312,7 +317,7 @@ if ($cleanPath === '/dashboard/stats') {
         $statsStmt = $conn->prepare($statsSql);
         $statsStmt->execute($statsParams);
         $statsRow = $statsStmt->fetch(PDO::FETCH_ASSOC);
-        $debugInfo .= " | stats_ok present={$statsRow['present_count']} inTx2=" . ($conn->inTransaction() ? '1' : '0');
+        if ($isDev) $debugInfo .= " | stats_ok present={$statsRow['present_count']} inTx2=" . ($conn->inTransaction() ? '1' : '0');
 
         $presentCount = (int)($statsRow['present_count'] ?? 0);
         $absentCount = (int)($statsRow['absent_count'] ?? 0);
@@ -360,7 +365,7 @@ if ($cleanPath === '/dashboard/stats') {
             $groupsStmt->execute([$schoolId]);
         }
         $allStudents = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
-        $debugInfo .= " | students=" . count($allStudents) . " inTx3=" . ($conn->inTransaction() ? '1' : '0');
+        if ($isDev) $debugInfo .= " | students=" . count($allStudents) . " inTx3=" . ($conn->inTransaction() ? '1' : '0');
 
         $studentsByGroup = [];
         foreach ($allStudents as $row) {
@@ -391,13 +396,13 @@ if ($cleanPath === '/dashboard/stats') {
                 $tgStmt->execute([$schoolId]);
                 $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
             }
-            $debugInfo .= " | tg=" . count($teacherGroups) . " inTx4=" . ($conn->inTransaction() ? '1' : '0');
+            if ($isDev) $debugInfo .= " | tg=" . count($teacherGroups) . " inTx4=" . ($conn->inTransaction() ? '1' : '0');
         } catch (Exception $tgEx) {
-            $debugInfo .= " | TG_ERROR: " . $tgEx->getMessage();
+            if ($isDev) $debugInfo .= " | TG_ERROR: " . $tgEx->getMessage();
             $teacherGroups = [];
         }
 
-        $response = json_encode([
+        $responseData = [
             'status' => 'ok',
             'presentCount' => (int)$presentCount,
             'absentCount' => (int)$absentCount,
@@ -406,7 +411,6 @@ if ($cleanPath === '/dashboard/stats') {
             'lateCount' => (int)$lateCount,
             'pendingTasks' => $pendingTasks,
             'studentsByGroup' => $studentsByGroup,
-            '_debug' => $debugInfo ?? 'no-debug',
             'teacherGroups' => $teacherGroups,
             'groupStats' => [
                 'present' => (int)$presentCount,
@@ -415,7 +419,12 @@ if ($cleanPath === '/dashboard/stats') {
                 'permisos' => (int)$permCount,
                 'late' => (int)$lateCount
             ]
-        ]);
+        ];
+        // VF-020: Solo incluir _debug en desarrollo
+        if ($isDev) {
+            $responseData['_debug'] = $debugInfo ?? 'no-debug';
+        }
+        $response = json_encode($responseData);
 
         // Guardar en caché Redis por 30s
         try {

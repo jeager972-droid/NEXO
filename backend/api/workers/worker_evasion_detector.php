@@ -58,18 +58,35 @@ function logE(string $e, string $m = ''): void {
  * Envía notificación WhatsApp + notificación interna a un usuario.
  */
 function notifyUser($conn, $redis, string $userId, string $phone, string $msg, string $schoolId, string $typeCode, array $meta): void {
-    // Notificación interna
+    // Notificación interna con dedup (VF-010)
+    $incidentId = $meta['incident_id'] ?? null;
+    $dedupKey = $incidentId ? hash('sha256', $userId . '|' . $incidentId) : null;
     try {
-        $notifStmt = $conn->prepare("
-            INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, 'ALERT', ?::jsonb, NOW())
-        ");
-        $notifStmt->execute([
-            $schoolId, $userId,
-            'Alerta de Evasión',
-            $msg,
-            json_encode($meta, JSON_UNESCAPED_UNICODE)
-        ]);
+        if ($dedupKey) {
+            $notifStmt = $conn->prepare("
+                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at, dedup_key)
+                VALUES (?, ?, ?, ?, 'ALERT', ?::jsonb, NOW(), ?)
+                ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING
+            ");
+            $notifStmt->execute([
+                $schoolId, $userId,
+                'Alerta de Evasión',
+                $msg,
+                json_encode($meta, JSON_UNESCAPED_UNICODE),
+                $dedupKey
+            ]);
+        } else {
+            $notifStmt = $conn->prepare("
+                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                VALUES (?, ?, ?, ?, 'ALERT', ?::jsonb, NOW())
+            ");
+            $notifStmt->execute([
+                $schoolId, $userId,
+                'Alerta de Evasión',
+                $msg,
+                json_encode($meta, JSON_UNESCAPED_UNICODE)
+            ]);
+        }
     } catch (Exception $e) {
         logE('NOTIF_INSERT_FAIL', $e->getMessage());
     }
@@ -78,10 +95,12 @@ function notifyUser($conn, $redis, string $userId, string $phone, string $msg, s
         try {
             $payload = json_encode([
                 'to' => $phone,
-                'message' => $msg,
+                'body' => $msg,
                 'school_id' => $schoolId,
-                'user_id' => $userId,
+                'sender_user_id' => $userId,
                 'type_code' => $typeCode,
+                'retries' => 0,
+                'created_at' => time(),
             ], JSON_UNESCAPED_UNICODE);
             $redis->rPush('queue:twilio', $payload);
             $redis->expire('queue:twilio', 86400);
@@ -94,8 +113,15 @@ function notifyUser($conn, $redis, string $userId, string $phone, string $msg, s
 /**
  * Verifica si ya existe un incidente de evasión para el estudiante hoy
  * (evita duplicados / acumulación).
+ * FIX (RLS): Setea RLS context en su propia transacción para que el SELECT
+ * vea las filas insertadas por insertEvasionIncident en iteraciones anteriores.
+ * Sin este fix, el check no veía las filas (RLS context perdido tras COMMIT)
+ * y se re-insertaba + re-notificaba infinitamente → flood de Twilio.
  */
 function hasEvasionToday(PDO $conn, string $schoolId, string $studentId): bool {
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
     $stmt = $conn->prepare("
         SELECT 1 FROM attendance_incidents
         WHERE student_id = ? AND school_id = ?
@@ -105,11 +131,15 @@ function hasEvasionToday(PDO $conn, string $schoolId, string $studentId): bool {
         LIMIT 1
     ");
     $stmt->execute([$studentId, $schoolId]);
-    return (bool)$stmt->fetchColumn();
+    $exists = (bool)$stmt->fetchColumn();
+    $conn->exec("COMMIT");
+    return $exists;
 }
 
 /**
  * Registra un incidente de evasión en attendance_incidents.
+ * FIX (RLS): Setea RLS context en su propia transacción para que el INSERT
+ * respete la policy ai_insert (school_id = get_current_school_id()).
  */
 function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, string $metaJson): void {
     $conn->exec("BEGIN");
@@ -674,7 +704,16 @@ if ($runMode === 'cron') {
 
         $total = 0;
         foreach ($schools as $schoolId) {
-            $total += processSchoolEvasion($pdo, $redis, $schoolId);
+            $lockKey = "lock:evasion_detector:$schoolId";
+            if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                logE('LOCK_SKIP', "school=$schoolId already locked by another instance");
+                continue;
+            }
+            try {
+                $total += processSchoolEvasion($pdo, $redis, $schoolId);
+            } finally {
+                $redis->del($lockKey);
+            }
         }
         logE('CRON_DONE', "schools=" . count($schools) . " evasions=$total");
         exit(0);
@@ -708,7 +747,15 @@ while (!$shutdown) {
 
             $total = 0;
             foreach ($schools as $schoolId) {
-                $total += processSchoolEvasion($pdo, $redis, $schoolId);
+                $lockKey = "lock:evasion_detector:$schoolId";
+                if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                    continue;
+                }
+                try {
+                    $total += processSchoolEvasion($pdo, $redis, $schoolId);
+                } finally {
+                    $redis->del($lockKey);
+                }
             }
             if ($total > 0) {
                 logE('DETECTED', "evasions=$total");

@@ -75,17 +75,25 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
     try {
         $rl = getRedisConnection();
         if (!$rl) {
-        } else {
-            $key = "rl:contacto:{$contactIp}";
-            $hits = $rl->incr($key);
-            if ($hits === 1) $rl->expire($key, 3600);
-            if ($hits > 5) {
-                http_response_code(429);
-                echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
-                exit;
-            }
+            // VF-023: Fail-closed — si Redis cae, no permitir spam
+            http_response_code(503);
+            echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
+            exit;
         }
-    } catch (Throwable $e) { /* Redis down — allow */ }
+        $key = "rl:contacto:{$contactIp}";
+        $hits = $rl->incr($key);
+        if ($hits === 1) $rl->expire($key, 3600);
+        if ($hits > 5) {
+            http_response_code(429);
+            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
+            exit;
+        }
+    } catch (Throwable $e) {
+        // VF-023: Fail-closed también en excepciones
+        http_response_code(503);
+        echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
+        exit;
+    }
 
     $nombre      = trim((string)($input['name'] ?? ''));
     $cargo       = trim((string)($input['position'] ?? ''));
@@ -156,18 +164,6 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
     exit;
 }
 
-// GET /audit/logs — Endpoint legacy/placeholder; actualmente retorna array vacío.
-if ($cleanPath === '/audit/logs') {
-    $authUser = requireAuth(['RECTOR']);
-    echo json_encode([
-        'status' => 'ok',
-        'data' => [],
-        'meta' => [
-            'viewer_role' => $authUser['role']
-        ]
-    ]);
-    exit;
-}
 // GET/POST /notifications — Crear y listar notificaciones internas del usuario autenticado.
 if ($cleanPath === '/notifications') {
     $authUser = requireAuth();
@@ -300,11 +296,35 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
         $incidentId = $meta['incident_id'] ?? null;
 
         if ($action === 'justify' && $incidentId) {
-            // Eliminar el incidente de llegada tarde (justificado)
-            $delIncident = $conn->prepare(
-                "DELETE FROM attendance_incidents WHERE incident_id = ?::uuid AND incident_type = 'LATE_ARRIVAL'"
+            // VF-015: Soft-delete + audit trail — marcar como resolved en lugar de hard delete
+            $resolveIncident = $conn->prepare(
+                "UPDATE attendance_incidents
+                 SET resolved = TRUE, metadata_json = COALESCE(metadata_json, '{}'::jsonb) || ?::jsonb
+                 WHERE incident_id = ?::uuid AND incident_type = 'LATE_ARRIVAL'
+                 RETURNING student_id, school_id"
             );
-            $delIncident->execute([$incidentId]);
+            $auditMeta = json_encode(['justified_by' => $authUser['id'], 'justified_at' => date('c'), 'action' => 'justify'], JSON_UNESCAPED_UNICODE);
+            $resolveIncident->execute([$auditMeta, $incidentId]);
+            $incidentRow = $resolveIncident->fetch(PDO::FETCH_ASSOC);
+
+            // Crear audit trail en student_record_audit
+            if ($incidentRow) {
+                try {
+                    $auditStmt = $conn->prepare(
+                        "INSERT INTO student_record_audit (audit_id, school_id, student_id, performed_by_user_id, action_type, previous_data, new_data, performed_at)
+                         VALUES (uuid_generate_v4(), ?::uuid, ?::uuid, ?::uuid, 'LATE_ARRIVAL_JUSTIFIED', ?::jsonb, ?::jsonb, NOW())"
+                    );
+                    $auditStmt->execute([
+                        $incidentRow['school_id'],
+                        $incidentRow['student_id'],
+                        $authUser['id'],
+                        json_encode(['incident_id' => $incidentId, 'resolved' => false]),
+                        json_encode(['incident_id' => $incidentId, 'resolved' => true, 'justified_by' => $authUser['id']])
+                    ]);
+                } catch (Exception $ae) {
+                    securityLog('AUDIT_JUSTIFY_FAIL', $ae->getMessage());
+                }
+            }
         }
 
         // En ambos casos (justify y no_justify), eliminar la notificación

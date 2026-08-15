@@ -306,7 +306,31 @@ if (!function_exists('getRedisConnection')) {
 - `config.example.json` GPIO pins `32/33/34` no coinciden con `RealGpioManager.cpp` (`17/27/22`).
 - `RealGpioManager.cpp` define una clase local sin registro; no se usa en `main.cpp`.
 
-## 12. Recomendación final
+## 12. Campos edge redundantes (VF-041)
+
+### 12.1 `cloud_manager.cpp:126-133` — `inst_id` y `token` en body
+
+```cpp
+body["inst_id"] = instId;
+body["payload"] = encrypted;
+std::string token = crypto.getToken();
+if (crypto.isTokenProvisioned()) {
+    body["token"] = token;
+}
+```
+
+- **Observación**: `inst_id` se envía en el body JSON y también está disponible via URL/headers en el endpoint edge. `token` se envía en el body y también como header `X-Device-Signature` (ver `curlPost` que lo pasa como header).
+- **Impacto**: inofensivo — los campos son redundantes pero no causan errores ni vulnerabilidades.
+- **Acción sugerida**: documentar que `inst_id` en body es para compatibilidad con endpoints legacy que no leen headers. `token` en body puede eliminarse una vez que todos los endpoints edge validen via header.
+
+### 12.2 `cloud_manager.h:8,23` — declaración de `m_instId`
+
+- `m_instId` se almacena como miembro de la clase y se pasa como parámetro a `buildAuthenticatedRequest`. Redundante pero no dañino.
+- **Acción sugerida**: usar solo `m_instId` y eliminar el parámetro `instId` de `buildAuthenticatedRequest`.
+
+---
+
+## 13. Recomendación final
 
 No se deben eliminar archivos sin antes confirmar con el frontend y con el roadmap. La mayoría de los ítems anteriores son **deuda técnica documentada** y deben abordarse en iteraciones posteriores:
 

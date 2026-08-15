@@ -34,6 +34,7 @@ struct Estudiante {
     std::string nombre_acudiente;
     uint32_t huella_id = 0;
     std::vector<uint8_t> template_huella;
+    std::string school_id;  // Multi-tenancy: identificador de colegio
 };
 
 struct AuditRecord {
@@ -95,4 +96,5 @@ private:
     ~SqliteManager() { close(); }
     sqlite3* db = nullptr;
     bool createTables();
+    void migrateSchema();  // Migraciones para bases de datos existentes
 };

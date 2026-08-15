@@ -131,33 +131,39 @@ export async function flushTelemetry() {
 
 // ── Inicialización: llama una vez desde App.jsx o main.jsx ─
 export function initTelemetry() {
-  // Escuchar eventos de latencia emitidos por client.js (sin circular dep)
-  window.addEventListener('nexo:telemetry', (e) => {
+  const onTelemetry = (e) => {
     const { type, payload } = e.detail ?? {};
     if (type === 'API_LATENCY') {
       trackLatency(payload.path, payload.method, payload.status, payload.duration_ms);
     }
-  });
-
-  // Captura global de errores JS no manejados
-  window.addEventListener('error', (e) => {
+  };
+  const onError = (e) => {
     trackError(e.error ?? { message: e.message, name: 'Error' }, e.filename ?? '');
-  });
-  window.addEventListener('unhandledrejection', (e) => {
+  };
+  const onUnhandledRejection = (e) => {
     trackError(
       e.reason instanceof Error ? e.reason : { message: String(e.reason), name: 'UnhandledRejection' },
       'promise'
     );
-  });
-
-  // Flush inicial (diferido 10 s para no competir con el arranque)
-  setTimeout(flushTelemetry, 10_000);
-
-  // Flush periódico cada 5 minutos
-  setInterval(flushTelemetry, FLUSH_INTERVAL_MS);
-
-  // Flush al cerrar la pestaña (best-effort)
-  window.addEventListener('visibilitychange', () => {
+  };
+  const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden') flushTelemetry();
-  });
+  };
+
+  window.addEventListener('nexo:telemetry', onTelemetry);
+  window.addEventListener('error', onError);
+  window.addEventListener('unhandledrejection', onUnhandledRejection);
+  window.addEventListener('visibilitychange', onVisibilityChange);
+
+  const initialFlushTimer = setTimeout(flushTelemetry, 10_000);
+  const flushInterval = setInterval(flushTelemetry, FLUSH_INTERVAL_MS);
+
+  return function stopTelemetry() {
+    clearTimeout(initialFlushTimer);
+    clearInterval(flushInterval);
+    window.removeEventListener('nexo:telemetry', onTelemetry);
+    window.removeEventListener('error', onError);
+    window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    window.removeEventListener('visibilitychange', onVisibilityChange);
+  };
 }

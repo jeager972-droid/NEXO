@@ -3,15 +3,14 @@
  * Navegación lateral CMP-030. 240 px en escritorio, panel deslizante en compact.
  * Filtrada por rol, con tema y perfil en la base.
  */
-import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getRoleDisplay, getSecondaryActions, SIDEBAR_ITEMS } from '../config/roles';
 import { LogOut, Sun, Moon, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogoNexo from '../components/LogoNexo';
-import { notificationsApi } from '../api/notifications';
 
 const NavItem = ({ item, onClick, showNotifDot }) => {
   const Icon = item.icon;
@@ -39,29 +38,11 @@ const NavItem = ({ item, onClick, showNotifDot }) => {
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
+  const { notifCount } = useNotifications();
   const secondaryItems = getSecondaryActions(user?.role);
   const allItems = SIDEBAR_ITEMS.filter((i) => i.roles.includes(user?.role));
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
-  const [notifCount, setNotifCount] = useState(0);
-
-  useEffect(() => {
-    const poll = () => {
-      notificationsApi.getAll().then((data) => {
-        const arr = Array.isArray(data) ? data : [];
-        const lastSeen = parseInt(sessionStorage.getItem('nexo:last-notif-count') || '0', 10);
-        setNotifCount(Math.max(0, arr.length - lastSeen));
-      }).catch(() => {});
-    };
-    poll();
-    const id = setInterval(poll, 60000);
-    const handler = (e) => {
-      const count = e.detail?.count ?? 0;
-      setNotifCount(count > 0 ? count : 0);
-    };
-    window.addEventListener('nexo:notif-count', handler);
-    return () => { clearInterval(id); window.removeEventListener('nexo:notif-count', handler); };
-  }, []);
 
   const closeMobile = () => { if (window.innerWidth < 1024) toggleSidebar(); };
 

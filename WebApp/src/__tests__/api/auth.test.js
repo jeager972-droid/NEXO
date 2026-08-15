@@ -17,7 +17,7 @@ describe('authApi', () => {
   });
 
   describe('login', () => {
-    it('calls POST /auth/login with email, password and action', async () => {
+    it('calls POST /auth/login with email and password', async () => {
       client.post.mockResolvedValue({ data: { user: { email: 'admin@nexo.edu' } } });
 
       const result = await authApi.login('admin@nexo.edu', 'admin123');
@@ -25,7 +25,6 @@ describe('authApi', () => {
       expect(client.post).toHaveBeenCalledWith('/auth/login', {
         email: 'admin@nexo.edu',
         password: 'admin123',
-        action: 'LOGIN',
       });
       expect(result.user.email).toBe('admin@nexo.edu');
     });

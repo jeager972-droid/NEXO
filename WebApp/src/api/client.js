@@ -6,6 +6,7 @@
  * Dependencias: axios.
  */
 import axios from 'axios';
+import { isTokenExpiringSoon } from '../utils/jwt';
 
 
 // Base URL: VITE_API_BASE_URL debe apuntar al backend (sin /v1 trailing).
@@ -45,6 +46,9 @@ client.interceptors.request.use(
     const token = localStorage.getItem('nexo:auth-token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      if (isTokenExpiringSoon(token, 5)) {
+        window.dispatchEvent(new CustomEvent('nexo:token-check'));
+      }
     }
 
     return config;
@@ -71,14 +75,80 @@ function emitLatency(config, status) {
 }
 
 // Interceptor de response: telemetría de latencia + manejo de errores globales
+// VF-009: Auto-refresh en 401 antes de dispatch logout
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+const subscribeTokenRefresh = (cb) => refreshSubscribers.push(cb);
+const onRefreshed = (token) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
+
 client.interceptors.response.use(
   (response) => {
     emitLatency(response.config, response.status);
     return response;
   },
-  (error) => {
+  async (error) => {
     emitLatency(error.config, error.response?.status ?? 0);
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const originalRequest = error.config;
+
+    if (status === 401 && originalRequest && !originalRequest._retry
+        && !originalRequest.url?.includes('/auth/refresh')
+        && !originalRequest.url?.includes('/auth/login')
+        && !originalRequest.url?.includes('/auth/verify-2fa')) {
+      if (isRefreshing) {
+        // Si ya hay un refresh en curso, esperar a que termine
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh((newToken) => {
+            if (newToken) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              resolve(client(originalRequest));
+            } else {
+              reject(error);
+            }
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = localStorage.getItem('nexo:auth-refresh-token');
+      if (refreshToken) {
+        try {
+          const refreshResponse = await axios.post(
+            `${API_BASE_URL}/auth/refresh`,
+            { refresh_token: refreshToken },
+            { withCredentials: true, timeout: 10000 }
+          );
+          const data = refreshResponse.data;
+          if (data?.token) {
+            localStorage.setItem('nexo:auth-token', data.token);
+            if (data.refresh_token) localStorage.setItem('nexo:auth-refresh-token', data.refresh_token);
+            isRefreshing = false;
+            onRefreshed(data.token);
+            originalRequest.headers.Authorization = `Bearer ${data.token}`;
+            return client(originalRequest);
+          }
+        } catch (refreshError) {
+          isRefreshing = false;
+          onRefreshed(null);
+          window.dispatchEvent(new CustomEvent('nexo:auth-logout'));
+          return Promise.reject(error);
+        }
+      }
+
+      isRefreshing = false;
+      const publicRoutes = ['/app/login', '/login', '/instalar/', '/descargas'];
+      const currentPath = window.location.pathname;
+      const isPublicRoute = publicRoutes.some(route => currentPath.startsWith(route) || currentPath.includes(route));
+      if (!isPublicRoute) {
+        window.dispatchEvent(new CustomEvent('nexo:auth-logout'));
+      }
+    } else if (status === 401) {
       const publicRoutes = ['/app/login', '/login', '/instalar/', '/descargas'];
       const currentPath = window.location.pathname;
       const isPublicRoute = publicRoutes.some(route => currentPath.startsWith(route) || currentPath.includes(route));
@@ -87,6 +157,14 @@ client.interceptors.response.use(
       if (!isAuthRequest && !isPublicRoute) {
         window.dispatchEvent(new CustomEvent('nexo:auth-logout'));
       }
+    } else if (status === 403) {
+      window.dispatchEvent(new CustomEvent('nexo:forbidden', {
+        detail: { url: error.config?.url ?? '', status: 403 },
+      }));
+    } else if (!error.response || error.code === 'ERR_NETWORK') {
+      window.dispatchEvent(new CustomEvent('nexo:network-error', {
+        detail: { url: error.config?.url ?? '' },
+      }));
     }
     return Promise.reject(error);
   }

@@ -137,12 +137,22 @@ $runMode = getenv('PERMISSION_STATUS_MODE') ?: 'cron';
 
 if ($runMode === 'cron') {
     try {
+        $redis = getRedisConnection();
         $schoolsStmt = $pdo->query("SELECT school_id FROM schools WHERE active = TRUE");
         $schools = $schoolsStmt->fetchAll(PDO::FETCH_COLUMN);
 
         $total = 0;
         foreach ($schools as $schoolId) {
-            $total += processSchoolPermissions($pdo, $schoolId);
+            $lockKey = "lock:permission_status:$schoolId";
+            if ($redis && !$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                logE('LOCK_SKIP', "school=$schoolId already locked by another instance");
+                continue;
+            }
+            try {
+                $total += processSchoolPermissions($pdo, $schoolId);
+            } finally {
+                if ($redis) $redis->del($lockKey);
+            }
         }
         logE('CRON_DONE', "schools=" . count($schools) . " updated=$total");
         exit(0);
@@ -176,7 +186,15 @@ while (!$shutdown) {
 
             $total = 0;
             foreach ($schools as $schoolId) {
-                $total += processSchoolPermissions($pdo, $schoolId);
+                $lockKey = "lock:permission_status:$schoolId";
+                if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                    continue;
+                }
+                try {
+                    $total += processSchoolPermissions($pdo, $schoolId);
+                } finally {
+                    $redis->del($lockKey);
+                }
             }
             if ($total > 0) {
                 logE('UPDATED', "permissions=$total");

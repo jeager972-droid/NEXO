@@ -139,12 +139,22 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const signal = controller.signal;
     const load = async () => {
-      try { setStats({ ...EMPTY_STATS, ...(await dashboardApi.getStats() || {}) }); }
-      catch (e) { console.error(e); setStats(EMPTY_STATS); }
-      finally { setLoading(false); }
+      try {
+        const data = await dashboardApi.getStats('', { signal });
+        if (!signal.aborted) setStats({ ...EMPTY_STATS, ...(data || {}) });
+      }
+      catch (e) {
+        if (!signal.aborted) { console.error(e); setStats(EMPTY_STATS); }
+      }
+      finally {
+        if (!signal.aborted) setLoading(false);
+      }
     };
     load();
+    return () => controller.abort();
   }, [user]);
 
   switch (user?.role) {

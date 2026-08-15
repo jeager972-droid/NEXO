@@ -7,6 +7,7 @@ import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth';
 import userStore from '../store/userStore';
+import { isTokenExpired, isTokenExpiringSoon } from '../utils/jwt';
 
 export const AuthContext = createContext();
 
@@ -15,12 +16,26 @@ const USER_FALLBACK_KEY = 'nexo:user-fallback';
 // TEMPORAL ITP WORKAROUND: token en localStorage para iOS/Safari donde ITP bloquea cookies cross-site.
 // TODO: Cuando frontend y backend estén en same-site, eliminar TOKEN_KEY y usar solo cookie HttpOnly.
 const TOKEN_KEY = 'nexo:auth-token';
+const REFRESH_TOKEN_KEY = 'nexo:auth-refresh-token';
 
 const saveToken = (token) => {
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
   } catch { /* ignore */ }
+};
+
+const saveRefreshToken = (refreshToken) => {
+  try {
+    if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    else localStorage.removeItem(REFRESH_TOKEN_KEY);
+  } catch { /* ignore */ }
+};
+
+const getRefreshToken = () => {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY) || '';
+  } catch { return ''; }
 };
 
 const saveUserFallback = (user) => {
@@ -90,12 +105,89 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('nexo:auth-logout', onAuthLogout);
   }, []);
 
+  const verifyToken = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    if (isTokenExpired(token)) {
+      // VF-009: Intentar refresh antes de logout
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        try {
+          const data = await authApi.refresh(refreshToken);
+          if (data?.token) {
+            saveToken(data.token);
+            if (data.refresh_token) saveRefreshToken(data.refresh_token);
+            if (data?.user) {
+              setUser(data.user);
+              userStore.set(data.user);
+              saveUserFallback(data.user);
+            }
+            return;
+          }
+        } catch (refreshError) {
+          // Refresh falló — logout
+        }
+      }
+      window.dispatchEvent(new CustomEvent('nexo:auth-logout', {
+        detail: { reason: 'Tu sesión ha expirado' },
+      }));
+      return;
+    }
+    if (!isTokenExpiringSoon(token, 10)) return;
+    // VF-009: Token próximo a expirar — usar refresh en lugar de getMe
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        const data = await authApi.refresh(refreshToken);
+        if (data?.token) {
+          saveToken(data.token);
+          if (data.refresh_token) saveRefreshToken(data.refresh_token);
+          if (data?.user) {
+            setUser(data.user);
+            userStore.set(data.user);
+            saveUserFallback(data.user);
+          }
+          return;
+        }
+      } catch (refreshError) {
+        // Refresh falló — intentar getMe como fallback
+      }
+    }
+    try {
+      const data = await authApi.getMe();
+      if (data?.user) {
+        setUser(data.user);
+        userStore.set(data.user);
+        saveUserFallback(data.user);
+      }
+    } catch (error) {
+      if (error.response?.status === 401) {
+        window.dispatchEvent(new CustomEvent('nexo:auth-logout', {
+          detail: { reason: 'Tu sesión ha expirado' },
+        }));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const id = setInterval(verifyToken, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [user, verifyToken]);
+
+  useEffect(() => {
+    const onTokenCheck = () => verifyToken();
+    window.addEventListener('nexo:token-check', onTokenCheck);
+    return () => window.removeEventListener('nexo:token-check', onTokenCheck);
+  }, [verifyToken]);
+
   const login = useCallback(async (email, password) => {
     setLoading(true);
     try {
       const data = await authApi.login(email, password);
       if (data.status === '2fa_required' || data.requires_2fa) return data;
       if (data.token) saveToken(data.token);
+      if (data.refresh_token) saveRefreshToken(data.refresh_token);
       if (!data.user) throw new Error('La API no retornó el objeto de usuario esperado');
       userStore.set(data.user);
       setUser(data.user);
@@ -120,6 +212,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       saveUserFallback(null);
       saveToken(null);
+      saveRefreshToken(null);
       setLoading(true);
       navigate('/login');
     }

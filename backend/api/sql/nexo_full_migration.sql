@@ -183,8 +183,10 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_severity ON system_telemetry (severity)
 CREATE INDEX IF NOT EXISTS idx_telemetry_session ON system_telemetry (session_id);
 CREATE INDEX IF NOT EXISTS idx_telemetry_payload_gin ON system_telemetry USING GIN (payload);
 ALTER TABLE system_telemetry ENABLE ROW LEVEL SECURITY;
+-- FIX 4: system_telemetry no tiene school_id. Policy global: solo SYSTEM_WORKER y SUPER_ADMIN.
 DROP POLICY IF EXISTS telemetry_select_super_rector ON system_telemetry;
-CREATE POLICY telemetry_select_super_rector ON system_telemetry FOR SELECT USING (get_current_school_id() IS NOT NULL);
+DROP POLICY IF EXISTS telemetry_select_admin ON system_telemetry;
+CREATE POLICY telemetry_select_admin ON system_telemetry FOR SELECT USING (get_current_role() IN ('SYSTEM_WORKER', 'SUPER_ADMIN'));
 DROP POLICY IF EXISTS telemetry_insert_authenticated ON system_telemetry;
 CREATE POLICY telemetry_insert_authenticated ON system_telemetry FOR INSERT WITH CHECK (current_setting('app.current_role', true) IS NOT NULL AND current_setting('app.current_role', true) != '');
 CREATE INDEX IF NOT EXISTS idx_tracking_school_status ON student_tracking(school_id, status);
@@ -252,6 +254,11 @@ CREATE INDEX IF NOT EXISTS idx_guardian_rel_guardian ON guardian_student_relatio
 CREATE INDEX IF NOT EXISTS idx_groups_school_year_level ON academic_groups(school_id, academic_year, grade_level, group_name);
 CREATE INDEX IF NOT EXISTS idx_schedule_group_day_block ON schedules(group_id, day_of_week, block_number);
 CREATE INDEX IF NOT EXISTS idx_schedule_teacher_day_block ON schedules(teacher_user_id, day_of_week, block_number);
+-- FIX 3: Índices faltantes para optimización de queries
+CREATE INDEX IF NOT EXISTS idx_schedule_classroom ON schedules(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_subject ON schedules(subject_id);
+CREATE INDEX IF NOT EXISTS idx_edge_devices_classroom ON edge_devices(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON global_audit_logs(performed_by_user_id);
 CREATE INDEX IF NOT EXISTS idx_biometric_events_school_type_ts ON biometric_events(school_id, event_type, event_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_attendance_incidents_school_type_detected ON attendance_incidents(school_id, incident_type, detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sos_alerts_school_resolved_emitted ON sos_alerts(school_id, resolved, emitted_at DESC);
@@ -296,6 +303,19 @@ CREATE TABLE IF NOT EXISTS biometric_events_2026_05 PARTITION OF biometric_event
 CREATE TABLE IF NOT EXISTS biometric_events_2026_06 PARTITION OF biometric_events FOR VALUES FROM('2026-06-01') TO('2026-07-01');
 CREATE TABLE IF NOT EXISTS biometric_events_2026_07 PARTITION OF biometric_events FOR VALUES FROM('2026-07-01') TO('2026-08-01');
 CREATE TABLE IF NOT EXISTS biometric_events_2026_08 PARTITION OF biometric_events FOR VALUES FROM('2026-08-01') TO('2026-09-01');
+-- FIX 1: Particiones mensuales para próximos 12 meses (2026-09 a 2027-08)
+CREATE TABLE IF NOT EXISTS biometric_events_2026_09 PARTITION OF biometric_events FOR VALUES FROM('2026-09-01') TO('2026-10-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2026_10 PARTITION OF biometric_events FOR VALUES FROM('2026-10-01') TO('2026-11-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2026_11 PARTITION OF biometric_events FOR VALUES FROM('2026-11-01') TO('2026-12-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2026_12 PARTITION OF biometric_events FOR VALUES FROM('2026-12-01') TO('2027-01-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_01 PARTITION OF biometric_events FOR VALUES FROM('2027-01-01') TO('2027-02-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_02 PARTITION OF biometric_events FOR VALUES FROM('2027-02-01') TO('2027-03-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_03 PARTITION OF biometric_events FOR VALUES FROM('2027-03-01') TO('2027-04-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_04 PARTITION OF biometric_events FOR VALUES FROM('2027-04-01') TO('2027-05-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_05 PARTITION OF biometric_events FOR VALUES FROM('2027-05-01') TO('2027-06-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_06 PARTITION OF biometric_events FOR VALUES FROM('2027-06-01') TO('2027-07-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_07 PARTITION OF biometric_events FOR VALUES FROM('2027-07-01') TO('2027-08-01');
+CREATE TABLE IF NOT EXISTS biometric_events_2027_08 PARTITION OF biometric_events FOR VALUES FROM('2027-08-01') TO('2027-09-01');
 CREATE TABLE IF NOT EXISTS biometric_events_default PARTITION OF biometric_events DEFAULT;
 CREATE TABLE IF NOT EXISTS attendance_incidents_default PARTITION OF attendance_incidents DEFAULT;
 CREATE TABLE IF NOT EXISTS internal_messages_default PARTITION OF internal_messages DEFAULT;
@@ -311,7 +331,7 @@ DROP TRIGGER IF EXISTS trg_guardians_normalize_phone ON guardians;
 CREATE TRIGGER trg_guardians_normalize_phone BEFORE INSERT OR UPDATE OF whatsapp_phone ON guardians FOR EACH ROW EXECUTE FUNCTION fn_guardians_normalize_phone();
 
 -- AUDIT CHAIN
-CREATE OR REPLACE FUNCTION fn_calculate_audit_hash(p_prev_hash TEXT, p_school_id UUID, p_actor_id UUID, p_event_type TEXT, p_description TEXT, p_ip_address TEXT, p_created_at TIMESTAMPTZ) RETURNS TEXT AS $$ DECLARE v_secret TEXT; v_payload TEXT; BEGIN v_secret := COALESCE(current_setting('app.nexo_hmac_secret',true),'default-secret-change-me'); v_payload := COALESCE(p_prev_hash,'GENESIS')||'|'||COALESCE(p_school_id::TEXT,'NULL')||'|'||COALESCE(p_actor_id::TEXT,'NULL')||'|'||COALESCE(p_event_type,'')||'|'||COALESCE(p_description,'')||'|'||COALESCE(p_ip_address,'')||'|'||COALESCE(p_created_at::TEXT,''); RETURN encode(hmac(v_payload,v_secret,'sha256'),'hex'); END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+CREATE OR REPLACE FUNCTION fn_calculate_audit_hash(p_prev_hash TEXT, p_school_id UUID, p_actor_id UUID, p_event_type TEXT, p_description TEXT, p_ip_address TEXT, p_created_at TIMESTAMPTZ) RETURNS TEXT AS $$ DECLARE v_secret TEXT; v_payload TEXT; BEGIN v_secret := current_setting('app.nexo_hmac_secret', true); IF v_secret IS NULL OR v_secret = '' OR v_secret = 'default-secret-change-me' THEN RAISE EXCEPTION 'app.nexo_hmac_secret no configurado. Abortando para prevenir compromiso de cadena de auditoría.'; END IF; v_payload := COALESCE(p_prev_hash,'GENESIS')||'|'||COALESCE(p_school_id::TEXT,'NULL')||'|'||COALESCE(p_actor_id::TEXT,'NULL')||'|'||COALESCE(p_event_type,'')||'|'||COALESCE(p_description,'')||'|'||COALESCE(p_ip_address,'')||'|'||COALESCE(p_created_at::TEXT,''); RETURN encode(hmac(v_payload,v_secret,'sha256'),'hex'); END; $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog;
 
 CREATE OR REPLACE FUNCTION fn_audit_chain_trigger() RETURNS TRIGGER AS $$ DECLARE v_prev_hash TEXT; v_prev_id UUID; BEGIN SELECT log_id, chain_hash INTO v_prev_id, v_prev_hash FROM global_audit_logs WHERE(school_id IS NOT DISTINCT FROM NEW.school_id) ORDER BY created_at DESC, log_id DESC LIMIT 1 FOR UPDATE; NEW.prev_audit_id := v_prev_id; NEW.chain_hash := fn_calculate_audit_hash(v_prev_hash, NEW.school_id, NEW.performed_by_user_id, NEW.action_type, NEW.action_details::TEXT, NEW.ip_address::TEXT, NEW.created_at); RETURN NEW; END; $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_audit_chain ON global_audit_logs; CREATE TRIGGER trg_audit_chain BEFORE INSERT ON global_audit_logs FOR EACH ROW EXECUTE FUNCTION fn_audit_chain_trigger();
@@ -326,6 +346,7 @@ CREATE OR REPLACE FUNCTION fn_recalculate_school_metrics(p_school_id UUID) RETUR
 
 -- RLS HELPERS (moved before usage to fix order dependency)
 CREATE OR REPLACE FUNCTION get_current_school_id() RETURNS UUID AS $$ DECLARE v_school_id TEXT; BEGIN v_school_id := current_setting('app.current_school_id', true); IF v_school_id IS NULL OR v_school_id = '' THEN RETURN NULL; END IF; RETURN v_school_id::UUID; EXCEPTION WHEN OTHERS THEN RETURN NULL; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+CREATE OR REPLACE FUNCTION get_current_role() RETURNS TEXT AS $$ DECLARE v_role TEXT; BEGIN v_role := current_setting('app.current_role', true); IF v_role IS NULL OR v_role = '' THEN RETURN NULL; END IF; RETURN v_role; EXCEPTION WHEN OTHERS THEN RETURN NULL; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS students_select ON students; DROP POLICY IF EXISTS students_insert ON students; DROP POLICY IF EXISTS students_update ON students; DROP POLICY IF EXISTS students_delete ON students;
 CREATE POLICY students_select ON students FOR SELECT USING(school_id = get_current_school_id());
@@ -389,7 +410,7 @@ CREATE POLICY uc_delete ON user_commands FOR DELETE USING(school_id = get_curren
 
 ALTER TABLE guardian_student_relationships ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS gsr_select ON guardian_student_relationships; DROP POLICY IF EXISTS gsr_insert ON guardian_student_relationships; DROP POLICY IF EXISTS gsr_delete ON guardian_student_relationships;
-CREATE POLICY gsr_select ON guardian_student_relationships FOR SELECT USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()));
+CREATE POLICY gsr_select ON guardian_student_relationships FOR SELECT USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()) OR get_current_role() = 'SYSTEM_WORKER');
 CREATE POLICY gsr_insert ON guardian_student_relationships FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()));
 CREATE POLICY gsr_delete ON guardian_student_relationships FOR DELETE USING(EXISTS(SELECT 1 FROM students s WHERE s.student_id = guardian_student_relationships.student_id AND s.school_id = get_current_school_id()));
 
@@ -399,6 +420,13 @@ CREATE POLICY sga_select ON student_group_assignments FOR SELECT USING(EXISTS(SE
 CREATE POLICY sga_insert ON student_group_assignments FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
 CREATE POLICY sga_update ON student_group_assignments FOR UPDATE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
 CREATE POLICY sga_delete ON student_group_assignments FOR DELETE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = student_group_assignments.group_id AND ag.school_id = get_current_school_id()));
+
+ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS sch_select ON schedules; DROP POLICY IF EXISTS sch_insert ON schedules; DROP POLICY IF EXISTS sch_update ON schedules; DROP POLICY IF EXISTS sch_delete ON schedules;
+CREATE POLICY sch_select ON schedules FOR SELECT USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = schedules.group_id AND ag.school_id = get_current_school_id()) OR get_current_role() = 'SYSTEM_WORKER');
+CREATE POLICY sch_insert ON schedules FOR INSERT WITH CHECK(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = schedules.group_id AND ag.school_id = get_current_school_id()));
+CREATE POLICY sch_update ON schedules FOR UPDATE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = schedules.group_id AND ag.school_id = get_current_school_id()));
+CREATE POLICY sch_delete ON schedules FOR DELETE USING(EXISTS(SELECT 1 FROM academic_groups ag WHERE ag.group_id = schedules.group_id AND ag.school_id = get_current_school_id()));
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS users_select ON users; DROP POLICY IF EXISTS users_insert ON users; DROP POLICY IF EXISTS users_update ON users; DROP POLICY IF EXISTS users_delete ON users;
@@ -447,6 +475,11 @@ DROP POLICY IF EXISTS jbl_select ON jwt_blocklist; DROP POLICY IF EXISTS jbl_ins
 CREATE POLICY jbl_select ON jwt_blocklist FOR SELECT USING(true);
 CREATE POLICY jbl_insert ON jwt_blocklist FOR INSERT WITH CHECK(true);
 
+-- FIX 2: subjects es tabla de catálogo global (sin school_id). RLS con lectura global.
+ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS subjects_select ON subjects;
+CREATE POLICY subjects_select ON subjects FOR SELECT USING(true);
+
 -- SEED DATA
 INSERT INTO departments(department_id, department_name) VALUES(uuid_generate_v4(), 'Bogotá D.C.') ON CONFLICT DO NOTHING;
 INSERT INTO municipalities(municipality_id, department_id, municipality_name) SELECT uuid_generate_v4(), d.department_id, 'Bogotá D.C.' FROM departments d WHERE d.department_name = 'Bogotá D.C.' ON CONFLICT DO NOTHING;
@@ -460,6 +493,8 @@ INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'S
 INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'AUXILIARY', 'Administrative auxiliary') ON CONFLICT(role_name) DO NOTHING;
 INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'COUNSELOR', 'School counselor / psychologist') ON CONFLICT(role_name) DO NOTHING;
 INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'GUARDIAN', 'Student guardian / parent') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'SUPER_ADMIN', 'Global system administrator') ON CONFLICT(role_name) DO NOTHING;
+INSERT INTO roles(role_id, role_name, description) VALUES(uuid_generate_v4(), 'SYSTEM_WORKER', 'Internal system worker / background process') ON CONFLICT(role_name) DO NOTHING;
 
 -- ADMIN USER (password: admin123 | generate hash with: php -r "echo password_hash('admin123', PASSWORD_BCRYPT);")
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, password_hash, password_salt, active)

@@ -103,10 +103,10 @@ function verifyUserPassword($password, $hash) {
 }
 
 // ============================================================================
-// POST /auth/login (o action=LOGIN) — Autentica usuario y emite JWT.
+// POST /auth/login — Autentica usuario y emite JWT.
 // Si LOGIN_2FA_ENABLED=true y el teléfono está verificado, solicita 2FA vía WhatsApp.
 // ============================================================================
-if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action'] === 'LOGIN')) {
+if ($cleanPath === '/auth/login') {
     $email = filter_var($input['email'] ?? '', FILTER_SANITIZE_EMAIL);
     $password = $input['password'] ?? '';
     if (empty($email) || empty($password)) {
@@ -171,7 +171,9 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
             $updateStmt->execute([$user['user_id']]);
 
             $normalizedRole = normalizeRole($user['role_name']);
-            $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
+            // VF-009: Access token TTL corto (15 min por defecto) + refresh token (7 días)
+            $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
+            $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800); // 7 días
 
             $userPhone = isset($user['phone']) ? preg_replace('/[^0-9+]/', '', $user['phone']) : '';
             $twoFaEnabled = getenv('LOGIN_2FA_ENABLED') === 'true';
@@ -226,7 +228,19 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 'school_id' => $user['school_id'],
                 'exp' => time() + $tokenTtlSeconds
             ]);
-            
+
+            // VF-009: Generar refresh token y persistir su hash en user_sessions
+            $refreshToken = bin2hex(random_bytes(32));
+            $refreshTokenHash = hash('sha256', $refreshToken);
+            $refreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
+            $clientIp = getRealClientIp();
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+            $sessionStmt = $conn->prepare("
+                INSERT INTO user_sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
+                VALUES (?::uuid, ?, ?::inet, ?, ?::timestamptz)
+            ");
+            $sessionStmt->execute([$user['user_id'], $refreshTokenHash, $clientIp, $userAgent, $refreshExpiresAt]);
+
             $cookieOpts = [
                 'expires' => time() + $tokenTtlSeconds,
                 'path' => '/',
@@ -235,13 +249,25 @@ if ($cleanPath === '/auth/login' || (isset($input['action']) && $input['action']
                 'samesite' => 'None'
             ];
             setcookie('token', $token, $cookieOpts);
-            
+
+            // Refresh token cookie: HttpOnly, no accessible desde JS
+            $refreshCookieOpts = [
+                'expires' => time() + $refreshTtlSeconds,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+                'samesite' => 'None'
+            ];
+            setcookie('refresh_token', $refreshToken, $refreshCookieOpts);
+
             echo json_encode([
                 'status' => 'ok',
                 // TEMPORAL ITP WORKAROUND: token en body para iOS/Safari donde ITP bloquea cookies cross-site.
                 // La cookie HttpOnly sigue seteándose arriba para cuando frontend y backend estén en same-site.
                 // TODO: Cuando se migre a same-site, eliminar 'token' del response y usar solo cookie HttpOnly.
                 'token' => $token,
+                'refresh_token' => $refreshToken,
+                'token_expires_in' => $tokenTtlSeconds,
                 'user' => [
                     'id' => $user['user_id'],
                     'nombre' => $user['first_name'] . ' ' . $user['last_name'],
@@ -353,7 +379,9 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         $mark->execute([$codeRow['code_id']]);
 
         $normalizedRole = normalizeRole($user['role_name']);
-        $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 86400);
+        // VF-009: Access token TTL corto + refresh token
+        $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
+        $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800);
         $token = issueJwtToken([
             'sub' => (string)$user['user_id'],
             'email' => $user['email'],
@@ -361,6 +389,18 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             'school_id' => $user['school_id'],
             'exp' => time() + $tokenTtlSeconds
         ]);
+
+        // VF-009: Generar refresh token
+        $refreshToken = bin2hex(random_bytes(32));
+        $refreshTokenHash = hash('sha256', $refreshToken);
+        $refreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
+        $clientIp = getRealClientIp();
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+        $sessionStmt = $conn->prepare("
+            INSERT INTO user_sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
+            VALUES (?::uuid, ?, ?::inet, ?, ?::timestamptz)
+        ");
+        $sessionStmt->execute([$user['user_id'], $refreshTokenHash, $clientIp, $userAgent, $refreshExpiresAt]);
 
         $cookieOpts = [
             'expires' => time() + $tokenTtlSeconds,
@@ -370,6 +410,14 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             'samesite' => 'None'
         ];
         setcookie('token', $token, $cookieOpts);
+        $refreshCookieOpts = [
+            'expires' => time() + $refreshTtlSeconds,
+            'path' => '/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'None'
+        ];
+        setcookie('refresh_token', $refreshToken, $refreshCookieOpts);
 
         securityLog('LOGIN_2FA_SUCCESS', "User authenticated via 2FA: " . $user['user_id']);
         echo json_encode([
@@ -378,6 +426,8 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             // La cookie HttpOnly sigue seteándose arriba para cuando frontend y backend estén en same-site.
             // TODO: Cuando se migre a same-site, eliminar 'token' del response y usar solo cookie HttpOnly.
             'token' => $token,
+            'refresh_token' => $refreshToken,
+            'token_expires_in' => $tokenTtlSeconds,
             'user' => [
                 'id' => $user['user_id'],
                 'nombre' => $user['first_name'] . ' ' . $user['last_name'],
@@ -417,7 +467,26 @@ if ($cleanPath === '/auth/logout' && $method === 'POST') {
         }
     }
 
+    // VF-009: Revocar refresh token si está presente
+    $refreshToken = $_COOKIE['refresh_token'] ?? '';
+    if ($refreshToken !== '') {
+        try {
+            $refreshTokenHash = hash('sha256', $refreshToken);
+            $revokeStmt = $conn->prepare("UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE refresh_token_hash = ? AND revoked = FALSE");
+            $revokeStmt->execute([$refreshTokenHash]);
+        } catch (Exception $e) {
+            securityLog('AUTH_LOGOUT_REFRESH_IGNORED', $e->getMessage());
+        }
+    }
+
     setcookie('token', '', [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'secure'   => true,
+        'httponly' => true,
+        'samesite' => 'None',
+    ]);
+    setcookie('refresh_token', '', [
         'expires'  => time() - 3600,
         'path'     => '/',
         'secure'   => true,
@@ -448,6 +517,111 @@ if ($cleanPath === '/auth/me') {
             'school_name' => $authUser['school_name'],
             'profile_photo_url' => $authUser['profile_photo_url'] ?? null,
             'work_shift' => $authUser['work_shift'] ?? null
+        ]
+    ]);
+    exit;
+}
+
+// ============================================================================
+// POST /auth/refresh — Renueva el access token usando el refresh token.
+// VF-009: Implementa rotación de refresh tokens (cada uso invalida el anterior).
+// ============================================================================
+if ($cleanPath === '/auth/refresh' && $method === 'POST') {
+    // El refresh token puede venir del body (ITP workaround) o de la cookie HttpOnly
+    $refreshToken = (string)($input['refresh_token'] ?? $_COOKIE['refresh_token'] ?? '');
+
+    if ($refreshToken === '' || strlen($refreshToken) < 32) {
+        http_response_code(401);
+        exit(json_encode(['status' => 'error', 'message' => 'Refresh token no proporcionado']));
+    }
+
+    $refreshTokenHash = hash('sha256', $refreshToken);
+
+    // Buscar la sesión activa con este refresh token
+    $stmt = $conn->prepare("
+        SELECT us.session_id, us.user_id, us.expires_at, us.revoked,
+               u.email, u.role_name, u.school_id, u.first_name, u.last_name,
+               u.profile_photo_url, u.work_shift, u.active as user_active,
+               s.school_name
+        FROM user_sessions us
+        JOIN users u ON u.user_id = us.user_id
+        LEFT JOIN schools s ON s.school_id = u.school_id
+        WHERE us.refresh_token_hash = ?
+          AND us.revoked = FALSE
+          AND us.expires_at > NOW()
+          AND u.active = TRUE
+        LIMIT 1
+    ");
+    $stmt->execute([$refreshTokenHash]);
+    $session = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$session) {
+        securityLog('REFRESH_TOKEN_INVALID', 'Refresh token not found, expired, or revoked');
+        http_response_code(401);
+        exit(json_encode(['status' => 'error', 'message' => 'Refresh token inválido o expirado']));
+    }
+
+    // Rotar: revocar el refresh token actual
+    $revokeStmt = $conn->prepare("UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE session_id = ?::uuid");
+    $revokeStmt->execute([$session['session_id']]);
+
+    // Emitir nuevo access token
+    $normalizedRole = normalizeRole($session['role_name']);
+    $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
+    $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800);
+
+    $newToken = issueJwtToken([
+        'sub' => (string)$session['user_id'],
+        'email' => $session['email'],
+        'role' => $normalizedRole,
+        'school_id' => $session['school_id'],
+        'exp' => time() + $tokenTtlSeconds
+    ]);
+
+    // Emitir nuevo refresh token (rotación)
+    $newRefreshToken = bin2hex(random_bytes(32));
+    $newRefreshTokenHash = hash('sha256', $newRefreshToken);
+    $newRefreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
+    $clientIp = getRealClientIp();
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+    $newSessionStmt = $conn->prepare("
+        INSERT INTO user_sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
+        VALUES (?::uuid, ?, ?::inet, ?, ?::timestamptz)
+    ");
+    $newSessionStmt->execute([$session['user_id'], $newRefreshTokenHash, $clientIp, $userAgent, $newRefreshExpiresAt]);
+
+    // Setear cookies
+    $cookieOpts = [
+        'expires' => time() + $tokenTtlSeconds,
+        'path' => '/',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'None'
+    ];
+    setcookie('token', $newToken, $cookieOpts);
+    $refreshCookieOpts = [
+        'expires' => time() + $refreshTtlSeconds,
+        'path' => '/',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'None'
+    ];
+    setcookie('refresh_token', $newRefreshToken, $refreshCookieOpts);
+
+    echo json_encode([
+        'status' => 'ok',
+        'token' => $newToken,
+        'refresh_token' => $newRefreshToken,
+        'token_expires_in' => $tokenTtlSeconds,
+        'user' => [
+            'id' => $session['user_id'],
+            'nombre' => $session['first_name'] . ' ' . $session['last_name'],
+            'email' => $session['email'],
+            'role' => $normalizedRole,
+            'school_id' => $session['school_id'],
+            'school_name' => $session['school_name'],
+            'profile_photo_url' => $session['profile_photo_url'] ?? null,
+            'work_shift' => $session['work_shift'] ?? null
         ]
     ]);
     exit;

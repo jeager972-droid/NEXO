@@ -314,16 +314,10 @@ function processJob(array $job, PDO $conn): bool {
                             "INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
                              SELECT uuid_generate_v4(), school_id, student_id, 'LATE_ARRIVAL', to_timestamp(?)
                              FROM students WHERE document_number = ? AND school_id = ?
-                             AND NOT EXISTS (
-                                 SELECT 1 FROM attendance_incidents
-                                 WHERE student_id = students.student_id
-                                   AND school_id = ?
-                                   AND (detected_at)::date = (to_timestamp(?))::date
-                                   AND incident_type = 'LATE_ARRIVAL'
-                             )
+                             ON CONFLICT (student_id, school_id, (detected_at)::date) WHERE incident_type = 'LATE_ARRIVAL' DO NOTHING
                              RETURNING incident_id"
                         );
-                        $lateStmt->execute([$capturedAt, $doc, $instId, $instId, $capturedAt]);
+                        $lateStmt->execute([$capturedAt, $doc, $instId]);
                         $incidentId = $lateStmt->fetchColumn();
 
                         // ───────────────────────────────────────────────────────
@@ -361,16 +355,19 @@ function processJob(array $job, PDO $conn): bool {
                                 ], JSON_UNESCAPED_UNICODE);
 
                                 $notifStmt = $conn->prepare(
-                                    "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json)
-                                     VALUES (?, ?, 'Llegada tarde detectada', ?, 'ALERT', ?::jsonb)"
+                                    "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, dedup_key)
+                                     VALUES (?, ?, 'Llegada tarde detectada', ?, 'ALERT', ?::jsonb, ?)
+                                     ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING"
                                 );
                                 foreach (array_unique($teacherIds) as $teacherUserId) {
                                     try {
+                                        $dedupKey = $incidentId ? hash('sha256', $teacherUserId . '|' . $incidentId) : null;
                                         $notifStmt->execute([
                                             $instId,
                                             $teacherUserId,
                                             "El estudiante {$studentFullName} llegó tarde a clase",
                                             $notifMeta,
+                                            $dedupKey,
                                         ]);
                                     } catch (Exception $ne) {
                                         logW('NOTIF_LATE_ARRIVAL_INSERT_FAIL', $ne->getMessage());
@@ -383,7 +380,30 @@ function processJob(array $job, PDO $conn): bool {
 
                 $conn->exec("COMMIT");
                 if (!$inserted) {
-                    logW('SYNC_NOOP', "doc=$doc evt=$evt — estudiante no encontrado o duplicado");
+                    // Distinguir entre estudiante no encontrado y evento duplicado
+                    $checkStmt = $conn->prepare("SELECT 1 FROM students WHERE document_number = ? AND school_id = ? AND active = TRUE LIMIT 1");
+                    $checkStmt->execute([$doc, $instId]);
+                    $studentExists = $checkStmt->fetchColumn();
+
+                    if (!$studentExists) {
+                        logW('UNKNOWN_STUDENT', "doc=$doc evt=$evt school=$instId device=$deviceId — estudiante no existe en BD");
+                        // Registrar como incidente de seguridad para trazabilidad
+                        try {
+                            $secStmt = $conn->prepare(
+                                "INSERT INTO security_incidents (incident_id, school_id, incident_type, severity_level, description, detected_at, metadata_json)
+                                 VALUES (uuid_generate_v4(), ?, 'UNKNOWN_STUDENT', 'WARNING', ?, NOW(), ?::jsonb)"
+                            );
+                            $secStmt->execute([
+                                $instId,
+                                "Evento biométrico recibido para documento no registrado: $doc",
+                                json_encode(['document' => $doc, 'event_type' => $evt, 'device_id' => $deviceId, 'captured_at' => $capturedAt])
+                            ]);
+                        } catch (Exception $se) {
+                            logW('UNKNOWN_STUDENT_INCIDENT_FAIL', $se->getMessage());
+                        }
+                    } else {
+                        logW('SYNC_NOOP', "doc=$doc evt=$evt — evento duplicado (fingerprint ya existe)");
+                    }
                 }
                 return $inserted;
             } catch (Exception $e) {

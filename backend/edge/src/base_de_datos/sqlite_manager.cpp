@@ -66,17 +66,29 @@ bool SqliteManager::factoryReset() { close(); return true; }
 
 bool SqliteManager::createTables() {
     const char* sql = R"(
-        CREATE TABLE IF NOT EXISTS estudiantes (documento TEXT PRIMARY KEY, nombre TEXT NOT NULL, telefono_acudiente TEXT, nombre_acudiente TEXT, huella_id INTEGER UNIQUE, template_huella BLOB);
+        CREATE TABLE IF NOT EXISTS estudiantes (documento TEXT PRIMARY KEY, nombre TEXT NOT NULL, telefono_acudiente TEXT, nombre_acudiente TEXT, huella_id INTEGER UNIQUE, template_huella BLOB, school_id TEXT);
+        -- TODO: evaluar si tabla patrones se usa, candidato a eliminar
         CREATE TABLE IF NOT EXISTS patrones (documento TEXT PRIMARY KEY, ingresos_temprano INTEGER DEFAULT 0, ingresos_tarde INTEGER DEFAULT 0, asistencia_total INTEGER DEFAULT 0);
         -- PAE (Programa de Alimentacion Escolar) eliminado por decision de arquitectura
         CREATE TABLE IF NOT EXISTS inasistencias (documento TEXT PRIMARY KEY, fecha TEXT DEFAULT (date('now')));
         CREATE TABLE IF NOT EXISTS audit_trail (id INTEGER PRIMARY KEY AUTOINCREMENT, documento TEXT NOT NULL, event TEXT NOT NULL, fecha TEXT DEFAULT (datetime('now')), synced INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
         CREATE INDEX IF NOT EXISTS idx_audit_synced ON audit_trail(synced);
+        CREATE INDEX IF NOT EXISTS idx_estudiantes_documento ON estudiantes(documento);
+        CREATE INDEX IF NOT EXISTS idx_estudiantes_school_id ON estudiantes(school_id);
+        CREATE INDEX IF NOT EXISTS idx_estudiantes_huella ON estudiantes(huella_id);
     )";
     bool ok = sqlite3_exec(db, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
     sqlite3_exec(db, "ALTER TABLE audit_trail ADD COLUMN attempts INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+    // Migración para bases de datos existentes (agrega school_id si no existe)
+    migrateSchema();
     return ok;
+}
+
+void SqliteManager::migrateSchema() {
+    // ALTER TABLE para bases de datos existentes que no tienen school_id
+    // Si la columna ya existe, SQLite retorna error (SQLITE_ERROR) — lo ignoramos
+    sqlite3_exec(db, "ALTER TABLE estudiantes ADD COLUMN school_id TEXT;", nullptr, nullptr, nullptr);
 }
 
 // Ejecuta un statement con manejo de SQLITE_LOCKED (Race Conditions)
@@ -91,7 +103,7 @@ int executeWithRetry(sqlite3_stmt* stmt) {
 }
 
 bool SqliteManager::saveEstudiante(const Estudiante& est) {
-    const char* sql = "INSERT OR REPLACE INTO estudiantes (documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella) VALUES (?,?,?,?,?,?);";
+    const char* sql = "INSERT OR REPLACE INTO estudiantes (documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella, school_id) VALUES (?,?,?,?,?,?,?);";
     sqlite3_stmt* stmt;
     // FIX: Uso de prepare_v3 con flag 0 (evita fuga de memoria con SQLITE_PREPARE_PERSISTENT)
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
@@ -104,12 +116,19 @@ bool SqliteManager::saveEstudiante(const Estudiante& est) {
     std::string rawTemplate(est.template_huella.begin(), est.template_huella.end());
     std::vector<uint8_t> iv(12);
     if (RAND_bytes(iv.data(), static_cast<int>(iv.size())) != 1) {
-        LOG_ERROR("RAND_bytes failed for IV generation");
+        // FIX 1: Si RAND_bytes falla, NO continuar con IV no inicializado — retornar error inmediatamente
+        LOG_ERROR("RAND_bytes failed for IV generation — abortando saveEstudiante por seguridad");
         sqlite3_finalize(stmt);
         return false;
     }
     std::string encryptedTemplateB64 = Encryption::getInstance().encrypt(rawTemplate, iv);
     sqlite3_bind_text(stmt, 6, encryptedTemplateB64.c_str(), -1, SQLITE_TRANSIENT);
+    // school_id: multi-tenancy (NULL si no está definido)
+    if (est.school_id.empty()) {
+        sqlite3_bind_null(stmt, 7);
+    } else {
+        sqlite3_bind_text(stmt, 7, est.school_id.c_str(), -1, SQLITE_TRANSIENT);
+    }
     
     bool success = (executeWithRetry(stmt) == SQLITE_DONE);
     sqlite3_finalize(stmt);
@@ -117,7 +136,7 @@ bool SqliteManager::saveEstudiante(const Estudiante& est) {
 }
 
 bool SqliteManager::getEstudianteByDocumento(const std::string& doc, Estudiante& est) {
-    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella FROM estudiantes WHERE documento = ?;";
+    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella, school_id FROM estudiantes WHERE documento = ?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
     sqlite3_bind_text(stmt, 1, doc.c_str(), -1, SQLITE_TRANSIENT);
@@ -139,6 +158,9 @@ bool SqliteManager::getEstudianteByDocumento(const std::string& doc, Estudiante&
                 est.template_huella.assign(decrypted.begin(), decrypted.end());
             }
         }
+        // school_id (columna 6) — multi-tenancy
+        const char* sid = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+        est.school_id = sid ? sid : "";
         found = true;
     }
     sqlite3_finalize(stmt);
@@ -146,7 +168,7 @@ bool SqliteManager::getEstudianteByDocumento(const std::string& doc, Estudiante&
 }
 
 bool SqliteManager::getEstudianteByHuellaID(uint32_t huellaId, Estudiante& est) {
-    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella FROM estudiantes WHERE huella_id = ?;";
+    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella, school_id FROM estudiantes WHERE huella_id = ?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
     sqlite3_bind_int(stmt, 1, static_cast<int>(huellaId));
@@ -167,6 +189,9 @@ bool SqliteManager::getEstudianteByHuellaID(uint32_t huellaId, Estudiante& est) 
                 est.template_huella.assign(decrypted.begin(), decrypted.end());
             }
         }
+        // school_id (columna 6) — multi-tenancy
+        const char* sid = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+        est.school_id = sid ? sid : "";
         found = true;
     }
     sqlite3_finalize(stmt);
@@ -306,7 +331,7 @@ std::string SqliteManager::getConfig(const std::string& key, const std::string& 
 }
 
 bool SqliteManager::getAllEstudiantesConTemplate(std::vector<Estudiante>& estudiantes) {
-    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella FROM estudiantes WHERE template_huella IS NOT NULL AND length(template_huella) > 0;";
+    const char* sql = "SELECT documento, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella, school_id FROM estudiantes WHERE template_huella IS NOT NULL AND length(template_huella) > 0;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
     while (executeWithRetry(stmt) == SQLITE_ROW) {
@@ -325,6 +350,9 @@ bool SqliteManager::getAllEstudiantesConTemplate(std::vector<Estudiante>& estudi
                 est.template_huella.assign(decrypted.begin(), decrypted.end());
             }
         }
+        // school_id (columna 6) — multi-tenancy
+        const char* sid = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+        est.school_id = sid ? sid : "";
         if (!est.template_huella.empty()) {
             estudiantes.push_back(std::move(est));
         }

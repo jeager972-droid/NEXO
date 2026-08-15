@@ -52,14 +52,12 @@ http {
 
         # Health check
         location = /health {
-            add_header Content-Type text/plain always;
-            return 200 "OK\n";
+            try_files /health.php =404;
         }
 
         # Health check workers
         location = /health/workers {
-            add_header Content-Type text/plain always;
-            return 200 "OK\n";
+            try_files /health.php =404;
         }
 
         # Root should hit the PHP API, not a static landing page
@@ -72,8 +70,15 @@ http {
             try_files \$uri \$uri/ /api.php?\$query_string;
         }
 
-        # PHP handler EXCLUSIVO para api.php
+        # PHP handler EXCLUSIVO para api.php y health.php
         location = /api.php {
+            include fastcgi_params;
+            fastcgi_pass unix:/run/php/php-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            fastcgi_hide_header X-Powered-By;
+        }
+
+        location = /health.php {
             include fastcgi_params;
             fastcgi_pass unix:/run/php/php-fpm.sock;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
@@ -136,6 +141,9 @@ done
 [ -S /run/php/php-fpm.sock ] && echo "[nexo] Socket listo." || echo "[nexo] WARN: socket no encontrado, continuando igual"
 
 echo "[nexo] Arrancando workers en segundo plano con backoff exponencial..."
+
+# Workers de cola (twilio, audit, biometric) son daemon-loop: corren indefinidamente
+# y nunca exit(0) en condiciones normales. Si mueren, se reinician con backoff.
 run_worker_with_backoff() {
     local worker_file=$1
     local backoff=2
@@ -153,10 +161,34 @@ run_worker_with_backoff() {
     done
 }
 
+# Workers periódicos (absence, evasion, permission) son cron-mode: ejecutan una vez
+# y exit(0). Si se reinician inmediatamente, se ejecutarían cada 2s en lugar de cada
+# 60-120s, causando flood de DB y Twilio. Usar daemon mode (loop interno con sleep)
+# vía variable de entorno, y un sleep mínimo de seguridad entre reinicios.
+run_periodic_worker() {
+    local worker_file=$1
+    local mode_env=$2
+    local backoff=2
+    local max_backoff=60
+    while true; do
+        if env "$mode_env=daemon" php "/var/www/html/$worker_file"; then
+            backoff=2
+        else
+            echo "[nexo] WARN: $worker_file falló. Reintentando en ${backoff}s..."
+            sleep $backoff
+            backoff=$((backoff * 2))
+            if [ $backoff -gt $max_backoff ]; then backoff=$max_backoff; fi
+        fi
+        sleep 5
+    done
+}
+
 run_worker_with_backoff "workers/worker_twilio.php" > /dev/stdout 2>&1 &
 run_worker_with_backoff "workers/worker_audit.php" > /dev/stdout 2>&1 &
 run_worker_with_backoff "workers/worker_biometric.php" > /dev/stdout 2>&1 &
-run_worker_with_backoff "workers/worker_absence_detector.php" > /dev/stdout 2>&1 &
+run_periodic_worker "workers/worker_absence_detector.php" "ABSENCE_DETECTOR_MODE" > /dev/stdout 2>&1 &
+run_periodic_worker "workers/worker_evasion_detector.php" "EVASION_DETECTOR_MODE" > /dev/stdout 2>&1 &
+run_periodic_worker "workers/worker_permission_status.php" "PERMISSION_STATUS_MODE" > /dev/stdout 2>&1 &
 
 echo "[nexo] Iniciando Mosquitto MQTT broker..."
 # Create mosquitto config for production (Auth si hay variables, fallback a open solo si faltan)
@@ -184,8 +216,8 @@ persistence_location /mosquitto/data/
 log_dest stdout
 MOSQUITTOCONF
 fi
-# mosquitto -c /mosquitto/config/mosquitto.conf -d
-echo "[nexo] Mosquitto MQTT broker deshabilitado temporalmente para pruebas de red"
+mosquitto -c /mosquitto/config/mosquitto.conf -d
+echo "[nexo] Mosquitto MQTT broker iniciado en puerto 1883"
 
 echo "[nexo] Arrancando nginx en puerto 8080 (en background)..."
 nginx

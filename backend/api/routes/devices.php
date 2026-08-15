@@ -90,7 +90,8 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
         exit(json_encode(['status' => 'error', 'message' => 'Formato de ID de dispositivo inválido']));
     }
 
-    $stmt = $conn->prepare("DELETE FROM edge_devices WHERE device_id = ? AND school_id = ?");
+    // VF-016: Soft-delete — marcar como inactivo en lugar de hard delete
+    $stmt = $conn->prepare("UPDATE edge_devices SET active = FALSE WHERE device_id = ? AND school_id = ? AND active = TRUE");
     $stmt->execute([$deviceId, $authUser['school_id']]);
 
     securityLog('EDGE_DEVICE_REVOKED', "Device: $deviceId", $authUser['id'], $authUser['school_id']);
@@ -167,7 +168,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', false)")->execute();
+    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
     $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -175,20 +176,18 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
     }
-    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
     $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
         $redis = getRedisConnection();
-        if (!$redis) {
-            $commands = [];
-        }
-
         $commands = [];
-        $queue = "device:{$deviceId}:commands";
-        while (($item = $redis->rPop($queue)) !== false) {
-            $cmd = json_decode($item, true);
-            if ($cmd) $commands[] = $cmd;
+        if ($redis) {
+            $queue = "device:{$deviceId}:commands";
+            while (($item = $redis->rPop($queue)) !== false) {
+                $cmd = json_decode($item, true);
+                if ($cmd) $commands[] = $cmd;
+            }
         }
 
         echo json_encode([
@@ -221,7 +220,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', false)")->execute();
+    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
     $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -229,7 +228,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
     }
-    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, false), set_config('app.current_role', 'EDGE_NODE', false)");
+    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
     $stmtConfig->execute([(string)$device['school_id']]);
 
     try {

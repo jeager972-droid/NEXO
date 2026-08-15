@@ -101,7 +101,11 @@ function calculateAuditHash($prevHash, $schoolId, $actorId, $eventType, $descrip
 function insertBatch($conn, array $rows) {
     if (empty($rows)) return;
     
-    $secret = getenv('APP_NEXO_HMAC_SECRET') ?: 'default-secret-change-me';
+    $secret = getenv('APP_NEXO_HMAC_SECRET');
+    if (!$secret || $secret === 'default-secret-change-me') {
+        error_log('[AUDIT_WORKER] FATAL: APP_NEXO_HMAC_SECRET no configurada o es default. Worker no puede iniciar.');
+        exit(1);
+    }
     $lastHashes = []; // Cache en memoria para el batch
 
     $conn->beginTransaction();
@@ -241,12 +245,23 @@ while (!$shutdown) {
                 $redis->set('worker:audit:last_heartbeat', time(), 600);
             } catch (Exception $e) {
                 logWorker('BATCH_ERROR', $e->getMessage());
-                // Reencolar los logs fallidos en la cola de reintentos
+                // Reencolar con retry count; tras 3 reintentos, enviar a DLQ
+                $dlqQueue = 'queue:audit_logs_dlq';
                 foreach ($batch as $row) {
-                    $redis->rPush($queue, json_encode($row, JSON_UNESCAPED_UNICODE));
+                    $retryCount = ($row['_retry_count'] ?? 0) + 1;
+                    $row['_retry_count'] = $retryCount;
+                    if ($retryCount > 3) {
+                        $row['_error'] = $e->getMessage();
+                        $row['_failed_at'] = date('c');
+                        $redis->rPush($dlqQueue, json_encode($row, JSON_UNESCAPED_UNICODE));
+                        logWorker('DLQ', "Audit log moved to DLQ after $retryCount retries: " . json_encode($row, JSON_UNESCAPED_UNICODE));
+                    } else {
+                        $redis->rPush($queue, json_encode($row, JSON_UNESCAPED_UNICODE));
+                        logWorker('REQUEUE', "Audit log requeued (retry $retryCount/3)");
+                    }
                 }
-                // Escalar al catch externo para forzar restart del supervisor
-                throw $e;
+                // No re-throw: continuar procesando siguiente batch en lugar de
+                // forzar restart del supervisor (que causaría loop infinito)
             }
             $batch = [];
         }

@@ -10,8 +10,8 @@ import { Menu, Settings, LogOut, ChevronDown, Sun, Moon } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
-import { notificationsApi } from '../api/notifications';
 import { schoolApi } from '../api/school';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { NavLink } from 'react-router-dom';
@@ -26,39 +26,15 @@ const getGreeting = () => {
 const Layout = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [notifCount, setNotifCount] = useState(0);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
+  const { notifCount } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const profileRef = useRef(null);
-
-  useEffect(() => {
-    let mounted = true;
-    const poll = () => {
-      notificationsApi.getAll().then((data) => {
-        if (!mounted) return;
-        const arr = Array.isArray(data) ? data : [];
-        const lastSeen = parseInt(sessionStorage.getItem('nexo:last-notif-count') || '0', 10);
-        setNotifCount(Math.max(0, arr.length - lastSeen));
-      }).catch(() => {});
-    };
-    poll();
-    const id = setInterval(poll, 60000);
-    return () => { mounted = false; clearInterval(id); };
-  }, []);
-
-  useEffect(() => {
-    const handler = (e) => {
-      const count = e.detail?.count ?? 0;
-      setNotifCount(count);
-    };
-    window.addEventListener('nexo:notif-count', handler);
-    return () => window.removeEventListener('nexo:notif-count', handler);
-  }, []);
 
   useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth >= 1024);

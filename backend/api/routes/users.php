@@ -221,7 +221,11 @@ if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
 
         $file = $_FILES['photo'];
         $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-        if (!in_array($file['type'], $allowed)) {
+        // VF-026: Validar MIME real del contenido, no del header HTTP (que puede ser spoofed)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $realMime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        if (!$realMime || !in_array($realMime, $allowed)) {
             usersJson(['status' => 'error', 'message' => 'Solo JPG, PNG, WEBP permitidos'], 400);
         }
         if ($file['size'] > 2 * 1024 * 1024) {
@@ -233,7 +237,8 @@ if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
             usersJson(['status' => 'error', 'message' => 'No se pudo leer la imagen'], 500);
         }
 
-        $mime = $file['type'];
+        // Usar el MIME real detectado, no el del header
+        $mime = $realMime;
         $base64 = 'data:' . $mime . ';base64,' . base64_encode($raw);
 
         $stmt = $conn->prepare("UPDATE users SET profile_photo_url = ? WHERE user_id = ?");
@@ -451,6 +456,19 @@ if ($cleanPath === '/users/delete-field' && $method === 'POST') {
         ];
         if (!isset($validFields[$field])) {
             usersJson(['status' => 'error', 'message' => 'field no válido'], 400);
+        }
+
+        // VF-027: Re-verificación de password para prevenir account takeover
+        $password = (string)($input['password'] ?? '');
+        if ($password === '') {
+            usersJson(['status' => 'error', 'message' => 'Se requiere contraseña para eliminar campos'], 403);
+        }
+        $pwdStmt = $conn->prepare("SELECT password_hash, password_salt FROM users WHERE user_id = ?");
+        $pwdStmt->execute([$userId]);
+        $userRow = $pwdStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$userRow || !password_verify($password . $userRow['password_salt'], $userRow['password_hash'])) {
+            securityLog('DELETE_FIELD_AUTH_FAIL', "User: $userId, Field: $field");
+            usersJson(['status' => 'error', 'message' => 'Contraseña incorrecta'], 403);
         }
 
         $col = $validFields[$field]['column'];

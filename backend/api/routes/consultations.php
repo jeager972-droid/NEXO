@@ -611,11 +611,6 @@ if ($cleanPath === '/consultations/query') {
                 $columns = ['tipo' => 'Tipo', 'generado_en' => 'Generado en', 'formato' => 'Formato', 'estado' => 'Estado'];
                 break;
 
-            case 'audit_logs':
-                $data = [];
-                $columns = ['info' => 'Información'];
-                break;
-
             // ==========================================
             // NUEVOS MÓDULOS: Inasistencias Justificadas, Eventos Críticos
             // ==========================================
