@@ -4,6 +4,7 @@
  * Moodboard: mensajes llegados de NEXO — formato chat unificado para todos los roles.
  */
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Trash2, ChevronRight, Loader2 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
@@ -93,6 +94,7 @@ const humanizeMessage = (notif) => {
 const ACTIONS_WITH_DETAILS = [
   'permiso', 'autorizar_salida', 'sos', 'iniciar_seguimiento',
   'solicitud', 'incidente', 'citacion_confirmada', 'reagendar_motivo', 'salida_no_autorizada',
+  'situacion_critica', 'daño', 'pedagogica',
 ];
 
 const NotifItem = ({ notif, hasDetails, onClick, onAction }) => {
@@ -166,6 +168,7 @@ const NotifItem = ({ notif, hasDetails, onClick, onAction }) => {
 
 const Notifications = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
@@ -188,6 +191,20 @@ const Notifications = () => {
     };
     fetch();
   }, []);
+
+  // Auto-abrir detalle si viene notif_id en query params
+  useEffect(() => {
+    const notifId = searchParams.get('notif_id');
+    if (notifId && !loading && notifications.length > 0 && !detail) {
+      const target = notifications.find((n) => String(n.id) === String(notifId) || String(n.notification_id) === String(notifId));
+      if (target) {
+        setDetail(target);
+        if (!target.read) markRead(target.id ?? target.notification_id);
+      }
+      // Limpiar el query param
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, loading, notifications, detail, setSearchParams]);
 
   const handleClear = async () => {
     if (!notifications.length) return;

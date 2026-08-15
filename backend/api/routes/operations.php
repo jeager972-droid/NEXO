@@ -747,6 +747,18 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
+                // Notificar también al TEACHER que generó el permiso
+                try {
+                    $teacherNotif = $conn->prepare("
+                        INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                        VALUES (?, ?, 'Permiso', ?, 'INFO', ?::jsonb, NOW())
+                    ");
+                    $teacherNotifMsg = "Se registró un permiso" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
+                    $teacherNotif->execute([$schoolId, $userId, $teacherNotifMsg, $meta]);
+                } catch (Throwable $e) {
+                    error_log("[OPERATIONS] Permiso teacher notification insert error: " . $e->getMessage());
+                }
+
                 // Enriquecer params con student_name para el event feed
                 $logParams = $params;
                 if ($studentId && !empty($stuMeta)) {
@@ -834,6 +846,32 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
 
+                    // Notificar también al RECTOR
+                    $rectStmt = $conn->prepare("
+                        SELECT user_id FROM users
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
+                    ");
+                    $rectStmt->execute([$schoolId]);
+                    $rects = $rectStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($rects)) {
+                        $rows = [];
+                        $rParams = [];
+                        foreach ($rects as $r) {
+                            $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
+                            $rParams[] = $schoolId;
+                            $rParams[] = $r['user_id'];
+                            $rParams[] = 'Salida autorizada';
+                            $rParams[] = "Se autorizó una salida" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
+                            $rParams[] = $meta;
+                        }
+                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                        try {
+                            $conn->prepare($sql)->execute($rParams);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] Autorizar salida rector notification batch insert error: " . $e->getMessage());
+                        }
+                    }
+
                     if (!empty($stuMeta)) {
                         $guardsStmt = $conn->prepare("
                             SELECT g.guardian_id, g.whatsapp_phone, u.phone AS guardian_user_phone
@@ -909,6 +947,43 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     }
                 }
 
+                // Notificar al COORDINADOR que ejecutó y al RECTOR
+                $pedagSenderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                $pedagMeta = json_encode([
+                    'group_name' => $groupName,
+                    'reason' => $purpose,
+                    'destination' => $destination,
+                    'sender_name' => $pedagSenderName,
+                    'sender_role' => $role,
+                    'action' => 'pedagogica',
+                ], JSON_UNESCAPED_UNICODE);
+
+                $pedagNotifyUsers = [$userId]; // El coordinador que la ejecutó
+                $rectStmt = $conn->prepare("
+                    SELECT user_id FROM users
+                    WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
+                ");
+                $rectStmt->execute([$schoolId]);
+                while ($rRow = $rectStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $pedagNotifyUsers[] = $rRow['user_id'];
+                }
+                $pedagMsg = "Se programó una salida pedagógica" . ($groupName ? " para el grupo {$groupName}" : '') . ". Ver detalles.";
+                $rows = [];
+                $pedagParams = [];
+                foreach ($pedagNotifyUsers as $uid) {
+                    $rows[] = "(?, ?, 'Salida pedagógica', ?, 'INFO', ?::jsonb, NOW())";
+                    $pedagParams[] = $schoolId;
+                    $pedagParams[] = $uid;
+                    $pedagParams[] = $pedagMsg;
+                    $pedagParams[] = $pedagMeta;
+                }
+                $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                try {
+                    $conn->prepare($sql)->execute($pedagParams);
+                } catch (Throwable $e) {
+                    error_log("[OPERATIONS] Pedagogica notification batch insert error: " . $e->getMessage());
+                }
+
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
                 echo json_encode([
                     'status'  => 'ok',
@@ -968,6 +1043,35 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         } catch (Throwable $e) {
                             error_log("[OPERATIONS] Seguimiento notification batch insert error: " . $e->getMessage());
                         }
+                    }
+
+                    // Notificar también al RECTOR y al usuario que solicitó el seguimiento
+                    $segNotifyUsers = [$userId]; // El coordinador que lo pidió
+                    if ($role !== 'RECTOR') {
+                        $rectStmt = $conn->prepare("
+                            SELECT user_id FROM users
+                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
+                        ");
+                        $rectStmt->execute([$schoolId]);
+                        while ($rRow = $rectStmt->fetch(PDO::FETCH_ASSOC)) {
+                            $segNotifyUsers[] = $rRow['user_id'];
+                        }
+                    }
+                    $segMsg = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderRoleDisplay} {$senderName}. Ver detalles.";
+                    $rows = [];
+                    $segParams = [];
+                    foreach ($segNotifyUsers as $uid) {
+                        $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
+                        $segParams[] = $schoolId;
+                        $segParams[] = $uid;
+                        $segParams[] = $segMsg;
+                        $segParams[] = $meta;
+                    }
+                    $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                    try {
+                        $conn->prepare($sql)->execute($segParams);
+                    } catch (Throwable $e) {
+                        error_log("[OPERATIONS] Seguimiento rector/coordinator notification batch insert error: " . $e->getMessage());
                     }
                 }
 
@@ -1331,6 +1435,42 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     while ($dRow = $dStmt->fetch(PDO::FETCH_ASSOC)) {
                         if (!empty($dRow['phone'])) {
                             enqueueTwilioJob($dRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                        }
+                    }
+
+                    // Notificar internamente a COORDINADOR y RECTOR
+                    $dañoReporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                    $dañoMeta = json_encode([
+                        'location' => $locationDaño,
+                        'reason' => $reason,
+                        'reporter_name' => $dañoReporterName,
+                        'reporter_role' => $role,
+                        'action' => 'daño',
+                    ], JSON_UNESCAPED_UNICODE);
+
+                    $dañoNotifyRoles = ['COORDINATOR', 'RECTOR'];
+                    $dañoPlaceholders = implode(',', array_fill(0, count($dañoNotifyRoles), '?'));
+                    $dañoStmt = $conn->prepare("
+                        SELECT user_id FROM users
+                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) IN ($dañoPlaceholders)) AND active = TRUE
+                    ");
+                    $dañoStmt->execute(array_merge([$schoolId], $dañoNotifyRoles));
+                    $dañoRecipients = $dañoStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($dañoRecipients)) {
+                        $rows = [];
+                        $dañoParams = [];
+                        foreach ($dañoRecipients as $r) {
+                            $rows[] = "(?, ?, 'Daño reportado', ?, 'ALERT', ?::jsonb, NOW())";
+                            $dañoParams[] = $schoolId;
+                            $dañoParams[] = $r['user_id'];
+                            $dañoParams[] = "Se reportó un daño" . ($reason ? ": {$reason}" : '') . ". Ver detalles.";
+                            $dañoParams[] = $dañoMeta;
+                        }
+                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+                        try {
+                            $conn->prepare($sql)->execute($dañoParams);
+                        } catch (Throwable $e) {
+                            error_log("[OPERATIONS] Daño notification batch insert error: " . $e->getMessage());
                         }
                     }
                 }

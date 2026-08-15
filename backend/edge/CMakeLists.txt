@@ -130,8 +130,6 @@ set(UAREU_SDK_LIBS
     ${UAREU_SDK_LIB_DIR}/libdpfpdd_ptapi.so
     ${UAREU_SDK_LIB_DIR}/libdpfr6.so
     ${UAREU_SDK_LIB_DIR}/libdpfr7.so
-    ${UAREU_SDK_LIB_DIR}/libnex_sdk.so
-    ${UAREU_SDK_LIB_DIR}/libtfm.so
 )
 if(EXISTS ${UAREU_SDK_LIB_DIR}/libdpfpdd.so AND EXISTS ${UAREU_SDK_LIB_DIR}/libdpfj.so)
     message(STATUS "U.are.U SDK found for ${UAREU_ARCH}")

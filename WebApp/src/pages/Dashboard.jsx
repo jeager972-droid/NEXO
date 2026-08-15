@@ -113,10 +113,19 @@ const StreamList = ({ events, loading, showIssuer, onItemClick, currentUserName 
         <div className="space-y-3">
           {events.map((ev, i) => (
             <Surface key={i} className="p-4">
-              <NexoChatBubble
-                message={eventToMessage(ev, currentUserName)}
-                timestamp={ev.time || 'Ahora'}
-              />
+              {onItemClick ? (
+                <button onClick={() => onItemClick(ev)} className="w-full text-left">
+                  <NexoChatBubble
+                    message={eventToMessage(ev, currentUserName)}
+                    timestamp={ev.time || 'Ahora'}
+                  />
+                </button>
+              ) : (
+                <NexoChatBubble
+                  message={eventToMessage(ev, currentUserName)}
+                  timestamp={ev.time || 'Ahora'}
+                />
+              )}
               {onItemClick && (
                 <button
                   onClick={() => onItemClick(ev)}
@@ -194,12 +203,17 @@ const getGreeting = () => {
 
 const AdminDashboard = ({ stats, loading }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showScheduleTask, setShowScheduleTask] = useState(false);
+
+  const handleEventClick = (ev) => {
+    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
+  };
 
   useEffect(() => {
     if (user?.role === ROLES.COORDINADOR && isTaskActive(user) && !isTaskDoneToday(user)) {
@@ -320,7 +334,7 @@ const AdminDashboard = ({ stats, loading }) => {
         </div>
       )}
 
-      <StreamList events={stream} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
+      <StreamList events={stream} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
 
       <AnimatePresence>
         {activeCategory && (
@@ -343,8 +357,12 @@ const AdminDashboard = ({ stats, loading }) => {
 
 const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const handleEventClick = (ev) => {
+    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
+  };
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -369,7 +387,7 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
     </div>
   );
 };
@@ -378,8 +396,12 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 
 const CounselorDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const handleEventClick = (ev) => {
+    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
+  };
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -413,7 +435,7 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
           <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Seguimientos" value={0} tone="warning" />
         </div>
       )}
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
     </div>
   );
 };
@@ -440,6 +462,10 @@ const GROUP_KEY = 'nexo:teacher:selected-group';
 
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const handleEventClick = (ev) => {
+    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
+  };
   const [selectedGroup, setSelectedGroup] = useState(() => {
     try { return localStorage.getItem(GROUP_KEY) || ''; } catch { return ''; }
   });
@@ -691,7 +717,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             )
           )}
 
-          <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
+          <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
 
           <AnimatePresence>
             {activeCategory && (
@@ -1127,8 +1153,12 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 
 const StaffDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const handleEventClick = (ev) => {
+    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
+  };
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -1153,7 +1183,7 @@ const StaffDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} />
+      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
     </div>
   );
 };
