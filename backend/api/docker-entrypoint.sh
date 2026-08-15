@@ -35,15 +35,41 @@ http {
     server_tokens off;
     access_log /dev/stdout;
 
+    # Map para CORS: reflejar origen legítimo en TODAS las respuestas
+    # (incluyendo errores 502/503/504 de nginx cuando PHP-FPM no responde).
+    # Esto evita que el navegador reporte errores CORS cuando el problema real
+    # es que PHP-FPM está temporalmente no disponible.
+    map \$http_origin \$cors_origin {
+        default "";
+        "~^https://nexo-[a-zA-Z0-9-]+\.vercel\.app\$" \$http_origin;
+        "~^https://(www\.)?nexo\.edu\.co\$" \$http_origin;
+        "~^https://nexo-80go\.onrender\.com\$" \$http_origin;
+    }
+
     server {
-        listen 8080 default_server;
-        listen [::]:8080 default_server;
-        listen 80;
-        listen [::]:80;
-        listen 1883;
-        listen [::]:1883;
+        listen ${PORT} default_server;
+        listen [::]:${PORT};
         root /var/www/html;
         index index.php;
+
+        # CORS headers a nivel nginx — presentes incluso en errores 502/503/504.
+        # add_header ... always asegura que se envíen sin importar el status code.
+        add_header Access-Control-Allow-Origin \$cors_origin always;
+        add_header Access-Control-Allow-Credentials "true" always;
+        add_header Access-Control-Max-Age 86400 always;
+
+        # Intercept OPTIONS preflight ANTES de llegar a PHP.
+        # Si el origen es válido, responde 204 con headers CORS.
+        if (\$request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin \$cors_origin;
+            add_header Access-Control-Allow-Credentials "true";
+            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, PATCH, OPTIONS";
+            add_header Access-Control-Allow-Headers \$http_access_control_request_headers;
+            add_header Access-Control-Max-Age 86400;
+            add_header Content-Length 0;
+            add_header Content-Type text/plain;
+            return 204;
+        }
 
 
 
@@ -71,17 +97,28 @@ http {
         }
 
         # PHP handler EXCLUSIVO para api.php y health.php
+        # fastcgi_hide_header para CORS: PHP ya añade estos headers via _cors_middleware.php.
+        # Si no los ocultamos, nginx duplicaría los headers CORS (uno de PHP, uno de nginx).
+        # fastcgi_param HTTP_AUTHORIZATION: nginx NO pasa el header Authorization a PHP-FPM
+        # por defecto. Sin esto, extractBearerToken() no encuentra el token JWT.
         location = /api.php {
             include fastcgi_params;
             fastcgi_pass unix:/run/php/php-fpm.sock;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            fastcgi_param HTTP_AUTHORIZATION \$http_authorization;
             fastcgi_hide_header X-Powered-By;
+            fastcgi_hide_header Access-Control-Allow-Origin;
+            fastcgi_hide_header Access-Control-Allow-Credentials;
+            fastcgi_hide_header Access-Control-Allow-Methods;
+            fastcgi_hide_header Access-Control-Allow-Headers;
+            fastcgi_hide_header Access-Control-Max-Age;
         }
 
         location = /health.php {
             include fastcgi_params;
             fastcgi_pass unix:/run/php/php-fpm.sock;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            fastcgi_param HTTP_AUTHORIZATION \$http_authorization;
             fastcgi_hide_header X-Powered-By;
         }
 
