@@ -627,34 +627,32 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
         if (!empty($oldGroupIds)) {
             $placeholders = implode(',', array_fill(0, count($oldGroupIds), '?'));
 
+            // Helper: ejecutar sentencia opcional con SAVEPOINT
+            // Si la tabla/columna no existe, rollback al savepoint sin abortar la transacción
+            $execOptional = function($sql, $params) use ($conn) {
+                $conn->exec("SAVEPOINT cleanup_op");
+                try {
+                    $conn->prepare($sql)->execute($params);
+                } catch (Exception $e) {
+                    $conn->exec("ROLLBACK TO SAVEPOINT cleanup_op");
+                }
+            };
+
             // Borrar dependencias en orden (FK constraints)
-            // 1. student_group_assignments
-            $conn->prepare("DELETE FROM student_group_assignments WHERE group_id IN ($placeholders)")
-                ->execute($oldGroupIds);
+            // 1. student_group_assignments (obligatoria — debe existir)
+            $execOptional("DELETE FROM student_group_assignments WHERE group_id IN ($placeholders)", $oldGroupIds);
 
             // 2. schedules
-            try {
-                $conn->prepare("DELETE FROM schedules WHERE group_id IN ($placeholders)")
-                    ->execute($oldGroupIds);
-            } catch (Exception $ignore) {}
+            $execOptional("DELETE FROM schedules WHERE group_id IN ($placeholders)", $oldGroupIds);
 
             // 3. daily_schedule_config
-            try {
-                $conn->prepare("DELETE FROM daily_schedule_config WHERE group_id IN ($placeholders)")
-                    ->execute($oldGroupIds);
-            } catch (Exception $ignore) {}
+            $execOptional("DELETE FROM daily_schedule_config WHERE group_id IN ($placeholders)", $oldGroupIds);
 
             // 4. edge_devices: desvincular group_id (no borrar el device)
-            try {
-                $conn->prepare("UPDATE edge_devices SET group_id = NULL WHERE group_id IN ($placeholders)")
-                    ->execute($oldGroupIds);
-            } catch (Exception $ignore) {}
+            $execOptional("UPDATE edge_devices SET group_id = NULL WHERE group_id IN ($placeholders)", $oldGroupIds);
 
             // 5. attendance_incidents: desvincular group_id (no borrar incidentes)
-            try {
-                $conn->prepare("UPDATE attendance_incidents SET group_id = NULL WHERE group_id IN ($placeholders)")
-                    ->execute($oldGroupIds);
-            } catch (Exception $ignore) {}
+            $execOptional("UPDATE attendance_incidents SET group_id = NULL WHERE group_id IN ($placeholders)", $oldGroupIds);
         }
 
         // Ahora sí borrar los grupos del año actual
