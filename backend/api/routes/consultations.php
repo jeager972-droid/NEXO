@@ -763,7 +763,7 @@ if ($cleanPath === '/consultations/query') {
     } catch (Exception $e) {
         securityLog('CONSULTATION_QUERY_ERROR', $e->getMessage(), $userId, $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al consultar datos']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al consultar datos', 'debug' => $e->getMessage()]);
     }
     exit;
 }

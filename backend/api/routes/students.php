@@ -104,7 +104,7 @@ if ($cleanPath === '/students') {
                 try { $conn->rollBack(); } catch (Exception $ignore) {}
             }
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al registrar estudiante']);
+            echo json_encode(['status' => 'error', 'message' => 'Error al registrar estudiante', 'debug' => $e->getMessage()]);
         }
         exit;
     }

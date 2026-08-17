@@ -77,7 +77,7 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         if (!$rl) {
             // VF-023: Fail-closed — si Redis cae, no permitir spam
             http_response_code(503);
-            echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
+            echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.', 'debug' => $e->getMessage()]);
             exit;
         }
         $key = "rl:contacto:{$contactIp}";
@@ -85,13 +85,13 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         if ($hits === 1) $rl->expire($key, 3600);
         if ($hits > 5) {
             http_response_code(429);
-            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
+            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.', 'debug' => $e->getMessage()]);
             exit;
         }
     } catch (Throwable $e) {
         // VF-023: Fail-closed también en excepciones
         http_response_code(503);
-        echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
+        echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.', 'debug' => $e->getMessage()]);
         exit;
     }
 
@@ -105,18 +105,18 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
 
     if ($nombre === '' || $cargo === '' || $institucion === '' || $municipio === '' || $email === '' || $whatsapp === '') {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Todos los campos obligatorios deben completarse.']);
+        echo json_encode(['status' => 'error', 'message' => 'Todos los campos obligatorios deben completarse.', 'debug' => $e->getMessage()]);
         exit;
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         http_response_code(422);
-        echo json_encode(['status' => 'error', 'message' => 'Correo electrónico inválido.']);
+        echo json_encode(['status' => 'error', 'message' => 'Correo electrónico inválido.', 'debug' => $e->getMessage()]);
         exit;
     }
     $digits = preg_replace('/\D/', '', $whatsapp);
     if (strlen($digits) < 10) {
         http_response_code(422);
-        echo json_encode(['status' => 'error', 'message' => 'Número de WhatsApp inválido.']);
+        echo json_encode(['status' => 'error', 'message' => 'Número de WhatsApp inválido.', 'debug' => $e->getMessage()]);
         exit;
     }
 
@@ -175,7 +175,7 @@ if ($cleanPath === '/notifications') {
         $meta = $input['metadata'] ?? $input['metadata_json'] ?? null;
         if ($desc === '') {
             http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => 'Mensaje de notificación requerido']);
+            echo json_encode(['status' => 'error', 'message' => 'Mensaje de notificación requerido', 'debug' => $e->getMessage()]);
             exit;
         }
 
@@ -194,7 +194,7 @@ if ($cleanPath === '/notifications') {
         } catch (Throwable $e) {
             securityLog('NOTIFICATIONS_INSERT_ERROR', $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al crear notificación']);
+            echo json_encode(['status' => 'error', 'message' => 'Error al crear notificación', 'debug' => $e->getMessage()]);
         }
         exit;
     }
@@ -243,7 +243,7 @@ if ($cleanPath === '/notifications') {
     } catch (Throwable $e) {
         securityLog('NOTIFICATIONS_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener notificaciones']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener notificaciones', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -259,7 +259,7 @@ if ($cleanPath === '/notifications/clear' && $method === 'POST') {
     } catch (Throwable $e) {
         securityLog('NOTIFICATIONS_CLEAR_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al vaciar notificaciones']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al vaciar notificaciones', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -272,7 +272,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
 
     if (!in_array($action, ['justify', 'no_justify'], true)) {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Acción no válida. Use justify o no_justify.']);
+        echo json_encode(['status' => 'error', 'message' => 'Acción no válida. Use justify o no_justify.', 'debug' => $e->getMessage()]);
         exit;
     }
 
@@ -288,7 +288,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
 
         if (!$notif) {
             http_response_code(404);
-            echo json_encode(['status' => 'error', 'message' => 'Notificación no encontrada']);
+            echo json_encode(['status' => 'error', 'message' => 'Notificación no encontrada', 'debug' => $e->getMessage()]);
             exit;
         }
 
@@ -336,7 +336,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
     } catch (Throwable $e) {
         securityLog('NOTIFICATION_ACTION_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al procesar la acción']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al procesar la acción', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -375,7 +375,7 @@ if ($cleanPath === '/consultation/search') {
     } catch (Exception $e) {
         securityLog('CONSULTATION_SEARCH_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error en consulta']);
+        echo json_encode(['status' => 'error', 'message' => 'Error en consulta', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -422,7 +422,7 @@ if ($cleanPath === '/reports/preview') {
     } catch (Exception $e) {
         securityLog('REPORTS_PREVIEW_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener vista previa de reportes']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener vista previa de reportes', 'debug' => $e->getMessage()]);
     }
     exit;
 }

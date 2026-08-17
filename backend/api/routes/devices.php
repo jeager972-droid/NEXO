@@ -227,7 +227,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/configure$#', $cleanPath, $matches) 
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_CONFIGURE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al configurar el sensor']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al configurar el sensor', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -307,7 +307,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_DELETE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar el sensor']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar el sensor', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -416,7 +416,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation$#', $cleanPath, $matches)
     } catch (Exception $e) {
         securityLog('SENSOR_REVOCATION_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al iniciar la revocación del sensor']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al iniciar la revocación del sensor', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -526,7 +526,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation/cancel$#', $cleanPath, $m
     } catch (Exception $e) {
         securityLog('SENSOR_REVOCATION_CANCEL_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al cancelar la revocación']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al cancelar la revocación', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -572,7 +572,7 @@ if ($cleanPath === '/devices/revocations/pending' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('REVOCATIONS_PENDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener revocaciones pendientes']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener revocaciones pendientes', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -676,7 +676,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('DEVICE_COMMANDS_FETCH_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener comandos']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener comandos', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -726,7 +726,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
     } catch (Exception $e) {
         securityLog('HEARTBEAT_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al procesar heartbeat']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al procesar heartbeat', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -769,7 +769,7 @@ if ($cleanPath === '/admin/devices' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('ADMIN_DEVICES_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener dispositivos']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener dispositivos', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -845,7 +845,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/reconfigure$#', $cleanPath, $matches
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_RECONFIGURE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al reconfigurar el sensor']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al reconfigurar el sensor', 'debug' => $e->getMessage()]);
     }
     exit;
 }

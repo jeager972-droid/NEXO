@@ -438,7 +438,7 @@ if ($cleanPath === '/dashboard/stats') {
     } catch (Exception $e) {
         securityLog('DASHBOARD_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estadísticas']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estadísticas', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -461,7 +461,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
     if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late'])) {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Category requerida']);
+        echo json_encode(['status' => 'error', 'message' => 'Category requerida', 'debug' => $e->getMessage()]);
         exit;
     }
 
@@ -473,7 +473,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
         if ($isTeacher) {
             if (!$groupName) {
                 http_response_code(400);
-                echo json_encode(['status' => 'error', 'message' => 'group_name requerido para docentes']);
+                echo json_encode(['status' => 'error', 'message' => 'group_name requerido para docentes', 'debug' => $e->getMessage()]);
                 exit;
             }
             $checkStmt = $conn->prepare("
@@ -488,7 +488,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
         if (!$validGroup) {
             http_response_code(403);
-            echo json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']);
+            echo json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente', 'debug' => $e->getMessage()]);
             exit;
         }
 
@@ -662,7 +662,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     } catch (Exception $e) {
         securityLog('TEACHER_GROUP_DETAIL_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles del grupo']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles del grupo', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -769,7 +769,7 @@ if ($cleanPath === '/dashboard/events') {
     } catch (Exception $e) {
         securityLog('DASHBOARD_EVENTS_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener eventos']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener eventos', 'debug' => $e->getMessage()]);
     }
     exit;
 }

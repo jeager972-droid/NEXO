@@ -91,7 +91,7 @@ if ($cleanPath === '/admin/recalc-risk') {
     } catch (Exception $e) {
         securityLog('ADMIN_RECALC_RISK_ERROR', $e->getMessage(), $authUser['id'], $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al recalcular métricas']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al recalcular métricas', 'debug' => $e->getMessage()]);
     }
     exit;
 }

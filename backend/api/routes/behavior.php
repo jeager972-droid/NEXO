@@ -89,7 +89,7 @@ if ($cleanPath === '/behavior/risk') {
     } catch (Exception $e) {
         securityLog('BEHAVIOR_RISK_ERROR', $e->getMessage(), $authUser['id'], $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener métricas de riesgo']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener métricas de riesgo', 'debug' => $e->getMessage()]);
     }
     exit;
 }

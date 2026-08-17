@@ -52,7 +52,7 @@ if ($cleanPath === '/audit/global' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('AUDIT_LOGS_DB_ERROR', $e->getMessage(), $authUser['id'], $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error querying audit logs']);
+        echo json_encode(['status' => 'error', 'message' => 'Error querying audit logs', 'debug' => $e->getMessage()]);
     }
     exit;
 }

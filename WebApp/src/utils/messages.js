@@ -98,18 +98,27 @@ export const humanizeError = (error, fallback = 'No pudimos completar la acción
     typeof payload === 'string' ? payload : '',
   ];
 
+  let humanized = null;
   for (const candidate of candidates) {
     const clean = cleanServerMessage(candidate);
-    if (clean) return clean;
+    if (clean) { humanized = clean; break; }
   }
 
-  if (status !== undefined && BY_STATUS[status]) return BY_STATUS[status];
-  if (status >= 500) return BY_STATUS[500];
+  if (!humanized) {
+    if (status !== undefined && BY_STATUS[status]) humanized = BY_STATUS[status];
+    else if (status >= 500) humanized = BY_STATUS[500];
+    else if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') humanized = BY_STATUS[0];
+    else if (error?.code === 'ECONNABORTED') humanized = BY_STATUS[408];
+    else humanized = cleanServerMessage(error?.message) || fallback;
+  }
 
-  if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') return BY_STATUS[0];
-  if (error?.code === 'ECONNABORTED') return BY_STATUS[408];
+  // Incluir debug del backend si está disponible (para diagnóstico)
+  const debug = payload?.debug;
+  if (debug && typeof debug === 'string' && debug.trim()) {
+    return `${humanized} (${debug.trim()})`;
+  }
 
-  return cleanServerMessage(error?.message) || fallback;
+  return humanized;
 };
 
 /**

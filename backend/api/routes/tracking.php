@@ -175,7 +175,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             echo json_encode(['status' => 'ok', 'message' => 'Nota agregada']);
         } catch (Throwable $e) {
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al agregar nota', 'detail' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Error al agregar nota', 'detail' => $e->getMessage(), 'debug' => $e->getMessage()]);
         }
         exit;
     }
@@ -217,7 +217,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             echo json_encode(['status' => 'ok', 'tracking' => $tracking, 'notes' => $notes]);
         } catch (Throwable $e) {
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles', 'detail' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles', 'detail' => $e->getMessage(), 'debug' => $e->getMessage()]);
         }
         exit;
     }
@@ -239,7 +239,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
             echo json_encode(['status' => 'ok', 'trackings' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         } catch (Throwable $e) {
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al listar seguimientos', 'detail' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Error al listar seguimientos', 'detail' => $e->getMessage(), 'debug' => $e->getMessage()]);
         }
         exit;
     }

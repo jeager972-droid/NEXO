@@ -98,7 +98,7 @@ if ($cleanPath === '/school/config' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('SCHOOL_CONFIG_GET_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener configuración']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener configuración', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -260,7 +260,7 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('ONBOARDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración. Contacte al administrador.']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración. Contacte al administrador.', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -369,7 +369,7 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('SCHOOL_CONFIG_UPDATE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al actualizar configuración']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al actualizar configuración', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -406,7 +406,7 @@ if ($cleanPath === '/school/time-blocks' && $method === 'GET') {
         echo json_encode(['status' => 'ok', 'time_blocks' => $formatted]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener bloques horarios']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener bloques horarios', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -472,7 +472,7 @@ if ($cleanPath === '/school/time-blocks' && $method === 'POST') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('TIME_BLOCKS_UPDATE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar bloques horarios']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar bloques horarios', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -808,7 +808,7 @@ if ($cleanPath === '/school/sensor-master-key' && $method === 'POST') {
     } catch (Exception $e) {
         securityLog('SENSOR_MASTER_KEY_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra', 'debug' => $e->getMessage()]);
     }
     exit;
 }

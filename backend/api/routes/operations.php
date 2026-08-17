@@ -453,7 +453,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para inasistencia']);
+                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para inasistencia', 'debug' => $e->getMessage()]);
                     break;
                 }
 
@@ -470,7 +470,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $target = $studentStmt->fetch(PDO::FETCH_ASSOC);
                 if (!$target) {
                     http_response_code(404);
-                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante']);
+                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante', 'debug' => $e->getMessage()]);
                     break;
                 }
 
@@ -502,11 +502,11 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     if ($allMissingPhone) {
                         securityLog('INASISTENCIA_NO_PHONE', "Student:$studentId Guardian:{$target['guardian_id']} has no whatsapp_phone");
                         http_response_code(422);
-                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.']);
+                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.', 'debug' => $e->getMessage()]);
                     } else {
                         securityLog('INASISTENCIA_DELIVERY_FAILED', "Student:$studentId Results:" . json_encode($deliveryResults));
                         http_response_code(500);
-                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.']);
+                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.', 'debug' => $e->getMessage()]);
                     }
                     break;
                 }
@@ -524,7 +524,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para citación']);
+                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para citación', 'debug' => $e->getMessage()]);
                     break;
                 }
 
@@ -539,7 +539,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $valStmt->execute([$studentId, $userId]);
                     if (!$valStmt->fetchColumn()) {
                         http_response_code(403);
-                        echo json_encode(['status' => 'error', 'message' => 'No puedes citar a un estudiante que no pertenece a tus grupos.']);
+                        echo json_encode(['status' => 'error', 'message' => 'No puedes citar a un estudiante que no pertenece a tus grupos.', 'debug' => $e->getMessage()]);
                         break;
                     }
                 }
@@ -557,7 +557,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $target = $studentStmt->fetch(PDO::FETCH_ASSOC);
                 if (!$target) {
                     http_response_code(404);
-                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante']);
+                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante', 'debug' => $e->getMessage()]);
                     break;
                 }
 
@@ -632,27 +632,27 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Estudiante requerido para permiso']);
+                    echo json_encode(['status' => 'error', 'message' => 'Estudiante requerido para permiso', 'debug' => $e->getMessage()]);
                     break;
                 }
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 if ($reason === '') {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Motivo requerido para permiso']);
+                    echo json_encode(['status' => 'error', 'message' => 'Motivo requerido para permiso', 'debug' => $e->getMessage()]);
                     break;
                 }
                 $timeStart = trim((string)($params['timeStart'] ?? ''));
                 $timeEnd = trim((string)($params['timeEnd'] ?? ''));
                 if (empty($timeStart) || empty($timeEnd)) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Hora de inicio y hora de fin son obligatorias para generar un permiso']);
+                    echo json_encode(['status' => 'error', 'message' => 'Hora de inicio y hora de fin son obligatorias para generar un permiso', 'debug' => $e->getMessage()]);
                     break;
                 }
                 // Validar formato de hora (HH:MM o HH:MM:SS)
                 foreach ([$timeStart, $timeEnd] as $t) {
                     if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
                         http_response_code(400);
-                        echo json_encode(['status' => 'error', 'message' => 'Formato de hora inválido. Use HH:MM']);
+                        echo json_encode(['status' => 'error', 'message' => 'Formato de hora inválido. Use HH:MM', 'debug' => $e->getMessage()]);
                         break 2;
                     }
                 }
@@ -661,7 +661,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $stuCheck->execute([$studentId, $schoolId]);
                 if (!$stuCheck->fetchColumn()) {
                     http_response_code(404);
-                    echo json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado o inactivo']);
+                    echo json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado o inactivo', 'debug' => $e->getMessage()]);
                     break;
                 }
                 // Construir timestamps con zona Bogotá
@@ -671,14 +671,14 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $returnTs = new DateTime("$bogotaToday $timeEnd", new DateTimeZone('America/Bogota'));
                 } catch (Exception $e) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Hora inválida']);
+                    echo json_encode(['status' => 'error', 'message' => 'Hora inválida', 'debug' => $e->getMessage()]);
                     break;
                 }
                 // Validar que returnTs sea futuro
                 $nowBogota = new DateTime('now', new DateTimeZone('America/Bogota'));
                 if ($returnTs <= $nowBogota) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'La hora de retorno debe ser una hora futura']);
+                    echo json_encode(['status' => 'error', 'message' => 'La hora de retorno debe ser una hora futura', 'debug' => $e->getMessage()]);
                     break;
                 }
                 // Insertar permiso con horas reales
@@ -1491,7 +1491,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     } catch (Exception $e) {
         securityLog('OPERATION_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error en la operación']);
+        echo json_encode(['status' => 'error', 'message' => 'Error en la operación', 'debug' => $e->getMessage()]);
     }
     exit;
 }
