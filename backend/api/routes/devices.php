@@ -101,8 +101,9 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
 }
 
 // Enviar comando a un dispositivo edge (M2M) — V2: MQTT Pub/Sub con Redis fallback
+// SECRETARY: necesita enviar ENROLL_REQUEST para registrar huellas de estudiantes
 if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method === 'POST') {
-    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR', 'SECRETARY']);
     $deviceId = $matches[1];
 
     $ownerStmt = $conn->prepare("SELECT 1 FROM edge_devices WHERE device_id = ? AND school_id = ?");

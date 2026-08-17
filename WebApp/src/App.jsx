@@ -25,6 +25,7 @@ const Casos = lazy(() => import('./pages/Seguimiento'));
 const Downloads = lazy(() => import('./pages/Downloads'));
 const InstallPage = lazy(() => import('./pages/InstallPage'));
 const Profile = lazy(() => import('./pages/Profile'));
+const Devices = lazy(() => import('./pages/Devices'));
 
 function App() {
   const { user } = useAuth();
@@ -108,6 +109,9 @@ function App() {
                   </Route>
                   <Route path="/enrolamiento" element={<ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />}>
                     <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
+                  </Route>
+                  <Route path="/dispositivos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR]} />}>
+                    <Route index element={<ErrorBoundary><Devices /></ErrorBoundary>} />
                   </Route>
                 </Route>
               </Route>

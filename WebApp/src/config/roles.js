@@ -27,6 +27,7 @@ import {
   UserPlus,
   BarChart2,
   ShieldCheck,
+  Cpu,
   User,
 } from 'lucide-react';
 
@@ -72,6 +73,12 @@ export const SIDEBAR_ITEMS = [
     path: '/enrolamiento',
     icon: UserPlus,
     roles: [ROLES.SECRETARIA],
+  },
+  {
+    title: 'Sensores',
+    path: '/dispositivos',
+    icon: Cpu,
+    roles: [ROLES.RECTOR, ROLES.COORDINADOR],
   },
   {
     title: 'Perfil',
@@ -136,7 +143,7 @@ export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
  * Las demás quedan en el sidebar vertical.
  */
 export const PRIMARY_ACTIONS = {
-  [ROLES.RECTOR]:         ['/', '/operacion', '/consulta', '/casos'],
+  [ROLES.RECTOR]:         ['/', '/operacion', '/dispositivos', '/consulta'],
   [ROLES.COORDINADOR]:    ['/', '/operacion', '/notificaciones', '/casos'],
   [ROLES.DOCENTE]:        ['/', '/operacion', '/consulta', '/notificaciones'],
   [ROLES.SECRETARIA]:     ['/', '/consulta', '/enrolamiento', '/notificaciones'],
