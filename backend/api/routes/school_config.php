@@ -674,12 +674,10 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
 
         // Borrar sensores viejos (de grupos de años anteriores o genéricos)
         // Solo borrar los que NO están configurados (los configurados se conservan)
-        // Primero borrar revocaciones pendientes de esos sensores
+        // Primero borrar TODAS las revocaciones de esos sensores (pendientes, completadas, canceladas)
         $conn->prepare("
             DELETE FROM sensor_revocation_requests
             WHERE school_id = ?
-              AND completed = FALSE
-              AND cancelled = FALSE
               AND device_id IN (
                 SELECT device_id FROM edge_devices
                 WHERE school_id = ?
