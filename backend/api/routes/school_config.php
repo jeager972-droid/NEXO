@@ -539,7 +539,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('GROUPS_ONBOARDING_GET_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener el estado de configuración de grupos']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener el estado de configuración de grupos', 'debug' => $e->getMessage()]);
     }
     exit;
 }
@@ -649,7 +649,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('GROUPS_ONBOARDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración de grupos. Contacte al administrador.']);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración de grupos. Contacte al administrador.', 'debug' => $e->getMessage()]);
     }
     exit;
 }

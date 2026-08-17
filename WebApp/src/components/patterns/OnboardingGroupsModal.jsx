@@ -95,7 +95,8 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
       });
       onCompleted?.();
     } catch (err) {
-      setError(humanizeError(err, 'No se pudo guardar la configuración.'));
+      const debugMsg = err?.response?.data?.debug || err?.response?.data?.message;
+      setError(debugMsg ? `${humanizeError(err, 'No se pudo guardar la configuración.')} (${debugMsg})` : humanizeError(err, 'No se pudo guardar la configuración.'));
     } finally {
       setSaving(false);
     }
