@@ -29,10 +29,9 @@ const Layout = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
-  const [onboardingRequired, setOnboardingRequired] = useState(false);
-  const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const [scheduleOnboardingRequired, setScheduleOnboardingRequired] = useState(false);
   const [groupsOnboardingRequired, setGroupsOnboardingRequired] = useState(false);
-  const [groupsOnboardingLoading, setGroupsOnboardingLoading] = useState(true);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { notifCount } = useNotifications();
@@ -52,37 +51,23 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // Onboarding unificado: consulta horarios + grupos en paralelo
   useEffect(() => {
-    if (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) {
-      const checkOnboarding = async () => {
-        try {
-          const config = await schoolApi.getConfig();
-          setOnboardingRequired(!config.onboarding_completed);
-        } catch (e) {
-          console.error('Onboarding check failed:', e);
-        } finally {
-          setOnboardingLoading(false);
-        }
-      };
-      checkOnboarding();
-    } else {
-      setOnboardingLoading(false);
-    }
-  }, [user]);
-
-  // Onboarding de grupos: todos los roles consultan, pero solo RECTOR lo completa
-  useEffect(() => {
-    const checkGroupsOnboarding = async () => {
+    const checkOnboarding = async () => {
       try {
-        const resp = await schoolApi.getGroupsOnboarding();
-        setGroupsOnboardingRequired(!!resp?.needs_onboarding);
+        const [config, groupsResp] = await Promise.all([
+          schoolApi.getConfig().catch(() => null),
+          schoolApi.getGroupsOnboarding().catch(() => null),
+        ]);
+        setScheduleOnboardingRequired(config ? !config.onboarding_completed : false);
+        setGroupsOnboardingRequired(groupsResp ? !!groupsResp.needs_onboarding : false);
       } catch (e) {
-        console.error('Groups onboarding check failed:', e);
+        console.error('Onboarding check failed:', e);
       } finally {
-        setGroupsOnboardingLoading(false);
+        setOnboardingLoading(false);
       }
     };
-    checkGroupsOnboarding();
+    checkOnboarding();
   }, [user]);
 
   const roleDisplay = getRoleDisplay(user?.role);
@@ -92,23 +77,33 @@ const Layout = () => {
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
   const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
 
-  // Onboarding de horarios: RECTOR y COORDINADOR lo completan
-  if (!onboardingLoading && onboardingRequired && (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR)) {
-    return (
-      <OnboardingScheduleModal
-        schoolId={user?.school_id}
-        userId={user?.id}
-        role={user?.role}
-        onCompleted={() => {
-          setOnboardingRequired(false);
-        }}
-      />
-    );
-  }
+  // Onboarding unificado — flujo secuencial
+  // 1. Horarios (RECTOR + COORDINADOR pueden completar)
+  // 2. Grupos (solo RECTOR puede completar)
+  // Otros roles: bloqueo si cualquiera falta
+  if (!onboardingLoading) {
+    const needsSchedule = scheduleOnboardingRequired;
+    const needsGroups = groupsOnboardingRequired;
+    const isRector = user?.role === ROLES.RECTOR;
+    const isCoordinator = user?.role === ROLES.COORDINADOR;
+    const canConfigureSchedule = isRector || isCoordinator;
 
-  // Onboarding de grupos: solo RECTOR lo completa. Otros roles ven pantalla de bloqueo.
-  if (!groupsOnboardingLoading && groupsOnboardingRequired) {
-    if (user?.role === ROLES.RECTOR) {
+    // RECTOR/COORDINADOR: ven el modal de horarios si falta
+    if (needsSchedule && canConfigureSchedule) {
+      return (
+        <OnboardingScheduleModal
+          schoolId={user?.school_id}
+          userId={user?.id}
+          role={user?.role}
+          onCompleted={() => {
+            setScheduleOnboardingRequired(false);
+          }}
+        />
+      );
+    }
+
+    // RECTOR: ven el modal de grupos si falta (después de horarios)
+    if (needsGroups && isRector) {
       return (
         <OnboardingGroupsModal
           onCompleted={() => {
@@ -116,8 +111,15 @@ const Layout = () => {
           }}
         />
       );
-    } else {
-      return <SystemInactiveScreen roleDisplay={roleDisplay} />;
+    }
+
+    // Cualquier rol: si algo falta y no puede configurarlo, ve pantalla de bloqueo
+    if ((needsSchedule || needsGroups) && !canConfigureSchedule) {
+      return <SystemInactiveScreen roleDisplay={roleDisplay} reason={needsSchedule ? 'schedule' : 'groups'} />;
+    }
+    // COORDINADOR: si horarios está OK pero grupos falta, ve pantalla de bloqueo
+    if (needsGroups && isCoordinator && !needsSchedule) {
+      return <SystemInactiveScreen roleDisplay={roleDisplay} reason="groups" />;
     }
   }
 
