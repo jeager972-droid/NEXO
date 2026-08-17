@@ -619,7 +619,45 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
         $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
         $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($role) . ", true)");
 
-        // Borrar grupos del año actual si existen
+        // Obtener IDs de grupos del año actual que se van a reemplazar
+        $oldGroupsStmt = $conn->prepare("SELECT group_id FROM academic_groups WHERE school_id = ? AND academic_year = ?");
+        $oldGroupsStmt->execute([$schoolId, $currentYear]);
+        $oldGroupIds = $oldGroupsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if (!empty($oldGroupIds)) {
+            $placeholders = implode(',', array_fill(0, count($oldGroupIds), '?'));
+
+            // Borrar dependencias en orden (FK constraints)
+            // 1. student_group_assignments
+            $conn->prepare("DELETE FROM student_group_assignments WHERE group_id IN ($placeholders)")
+                ->execute($oldGroupIds);
+
+            // 2. schedules
+            try {
+                $conn->prepare("DELETE FROM schedules WHERE group_id IN ($placeholders)")
+                    ->execute($oldGroupIds);
+            } catch (Exception $ignore) {}
+
+            // 3. daily_schedule_config
+            try {
+                $conn->prepare("DELETE FROM daily_schedule_config WHERE group_id IN ($placeholders)")
+                    ->execute($oldGroupIds);
+            } catch (Exception $ignore) {}
+
+            // 4. edge_devices: desvincular group_id (no borrar el device)
+            try {
+                $conn->prepare("UPDATE edge_devices SET group_id = NULL WHERE group_id IN ($placeholders)")
+                    ->execute($oldGroupIds);
+            } catch (Exception $ignore) {}
+
+            // 5. attendance_incidents: desvincular group_id (no borrar incidentes)
+            try {
+                $conn->prepare("UPDATE attendance_incidents SET group_id = NULL WHERE group_id IN ($placeholders)")
+                    ->execute($oldGroupIds);
+            } catch (Exception $ignore) {}
+        }
+
+        // Ahora sí borrar los grupos del año actual
         $conn->prepare("DELETE FROM academic_groups WHERE school_id = ? AND academic_year = ?")
             ->execute([$schoolId, $currentYear]);
 
