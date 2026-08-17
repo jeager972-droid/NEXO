@@ -674,6 +674,10 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
     $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
+        // Actualizar last_ping al recibir poll de comandos
+        $conn->prepare("UPDATE edge_devices SET last_ping = NOW() WHERE device_id = ?")
+            ->execute([$deviceId]);
+
         $redis = getRedisConnection();
         $commands = [];
         if ($redis) {
@@ -728,10 +732,10 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
     try {
         $stmt = $conn->prepare("
             UPDATE edge_devices
-            SET last_ping = NOW(), status = ?, last_seen_timestamp = to_timestamp(?)
+            SET last_ping = NOW()
             WHERE device_id = ?
         ");
-        $stmt->execute([$status, (int)$timestamp, $deviceId]);
+        $stmt->execute([$deviceId]);
 
         if ($stmt->rowCount() === 0) {
             http_response_code(404);

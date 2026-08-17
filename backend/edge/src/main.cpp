@@ -939,6 +939,16 @@ int main() {
         LOG_WARN("mqtt_host not configured. Skipping MqttCommandWorker. Add mqtt_host to config.json for V2.");
     }
 
+    // Fallback V1: CommandWorker — polling HTTP cada 30s cuando no hay MQTT
+    std::unique_ptr<CommandWorker> commandWorker;
+    if (mqttHost.empty()) {
+        std::string apiBase = ConfigManager::getInstance().getString("api_url", "");
+        std::string deviceToken = ConfigManager::getInstance().getDeviceToken();
+        commandWorker = std::make_unique<CommandWorker>();
+        commandWorker->start(apiBase, deviceToken, deviceId);
+        LOG_INFO("[Main] CommandWorker started (HTTP polling fallback, 30s interval)");
+    }
+
     // FIX (SRE-2): HealthMonitor — detecta threads muertos (Sync/MQTT) que el
     // hardware watchdog no ve, y fuerza exit(1) para que systemd reinicie.
     HealthMonitor healthMonitor(syncWorker, mqttWorker.get());
