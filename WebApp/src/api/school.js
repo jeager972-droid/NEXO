@@ -38,8 +38,4 @@ export const schoolApi = {
     const response = await client.post('/school/sensor-master-key', payload);
     return response.data;
   },
-  groupsRollover: async () => {
-    const response = await client.post('/school/groups-rollover', {});
-    return response.data;
-  },
 };

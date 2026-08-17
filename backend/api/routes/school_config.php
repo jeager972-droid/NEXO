@@ -674,6 +674,24 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
 
         // Borrar sensores viejos (de grupos de años anteriores o genéricos)
         // Solo borrar los que NO están configurados (los configurados se conservan)
+        // Primero borrar revocaciones pendientes de esos sensores
+        $conn->prepare("
+            DELETE FROM sensor_revocation_requests
+            WHERE school_id = ?
+              AND completed = FALSE
+              AND cancelled = FALSE
+              AND device_id IN (
+                SELECT device_id FROM edge_devices
+                WHERE school_id = ?
+                  AND configured = FALSE
+                  AND (
+                    group_id IS NULL
+                    OR group_id NOT IN (SELECT group_id FROM academic_groups WHERE school_id = ? AND academic_year = ?)
+                  )
+              )
+        ")->execute([$schoolId, $schoolId, $schoolId, $currentYear]);
+
+        // Ahora sí borrar los sensores viejos
         $conn->prepare("
             DELETE FROM edge_devices
             WHERE school_id = ?
@@ -809,81 +827,6 @@ if ($cleanPath === '/school/sensor-master-key' && $method === 'POST') {
         securityLog('SENSOR_MASTER_KEY_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra', 'debug' => $e->getMessage()]);
-    }
-    exit;
-}
-
-// ============================================================================
-// POST /school/groups-rollover — Pasar estudiantes al siguiente grado
-// ============================================================================
-if ($cleanPath === '/school/groups-rollover' && $method === 'POST') {
-    $authUser = requireAuth(['RECTOR']);
-    $schoolId = $authUser['school_id'];
-    $currentYear = (int)date('Y');
-
-    try {
-        if (!$conn) throw new Exception("Conexión a BD no disponible");
-
-        // Obtener año anterior
-        $oldYearStmt = $conn->prepare("SELECT DISTINCT academic_year FROM academic_groups WHERE school_id = ? AND academic_year < ? ORDER BY academic_year DESC LIMIT 1");
-        $oldYearStmt->execute([$schoolId, $currentYear]);
-        $oldYear = $oldYearStmt->fetchColumn();
-
-        if (!$oldYear) {
-            http_response_code(400);
-            exit(json_encode(['status' => 'error', 'message' => 'No hay grupos del año anterior para migrar']));
-        }
-
-        $oldYear = (int)$oldYear;
-
-        // Mapear: 7A (2025) → 8A (2026) si existe
-        $oldGroupsStmt = $conn->prepare("
-            SELECT ag_old.group_id as old_group_id, ag_old.grade_level, ag_old.group_name as old_name,
-                   ag_new.group_id as new_group_id, ag_new.group_name as new_name
-            FROM academic_groups ag_old
-            LEFT JOIN academic_groups ag_new
-              ON ag_new.school_id = ag_old.school_id
-             AND ag_new.academic_year = ?
-             AND ag_new.group_name = REPLACE(ag_old.group_name, ag_old.grade_level, CAST(CAST(ag_old.grade_level AS INTEGER) + 1 AS TEXT))
-            WHERE ag_old.school_id = ? AND ag_old.academic_year = ?
-        ");
-        $oldGroupsStmt->execute([$currentYear, $schoolId, $oldYear]);
-        $mappings = $oldGroupsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $assigned = 0;
-        $assignStmt = $conn->prepare("
-            INSERT INTO student_group_assignments (student_id, group_id, active, start_date)
-            VALUES (?, ?, TRUE, CURRENT_DATE)
-            ON CONFLICT (student_id, group_id) DO UPDATE SET active = TRUE, start_date = CURRENT_DATE
-        ");
-
-        foreach ($mappings as $map) {
-            if (!$map['new_group_id']) continue;
-
-            $studentsStmt = $conn->prepare("SELECT student_id FROM student_group_assignments WHERE group_id = ? AND active = TRUE");
-            $studentsStmt->execute([$map['old_group_id']]);
-            $studentIds = $studentsStmt->fetchAll(PDO::FETCH_COLUMN);
-
-            foreach ($studentIds as $sid) {
-                $conn->prepare("UPDATE student_group_assignments SET active = FALSE WHERE student_id = ?")->execute([$sid]);
-                $assignStmt->execute([$sid, $map['new_group_id']]);
-                $assigned++;
-            }
-        }
-
-        securityLog('GROUPS_ROLLOVER', "School: $schoolId, Year: $oldYear → $currentYear, Students: $assigned", $authUser['id'], $schoolId);
-
-        echo json_encode([
-            'status' => 'ok',
-            'message' => 'Estudiantes migrados al siguiente grado',
-            'students_assigned' => $assigned,
-            'from_year' => $oldYear,
-            'to_year' => $currentYear,
-        ]);
-    } catch (Exception $e) {
-        securityLog('GROUPS_ROLLOVER_ERROR', $e->getMessage());
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al migrar estudiantes', 'debug' => $e->getMessage()]);
     }
     exit;
 }
