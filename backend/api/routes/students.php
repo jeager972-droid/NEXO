@@ -202,3 +202,146 @@ if ($cleanPath === '/students') {
     }
     exit;
 }
+
+// ============================================================================
+// GET /students/unassigned — Estudiantes sin grupo para el año actual
+// ============================================================================
+if ($cleanPath === '/students/unassigned' && $method === 'GET') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR', 'SECRETARY']);
+    $schoolId = $authUser['school_id'];
+    $currentYear = (int)date('Y');
+
+    try {
+        $search = trim($_GET['search'] ?? '');
+        $params = [$schoolId, $currentYear];
+
+        $searchClause = '';
+        if ($search !== '') {
+            $searchClause = " AND (s.first_name ILIKE ? OR s.last_name ILIKE ? OR s.document_number ILIKE ?)";
+            $like = "%{$search}%";
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $stmt = $conn->prepare("
+            SELECT s.student_id as id, s.first_name, s.last_name, s.document_number,
+                   s.created_at,
+                   COALESCE(ag_old.group_name, 'Sin grupo') as previous_group
+            FROM students s
+            LEFT JOIN student_group_assignments sga_old
+              ON s.student_id = sga_old.student_id AND sga_old.active = TRUE
+            LEFT JOIN academic_groups ag_old
+              ON sga_old.group_id = ag_old.group_id
+            WHERE s.school_id = ?
+              AND s.deleted_at IS NULL
+              AND s.student_id NOT IN (
+                SELECT sga.student_id FROM student_group_assignments sga
+                JOIN academic_groups ag ON sga.group_id = ag.group_id
+                WHERE ag.school_id = ? AND ag.academic_year = ? AND sga.active = TRUE
+              )
+              {$searchClause}
+            ORDER BY s.first_name, s.last_name
+            LIMIT 100
+        ");
+        $stmt->execute($params);
+        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['status' => 'ok', 'data' => $students]);
+    } catch (Exception $e) {
+        securityLog('STUDENTS_UNASSIGNED_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estudiantes sin grupo', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /students/{id}/assign-group — Asignar estudiante a un grupo
+// ============================================================================
+if (preg_match('#^/students/([0-9a-fA-F\-]+)/assign-group$#', $cleanPath, $matches) && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR', 'SECRETARY']);
+    $schoolId = $authUser['school_id'];
+    $studentId = $matches[1];
+    $groupId = trim((string)($input['group_id'] ?? ''));
+
+    if (!$groupId) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'group_id es obligatorio']));
+    }
+
+    try {
+        // Validar que el estudiante pertenece a la escuela
+        $studentCheck = $conn->prepare("SELECT 1 FROM students WHERE student_id = ? AND school_id = ? AND deleted_at IS NULL");
+        $studentCheck->execute([$studentId, $schoolId]);
+        if (!$studentCheck->fetchColumn()) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+        }
+
+        // Validar que el grupo pertenece a la escuela
+        $groupCheck = $conn->prepare("SELECT group_name FROM academic_groups WHERE group_id = ? AND school_id = ?");
+        $groupCheck->execute([$groupId, $schoolId]);
+        $groupName = $groupCheck->fetchColumn();
+        if (!$groupName) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Grupo no encontrado']));
+        }
+
+        // Desactivar asignaciones anteriores
+        $conn->prepare("UPDATE student_group_assignments SET active = FALSE WHERE student_id = ?")
+            ->execute([$studentId]);
+
+        // Insertar nueva asignación
+        $conn->prepare("
+            INSERT INTO student_group_assignments (student_id, group_id, active, start_date)
+            VALUES (?, ?, TRUE, CURRENT_DATE)
+            ON CONFLICT (student_id, group_id) DO UPDATE SET active = TRUE, start_date = CURRENT_DATE
+        ")->execute([$studentId, $groupId]);
+
+        securityLog('STUDENT_ASSIGNED_GROUP', "Student: $studentId, Group: $groupName ($groupId)", $authUser['id'], $schoolId);
+
+        echo json_encode(['status' => 'ok', 'message' => "Estudiante asignado a {$groupName}"]);
+    } catch (Exception $e) {
+        securityLog('STUDENT_ASSIGN_GROUP_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al asignar estudiante', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ============================================================================
+// GET /groups — Listar grupos del año actual con conteo de estudiantes
+// ============================================================================
+if ($cleanPath === '/groups' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $currentYear = (int)date('Y');
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT ag.group_id, ag.group_name, ag.grade_level, ag.academic_year,
+                   COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
+            FROM academic_groups ag
+            LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
+            WHERE ag.school_id = ? AND ag.academic_year = ?
+            GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year
+            ORDER BY ag.grade_level::INT, ag.group_name
+        ");
+        $stmt->execute([$schoolId, $currentYear]);
+        $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'status' => 'ok',
+            'message' => "Estudiantes migrados al siguiente grado",
+            'students_assigned' => $assigned,
+            'from_year' => $oldYear,
+            'to_year' => $currentYear,
+        ]);
+    } catch (Exception $e) {
+        securityLog('GROUPS_ROLLOVER_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al migrar estudiantes', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}

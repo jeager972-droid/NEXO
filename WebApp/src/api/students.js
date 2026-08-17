@@ -89,4 +89,14 @@ export const studentsApi = {
     const response = await client.post('/students', data);
     return response.data;
   },
+  getUnassigned: async (search = '') => {
+    const params = {};
+    if (search) params.search = search;
+    const response = await client.get('/students/unassigned', { params });
+    return response.data?.data ?? [];
+  },
+  assignGroup: async (studentId, groupId) => {
+    const response = await client.post(`/students/${studentId}/assign-group`, { group_id: groupId });
+    return response.data;
+  },
 };

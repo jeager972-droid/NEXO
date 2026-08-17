@@ -2,19 +2,23 @@
  * OnboardingGroupsModal — Wizard bloqueante para configuración de grupos académicos.
  * Solo RECTOR. Se activa cada 1 de enero o cuando falta configuración.
  *
- * Flujo de 3 pasos:
+ * Flujo de pasos:
  *   Paso 1: Seleccionar grados (Primero a Once)
  *   Paso 2: Elegir nomenclatura (Alfabética, Numérica, Otra)
  *   Paso 3: Configurar cuántos grupos por grado
+ *   Paso 4: ¿Estudiantes pasan al siguiente grado? (rollover)
+ *           - "Sí, pasar automáticamente" → backend migra 7A→8A
+ *           - "No, asignar manualmente después" → abre UI de asignación
+ *           - "Saltar" → continuar sin asignar
  *
- * Al guardar: borra grupos del año actual y crea los nuevos.
- * No se puede cerrar hasta completar.
+ * Al guardar: borra grupos del año actual, crea los nuevos, y auto-crea sensores.
  */
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, ChevronLeft, ChevronRight,
   GraduationCap, Hash, Type, Edit3, Calendar,
+  Users, ArrowRight, SkipForward,
 } from 'lucide-react';
 import { schoolApi } from '../../api/school';
 import { Button } from '../ui/Button';
@@ -23,7 +27,7 @@ import { Stepper } from '../ui/Stepper';
 import { humanizeError } from '../../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
-const STEPS = ['Grados', 'Nomenclatura', 'Grupos por grado'];
+const STEPS = ['Grados', 'Nomenclatura', 'Grupos', 'Estudiantes'];
 
 const ALL_GRADES = [
   { value: '1', label: 'Primero' },
@@ -54,7 +58,6 @@ const generateGroupName = (grade, nomenclature, index, separator) => {
   if (nomenclature === 'numeric') {
     return `${grade}-${index + 1}`;
   }
-  // other
   const sep = separator || '-';
   return `${grade}${sep}${index + 1}`;
 };
@@ -65,15 +68,19 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
   const [nomenclature, setNomenclature] = useState('alphabetic');
   const [separator, setSeparator] = useState('-');
   const [groupsPerGrade, setGroupsPerGrade] = useState({});
+  const [rolloverChoice, setRolloverChoice] = useState(''); // 'auto' | 'manual' | 'skip'
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const canNext = step === 1 ? selectedGrades.length > 0 : step === 2 ? !!nomenclature : step === 3;
+  const canNext = step === 1 ? selectedGrades.length > 0
+    : step === 2 ? !!nomenclature
+    : step === 3 ? true
+    : step === 4 ? !!rolloverChoice
+    : false;
 
   const toggleGrade = (value) => {
     setSelectedGrades((prev) => {
       const next = prev.includes(value) ? prev.filter((g) => g !== value) : [...prev, value].sort((a, b) => Number(a) - Number(b));
-      // Inicializar groups_per_grade para nuevos grados
       const newGpg = {};
       for (const g of next) {
         newGpg[g] = groupsPerGrade[g] || 1;
@@ -87,13 +94,25 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
     setSaving(true);
     setError('');
     try {
+      // 1. Guardar grupos
       await schoolApi.completeGroupsOnboarding({
         grades: selectedGrades,
         nomenclature,
         nomenclature_separator: separator,
         groups_per_grade: groupsPerGrade,
       });
-      onCompleted?.();
+
+      // 2. Si eligió rollover automático, migrar estudiantes
+      if (rolloverChoice === 'auto') {
+        try {
+          await schoolApi.groupsRollover();
+        } catch (rolloverErr) {
+          // El rollover falló pero los grupos se crearon. No es crítico.
+          console.warn('[Onboarding] Rollover failed:', rolloverErr);
+        }
+      }
+
+      onCompleted?.(rolloverChoice);
     } catch (err) {
       const debugMsg = err?.response?.data?.debug || err?.response?.data?.message;
       setError(debugMsg ? `${humanizeError(err, 'No se pudo guardar la configuración.')} (${debugMsg})` : humanizeError(err, 'No se pudo guardar la configuración.'));
@@ -124,7 +143,7 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
         transition={{ duration: 0.3, ease: EASE }}
         className="w-full max-w-2xl rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-large"
       >
-        {/* Header con barra accent */}
+        {/* Header */}
         <div className="relative overflow-hidden rounded-t-surface">
           <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[var(--nx-accent)] via-[oklch(52%_0.125_245)] to-[var(--nx-accent)]" />
           <div className="flex items-center justify-between p-6 pb-4">
@@ -139,7 +158,7 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
             </div>
           </div>
           <div className="px-6 pb-4">
-            <Stepper steps={STEPS} current={step} />
+            <Stepper steps={STEPS} current={step - 1} />
           </div>
         </div>
 
@@ -304,6 +323,77 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
                   </div>
                 </div>
               )}
+
+              {/* Paso 4: Rollover de estudiantes */}
+              {step === 4 && (
+                <div className="space-y-4">
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                    <p className="text-label text-[var(--nx-text)]">¿Los estudiantes pasan al siguiente grado?</p>
+                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Puedes migrarlos automáticamente o asignarlos manualmente después</p>
+                  </div>
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setRolloverChoice('auto')}
+                      className={`flex w-full items-center gap-4 rounded-control border p-4 text-left transition-all ${
+                        rolloverChoice === 'auto'
+                          ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] shadow-low'
+                          : 'border-[var(--nx-border)] bg-[var(--nx-surface)] hover:border-[var(--nx-border-accent)]'
+                      }`}
+                    >
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-control ${
+                        rolloverChoice === 'auto' ? 'bg-[var(--nx-icon-bg-accent)] text-[var(--nx-accent)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'
+                      }`}>
+                        <ArrowRight size={18} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-body-sm text-[var(--nx-text)] font-semibold">Sí, pasar automáticamente</p>
+                        <p className="text-caption text-[var(--nx-text-muted)]">Los estudiantes de 7A pasan a 8A, 8A a 9A, etc.</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRolloverChoice('manual')}
+                      className={`flex w-full items-center gap-4 rounded-control border p-4 text-left transition-all ${
+                        rolloverChoice === 'manual'
+                          ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] shadow-low'
+                          : 'border-[var(--nx-border)] bg-[var(--nx-surface)] hover:border-[var(--nx-border-accent)]'
+                      }`}
+                    >
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-control ${
+                        rolloverChoice === 'manual' ? 'bg-[var(--nx-icon-bg-accent)] text-[var(--nx-accent)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'
+                      }`}>
+                        <Users size={18} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-body-sm text-[var(--nx-text)] font-semibold">No, asignar manualmente después</p>
+                        <p className="text-caption text-[var(--nx-text-muted)]">Podrás buscar y asignar estudiantes a cada grupo desde la sección de grupos</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRolloverChoice('skip')}
+                      className={`flex w-full items-center gap-4 rounded-control border p-4 text-left transition-all ${
+                        rolloverChoice === 'skip'
+                          ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] shadow-low'
+                          : 'border-[var(--nx-border)] bg-[var(--nx-surface)] hover:border-[var(--nx-border-accent)]'
+                      }`}
+                    >
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-control ${
+                        rolloverChoice === 'skip' ? 'bg-[var(--nx-icon-bg-accent)] text-[var(--nx-accent)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'
+                      }`}>
+                        <SkipForward size={18} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-body-sm text-[var(--nx-text)] font-semibold">Saltar por ahora</p>
+                        <p className="text-caption text-[var(--nx-text-muted)]">Los estudiantes quedan sin grupo. Podrás asignarlos más tarde</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -320,12 +410,12 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
                 Atrás
               </Button>
             )}
-            {step < 3 ? (
+            {step < 4 ? (
               <Button onClick={() => canNext && setStep((s) => s + 1)} disabled={!canNext} rightIcon={<ChevronRight size={16} />}>
                 Siguiente
               </Button>
             ) : (
-              <Button onClick={handleSave} loading={saving} leftIcon={<Check size={16} />}>
+              <Button onClick={handleSave} loading={saving} disabled={!canNext} leftIcon={<Check size={16} />}>
                 Guardar y finalizar
               </Button>
             )}

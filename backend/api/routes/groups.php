@@ -53,15 +53,18 @@ if ($cleanPath === '/groups') {
             $stmt->execute([$authUser['id']]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } else {
+            $currentYear = (int)date('Y');
             $stmt = $conn->prepare("
-                SELECT ag.group_id as id, ag.group_name as name, ag.grade_level, COUNT(sga.student_id) as student_count
+                SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
+                       ag.academic_year,
+                       COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
                 FROM academic_groups ag
                 LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
-                WHERE ag.school_id = ?
-                GROUP BY ag.group_id, ag.group_name, ag.grade_level
-                ORDER BY COUNT(sga.student_id) DESC, ag.grade_level, ag.group_name
+                WHERE ag.school_id = ? AND ag.academic_year = ?
+                GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year
+                ORDER BY ag.grade_level::INT, ag.group_name
             ");
-            $stmt->execute([$schoolId]);
+            $stmt->execute([$schoolId, $currentYear]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 

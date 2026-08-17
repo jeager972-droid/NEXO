@@ -44,6 +44,11 @@ const getDeviceStatus = (device) => {
   return { scheme: 'danger', label: 'Desconectado', icon: WifiOff };
 };
 
+const getDeviceLocation = (device) => {
+  if (device.group_name) return `Grupo ${device.group_name}`;
+  return device.location || 'Sin ubicación';
+};
+
 const timeAgo = (iso) => {
   if (!iso) return 'Nunca';
   const ms = Date.now() - new Date(iso + 'Z').getTime();
@@ -377,7 +382,7 @@ const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke }) => {
             <h3 className="text-h3 text-[var(--nx-text)] truncate">{device.device_name || 'Sensor sin nombre'}</h3>
             <p className="mt-0.5 flex items-center gap-1 text-body-sm text-[var(--nx-text-muted)]">
               <MapPin size={13} className="shrink-0" />
-              <span className="truncate">{device.location || 'Sin ubicación'}</span>
+              <span className="truncate">{getDeviceLocation(device)}</span>
             </p>
           </div>
         </div>
