@@ -53,6 +53,15 @@ const Layout = () => {
 
   // Onboarding unificado: consulta horarios + grupos en paralelo
   useEffect(() => {
+    // No consultar si no hay usuario autenticado
+    if (!user?.id) {
+      setOnboardingLoading(false);
+      return;
+    }
+
+    // Resetear loading a true al inicio de cada consulta
+    setOnboardingLoading(true);
+
     const checkOnboarding = async () => {
       try {
         const [configResult, groupsResult] = await Promise.allSettled([
@@ -71,6 +80,12 @@ const Layout = () => {
 
         setScheduleOnboardingRequired(config ? !config.onboarding_completed : false);
         setGroupsOnboardingRequired(groupsResp ? !!groupsResp.needs_onboarding : false);
+
+        console.log('[Onboarding] Result:', {
+          scheduleRequired: config ? !config.onboarding_completed : 'no-config',
+          groupsRequired: groupsResp ? !!groupsResp.needs_onboarding : 'no-groups-resp',
+          groupsData: groupsResp,
+        });
       } catch (e) {
         console.error('Onboarding check failed:', e);
       } finally {
