@@ -25,7 +25,6 @@ import {
   FolderHeart,
   Search,
   UserPlus,
-  BarChart2,
   ShieldCheck,
   Cpu,
   User,

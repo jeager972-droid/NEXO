@@ -6,12 +6,11 @@
  * Nada técnico: sin tokens visibles, sin IPs, sin MQTT details.
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import { devicesApi } from '../api/devices';
 import { studentsApi } from '../api/students';
 import {
   Fingerprint, Plus, Search, MapPin, Wifi, WifiOff,
-  Cpu, Trash2, Loader2, Check, X, RefreshCw, ShieldCheck, AlertCircle,
+  Cpu, Trash2, Check, X, RefreshCw, ShieldCheck, AlertCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface, PageHeader } from '../components/ui/Surface';
@@ -21,7 +20,7 @@ import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Drawer } from '../components/ui/Overlay';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton, SkeletonCards } from '../components/ui/Skeleton';
+import { SkeletonCards } from '../components/ui/Skeleton';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { humanizeError } from '../utils/messages';
 
@@ -55,7 +54,6 @@ const timeAgo = (iso) => {
 // ── Página principal ──
 
 const Devices = () => {
-  const { user } = useAuth();
   const [devices, setDevices] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -475,7 +473,7 @@ const TokenDrawer = ({ info, onClose }) => {
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
             <strong className="text-[var(--nx-text)]">Siguiente paso:</strong> Configura el dispositivo
             físico con este código de activación y el ID. Una vez conectado, aparecerá automáticamente
-            como "Operativo" en esta pantalla.
+            como &laquo;Operativo&raquo; en esta pantalla.
           </p>
         </div>
       </div>
