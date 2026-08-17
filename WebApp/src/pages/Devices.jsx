@@ -339,9 +339,12 @@ const Devices = () => {
       <ConfigureDrawer
         device={configureTarget}
         onClose={() => setConfigureTarget(null)}
-        onConfigured={() => {
+        onConfigured={(info) => {
           setConfigureTarget(null);
           fetchData();
+          if (info?.token) {
+            setNewToken(info);
+          }
         }}
       />
 
@@ -525,8 +528,12 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
     setConfiguring(true);
     setErr('');
     try {
-      await devicesApi.configure(device.device_id);
-      onConfigured();
+      const result = await devicesApi.configure(device.device_id);
+      onConfigured({
+        device_id: device.device_id,
+        name: device.device_name,
+        token: result?.token || null,
+      });
     } catch (error) {
       setErr(humanizeError(error, 'No se pudo marcar como configurado.'));
     } finally {
@@ -545,7 +552,7 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button className="flex-1" loading={configuring} onClick={handleConfigure} leftIcon={<Check size={16} />}>
-            Marcar como configurado
+            Configurar y generar código
           </Button>
         </div>
       }
@@ -558,8 +565,7 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
         )}
         <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
-            Confirma que has configurado el dispositivo físico con el código de activación.
-            Al marcarlo como configurado, el sensor aparecerá como <strong className="text-[var(--nx-text)]">Operativo</strong> en el listado.
+            Al configurar el sensor se generará un <strong className="text-[var(--nx-text)]">código de activación</strong> que debes copiar y pegar en el archivo de configuración del dispositivo físico. El sensor aparecerá como <strong className="text-[var(--nx-text)]">Configurado</strong> en el listado.
           </p>
         </div>
         <div className="space-y-2">
@@ -593,8 +599,8 @@ const TokenDrawer = ({ info, onClose }) => {
 
   return (
     <Drawer
-      title="Sensor registrado"
-      context={info.name || 'Nuevo sensor'}
+      title={info.token ? "Sensor configurado" : "Sensor registrado"}
+      context={info.name || 'Sensor'}
       onClose={onClose}
       size="sm"
       footer={

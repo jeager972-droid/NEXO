@@ -196,7 +196,7 @@ if ($cleanPath === '/devices' && $method === 'POST') {
 }
 
 // ============================================================================
-// POST /devices/{id}/configure — Marcar sensor como configurado
+// POST /devices/{id}/configure — Marcar sensor como configurado y generar token
 // ============================================================================
 if (preg_match('#^/devices/([0-9a-fA-F\-]+)/configure$#', $cleanPath, $matches) && $method === 'POST') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
@@ -211,19 +211,35 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/configure$#', $cleanPath, $matches) 
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
         // Verificar que el device pertenece a la escuela
-        $ownerStmt = $conn->prepare("SELECT 1 FROM edge_devices WHERE device_id = ? AND school_id = ?");
+        $ownerStmt = $conn->prepare("SELECT token_hash FROM edge_devices WHERE device_id = ? AND school_id = ?");
         $ownerStmt->execute([$deviceId, $authUser['school_id']]);
-        if (!$ownerStmt->fetchColumn()) {
+        $existingTokenHash = $ownerStmt->fetchColumn();
+        if ($existingTokenHash === false) {
             http_response_code(404);
             exit(json_encode(['status' => 'error', 'message' => 'Sensor no encontrado']));
         }
 
-        $conn->prepare("UPDATE edge_devices SET configured = TRUE WHERE device_id = ? AND school_id = ?")
-            ->execute([$deviceId, $authUser['school_id']]);
+        // Generar token si no tiene uno (sensores auto-creados tienen token_hash = NULL)
+        $rawToken = null;
+        if (empty($existingTokenHash)) {
+            $rawToken = bin2hex(random_bytes(32));
+            $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
+            $conn->prepare("UPDATE edge_devices SET configured = TRUE, token_hash = ? WHERE device_id = ? AND school_id = ?")
+                ->execute([$tokenHash, $deviceId, $authUser['school_id']]);
+        } else {
+            // Ya tiene token (registrado manualmente), solo marcar como configurado
+            $conn->prepare("UPDATE edge_devices SET configured = TRUE WHERE device_id = ? AND school_id = ?")
+                ->execute([$deviceId, $authUser['school_id']]);
+        }
 
         securityLog('EDGE_DEVICE_CONFIGURED', "Device: $deviceId, By: {$authUser['id']}", $authUser['id'], $authUser['school_id']);
 
-        echo json_encode(['status' => 'ok', 'message' => 'Sensor configurado correctamente', 'device_id' => $deviceId]);
+        echo json_encode([
+            'status' => 'ok',
+            'message' => 'Sensor configurado correctamente',
+            'device_id' => $deviceId,
+            'token' => $rawToken, // null si ya tenía token, string si se generó uno nuevo
+        ]);
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_CONFIGURE_ERROR', $e->getMessage());
         http_response_code(500);
