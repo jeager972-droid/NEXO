@@ -375,6 +375,16 @@ CREATE INDEX IF NOT EXISTS idx_edge_devices_group ON edge_devices(group_id);
 
 COMMENT ON COLUMN edge_devices.configured IS 'TRUE cuando el rector ha configurado el sensor con su token (lo ha vinculado físicamente). Distingue de active que indica si el dispositivo está operativo';
 
+-- Marcar sensores existentes como configured=TRUE (migración de datos)
+-- Solo afecta filas donde configured es FALSE pero active es TRUE (sensores ya en uso)
+DO $$
+BEGIN
+    UPDATE edge_devices SET configured = TRUE WHERE active = TRUE AND configured = FALSE;
+    RAISE NOTICE 'Sensores existentes marcados como configured=TRUE';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'No se pudo actualizar edge_devices.configured: %', SQLERRM;
+END $$;
+
 -- Tabla de revocación de sensores con countdown de 1 hora
 CREATE TABLE IF NOT EXISTS sensor_revocation_requests (
     revocation_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -43,24 +43,39 @@ CREATE TABLE IF NOT EXISTS sensor_revocation_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_revocation_pending ON sensor_revocation_requests(school_id, completed, cancelled);
 
--- 4. RLS para sensor_revocation_requests
-ALTER TABLE sensor_revocation_requests ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS srr_select ON sensor_revocation_requests;
-CREATE POLICY srr_select ON sensor_revocation_requests
-    FOR SELECT USING (school_id = get_current_school_id() OR get_current_role() = 'SYSTEM_WORKER');
-DROP POLICY IF EXISTS srr_insert ON sensor_revocation_requests;
-CREATE POLICY srr_insert ON sensor_revocation_requests
-    FOR INSERT WITH CHECK (school_id = get_current_school_id());
-DROP POLICY IF EXISTS srr_update ON sensor_revocation_requests;
-CREATE POLICY srr_update ON sensor_revocation_requests
-    FOR UPDATE USING (school_id = get_current_school_id());
+-- 4. RLS para sensor_revocation_requests (solo si las funciones helper existen)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_current_school_id') THEN
+        ALTER TABLE sensor_revocation_requests ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS srr_select ON sensor_revocation_requests;
+        CREATE POLICY srr_select ON sensor_revocation_requests
+            FOR SELECT USING (school_id = get_current_school_id() OR get_current_role() = 'SYSTEM_WORKER');
+        DROP POLICY IF EXISTS srr_insert ON sensor_revocation_requests;
+        CREATE POLICY srr_insert ON sensor_revocation_requests
+            FOR INSERT WITH CHECK (school_id = get_current_school_id());
+        DROP POLICY IF EXISTS srr_update ON sensor_revocation_requests;
+        CREATE POLICY srr_update ON sensor_revocation_requests
+            FOR UPDATE USING (school_id = get_current_school_id());
+    ELSE
+        RAISE NOTICE 'Funciones get_current_* no existen. Saltando RLS para sensor_revocation_requests.';
+    END IF;
+END $$;
 
-SELECT register_migration(
-    '2026-29-onboarding-groups-sensors.sql'::VARCHAR,
-    '2026-08'::VARCHAR,
-    'Onboarding de grupos académicos (rector) + gestión de sensores biométricos con revocación con countdown y master key'::TEXT,
-    NULL::VARCHAR,
-    CURRENT_USER::VARCHAR,
-    NULL::INTEGER,
-    'Añade groups_onboarding a schools, configured+group_id a edge_devices, tabla sensor_revocation_requests'::TEXT
-);
+-- 5. Registrar migración (solo si la función register_migration existe)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'register_migration') THEN
+        PERFORM register_migration(
+            '2026-29-onboarding-groups-sensors.sql'::VARCHAR,
+            '2026-08'::VARCHAR,
+            'Onboarding de grupos académicos (rector) + gestión de sensores biométricos con revocación con countdown y master key'::TEXT,
+            NULL::VARCHAR,
+            CURRENT_USER::VARCHAR,
+            NULL::INTEGER,
+            'Añade groups_onboarding a schools, configured+group_id a edge_devices, tabla sensor_revocation_requests'::TEXT
+        );
+    ELSE
+        RAISE NOTICE 'Función register_migration no existe. Saltando registro de migración.';
+    END IF;
+END $$;
