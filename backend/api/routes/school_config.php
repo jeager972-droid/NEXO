@@ -492,6 +492,28 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'GET') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
+        // Verificar si las columnas existen antes de consultarlas
+        $colCheck = $conn->prepare("
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'schools' AND column_name IN ('groups_onboarding_completed', 'groups_onboarding_year')
+        ");
+        $colCheck->execute();
+        $existingCols = $colCheck->fetchAll(PDO::FETCH_COLUMN);
+
+        if (count($existingCols) < 2) {
+            // Las columnas no existen — el onboarding de grupos no se ha aplicado
+            // Devolver needs_onboarding=true para forzar el flujo
+            $currentYear = (int)date('Y');
+            echo json_encode([
+                'status' => 'ok',
+                'onboarding_completed' => false,
+                'onboarding_year' => null,
+                'current_year' => $currentYear,
+                'needs_onboarding' => true,
+            ]);
+            exit;
+        }
+
         $stmt = $conn->prepare("SELECT groups_onboarding_completed, groups_onboarding_year FROM schools WHERE school_id = ?");
         $stmt->execute([$schoolId]);
         $school = $stmt->fetch(PDO::FETCH_ASSOC);
