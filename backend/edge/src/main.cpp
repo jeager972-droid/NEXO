@@ -477,6 +477,13 @@ bool runSecurityProvisioning() {
         return true;
     }
 
+    // Auto-provision token from config.json if available
+    std::string configToken = ConfigManager::getInstance().getDeviceToken();
+    if (!configToken.empty() && !crypto.isTokenProvisioned()) {
+        crypto.provisionToken(configToken);
+        LOG_INFO("API token auto-provisioned from config.json");
+    }
+
     const std::string provisionPath = ConfigManager::getInstance().getString("provision_file", "/boot/nexo_provision.json");
 
     while (!crypto.isKeyProvisioned() || !crypto.isTokenProvisioned()) {
