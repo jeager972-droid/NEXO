@@ -14,6 +14,8 @@ import { useNotifications } from '../context/NotificationContext';
 import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { schoolApi } from '../api/school';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
+import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
+import { SystemInactiveScreen } from '../components/patterns/SystemInactiveScreen';
 import { NavLink } from 'react-router-dom';
 
 const getGreeting = () => {
@@ -29,6 +31,8 @@ const Layout = () => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const [groupsOnboardingRequired, setGroupsOnboardingRequired] = useState(false);
+  const [groupsOnboardingLoading, setGroupsOnboardingLoading] = useState(true);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { notifCount } = useNotifications();
@@ -66,6 +70,21 @@ const Layout = () => {
     }
   }, [user]);
 
+  // Onboarding de grupos: todos los roles consultan, pero solo RECTOR lo completa
+  useEffect(() => {
+    const checkGroupsOnboarding = async () => {
+      try {
+        const resp = await schoolApi.getGroupsOnboarding();
+        setGroupsOnboardingRequired(!!resp?.needs_onboarding);
+      } catch (e) {
+        console.error('Groups onboarding check failed:', e);
+      } finally {
+        setGroupsOnboardingLoading(false);
+      }
+    };
+    checkGroupsOnboarding();
+  }, [user]);
+
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
   const greeting = useMemo(() => getGreeting(), []);
@@ -73,6 +92,7 @@ const Layout = () => {
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
   const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
 
+  // Onboarding de horarios: RECTOR y COORDINADOR lo completan
   if (!onboardingLoading && onboardingRequired && (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR)) {
     return (
       <OnboardingScheduleModal
@@ -84,6 +104,21 @@ const Layout = () => {
         }}
       />
     );
+  }
+
+  // Onboarding de grupos: solo RECTOR lo completa. Otros roles ven pantalla de bloqueo.
+  if (!groupsOnboardingLoading && groupsOnboardingRequired) {
+    if (user?.role === ROLES.RECTOR) {
+      return (
+        <OnboardingGroupsModal
+          onCompleted={() => {
+            setGroupsOnboardingRequired(false);
+          }}
+        />
+      );
+    } else {
+      return <SystemInactiveScreen roleDisplay={roleDisplay} />;
+    }
   }
 
   return (

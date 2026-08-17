@@ -2,8 +2,12 @@
  * SCR-DEV-01 Dispositivos · Gestión de sensores biométricos
  * Acceso: RECTOR (y COORDINADOR).
  * Filosofía: el rector no es programador. Ve sus lectores de huella,
- * dónde están, si están operativos y puede registrar nuevos o revocarlos.
- * Nada técnico: sin tokens visibles, sin IPs, sin MQTT details.
+ * dónde están, si están configurados y puede registrar nuevos o revocarlos.
+ *
+ * Sensores: 1 por grupo + sensor de secretaria + sensor de coordinador.
+ * "Configurado" reemplaza "Activo" en la UI.
+ * Revocación: password + countdown 1h + coordinador puede cancelar.
+ * Eliminación: hard delete (no soft delete).
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { devicesApi } from '../api/devices';
@@ -11,6 +15,7 @@ import { studentsApi } from '../api/students';
 import {
   Fingerprint, Plus, Search, MapPin, Wifi, WifiOff,
   Cpu, Trash2, Check, X, RefreshCw, ShieldCheck, AlertCircle,
+  Clock, Settings2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface, PageHeader } from '../components/ui/Surface';
@@ -20,18 +25,18 @@ import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Drawer } from '../components/ui/Overlay';
 import { EmptyState } from '../components/ui/EmptyState';
-import { SkeletonCards } from '../components/ui/Skeleton';
+import { Skeleton } from '../components/ui/Skeleton';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { humanizeError } from '../utils/messages';
+import { formatGroupName } from '../utils/groupFormat';
 
 const EASE = [0.22, 1, 0.36, 1];
+const FRESH_WINDOW_MS = 5 * 60 * 1000;
 
 // ── Helpers ──
 
-const FRESH_WINDOW_MS = 5 * 60 * 1000; // 5 min
-
 const getDeviceStatus = (device) => {
-  if (!device.active) return { scheme: 'neutral', label: 'Inactivo', icon: WifiOff };
+  if (!device.configured) return { scheme: 'neutral', label: 'No configurado', icon: Settings2 };
   if (!device.last_ping) return { scheme: 'warning', label: 'Sin conexión', icon: AlertCircle };
   const ageMs = Date.now() - new Date(device.last_ping + 'Z').getTime();
   if (ageMs <= FRESH_WINDOW_MS) return { scheme: 'success', label: 'Operativo', icon: Wifi };
@@ -51,6 +56,33 @@ const timeAgo = (iso) => {
   return `Hace ${days} d`;
 };
 
+// ── Skeleton dinámico ──
+
+const DynamicSkeleton = ({ count }) => {
+  // El skeleton se ajusta al grid: 1 col en mobile, 2 en md, 3 en lg
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Skeleton className="h-11 w-11 rounded-control" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </div>
+            <Skeleton className="h-6 w-24 rounded-full" />
+          </div>
+          <div className="mt-4 border-t border-[var(--nx-border)] pt-3">
+            <Skeleton className="h-4 w-40" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ── Página principal ──
 
 const Devices = () => {
@@ -61,22 +93,25 @@ const Devices = () => {
   const [search, setSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
   const [showRegister, setShowRegister] = useState(false);
+  const [configureTarget, setConfigureTarget] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
-  const [revoking, setRevoking] = useState(false);
-  const [newToken, setNewToken] = useState(null); // {name, token} tras registro
+  const [newToken, setNewToken] = useState(null);
+  const [pendingRevocations, setPendingRevocations] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [devs, grps] = await Promise.all([
+      const [devs, grps, revocations] = await Promise.all([
         devicesApi.getAll(),
         studentsApi.getGroups().catch(() => []),
+        devicesApi.getPendingRevocations().catch(() => []),
       ]);
       setDevices(devs);
       setGroups(grps);
+      setPendingRevocations(revocations);
     } catch (err) {
-      setError(humanizeError(err, 'No pudimos cargar los dispositivos.'));
+      setError(humanizeError(err, 'No pudimos cargar los sensores.'));
     } finally {
       setLoading(false);
     }
@@ -84,10 +119,11 @@ const Devices = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Refrescar cada 30s para mantener el estado operativo al día
+  // Auto-refresh cada 30s
   useEffect(() => {
     const t = setInterval(() => {
       devicesApi.getAll().then(setDevices).catch(() => {});
+      devicesApi.getPendingRevocations().then(setPendingRevocations).catch(() => {});
     }, 30000);
     return () => clearInterval(t);
   }, []);
@@ -99,30 +135,17 @@ const Devices = () => {
         (d.device_name || '').toLowerCase().includes(q) ||
         (d.location || '').toLowerCase().includes(q);
       const matchesGrade = !gradeFilter ||
-        (d.location || '').toLowerCase().includes(gradeFilter.toLowerCase());
+        (d.location || '').toLowerCase().includes(gradeFilter.toLowerCase()) ||
+        (d.group_name || '').toLowerCase().includes(gradeFilter.toLowerCase());
       return matchesSearch && matchesGrade;
     });
   }, [devices, search, gradeFilter]);
 
-  const activeCount = devices.filter((d) => d.active).length;
+  const configuredCount = devices.filter((d) => d.configured).length;
   const operativeCount = devices.filter((d) => {
     const s = getDeviceStatus(d);
     return s.scheme === 'success';
   }).length;
-
-  const handleRevoke = async () => {
-    if (!revokeTarget) return;
-    setRevoking(true);
-    try {
-      await devicesApi.revoke(revokeTarget.device_id);
-      setRevokeTarget(null);
-      await fetchData();
-    } catch (err) {
-      setError(humanizeError(err, 'No se pudo revocar el dispositivo.'));
-    } finally {
-      setRevoking(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -130,7 +153,7 @@ const Devices = () => {
         eyebrow="Infraestructura"
         title="Sensores biométricos"
         subtitle="Gestiona los lectores de huella de tu institución"
-        meta={`${devices.length} dispositivo${devices.length !== 1 ? 's' : ''} · ${operativeCount} operativo${operativeCount !== 1 ? 's' : ''}`}
+        meta={`${devices.length} sensor${devices.length !== 1 ? 'es' : ''} · ${operativeCount} operativo${operativeCount !== 1 ? 's' : ''}`}
         actions={
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>
             Registrar sensor
@@ -138,7 +161,7 @@ const Devices = () => {
         }
       />
 
-      {/* StatCards — resumen visual no técnico */}
+      {/* StatCards */}
       {!loading && !error && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card tone="accent" edge>
@@ -163,18 +186,59 @@ const Devices = () => {
               </div>
             </div>
           </Card>
-          <Card tone={activeCount === devices.length ? 'success' : 'warning'} edge className="col-span-2 md:col-span-1">
+          <Card tone={configuredCount === devices.length ? 'success' : 'warning'} edge className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]">
                 <ShieldCheck size={20} />
               </span>
               <div>
-                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{activeCount}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">Activos</p>
+                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{configuredCount}</p>
+                <p className="text-caption text-[var(--nx-text-muted)]">Configurados</p>
               </div>
             </div>
           </Card>
         </div>
+      )}
+
+      {/* Revocaciones pendientes */}
+      {pendingRevocations.length > 0 && (
+        <Surface className="p-4 border-[var(--nx-border-warning)]">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]">
+              <Clock size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-body-sm font-semibold text-[var(--nx-text)]">
+                {pendingRevocations.length} revocaci&oacute;n{pendingRevocations.length !== 1 ? 'es' : ''} en proceso
+              </p>
+              <div className="mt-2 space-y-1.5">
+                {pendingRevocations.map((rev) => {
+                  const device = devices.find((d) => d.device_id === rev.device_id);
+                  const remaining = Math.max(0, new Date(rev.executes_at + 'Z').getTime() - Date.now());
+                  const mins = Math.floor(remaining / 60000);
+                  return (
+                    <div key={rev.revocation_id} className="flex items-center justify-between gap-3 text-body-sm">
+                      <span className="text-[var(--nx-text-muted)] truncate">
+                        {device?.device_name || 'Sensor'} — {device?.location || ''}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge scheme="warning" dot>En {mins} min</Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<X size={13} />}
+                          onClick={() => setRevokeTarget({ ...device, revocationId: rev.revocation_id, cancelMode: true })}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </Surface>
       )}
 
       {/* Filtros */}
@@ -192,8 +256,8 @@ const Devices = () => {
             options={groups.map((g) => ({ value: g.name || g.group_name, label: g.name || g.group_name }))}
             value={gradeFilter}
             onChange={(v) => setGradeFilter(v || '')}
-            placeholder="Todos los grados"
-            searchPlaceholder="Buscar grado…"
+            placeholder="Todos los grupos"
+            searchPlaceholder="Buscar grupo…"
             clearable
           />
         </div>
@@ -210,9 +274,7 @@ const Devices = () => {
           />
         </Surface>
       ) : loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <SkeletonCards count={3} />
-        </div>
+        <DynamicSkeleton count={Math.min(devices.length || 6, 9)} />
       ) : filtered.length === 0 ? (
         <Surface className="p-6">
           <EmptyState
@@ -245,7 +307,8 @@ const Devices = () => {
                     device={device}
                     status={status}
                     StatusIcon={StatusIcon}
-                    onRevoke={() => setRevokeTarget(device)}
+                    onConfigure={() => setConfigureTarget(device)}
+                    onRevoke={() => setRevokeTarget({ ...device, cancelMode: false })}
                   />
                 </motion.div>
               );
@@ -257,6 +320,7 @@ const Devices = () => {
       {/* Drawer: Registrar nuevo sensor */}
       <RegisterDrawer
         open={showRegister}
+        groups={groups}
         onClose={() => setShowRegister(false)}
         onRegistered={(info) => {
           setNewToken(info);
@@ -264,20 +328,29 @@ const Devices = () => {
         }}
       />
 
-      {/* Drawer: Mostrar token tras registro */}
-      <TokenDrawer
-        info={newToken}
-        onClose={() => setNewToken(null)}
+      {/* Drawer: Configurar sensor (mostrar ID + token) */}
+      <ConfigureDrawer
+        device={configureTarget}
+        onClose={() => setConfigureTarget(null)}
+        onConfigured={() => {
+          setConfigureTarget(null);
+          fetchData();
+        }}
       />
+
+      {/* Drawer: Mostrar token tras registro */}
+      <TokenDrawer info={newToken} onClose={() => setNewToken(null)} />
 
       {/* Confirmación: Revocar sensor */}
       <AnimatePresence>
         {revokeTarget && (
           <RevokeConfirm
             device={revokeTarget}
-            revoking={revoking}
             onCancel={() => setRevokeTarget(null)}
-            onConfirm={handleRevoke}
+            onDone={() => {
+              setRevokeTarget(null);
+              fetchData();
+            }}
           />
         )}
       </AnimatePresence>
@@ -287,7 +360,7 @@ const Devices = () => {
 
 // ── Tarjeta de dispositivo ──
 
-const DeviceCard = ({ device, status, StatusIcon, onRevoke }) => {
+const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke }) => {
   return (
     <Card tone={status.scheme} edge className="h-full">
       <div className="flex items-start justify-between gap-3">
@@ -316,9 +389,14 @@ const DeviceCard = ({ device, status, StatusIcon, onRevoke }) => {
       <div className="mt-4 flex items-center justify-between border-t border-[var(--nx-border)] pt-3">
         <div className="flex items-center gap-1.5 text-caption text-[var(--nx-text-muted)]">
           <RefreshCw size={12} />
-          <span>Última conexión: {timeAgo(device.last_ping)}</span>
+          <span>{timeAgo(device.last_ping)}</span>
         </div>
-        {device.active && (
+        <div className="flex items-center gap-2">
+          {!device.configured && (
+            <Button variant="quiet" size="sm" leftIcon={<Settings2 size={13} />} onClick={onConfigure}>
+              Configurar
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -328,7 +406,7 @@ const DeviceCard = ({ device, status, StatusIcon, onRevoke }) => {
           >
             Revocar
           </Button>
-        )}
+        </div>
       </div>
     </Card>
   );
@@ -336,22 +414,28 @@ const DeviceCard = ({ device, status, StatusIcon, onRevoke }) => {
 
 // ── Drawer: Registrar nuevo sensor ──
 
-const RegisterDrawer = ({ open, onClose, onRegistered }) => {
+const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
+  const [groupId, setGroupId] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
     setErr('');
     try {
-      const data = await devicesApi.register({ name: name.trim(), location: location.trim() });
+      const data = await devicesApi.register({
+        name: name.trim(),
+        location: location.trim(),
+        group_id: groupId || undefined,
+      });
       onRegistered(data);
       setName('');
       setLocation('');
+      setGroupId('');
       onClose();
     } catch (error) {
       setErr(humanizeError(error, 'No se pudo registrar el sensor.'));
@@ -386,8 +470,8 @@ const RegisterDrawer = ({ open, onClose, onRegistered }) => {
           label="Nombre del sensor"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Ej. Lector Portería"
-          help="Un nombre que identifique dónde está el sensor."
+          placeholder="Ej. Sensor 7A, Sensor Portería"
+          help="Un nombre que identifique el sensor."
           required
         />
         <Input
@@ -397,6 +481,22 @@ const RegisterDrawer = ({ open, onClose, onRegistered }) => {
           placeholder="Ej. Entrada principal, Bloque A"
           help="Dónde está físicamente instalado."
         />
+        {groups.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-label text-[var(--nx-text)]">Grupo asociado (opcional)</label>
+            <SearchableSelect
+              options={groups.map((g) => ({ value: g.group_id || g.id, label: formatGroupName(g.name || g.group_name) }))}
+              value={groupId}
+              onChange={(v) => setGroupId(v || '')}
+              placeholder="— Ninguno (sensor general) —"
+              searchPlaceholder="Buscar grupo…"
+              clearable
+            />
+            <p className="text-caption text-[var(--nx-text-muted)]">
+              Si es un sensor de aula, selecciónalo. Los sensores de portería o generales no necesitan grupo.
+            </p>
+          </div>
+        )}
         <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
             Al registrar el sensor, recibirás un <strong className="text-[var(--nx-text)]">código de activación</strong> único.
@@ -404,6 +504,66 @@ const RegisterDrawer = ({ open, onClose, onRegistered }) => {
           </p>
         </div>
       </form>
+    </Drawer>
+  );
+};
+
+// ── Drawer: Configurar sensor (marcar como configurado) ──
+
+const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
+  const [configuring, setConfiguring] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleConfigure = async () => {
+    setConfiguring(true);
+    setErr('');
+    try {
+      await devicesApi.configure(device.device_id);
+      onConfigured();
+    } catch (error) {
+      setErr(humanizeError(error, 'No se pudo marcar como configurado.'));
+    } finally {
+      setConfiguring(false);
+    }
+  };
+
+  if (!device) return null;
+  return (
+    <Drawer
+      title="Configurar sensor"
+      context={device.device_name}
+      onClose={onClose}
+      size="sm"
+      footer={
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button className="flex-1" loading={configuring} onClick={handleConfigure} leftIcon={<Check size={16} />}>
+            Marcar como configurado
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-5 p-6">
+        {err && (
+          <div className="rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
+            {err}
+          </div>
+        )}
+        <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
+          <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
+            Confirma que has configurado el dispositivo físico con el código de activación.
+            Al marcarlo como configurado, el sensor aparecerá como <strong className="text-[var(--nx-text)]">Operativo</strong> en el listado.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <label className="text-label text-[var(--nx-text)]">ID del dispositivo</label>
+          <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-3">
+            <code className="block break-all text-caption text-[var(--nx-text-muted)] font-mono">
+              {device.device_id}
+            </code>
+          </div>
+        </div>
+      </div>
     </Drawer>
   );
 };
@@ -481,53 +641,113 @@ const TokenDrawer = ({ info, onClose }) => {
   );
 };
 
-// ── Confirmación: Revocar sensor ──
+// ── Confirmación: Revocar sensor (con password + countdown) ──
 
-const RevokeConfirm = ({ device, revoking, onCancel, onConfirm }) => (
-  <>
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      onClick={onCancel}
-      className="fixed inset-0 z-40 backdrop-blur-[2px] bg-[color-mix(in_oklch,var(--nx-text)_42%,transparent)]"
-    />
-    <motion.div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Revocar sensor"
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.2, ease: EASE }}
-      className="fixed left-1/2 top-1/2 z-50 w-[min(420px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-surface border border-[var(--nx-border-danger)] bg-[var(--nx-surface)] p-6 shadow-large"
-    >
-      <div className="mb-4 flex items-start gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]">
-          <AlertCircle size={22} />
-        </span>
-        <div>
-          <h3 className="text-h3 text-[var(--nx-text)]">¿Revocar este sensor?</h3>
-          <p className="mt-1 text-body-sm text-[var(--nx-text-muted)]">
-            <strong className="text-[var(--nx-text)]">{device.device_name}</strong>
-            {device.location ? ` · ${device.location}` : ''}
+const RevokeConfirm = ({ device, onCancel, onDone }) => {
+  const isCancelMode = device?.cancelMode;
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    if (!password) return;
+    setSubmitting(true);
+    setErr('');
+    try {
+      if (isCancelMode) {
+        await devicesApi.cancelRevocation(device.device_id, device.revocationId, password);
+      } else {
+        await devicesApi.startRevocation(device.device_id, password);
+      }
+      onDone();
+    } catch (error) {
+      setErr(humanizeError(error, isCancelMode ? 'No se pudo cancelar la revocación.' : 'No se pudo iniciar la revocación.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={onCancel}
+        className="fixed inset-0 z-40 backdrop-blur-[2px] bg-[color-mix(in_oklch,var(--nx-text)_42%,transparent)]"
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isCancelMode ? 'Cancelar revocación' : 'Revocar sensor'}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ duration: 0.2, ease: EASE }}
+        className="fixed left-1/2 top-1/2 z-50 w-[min(440px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-surface border border-[var(--nx-border-danger)] bg-[var(--nx-surface)] p-6 shadow-large"
+      >
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4 flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]">
+              {isCancelMode ? <ShieldCheck size={22} /> : <AlertCircle size={22} />}
+            </span>
+            <div>
+              <h3 className="text-h3 text-[var(--nx-text)]">
+                {isCancelMode ? '¿Cancelar revocación?' : '¿Revocar este sensor?'}
+              </h3>
+              <p className="mt-1 text-body-sm text-[var(--nx-text-muted)]">
+                <strong className="text-[var(--nx-text)]">{device.device_name}</strong>
+                {device.location ? ` · ${device.location}` : ''}
+              </p>
+            </div>
+          </div>
+
+          <p className="mb-4 text-body-sm leading-relaxed text-[var(--nx-text-muted)]">
+            {isCancelMode ? (
+              'Si cancelas, el sensor seguirá activo y funcionando normalmente.'
+            ) : (
+              'El sensor será revocado en 1 hora. Durante ese tiempo, el coordinador puede cancelar la acción. ' +
+              'Tras la revocación, el sensor se elimina permanentemente. Para reconfigurarlo necesitarás la llave maestra.'
+            )}
           </p>
-        </div>
-      </div>
-      <p className="mb-6 text-body-sm leading-relaxed text-[var(--nx-text-muted)]">
-        El sensor se desactivará inmediatamente y dejará de registrar ingresos biométricos.
-        Los estudiantes ya enrolados conservan sus huellas. Puedes volver a activarlo más adelante
-        registrando un nuevo sensor.
-      </p>
-      <div className="flex gap-3">
-        <Button variant="secondary" className="flex-1" onClick={onCancel} disabled={revoking}>Cancelar</Button>
-        <Button variant="danger" className="flex-1" loading={revoking} onClick={onConfirm} leftIcon={<Trash2 size={16} />}>
-          Revocar sensor
-        </Button>
-      </div>
-    </motion.div>
-  </>
-);
+
+          {err && (
+            <div className="mb-4 rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
+              {err}
+            </div>
+          )}
+
+          <Input
+            label="Confirma con tu contraseña"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Tu contraseña de acceso"
+            required
+            autoFocus
+          />
+
+          <div className="mt-6 flex gap-3">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={submitting}>
+              No, volver
+            </Button>
+            <Button
+              type="submit"
+              variant={isCancelMode ? 'primary' : 'danger'}
+              className="flex-1"
+              loading={submitting}
+              disabled={!password}
+              leftIcon={isCancelMode ? <Check size={16} /> : <Trash2 size={16} />}
+            >
+              {isCancelMode ? 'Sí, cancelar revocación' : 'Sí, revocar sensor'}
+            </Button>
+          </div>
+        </form>
+      </motion.div>
+    </>
+  );
+};
 
 export default Devices;

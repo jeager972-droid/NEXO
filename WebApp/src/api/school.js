@@ -26,4 +26,16 @@ export const schoolApi = {
     const response = await client.get('/school/time-blocks');
     return response.data;
   },
+  getGroupsOnboarding: async () => {
+    const response = await client.get('/school/groups-onboarding');
+    return response.data;
+  },
+  completeGroupsOnboarding: async (payload) => {
+    const response = await client.post('/school/groups-onboarding', payload);
+    return response.data;
+  },
+  setSensorMasterKey: async (payload) => {
+    const response = await client.post('/school/sensor-master-key', payload);
+    return response.data;
+  },
 };

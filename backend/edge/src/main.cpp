@@ -393,18 +393,49 @@ std::string checkLateStatus() {
 // =============================================================================
 // Verifica sincronización NTP y que el año del sistema sea >= 2024. Si el
 // reloj es inválido, g_clockValid=false y se bloquean lecturas biométricas.
+// Intenta múltiples métodos: chronyc (modern), ntpdate (legacy), timedatectl.
 bool checkNtpSync() {
     std::array<char, 128> buffer;
     std::string result;
     auto pclose_deleter = [](FILE* f) { if (f) pclose(f); };
-    std::unique_ptr<FILE, decltype(pclose_deleter)> pipe(popen("ntpdate -q pool.ntp.org 2>/dev/null | grep -oP 'offset \\K[-\\d.]+'", "r"), pclose_deleter);
-    if (!pipe) {
-        LOG_WARN("Could not run ntpdate command");
-        return true;
+
+    // Método 1: chronyc (systemd/chrony — estándar en Fedora/RHEL/RPi OS moderno)
+    std::unique_ptr<FILE, decltype(pclose_deleter)> pipe(
+        popen("chronyc tracking 2>/dev/null | grep -oP 'System time:\\s+\\K[-\\d.]+'", "r"), pclose_deleter);
+    if (pipe) {
+        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+            result += buffer.data();
+        }
     }
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-        result += buffer.data();
+    pipe.reset();
+
+    // Método 2: ntpdate (legacy, si chronyc no devolvió nada)
+    if (result.empty()) {
+        pipe.reset(popen("ntpdate -q pool.ntp.org 2>/dev/null | grep -oP 'offset \\K[-\\d.]+'", "r"));
+        if (pipe) {
+            while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                result += buffer.data();
+            }
+        }
+        pipe.reset();
     }
+
+    // Método 3: timedatectl (systemd — verifica si NTP está sincronizado)
+    if (result.empty()) {
+        pipe.reset(popen("timedatectl show --property=NTPSynchronized --value 2>/dev/null", "r"));
+        if (pipe) {
+            while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                result += buffer.data();
+            }
+        }
+        pipe.reset();
+        if (result.find("yes") != std::string::npos) {
+            LOG_INFO("NTP synchronized (timedatectl)");
+            return true;
+        }
+        result.clear();
+    }
+
     if (!result.empty()) {
         try {
             double offset = std::stod(result);

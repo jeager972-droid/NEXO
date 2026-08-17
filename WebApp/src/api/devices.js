@@ -1,9 +1,8 @@
 /**
  * devices API / NEXO Institucional
  * Responsabilidad: Cliente para dispositivos edge biométricos: listado, registro,
- * revocación y envío de comandos M2M (enrolamiento remoto ENROLL_REQUEST,
- * autorización de salida AUTHORIZE_EXIT, eliminación DELETE_STUDENT,
- * FORCE_SYNC, RELOAD_CONFIG).
+ * configuración, revocación (con countdown de 1h), reconfiguración con master key,
+ * y envío de comandos M2M (ENROLL_REQUEST, AUTHORIZE_EXIT, etc).
  * El comando viaja API -> MQTT (fallback Redis) -> nexo-edge.
  * Dependencias: axios client.js.
  */
@@ -22,12 +21,32 @@ export const devicesApi = {
     devicesApi.sendCommand(deviceId, 'ENROLL_REQUEST', { doc, nombre, tel }),
   authorizeExit: (deviceId, doc) =>
     devicesApi.sendCommand(deviceId, 'AUTHORIZE_EXIT', { doc }),
-  register: async ({ name, location }) => {
-    const response = await client.post('/devices', { name, location });
+  register: async ({ name, location, group_id }) => {
+    const response = await client.post('/devices', { name, location, group_id });
     return response.data?.data ?? null;
+  },
+  configure: async (deviceId) => {
+    const response = await client.post(`/devices/${deviceId}/configure`, {});
+    return response.data;
   },
   revoke: async (deviceId) => {
     const response = await client.delete(`/devices/${deviceId}`);
+    return response.data;
+  },
+  startRevocation: async (deviceId, password) => {
+    const response = await client.post(`/devices/${deviceId}/revocation`, { password });
+    return response.data;
+  },
+  cancelRevocation: async (deviceId, revocationId, password) => {
+    const response = await client.post(`/devices/${deviceId}/revocation/cancel`, { revocation_id: revocationId, password });
+    return response.data;
+  },
+  getPendingRevocations: async () => {
+    const response = await client.get('/devices/revocations/pending');
+    return response.data?.data ?? [];
+  },
+  reconfigure: async (deviceId, token, masterKey) => {
+    const response = await client.post(`/devices/${deviceId}/reconfigure`, { master_key: masterKey, device_id: deviceId, token });
     return response.data;
   },
 };

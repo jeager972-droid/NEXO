@@ -123,20 +123,26 @@ CREATE TABLE IF NOT EXISTS municipalities (
 CREATE INDEX IF NOT EXISTS idx_municipality_department ON municipalities(department_id);
 
 CREATE TABLE IF NOT EXISTS schools (
-    school_id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    municipality_id   UUID NOT NULL REFERENCES municipalities(municipality_id),
-    dane_code         VARCHAR(50) UNIQUE,
-    school_name       VARCHAR(255) NOT NULL,
-    address           TEXT,
-    phone             VARCHAR(30),
-    email             VARCHAR(255),
-    active            BOOLEAN NOT NULL DEFAULT TRUE,
-    onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    school_id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    municipality_id            UUID NOT NULL REFERENCES municipalities(municipality_id),
+    dane_code                  VARCHAR(50) UNIQUE,
+    school_name                VARCHAR(255) NOT NULL,
+    address                    TEXT,
+    phone                      VARCHAR(30),
+    email                      VARCHAR(255),
+    active                     BOOLEAN NOT NULL DEFAULT TRUE,
+    onboarding_completed       BOOLEAN NOT NULL DEFAULT FALSE,
+    groups_onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
+    groups_onboarding_year     INTEGER,
+    sensor_master_key_hash     VARCHAR(255),
+    created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_school_municipality ON schools(municipality_id);
 
 COMMENT ON COLUMN schools.onboarding_completed IS 'TRUE cuando el coordinador/rector completó el onboarding de horarios institucionales';
+COMMENT ON COLUMN schools.groups_onboarding_completed IS 'TRUE cuando el rector completó el onboarding de grupos académicos (grados + nomenclatura + grupos por grado)';
+COMMENT ON COLUMN schools.groups_onboarding_year IS 'Año electivo para el que se configuraron los grupos. Cada 1 de enero se resetea si el año no coincide';
+COMMENT ON COLUMN schools.sensor_master_key_hash IS 'Hash bcrypt de la llave maestra para reconfigurar tokens de sensores';
 
 CREATE TABLE IF NOT EXISTS roles (
     role_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -350,9 +356,11 @@ CREATE TABLE IF NOT EXISTS edge_devices (
     device_id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     school_id            UUID NOT NULL REFERENCES schools(school_id),
     classroom_id         UUID REFERENCES classrooms(classroom_id),
+    group_id             UUID REFERENCES academic_groups(group_id),
     device_name          VARCHAR(120) NOT NULL,
     public_key           TEXT,
     active               BOOLEAN NOT NULL DEFAULT TRUE,
+    configured           BOOLEAN NOT NULL DEFAULT FALSE,
     last_sync_at         TIMESTAMPTZ,
     token_hash           VARCHAR(255),
     last_ping            TIMESTAMPTZ,
@@ -363,6 +371,25 @@ CREATE TABLE IF NOT EXISTS edge_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_edge_devices_school_active ON edge_devices(school_id, active);
 CREATE INDEX IF NOT EXISTS idx_edge_devices_classroom ON edge_devices(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_edge_devices_group ON edge_devices(group_id);
+
+COMMENT ON COLUMN edge_devices.configured IS 'TRUE cuando el rector ha configurado el sensor con su token (lo ha vinculado físicamente). Distingue de active que indica si el dispositivo está operativo';
+
+-- Tabla de revocación de sensores con countdown de 1 hora
+CREATE TABLE IF NOT EXISTS sensor_revocation_requests (
+    revocation_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id        UUID NOT NULL REFERENCES edge_devices(device_id),
+    school_id        UUID NOT NULL REFERENCES schools(school_id),
+    requested_by     UUID NOT NULL REFERENCES users(user_id),
+    requested_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    executes_at      TIMESTAMPTZ NOT NULL,
+    cancelled        BOOLEAN NOT NULL DEFAULT FALSE,
+    cancelled_by     UUID REFERENCES users(user_id),
+    cancelled_at     TIMESTAMPTZ,
+    completed        BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_revocation_pending ON sensor_revocation_requests(school_id, completed, cancelled);
 
 -- =============================================================================
 -- TABLAS DE EVENTOS PARTICIONADAS

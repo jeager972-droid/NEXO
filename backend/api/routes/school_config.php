@@ -476,3 +476,223 @@ if ($cleanPath === '/school/time-blocks' && $method === 'POST') {
     }
     exit;
 }
+
+// ============================================================================
+// GET /school/groups-onboarding — Estado del onboarding de grupos académicos
+// ============================================================================
+if ($cleanPath === '/school/groups-onboarding' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+
+    if (!$schoolId) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'ID de institución requerido']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $stmt = $conn->prepare("SELECT groups_onboarding_completed, groups_onboarding_year FROM schools WHERE school_id = ?");
+        $stmt->execute([$schoolId]);
+        $school = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$school) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Institución no encontrada']));
+        }
+
+        $onboardingCompleted = (bool)$school['groups_onboarding_completed'];
+        $onboardingYear = $school['groups_onboarding_year'] ? (int)$school['groups_onboarding_year'] : null;
+        $currentYear = (int)date('Y');
+
+        $needsOnboarding = !$onboardingCompleted || $onboardingYear !== $currentYear;
+
+        echo json_encode([
+            'status' => 'ok',
+            'onboarding_completed' => $onboardingCompleted,
+            'onboarding_year' => $onboardingYear,
+            'current_year' => $currentYear,
+            'needs_onboarding' => $needsOnboarding,
+        ]);
+    } catch (Exception $e) {
+        securityLog('GROUPS_ONBOARDING_GET_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener el estado de configuración de grupos']);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /school/groups-onboarding — Onboarding de grupos académicos (solo RECTOR)
+// ============================================================================
+if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userId = $authUser['id'];
+    $role = strtoupper($authUser['role'] ?? '');
+
+    if ($role !== 'RECTOR') {
+        securityLog('GROUPS_ONBOARDING_UNAUTHORIZED', "User: $userId, Role: $role");
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Solo el rector puede configurar los grupos académicos']));
+    }
+
+    $grades = $input['grades'] ?? [];
+    $nomenclature = trim((string)($input['nomenclature'] ?? ''));
+    $nomenclatureSeparator = trim((string)($input['nomenclature_separator'] ?? '-'));
+    $groupsPerGrade = $input['groups_per_grade'] ?? [];
+
+    if (empty($grades) || !is_array($grades)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'Debe especificar al menos un grado']));
+    }
+
+    $validNomenclatures = ['alphabetic', 'numeric', 'other'];
+    if (!in_array($nomenclature, $validNomenclatures)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'Nomenclatura inválida. Debe ser: ' . implode(', ', $validNomenclatures)]));
+    }
+
+    $currentYear = (int)date('Y');
+
+    // Generar nombres de grupos según nomenclatura
+    $groupsToInsert = [];
+    foreach ($grades as $grade) {
+        $grade = trim((string)$grade);
+        if ($grade === '') continue;
+
+        $count = (int)($groupsPerGrade[$grade] ?? 0);
+        if ($count <= 0) {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => "Debe especificar el número de grupos para el grado $grade"]));
+        }
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($nomenclature === 'alphabetic') {
+                $letter = chr(65 + $i); // A=65
+                if ($i > 25) {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => "La nomenclatura alfabética soporta máximo 26 grupos por grado. El grado $grade tiene $count."]));
+                }
+                $groupName = $grade . $letter;
+            } elseif ($nomenclature === 'numeric') {
+                $groupName = $grade . '-' . ($i + 1);
+            } else { // other
+                $groupName = $grade . $nomenclatureSeparator . ($i + 1);
+            }
+
+            $groupsToInsert[] = ['grade_level' => $grade, 'group_name' => $groupName];
+        }
+    }
+
+    if (empty($groupsToInsert)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'No se generaron grupos con la configuración proporcionada']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $conn->exec("BEGIN");
+        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+        $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($role) . ", true)");
+
+        // Borrar grupos del año actual si existen
+        $conn->prepare("DELETE FROM academic_groups WHERE school_id = ? AND academic_year = ?")
+            ->execute([$schoolId, $currentYear]);
+
+        // Insertar nuevos grupos
+        $insertStmt = $conn->prepare("
+            INSERT INTO academic_groups (school_id, group_name, grade_level, academic_year)
+            VALUES (?, ?, ?, ?)
+        ");
+        foreach ($groupsToInsert as $g) {
+            $insertStmt->execute([$schoolId, $g['group_name'], $g['grade_level'], $currentYear]);
+        }
+
+        // Marcar onboarding completado
+        $conn->prepare("UPDATE schools SET groups_onboarding_completed = TRUE, groups_onboarding_year = ? WHERE school_id = ?")
+            ->execute([$currentYear, $schoolId]);
+
+        $conn->exec("COMMIT");
+
+        securityLog('GROUPS_ONBOARDING_COMPLETED', "School: $schoolId, By: $userId ($role), Grupos: " . count($groupsToInsert), $userId, $schoolId);
+
+        echo json_encode([
+            'status' => 'ok',
+            'message' => 'Grupos académicos configurados correctamente',
+            'groups_created' => count($groupsToInsert),
+        ]);
+    } catch (Exception $e) {
+        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+        securityLog('GROUPS_ONBOARDING_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración de grupos. Contacte al administrador.']);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /school/sensor-master-key — Configurar llave maestra de sensores
+// ============================================================================
+if ($cleanPath === '/school/sensor-master-key' && $method === 'POST') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userId = $authUser['id'];
+    $role = strtoupper($authUser['role'] ?? '');
+
+    if ($role !== 'RECTOR') {
+        securityLog('SENSOR_MASTER_KEY_UNAUTHORIZED', "User: $userId, Role: $role");
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Solo el rector puede configurar la llave maestra']));
+    }
+
+    $masterKey = trim((string)($input['master_key'] ?? ''));
+
+    if (strlen($masterKey) < 12) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'La llave maestra debe tener al menos 12 caracteres']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        // Verificar si ya existe un hash configurado
+        $checkStmt = $conn->prepare("SELECT sensor_master_key_hash FROM schools WHERE school_id = ?");
+        $checkStmt->execute([$schoolId]);
+        $existingHash = $checkStmt->fetchColumn();
+
+        if ($existingHash) {
+            // Si ya existe, pedir password del rector para sobrescribir
+            $currentPassword = trim((string)($input['current_password'] ?? ''));
+            if (empty($currentPassword)) {
+                http_response_code(400);
+                exit(json_encode(['status' => 'error', 'message' => 'Debe proporcionar su contraseña para sobrescribir la llave maestra']));
+            }
+
+            $userStmt = $conn->prepare("SELECT password_hash FROM users WHERE user_id = ? AND deleted_at IS NULL");
+            $userStmt->execute([$userId]);
+            $userRow = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$userRow || !password_verify($currentPassword, $userRow['password_hash'])) {
+                securityLog('SENSOR_MASTER_KEY_PASSWORD_FAIL', "User: $userId", $userId, $schoolId);
+                http_response_code(401);
+                exit(json_encode(['status' => 'error', 'message' => 'Contraseña incorrecta']));
+            }
+        }
+
+        $keyHash = password_hash($masterKey, PASSWORD_BCRYPT);
+
+        $conn->prepare("UPDATE schools SET sensor_master_key_hash = ? WHERE school_id = ?")
+            ->execute([$keyHash, $schoolId]);
+
+        securityLog('SENSOR_MASTER_KEY_SET', "School: $schoolId, By: $userId ($role)", $userId, $schoolId);
+
+        echo json_encode(['status' => 'ok', 'message' => 'Llave maestra configurada']);
+    } catch (Exception $e) {
+        securityLog('SENSOR_MASTER_KEY_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra']);
+    }
+    exit;
+}

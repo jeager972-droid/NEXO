@@ -1172,3 +1172,204 @@ Ejecutado en producción el 2026-08-05 con éxito:
 - DB: migración ejecutada, permisos y funciones actualizadas.
 - Workers: integración con `daily_schedule_config` completa (commit
   anterior).
+
+## 40. Onboarding de Grupos Académicos y Gestión de Sensores (Iteración 4)
+
+### 40.1 Onboarding de Grupos — Ciclo Anual
+
+El onboarding de grupos es un proceso obligatorio que el **rector** debe completar
+al inicio de cada año electivo. Define qué grados existen, cómo se nombran los
+grupos y cuántos hay por grado.
+
+#### Ciclo de activación
+
+1. **Cada 1 de enero** el sistema verifica si `groups_onboarding_year` en la tabla
+   `schools` coincide con el año actual.
+2. Si no coincide (o `groups_onboarding_completed=FALSE`), el sistema entra en
+   modo **"pendiente de configuración"**.
+3. **Solo el rector** ve el wizard de onboarding. Los demás roles ven una pantalla
+   de "Sistema en configuración" y no pueden acceder a ninguna funcionalidad.
+4. Al completar el onboarding, se **borran los grupos del año anterior** y se crean
+   los nuevos en `academic_groups` con `academic_year = EXTRACT(YEAR FROM NOW())`.
+
+#### Wizard de 3 pasos (OnboardingGroupsModal)
+
+**Paso 1 — Grados:** El rector marca qué grados existen (de Primero a Once).
+Cada grado es una casilla seleccionable.
+
+**Paso 2 — Nomenclatura:** Elige cómo se distinguen los grupos dentro de cada grado:
+- **Alfabética:** 7A, 7B, 7C (letras A-Z después del grado)
+- **Numérica:** 7-1, 7-2, 7-3 (números con guion)
+- **Otra:** Separador personalizado (ej. 7.1, 7.2, 7/1)
+
+**Paso 3 — Grupos por grado:** Para cada grado seleccionado, indica cuántos grupos
+existen este año. Se muestra una vista previa con los nombres generados.
+
+#### Al guardar
+
+1. `DELETE FROM academic_groups WHERE school_id=? AND academic_year=current_year`
+2. `INSERT INTO academic_groups` con los nuevos grupos generados
+3. `UPDATE schools SET groups_onboarding_completed=TRUE, groups_onboarding_year=current_year`
+
+#### Bloqueo del sistema
+
+Mientras el onboarding de grupos esté pendiente:
+- **RECTOR:** ve el wizard bloqueante (no puede cerrarlo hasta completar)
+- **COORDINADOR, DOCENTE, SECRETARIA, PORTERO, AUXILIAR, PSICORIENTADOR:**
+  ven `SystemInactiveScreen` — pantalla que dice "El sistema está en configuración"
+
+### 40.2 Sensores Biométricos — Arquitectura
+
+#### Distribución de sensores
+
+Cada institución debe tener:
+- **1 sensor por grupo** (aula) — para control de asistencia en clase
+- **1 sensor de secretaría** — para enrolamiento de estudiantes
+- **1 sensor de coordinación** — para operaciones administrativas
+
+Total = (número de grupos) + 2
+
+#### Estados de un sensor
+
+| Estado | Significado | Color |
+|---|---|---|
+| **Operativo** | `configured=TRUE` + `last_ping` < 5 min | Verde |
+| **Conectando** | `configured=TRUE` + `last_ping` < 30 min | Ámbar |
+| **Desconectado** | `configured=TRUE` + `last_ping` > 30 min | Rojo |
+| **No configurado** | `configured=FALSE` (registrado pero no vinculado) | Gris |
+
+La columna `active` se mantiene por compatibilidad con el edge (ping).
+La columna `configured` es la que la UI usa para distinguir sensores
+registrados de sensores realmente vinculados.
+
+#### Flujo de registro
+
+1. **RECTOR** registra el sensor desde la UI (`POST /devices`)
+   - Nombre, ubicación, grupo asociado (opcional)
+   - La API genera `device_id` (UUID) y `token` (64 hex chars aleatorio)
+   - El token se hashea con bcrypt y se guarda en `token_hash`
+   - `configured=FALSE` (aún no está vinculado físicamente)
+2. La UI muestra el **código de activación** (token) una sola vez
+3. El rector configura el dispositivo físico con el `device_id` y `token`
+4. El rector marca el sensor como **"Configurado"** desde la UI
+   (`POST /devices/{id}/configure` → `configured=TRUE`)
+
+#### Autenticación del edge
+
+Cada petición del edge a la API incluye:
+- `device_id` como query param
+- `X-Device-Token` como header
+
+La API valida con `password_verify($token, $token_hash)`.
+Si no coincide → 403 Forbidden.
+
+### 40.3 Revocación de Sensores con Countdown
+
+La revocación es un proceso **destructivo e irreversible** que elimina
+permanentemente un sensor. Por eso tiene un mecanismo de seguridad de 2 capas:
+
+#### Flujo de revocación
+
+1. **RECTOR o COORDINADOR** inicia la revocación (`POST /devices/{id}/revocation`)
+   - Debe ingresar su **contraseña** (validada con `password_verify`)
+   - Se crea un registro en `sensor_revocation_requests` con `executes_at = NOW() + 1 hour`
+2. **Notificación automática** a todos los RECTOR y COORDINATOR:
+   "Revocación de sensor en proceso. Puedes cancelar esta acción."
+3. Durante 1 hora, el sensor sigue funcionando normalmente
+4. **CANCELACIÓN:** Cualquier RECTOR o COORDINADOR puede cancelar
+   (`POST /devices/{id}/revocation/cancel`) ingresando su contraseña.
+   La cancelación es **instantánea**.
+5. **EJECUCIÓN AUTOMÁTICA:** Tras 1 hora, en la próxima petición a `/devices/*`,
+   el worker de revocación automática:
+   - `DELETE FROM edge_devices WHERE device_id=?` (hard delete)
+   - `UPDATE sensor_revocation_requests SET completed=TRUE`
+   - Notifica "Sensor revocado" a RECTOR y COORDINATOR
+
+#### Worker de revocación (lazy execution)
+
+No usa cron. Se ejecuta al inicio de cada petición a `/devices/*`:
+```php
+SELECT * FROM sensor_revocation_requests
+WHERE completed=FALSE AND cancelled=FALSE AND executes_at <= NOW()
+```
+Para cada registro vencido: DELETE device + UPDATE revocation + notificación.
+
+### 40.4 Llave Maestra de Sensores
+
+La **llave maestra** es una contraseña adicional que el rector configura
+para poder reconfigurar sensores eliminados por error.
+
+#### Configuración
+
+- `POST /school/sensor-master-key` (solo RECTOR)
+- Mínimo 12 caracteres
+- Se hashea con bcrypt y se guarda en `schools.sensor_master_key_hash`
+- Si ya existe una llave, se requiere la contraseña actual del rector para sobrescribirla
+
+#### Uso: Reconfigurar sensor eliminado
+
+Si un sensor fue eliminado por error y se quiere volver a registrar con el
+mismo `device_id` y `token` originales:
+- `POST /devices/{id}/reconfigure` con `master_key`, `device_id` y `token`
+- La API valida la master key con `password_verify`
+- Si coincide: INSERT nuevo `edge_devices` con `configured=TRUE`
+- Si no coincide: 403 "Llave maestra incorrecta"
+
+### 40.5 Notificaciones de Sensores
+
+Cuando un sensor es eliminado o revocado, se insertan notificaciones
+en la tabla `notifications` para RECTOR y COORDINATOR:
+
+| Evento | Title | Type | Metadata |
+|---|---|---|---|
+| Sensor eliminado | "Sensor eliminado" | WARNING | device_id, device_name, location, deleted_by |
+| Revocación iniciada | "Revocación de sensor en proceso" | WARNING | revocation_id, device_id, executes_at |
+| Revocación cancelada | "Revocación cancelada" | INFO | revocation_id, device_id |
+| Revocación completada | "Sensor revocado" | WARNING | device_id, device_name |
+
+### 40.6 Endpoints de Sensores (Resumen)
+
+| Método | Ruta | Roles | Descripción |
+|---|---|---|---|
+| GET | `/devices` | RECTOR, COORDINATOR | Listar sensores |
+| POST | `/devices` | RECTOR, COORDINATOR | Registrar sensor |
+| POST | `/devices/{id}/configure` | RECTOR, COORDINATOR | Marcar como configurado |
+| DELETE | `/devices/{id}` | RECTOR, COORDINATOR | Eliminar sensor (hard delete) |
+| POST | `/devices/{id}/revocation` | RECTOR, COORDINATOR | Iniciar revocación (1h countdown) |
+| POST | `/devices/{id}/revocation/cancel` | RECTOR, COORDINATOR | Cancelar revocación |
+| GET | `/devices/revocations/pending` | RECTOR, COORDINATOR | Listar revocaciones pendientes |
+| POST | `/devices/{id}/reconfigure` | RECTOR, COORDINATOR | Reconfigurar sensor con master key |
+| POST | `/devices/command/{id}` | RECTOR, COORDINATOR, SECRETARY | Enviar comando M2M |
+| GET | `/devices/commands` | Edge (X-Device-Token) | Polling de comandos |
+| POST | `/devices/ping` | Edge (X-Device-Token) | Heartbeat |
+| POST | `/school/groups-onboarding` | RECTOR | Guardar onboarding de grupos |
+| GET | `/school/groups-onboarding` | Cualquier autenticado | Estado del onboarding |
+| POST | `/school/sensor-master-key` | RECTOR | Configurar llave maestra |
+
+### 40.7 Esquema de Base de Datos (Cambios)
+
+```sql
+-- schools: nuevas columnas
+ALTER TABLE schools ADD COLUMN groups_onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE schools ADD COLUMN groups_onboarding_year INTEGER;
+ALTER TABLE schools ADD COLUMN sensor_master_key_hash VARCHAR(255);
+
+-- edge_devices: nuevas columnas
+ALTER TABLE edge_devices ADD COLUMN configured BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE edge_devices ADD COLUMN group_id UUID REFERENCES academic_groups(group_id);
+
+-- Nueva tabla
+CREATE TABLE sensor_revocation_requests (
+    revocation_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id        UUID NOT NULL REFERENCES edge_devices(device_id),
+    school_id        UUID NOT NULL REFERENCES schools(school_id),
+    requested_by     UUID NOT NULL REFERENCES users(user_id),
+    requested_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    executes_at      TIMESTAMPTZ NOT NULL,
+    cancelled        BOOLEAN NOT NULL DEFAULT FALSE,
+    cancelled_by     UUID REFERENCES users(user_id),
+    cancelled_at     TIMESTAMPTZ,
+    completed        BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_at     TIMESTAMPTZ
+);
+```
