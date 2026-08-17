@@ -101,16 +101,16 @@ export const OPERATION_COMMANDS = [
   { id: 'permiso', title: 'Generar permiso', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR] },
   // Mandar solicitud — todos
   { id: 'solicitud', title: 'Mandar solicitud', icon: Send, roles: ALL_ROLES },
-  // Reportar incidente — docente, psicoorientador
-  { id: 'incidente', title: 'Reportar incidente', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
-  // Reportar daño — portero, auxiliar
-  { id: 'dano', title: 'Reportar daño', icon: Wrench, roles: [ROLES.PORTERO, ROLES.AUXILIAR] },
-  // Solicitar seguimiento / Caso — coordinador, rector
-  { id: 'seguimiento', title: 'Solicitar seguimiento', icon: FileText, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-  // Salida pedagógica — coordinador, rector
-  { id: 'salida_pedagogica', title: 'Salida pedagógica', icon: Bus, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
-  // Cambio de horario — coordinador, rector
-  { id: 'cambio_horario', title: 'Cambio de horario', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR] },
+  // Reportar incidente — docente, psicoorientador, rector, coordinador
+  { id: 'incidente', title: 'Reportar incidente', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.RECTOR, ROLES.COORDINADOR] },
+  // Reportar daño — portero, auxiliar, rector, coordinador
+  { id: 'dano', title: 'Reportar daño', icon: Wrench, roles: [ROLES.PORTERO, ROLES.AUXILIAR, ROLES.RECTOR, ROLES.COORDINADOR] },
+  // Solicitar seguimiento / Caso — coordinador, rector, docente, psicoorientador
+  { id: 'seguimiento', title: 'Solicitar seguimiento', icon: FileText, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
+  // Salida pedagógica — coordinador, rector, docente
+  { id: 'salida_pedagogica', title: 'Salida pedagógica', icon: Bus, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.DOCENTE] },
+  // Cambio de horario — coordinador, rector, docente
+  { id: 'cambio_horario', title: 'Cambio de horario', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.DOCENTE] },
 ];
 
 /**

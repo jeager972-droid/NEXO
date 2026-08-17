@@ -1835,6 +1835,7 @@ SELECT assign_permission_to_role('TEACHER', 'operations.pedagogica');
 SELECT assign_permission_to_role('TEACHER', 'operations.horario');
 SELECT assign_permission_to_role('TEACHER', 'operations.incidente');
 SELECT assign_permission_to_role('TEACHER', 'operations.seguimiento');
+SELECT assign_permission_to_role('TEACHER', 'operations.solicitud');
 SELECT assign_permission_to_role('TEACHER', 'operations.fusionar_bloque');
 SELECT assign_permission_to_role('TEACHER', 'operations.situacion_critica');
 SELECT assign_permission_to_role('TEACHER', 'consultations.teacher_view');
@@ -1860,12 +1861,17 @@ SELECT assign_permission_to_role('COUNSELOR', 'consultations.teacher_view');
 SELECT assign_permission_to_role('COUNSELOR', 'consultations.global_view');
 SELECT assign_permission_to_role('COUNSELOR', 'operations.seguimiento');
 SELECT assign_permission_to_role('COUNSELOR', 'operations.situacion_critica');
+SELECT assign_permission_to_role('COUNSELOR', 'operations.solicitud');
+SELECT assign_permission_to_role('COUNSELOR', 'operations.citacion');
 SELECT assign_permission_to_role('COUNSELOR', 'students.view');
 
 -- SECURITY
 SELECT assign_permission_to_role('SECURITY', 'students.view');
 SELECT assign_permission_to_role('SECURITY', 'consultations.global_view');
 SELECT assign_permission_to_role('SECURITY', 'reports.preview');
+SELECT assign_permission_to_role('SECURITY', 'operations.solicitud');
+SELECT assign_permission_to_role('SECURITY', 'operations.daño');
+SELECT assign_permission_to_role('SECURITY', 'operations.situacion_critica');
 
 -- AUXILIARY
 SELECT assign_permission_to_role('AUXILIARY', 'dashboard.global_view');
@@ -1873,6 +1879,8 @@ SELECT assign_permission_to_role('AUXILIARY', 'students.view');
 SELECT assign_permission_to_role('AUXILIARY', 'consultations.global_view');
 SELECT assign_permission_to_role('AUXILIARY', 'reports.preview');
 SELECT assign_permission_to_role('AUXILIARY', 'operations.solicitud');
+SELECT assign_permission_to_role('AUXILIARY', 'operations.daño');
+SELECT assign_permission_to_role('AUXILIARY', 'operations.situacion_critica');
 
 DROP FUNCTION IF EXISTS assign_permission_to_role(VARCHAR, VARCHAR);
 
