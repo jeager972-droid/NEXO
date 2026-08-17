@@ -107,13 +107,15 @@ const Devices = () => {
     setLoading(true);
     setError('');
     try {
-      const [devs, grps, revocations] = await Promise.all([
+      // Cargar grupos primero para que el skeleton sepa cuántos sensores esperar
+      const grps = await studentsApi.getGroups().catch(() => []);
+      setGroups(grps);
+
+      const [devs, revocations] = await Promise.all([
         devicesApi.getAll(),
-        studentsApi.getGroups().catch(() => []),
         devicesApi.getPendingRevocations().catch(() => []),
       ]);
       setDevices(devs);
-      setGroups(grps);
       setPendingRevocations(revocations);
     } catch (err) {
       setError(humanizeError(err, 'No pudimos cargar los sensores.'));
@@ -279,17 +281,17 @@ const Devices = () => {
           />
         </Surface>
       ) : loading ? (
-        <DynamicSkeleton count={Math.min(devices.length || 6, 9)} />
+        <DynamicSkeleton count={Math.max(groups.length + 2, 3)} />
       ) : filtered.length === 0 ? (
         <Surface className="p-6">
           <EmptyState
             icon={<Fingerprint size={22} strokeWidth={1.75} className="text-[var(--nx-text-muted)]" />}
             title={devices.length === 0 ? 'No hay sensores registrados' : 'Sin resultados'}
             description={devices.length === 0
-              ? 'Registra tu primer lector de huella para empezar a controlar la asistencia biométrica.'
+              ? 'Completa la configuración de grupos académicos para que los sensores se creen automáticamente.'
               : 'Ajusta la búsqueda o los filtros para ver tus sensores.'}
             action={devices.length === 0 ? (
-              <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>Registrar sensor</Button>
+              <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>Registrar sensor manual</Button>
             ) : undefined}
           />
         </Surface>

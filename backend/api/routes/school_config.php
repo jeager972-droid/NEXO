@@ -672,8 +672,20 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
         $conn->prepare("UPDATE schools SET groups_onboarding_completed = TRUE, groups_onboarding_year = ? WHERE school_id = ?")
             ->execute([$currentYear, $schoolId]);
 
+        // Borrar sensores viejos (de grupos de años anteriores o genéricos)
+        // Solo borrar los que NO están configurados (los configurados se conservan)
+        $conn->prepare("
+            DELETE FROM edge_devices
+            WHERE school_id = ?
+              AND configured = FALSE
+              AND (
+                group_id IS NULL
+                OR group_id NOT IN (SELECT group_id FROM academic_groups WHERE school_id = ? AND academic_year = ?)
+              )
+        ")->execute([$schoolId, $schoolId, $currentYear]);
+
         // Auto-crear sensores: 1 por grupo + secretaria + coordinación
-        // Solo si no existen ya (idempotente)
+        // Solo si no existen ya (idempotente por group_id + nombre)
         $sensorStmt = $conn->prepare("
             INSERT INTO edge_devices (school_id, device_name, location, group_id, configured, active, token_hash)
             VALUES (?, ?, ?, ?, FALSE, TRUE, NULL)
@@ -687,20 +699,33 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
             $gidStmt->execute([$schoolId, $g['group_name'], $currentYear]);
             $gid = $gidStmt->fetchColumn();
             if ($gid) {
-                $sensorStmt->execute([
-                    $schoolId,
-                    'Sensor ' . $g['group_name'],
-                    'Aula ' . $g['group_name'],
-                    $gid,
-                ]);
+                // Verificar si ya existe un sensor para este grupo
+                $existsStmt = $conn->prepare("SELECT 1 FROM edge_devices WHERE school_id = ? AND group_id = ? AND active = TRUE");
+                $existsStmt->execute([$schoolId, $gid]);
+                if (!$existsStmt->fetchColumn()) {
+                    $sensorStmt->execute([
+                        $schoolId,
+                        'Sensor ' . $g['group_name'],
+                        'Aula ' . $g['group_name'],
+                        $gid,
+                    ]);
+                }
             }
         }
 
-        // Sensor de secretaría
-        $sensorStmt->execute([$schoolId, 'Sensor Secretaría', 'Secretaría', null]);
+        // Sensor de secretaría (verificar si ya existe)
+        $secExists = $conn->prepare("SELECT 1 FROM edge_devices WHERE school_id = ? AND device_name = 'Sensor Secretaría' AND active = TRUE");
+        $secExists->execute([$schoolId]);
+        if (!$secExists->fetchColumn()) {
+            $sensorStmt->execute([$schoolId, 'Sensor Secretaría', 'Secretaría', null]);
+        }
 
-        // Sensor de coordinación
-        $sensorStmt->execute([$schoolId, 'Sensor Coordinación', 'Coordinación', null]);
+        // Sensor de coordinación (verificar si ya existe)
+        $coordExists = $conn->prepare("SELECT 1 FROM edge_devices WHERE school_id = ? AND device_name = 'Sensor Coordinación' AND active = TRUE");
+        $coordExists->execute([$schoolId]);
+        if (!$coordExists->fetchColumn()) {
+            $sensorStmt->execute([$schoolId, 'Sensor Coordinación', 'Coordinación', null]);
+        }
 
         $conn->exec("COMMIT");
 

@@ -125,6 +125,10 @@ if ($conn && strpos($cleanPath, '/devices') === 0) {
 
 if ($cleanPath === '/devices' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $currentYear = (int)date('Y');
+    // Solo sensores del año actual:
+    // - Sensores con group_id de grupos del año actual
+    // - Sensores de secretaría/coordinación (group_id NULL, nombre específico)
     $stmt = $conn->prepare("
         SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
                ed.last_ping, ed.created_at, ed.group_id,
@@ -132,9 +136,17 @@ if ($cleanPath === '/devices' && $method === 'GET') {
         FROM edge_devices ed
         LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
         WHERE ed.school_id = ?
-        ORDER BY ed.configured ASC, ag.grade_level ASC, ag.group_name ASC, ed.created_at DESC
+          AND ed.active = TRUE
+          AND (
+            (ed.group_id IS NOT NULL AND ag.academic_year = ?)
+            OR
+            (ed.group_id IS NULL AND ed.device_name IN ('Sensor Secretaría', 'Sensor Coordinación'))
+          )
+        ORDER BY ed.configured ASC,
+                 CASE WHEN ag.grade_level IS NULL THEN 99 ELSE ag.grade_level::INT END ASC,
+                 ag.group_name ASC, ed.created_at DESC
     ");
-    $stmt->execute([$authUser['school_id']]);
+    $stmt->execute([$authUser['school_id'], $currentYear]);
     echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     exit;
 }
