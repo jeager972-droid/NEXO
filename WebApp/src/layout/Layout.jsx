@@ -55,10 +55,20 @@ const Layout = () => {
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
-        const [config, groupsResp] = await Promise.all([
-          schoolApi.getConfig().catch(() => null),
-          schoolApi.getGroupsOnboarding().catch(() => null),
+        const [configResult, groupsResult] = await Promise.allSettled([
+          schoolApi.getConfig(),
+          schoolApi.getGroupsOnboarding(),
         ]);
+        const config = configResult.status === 'fulfilled' ? configResult.value : null;
+        const groupsResp = groupsResult.status === 'fulfilled' ? groupsResult.value : null;
+
+        if (configResult.status === 'rejected') {
+          console.error('[Onboarding] Schedule check failed:', configResult.reason);
+        }
+        if (groupsResult.status === 'rejected') {
+          console.error('[Onboarding] Groups check failed:', groupsResult.reason);
+        }
+
         setScheduleOnboardingRequired(config ? !config.onboarding_completed : false);
         setGroupsOnboardingRequired(groupsResp ? !!groupsResp.needs_onboarding : false);
       } catch (e) {

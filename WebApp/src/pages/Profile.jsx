@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown, ChevronRight } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown, ChevronRight, GraduationCap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -19,6 +19,7 @@ import { schoolApi } from '../api/school';
 import { ROLES } from '../config/roles';
 import { humanizeError } from '../utils/messages';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
+import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
 
 const compressImage = (file, maxWidth = 800, quality = 0.85) =>
   new Promise((resolve, reject) => {
@@ -424,6 +425,10 @@ const Profile = () => {
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
   const [scheduleEditOpen, setScheduleEditOpen] = useState(false);
 
+  // Configuración de grupos académicos
+  const [groupsConfig, setGroupsConfig] = useState(null);
+  const [groupsEditOpen, setGroupsEditOpen] = useState(false);
+
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
       if (res.status === 'ok' && res.data) {
@@ -458,6 +463,11 @@ const Profile = () => {
           })));
         }
       }).catch(() => {}).finally(() => setSchoolConfigLoading(false));
+
+      // Cargar estado de onboarding de grupos
+      schoolApi.getGroupsOnboarding().then((res) => {
+        if (res?.status === 'ok') setGroupsConfig(res);
+      }).catch(() => {});
     } else {
       setSchoolConfigLoading(false);
     }
@@ -731,7 +741,7 @@ const Profile = () => {
         <Toast toast={actionToast} />
       </Card>
 
-      {/* ── Configuración de horarios institucionales ── */}
+      {/* ── Calendario escolar (horarios) ── */}
       {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && !schoolConfigLoading && (
         <Card className="p-5">
           {schoolConfigToast && (
@@ -750,7 +760,31 @@ const Profile = () => {
             className="flex w-full items-center gap-3 text-left"
           >
             <Settings size={18} className="text-[var(--nx-accent)] shrink-0" />
-            <p className="text-h3 text-[var(--nx-text)]">Configuración de horarios</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-h3 text-[var(--nx-text)]">Calendario escolar</p>
+              <p className="text-caption text-[var(--nx-text-muted)]">Jornadas, horarios y bloques</p>
+            </div>
+            <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
+          </button>
+        </Card>
+      )}
+
+      {/* ── Grupos académicos (solo RECTOR) ── */}
+      {user?.role === ROLES.RECTOR && (
+        <Card className="p-5">
+          <button
+            onClick={() => setGroupsEditOpen(true)}
+            className="flex w-full items-center gap-3 text-left"
+          >
+            <GraduationCap size={18} className="text-[var(--nx-accent)] shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-h3 text-[var(--nx-text)]">Grupos académicos</p>
+              <p className="text-caption text-[var(--nx-text-muted)]">
+                {groupsConfig?.onboarding_completed
+                  ? `Configurado para ${groupsConfig.onboarding_year ?? new Date().getFullYear()}`
+                  : 'Pendiente de configuración'}
+              </p>
+            </div>
             <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
           </button>
         </Card>
@@ -760,13 +794,13 @@ const Profile = () => {
       <AnimatePresence>
         {scheduleDrawerOpen && (
           <Drawer
-            title="Ajustes de horario"
+            title="Calendario escolar"
             onClose={() => { setScheduleDrawerOpen(false); setExpandedJornada(null); }}
             size="md"
             footer={
               <div className="flex justify-end gap-3">
                 <Button variant="secondary" onClick={() => { setScheduleDrawerOpen(false); setExpandedJornada(null); }}>Cerrar</Button>
-                <Button variant="primary" onClick={() => setScheduleEditOpen(true)}>Editar horarios</Button>
+                <Button variant="primary" onClick={() => setScheduleEditOpen(true)}>Editar calendario</Button>
               </div>
             }
           >
@@ -912,6 +946,22 @@ const Profile = () => {
             setTimeout(() => setSchoolConfigToast(null), 4000);
           }}
           onCancel={() => setScheduleEditOpen(false)}
+        />
+      )}
+
+      {/* Modal de edición de grupos académicos (reutiliza OnboardingGroupsModal) */}
+      {groupsEditOpen && (
+        <OnboardingGroupsModal
+          onCompleted={async () => {
+            setGroupsEditOpen(false);
+            setSchoolConfigToast({ type: 'success', message: 'Grupos académicos actualizados correctamente' });
+            // Recargar estado de grupos
+            try {
+              const fresh = await schoolApi.getGroupsOnboarding();
+              if (fresh?.status === 'ok') setGroupsConfig(fresh);
+            } catch { /* ignore reload error */ }
+            setTimeout(() => setSchoolConfigToast(null), 4000);
+          }}
         />
       )}
 

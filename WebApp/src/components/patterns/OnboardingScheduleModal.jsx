@@ -384,7 +384,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
             </div>
             <div className="flex-1">
               <h2 className="text-h3 text-[var(--nx-text)]">
-                {isEditMode ? 'Cambiar Configuración de Horarios' : 'Configuración de Horarios'}
+                {isEditMode ? 'Cambiar calendario escolar' : 'Calendario escolar'}
               </h2>
               <p className="text-body-sm text-[var(--nx-text-muted)]">
                 {isEditMode
@@ -432,13 +432,13 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
               <div>
                 <p className="text-body text-[var(--nx-text)] mb-1">
                   {isEditMode
-                    ? 'Modifique los horarios de la institución según sea necesario.'
-                    : 'Bienvenido. Antes de usar el sistema, debe configurar los horarios de la institución.'}
+                    ? 'Modifique el calendario escolar de la institución según sea necesario.'
+                    : 'Bienvenido. Antes de usar el sistema, debe configurar el calendario escolar de la institución.'}
                 </p>
                 <p className="text-body-sm text-[var(--nx-text-muted)]">
                   {isEditMode
                     ? 'Los cambios se aplicarán inmediatamente al guardar.'
-                    : 'Esta configuración es la base para el funcionamiento del sistema en base a los horarios de la institución.'}
+                    : 'Esta configuración es la base para el funcionamiento del sistema según el calendario escolar de la institución.'}
                 </p>
               </div>
 
