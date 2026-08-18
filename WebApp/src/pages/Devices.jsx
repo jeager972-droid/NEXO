@@ -37,7 +37,10 @@ const FRESH_WINDOW_MS = 5 * 60 * 1000;
 
 // ── Helpers ──
 
-const getDeviceStatus = (device) => {
+const getDeviceStatus = (device, pendingRevocationIds) => {
+  if (pendingRevocationIds?.has(device.device_id)) {
+    return { scheme: 'warning', label: 'En eliminación', icon: Clock };
+  }
   if (device.last_ping) {
     const ageMs = Date.now() - new Date(device.last_ping + 'Z').getTime();
     if (ageMs <= FRESH_WINDOW_MS) return { scheme: 'success', label: 'Operativo', icon: Wifi };
@@ -154,20 +157,23 @@ const Devices = () => {
 
   const configuredCount = devices.filter((d) => d.configured).length;
   const operativeCount = devices.filter((d) => {
-    const s = getDeviceStatus(d);
+    const s = getDeviceStatus(d, pendingRevocationIds);
     return s.scheme === 'success';
   }).length;
+
+  // Sensores con revocación pendiente: marcar visualmente como "En eliminación"
+  const pendingRevocationIds = useMemo(() => new Set(pendingRevocations.map((r) => r.device_id)), [pendingRevocations]);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Infraestructura"
-        title="Sensores biométricos"
-        subtitle="Gestiona los lectores de huella de tu institución"
+        eyebrow="Sensores"
+        title="Lectores de huella"
+        subtitle="Revisa el estado de tus sensores y configura nuevos lectores"
         meta={`${devices.length} sensor${devices.length !== 1 ? 'es' : ''} · ${operativeCount} operativo${operativeCount !== 1 ? 's' : ''}`}
         actions={
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>
-            Registrar sensor
+            Nuevo sensor
           </Button>
         }
       />
@@ -182,7 +188,7 @@ const Devices = () => {
               </span>
               <div>
                 <p className="text-h2 text-[var(--nx-text)] tabular-nums">{devices.length}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">Sensores registrados</p>
+                <p className="text-caption text-[var(--nx-text-muted)]">Total sensores</p>
               </div>
             </div>
           </Card>
@@ -220,7 +226,7 @@ const Devices = () => {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-body-sm font-semibold text-[var(--nx-text)]">
-                {pendingRevocations.length} revocaci&oacute;n{pendingRevocations.length !== 1 ? 'es' : ''} en proceso
+                {pendingRevocations.length} sensor{pendingRevocations.length !== 1 ? 'es' : ''} en proceso de eliminaci&oacute;n
               </p>
               <div className="mt-2 space-y-1.5">
                 {pendingRevocations.map((rev) => {
@@ -256,7 +262,7 @@ const Devices = () => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Input
           leftIcon={<Search size={16} />}
-          placeholder="Buscar por nombre o ubicación…"
+          placeholder="Buscar sensor por nombre o ubicación…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1"
@@ -292,10 +298,10 @@ const Devices = () => {
             icon={<Fingerprint size={22} strokeWidth={1.75} className="text-[var(--nx-text-muted)]" />}
             title={devices.length === 0 ? 'No hay sensores registrados' : 'Sin resultados'}
             description={devices.length === 0
-              ? 'Completa la configuración de grupos académicos para que los sensores se creen automáticamente.'
+              ? 'Cuando configures los grupos académicos, los sensores se crearán automáticamente. También puedes registrar uno manualmente.'
               : 'Ajusta la búsqueda o los filtros para ver tus sensores.'}
             action={devices.length === 0 ? (
-              <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>Registrar sensor manual</Button>
+              <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>Registrar sensor</Button>
             ) : undefined}
           />
         </Surface>
@@ -303,7 +309,7 @@ const Devices = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence mode="popLayout">
             {filtered.map((device) => {
-              const status = getDeviceStatus(device);
+              const status = getDeviceStatus(device, pendingRevocationIds);
               const StatusIcon = status.icon;
               return (
                 <motion.div
@@ -318,6 +324,7 @@ const Devices = () => {
                     device={device}
                     status={status}
                     StatusIcon={StatusIcon}
+                    isPendingRevocation={pendingRevocationIds.has(device.device_id)}
                     onConfigure={() => setConfigureTarget(device)}
                     onRevoke={() => setRevokeTarget({ ...device, cancelMode: false })}
                   />
@@ -344,10 +351,12 @@ const Devices = () => {
         device={configureTarget}
         onClose={() => setConfigureTarget(null)}
         onConfigured={(info) => {
-          setConfigureTarget(null);
           fetchData();
           if (info?.token) {
             setNewToken(info);
+          }
+          if (!info?.stayOpen) {
+            setConfigureTarget(null);
           }
         }}
       />
@@ -374,7 +383,7 @@ const Devices = () => {
 
 // ── Tarjeta de dispositivo ──
 
-const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke }) => {
+const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke, isPendingRevocation }) => {
   return (
     <Card tone={status.scheme} edge className="h-full">
       <div className="flex items-start justify-between gap-3">
@@ -412,20 +421,22 @@ const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke }) => {
           <span>{timeAgo(device.last_ping)}</span>
         </div>
         <div className="flex items-center gap-2">
-          {!device.configured && (
+          {!device.configured && !isPendingRevocation && (
             <Button variant="quiet" size="sm" leftIcon={<Settings2 size={13} />} onClick={onConfigure}>
               Configurar
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={<Trash2 size={13} />}
-            onClick={onRevoke}
-            className="text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)]"
-          >
-            Revocar
-          </Button>
+          {!isPendingRevocation && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Trash2 size={13} />}
+              onClick={onRevoke}
+              className="text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)]"
+            >
+              Eliminar
+            </Button>
+          )}
         </div>
       </div>
     </Card>
@@ -480,7 +491,7 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
       setAssignedUserId('');
       onClose();
     } catch (error) {
-      setErr(humanizeError(error, 'No se pudo registrar el sensor.'));
+      setErr(humanizeError(error, 'No pudimos registrar el sensor. Inténtalo de nuevo.'));
     } finally {
       setSaving(false);
     }
@@ -490,7 +501,7 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
   return (
     <Drawer
       title="Registrar nuevo sensor"
-      context="Configura un lector de huella para tu institución"
+      context="Agrega un lector de huella a tu institución"
       onClose={onClose}
       size="sm"
       footer={
@@ -535,7 +546,7 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
               clearable
             />
             <p className="text-caption text-[var(--nx-text-muted)]">
-              Si es un sensor de aula, selecciónalo. Los sensores de portería o generales no necesitan grupo.
+              Si es un sensor de aula, selecciónalo. Los sensores de secretaría o generales no necesitan grupo.
             </p>
           </div>
         )}
@@ -583,7 +594,7 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
         <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
             Al registrar el sensor, recibirás un <strong className="text-[var(--nx-text)]">código de activación</strong> único.
-            Este código se debe configurar en el dispositivo físico para vincularlo con tu institución.
+            Guárdalo bien: lo necesitarás para configurar el sensor físico y vincularlo con tu institución.
           </p>
         </div>
       </form>
@@ -594,6 +605,7 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
 // ── Drawer: Configurar sensor (marcar como configurado) ──
 
 const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
+  const [phase, setPhase] = useState('info'); // 'info' → 'details'
   const [configuring, setConfiguring] = useState(false);
   const [err, setErr] = useState('');
 
@@ -602,19 +614,37 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
     setErr('');
     try {
       const result = await devicesApi.configure(device.device_id);
+      // Mostrar la pantalla con ID + token
+      setPhase('details');
       onConfigured({
         device_id: device.device_id,
         name: device.device_name,
         token: result?.token || null,
+        stayOpen: true,
       });
     } catch (error) {
-      setErr(humanizeError(error, 'No se pudo marcar como configurado.'));
+      setErr(humanizeError(error, 'No pudimos configurar el sensor. Inténtalo de nuevo.'));
     } finally {
       setConfiguring(false);
     }
   };
 
   if (!device) return null;
+
+  if (phase === 'details') {
+    // Después de configurar, mostrar ID + token (reusa TokenDrawer visual)
+    return (
+      <TokenDrawer
+        info={{
+          device_id: device.device_id,
+          name: device.device_name,
+          token: null, // El token ya se mostró en onConfigured → TokenDrawer
+        }}
+        onClose={onClose}
+      />
+    );
+  }
+
   return (
     <Drawer
       title="Configurar sensor"
@@ -625,7 +655,7 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button className="flex-1" loading={configuring} onClick={handleConfigure} leftIcon={<Check size={16} />}>
-            Configurar y generar código
+            Aceptar y configurar
           </Button>
         </div>
       }
@@ -638,16 +668,17 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
         )}
         <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
-            Al configurar el sensor se generará un <strong className="text-[var(--nx-text)]">código de activación</strong> que debes copiar y pegar en el archivo de configuración del dispositivo físico. El sensor aparecerá como <strong className="text-[var(--nx-text)]">Configurado</strong> en el listado.
+            Vas a configurar el sensor <strong className="text-[var(--nx-text)]">{device.device_name}</strong>.
+            Al hacerlo, generaremos un <strong className="text-[var(--nx-text)]">código de activación</strong> único
+            que debes guardar y usar en el dispositivo físico. Una vez que el sensor se conecte,
+            aparecerá automáticamente como <strong className="text-[var(--nx-text)]">Operativo</strong>.
           </p>
         </div>
-        <div className="space-y-2">
-          <label className="text-label text-[var(--nx-text)]">ID del dispositivo</label>
-          <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-3">
-            <code className="block break-all text-caption text-[var(--nx-text-muted)] font-mono">
-              {device.device_id}
-            </code>
-          </div>
+        <div className="rounded-control border border-[var(--nx-border-warning)] bg-[var(--nx-surface-subtle)] p-4">
+          <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
+            <strong className="text-[var(--nx-text)]">Importante:</strong> El código de activación solo se muestra una vez.
+            Guárdalo en un lugar seguro. Si lo pierdes, necesitarás la llave maestra para reconfigurar el sensor.
+          </p>
         </div>
       </div>
     </Drawer>
@@ -672,7 +703,7 @@ const TokenDrawer = ({ info, onClose }) => {
 
   return (
     <Drawer
-      title={info.token ? "Sensor configurado" : "Sensor registrado"}
+      title={info.token ? "Sensor configurado" : "Sensor registrado correctamente"}
       context={info.name || 'Sensor'}
       onClose={onClose}
       size="sm"
@@ -680,7 +711,7 @@ const TokenDrawer = ({ info, onClose }) => {
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose}>Cerrar</Button>
           <Button className="flex-1" onClick={handleCopy} leftIcon={copied ? <Check size={16} /> : <Cpu size={16} />}>
-            {copied ? 'Copiado' : 'Copiar código'}
+            {copied ? 'Copiado' : 'Copiar código de activación'}
           </Button>
         </div>
       }
@@ -689,7 +720,7 @@ const TokenDrawer = ({ info, onClose }) => {
         <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4">
           <div className="flex items-center gap-2 text-[var(--nx-success)]">
             <ShieldCheck size={18} />
-            <p className="text-body-sm font-semibold">Sensor vinculado a tu institución</p>
+            <p className="text-body-sm font-semibold">Sensor listo para usar</p>
           </div>
         </div>
 
@@ -701,13 +732,13 @@ const TokenDrawer = ({ info, onClose }) => {
             </code>
           </div>
           <p className="text-caption text-[var(--nx-text-muted)]">
-            Guárdalo en un lugar seguro. Lo necesitarás para configurar el dispositivo físico.
-            Por seguridad, no volveremos a mostrarlo.
+            Guárdalo en un lugar seguro. Lo necesitarás para configurar el sensor físico.
+            Por seguridad, no lo volveremos a mostrar.
           </p>
         </div>
 
         <div className="space-y-2">
-          <label className="text-label text-[var(--nx-text)]">ID del dispositivo</label>
+          <label className="text-label text-[var(--nx-text)]">ID del sensor</label>
           <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-3">
             <code className="block break-all text-caption text-[var(--nx-text-muted)] font-mono">
               {deviceId}
@@ -717,8 +748,8 @@ const TokenDrawer = ({ info, onClose }) => {
 
         <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
-            <strong className="text-[var(--nx-text)]">Siguiente paso:</strong> Configura el dispositivo
-            físico con este código de activación y el ID. Una vez conectado, aparecerá automáticamente
+            <strong className="text-[var(--nx-text)]">Siguiente paso:</strong> Usa este código y el ID
+            para configurar el sensor físico. Una vez que se conecte, aparecerá automáticamente
             como &laquo;Operativo&raquo; en esta pantalla.
           </p>
         </div>
@@ -748,7 +779,7 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
       }
       onDone();
     } catch (error) {
-      setErr(humanizeError(error, isCancelMode ? 'No se pudo cancelar la revocación.' : 'No se pudo iniciar la revocación.'));
+      setErr(humanizeError(error, isCancelMode ? 'No pudimos cancelar la eliminación.' : 'No pudimos iniciar la eliminación.'));
     } finally {
       setSubmitting(false);
     }
@@ -767,7 +798,7 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label={isCancelMode ? 'Cancelar revocación' : 'Revocar sensor'}
+        aria-label={isCancelMode ? 'Cancelar eliminación' : 'Eliminar sensor'}
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
@@ -781,7 +812,7 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
             </span>
             <div>
               <h3 className="text-h3 text-[var(--nx-text)]">
-                {isCancelMode ? '¿Cancelar revocación?' : '¿Revocar este sensor?'}
+                {isCancelMode ? '¿Cancelar la eliminación?' : '¿Eliminar este sensor?'}
               </h3>
               <p className="mt-1 text-body-sm text-[var(--nx-text-muted)]">
                 <strong className="text-[var(--nx-text)]">{device.device_name}</strong>
@@ -794,8 +825,8 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
             {isCancelMode ? (
               'Si cancelas, el sensor seguirá activo y funcionando normalmente.'
             ) : (
-              'El sensor será revocado en 1 hora. Durante ese tiempo, el coordinador puede cancelar la acción. ' +
-              'Tras la revocación, el sensor se elimina permanentemente. Para reconfigurarlo necesitarás la llave maestra.'
+              'El sensor se eliminará en 1 hora. Durante ese tiempo, puedes cancelar si fue un error. ' +
+              'Tras la eliminación, el sensor desaparece permanentemente. Para volver a usarlo, necesitarás registrarlo de nuevo.'
             )}
           </p>
 
@@ -817,7 +848,7 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
 
           <div className="mt-6 flex gap-3">
             <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={submitting}>
-              No, volver
+              No, cancelar
             </Button>
             <Button
               type="submit"
@@ -827,7 +858,7 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
               disabled={!password}
               leftIcon={isCancelMode ? <Check size={16} /> : <Trash2 size={16} />}
             >
-              {isCancelMode ? 'Sí, cancelar revocación' : 'Sí, revocar sensor'}
+              {isCancelMode ? 'Sí, cancelar eliminación' : 'Sí, eliminar sensor'}
             </Button>
           </div>
         </form>

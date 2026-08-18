@@ -85,6 +85,25 @@ const humanizeMessage = (notif) => {
       return `Se marcó como error la salida autorizada${withGroup(student ? ` de ${student}` : '')}. Verificar de inmediato.`;
     case 'late_arrival':
       return `El estudiante ${student || 'un estudiante'} llegó tarde a clase.`;
+    case 'sensor_configurado': {
+      const devName = get('device_name');
+      const devLoc = get('location');
+      const byName = get('configured_by_name');
+      return `Se configuró el sensor${devName ? ` "${devName}"` : ''}${devLoc ? ` en ${devLoc}` : ''}${by(byName)}.`;
+    }
+    case 'sensor_eliminado': {
+      const devName = get('device_name');
+      const devLoc = get('location');
+      const byName = get('deleted_by_name');
+      const auto = meta?.auto_revoked;
+      if (auto) return `Se eliminó el sensor${devName ? ` "${devName}"` : ''}${devLoc ? ` (${devLoc})` : ''} tras completarse el tiempo de espera.`;
+      return `Se eliminó el sensor${devName ? ` "${devName}"` : ''}${devLoc ? ` (${devLoc})` : ''}${by(byName)}.`;
+    }
+    case 'sensor_revocacion_iniciada': {
+      const devName = get('device_name');
+      const byName = get('requested_by_name');
+      return `Se inició la eliminación del sensor${devName ? ` "${devName}"` : ''}${by(byName)}. Se completará en 1 hora.`;
+    }
     default:
       if (message) return message.replace(/\.\s*Ver detalles\.?$/i, '').trim();
       return notif.title || 'Novedad institucional';
@@ -95,6 +114,7 @@ const ACTIONS_WITH_DETAILS = [
   'permiso', 'autorizar_salida', 'sos', 'iniciar_seguimiento',
   'solicitud', 'incidente', 'citacion_confirmada', 'reagendar_motivo', 'salida_no_autorizada',
   'situacion_critica', 'daño', 'pedagogica',
+  'sensor_configurado', 'sensor_eliminado', 'sensor_revocacion_iniciada',
 ];
 
 const NotifItem = ({ notif, hasDetails, onClick, onAction }) => {
@@ -242,6 +262,19 @@ const Notifications = () => {
     const cleanRaw = raw.replace(/\.?\s*Ver detalles\.?$/i, '').trim();
     const extra = meta?.message || meta?.reason || meta?.motivo || '';
     if (extra) return String(extra).trim();
+
+    // Detalles específicos para sensores
+    const action = meta?.action;
+    if (action === 'sensor_configurado' || action === 'sensor_eliminado' || action === 'sensor_revocacion_iniciada') {
+      const parts = [];
+      if (meta?.device_name) parts.push(`Sensor: ${meta.device_name}`);
+      if (meta?.location) parts.push(`Ubicación: ${meta.location}`);
+      const byName = meta?.configured_by_name || meta?.deleted_by_name || meta?.requested_by_name;
+      if (byName) parts.push(`Realizado por: ${byName}`);
+      if (meta?.auto_revoked) parts.push('Eliminado automáticamente tras completarse el tiempo de espera.');
+      if (parts.length > 0) return parts.join('. ') + '.';
+    }
+
     if (cleanRaw && cleanRaw !== humanizeMessage(notif)) return cleanRaw;
     return '';
   };

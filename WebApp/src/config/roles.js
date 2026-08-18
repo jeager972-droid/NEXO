@@ -142,8 +142,8 @@ export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
  * Las demás quedan en el sidebar vertical.
  */
 export const PRIMARY_ACTIONS = {
-  [ROLES.RECTOR]:         ['/', '/operacion', '/dispositivos', '/consulta'],
-  [ROLES.COORDINADOR]:    ['/', '/operacion', '/notificaciones', '/casos'],
+  [ROLES.RECTOR]:         ['/', '/operacion', '/casos', '/notificaciones'],
+  [ROLES.COORDINADOR]:    ['/', '/operacion', '/casos', '/notificaciones'],
   [ROLES.DOCENTE]:        ['/', '/operacion', '/consulta', '/notificaciones'],
   [ROLES.SECRETARIA]:     ['/', '/consulta', '/enrolamiento', '/notificaciones'],
   [ROLES.PORTERO]:        ['/', '/operacion', '/notificaciones', '/perfil'],

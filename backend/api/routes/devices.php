@@ -92,7 +92,7 @@ if ($conn && strpos($cleanPath, '/devices') === 0) {
 
             if (!empty($recipients)) {
                 $meta = json_encode([
-                    'revocation_id' => $revId,
+                    'action' => 'sensor_eliminado',
                     'device_id' => $devId,
                     'device_name' => $devName,
                     'location' => $devLocation,
@@ -101,11 +101,12 @@ if ($conn && strpos($cleanPath, '/devices') === 0) {
 
                 $rows = [];
                 $params = [];
+                $notifMessage = "Se eliminó el sensor \"{$devName}\"" . ($devLocation ? " ({$devLocation})" : "") . " tras completarse el tiempo de espera.";
                 foreach ($recipients as $r) {
-                    $rows[] = "(?, ?, 'Sensor revocado', ?, 'WARNING', ?::jsonb, NOW())";
+                    $rows[] = "(?, ?, 'Sensor eliminado', ?, 'WARNING', ?::jsonb, NOW())";
                     $params[] = $schId;
                     $params[] = $r['user_id'];
-                    $params[] = "El sensor '{$devName}' ha sido revocado automáticamente.";
+                    $params[] = $notifMessage;
                     $params[] = $meta;
                 }
                 $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
@@ -202,12 +203,53 @@ if ($cleanPath === '/devices' && $method === 'POST') {
         $rawToken = bin2hex(random_bytes(32));
         $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
 
-        $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id, assigned_user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING device_id");
+        // Sensores registrados manualmente nacen configurados (tienen token).
+        // Solo los sensores auto-creados por grupos nacen sin configurar.
+        $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id, assigned_user_id, configured) VALUES (?, ?, ?, ?, ?, ?, TRUE) RETURNING device_id");
         $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $validGroupId, $validAssignedUserId]);
         $deviceId = $stmt->fetchColumn();
 
         // Pasando el ID del usuario y escuela para trazabilidad
         securityLog('EDGE_DEVICE_REGISTERED', "Device: $deviceId, Name: $name", $authUser['id'], $authUser['school_id']);
+
+        // Notificar a RECTOR y COORDINATOR
+        $notifyRoles = ['RECTOR', 'COORDINATOR'];
+        $placeholders = implode(',', array_fill(0, count($notifyRoles), '?'));
+        $nStmt = $conn->prepare("
+            SELECT user_id FROM users
+            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) IN ($placeholders)) AND active = TRUE
+        ");
+        $nStmt->execute(array_merge([$authUser['school_id']], $notifyRoles));
+        $recipients = $nStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($recipients)) {
+            $userName = $authUser['nombre'] ?? $authUser['email'];
+            $meta = json_encode([
+                'action' => 'sensor_configurado',
+                'device_id' => $deviceId,
+                'device_name' => $name,
+                'location' => $location,
+                'configured_by' => $authUser['id'],
+                'configured_by_name' => $userName,
+            ], JSON_UNESCAPED_UNICODE);
+
+            $rows = [];
+            $params = [];
+            $notifMessage = "Se configuró el sensor \"{$name}\"" . ($location ? " en {$location}" : "") . ".";
+            foreach ($recipients as $r) {
+                $rows[] = "(?, ?, 'Sensor configurado', ?, 'INFO', ?::jsonb, NOW())";
+                $params[] = $authUser['school_id'];
+                $params[] = $r['user_id'];
+                $params[] = $notifMessage;
+                $params[] = $meta;
+            }
+            $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+            try {
+                $conn->prepare($sql)->execute($params);
+            } catch (Throwable $e) {
+                error_log("[DEVICES] Register notification error: " . $e->getMessage());
+            }
+        }
 
         echo json_encode([
             'status' => 'ok',
@@ -259,6 +301,51 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/configure$#', $cleanPath, $matches) 
         }
 
         securityLog('EDGE_DEVICE_CONFIGURED', "Device: $deviceId, By: {$authUser['id']}", $authUser['id'], $authUser['school_id']);
+
+        // Notificar a RECTOR y COORDINATOR
+        $devNameStmt = $conn->prepare("SELECT device_name, location FROM edge_devices WHERE device_id = ?");
+        $devNameStmt->execute([$deviceId]);
+        $devNameRow = $devNameStmt->fetch(PDO::FETCH_ASSOC);
+        $devName = $devNameRow ? $devNameRow['device_name'] : 'Sensor';
+        $devLoc = $devNameRow ? ($devNameRow['location'] ?? '') : '';
+
+        $notifyRoles = ['RECTOR', 'COORDINATOR'];
+        $placeholders = implode(',', array_fill(0, count($notifyRoles), '?'));
+        $nStmt = $conn->prepare("
+            SELECT user_id FROM users
+            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) IN ($placeholders)) AND active = TRUE
+        ");
+        $nStmt->execute(array_merge([$authUser['school_id']], $notifyRoles));
+        $recipients = $nStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($recipients)) {
+            $userName = $authUser['nombre'] ?? $authUser['email'];
+            $meta = json_encode([
+                'action' => 'sensor_configurado',
+                'device_id' => $deviceId,
+                'device_name' => $devName,
+                'location' => $devLoc,
+                'configured_by' => $authUser['id'],
+                'configured_by_name' => $userName,
+            ], JSON_UNESCAPED_UNICODE);
+
+            $rows = [];
+            $params = [];
+            $notifMessage = "Se configuró el sensor \"{$devName}\"" . ($devLoc ? " en {$devLoc}" : "") . ".";
+            foreach ($recipients as $r) {
+                $rows[] = "(?, ?, 'Sensor configurado', ?, 'INFO', ?::jsonb, NOW())";
+                $params[] = $authUser['school_id'];
+                $params[] = $r['user_id'];
+                $params[] = $notifMessage;
+                $params[] = $meta;
+            }
+            $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
+            try {
+                $conn->prepare($sql)->execute($params);
+            } catch (Throwable $e) {
+                error_log("[DEVICES] Configure notification error: " . $e->getMessage());
+            }
+        }
 
         echo json_encode([
             'status' => 'ok',
@@ -318,16 +405,18 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
 
         if (!empty($recipients)) {
             $meta = json_encode([
+                'action' => 'sensor_eliminado',
                 'device_id' => $deviceId,
                 'device_name' => $deviceName,
                 'location' => $location,
                 'deleted_by' => $authUser['id'],
+                'deleted_by_name' => $userName,
                 'deleted_by_role' => $userRole,
             ], JSON_UNESCAPED_UNICODE);
 
             $rows = [];
             $params = [];
-            $notifMessage = "El sensor '{$deviceName}' ({$location}) ha sido eliminado por {$userName}.";
+            $notifMessage = "Se eliminó el sensor \"{$deviceName}\"" . ($location ? " ({$location})" : "") . ".";
             foreach ($recipients as $r) {
                 $rows[] = "(?, ?, 'Sensor eliminado', ?, 'WARNING', ?::jsonb, NOW())";
                 $params[] = $authUser['school_id'];
@@ -444,6 +533,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation$#', $cleanPath, $matches)
 
         if (!empty($recipients)) {
             $meta = json_encode([
+                'action' => 'sensor_revocacion_iniciada',
                 'revocation_id' => $revocationId,
                 'device_id' => $deviceId,
                 'device_name' => $deviceName,
@@ -454,9 +544,9 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation$#', $cleanPath, $matches)
 
             $rows = [];
             $params = [];
-            $notifMessage = "El sensor '{$deviceName}' será revocado en 1 hora. Puedes cancelar esta acción.";
+            $notifMessage = "Se inició la eliminación del sensor \"{$deviceName}\". Se completará en 1 hora. Puedes cancelar si fue un error.";
             foreach ($recipients as $r) {
-                $rows[] = "(?, ?, 'Revocación de sensor en proceso', ?, 'WARNING', ?::jsonb, NOW())";
+                $rows[] = "(?, ?, 'Sensor en proceso de eliminación', ?, 'WARNING', ?::jsonb, NOW())";
                 $params[] = $authUser['school_id'];
                 $params[] = $r['user_id'];
                 $params[] = $notifMessage;

@@ -91,17 +91,17 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     if (!edgeDevice) return;
     setEnrollCmd({ state: 'sending', message: '' });
     try {
-      const res = await devicesApi.requestEnrollment(edgeDevice.device_id, {
+      await devicesApi.requestEnrollment(edgeDevice.device_id, {
         doc: form.documento,
         nombre: `${form.nombres} ${form.apellidos}`.trim(),
         tel: form.acudienteCelular,
       });
       setEnrollCmd({
         state: 'sent',
-        message: `Comando enviado por ${res?.channel || 'MQTT'}. Coloca el dedo del alumno en el lector del dispositivo "${edgeDevice.device_name || 'edge'}".`,
+        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella.`,
       });
     } catch (err) {
-      setEnrollCmd({ state: 'error', message: humanizeError(err, 'No se pudo enviar el comando al dispositivo.') });
+      setEnrollCmd({ state: 'error', message: humanizeError(err, 'No pudimos enviar la instrucción al sensor. Verifica que esté conectado e inténtalo de nuevo.') });
     }
   };
 
@@ -209,8 +209,8 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                   {biometricStatus === 'checking' ? <Skeleton className="h-12" /> : (
                     <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]'}`}>
                       {biometricStatus === 'connected'
-                        ? `Dispositivo "${edgeDevice?.device_name || 'edge'}" disponible. Puedes registrar la huella.`
-                        : 'No tienes ningún sensor asignado. Contacta al rector para que te asigne un sensor.'}
+                        ? `El sensor "${edgeDevice?.device_name || 'Secretaría'}" está listo. Presiona "Registrar huella" para comenzar.`
+                        : 'No tienes ningún sensor asignado. Pide al rector que te asigne uno para registrar huellas.'}
                     </div>
                   )}
                   <Button
@@ -221,7 +221,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     onClick={handleEnrollCommand}
                     leftIcon={<Fingerprint size={16} />}
                   >
-                    {enrollCmd.state === 'sent' ? 'Reenviar comando de enrolamiento' : 'Registrar huella'}
+                    {enrollCmd.state === 'sent' ? 'Volver a enviar la instrucción' : 'Registrar huella'}
                   </Button>
                   {enrollCmd.message && (
                     <div className={`rounded-control p-4 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'}`} role="status">
@@ -286,17 +286,17 @@ const StudentProfileDrawer = ({ student, onClose }) => {
     if (!edgeDevice) return;
     setEnrollCmd({ state: 'sending', message: '' });
     try {
-      const res = await devicesApi.requestEnrollment(edgeDevice.device_id, {
+      await devicesApi.requestEnrollment(edgeDevice.device_id, {
         doc: student.document || student.documento,
         nombre: `${student.first_name || ''} ${student.last_name || ''}`.trim(),
         tel: student.guardian_phone || '',
       });
       setEnrollCmd({
         state: 'sent',
-        message: `Comando enviado por ${res?.channel || 'MQTT'}. Coloca el dedo del alumno en el lector del dispositivo "${edgeDevice.device_name || 'edge'}".`,
+        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella.`,
       });
     } catch (err) {
-      setEnrollCmd({ state: 'error', message: humanizeError(err, 'No se pudo enviar el comando al dispositivo.') });
+      setEnrollCmd({ state: 'error', message: humanizeError(err, 'No pudimos enviar la instrucción al sensor. Verifica que esté conectado e inténtalo de nuevo.') });
     }
   };
 
@@ -364,12 +364,12 @@ const StudentProfileDrawer = ({ student, onClose }) => {
                 {biometricStatus === 'checking'
                   ? 'Verificando sensor…'
                   : biometricStatus !== 'connected'
-                    ? 'No tienes ningún sensor asignado. Contacta al rector.'
+                    ? 'No tienes ningún sensor asignado. Pide al rector que te asigne uno.'
                     : hasFingerprint === null
-                      ? 'Verificando huella registrada…'
+                      ? 'Verificando si hay huella registrada…'
                       : hasFingerprint
-                        ? 'Huella actual verificada. Presiona para reemplazar.'
-                        : 'No hay huella registrada aún. Presiona para registrar.'}
+                        ? 'Este estudiante ya tiene huella. Presiona aquí para volver a registrarla.'
+                        : 'Este estudiante no tiene huella todavía. Presiona aquí para registrarla.'}
               </p>
             </div>
             {enrollCmd.state === 'sending' && <Loader2 size={18} className="animate-spin text-[var(--nx-success)]" />}
