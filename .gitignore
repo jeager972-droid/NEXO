@@ -58,3 +58,4 @@ venv/
 .aider*
 .agents/
 .obsidian/
+nexo_edge.db*
