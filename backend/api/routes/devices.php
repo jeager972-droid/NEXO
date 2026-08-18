@@ -760,8 +760,15 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
         $stmt->execute([$deviceId]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+        if (!$device) {
             if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            securityLog('DEVICE_LOOKUP_FAILED', "Device not found: $deviceId (RLS may be blocking)");
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+        }
+        if (!password_verify($deviceToken, $device['token_hash'])) {
+            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            securityLog('DEVICE_TOKEN_MISMATCH', "Token mismatch for device: $deviceId");
             http_response_code(403);
             exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
         }
@@ -794,7 +801,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         ]);
     } catch (Exception $e) {
         if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-        securityLog('DEVICE_COMMANDS_FETCH_ERROR', $e->getMessage());
+        securityLog('DEVICE_COMMANDS_FETCH_ERROR', $e->getMessage() . " | DeviceID: $deviceId");
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al obtener comandos', 'debug' => $e->getMessage()]);
     }
@@ -831,8 +838,15 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
         $stmt->execute([$deviceId]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+        if (!$device) {
             if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            securityLog('DEVICE_PING_LOOKUP_FAILED', "Device not found: $deviceId (RLS may be blocking)");
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+        }
+        if (!password_verify($deviceToken, $device['token_hash'])) {
+            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            securityLog('DEVICE_PING_TOKEN_MISMATCH', "Token mismatch for device: $deviceId");
             http_response_code(403);
             exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
         }
@@ -847,6 +861,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
 
         if ($stmt->rowCount() === 0) {
             if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            securityLog('DEVICE_PING_UPDATE_FAILED', "UPDATE affected 0 rows for device: $deviceId");
             http_response_code(404);
             exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
         }
@@ -860,7 +875,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         echo json_encode(['status' => 'ok', 'received_at' => time()]);
     } catch (Exception $e) {
         if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-        securityLog('HEARTBEAT_ERROR', $e->getMessage());
+        securityLog('HEARTBEAT_ERROR', $e->getMessage() . " | DeviceID: $deviceId");
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al procesar heartbeat', 'debug' => $e->getMessage()]);
     }

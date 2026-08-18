@@ -306,12 +306,12 @@ private:
 
     void pollCommands() {
         std::string url = m_apiBase + "/devices/commands?device_id=" + m_deviceId;
+        LOG_INFO("[CommandWorker] Polling: {}", url);
         CURL* curl = curl_easy_init();
         if (!curl) return;
 
         std::string readBuffer;
         struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
         headers = curl_slist_append(headers, ("X-Device-Token: " + m_deviceToken).c_str());
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -320,7 +320,12 @@ private:
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1L);
+        curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "nexo-edge/1.0");
 
         CURLcode res = curl_easy_perform(curl);
         long httpCode = 0;
