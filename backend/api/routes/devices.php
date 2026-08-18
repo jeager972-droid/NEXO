@@ -787,14 +787,19 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
 
             $conn->commit();
 
-            $redis = getRedisConnection();
+            // Redis best-effort: si falla, retornar comandos vacíos (no es crítico)
             $commands = [];
-            if ($redis) {
-                $queue = "device:{$deviceId}:commands";
-                while (($item = $redis->rPop($queue)) !== false) {
-                    $cmd = json_decode($item, true);
-                    if ($cmd) $commands[] = $cmd;
+            try {
+                $redis = getRedisConnection();
+                if ($redis) {
+                    $queue = "device:{$deviceId}:commands";
+                    while (($item = $redis->rPop($queue)) !== false) {
+                        $cmd = json_decode($item, true);
+                        if ($cmd) $commands[] = $cmd;
+                    }
                 }
+            } catch (Exception $redisErr) {
+                securityLog('DEVICE_COMMANDS_REDIS_DOWN', "Redis unavailable, returning empty commands: " . $redisErr->getMessage());
             }
 
             echo json_encode([
