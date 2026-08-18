@@ -129,7 +129,7 @@ if ($cleanPath === '/devices' && $method === 'GET') {
     // Mostrar todos los sensores activos de la escuela (incluye manuales y auto-creados)
     $stmt = $conn->prepare("
         SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
-               ed.last_ping, ed.created_at, ed.group_id,
+               ed.last_ping, ed.created_at, ed.group_id, ed.assigned_role,
                ag.group_name, ag.grade_level
         FROM edge_devices ed
         LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
@@ -149,6 +149,14 @@ if ($cleanPath === '/devices' && $method === 'POST') {
     $name = trim($input['name'] ?? '');
     $location = trim($input['location'] ?? '');
     $groupId = trim((string)($input['group_id'] ?? ''));
+    $assignedRole = trim((string)($input['assigned_role'] ?? ''));
+
+    $validRoles = ['RECTOR', 'COORDINATOR', 'SECRETARY', 'TEACHER', 'SECURITY', 'AUXILIARY', 'COUNSELOR'];
+    if ($assignedRole !== '' && !in_array(strtoupper($assignedRole), $validRoles)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'Rol asignado no válido']));
+    }
+    $assignedRole = $assignedRole !== '' ? strtoupper($assignedRole) : null;
 
     if (empty($name)) {
         http_response_code(400);
@@ -174,8 +182,8 @@ if ($cleanPath === '/devices' && $method === 'POST') {
     $rawToken = bin2hex(random_bytes(32));
     $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
 
-    $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id) VALUES (?, ?, ?, ?, ?) RETURNING device_id");
-    $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $validGroupId]);
+    $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id, assigned_role) VALUES (?, ?, ?, ?, ?, ?) RETURNING device_id");
+    $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $validGroupId, $assignedRole]);
     $deviceId = $stmt->fetchColumn();
 
     // Pasando el ID del usuario y escuela para trazabilidad
@@ -604,6 +612,61 @@ if ($cleanPath === '/devices/revocations/pending' && $method === 'GET') {
         securityLog('REVOCATIONS_PENDING_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al obtener revocaciones pendientes', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ============================================================================
+// GET /devices/by-role — Obtener sensor asignado al rol del usuario actual
+// ============================================================================
+// Devuelve el sensor cuyo assigned_role coincide con el rol del usuario.
+// Si no hay sensor asignado a ese rol, devuelve el primer sensor activo
+// como fallback (comportamiento anterior).
+if ($cleanPath === '/devices/by-role' && $method === 'GET') {
+    $authUser = requireAuth();
+    $userRole = strtoupper($authUser['role'] ?? '');
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        // Buscar sensor asignado al rol del usuario
+        $stmt = $conn->prepare("
+            SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
+                   ed.last_ping, ed.created_at, ed.group_id, ed.assigned_role,
+                   ag.group_name, ag.grade_level
+            FROM edge_devices ed
+            LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
+            WHERE ed.school_id = ?
+              AND ed.active = TRUE
+              AND ed.assigned_role = ?
+            ORDER BY ed.configured DESC, ed.created_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$authUser['school_id'], $userRole]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Fallback: primer sensor activo si no hay uno asignado al rol
+        if (!$device) {
+            $fallbackStmt = $conn->prepare("
+                SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
+                       ed.last_ping, ed.created_at, ed.group_id, ed.assigned_role,
+                       ag.group_name, ag.grade_level
+                FROM edge_devices ed
+                LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
+                WHERE ed.school_id = ?
+                  AND ed.active = TRUE
+                ORDER BY ed.configured DESC, ed.created_at DESC
+                LIMIT 1
+            ");
+            $fallbackStmt->execute([$authUser['school_id']]);
+            $device = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode(['status' => 'ok', 'data' => $device ?: null]);
+    } catch (Exception $e) {
+        securityLog('DEVICE_BY_ROLE_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener sensor por rol']);
     }
     exit;
 }

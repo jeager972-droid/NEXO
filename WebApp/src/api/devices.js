@@ -13,6 +13,10 @@ export const devicesApi = {
     const response = await client.get('/devices');
     return response.data?.data ?? [];
   },
+  getByRole: async () => {
+    const response = await client.get('/devices/by-role');
+    return response.data?.data ?? null;
+  },
   sendCommand: async (deviceId, command, payload = {}) => {
     const response = await client.post(`/devices/command/${deviceId}`, { command, payload });
     return response.data;
@@ -21,8 +25,8 @@ export const devicesApi = {
     devicesApi.sendCommand(deviceId, 'ENROLL_REQUEST', { doc, nombre, tel }),
   authorizeExit: (deviceId, doc) =>
     devicesApi.sendCommand(deviceId, 'AUTHORIZE_EXIT', { doc }),
-  register: async ({ name, location, group_id }) => {
-    const response = await client.post('/devices', { name, location, group_id });
+  register: async ({ name, location, group_id, assigned_role }) => {
+    const response = await client.post('/devices', { name, location, group_id, assigned_role });
     return response.data?.data ?? null;
   },
   configure: async (deviceId) => {

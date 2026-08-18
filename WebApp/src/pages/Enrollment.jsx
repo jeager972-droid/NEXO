@@ -79,9 +79,8 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     if (step !== 4) return;
     setBiometricStatus('checking');
     setEnrollCmd({ state: 'idle', message: '' });
-    devicesApi.getAll()
-      .then((devices) => {
-        const device = devices.find((d) => d.active) || devices[0] || null;
+    devicesApi.getByRole()
+      .then((device) => {
         setEdgeDevice(device);
         setBiometricStatus(device ? 'connected' : 'error');
       })
@@ -269,9 +268,8 @@ const StudentProfileDrawer = ({ student, onClose }) => {
 
   useEffect(() => {
     if (!student) return;
-    devicesApi.getAll()
-      .then((devices) => {
-        const device = devices.find((d) => d.active) || devices[0] || null;
+    devicesApi.getByRole()
+      .then((device) => {
         setEdgeDevice(device);
         setBiometricStatus(device ? 'connected' : 'error');
       })

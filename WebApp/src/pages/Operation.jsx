@@ -289,8 +289,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
           const student = students.find((s) => (s.student_id || s.id) === form.student);
           const doc = student?.document || student?.documento;
           if (doc) {
-            const devices = await devicesApi.getAll();
-            const device = devices.find((d) => d.active) || devices[0];
+            const device = await devicesApi.getByRole();
             if (device) {
               await devicesApi.authorizeExit(device.device_id, String(doc));
               setDeliveryStatus((prev) => prev || 'Salida notificada al lector biométrico');
