@@ -126,25 +126,31 @@ if ($conn && strpos($cleanPath, '/devices') === 0) {
 if ($cleanPath === '/devices' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $currentYear = (int)date('Y');
-    // Mostrar todos los sensores activos de la escuela (incluye manuales y auto-creados)
-    $stmt = $conn->prepare("
-        SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
-               ed.last_ping, ed.created_at, ed.group_id, ed.assigned_user_id,
-               ag.group_name, ag.grade_level,
-               u.first_name AS assigned_user_first_name,
-               u.last_name AS assigned_user_last_name,
-               u.role AS assigned_user_role
-        FROM edge_devices ed
-        LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
-        LEFT JOIN users u ON ed.assigned_user_id = u.user_id
-        WHERE ed.school_id = ?
-          AND ed.active = TRUE
-        ORDER BY ed.configured ASC,
-                 CASE WHEN ag.grade_level IS NULL THEN 99 ELSE ag.grade_level::INT END ASC,
-                 ag.group_name ASC, ed.created_at DESC
-    ");
-    $stmt->execute([$authUser['school_id']]);
-    echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    try {
+        // Mostrar todos los sensores activos de la escuela (incluye manuales y auto-creados)
+        $stmt = $conn->prepare("
+            SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
+                   ed.last_ping, ed.created_at, ed.group_id, ed.assigned_user_id,
+                   ag.group_name, ag.grade_level,
+                   u.first_name AS assigned_user_first_name,
+                   u.last_name AS assigned_user_last_name,
+                   u.role AS assigned_user_role
+            FROM edge_devices ed
+            LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
+            LEFT JOIN users u ON ed.assigned_user_id = u.user_id
+            WHERE ed.school_id = ?
+              AND ed.active = TRUE
+            ORDER BY ed.configured ASC,
+                     CASE WHEN ag.grade_level IS NULL THEN 99 ELSE ag.grade_level::INT END ASC,
+                     ag.group_name ASC, ed.created_at DESC
+        ");
+        $stmt->execute([$authUser['school_id']]);
+        echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (PDOException $e) {
+        error_log("[DEVICES] GET /devices error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al cargar los sensores. Verifica que la base de datos esté actualizada.']);
+    }
     exit;
 }
 
@@ -155,56 +161,62 @@ if ($cleanPath === '/devices' && $method === 'POST') {
     $groupId = trim((string)($input['group_id'] ?? ''));
     $assignedUserId = trim((string)($input['assigned_user_id'] ?? ''));
 
-    $validAssignedUserId = null;
-    if ($assignedUserId !== '') {
-        if (!preg_match('/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i', $assignedUserId)) {
+    try {
+        $validAssignedUserId = null;
+        if ($assignedUserId !== '') {
+            if (!preg_match('/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i', $assignedUserId)) {
+                http_response_code(400);
+                exit(json_encode(['status' => 'error', 'message' => 'Formato de ID de usuario inválido']));
+            }
+            $userStmt = $conn->prepare("SELECT 1 FROM users WHERE user_id = ? AND school_id = ? AND deleted_at IS NULL");
+            $userStmt->execute([$assignedUserId, $authUser['school_id']]);
+            if (!$userStmt->fetchColumn()) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'El usuario no pertenece a tu institución']));
+            }
+            $validAssignedUserId = $assignedUserId;
+        }
+
+        if (empty($name)) {
             http_response_code(400);
-            exit(json_encode(['status' => 'error', 'message' => 'Formato de ID de usuario inválido']));
+            exit(json_encode(['status' => 'error', 'message' => 'El nombre es obligatorio']));
         }
-        $userStmt = $conn->prepare("SELECT 1 FROM users WHERE user_id = ? AND school_id = ? AND deleted_at IS NULL");
-        $userStmt->execute([$assignedUserId, $authUser['school_id']]);
-        if (!$userStmt->fetchColumn()) {
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'El usuario no pertenece a tu institución']));
+
+        // Validar group_id si viene en el body
+        $validGroupId = null;
+        if ($groupId !== '') {
+            if (!preg_match('/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i', $groupId)) {
+                http_response_code(400);
+                exit(json_encode(['status' => 'error', 'message' => 'Formato de ID de grupo inválido']));
+            }
+            $groupStmt = $conn->prepare("SELECT 1 FROM academic_groups WHERE group_id = ? AND school_id = ?");
+            $groupStmt->execute([$groupId, $authUser['school_id']]);
+            if (!$groupStmt->fetchColumn()) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'El grupo no pertenece a tu institución']));
+            }
+            $validGroupId = $groupId;
         }
-        $validAssignedUserId = $assignedUserId;
+
+        $rawToken = bin2hex(random_bytes(32));
+        $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
+
+        $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id, assigned_user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING device_id");
+        $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $validGroupId, $validAssignedUserId]);
+        $deviceId = $stmt->fetchColumn();
+
+        // Pasando el ID del usuario y escuela para trazabilidad
+        securityLog('EDGE_DEVICE_REGISTERED', "Device: $deviceId, Name: $name", $authUser['id'], $authUser['school_id']);
+
+        echo json_encode([
+            'status' => 'ok',
+            'data' => ['device_id' => $deviceId, 'name' => $name, 'token' => $rawToken]
+        ]);
+    } catch (PDOException $e) {
+        error_log("[DEVICES] POST /devices error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al registrar el sensor. Verifica que la base de datos esté actualizada.']);
     }
-
-    if (empty($name)) {
-        http_response_code(400);
-        exit(json_encode(['status' => 'error', 'message' => 'El nombre es obligatorio']));
-    }
-
-    // Validar group_id si viene en el body
-    $validGroupId = null;
-    if ($groupId !== '') {
-        if (!preg_match('/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i', $groupId)) {
-            http_response_code(400);
-            exit(json_encode(['status' => 'error', 'message' => 'Formato de ID de grupo inválido']));
-        }
-        $groupStmt = $conn->prepare("SELECT 1 FROM academic_groups WHERE group_id = ? AND school_id = ?");
-        $groupStmt->execute([$groupId, $authUser['school_id']]);
-        if (!$groupStmt->fetchColumn()) {
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'El grupo no pertenece a tu institución']));
-        }
-        $validGroupId = $groupId;
-    }
-
-    $rawToken = bin2hex(random_bytes(32));
-    $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
-
-    $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id, assigned_user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING device_id");
-    $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $validGroupId, $validAssignedUserId]);
-    $deviceId = $stmt->fetchColumn();
-
-    // Pasando el ID del usuario y escuela para trazabilidad
-    securityLog('EDGE_DEVICE_REGISTERED', "Device: $deviceId, Name: $name", $authUser['id'], $authUser['school_id']);
-
-    echo json_encode([
-        'status' => 'ok',
-        'data' => ['device_id' => $deviceId, 'name' => $name, 'token' => $rawToken]
-    ]);
     exit;
 }
 
