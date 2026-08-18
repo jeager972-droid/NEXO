@@ -210,7 +210,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]'}`}>
                       {biometricStatus === 'connected'
                         ? `Dispositivo "${edgeDevice?.device_name || 'edge'}" disponible. Puedes registrar la huella.`
-                        : 'No se detectó el sensor de huellas.'}
+                        : 'No tienes ningún sensor asignado. Contacta al rector para que te asigne un sensor.'}
                     </div>
                   )}
                   <Button
@@ -238,7 +238,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                 </div>
                 {biometricStatus !== 'connected' && (
                   <div className="rounded-control bg-[var(--nx-subtle-bg-warning)] p-4 text-body text-[var(--nx-warning)] flex items-center gap-2">
-                    <AlertCircle size={18} /> El alumno queda pendiente de registrar su huella.
+                    <AlertCircle size={18} /> No tienes sensor asignado. El alumno queda pendiente de registrar su huella.
                   </div>
                 )}
               </div>
@@ -364,7 +364,7 @@ const StudentProfileDrawer = ({ student, onClose }) => {
                 {biometricStatus === 'checking'
                   ? 'Verificando sensor…'
                   : biometricStatus !== 'connected'
-                    ? 'No se detectó el sensor de huellas.'
+                    ? 'No tienes ningún sensor asignado. Contacta al rector.'
                     : hasFingerprint === null
                       ? 'Verificando huella registrada…'
                       : hasFingerprint

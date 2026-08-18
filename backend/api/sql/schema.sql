@@ -367,7 +367,7 @@ CREATE TABLE IF NOT EXISTS edge_devices (
     status               VARCHAR(50) DEFAULT 'unknown',
     last_seen_timestamp  TIMESTAMPTZ,
     location             TEXT,
-    assigned_role        VARCHAR(50),
+    assigned_user_id     UUID REFERENCES users(user_id),
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_edge_devices_school_active ON edge_devices(school_id, active);

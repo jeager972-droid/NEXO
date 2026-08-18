@@ -29,6 +29,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { humanizeError } from '../utils/messages';
 import { ROLES, getRoleDisplay } from '../config/roles';
+import { usersApi } from '../api/users';
 import { formatGroupName } from '../utils/groupFormat';
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -390,9 +391,10 @@ const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke }) => {
               <MapPin size={13} className="shrink-0" />
               <span className="truncate">{getDeviceLocation(device)}</span>
             </p>
-            {device.assigned_role && (
+            {device.assigned_user_id && (
               <p className="mt-0.5 text-caption text-[var(--nx-text-muted)]">
-                Rol: {getRoleDisplay(device.assigned_role)}
+                Asignado a: {device.assigned_user_first_name || ''} {device.assigned_user_last_name || ''}
+                {device.assigned_user_role ? ` (${getRoleDisplay(device.assigned_user_role)})` : ''}
               </p>
             )}
           </div>
@@ -436,9 +438,25 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [groupId, setGroupId] = useState('');
-  const [assignedRole, setAssignedRole] = useState('');
+  const [selectedRole, setSelectedRole] = useState('');
+  const [assignedUserId, setAssignedUserId] = useState('');
+  const [roleUsers, setRoleUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (selectedRole) {
+      setLoadingUsers(true);
+      usersApi.getByRole(selectedRole, false)
+        .then((res) => setRoleUsers(res.data || []))
+        .catch(() => setRoleUsers([]))
+        .finally(() => setLoadingUsers(false));
+    } else {
+      setRoleUsers([]);
+      setAssignedUserId('');
+    }
+  }, [selectedRole]);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -450,13 +468,14 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
         name: name.trim(),
         location: location.trim(),
         group_id: groupId || undefined,
-        assigned_role: assignedRole || undefined,
+        assigned_user_id: assignedUserId || undefined,
       });
       onRegistered(data);
       setName('');
       setLocation('');
       setGroupId('');
-      setAssignedRole('');
+      setSelectedRole('');
+      setAssignedUserId('');
       onClose();
     } catch (error) {
       setErr(humanizeError(error, 'No se pudo registrar el sensor.'));
@@ -519,19 +538,46 @@ const RegisterDrawer = ({ open, groups, onClose, onRegistered }) => {
           </div>
         )}
         <div className="space-y-2">
-          <label className="text-label text-[var(--nx-text)]">Rol con acceso (opcional)</label>
+          <label className="text-label text-[var(--nx-text)]">Rol del usuario asignado (opcional)</label>
           <SearchableSelect
             options={ROLE_OPTIONS}
-            value={assignedRole}
-            onChange={(v) => setAssignedRole(v || '')}
-            placeholder="— Ninguno (cualquier rol) —"
+            value={selectedRole}
+            onChange={(v) => { setSelectedRole(v || ''); setAssignedUserId(''); }}
+            placeholder="— Ninguno —"
             searchPlaceholder="Buscar rol…"
             clearable
           />
           <p className="text-caption text-[var(--nx-text-muted)]">
-            Si asignas un rol (ej. Secretaria), los usuarios con ese rol usarán este sensor para enrolar huellas. Si no seleccionas ninguno, el sistema usará el primer sensor disponible.
+            Selecciona un rol para ver los usuarios disponibles.
           </p>
         </div>
+        {selectedRole && (
+          <div className="space-y-2">
+            <label className="text-label text-[var(--nx-text)]">Usuario asignado</label>
+            {loadingUsers ? (
+              <div className="h-12 w-full nx-skeleton rounded-control" aria-hidden />
+            ) : roleUsers.length === 0 ? (
+              <div className="rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">
+                No hay usuarios con el rol seleccionado.
+              </div>
+            ) : (
+              <SearchableSelect
+                options={roleUsers.map((u) => ({
+                  value: u.user_id || u.id,
+                  label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id,
+                }))}
+                value={assignedUserId}
+                onChange={(v) => setAssignedUserId(v || '')}
+                placeholder="— Seleccionar usuario —"
+                searchPlaceholder="Buscar usuario…"
+                clearable
+              />
+            )}
+            <p className="text-caption text-[var(--nx-text-muted)]">
+              Solo este usuario podrá usar el sensor para enrolar huellas. Si no seleccionas ninguno, el sensor no tendrá usuario asignado.
+            </p>
+          </div>
+        )}
         <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
             Al registrar el sensor, recibirás un <strong className="text-[var(--nx-text)]">código de activación</strong> único.

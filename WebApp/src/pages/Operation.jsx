@@ -59,7 +59,7 @@ const FIELD_LABELS = {
   group: 'Grupo', student: 'Estudiante', grade: 'Grado', date: 'Fecha', time: 'Hora',
   timeStart: 'Hora de salida', timeEnd: 'Hora de retorno',
   message: 'Mensaje', reason: 'Motivo', location: 'Ubicación', description: 'Descripción',
-  targetRole: 'Rol destinatario', targets: 'Destinatarios'
+  targetRole: 'Rol destinatario', targets: 'Destinatario'
 };
 
 const Operation = () => {
@@ -243,7 +243,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         payload.group = form.group;
         payload.group_name = form.group;
       }
-      if (command.fields.includes('targets')) payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
+      if (command.fields.includes('targets') && command.id !== 'solicitud') payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
       if (command.fields.includes('timeStart')) payload.timeStart = form.timeStart || null;
       if (command.fields.includes('timeEnd')) payload.timeEnd = form.timeEnd || null;
 
@@ -254,12 +254,11 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
           return;
         }
         if (!form.targets || !form.targets.trim()) {
-          setResult({ variant: 'danger', message: 'Debes seleccionar al menos un destinatario.' });
+          setResult({ variant: 'danger', message: 'Debes seleccionar un destinatario.' });
           setIsSubmitting(false);
           return;
         }
-        const ids = form.targets.split(',').filter(Boolean);
-        payload.recipient_id = ids[0] || null;
+        payload.recipient_id = form.targets;
       }
 
       let result;
@@ -335,6 +334,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     }
     if (field === 'targets') {
       const isIncident = command.id === 'incidente';
+      const isSolicitud = command.id === 'solicitud';
       const incidentOptions = [
         { value: 'padre', label: 'Acudiente' },
         { value: 'rector', label: 'Rectoría' },
@@ -347,6 +347,21 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         if (loadingUsers) return <div className="h-20 w-full nx-skeleton rounded-control" aria-hidden />;
         if (!form.targetRole) return <div className="rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</div>;
         options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id }));
+      }
+      if (isSolicitud) {
+        return (
+          <SearchableSelect
+            key={field}
+            label={FIELD_LABELS[field]}
+            options={options}
+            value={form.targets || ''}
+            onChange={(v) => updateField('targets', v || '')}
+            clearable
+            placeholder="Seleccionar destinatario…"
+            searchPlaceholder="Buscar destinatario…"
+            emptyText="Sin destinatarios"
+          />
+        );
       }
       const value = (form.targets || '').split(',').filter(Boolean);
       return (
