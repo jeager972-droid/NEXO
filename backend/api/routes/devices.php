@@ -134,10 +134,11 @@ if ($cleanPath === '/devices' && $method === 'GET') {
                    ag.group_name, ag.grade_level,
                    u.first_name AS assigned_user_first_name,
                    u.last_name AS assigned_user_last_name,
-                   u.role AS assigned_user_role
+                   r.role_name AS assigned_user_role
             FROM edge_devices ed
             LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
             LEFT JOIN users u ON ed.assigned_user_id = u.user_id
+            LEFT JOIN roles r ON u.role_id = r.role_id
             WHERE ed.school_id = ?
               AND ed.active = TRUE
             ORDER BY ed.configured ASC,

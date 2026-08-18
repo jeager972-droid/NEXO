@@ -540,11 +540,12 @@ if ($cleanPath === '/auth/refresh' && $method === 'POST') {
     // Buscar la sesión activa con este refresh token
     $stmt = $conn->prepare("
         SELECT us.session_id, us.user_id, us.expires_at, us.revoked,
-               u.email, u.role_name, u.school_id, u.first_name, u.last_name,
+               u.email, r.role_name, u.school_id, u.first_name, u.last_name,
                u.profile_photo_url, u.work_shift, u.active as user_active,
                s.school_name
         FROM user_sessions us
         JOIN users u ON u.user_id = us.user_id
+        INNER JOIN roles r ON u.role_id = r.role_id
         LEFT JOIN schools s ON s.school_id = u.school_id
         WHERE us.refresh_token_hash = ?
           AND us.revoked = FALSE
