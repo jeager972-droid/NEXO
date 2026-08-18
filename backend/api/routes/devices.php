@@ -366,6 +366,28 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation$#', $cleanPath, $matches)
         $deviceName = $devInfo['device_name'];
         $userName = $authUser['nombre'] ?? $authUser['email'];
 
+        // Verificar si ya hay una revocación pendiente para este dispositivo
+        $pendingStmt = $conn->prepare("
+            SELECT r.revocation_id, r.executes_at
+            FROM sensor_revocation_requests r
+            WHERE r.device_id = ? AND r.school_id = ?
+              AND r.completed = FALSE AND r.cancelled = FALSE
+              AND r.executes_at > NOW()
+            LIMIT 1
+        ");
+        $pendingStmt->execute([$deviceId, $authUser['school_id']]);
+        $existingRevocation = $pendingStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existingRevocation) {
+            http_response_code(409);
+            exit(json_encode([
+                'status' => 'error',
+                'message' => 'Ya hay una revocación en proceso para este sensor',
+                'revocation_id' => $existingRevocation['revocation_id'],
+                'executes_at' => $existingRevocation['executes_at'],
+            ]));
+        }
+
         // Crear revocación con executes_at = NOW() + 1 hour
         $revStmt = $conn->prepare("
             INSERT INTO sensor_revocation_requests (revocation_id, device_id, school_id, requested_by, requested_at, executes_at)
