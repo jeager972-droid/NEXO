@@ -329,7 +329,7 @@ private:
         curl_slist_free_all(headers);
 
         if (res != CURLE_OK || httpCode != 200) {
-            LOG_WARN("[CommandWorker] Poll failed: HTTP {} | {}", httpCode, curl_easy_strerror(res));
+            LOG_WARN("[CommandWorker] Poll failed: HTTP {} | {} | URL: {} | Body: {}", httpCode, curl_easy_strerror(res), url, readBuffer);
             return;
         }
 
@@ -904,8 +904,15 @@ int main() {
     auto initResult = biometricSensor->initialize();
     if (!initResult) {
         LOG_CRITICAL("Biometric sensor init failed: {} - {}", toString(initResult.error), initResult.message);
-        SqliteManager::getInstance().close();
-        return 1;
+        LOG_WARN("Falling back to DevStub sensor. Edge will continue without biometric hardware.");
+        biometricSensor = std::make_unique<DevStubBiometricSensor>();
+        g_activeSensor.store(biometricSensor.get(), std::memory_order_release);
+        auto retryResult = biometricSensor->initialize();
+        if (!retryResult) {
+            LOG_CRITICAL("DevStub sensor also failed: {}. Edge cannot continue.", retryResult.message);
+            SqliteManager::getInstance().close();
+            return 1;
+        }
     }
     auto display = std::make_unique<DevStubDisplay>();
     auto notification = std::make_unique<DevStubNotification>();

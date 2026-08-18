@@ -746,18 +746,27 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
-    $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
-    $stmt->execute([$deviceId]);
-    $device = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
-        http_response_code(403);
-        exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+
+    // FIX (PgBouncer): En transaction-pool mode, set_config(..., true) no persiste
+    // entre consultas sin transacción. Usar beginTransaction() + SET LOCAL.
+    $startedTx = false;
+    if (!$conn->inTransaction()) {
+        $conn->beginTransaction();
+        $startedTx = true;
     }
-    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
-    $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
+        $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
+        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
+        $stmt->execute([$deviceId]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+        }
+        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$device['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+
         // Actualizar last_ping al recibir poll de comandos
         $conn->prepare("UPDATE edge_devices SET last_ping = NOW() WHERE device_id = ?")
             ->execute([$deviceId]);
@@ -772,12 +781,19 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
             }
         }
 
+        if ($startedTx) {
+            register_shutdown_function(function() use ($conn) {
+                try { if ($conn->inTransaction()) $conn->commit(); } catch (Exception $e) {}
+            });
+        }
+
         echo json_encode([
             'status' => 'ok',
             'data' => $commands,
             'meta' => ['count' => count($commands)]
         ]);
     } catch (Exception $e) {
+        if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
         securityLog('DEVICE_COMMANDS_FETCH_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al obtener comandos', 'debug' => $e->getMessage()]);
@@ -802,18 +818,26 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    $conn->prepare("SELECT set_config('app.current_role', 'EDGE_NODE', true)")->execute();
-    $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
-    $stmt->execute([$deviceId]);
-    $device = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
-        http_response_code(403);
-        exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+    // FIX (PgBouncer): En transaction-pool mode, set_config(..., true) no persiste
+    // entre consultas sin transacción. Usar beginTransaction() + SET LOCAL.
+    $startedTx = false;
+    if (!$conn->inTransaction()) {
+        $conn->beginTransaction();
+        $startedTx = true;
     }
-    $stmtConfig = $conn->prepare("SELECT set_config('app.current_school_id', ?, true), set_config('app.current_role', 'EDGE_NODE', true)");
-    $stmtConfig->execute([(string)$device['school_id']]);
 
     try {
+        $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
+        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
+        $stmt->execute([$deviceId]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+        }
+        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$device['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+
         $stmt = $conn->prepare("
             UPDATE edge_devices
             SET last_ping = NOW()
@@ -822,12 +846,20 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         $stmt->execute([$deviceId]);
 
         if ($stmt->rowCount() === 0) {
+            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
             http_response_code(404);
             exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
         }
 
+        if ($startedTx) {
+            register_shutdown_function(function() use ($conn) {
+                try { if ($conn->inTransaction()) $conn->commit(); } catch (Exception $e) {}
+            });
+        }
+
         echo json_encode(['status' => 'ok', 'received_at' => time()]);
     } catch (Exception $e) {
+        if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
         securityLog('HEARTBEAT_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al procesar heartbeat', 'debug' => $e->getMessage()]);
