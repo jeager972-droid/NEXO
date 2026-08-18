@@ -711,22 +711,27 @@ if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) &&
         $mqttOk = publishDeviceCommand($deviceId, $cmdPayload);
     }
 
-    // Fallback: Redis para compatibilidad V1
+    // SIEMPRE encolar en Redis también (el edge usa polling HTTP, no MQTT)
+    $redisOk = false;
     try {
         $redis = getRedisConnection();
         if ($redis) {
             $redis->lPush("device:{$deviceId}:commands", json_encode($cmdPayload, JSON_UNESCAPED_UNICODE));
             $redis->expire("device:{$deviceId}:commands", 86400);
+            $redisOk = true;
+        } else {
+            securityLog('DEVICE_COMMAND_REDIS_NULL', "Redis connection returned null for device: $deviceId");
         }
     } catch (Exception $e) {
-        if (!$mqttOk) {
-            securityLog('DEVICE_COMMAND_ERROR', $e->getMessage());
-            http_response_code(500);
-            exit(json_encode(['status' => 'error', 'message' => 'Error al encolar comando']));
-        }
+        securityLog('DEVICE_COMMAND_REDIS_ERROR', "Redis failed for device: $deviceId | MQTT was " . ($mqttOk ? 'OK' : 'FAIL') . " | Error: " . $e->getMessage());
     }
 
-    $channel = $mqttOk ? 'MQTT' : 'REDIS';
+    if (!$mqttOk && !$redisOk) {
+        http_response_code(500);
+        exit(json_encode(['status' => 'error', 'message' => 'No se pudo encolar el comando (MQTT y Redis no disponibles)']));
+    }
+
+    $channel = $mqttOk ? ($redisOk ? 'MQTT+REDIS' : 'MQTT') : 'REDIS';
     securityLog('DEVICE_COMMAND_ISSUED', "Device: $deviceId Command: $command Channel: $channel", $authUser['id'], $authUser['school_id']);
     echo json_encode(['status' => 'ok', 'device_id' => $deviceId, 'command' => $command, 'channel' => $channel]);
     exit;

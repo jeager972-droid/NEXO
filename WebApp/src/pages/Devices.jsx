@@ -38,12 +38,14 @@ const FRESH_WINDOW_MS = 5 * 60 * 1000;
 // ── Helpers ──
 
 const getDeviceStatus = (device) => {
+  if (device.last_ping) {
+    const ageMs = Date.now() - new Date(device.last_ping + 'Z').getTime();
+    if (ageMs <= FRESH_WINDOW_MS) return { scheme: 'success', label: 'Operativo', icon: Wifi };
+    if (ageMs <= 30 * 60 * 1000) return { scheme: 'warning', label: 'Conectando', icon: RefreshCw };
+    return { scheme: 'danger', label: 'Desconectado', icon: WifiOff };
+  }
   if (!device.configured) return { scheme: 'neutral', label: 'No configurado', icon: Settings2 };
-  if (!device.last_ping) return { scheme: 'warning', label: 'Sin conexión', icon: AlertCircle };
-  const ageMs = Date.now() - new Date(device.last_ping + 'Z').getTime();
-  if (ageMs <= FRESH_WINDOW_MS) return { scheme: 'success', label: 'Operativo', icon: Wifi };
-  if (ageMs <= 30 * 60 * 1000) return { scheme: 'warning', label: 'Conectando', icon: RefreshCw };
-  return { scheme: 'danger', label: 'Desconectado', icon: WifiOff };
+  return { scheme: 'warning', label: 'Sin conexión', icon: AlertCircle };
 };
 
 const getDeviceLocation = (device) => {
