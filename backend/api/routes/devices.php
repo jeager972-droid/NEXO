@@ -747,64 +747,76 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
 
-    // FIX (PgBouncer): En transaction-pool mode, set_config(..., true) no persiste
-    // entre consultas sin transacción. Usar beginTransaction() + SET LOCAL.
-    $startedTx = false;
-    if (!$conn->inTransaction()) {
-        $conn->beginTransaction();
-        $startedTx = true;
-    }
+    // FIX (PgBouncer): Supabase pierde conexiones del pool intermitentemente.
+    // Retry hasta 3 veces para manejar "AUTH failed while reconnecting".
+    $maxRetries = 3;
+    $lastError = null;
 
-    try {
-        $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
-        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
-        $stmt->execute([$deviceId]);
-        $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$device) {
-            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-            securityLog('DEVICE_LOOKUP_FAILED', "Device not found: $deviceId (RLS may be blocking)");
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
-        }
-        if (!password_verify($deviceToken, $device['token_hash'])) {
-            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-            securityLog('DEVICE_TOKEN_MISMATCH', "Token mismatch for device: $deviceId");
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
-        }
-        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$device['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+    for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+        try {
+            // Rollback si quedó una transacción abortada de un intento anterior
+            if ($conn->inTransaction()) {
+                try { $conn->rollBack(); } catch (Exception $ignore) {}
+            }
 
-        // Actualizar last_ping al recibir poll de comandos
-        $conn->prepare("UPDATE edge_devices SET last_ping = NOW() WHERE device_id = ?")
-            ->execute([$deviceId]);
+            $conn->beginTransaction();
 
-        $redis = getRedisConnection();
-        $commands = [];
-        if ($redis) {
-            $queue = "device:{$deviceId}:commands";
-            while (($item = $redis->rPop($queue)) !== false) {
-                $cmd = json_decode($item, true);
-                if ($cmd) $commands[] = $cmd;
+            $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
+            $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
+            $stmt->execute([$deviceId]);
+            $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$device) {
+                $conn->rollBack();
+                securityLog('DEVICE_LOOKUP_FAILED', "Device not found: $deviceId (attempt $attempt)");
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+            }
+            if (!password_verify($deviceToken, $device['token_hash'])) {
+                $conn->rollBack();
+                securityLog('DEVICE_TOKEN_MISMATCH', "Token mismatch for device: $deviceId (attempt $attempt)");
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+            }
+
+            $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$device['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+
+            // Actualizar last_ping al recibir poll de comandos
+            $conn->prepare("UPDATE edge_devices SET last_ping = NOW() WHERE device_id = ?")
+                ->execute([$deviceId]);
+
+            $conn->commit();
+
+            $redis = getRedisConnection();
+            $commands = [];
+            if ($redis) {
+                $queue = "device:{$deviceId}:commands";
+                while (($item = $redis->rPop($queue)) !== false) {
+                    $cmd = json_decode($item, true);
+                    if ($cmd) $commands[] = $cmd;
+                }
+            }
+
+            echo json_encode([
+                'status' => 'ok',
+                'data' => $commands,
+                'meta' => ['count' => count($commands)]
+            ]);
+            exit;
+
+        } catch (Exception $e) {
+            $lastError = $e->getMessage();
+            try { if ($conn->inTransaction()) $conn->rollBack(); } catch (Exception $ignore) {}
+            securityLog('DEVICE_COMMANDS_RETRY', "Attempt $attempt failed: $lastError | DeviceID: $deviceId");
+            if ($attempt < $maxRetries) {
+                usleep(200000); // 200ms entre retries
             }
         }
-
-        if ($startedTx) {
-            register_shutdown_function(function() use ($conn) {
-                try { if ($conn->inTransaction()) $conn->commit(); } catch (Exception $e) {}
-            });
-        }
-
-        echo json_encode([
-            'status' => 'ok',
-            'data' => $commands,
-            'meta' => ['count' => count($commands)]
-        ]);
-    } catch (Exception $e) {
-        if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-        securityLog('DEVICE_COMMANDS_FETCH_ERROR', $e->getMessage() . " | DeviceID: $deviceId");
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener comandos', 'debug' => $e->getMessage()]);
     }
+
+    securityLog('DEVICE_COMMANDS_FETCH_ERROR', "All $maxRetries attempts failed: $lastError | DeviceID: $deviceId");
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Error al obtener comandos', 'debug' => $lastError]);
     exit;
 }
 
@@ -825,60 +837,67 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         http_response_code(401);
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
-    // FIX (PgBouncer): En transaction-pool mode, set_config(..., true) no persiste
-    // entre consultas sin transacción. Usar beginTransaction() + SET LOCAL.
-    $startedTx = false;
-    if (!$conn->inTransaction()) {
-        $conn->beginTransaction();
-        $startedTx = true;
+
+    // FIX (PgBouncer): Retry hasta 3 veces para manejar "AUTH failed while reconnecting"
+    $maxRetries = 3;
+    $lastError = null;
+
+    for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+        try {
+            if ($conn->inTransaction()) {
+                try { $conn->rollBack(); } catch (Exception $ignore) {}
+            }
+
+            $conn->beginTransaction();
+
+            $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
+            $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
+            $stmt->execute([$deviceId]);
+            $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$device) {
+                $conn->rollBack();
+                securityLog('DEVICE_PING_LOOKUP_FAILED', "Device not found: $deviceId (attempt $attempt)");
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+            }
+            if (!password_verify($deviceToken, $device['token_hash'])) {
+                $conn->rollBack();
+                securityLog('DEVICE_PING_TOKEN_MISMATCH', "Token mismatch for device: $deviceId (attempt $attempt)");
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+            }
+
+            $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$device['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+
+            $stmt = $conn->prepare("UPDATE edge_devices SET last_ping = NOW() WHERE device_id = ?");
+            $stmt->execute([$deviceId]);
+
+            if ($stmt->rowCount() === 0) {
+                $conn->rollBack();
+                securityLog('DEVICE_PING_UPDATE_FAILED', "UPDATE 0 rows: $deviceId (attempt $attempt)");
+                http_response_code(404);
+                exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
+            }
+
+            $conn->commit();
+
+            echo json_encode(['status' => 'ok', 'received_at' => time()]);
+            exit;
+
+        } catch (Exception $e) {
+            $lastError = $e->getMessage();
+            try { if ($conn->inTransaction()) $conn->rollBack(); } catch (Exception $ignore) {}
+            securityLog('DEVICE_PING_RETRY', "Attempt $attempt failed: $lastError | DeviceID: $deviceId");
+            if ($attempt < $maxRetries) {
+                usleep(200000);
+            }
+        }
     }
 
-    try {
-        $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
-        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? LIMIT 1");
-        $stmt->execute([$deviceId]);
-        $device = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$device) {
-            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-            securityLog('DEVICE_PING_LOOKUP_FAILED', "Device not found: $deviceId (RLS may be blocking)");
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
-        }
-        if (!password_verify($deviceToken, $device['token_hash'])) {
-            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-            securityLog('DEVICE_PING_TOKEN_MISMATCH', "Token mismatch for device: $deviceId");
-            http_response_code(403);
-            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
-        }
-        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$device['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
-
-        $stmt = $conn->prepare("
-            UPDATE edge_devices
-            SET last_ping = NOW()
-            WHERE device_id = ?
-        ");
-        $stmt->execute([$deviceId]);
-
-        if ($stmt->rowCount() === 0) {
-            if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-            securityLog('DEVICE_PING_UPDATE_FAILED', "UPDATE affected 0 rows for device: $deviceId");
-            http_response_code(404);
-            exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
-        }
-
-        if ($startedTx) {
-            register_shutdown_function(function() use ($conn) {
-                try { if ($conn->inTransaction()) $conn->commit(); } catch (Exception $e) {}
-            });
-        }
-
-        echo json_encode(['status' => 'ok', 'received_at' => time()]);
-    } catch (Exception $e) {
-        if ($startedTx) { try { $conn->rollBack(); } catch (Exception $ignore) {} }
-        securityLog('HEARTBEAT_ERROR', $e->getMessage() . " | DeviceID: $deviceId");
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al procesar heartbeat', 'debug' => $e->getMessage()]);
-    }
+    securityLog('HEARTBEAT_ERROR', "All $maxRetries attempts failed: $lastError | DeviceID: $deviceId");
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Error al procesar heartbeat', 'debug' => $lastError]);
     exit;
 }
 
