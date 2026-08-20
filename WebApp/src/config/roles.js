@@ -28,6 +28,15 @@ import {
   ShieldCheck,
   Cpu,
   User,
+  ShieldAlert,
+  Calendar,
+  Wrench,
+  Send,
+  Bus,
+  Clock,
+  UserCheck,
+  FileText,
+  Siren,
 } from 'lucide-react';
 
 const ALL_ROLES = Object.values(ROLES);
@@ -77,7 +86,13 @@ export const SIDEBAR_ITEMS = [
     title: 'Sensores',
     path: '/dispositivos',
     icon: Cpu,
-    roles: [ROLES.RECTOR, ROLES.COORDINADOR],
+    roles: [ROLES.RECTOR, ROLES.COORDINATOR],
+  },
+  {
+    title: 'Riesgo',
+    path: '/riesgo',
+    icon: ShieldAlert,
+    roles: [ROLES.RECTOR, ROLES.COORDINATOR],
   },
   {
     title: 'Perfil',
@@ -92,9 +107,6 @@ export const SIDEBAR_ITEMS = [
  * Autoridad: UX_DESIGN.md §Operaciones por rol.
  * Cada comando mapea a un flujo FLOW-OPS-* y endpoint /operations/execute.
  */
-import {
-  Calendar, Wrench, Send, Bus, Clock, UserCheck, ShieldAlert, FileText, Siren,
-} from 'lucide-react';
 
 export const OPERATION_COMMANDS = [
   // Citar acudiente — rector, coordinador, docente, psicoorientador

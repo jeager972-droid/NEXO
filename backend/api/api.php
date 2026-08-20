@@ -236,6 +236,7 @@ $routeMap = [
     'audit' => ['audit_logs.php', 'audit_integrity.php', 'audit_full.php'],
     'security' => 'security_panic.php',
     'behavior' => 'behavior.php',
+    'risk' => 'risk.php',
     'admin' => 'admin.php',
     'metrics' => 'metrics.php',
     'telemetry' => 'telemetry.php',

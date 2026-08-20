@@ -27,19 +27,31 @@ if [ -z "${DATABASE_URL:-}" ]; then
     exit 1
 fi
 
-log "Iniciando recálculo de métricas de riesgo..."
+log "Iniciando recálculo de métricas de riesgo (Motor v3.0)..."
 
-# Recalcular para cada escuela activa
+# Recalcular para cada escuela activa usando el nuevo motor v3
 RESULT=$(psql "$DATABASE_URL" -t -c "
+    SELECT COALESCE(SUM(fn_recalculate_school_risk_v3(school_id)), 0)
+    FROM schools
+    WHERE active = TRUE;
+" 2>&1) || {
+    log "ERROR: Fallo al ejecutar recálculo v3: $RESULT"
+    exit 1
+}
+
+STUDENTS_COUNT=$(echo "$RESULT" | xargs)
+log "Recálculo v3 completado. Estudiantes procesados: ${STUDENTS_COUNT}"
+
+# También ejecutar el motor legacy para compatibilidad (durante transición)
+log "Ejecutando recálculo legacy para compatibilidad..."
+RESULT_LEGACY=$(psql "$DATABASE_URL" -t -c "
     SELECT COUNT(*) FROM (
         SELECT fn_recalculate_school_metrics(school_id)
         FROM schools
         WHERE active = TRUE
     ) AS recalc;
 " 2>&1) || {
-    log "ERROR: Fallo al ejecutar recálculo: $RESULT"
-    exit 1
+    log "WARN: Recálculo legacy falló (no crítico): $RESULT_LEGACY"
 }
 
-SCHOOLS_COUNT=$(echo "$RESULT" | xargs)
-log "Recálculo completado. Escuelas procesadas: ${SCHOOLS_COUNT}"
+log "Recálculo completado."
