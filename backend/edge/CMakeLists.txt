@@ -65,6 +65,47 @@ add_executable(nexo-edge
 
 target_include_directories(nexo-edge PRIVATE ${EDGE_INCLUDE_DIR})
 
+# ============================================================
+# FIX C8: Hardware real (OLED + GPIO) — incluido condicionalmente
+# Solo se compila si el hardware está disponible en el target.
+# HAS_GPIOD se define más abajo si libgpiod está instalada.
+# HAS_I2C se define si /dev/i2c-1 está accesible (Linux ARM64).
+# ============================================================
+option(USE_REAL_DISPLAY "Use real OLED SSD1306 display" OFF)
+option(USE_REAL_GPIO "Use real GPIO for LEDs/buzzer" OFF)
+
+if(USE_REAL_DISPLAY)
+    target_sources(nexo-edge PRIVATE src/hardware/real/RealOledDisplay.cpp)
+    target_compile_definitions(nexo-edge PRIVATE HAS_REAL_DISPLAY=1)
+    message(STATUS "RealOledDisplay enabled (SSD1306 I2C)")
+else()
+    message(STATUS "RealOledDisplay disabled (using DevStubDisplay)")
+endif()
+
+if(USE_REAL_GPIO)
+    target_sources(nexo-edge PRIVATE src/hardware/real/RealGpioManager.cpp)
+    target_compile_definitions(nexo-edge PRIVATE HAS_REAL_GPIO=1)
+    message(STATUS "RealGpioManager enabled (libgpiod LEDs/buzzer)")
+else()
+    message(STATUS "RealGpioManager disabled (using DevStubNotification)")
+endif()
+
+# Auto-detección en ARM64: si es ARM64 y tiene gpiod, habilitar hardware real
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64" AND gpiod_FOUND)
+    if(NOT USE_REAL_DISPLAY)
+        set(USE_REAL_DISPLAY ON CACHE BOOL "Auto-enabled on ARM64" FORCE)
+        target_sources(nexo-edge PRIVATE src/hardware/real/RealOledDisplay.cpp)
+        target_compile_definitions(nexo-edge PRIVATE HAS_REAL_DISPLAY=1)
+        message(STATUS "RealOledDisplay auto-enabled (ARM64 + gpiod)")
+    endif()
+    if(NOT USE_REAL_GPIO)
+        set(USE_REAL_GPIO ON CACHE BOOL "Auto-enabled on ARM64" FORCE)
+        target_sources(nexo-edge PRIVATE src/hardware/real/RealGpioManager.cpp)
+        target_compile_definitions(nexo-edge PRIVATE HAS_REAL_GPIO=1)
+        message(STATUS "RealGpioManager auto-enabled (ARM64 + gpiod)")
+    endif()
+endif()
+
 # Dependencies
 set(FEDORA_DEPS_MSG "En Fedora instala las dependencias con:\n   sudo dnf install -y libcurl-devel spdlog-devel mosquitto-devel sqlite-devel openssl-devel")
 

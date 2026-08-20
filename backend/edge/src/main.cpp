@@ -72,6 +72,14 @@
 #include "hardware/dev_stub/DevStubNotification.h"
 #include "interoperabilidad/audit_trail.h"
 
+// FIX C8: Hardware real condicional — OLED SSD1306 + GPIO LEDs/buzzer
+#if defined(HAS_REAL_DISPLAY)
+#include "hardware/real/RealOledDisplay.h"
+#endif
+#if defined(HAS_REAL_GPIO)
+#include "hardware/real/RealGpioManager.h"
+#endif
+
 // =============================================================================
 // Globals
 // =============================================================================
@@ -171,9 +179,20 @@ private:
 
     void run() {
         LOG_INFO("[SyncWorker] Cloud sync thread started");
+        // FIX C3: Contador para purgar audit_trail una vez al día (~2880 ciclos de 30s)
+        int cycleCount = 0;
         while (!m_stop.load(std::memory_order_acquire)) {
             m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
             syncBatch();
+            // FIX C3: Purgar registros antiguos cada ~24h (2880 ciclos × 30s)
+            if (++cycleCount >= 2880) {
+                cycleCount = 0;
+                auto& db = SqliteManager::getInstance();
+                int purged = db.purgeOldAuditTrail(30, 90);
+                if (purged > 0) {
+                    db.vacuum();  // Reclamar espacio físico solo si hubo purgado
+                }
+            }
             std::unique_lock<std::mutex> lk(m_mtx);
             m_cv.wait_for(lk, std::chrono::seconds(30), [this] {
                 return m_stop.load(std::memory_order_acquire);
@@ -265,6 +284,95 @@ private:
 // =============================================================================
 // (V1) Hilo que cada 30s consulta /devices/commands por HTTP. En V2 este rol
 // es desempeñado por MqttCommandWorker; esta clase queda como fallback.
+
+// FIX C7: HeartbeatWorker — envía POST /devices/ping cada 30s siempre,
+// incluso cuando MQTT está habilitado. Esto asegura que el edge aparezca
+// online en el dashboard de health check del RECTOR.
+class HeartbeatWorker {
+public:
+    void start(const std::string& apiBase, const std::string& deviceToken, const std::string& deviceId) {
+        m_apiBase = apiBase;
+        m_deviceToken = deviceToken;
+        m_deviceId = deviceId;
+        m_thread = std::thread([this] { run(); });
+    }
+
+    void requestStop() { m_stop.store(true, std::memory_order_release); }
+    void join() { if (m_thread.joinable()) m_thread.join(); }
+
+    std::chrono::steady_clock::time_point lastActivity() const { return m_lastActivity.load(std::memory_order_acquire); }
+
+private:
+    std::thread m_thread;
+    std::atomic<bool> m_stop{false};
+    std::string m_apiBase, m_deviceToken, m_deviceId;
+    std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
+
+    static size_t writeCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+        userp->append((char*)contents, size * nmemb);
+        return size * nmemb;
+    }
+
+    void run() {
+        LOG_INFO("[HeartbeatWorker] Started (POST /devices/ping every 30s)");
+        while (!m_stop.load(std::memory_order_acquire)) {
+            sendPing();
+            for (int i = 0; i < 30 && !m_stop.load(std::memory_order_acquire); ++i) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }
+        LOG_INFO("[HeartbeatWorker] Stopped");
+    }
+
+    void sendPing() {
+        m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
+
+        if (m_apiBase.empty() || m_deviceId.empty() || m_deviceToken.empty()) {
+            LOG_WARN("[HeartbeatWorker] Missing api_url, device_id, or device_token — skipping ping");
+            return;
+        }
+
+        std::string url = m_apiBase + "/devices/ping";
+        std::string body = nlohmann::json({
+            {"device_id", m_deviceId},
+            {"status", "online"},
+            {"timestamp", std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count()}
+        }).dump();
+
+        CURL* curl = curl_easy_init();
+        if (!curl) return;
+
+        std::string readBuffer;
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        headers = curl_slist_append(headers, ("X-Device-Token: " + m_deviceToken).c_str());
+        headers = curl_slist_append(headers, "User-Agent: nexo-edge/1.0");
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+
+        CURLcode res = curl_easy_perform(curl);
+        long httpCode = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+        curl_easy_cleanup(curl);
+        curl_slist_free_all(headers);
+
+        if (res != CURLE_OK || (httpCode != 200 && httpCode != 202)) {
+            LOG_WARN("[HeartbeatWorker] Ping failed: HTTP {} | {}", httpCode, curl_easy_strerror(res));
+        } else {
+            LOG_DEBUG("[HeartbeatWorker] Ping OK (HTTP {})", httpCode);
+        }
+    }
+};
+
 class CommandWorker {
 public:
     void start(const std::string& apiBase, const std::string& deviceToken, const std::string& deviceId) {
@@ -367,8 +475,12 @@ private:
                     // Los comandos simples (RELOAD_CONFIG, FORCE_SYNC) se procesan inline;
                     // los que necesitan hardware (ENROLL_REQUEST, AUTHORIZE_EXIT) van a la cola.
                     if (command == "REBOOT") {
-                        LOG_WARN("[CommandWorker] Executing REBOOT command from cloud");
-                        // En producción: system("reboot");
+                        // FIX A6: REBOOT real — sync graceful + system("reboot")
+                        // CommandWorker no tiene acceso a syncWorker, pero el REBOOT
+                        // también llega por MQTT donde sí se hace sync. Aquí solo reboot.
+                        LOG_WARN("[CommandWorker] REBOOT ordered by cloud. Rebooting...");
+                        sync();
+                        system("reboot");
                     } else if (command == "RELOAD_CONFIG") {
                         LOG_INFO("[CommandWorker] Reloading configuration");
                         ConfigManager::getInstance().loadConfig();
@@ -532,6 +644,7 @@ bool runSecurityProvisioning() {
 
                 std::string key   = j.value("aes_key", "");
                 std::string token = j.value("api_token", "");
+                std::string provisionDeviceId = j.value("device_id", "");
 
                 if (key.length() != 32) {
                     throw std::runtime_error("Invalid AES key length in provision file");
@@ -545,6 +658,14 @@ bool runSecurityProvisioning() {
                 }
                 if (!crypto.provisionToken(token)) {
                     throw std::runtime_error("Failed to provision API token from file");
+                }
+
+                // FIX C2: Auto-update device_id desde provision file si es UUID v4 válido
+                if (!provisionDeviceId.empty() && ConfigManager::isValidUuidV4(provisionDeviceId)) {
+                    ConfigManager::getInstance().setValue("device_id", provisionDeviceId, true);
+                    LOG_INFO("device_id auto-updated from provision file: {}", provisionDeviceId);
+                } else if (!provisionDeviceId.empty()) {
+                    LOG_WARN("Provision file contains device_id '{}' but it is not a valid UUID v4. Ignored.", provisionDeviceId);
                 }
 
                 // Securely delete the one-time staging file
@@ -881,6 +1002,23 @@ int main() {
     Logger::initialize();
     LOG_INFO("NEXO EDGE starting...");
 
+    // FIX C2: Validar que device_id sea UUID v4 (lo que la API exige).
+    // Si no lo es, el edge no puede sincronizar — bloquear con mensaje claro.
+    std::string deviceId = ConfigManager::getInstance().getDeviceId();
+    if (!ConfigManager::isValidUuidV4(deviceId)) {
+        LOG_CRITICAL("[C2] device_id '{}' no es UUID v4 válido. La API rechazará todo sync con HTTP 400.",
+                     deviceId.empty() ? "(empty)" : deviceId);
+        LOG_CRITICAL("[C2] ACCION REQUERIDA: Registrar el dispositivo en la WebApp del RECTOR y");
+        LOG_CRITICAL("[C2] copiar el device_id (UUID) y device_token al config.json o al provision file.");
+        if (isatty(STDIN_FILENO)) {
+            std::cout << "\n  ⚠️  ERROR: device_id no es UUID v4 válido.\n"
+                      << "     Registre el dispositivo en la WebApp y copie el UUID + token.\n"
+                      << "     Vea /boot/nexo_provision.json para provisionamiento automático.\n\n";
+        }
+        // No abortar: el edge puede seguir haciendo match local, pero sync fallará.
+        // El operador verá el error en logs y display.
+    }
+
     // FIX: Verificar sincronización de reloj antes de procesar eventos con timestamp
     if (!checkNtpSync() || !checkSystemClock()) {
         g_clockValid.store(false, std::memory_order_release);
@@ -947,9 +1085,31 @@ int main() {
             return 1;
         }
     }
-    auto display = std::make_unique<DevStubDisplay>();
-    auto notification = std::make_unique<DevStubNotification>();
-    LOG_INFO("HAL initialized (dev-stub mode, real HTTP sync)");
+    // FIX C8: Instanciar hardware real (OLED + GPIO) cuando esté compilado.
+    // Si el hardware físico no está disponible (ej: /dev/i2c-1 no existe),
+    // el constructor del display real hace fallback silencioso y los
+    // mensajes se ignoran. Siempre se compila DevStub como fallback final.
+    std::unique_ptr<IDisplay> display;
+    std::unique_ptr<INotification> notification;
+
+#if defined(HAS_REAL_DISPLAY)
+    display = std::make_unique<RealOledDisplay>();
+    if (!display) { display = std::make_unique<DevStubDisplay>(); }
+    LOG_INFO("Display: RealOledDisplay (SSD1306 I2C)");
+#else
+    display = std::make_unique<DevStubDisplay>();
+    LOG_INFO("Display: DevStubDisplay (no HAS_REAL_DISPLAY)");
+#endif
+
+#if defined(HAS_REAL_GPIO)
+    notification = std::make_unique<RealGpioManager>();
+    if (!notification) { notification = std::make_unique<DevStubNotification>(); }
+    LOG_INFO("Notification: RealGpioManager (libgpiod LEDs/buzzer)");
+#else
+    notification = std::make_unique<DevStubNotification>();
+    LOG_INFO("Notification: DevStubNotification (no HAS_REAL_GPIO)");
+#endif
+    LOG_INFO("HAL initialized");
 
     // FIX: Si el reloj es inválido, mostrar error en OLED y bloquear lecturas biométricas
     if (!g_clockValid.load(std::memory_order_acquire)) {
@@ -964,12 +1124,21 @@ int main() {
     std::unique_ptr<MqttCommandWorker> mqttWorker;
     std::string mqttHost = ConfigManager::getInstance().getString("mqtt_host", "");
     int mqttPort = ConfigManager::getInstance().getInt("mqtt_port", 1883);
-    std::string deviceId = ConfigManager::getInstance().getDeviceId();
+    // deviceId ya declarado arriba (validación C2)
     std::string mqttUser = ConfigManager::getInstance().getString("mqtt_user", "");
     std::string mqttPass = ConfigManager::getInstance().getString("mqtt_pass", "");
+    // FIX C4: Configuración TLS para MQTT
+    std::string mqttCaCert = ConfigManager::getInstance().getString("mqtt_ca_cert", "");
+    bool mqttUseTls = ConfigManager::getInstance().getBool("mqtt_use_tls", false);
 
     if (!mqttHost.empty()) {
-        mqttWorker = std::make_unique<MqttCommandWorker>(mqttHost, mqttPort, deviceId, mqttUser, mqttPass);
+        // FIX C4: Auto-habilitar TLS si el puerto es 8883
+        if (mqttPort == 8883 && !mqttUseTls) {
+            mqttUseTls = true;
+            LOG_INFO("[MQTT] Port 8883 detected — auto-enabling TLS");
+        }
+        mqttWorker = std::make_unique<MqttCommandWorker>(mqttHost, mqttPort, deviceId,
+                                                          mqttUser, mqttPass, mqttCaCert, mqttUseTls);
         if (mqttWorker->start()) {
             LOG_INFO("MqttCommandWorker started (persistent MQTT connection)");
         } else {
@@ -987,6 +1156,17 @@ int main() {
         commandWorker = std::make_unique<CommandWorker>();
         commandWorker->start(apiBase, deviceToken, deviceId);
         LOG_INFO("[Main] CommandWorker started (HTTP polling fallback, 30s interval)");
+    }
+
+    // FIX C7: HeartbeatWorker — siempre activo, envía POST /devices/ping cada 30s
+    // incluso cuando MQTT está habilitado. Esto asegura que el edge aparezca
+    // online en el dashboard de health check del RECTOR.
+    HeartbeatWorker heartbeatWorker;
+    {
+        std::string apiBase = ConfigManager::getInstance().getString("api_url", "");
+        std::string deviceToken = ConfigManager::getInstance().getDeviceToken();
+        heartbeatWorker.start(apiBase, deviceToken, deviceId);
+        LOG_INFO("[Main] HeartbeatWorker started (POST /devices/ping every 30s)");
     }
 
     // FIX (SRE-2): HealthMonitor — detecta threads muertos (Sync/MQTT) que el
@@ -1015,7 +1195,13 @@ int main() {
                     std::string cmd = j.value("command", "");
                     LOG_INFO("[Main] Executing MQTT command: {}", cmd);
                     if (cmd == "REBOOT") {
-                        LOG_WARN("[Main] REBOOT ordered by cloud");
+                        // FIX A6: REBOOT real — sync graceful + system("reboot")
+                        LOG_WARN("[Main] REBOOT ordered by cloud. Flushing and rebooting...");
+                        display->showMessage("REBOOT", "Orden cloud");
+                        syncWorker.nudge();
+                        std::this_thread::sleep_for(std::chrono::seconds(2));  // Dar tiempo al sync
+                        sync();
+                        system("reboot");
                     } else if (cmd == "RELOAD_CONFIG") {
                         ConfigManager::getInstance().loadConfig();
                     } else if (cmd == "FORCE_SYNC") {
@@ -1258,6 +1444,11 @@ int main() {
     LOG_INFO("Shutting down...");
     healthMonitor.stop();
     LOG_INFO("HealthMonitor stopped");
+
+    // FIX C7: Detener HeartbeatWorker
+    heartbeatWorker.requestStop();
+    heartbeatWorker.join();
+    LOG_INFO("HeartbeatWorker stopped");
 
     syncWorker.requestStop();
     syncWorker.join();

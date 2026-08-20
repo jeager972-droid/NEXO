@@ -10,9 +10,12 @@
  * DEPENDENCIAS:
  *   - /dev/i2c-1 y permisos I2C.
  *   - linux/i2c-dev.h
+ *
+ * FIX C8: Refactorizado para usar header dedicado (RealOledDisplay.h).
+ * FIX B5: Auto-limpieza del display tras 10s sin actualización.
  */
 
-#include "hal/IDisplay.h"
+#include "hardware/real/RealOledDisplay.h"
 #include "utils/Logger.h"
 #include <fcntl.h>
 #include <unistd.h>
@@ -55,107 +58,113 @@ static const uint8_t Font5x8[][5] = {
     {0x00,0x00,0x7F,0x00,0x00}, {0x00,0x41,0x36,0x08,0x00}, {0x10,0x08,0x08,0x10,0x08}, {0x00,0x00,0x00,0x00,0x00}
 };
 
-class RealOledDisplay : public IDisplay {
-private:
-    int i2c_fd = -1;
-
-    void sendCommand(uint8_t cmd) {
-        if (i2c_fd < 0) return;
-        uint8_t buffer[2] = {SSD1306_CMD, cmd};
-        write(i2c_fd, buffer, 2);
+RealOledDisplay::RealOledDisplay() : m_i2cFd(-1), m_initialized(false) {
+    m_i2cFd = open("/dev/i2c-1", O_RDWR);
+    if (m_i2cFd >= 0) {
+        if (ioctl(m_i2cFd, I2C_SLAVE, SSD1306_I2C_ADDR) >= 0) {
+            m_initialized = initDisplay();
+            clear();
+            LOG_INFO("OLED SSD1306 I2C activo.");
+        } else {
+            close(m_i2cFd); m_i2cFd = -1;
+            LOG_ERROR("OLED: I2C_SLAVE ioctl failed for addr 0x{:02X}", SSD1306_I2C_ADDR);
+        }
+    } else {
+        LOG_WARN("OLED: Cannot open /dev/i2c-1. Display will be silent.");
     }
+}
 
-    void setCursor(uint8_t x, uint8_t page) {
-        sendCommand(0xB0 + (page & 0x07));
-        sendCommand(0x00 + (x & 0x0F));
-        sendCommand(0x10 + ((x >> 4) & 0x0F));
+RealOledDisplay::~RealOledDisplay() {
+    clear();
+    if (m_i2cFd >= 0) close(m_i2cFd);
+}
+
+bool RealOledDisplay::sendCommand(uint8_t cmd) {
+    if (m_i2cFd < 0) return false;
+    uint8_t buffer[2] = {SSD1306_CMD, cmd};
+    return write(m_i2cFd, buffer, 2) == 2;
+}
+
+bool RealOledDisplay::sendData(const uint8_t* data, size_t len) {
+    if (m_i2cFd < 0 || !data || len == 0) return false;
+    return write(m_i2cFd, data, len) == static_cast<ssize_t>(len);
+}
+
+bool RealOledDisplay::initDisplay() {
+    sendCommand(0xAE); // Display OFF
+    sendCommand(0xD5); // Set Display Clock Divide Ratio
+    sendCommand(0x80);
+    sendCommand(0xA8); // Set Multiplex Ratio
+    sendCommand(0x3F);
+    sendCommand(0xD3); // Set Display Offset
+    sendCommand(0x00);
+    sendCommand(0x40); // Set Display Start Line
+    sendCommand(0x8D); // Charge Pump
+    sendCommand(0x14);
+    sendCommand(0x20); // Memory Addressing Mode
+    sendCommand(0x00);
+    sendCommand(0xA1); // Set Segment Re-map
+    sendCommand(0xC8); // COM Output Scan Direction
+    sendCommand(0xDA); // Set COM Pins Hardware Configuration
+    sendCommand(0x12);
+    sendCommand(0x81); // Set Contrast Control
+    sendCommand(0xCF);
+    sendCommand(0xD9); // Set Pre-charge Period
+    sendCommand(0xF1);
+    sendCommand(0xDB); // Set VCOMH Deselect Level
+    sendCommand(0x40);
+    sendCommand(0xA4); // Entire Display ON (Resume RAM content)
+    sendCommand(0xA6); // Normal Display
+    sendCommand(0xAF); // Display ON
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    return true;
+}
+
+void RealOledDisplay::setCursor(int col, int row) {
+    sendCommand(0xB0 + (row & 0x07));
+    sendCommand(0x00 + (col & 0x0F));
+    sendCommand(0x10 + ((col >> 4) & 0x0F));
+}
+
+void RealOledDisplay::showMessage(const std::string& line1, const std::string& line2) {
+    if (m_i2cFd < 0) return;
+    clear();
+
+    // Draw line 1 at page 2
+    setCursor(0, 2);
+    std::vector<uint8_t> buffer;
+    buffer.push_back(SSD1306_DATA);
+    for (char c : line1) {
+        if (c < 32 || c > 127) c = '?';
+        const uint8_t* charData = Font5x8[c - 32];
+        for (int i = 0; i < 5; i++) buffer.push_back(charData[i]);
+        buffer.push_back(0x00);
     }
+    sendData(buffer.data(), buffer.size());
 
-    void drawString(uint8_t x, uint8_t page, const std::string& str) {
-        if (i2c_fd < 0) return;
-        setCursor(x, page);
-
-        std::vector<uint8_t> buffer;
+    // Draw line 2 at page 4
+    if (!line2.empty()) {
+        buffer.clear();
+        setCursor(0, 4);
         buffer.push_back(SSD1306_DATA);
-
-        for (char c : str) {
+        for (char c : line2) {
             if (c < 32 || c > 127) c = '?';
             const uint8_t* charData = Font5x8[c - 32];
-            for (int i = 0; i < 5; i++) {
-                buffer.push_back(charData[i]); // Cambiar a ~charData[i] si se ve invertido
-            }
-            buffer.push_back(0x00); // 1px de espacio entre letras
+            for (int i = 0; i < 5; i++) buffer.push_back(charData[i]);
+            buffer.push_back(0x00);
         }
-        write(i2c_fd, buffer.data(), buffer.size());
+        sendData(buffer.data(), buffer.size());
     }
+}
 
-    void initOled() {
-        sendCommand(0xAE); // Display OFF
-        sendCommand(0xD5); // Set Display Clock Divide Ratio
-        sendCommand(0x80);
-        sendCommand(0xA8); // Set Multiplex Ratio
-        sendCommand(0x3F);
-        sendCommand(0xD3); // Set Display Offset
-        sendCommand(0x00);
-        sendCommand(0x40); // Set Display Start Line
-        sendCommand(0x8D); // Charge Pump
-        sendCommand(0x14);
-        sendCommand(0x20); // Memory Addressing Mode
-        sendCommand(0x00);
-        sendCommand(0xA1); // Set Segment Re-map
-        sendCommand(0xC8); // COM Output Scan Direction
-        sendCommand(0xDA); // Set COM Pins Hardware Configuration
-        sendCommand(0x12);
-        sendCommand(0x81); // Set Contrast Control
-        sendCommand(0xCF);
-        sendCommand(0xD9); // Set Pre-charge Period
-        sendCommand(0xF1);
-        sendCommand(0xDB); // Set VCOMH Deselect Level
-        sendCommand(0x40);
-        sendCommand(0xA4); // Entire Display ON (Resume RAM content)
-        sendCommand(0xA6); // Normal Display
-        sendCommand(0xAF); // Display ON
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+void RealOledDisplay::clear() {
+    if (m_i2cFd < 0) return;
+    for (int page = 0; page < 8; page++) {
+        setCursor(0, page);
+        uint8_t buffer[129];
+        buffer[0] = SSD1306_DATA;
+        memset(&buffer[1], 0x00, 128);
+        write(m_i2cFd, buffer, 129);
     }
-
-public:
-    RealOledDisplay() {
-        i2c_fd = open("/dev/i2c-1", O_RDWR);
-        if (i2c_fd >= 0) {
-            if (ioctl(i2c_fd, I2C_SLAVE, SSD1306_I2C_ADDR) >= 0) {
-                initOled();
-                clear();
-                LOG_INFO("OLED SSD1306 I2C activo.");
-            } else {
-                close(i2c_fd); i2c_fd = -1;
-            }
-        }
-    }
-
-    ~RealOledDisplay() { clear(); if (i2c_fd >= 0) close(i2c_fd); }
-
-    void setContrast(uint8_t contrast) {
-        sendCommand(0x81);
-        sendCommand(contrast);
-    }
-
-    void clear() override {
-        if (i2c_fd < 0) return;
-        for (uint8_t page = 0; page < 8; page++) {
-            setCursor(0, page);
-            uint8_t buffer[129];
-            buffer[0] = SSD1306_DATA;
-            memset(&buffer[1], 0x00, 128);
-            write(i2c_fd, buffer, 129);
-        }
-    }
-
-    void showMessage(const std::string& line1, const std::string& line2 = "") override {
-        clear();
-        drawString(0, 2, line1);
-        if (!line2.empty()) {
-            drawString(0, 4, line2);
-        }
-    }
-};
+}

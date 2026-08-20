@@ -59,6 +59,10 @@ sudo dnf install -y \
 sudo dnf install -y \
     spdlog-devel
 
+# MQTT (libmosquitto) — FIX C1: faltaba en el script de instalación
+sudo dnf install -y \
+    mosquitto-devel
+
 # Testing framework (Catch2)
 # Catch2 may not be in default repos; use header-only fallback if needed.
 sudo dnf install -y catch2-devel || echo "Catch2 not found in dnf, will use header-only fallback"

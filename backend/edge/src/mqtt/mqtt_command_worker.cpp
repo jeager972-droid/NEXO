@@ -18,9 +18,11 @@
 #include <chrono>
 
 MqttCommandWorker::MqttCommandWorker(const std::string& h, int p,
-    const std::string& did, const std::string& u, const std::string& pw)
+    const std::string& did, const std::string& u, const std::string& pw,
+    const std::string& caCertPath, bool useTls)
     : m_brokerHost(h), m_brokerPort(p), m_deviceId(did), m_username(u), m_password(pw),
-      m_topic("nexo/devices/" + did + "/commands") {}
+      m_topic("nexo/devices/" + did + "/commands"),
+      m_caCertPath(caCertPath), m_useTls(useTls) {}
 
 MqttCommandWorker::~MqttCommandWorker() { stop(); }
 
@@ -29,6 +31,27 @@ bool MqttCommandWorker::start() {
     m_mosq = mosquitto_new(("nexo-edge-" + m_deviceId).c_str(), true, this);
     if (!m_mosq) { LOG_ERROR("[MQTT] mosquitto_new failed"); return false; }
     if (!m_username.empty()) mosquitto_username_pw_set(m_mosq, m_username.c_str(), m_password.c_str());
+
+    // FIX C4: Configurar TLS si está habilitado (puerto 8883)
+    if (m_useTls || m_brokerPort == 8883) {
+        int tlsRc;
+        if (!m_caCertPath.empty()) {
+            // TLS con CA cert específico (mutual auth o CA propia)
+            tlsRc = mosquitto_tls_set(m_mosq, m_caCertPath.c_str(), nullptr, nullptr, nullptr, nullptr);
+        } else {
+            // TLS usando el CA store del sistema (verificación estándar)
+            tlsRc = mosquitto_tls_set(m_mosq, nullptr, "/etc/ssl/certs/", nullptr, nullptr, nullptr);
+        }
+        if (tlsRc != MOSQ_ERR_SUCCESS) {
+            LOG_ERROR("[MQTT] tls_set failed: {}", mosquitto_strerror(tlsRc));
+            mosquitto_destroy(m_mosq); m_mosq = nullptr; return false;
+        }
+        // Verificar peer (requiere hostname válido en el cert del broker)
+        mosquitto_tls_opts_set(m_mosq, 1, nullptr, nullptr);
+        LOG_INFO("[MQTT] TLS enabled (CA: {})", m_caCertPath.empty() ? "system" : m_caCertPath);
+    } else {
+        LOG_WARN("[MQTT] TLS disabled — conexión en texto plano. NO usar en producción.");
+    }
 
     mosquitto_connect_callback_set(m_mosq, onConnect);
     mosquitto_message_callback_set(m_mosq, onMessage);
@@ -40,7 +63,10 @@ bool MqttCommandWorker::start() {
         mosquitto_destroy(m_mosq); m_mosq = nullptr; return false;
     }
     m_loopThread = std::thread([this] { runLoop(); });
-    LOG_INFO("[MQTT] Connecting to {}:{} | topic: {}", m_brokerHost, m_brokerPort, m_topic);
+    LOG_INFO("[MQTT] Connecting to {}:{} | TLS: {} | topic: {}",
+             m_brokerHost, m_brokerPort,
+             (m_useTls || m_brokerPort == 8883) ? "ON" : "OFF",
+             m_topic);
     return true;
 }
 

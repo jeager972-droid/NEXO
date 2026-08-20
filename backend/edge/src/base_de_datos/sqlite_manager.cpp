@@ -360,3 +360,57 @@ bool SqliteManager::getAllEstudiantesConTemplate(std::vector<Estudiante>& estudi
     sqlite3_finalize(stmt);
     return true;
 }
+
+// FIX C3: Purgar registros antiguos de audit_trail para evitar llenar la SD card.
+// - synced=1 (enviados OK): borrar tras `daysSynced` días (default 30)
+// - synced=-1 (DLQ): borrar tras `daysDlq` días (default 90, más conservador)
+// Retorna el número total de filas eliminadas.
+int SqliteManager::purgeOldAuditTrail(int daysSynced, int daysDlq) {
+    int totalDeleted = 0;
+
+    // Borrar registros sincronizados exitosamente
+    {
+        const char* sql = "DELETE FROM audit_trail WHERE synced = 1 AND fecha < datetime('now', ?);";
+        sqlite3_stmt* stmt;
+        if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) == SQLITE_OK) {
+            std::string delta = "-" + std::to_string(daysSynced) + " days";
+            sqlite3_bind_text(stmt, 1, delta.c_str(), -1, SQLITE_TRANSIENT);
+            if (executeWithRetry(stmt) == SQLITE_DONE) {
+                totalDeleted += sqlite3_changes(db);
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+
+    // Borrar registros en DLQ (synced=-1) tras período más largo
+    {
+        const char* sql = "DELETE FROM audit_trail WHERE synced = -1 AND fecha < datetime('now', ?);";
+        sqlite3_stmt* stmt;
+        if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) == SQLITE_OK) {
+            std::string delta = "-" + std::to_string(daysDlq) + " days";
+            sqlite3_bind_text(stmt, 1, delta.c_str(), -1, SQLITE_TRANSIENT);
+            if (executeWithRetry(stmt) == SQLITE_DONE) {
+                totalDeleted += sqlite3_changes(db);
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+
+    if (totalDeleted > 0) {
+        LOG_INFO("[C3] Purged {} old audit_trail records (synced>{}d, dlq>{}d)",
+                 totalDeleted, daysSynced, daysDlq);
+    }
+    return totalDeleted;
+}
+
+// FIX C3: VACUUM para reclamar espacio físico tras purgado
+bool SqliteManager::vacuum() {
+    // VACUUM no puede ejecutarse dentro de transacción
+    int rc = sqlite3_exec(db, "VACUUM;", nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("[C3] VACUUM failed: {}", sqlite3_errmsg(db));
+        return false;
+    }
+    LOG_INFO("[C3] VACUUM completed — disk space reclaimed");
+    return true;
+}

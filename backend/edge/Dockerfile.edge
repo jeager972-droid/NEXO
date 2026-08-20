@@ -3,16 +3,18 @@
 # =============================================================================
 # RESPONSABILIDAD:
 #   Crea una imagen ARM64 (Raspberry Pi 4) con dos etapas:
-#     1. builder: instala dependencias de build y compila con el preset
-#        cross-arm64-pi4 de CMake.
+#     1. builder: instala dependencias de build y compila con CMake.
 #     2. runtime: imagen mínima con librerías runtime y el binario nexo-edge.
 #
 # USO:
 #   docker build -f Dockerfile.edge -t nexo-edge .
+#   # Para cross-compilación ARM64 desde x86_64:
+#   docker buildx build --platform linux/arm64 -f Dockerfile.edge -t nexo-edge .
 #
 # NOTAS:
 #   - Requiere Docker con soporte para arm64v8 (buildx o runner ARM64).
-#   - No incluye libspdlog ni libmosquitto runtime (verificar dependencias).
+#   - FIX C1: Añadidas libspdlog-dev y libmosquitto-dev al builder,
+#     y libspdlog1 y libmosquitto1 al runtime.
 # =============================================================================
 
 # Stage 1: Build
@@ -21,22 +23,24 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     build-essential cmake git libssl-dev libcurl4-openssl-dev \
-    libsqlite3-dev libgpiod-dev pkg-config
+    libsqlite3-dev libgpiod-dev pkg-config \
+    libspdlog-dev libmosquitto-dev
 
 WORKDIR /build
 COPY . .
-RUN cmake --preset cross-arm64-pi4 -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build --preset cross-arm64-pi4 --parallel $(nproc)
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+RUN cmake --build build --parallel $(nproc)
 
 # Stage 2: Runtime
 FROM arm64v8/ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
-    libssl3 libcurl4 libsqlite3-0 libgpiod2 && \
+    libssl3 libcurl4 libsqlite3-0 libgpiod2 \
+    libspdlog1 libmosquitto1 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /build/build/arm64-pi4/bin/nexo-edge /app/nexo-edge
+COPY --from=builder /build/build/bin/nexo-edge /app/nexo-edge
 
 CMD ["/app/nexo-edge"]

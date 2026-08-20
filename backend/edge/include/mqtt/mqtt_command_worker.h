@@ -31,9 +31,12 @@
  */
 class MqttCommandWorker {
 public:
+    // FIX C4: Añadidos parámetros para TLS (caCertPath, useTls)
     MqttCommandWorker(const std::string& brokerHost, int brokerPort,
                       const std::string& deviceId,
-                      const std::string& username, const std::string& password);
+                      const std::string& username, const std::string& password,
+                      const std::string& caCertPath = "",
+                      bool useTls = false);
     ~MqttCommandWorker();
 
     bool start();
@@ -50,6 +53,8 @@ public:
 private:
     std::string m_brokerHost; int m_brokerPort;
     std::string m_deviceId, m_username, m_password, m_topic;
+    std::string m_caCertPath;  // FIX C4: Path al CA cert para TLS
+    bool m_useTls;             // FIX C4: Habilitar TLS (puerto 8883)
 
     struct mosquitto* m_mosq{nullptr};
     std::thread m_loopThread;

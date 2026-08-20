@@ -61,6 +61,10 @@ sudo apt-get install -y \
 sudo apt-get install -y \
     libspdlog-dev
 
+# MQTT (libmosquitto) — FIX C1: faltaba en el script de instalación
+sudo apt-get install -y \
+    libmosquitto-dev
+
 # Testing framework (Catch2)
 # Catch2 v3 is available in newer distros. Fallback to header-only if needed.
 sudo apt-get install -y \

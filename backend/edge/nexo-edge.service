@@ -1,0 +1,30 @@
+[Unit]
+Description=NEXO Edge - Biometric Attendance Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nexo
+ExecStart=/opt/nexo/nexo-edge
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+# Watchdog del kernel: si el proceso no responde en 60s, systemd lo reinicia
+WatchdogSec=60
+
+# Límites de recursos
+LimitNOFILE=4096
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

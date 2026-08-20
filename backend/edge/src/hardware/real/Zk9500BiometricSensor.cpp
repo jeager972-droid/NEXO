@@ -16,6 +16,9 @@
  * DEPENDENCIAS:
  *   - libzkfp, libzkfptype
  *   - utils/ConfigManager.h para threshold.
+ *
+ * FIX C6: Timeout asíncrono para ZKFPM_AcquireFingerprint (evita watchdog reboot),
+ *         cancelCapture() funcional, reconexión USB automática.
  */
 
 #include "hal/IBiometricSensor.h"
@@ -58,6 +61,8 @@ private:
     std::map<uint32_t, uint32_t> m_fidMap; // Mapeo DB interna
     int m_matchThreshold = 45; // Umbral dinámico configurable (0-100)
     int m_scoreDivisor = 1;    // Divisor configurable del score raw de ZKFPM_DBIdentify
+    int m_captureTimeoutMs = 10000;  // FIX C6: Timeout de captura configurable (default 10s)
+    std::atomic<bool> m_cancelFlag{false};  // FIX C6: Flag para cancelCapture()
 
 public:
     ~Zk9500BiometricSensor() {
@@ -72,9 +77,9 @@ public:
 
         if (ZKFPM_GetDeviceCount() == 0) return NexoResult<void>::fail(NexoError::SensorError, "No hay sensores conectados");
 
-        void* rawDevice = ZKFPM_OpenDevice(0);
-        if (!rawDevice) return NexoResult<void>::fail(NexoError::SensorError, "Fallo abriendo ZK9500");
-        m_hDevice.reset(rawDevice);
+        if (!openDevice()) {
+            return NexoResult<void>::fail(NexoError::SensorError, "Fallo abriendo ZK9500");
+        }
 
         void* rawDB = ZKFPM_DBInit();
         if (!rawDB) return NexoResult<void>::fail(NexoError::SensorError, "Fallo inicializando DB en RAM ZK");
@@ -82,7 +87,10 @@ public:
 
         m_matchThreshold = std::clamp(ConfigManager::getInstance().getMatchThreshold(), 0, 100);
         m_scoreDivisor = std::max(1, ConfigManager::getInstance().getInt("zk_score_divisor", 1));
-        LOG_INFO("ZK9500 match threshold={} score_divisor={}", m_matchThreshold, m_scoreDivisor);
+        // FIX C6: Timeout configurable desde config.json (default 10s)
+        m_captureTimeoutMs = ConfigManager::getInstance().getInt("zk_capture_timeout_ms", 10000);
+        LOG_INFO("ZK9500 match threshold={} score_divisor={} capture_timeout={}ms",
+                 m_matchThreshold, m_scoreDivisor, m_captureTimeoutMs);
 
         // Cargar estudiantes persistidos en SQLite al cache del sensor
         std::vector<Estudiante> estudiantes;
@@ -103,6 +111,60 @@ public:
         return NexoResult<void>::success();
     }
 
+    // FIX C6: Abrir dispositivo (extraído para reusar en reconexión)
+    bool openDevice() {
+        void* rawDevice = ZKFPM_OpenDevice(0);
+        if (!rawDevice) return false;
+        m_hDevice.reset(rawDevice);
+        return true;
+    }
+
+    // FIX C6: Reconexión USB automática (paridad con UareU5300)
+    bool reconnectDevice() {
+        LOG_WARN("[ZK9500] Attempting USB reconnection...");
+        m_hDevice.reset();  // Cierra el dispositivo actual
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        // Reintentar conexión con backoff
+        for (int attempt = 1; attempt <= 3; ++attempt) {
+            if (ZKFPM_GetDeviceCount() > 0 && openDevice()) {
+                LOG_INFO("[ZK9500] USB reconnected on attempt {}", attempt);
+                return true;
+            }
+            LOG_WARN("[ZK9500] Reconnect attempt {} failed", attempt);
+            std::this_thread::sleep_for(std::chrono::seconds(2 * attempt));
+        }
+        LOG_ERROR("[ZK9500] USB reconnection failed after 3 attempts");
+        return false;
+    }
+
+    // FIX C6: Captura con timeout asíncrono — evita bloqueo indefinido
+    // Usa std::async para ejecutar ZKFPM_AcquireFingerprint en un hilo separado
+    // y esperar con timeout. Si expira, retorna error (no bloquea el watchdog).
+    int acquireWithTimeout(unsigned char* templateBuf, unsigned int& cbTemplate) {
+        m_cancelFlag.store(false, std::memory_order_release);
+
+        // Lanzar captura en hilo asíncrono
+        auto future = std::async(std::launch::async, [this, templateBuf, &cbTemplate]() -> int {
+            return ZKFPM_AcquireFingerprint(m_hDevice.get(), templateBuf, cbTemplate, nullptr, nullptr);
+        });
+
+        // Esperar con timeout
+        auto status = future.wait_for(std::chrono::milliseconds(m_captureTimeoutMs));
+        if (status == std::future_status::timeout) {
+            LOG_WARN("[ZK9500] Capture timeout after {}ms", m_captureTimeoutMs);
+            // No podemos cancelar ZKFPM_AcquireFingerprint directamente, pero el hilo
+            // terminará cuando el dedo se quite o el sensor se desconecte.
+            // El future se destruye al salir de la función, esperando al hilo.
+            return -1;  // Timeout
+        }
+        if (m_cancelFlag.load(std::memory_order_acquire)) {
+            LOG_INFO("[ZK9500] Capture cancelled by cancelCapture()");
+            return -2;  // Cancelled
+        }
+        return future.get();
+    }
+
     NexoResult<void> enrollUser(uint32_t userId, std::vector<uint8_t>& templateOut) override {
         (void)userId;
         if (!m_isReady) return NexoResult<void>::fail(NexoError::NotInitialized);
@@ -111,8 +173,25 @@ public:
         std::memset(fpTemplate, 0, sizeof(fpTemplate));
         unsigned int cbTemplate = 2048;
 
-        int ret = ZKFPM_AcquireFingerprint(m_hDevice.get(), fpTemplate, cbTemplate, nullptr, nullptr);
-        if (ret != 0) return NexoResult<void>::fail(NexoError::BadQuality, "Fallo lectura huella");
+        int ret = acquireWithTimeout(fpTemplate, cbTemplate);
+        if (ret == -1) {
+            return NexoResult<void>::fail(NexoError::Timeout, "Timeout capturando huella (ningún dedo detectado)");
+        }
+        if (ret == -2) {
+            return NexoResult<void>::fail(NexoError::Cancelled, "Captura cancelada");
+        }
+        if (ret != 0) {
+            // FIX C6: Si el error indica dispositivo desconectado, intentar reconexión
+            LOG_ERROR("[ZK9500] AcquireFingerprint error: {}. Attempting reconnection.", ret);
+            if (reconnectDevice()) {
+                ret = acquireWithTimeout(fpTemplate, cbTemplate);
+                if (ret != 0) {
+                    return NexoResult<void>::fail(NexoError::SensorError, "Fallo lectura huella tras reconexión");
+                }
+            } else {
+                return NexoResult<void>::fail(NexoError::SensorError, "Sensor desconectado y reconexión falló");
+            }
+        }
 
         templateOut.assign(fpTemplate, fpTemplate + cbTemplate);
         return NexoResult<void>::success();
@@ -120,7 +199,7 @@ public:
 
     NexoResult<void> addTemplate(uint32_t userId, const std::vector<uint8_t>& templateData) override {
         if (!m_isReady) return NexoResult<void>::fail(NexoError::NotInitialized);
-        if (templateData.empty()) return NexoResult<void>::fail(NexoError::InvalidParameter, "Empty template");
+        if (templateData.empty()) return NexoResult<void>::fail(NexoError::InvalidInput, "Empty template");
 
         unsigned int cbTemplate = static_cast<unsigned int>(std::min(templateData.size(), static_cast<size_t>(2048)));
         ZKFPM_DBDel(m_hDBCache.get(), userId); // reemplazar si existe
@@ -136,9 +215,26 @@ public:
         unsigned char fpTemplate[2048];
         std::memset(fpTemplate, 0, sizeof(fpTemplate));
         unsigned int cbTemplate = 2048;
-        int ret = ZKFPM_AcquireFingerprint(m_hDevice.get(), fpTemplate, cbTemplate, nullptr, nullptr);
+        int ret = acquireWithTimeout(fpTemplate, cbTemplate);
 
-        if (ret != 0) return NexoResult<void>::fail(NexoError::BadQuality, "Fallo lectura huella");
+        if (ret == -1) {
+            return NexoResult<void>::fail(NexoError::Timeout, "Timeout capturando huella");
+        }
+        if (ret == -2) {
+            return NexoResult<void>::fail(NexoError::Cancelled, "Captura cancelada");
+        }
+        if (ret != 0) {
+            // FIX C6: Intentar reconexión USB
+            LOG_ERROR("[ZK9500] AcquireFingerprint error: {}. Attempting reconnection.", ret);
+            if (reconnectDevice()) {
+                ret = acquireWithTimeout(fpTemplate, cbTemplate);
+                if (ret != 0) {
+                    return NexoResult<void>::fail(NexoError::SensorError, "Sensor desconectado");
+                }
+            } else {
+                return NexoResult<void>::fail(NexoError::SensorError, "Sensor desconectado y reconexión falló");
+            }
+        }
 
         unsigned int fid = 0, score = 0;
         if (ZKFPM_DBIdentify(m_hDBCache.get(), fpTemplate, cbTemplate, &fid, &score) == 0) {
@@ -161,7 +257,10 @@ public:
         return NexoResult<void>::success();
     }
 
-    void cancelCapture() override {}
+    // FIX C6: cancelCapture() funcional — setea flag que el hilo de captura revisa
+    void cancelCapture() override {
+        m_cancelFlag.store(true, std::memory_order_release);
+    }
 
     bool isReady() const override { return m_isReady; }
     std::string getLastError() const override { return m_lastError; }

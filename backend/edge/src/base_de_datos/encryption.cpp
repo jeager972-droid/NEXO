@@ -22,6 +22,7 @@
 #include <openssl/rand.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
+#include <openssl/kdf.h>
 #include <cstring>
 #include <vector>
 #include <openssl/crypto.h>
@@ -100,6 +101,12 @@ bool Encryption::initialize() {
 
 bool Encryption::saveKeyToFile(const std::string& key) {
     if (key.size() != 32) return false;
+    // FIX C5: Cifrar la clave antes de guardarla en disco (binding a hardware)
+    // Si el cifrado falla (ej: no es RPi), fallback a texto plano con chmod 600
+    if (saveKeyToFileEncrypted(key)) {
+        return true;
+    }
+    LOG_WARN("[C5] Hardware-bound encryption failed, falling back to plaintext key file");
     // Escritura atómica: temp -> chmod -> rename, para evitar archivo truncado por apagón.
     std::string tmpPath = m_keyFile + ".tmp";
     {
@@ -121,11 +128,19 @@ bool Encryption::saveKeyToFile(const std::string& key) {
 }
 
 bool Encryption::loadKeyFromFile(std::string& key) {
+    // FIX C5: Intentar cargar cifrado primero, fallback a texto plano (compatibilidad)
+    if (loadKeyFromFileEncrypted(key)) {
+        return true;
+    }
+    // Fallback: archivo en texto plano (formato legacy o no-RPi)
     std::ifstream ifs(m_keyFile, std::ios::binary | std::ios::ate);
     if (!ifs) return false;
     auto size = static_cast<std::streamoff>(ifs.tellg());
     if (size != 32) {
-        LOG_ERROR("AES key file {} has invalid size {}", m_keyFile, size);
+        // Si el tamaño no es 32, probablemente está cifrado pero no podemos descifrar
+        // (ej: SD card movida a otra RPi) — eso es esperado y seguro
+        LOG_ERROR("AES key file {} has size {} (expected 32). May be encrypted for different hardware.",
+                  m_keyFile, size);
         return false;
     }
     ifs.seekg(0, std::ios::beg);
@@ -259,4 +274,193 @@ std::string Encryption::decrypt(const std::string& b64Ciphertext) {
     }
     plainLen += len;
     return std::string(reinterpret_cast<char*>(plaintext.data()), static_cast<size_t>(plainLen));
+}
+
+// ============================================================================
+// FIX C5: Hardware-bound encryption — cifrar clave AES en disco
+// ============================================================================
+// Deriva una clave de cifrado del CPU serial de la RPi (/proc/cpuinfo).
+// Esto significa que si extraen la SD card y la ponen en otra RPi, no pueden
+// descifrar la clave AES. No es tan seguro como un TPM, pero eleva la barra
+// significativamente para ataques de "robar la SD card".
+// ============================================================================
+
+std::string Encryption::getHardwareBoundKey() {
+    // Leer CPU serial y revision de /proc/cpuinfo (RPi específico)
+    std::string serial, revision;
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    if (cpuinfo) {
+        std::string line;
+        while (std::getline(cpuinfo, line)) {
+            if (line.rfind("Serial", 0) == 0) {
+                auto pos = line.find(':');
+                if (pos != std::string::npos) serial = line.substr(pos + 2);
+            } else if (line.rfind("Revision", 0) == 0) {
+                auto pos = line.find(':');
+                if (pos != std::string::npos) revision = line.substr(pos + 2);
+            }
+        }
+    }
+    if (serial.empty() && revision.empty()) {
+        // No es RPi o no se pudo leer — no se puede hacer binding
+        return "";
+    }
+    // Combinar serial + revision + salt fijo para derivar clave
+    std::string hwId = serial + ":" + revision + ":NEXO_EDGE_HW_BIND_V1";
+    // Derivar clave de 32 bytes con PBKDF2-SHA256
+    std::vector<uint8_t> derivedKey(32);
+    // Salt fijo (no necesita ser secreto, solo único para NEXO)
+    const unsigned char salt[] = "NEXO_EDGE_SALT_2026";
+    int rc = PKCS5_PBKDF2_HMAC(
+        hwId.c_str(), static_cast<int>(hwId.size()),
+        salt, sizeof(salt) - 1,  // -1 para excluir el null terminator
+        10000,  // iteraciones
+        EVP_sha256(),
+        32, derivedKey.data());
+    if (rc != 1) {
+        LOG_ERROR("[C5] PBKDF2 key derivation failed");
+        return "";
+    }
+    return std::string(reinterpret_cast<char*>(derivedKey.data()), 32);
+}
+
+bool Encryption::saveKeyToFileEncrypted(const std::string& key) {
+    std::string hwKey = getHardwareBoundKey();
+    if (hwKey.empty()) {
+        // No es RPi o no se pudo leer CPU serial — no se puede cifrar
+        return false;
+    }
+
+    // Cifrar la clave AES con la clave derivada del hardware
+    std::vector<uint8_t> iv(12);
+    if (RAND_bytes(iv.data(), 12) != 1) {
+        LOG_ERROR("[C5] RAND_bytes failed for IV");
+        return false;
+    }
+
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return false;
+
+    std::vector<uint8_t> ciphertext(key.size() + 16);
+    int len = 0, cipherLen = 0;
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) != 1 ||
+        EVP_EncryptInit_ex(ctx, nullptr, nullptr,
+                           reinterpret_cast<const unsigned char*>(hwKey.data()), iv.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        OPENSSL_cleanse(&hwKey[0], hwKey.size());
+        return false;
+    }
+    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
+                          reinterpret_cast<const unsigned char*>(key.data()),
+                          static_cast<int>(key.size())) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        OPENSSL_cleanse(&hwKey[0], hwKey.size());
+        return false;
+    }
+    cipherLen = len;
+    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        OPENSSL_cleanse(&hwKey[0], hwKey.size());
+        return false;
+    }
+    cipherLen += len;
+    std::vector<uint8_t> tag(16);
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data());
+    EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(&hwKey[0], hwKey.size());
+
+    // Empaquetar: magic(4) + IV(12) + ciphertext + tag(16)
+    // Magic "NXE1" para distinguir de archivo en texto plano
+    std::vector<uint8_t> packed;
+    packed.insert(packed.end(), {'N', 'X', 'E', '1'});
+    packed.insert(packed.end(), iv.begin(), iv.end());
+    packed.insert(packed.end(), ciphertext.begin(), ciphertext.begin() + cipherLen);
+    packed.insert(packed.end(), tag.begin(), tag.end());
+
+    // Escritura atómica
+    std::string tmpPath = m_keyFile + ".tmp";
+    {
+        std::ofstream ofs(tmpPath, std::ios::binary | std::ios::trunc);
+        if (!ofs) return false;
+        ofs.write(reinterpret_cast<const char*>(packed.data()),
+                  static_cast<std::streamsize>(packed.size()));
+        if (!ofs) return false;
+        ofs.close();
+    }
+    chmod(tmpPath.c_str(), S_IRUSR | S_IWUSR);
+    if (std::rename(tmpPath.c_str(), m_keyFile.c_str()) != 0) {
+        LOG_ERROR("[C5] Failed to rename encrypted key file");
+        return false;
+    }
+    LOG_INFO("[C5] AES key saved with hardware-bound encryption");
+    return true;
+}
+
+bool Encryption::loadKeyFromFileEncrypted(std::string& key) {
+    std::ifstream ifs(m_keyFile, std::ios::binary | std::ios::ate);
+    if (!ifs) return false;
+    auto size = static_cast<std::streamoff>(ifs.tellg());
+    // Formato cifrado: magic(4) + IV(12) + ciphertext(32) + tag(16) = 64 bytes
+    if (size != 64) return false;  // No es formato cifrado
+
+    std::vector<uint8_t> packed(size);
+    ifs.seekg(0, std::ios::beg);
+    ifs.read(reinterpret_cast<char*>(packed.data()), size);
+    if (!ifs.good()) return false;
+
+    // Verificar magic
+    if (packed[0] != 'N' || packed[1] != 'X' || packed[2] != 'E' || packed[3] != '1') {
+        return false;  // No es formato cifrado
+    }
+
+    std::string hwKey = getHardwareBoundKey();
+    if (hwKey.empty()) {
+        LOG_ERROR("[C5] Cannot decrypt key file — hardware ID not available");
+        return false;
+    }
+
+    // Extraer IV(12) + ciphertext(32) + tag(16)
+    std::vector<uint8_t> iv(packed.begin() + 4, packed.begin() + 16);
+    std::vector<uint8_t> ciphertext(packed.begin() + 16, packed.begin() + 48);
+    std::vector<uint8_t> tag(packed.begin() + 48, packed.begin() + 64);
+
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        OPENSSL_cleanse(&hwKey[0], hwKey.size());
+        return false;
+    }
+
+    std::vector<uint8_t> plaintext(32);
+    int len = 0, plainLen = 0;
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) != 1 ||
+        EVP_DecryptInit_ex(ctx, nullptr, nullptr,
+                           reinterpret_cast<const unsigned char*>(hwKey.data()), iv.data()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        OPENSSL_cleanse(&hwKey[0], hwKey.size());
+        return false;
+    }
+    if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
+                          static_cast<int>(ciphertext.size())) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        OPENSSL_cleanse(&hwKey[0], hwKey.size());
+        return false;
+    }
+    plainLen = len;
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag.data());
+    int ret = EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len);
+    EVP_CIPHER_CTX_free(ctx);
+    OPENSSL_cleanse(&hwKey[0], hwKey.size());
+
+    if (ret <= 0) {
+        LOG_ERROR("[C5] AES-GCM authentication failed for key file — wrong hardware?");
+        return false;
+    }
+    plainLen += len;
+    key.assign(reinterpret_cast<char*>(plaintext.data()), static_cast<size_t>(plainLen));
+    OPENSSL_cleanse(plaintext.data(), plaintext.size());
+    LOG_INFO("[C5] AES key loaded from hardware-bound encrypted file");
+    return true;
 }

@@ -60,4 +60,9 @@ private:
 
     bool saveKeyToFile(const std::string& key);
     bool loadKeyFromFile(std::string& key);
+
+    // FIX C5: Binding a hardware — cifrar clave AES en disco con clave derivada del CPU serial
+    std::string getHardwareBoundKey();  // Deriva clave de /proc/cpuinfo (Serial + Revision)
+    bool saveKeyToFileEncrypted(const std::string& key);
+    bool loadKeyFromFileEncrypted(std::string& key);
 };

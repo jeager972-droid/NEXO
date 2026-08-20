@@ -24,6 +24,7 @@ enum class NexoError {
     CryptoError,
     InvalidInput,
     PermissionDenied,
+    Cancelled,  // FIX C6: Captura cancelada por cancelCapture()
     Unknown
 };
 
@@ -40,6 +41,7 @@ inline std::string toString(NexoError e) {
         case NexoError::CryptoError:      return "CryptoError";
         case NexoError::InvalidInput:     return "InvalidInput";
         case NexoError::PermissionDenied: return "PermissionDenied";
+        case NexoError::Cancelled:        return "Cancelled";
         case NexoError::Unknown:          return "Unknown";
     }
     return "Unknown";

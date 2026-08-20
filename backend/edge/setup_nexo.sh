@@ -72,6 +72,8 @@ if [[ "$PKG_MANAGER" == "apt-get" ]]; then
         libssl-dev \
         libsqlite3-dev \
         libgpiod-dev \
+        libspdlog-dev \
+        libmosquitto-dev \
         g++ \
         git
 elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
@@ -82,6 +84,8 @@ elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
         openssl-devel \
         sqlite-devel \
         libgpiod-devel \
+        spdlog-devel \
+        mosquitto-devel \
         git
 fi
 
@@ -106,6 +110,31 @@ if [[ ! -d "/var/log/nexo" ]]; then
     echo "✅ Logs directory created and permissions set"
 else
     echo "✅ Logs directory already exists"
+fi
+
+# FIX A7: Crear directorio de despliegue /opt/nexo
+echo "📁 Creating deployment directory: /opt/nexo"
+if [[ ! -d "/opt/nexo" ]]; then
+    sudo mkdir -p /opt/nexo
+    sudo chown $USER:$USER /opt/nexo
+    echo "✅ Deployment directory created"
+else
+    echo "✅ Deployment directory already exists"
+fi
+
+# FIX A7: Instalar systemd service para auto-start y auto-restart
+echo "⚙️  Installing systemd service..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/nexo-edge.service" ]]; then
+    sudo cp "$SCRIPT_DIR/nexo-edge.service" /etc/systemd/system/nexo-edge.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable nexo-edge.service
+    echo "✅ systemd service installed and enabled (auto-start on boot)"
+    echo "   Start with:  sudo systemctl start nexo-edge"
+    echo "   Status with: sudo systemctl status nexo-edge"
+    echo "   Logs with:   sudo journalctl -u nexo-edge -f"
+else
+    echo "⚠️  nexo-edge.service not found in $SCRIPT_DIR — skipping systemd setup"
 fi
 
 echo ""
