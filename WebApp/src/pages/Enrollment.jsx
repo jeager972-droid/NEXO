@@ -42,6 +42,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
   const [biometricStatus, setBiometricStatus] = useState('checking');
   const [edgeDevice, setEdgeDevice] = useState(null);
   const [enrollCmd, setEnrollCmd] = useState({ state: 'idle', message: '' });
+  const enrollPollRef = useRef(null);
 
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
   const canNext =
@@ -85,11 +86,16 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
         setBiometricStatus(device ? 'connected' : 'error');
       })
       .catch(() => setBiometricStatus('error'));
+    return () => {
+      if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+    };
   }, [step]);
 
   const handleEnrollCommand = async () => {
     if (!edgeDevice) return;
     setEnrollCmd({ state: 'sending', message: '' });
+    // Limpiar polling anterior si existe
+    if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
     try {
       await devicesApi.requestEnrollment(edgeDevice.device_id, {
         doc: form.documento,
@@ -98,8 +104,36 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
       });
       setEnrollCmd({
         state: 'sent',
-        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella.`,
+        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella. Debes levantar y poner el dedo 4 veces.`,
       });
+      // Iniciar polling: verificar cada 5s si el estudiante ya tiene huella registrada
+      const studentDoc = form.documento;
+      let attempts = 0;
+      const maxAttempts = 72; // 72 * 5s = 6 minutos máximo
+      enrollPollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+          setEnrollCmd({
+            state: 'error',
+            message: 'Tiempo de espera agotado. El sensor no respondió en 6 minutos. Verifica que el alumno ponga el dedo correctamente e inténtalo de nuevo.',
+          });
+          return;
+        }
+        try {
+          const res = await studentsApi.getAll({ search: studentDoc, limit: 1 });
+          const found = res.students?.[0] || res.data?.[0];
+          if (found?.has_fingerprint) {
+            if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+            setEnrollCmd({
+              state: 'success',
+              message: `¡Huella registrada exitosamente para ${form.nombres} ${form.apellidos}! El alumno ya puede usar el sensor para registrar su asistencia.`,
+            });
+          }
+        } catch (e) {
+          // Error temporal, seguir intentando
+        }
+      }, 5000);
     } catch (err) {
       setEnrollCmd({ state: 'error', message: humanizeError(err, 'No pudimos enviar la instrucción al sensor. Verifica que esté conectado e inténtalo de nuevo.') });
     }
@@ -224,7 +258,8 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     {enrollCmd.state === 'sent' ? 'Volver a enviar la instrucción' : 'Registrar huella'}
                   </Button>
                   {enrollCmd.message && (
-                    <div className={`rounded-control p-4 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'}`} role="status">
+                    <div className={`rounded-control p-4 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : enrollCmd.state === 'success' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-info)] text-[var(--nx-info)]'}`} role="status">
+                      {enrollCmd.state === 'success' && <Check size={16} className="inline mr-2" />}
                       {enrollCmd.message}
                     </div>
                   )}
@@ -265,6 +300,7 @@ const StudentProfileDrawer = ({ student, onClose }) => {
   const [edgeDevice, setEdgeDevice] = useState(null);
   const [enrollCmd, setEnrollCmd] = useState({ state: 'idle', message: '' });
   const [hasFingerprint, setHasFingerprint] = useState(null);
+  const enrollPollRef = useRef(null);
 
   useEffect(() => {
     if (!student) return;
@@ -276,15 +312,19 @@ const StudentProfileDrawer = ({ student, onClose }) => {
       .catch(() => setBiometricStatus('error'));
     studentsApi.getAll({ search: student.document || student.documento, limit: 1 })
       .then((res) => {
-        const found = res.students?.[0];
+        const found = res.students?.[0] || res.data?.[0];
         setHasFingerprint(!!found?.has_fingerprint);
       })
       .catch(() => setHasFingerprint(false));
+    return () => {
+      if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+    };
   }, [student]);
 
   const handleChangeFingerprint = async () => {
     if (!edgeDevice) return;
     setEnrollCmd({ state: 'sending', message: '' });
+    if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
     try {
       await devicesApi.requestEnrollment(edgeDevice.device_id, {
         doc: student.document || student.documento,
@@ -293,8 +333,32 @@ const StudentProfileDrawer = ({ student, onClose }) => {
       });
       setEnrollCmd({
         state: 'sent',
-        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella.`,
+        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella. Debes levantar y poner el dedo 4 veces.`,
       });
+      // Polling: verificar cada 5s si la huella quedó registrada
+      const studentDoc = student.document || student.documento;
+      let attempts = 0;
+      const maxAttempts = 72;
+      enrollPollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+          setEnrollCmd({ state: 'error', message: 'Tiempo de espera agotado. El sensor no respondió en 6 minutos. Inténtalo de nuevo.' });
+          return;
+        }
+        try {
+          const res = await studentsApi.getAll({ search: studentDoc, limit: 1 });
+          const found = res.students?.[0] || res.data?.[0];
+          if (found?.has_fingerprint) {
+            if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+            setHasFingerprint(true);
+            setEnrollCmd({
+              state: 'success',
+              message: `¡Huella registrada exitosamente para ${student.first_name || ''} ${student.last_name || ''}!`,
+            });
+          }
+        } catch (e) { /* retry silencioso */ }
+      }, 5000);
     } catch (err) {
       setEnrollCmd({ state: 'error', message: humanizeError(err, 'No pudimos enviar la instrucción al sensor. Verifica que esté conectado e inténtalo de nuevo.') });
     }
@@ -375,7 +439,8 @@ const StudentProfileDrawer = ({ student, onClose }) => {
             {enrollCmd.state === 'sending' && <Loader2 size={18} className="animate-spin text-[var(--nx-success)]" />}
           </button>
           {enrollCmd.message && (
-            <div className={`mt-2 rounded-control p-3 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'}`} role="status">
+            <div className={`mt-2 rounded-control p-3 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : enrollCmd.state === 'success' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-info)] text-[var(--nx-info)]'}`} role="status">
+              {enrollCmd.state === 'success' && <Check size={16} className="inline mr-2" />}
               {enrollCmd.message}
             </div>
           )}
