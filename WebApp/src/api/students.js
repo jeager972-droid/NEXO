@@ -89,4 +89,8 @@ export const studentsApi = {
     const response = await client.post('/students', data);
     return response.data;
   },
+  bulkAssign: async (groupId, studentIds) => {
+    const response = await client.post('/students/bulk-assign', { group_id: groupId, student_ids: studentIds });
+    return response.data;
+  },
 };

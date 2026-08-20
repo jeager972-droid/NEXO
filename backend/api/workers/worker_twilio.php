@@ -226,6 +226,16 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         return;
     }
 
+    // FIX C5: Límite diario por número de teléfono para controlar costo económico.
+    // Máximo 10 SMS/día por destinatario. Configurable vía TWILIO_MAX_DAILY_PER_PHONE.
+    $maxDailyPerPhone = (int)(getenv('TWILIO_MAX_DAILY_PER_PHONE') ?: 10);
+    $todayKey = 'twilio:daily:' . $to . ':' . date('Ymd');
+    $dailyCount = (int)$redis->get($todayKey);
+    if ($dailyCount >= $maxDailyPerPhone) {
+        securityLog('TWILIO_DAILY_LIMIT_SKIP', "Skipped to $to: $dailyCount/$maxDailyPerPhone SMS today");
+        return;
+    }
+
     // FIX: Leaky Bucket rate limiter para no exceder límites de Twilio
     $now = microtime(true);
     $timeSinceLast = $now - $lastSend;
@@ -239,6 +249,10 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
     if ($send['ok']) {
         // Marcar dedup para evitar duplicados por 30 segundos
         $redis->setex($dedupKey, 30, '1');
+
+        // FIX C5: Incrementar contador diario por número (expira a medianoche)
+        $ttl = strtotime('tomorrow') - time();
+        $redis->setex($todayKey, max(1, $ttl), (string)($dailyCount + 1));
 
         // FIX (PgBouncer): SET LOCAL dentro de transacción para RLS
         try {

@@ -12,6 +12,9 @@
  * Pesos del modelo:
  *   - WEIGHT_LATE     = 5.0  : puntos por llegada tarde.
  *   - WEIGHT_ABSENCE  = 15.0 : puntos por inasistencia.
+ *   - WEIGHT_BATHROOM = 2.0  : puntos por cada salida al baño (exceso).
+ *   - BATHROOM_BASELINE = 3  : salidas al baño sin penalización por ventana.
+ *   - WEIGHT_PATTERN  = 10.0 : penalización por recurrencia (ej: ausente 3+ mismos días).
  *   - WEIGHT_OVERFLOW = 0.5  : penalización por eventos adicionales > BASELINE_EVENTS.
  *   - BASELINE_EVENTS = 20   : línea base de eventos sin penalización.
  *   - MAX_SCORE       = 100.0: techo absoluto del puntaje.
@@ -48,11 +51,15 @@ class RiskScoreEngine
 {
     // ── Pesos del modelo ──────────────────────────────────────────────────
     // Modifica estos valores sin tocar la base de datos.
-    const WEIGHT_LATE     = 5.0;   // Puntos por cada llegada tarde
-    const WEIGHT_ABSENCE  = 15.0;  // Puntos por cada inasistencia
-    const WEIGHT_OVERFLOW = 0.5;   // Penalización por eventos adicionales > 20
-    const BASELINE_EVENTS = 20;    // Línea base de eventos sin penalización
-    const MAX_SCORE       = 100.0; // Techo absoluto del puntaje
+    const WEIGHT_LATE       = 5.0;   // Puntos por cada llegada tarde
+    const WEIGHT_ABSENCE    = 15.0;  // Puntos por cada inasistencia
+    const WEIGHT_BATHROOM   = 2.0;   // Puntos por cada salida al baño sobre el baseline
+    const BATHROOM_BASELINE = 3;     // Salidas al baño sin penalización por ventana
+    const WEIGHT_PATTERN    = 10.0;  // Penalización por recurrencia (ej: ausente 3+ mismos días)
+    const PATTERN_THRESHOLD = 3;     // Mínimas ocurrencias en mismo día de semana para considerar patrón
+    const WEIGHT_OVERFLOW   = 0.5;   // Penalización por eventos adicionales > 20
+    const BASELINE_EVENTS   = 20;    // Línea base de eventos sin penalización
+    const MAX_SCORE         = 100.0; // Techo absoluto del puntaje
 
     // ── Umbrales de nivel de riesgo ───────────────────────────────────────
     const THRESHOLD_CRITICAL   = 80.0;
@@ -66,13 +73,23 @@ class RiskScoreEngine
 
     /**
      * Calcula el puntaje de riesgo a partir de conteos crudos.
+     * A4: bathroomCount cuenta salidas al baño sobre el baseline.
+     * A5: patternPenalty detecta recurrencia por día de semana.
      */
-    public static function computeScore(int $lateCount, int $absenceCount, int $totalEvents): float
-    {
-        $overflow = max(0, $totalEvents - self::BASELINE_EVENTS) * self::WEIGHT_OVERFLOW;
-        $raw      = ($lateCount * self::WEIGHT_LATE)
-                  + ($absenceCount * self::WEIGHT_ABSENCE)
-                  + $overflow;
+    public static function computeScore(
+        int $lateCount,
+        int $absenceCount,
+        int $totalEvents,
+        int $bathroomCount = 0,
+        float $patternPenalty = 0.0
+    ): float {
+        $overflow    = max(0, $totalEvents - self::BASELINE_EVENTS) * self::WEIGHT_OVERFLOW;
+        $bathroomPen = max(0, $bathroomCount - self::BATHROOM_BASELINE) * self::WEIGHT_BATHROOM;
+        $raw         = ($lateCount * self::WEIGHT_LATE)
+                     + ($absenceCount * self::WEIGHT_ABSENCE)
+                     + $bathroomPen
+                     + $patternPenalty
+                     + $overflow;
 
         return min(self::MAX_SCORE, $raw);
     }
@@ -114,6 +131,8 @@ class RiskScoreEngine
         // 1. Obtener conteos crudos de la DB (pura persistencia, sin lógica)
         // Late y absence se cuentan desde attendance_incidents (donde el worker
         // los inserta). total_events desde biometric_events (todos los ingresos).
+        // A4: bathroom_count cuenta SALIDA_BAÑO desde biometric_events.
+        // A5: pattern_day detecta el día de semana con más ausencias (recurrencia).
         $stmt = $conn->prepare("
             SELECT
                 (SELECT COUNT(*) FROM attendance_incidents
@@ -126,19 +145,41 @@ class RiskScoreEngine
                    AND detected_at >= NOW() - (? || ' days')::INTERVAL) AS absence_count,
                 (SELECT COUNT(*) FROM biometric_events
                  WHERE student_id = ? AND school_id = ?
-                   AND event_timestamp >= NOW() - (? || ' days')::INTERVAL) AS total_events
+                   AND event_timestamp >= NOW() - (? || ' days')::INTERVAL) AS total_events,
+                (SELECT COUNT(*) FROM biometric_events
+                 WHERE student_id = ? AND school_id = ?
+                   AND event_type = 'SALIDA_BAÑO'
+                   AND event_timestamp >= NOW() - (? || ' days')::INTERVAL) AS bathroom_count,
+                (SELECT MAX(dow_count) FROM (
+                    SELECT EXTRACT(ISODOW FROM detected_at) AS dow, COUNT(*) AS dow_count
+                    FROM attendance_incidents
+                    WHERE student_id = ? AND school_id = ?
+                      AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
+                      AND detected_at >= NOW() - (? || ' days')::INTERVAL
+                    GROUP BY dow
+                ) sub) AS max_absence_per_dow
         ");
         $stmt->execute([$studentId, $schoolId, $windowDays,
+                        $studentId, $schoolId, $windowDays,
+                        $studentId, $schoolId, $windowDays,
                         $studentId, $schoolId, $windowDays,
                         $studentId, $schoolId, $windowDays]);
         $counts = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $lateCount    = (int)($counts['late_count']    ?? 0);
-        $absenceCount = (int)($counts['absence_count'] ?? 0);
-        $totalEvents  = (int)($counts['total_events']  ?? 0);
+        $lateCount       = (int)($counts['late_count']       ?? 0);
+        $absenceCount    = (int)($counts['absence_count']     ?? 0);
+        $totalEvents     = (int)($counts['total_events']      ?? 0);
+        $bathroomCount   = (int)($counts['bathroom_count']    ?? 0);
+        $maxAbsencePerDow = (int)($counts['max_absence_per_dow'] ?? 0);
+
+        // A5: Penalización por patrón temporal (recurrencia por día de semana)
+        // Si un estudiante falta 3+ veces el mismo día de la semana, es un patrón
+        $patternPenalty = ($maxAbsencePerDow >= self::PATTERN_THRESHOLD)
+            ? self::WEIGHT_PATTERN
+            : 0.0;
 
         // 2. Calcular con la lógica de negocio en PHP
-        $riskScore = self::computeScore($lateCount, $absenceCount, $totalEvents);
+        $riskScore = self::computeScore($lateCount, $absenceCount, $totalEvents, $bathroomCount, $patternPenalty);
         $riskLevel = self::scoreToLevel($riskScore);
 
         // 3. Persistir resultado en student_behavior_metrics (UPSERT)
@@ -159,14 +200,19 @@ class RiskScoreEngine
             RETURNING metric_id
         ");
         $meta = json_encode([
-            'engine_version'   => '2.0',
+            'engine_version'   => '2.1',
             'weights'          => [
-                'late'     => self::WEIGHT_LATE,
-                'absence'  => self::WEIGHT_ABSENCE,
-                'overflow' => self::WEIGHT_OVERFLOW,
+                'late'      => self::WEIGHT_LATE,
+                'absence'   => self::WEIGHT_ABSENCE,
+                'bathroom'  => self::WEIGHT_BATHROOM,
+                'pattern'   => self::WEIGHT_PATTERN,
+                'overflow'  => self::WEIGHT_OVERFLOW,
             ],
             'alert_threshold'  => self::ALERT_THRESHOLD,
             'window_days'      => $windowDays,
+            'bathroom_count'   => $bathroomCount,
+            'pattern_penalty'  => $patternPenalty,
+            'max_absence_per_dow' => $maxAbsencePerDow,
         ], JSON_UNESCAPED_UNICODE);
 
         $upsert->execute([
@@ -197,6 +243,8 @@ class RiskScoreEngine
                 'metric_id'         => $metricId,
                 'late_count'        => $lateCount,
                 'absence_count'     => $absenceCount,
+                'bathroom_count'    => $bathroomCount,
+                'pattern_penalty'   => $patternPenalty,
                 'trigger_threshold' => self::ALERT_THRESHOLD,
             ], JSON_UNESCAPED_UNICODE);
 
@@ -215,6 +263,8 @@ class RiskScoreEngine
             'late_count'        => $lateCount,
             'absence_count'     => $absenceCount,
             'total_events'      => $totalEvents,
+            'bathroom_count'    => $bathroomCount,
+            'pattern_penalty'   => $patternPenalty,
             'threshold_exceeded'=> self::shouldAlert($riskScore),
         ];
     }

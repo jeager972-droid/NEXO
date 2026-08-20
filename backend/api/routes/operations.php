@@ -270,8 +270,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
     // Validación de presencia del estudiante para operaciones que lo requieren.
     // Excepciones: 'seguimiento' y 'citacion' pueden hacerse aunque el estudiante no esté presente.
+    // FIX M9: 'incidente' y 'pedagogica' eximidas — un docente puede reportar
+    // un incidente de un estudiante ausente (ej: pelea fuera del colegio).
     // 'sos', 'situacion_critica', 'solicitud', 'daño' no dependen de un estudiante específico.
-    $presenceRequiredActions = ['permiso', 'autorizar_salida', 'pedagogica', 'horario', 'incidente'];
+    $presenceRequiredActions = ['permiso', 'autorizar_salida', 'horario'];
     if (in_array($action, $presenceRequiredActions)) {
         $presenceStudentId = $params['student'] ?? $params['student_id'] ?? null;
         if ($presenceStudentId) {
@@ -533,8 +535,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 if ($isTeacher) {
                     $valStmt = $conn->prepare("
                         SELECT 1 FROM student_group_assignments sga
-                        JOIN schedules sch ON sch.group_id = sga.group_id
-                        WHERE sga.student_id = ? AND sch.teacher_user_id = ? AND sga.active = TRUE
+                        JOIN teacher_group_access tga ON tga.group_id = sga.group_id
+                        WHERE sga.student_id = ? AND tga.teacher_user_id = ? AND sga.active = TRUE
                     ");
                     $valStmt->execute([$studentId, $userId]);
                     if (!$valStmt->fetchColumn()) {
@@ -1112,6 +1114,26 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $schedRow = $schedStmt->fetch(PDO::FETCH_ASSOC);
                 $expectedEntry = $schedRow['entry_time'] ?? null;
                 $expectedExit = $schedRow['exit_time'] ?? null;
+
+                // FIX M5: Si schedules está vacío (NULL), usar school_schedule_config
+                // por work_shift del grupo como fallback
+                if ($expectedEntry === null || $expectedExit === null) {
+                    $sscStmt = $conn->prepare("
+                        SELECT ssc.entry_time, ssc.exit_time
+                        FROM school_schedule_config ssc
+                        JOIN academic_groups ag ON ag.school_id = ssc.school_id
+                            AND ag.work_shift = ssc.work_shift
+                        WHERE ag.group_id = ? AND ssc.school_id = ?
+                        ORDER BY ssc.entry_time ASC
+                        LIMIT 1
+                    ");
+                    $sscStmt->execute([$groupId, $schoolId]);
+                    $sscRow = $sscStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($sscRow) {
+                        $expectedEntry = $expectedEntry ?? $sscRow['entry_time'];
+                        $expectedExit = $expectedExit ?? $sscRow['exit_time'];
+                    }
+                }
 
                 // UPSERT en daily_schedule_config: marcar como fusionado
                 $dscMeta = json_encode([

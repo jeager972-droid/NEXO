@@ -5,15 +5,18 @@
  * Flujo de pasos:
  *   Paso 1: Seleccionar grados (Primero a Once)
  *   Paso 2: Elegir nomenclatura (Alfabética, Numérica, Otra)
- *   Paso 3: Configurar cuántos grupos por grado
+ *   Paso 3: Configurar cuántos grupos por grado + jornada por grado
+ *   Paso 4: Asignar docentes a cada grupo (obligatorio, ≥1 por grupo)
  *
- * Al guardar: borra grupos del año actual, crea los nuevos, y auto-crea sensores.
+ * Al guardar: borra grupos del año actual, crea los nuevos con work_shift,
+ * reasigna estudiantes existentes por grade_level, asigna docentes via
+ * teacher_group_access, y auto-crea sensores.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, ChevronLeft, ChevronRight,
-  GraduationCap, Hash, Type, Edit3, Calendar,
+  GraduationCap, Hash, Type, Edit3, Calendar, Sun, Moon, Clock,
 } from 'lucide-react';
 import { schoolApi } from '../../api/school';
 import { Button } from '../ui/Button';
@@ -22,7 +25,7 @@ import { Stepper } from '../ui/Stepper';
 import { humanizeError } from '../../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
-const STEPS = ['Grados', 'Nomenclatura', 'Grupos por grado'];
+const STEPS = ['Grados', 'Nomenclatura', 'Grupos y jornadas', 'Docentes'];
 
 const ALL_GRADES = [
   { value: '1', label: 'Primero' },
@@ -44,6 +47,13 @@ const NOMENCLATURES = [
   { value: 'other', label: 'Otra', example: '7-1, 7-2 (personalizado)', icon: Edit3, desc: 'Separador personalizado' },
 ];
 
+const SHIFTS = [
+  { value: 'mañana', label: 'Mañana', icon: Sun },
+  { value: 'tarde', label: 'Tarde', icon: Moon },
+  { value: 'noche', label: 'Noche', icon: Clock },
+  { value: 'completa', label: 'Completa', icon: GraduationCap },
+];
+
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
 const generateGroupName = (grade, nomenclature, index, separator) => {
@@ -57,29 +67,79 @@ const generateGroupName = (grade, nomenclature, index, separator) => {
   return `${grade}${sep}${index + 1}`;
 };
 
-export const OnboardingGroupsModal = ({ onCompleted }) => {
+export const OnboardingGroupsModal = ({ onCompleted, onCancel }) => {
   const [step, setStep] = useState(1);
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [nomenclature, setNomenclature] = useState('alphabetic');
   const [separator, setSeparator] = useState('-');
   const [groupsPerGrade, setGroupsPerGrade] = useState({});
+  const [gradeShifts, setGradeShifts] = useState({});
+  const [teacherAssignments, setTeacherAssignments] = useState({});
+  const [teachers, setTeachers] = useState([]);
+  const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Cargar docentes al llegar al paso 4
+  useEffect(() => {
+    if (step === 4 && teachers.length === 0 && !loadingTeachers) {
+      setLoadingTeachers(true);
+      schoolApi.getTeachers()
+        .then((res) => {
+          if (res.status === 'ok') setTeachers(res.data || []);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingTeachers(false));
+    }
+  }, [step, teachers.length, loadingTeachers]);
+
+  // Lista de grupos generados (computada)
+  const generatedGroups = useMemo(() => {
+    const groups = [];
+    for (const grade of selectedGrades) {
+      const count = groupsPerGrade[grade] || 1;
+      const shift = gradeShifts[grade] || 'mañana';
+      for (let i = 0; i < count; i++) {
+        const name = generateGroupName(grade, nomenclature, i, separator);
+        groups.push({ grade, name, shift });
+      }
+    }
+    return groups;
+  }, [selectedGrades, groupsPerGrade, gradeShifts, nomenclature, separator]);
+
+  // Validación por paso
   const canNext = step === 1 ? selectedGrades.length > 0
     : step === 2 ? !!nomenclature
-    : step === 3 ? true
+    : step === 3 ? selectedGrades.every((g) => gradeShifts[g])
+    : step === 4 ? generatedGroups.every((g) => (teacherAssignments[g.name] || []).length > 0)
     : false;
 
   const toggleGrade = (value) => {
     setSelectedGrades((prev) => {
       const next = prev.includes(value) ? prev.filter((g) => g !== value) : [...prev, value].sort((a, b) => Number(a) - Number(b));
       const newGpg = {};
+      const newShifts = {};
       for (const g of next) {
         newGpg[g] = groupsPerGrade[g] || 1;
+        newShifts[g] = gradeShifts[g] || 'mañana';
       }
       setGroupsPerGrade(newGpg);
+      setGradeShifts(newShifts);
       return next;
+    });
+  };
+
+  const setShiftForGrade = (grade, shift) => {
+    setGradeShifts((prev) => ({ ...prev, [grade]: shift }));
+  };
+
+  const toggleTeacherForGroup = (groupName, teacherId) => {
+    setTeacherAssignments((prev) => {
+      const current = prev[groupName] || [];
+      const next = current.includes(teacherId)
+        ? current.filter((id) => id !== teacherId)
+        : [...current, teacherId];
+      return { ...prev, [groupName]: next };
     });
   };
 
@@ -92,6 +152,8 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
         nomenclature,
         nomenclature_separator: separator,
         groups_per_grade: groupsPerGrade,
+        grade_shifts: gradeShifts,
+        teacher_assignments: teacherAssignments,
       });
       onCompleted?.();
     } catch (err) {
@@ -114,6 +176,12 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
     }
     return previews;
   }, [selectedGrades, nomenclature, separator, groupsPerGrade]);
+
+  // Filtrar docentes por jornada del grupo (mañana/tarde/noche) + completas + sin jornada
+  const teachersForShift = (shift) => {
+    if (shift === 'completa') return teachers;
+    return teachers.filter((t) => !t.work_shift || t.work_shift === shift || t.work_shift === 'completa');
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--nx-canvas)] p-4">
@@ -245,42 +313,67 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
                 </div>
               )}
 
-              {/* Paso 3: Grupos por grado */}
+              {/* Paso 3: Grupos por grado + jornada por grado */}
               {step === 3 && (
                 <div className="space-y-4">
                   <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">¿Cuántos grupos hay por grado este año?</p>
-                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Para cada grado, indica el número de grupos (salones)</p>
+                    <p className="text-label text-[var(--nx-text)]">¿Cuántos grupos hay por grado y en qué jornada?</p>
+                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Para cada grado, indica el número de grupos (salones) y la jornada</p>
                   </div>
                   <div className="space-y-3">
                     {selectedGrades.map((grade) => {
                       const label = ALL_GRADES.find((g) => g.value === grade)?.label || `Grado ${grade}`;
                       const count = groupsPerGrade[grade] || 1;
+                      const shift = gradeShifts[grade] || 'mañana';
                       return (
-                        <div key={grade} className="flex items-center justify-between rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
-                          <div className="min-w-0">
-                            <p className="text-body-sm text-[var(--nx-text)] font-medium">{label}</p>
-                            <p className="text-caption text-[var(--nx-text-muted)]">
-                              {Array.from({ length: Math.min(count, 5) }, (_, i) => generateGroupName(grade, nomenclature, i, separator)).join(', ')}
-                              {count > 5 && ` ... (+${count - 5})`}
-                            </p>
+                        <div key={grade} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-body-sm text-[var(--nx-text)] font-medium">{label}</p>
+                              <p className="text-caption text-[var(--nx-text-muted)]">
+                                {Array.from({ length: Math.min(count, 5) }, (_, i) => generateGroupName(grade, nomenclature, i, separator)).join(', ')}
+                                {count > 5 && ` ... (+${count - 5})`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setGroupsPerGrade((p) => ({ ...p, [grade]: Math.max(1, (p[grade] || 1) - 1) }))}
+                                className="grid h-9 w-9 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]"
+                              >
+                                –
+                              </button>
+                              <span className="w-8 text-center text-body font-semibold tabular-nums text-[var(--nx-text)]">{count}</span>
+                              <button
+                                type="button"
+                                onClick={() => setGroupsPerGrade((p) => ({ ...p, [grade]: Math.min(26, (p[grade] || 1) + 1) }))}
+                                className="grid h-9 w-9 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]"
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setGroupsPerGrade((p) => ({ ...p, [grade]: Math.max(1, (p[grade] || 1) - 1) }))}
-                              className="grid h-9 w-9 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]"
-                            >
-                              –
-                            </button>
-                            <span className="w-8 text-center text-body font-semibold tabular-nums text-[var(--nx-text)]">{count}</span>
-                            <button
-                              type="button"
-                              onClick={() => setGroupsPerGrade((p) => ({ ...p, [grade]: Math.min(26, (p[grade] || 1) + 1) }))}
-                              className="grid h-9 w-9 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]"
-                            >
-                              +
-                            </button>
+                          {/* Jornada por grado */}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {SHIFTS.map((s) => {
+                              const Icon = s.icon;
+                              const selected = shift === s.value;
+                              return (
+                                <button
+                                  key={s.value}
+                                  type="button"
+                                  onClick={() => setShiftForGrade(grade, s.value)}
+                                  className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption transition-all ${
+                                    selected
+                                      ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]'
+                                      : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:border-[var(--nx-border-accent)]'
+                                  }`}
+                                >
+                                  <Icon size={13} />
+                                  {s.label}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       );
@@ -294,6 +387,7 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
                         <p key={grade} className="text-body-sm text-[var(--nx-text)]">
                           <span className="font-medium">{ALL_GRADES.find((g) => g.value === grade)?.label}:</span>{' '}
                           <code className="font-mono text-[var(--nx-text-muted)]">{names.join(', ')}</code>
+                          <span className="text-caption text-[var(--nx-text-muted)] ml-2">({SHIFTS.find((s) => s.value === (gradeShifts[grade] || 'mañana'))?.label})</span>
                         </p>
                       ))}
                       {selectedGrades.length > 3 && (
@@ -301,6 +395,93 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
                       )}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Paso 4: Asignar docentes por grupo */}
+              {step === 4 && (
+                <div className="space-y-4">
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+                    <p className="text-label text-[var(--nx-text)]">Asigna al menos un docente a cada grupo</p>
+                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Cada grupo necesita ≥1 docente. Es válido dejar docentes sin grupo asignado.</p>
+                  </div>
+                  {loadingTeachers && (
+                    <p className="text-caption text-[var(--nx-text-muted)]">Cargando docentes...</p>
+                  )}
+                  {!loadingTeachers && teachers.length === 0 && (
+                    <div className="rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] p-4 text-body-sm text-[var(--nx-danger)]">
+                      No hay docentes registrados en la institución. Crea usuarios con rol Docente antes de continuar.
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {generatedGroups.map((g) => {
+                      const assigned = teacherAssignments[g.name] || [];
+                      const available = teachersForShift(g.shift);
+                      const gradeLabel = ALL_GRADES.find((gr) => gr.value === g.grade)?.label || g.grade;
+                      const shiftLabel = SHIFTS.find((s) => s.value === g.shift)?.label || g.shift;
+                      return (
+                        <div key={g.name} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="min-w-0">
+                              <p className="text-body-sm text-[var(--nx-text)] font-medium">
+                                {g.name} <span className="text-caption text-[var(--nx-text-muted)] font-normal">· {gradeLabel} · {shiftLabel}</span>
+                              </p>
+                              <p className="text-caption text-[var(--nx-text-muted)]">
+                                {assigned.length} docente(s) asignado(s)
+                                {assigned.length === 0 && <span className="text-[var(--nx-danger)] ml-1">— requerido</span>}
+                              </p>
+                            </div>
+                            {assigned.length > 0 && (
+                              <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--nx-icon-bg-success)] text-[var(--nx-success)] shrink-0">
+                                <Check size={12} strokeWidth={3} />
+                              </span>
+                            )}
+                          </div>
+                          {/* Chips de docentes disponibles */}
+                          {available.length === 0 ? (
+                            <p className="text-caption text-[var(--nx-text-muted)]">No hay docentes para la jornada {shiftLabel}.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {available.map((t) => {
+                                const selected = assigned.includes(t.user_id);
+                                const name = `${t.first_name} ${t.last_name}`.trim();
+                                return (
+                                  <button
+                                    key={t.user_id}
+                                    type="button"
+                                    onClick={() => toggleTeacherForGroup(g.name, t.user_id)}
+                                    className={`flex items-center gap-1.5 rounded-control border px-2.5 py-1.5 text-caption transition-all ${
+                                      selected
+                                        ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]'
+                                        : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:border-[var(--nx-border-accent)]'
+                                    }`}
+                                  >
+                                    {selected && <Check size={11} strokeWidth={3} />}
+                                    {name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Resumen de cobertura */}
+                  {teachers.length > 0 && (() => {
+                    const assignedIds = new Set();
+                    Object.values(teacherAssignments).forEach((ids) => ids.forEach((id) => assignedIds.add(id)));
+                    const unassignedCount = teachers.length - assignedIds.size;
+                    const allGroupsCovered = generatedGroups.every((g) => (teacherAssignments[g.name] || []).length > 0);
+                    return (
+                      <div className={`rounded-control border p-3 text-caption ${allGroupsCovered ? 'border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] text-[var(--nx-success)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'}`}>
+                        {allGroupsCovered
+                          ? `✓ Todos los grupos tienen docente. ${assignedIds.size} docente(s) asignado(s), ${unassignedCount} sin grupo.`
+                          : `Falta asignar docentes a uno o más grupos. ${assignedIds.size} docente(s) asignado(s), ${unassignedCount} sin grupo.`
+                        }
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </motion.div>
@@ -314,12 +495,17 @@ export const OnboardingGroupsModal = ({ onCompleted }) => {
             <span>Esta configuración se renueva cada 1 de enero</span>
           </div>
           <div className="flex gap-3">
+            {onCancel && (
+              <Button variant="secondary" onClick={onCancel}>
+                Cancelar
+              </Button>
+            )}
             {step > 1 && (
               <Button variant="secondary" onClick={() => setStep((s) => s - 1)} leftIcon={<ChevronLeft size={16} />}>
                 Atrás
               </Button>
             )}
-            {step < 3 ? (
+            {step < 4 ? (
               <Button onClick={() => canNext && setStep((s) => s + 1)} disabled={!canNext} rightIcon={<ChevronRight size={16} />}>
                 Siguiente
               </Button>

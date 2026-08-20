@@ -123,8 +123,14 @@ CREATE TABLE IF NOT EXISTS students (student_id UUID PRIMARY KEY DEFAULT uuid_ge
 CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
 ALTER TABLE students ADD COLUMN IF NOT EXISTS work_shift VARCHAR(50) DEFAULT 'mañana';
 COMMENT ON COLUMN students.work_shift IS 'mañana, tarde, completa. Usado para detección automática de ausentes por jornada';
+ALTER TABLE students ADD COLUMN IF NOT EXISTS grade_level VARCHAR(50);
+COMMENT ON COLUMN students.grade_level IS 'Grado actual del estudiante. Sincronizado al asignar grupo. Permite reconstruir student_group_assignments tras onboarding.';
+CREATE INDEX IF NOT EXISTS idx_students_school_grade ON students(school_id, grade_level) WHERE deleted_at IS NULL;
 CREATE TABLE IF NOT EXISTS guardian_student_relationships (relationship_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), guardian_id UUID NOT NULL REFERENCES guardians(guardian_id), student_id UUID NOT NULL REFERENCES students(student_id), relationship_type VARCHAR(80), primary_guardian BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS academic_groups (group_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), group_name VARCHAR(120) NOT NULL, grade_level VARCHAR(50), academic_year INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+ALTER TABLE academic_groups ADD COLUMN IF NOT EXISTS work_shift VARCHAR(50) DEFAULT 'mañana';
+COMMENT ON COLUMN academic_groups.work_shift IS 'Jornada del grupo: mañana, tarde, noche, completa. Asignada en el onboarding por grado.';
+CREATE INDEX IF NOT EXISTS idx_groups_school_year_shift ON academic_groups(school_id, academic_year, work_shift);
 CREATE TABLE IF NOT EXISTS student_group_assignments (assignment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), student_id UUID NOT NULL REFERENCES students(student_id), group_id UUID NOT NULL REFERENCES academic_groups(group_id), active BOOLEAN NOT NULL DEFAULT TRUE, start_date DATE, end_date DATE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS classrooms (classroom_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), classroom_name VARCHAR(120) NOT NULL, building VARCHAR(120), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS subjects (subject_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), subject_name VARCHAR(120) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
@@ -153,6 +159,30 @@ DROP POLICY IF EXISTS dsc_update ON daily_schedule_config;
 CREATE POLICY dsc_update ON daily_schedule_config FOR UPDATE USING(school_id = get_current_school_id());
 DROP POLICY IF EXISTS dsc_delete ON daily_schedule_config;
 CREATE POLICY dsc_delete ON daily_schedule_config FOR DELETE USING(school_id = get_current_school_id());
+-- teacher_group_access — Acceso de docentes a grupos por año electivo.
+-- Independiente de schedules (horarios reales). Fuente de verdad para permisos.
+CREATE TABLE IF NOT EXISTS teacher_group_access (
+    access_id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id        UUID NOT NULL REFERENCES schools(school_id),
+    group_id         UUID NOT NULL REFERENCES academic_groups(group_id),
+    teacher_user_id  UUID NOT NULL REFERENCES users(user_id),
+    work_shift       VARCHAR(50) NOT NULL DEFAULT 'mañana',
+    academic_year    INTEGER NOT NULL DEFAULT (EXTRACT(YEAR FROM NOW())::INT),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_teacher_group_year UNIQUE (teacher_user_id, group_id, academic_year)
+);
+CREATE INDEX IF NOT EXISTS idx_tga_teacher ON teacher_group_access(teacher_user_id, academic_year);
+CREATE INDEX IF NOT EXISTS idx_tga_group ON teacher_group_access(group_id, academic_year);
+CREATE INDEX IF NOT EXISTS idx_tga_school_shift ON teacher_group_access(school_id, work_shift, academic_year);
+ALTER TABLE teacher_group_access ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tga_select ON teacher_group_access;
+CREATE POLICY tga_select ON teacher_group_access FOR SELECT USING(school_id = get_current_school_id() OR get_current_role() = 'SYSTEM_WORKER');
+DROP POLICY IF EXISTS tga_insert ON teacher_group_access;
+CREATE POLICY tga_insert ON teacher_group_access FOR INSERT WITH CHECK(school_id = get_current_school_id());
+DROP POLICY IF EXISTS tga_update ON teacher_group_access;
+CREATE POLICY tga_update ON teacher_group_access FOR UPDATE USING(school_id = get_current_school_id());
+DROP POLICY IF EXISTS tga_delete ON teacher_group_access;
+CREATE POLICY tga_delete ON teacher_group_access FOR DELETE USING(school_id = get_current_school_id());
 CREATE TABLE IF NOT EXISTS edge_devices (device_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), school_id UUID NOT NULL REFERENCES schools(school_id), classroom_id UUID REFERENCES classrooms(classroom_id), device_name VARCHAR(120) NOT NULL, public_key TEXT, active BOOLEAN NOT NULL DEFAULT TRUE, last_sync_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS biometric_events (event_id UUID NOT NULL, school_id UUID NOT NULL, student_id UUID, device_id UUID NOT NULL, classroom_id UUID, schedule_id UUID, event_type VARCHAR(120) NOT NULL, event_result VARCHAR(120) NOT NULL, confidence_score NUMERIC(5,2), sync_hash TEXT, event_signature TEXT, event_fingerprint VARCHAR(64), event_timestamp TIMESTAMPTZ NOT NULL, metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(event_id, event_timestamp)) PARTITION BY RANGE(event_timestamp);
 CREATE TABLE IF NOT EXISTS notifications (notification_id UUID DEFAULT uuid_generate_v4() PRIMARY KEY, school_id UUID NOT NULL, user_id UUID NOT NULL, title VARCHAR(200) NOT NULL, message TEXT NOT NULL, type VARCHAR(50) NOT NULL DEFAULT 'INFO', metadata_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
@@ -249,6 +279,20 @@ CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email)) WHERE em
 CREATE INDEX IF NOT EXISTS idx_users_active_school_role ON users(active, school_id, role_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_refresh_hash ON user_sessions(refresh_token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_revoked ON user_sessions(expires_at, revoked);
+-- FIX C6: RLS en user_sessions (multi-tenant via JOIN con users.school_id)
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS user_sessions_select ON user_sessions;
+CREATE POLICY user_sessions_select ON user_sessions FOR SELECT
+    USING (get_current_role() = 'SYSTEM_WORKER' OR EXISTS (SELECT 1 FROM users u WHERE u.user_id = user_sessions.user_id AND u.school_id = get_current_school_id()));
+DROP POLICY IF EXISTS user_sessions_insert ON user_sessions;
+CREATE POLICY user_sessions_insert ON user_sessions FOR INSERT
+    WITH CHECK (EXISTS (SELECT 1 FROM users u WHERE u.user_id = user_sessions.user_id AND u.school_id = get_current_school_id()));
+DROP POLICY IF EXISTS user_sessions_update ON user_sessions;
+CREATE POLICY user_sessions_update ON user_sessions FOR UPDATE
+    USING (get_current_role() = 'SYSTEM_WORKER' OR EXISTS (SELECT 1 FROM users u WHERE u.user_id = user_sessions.user_id AND u.school_id = get_current_school_id()));
+DROP POLICY IF EXISTS user_sessions_delete ON user_sessions;
+CREATE POLICY user_sessions_delete ON user_sessions FOR DELETE
+    USING (get_current_role() = 'SYSTEM_WORKER' OR EXISTS (SELECT 1 FROM users u WHERE u.user_id = user_sessions.user_id AND u.school_id = get_current_school_id()));
 CREATE INDEX IF NOT EXISTS idx_guardian_rel_student_primary ON guardian_student_relationships(student_id, primary_guardian);
 CREATE INDEX IF NOT EXISTS idx_guardian_rel_guardian ON guardian_student_relationships(guardian_id);
 CREATE INDEX IF NOT EXISTS idx_groups_school_year_level ON academic_groups(school_id, academic_year, grade_level, group_name);

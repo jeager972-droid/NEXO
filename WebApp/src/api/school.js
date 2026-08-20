@@ -38,4 +38,17 @@ export const schoolApi = {
     const response = await client.post('/school/sensor-master-key', payload);
     return response.data;
   },
+  getTeachers: async (workShift = '') => {
+    const params = workShift ? { work_shift: workShift } : {};
+    const response = await client.get('/school/teachers', { params });
+    return response.data;
+  },
+  assignTeacher: async (groupId, teacherUserIds) => {
+    const response = await client.post('/school/assign-teacher', { group_id: groupId, teacher_user_ids: teacherUserIds });
+    return response.data;
+  },
+  unassignTeacher: async (groupId, teacherUserId) => {
+    const response = await client.delete('/school/assign-teacher', { data: { group_id: groupId, teacher_user_id: teacherUserId } });
+    return response.data;
+  },
 };

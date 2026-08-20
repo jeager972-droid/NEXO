@@ -331,13 +331,16 @@ function processJob(array $job, PDO $conn): bool {
                         $studentIdForNotif = $studentRow['student_id'] ?? null;
 
                         if ($studentIdForNotif && $incidentId) {
+                            // FIX: usar teacher_group_access en lugar de schedules.
+                            // schedules puede estar vacío tras onboarding (modela horarios
+                            // reales, no acceso). Notificamos a todos los docentes del
+                            // grupo del estudiante, no solo al que está en clase ahora.
                             $teacherStmt = $conn->prepare(
-                                "SELECT sch.teacher_user_id FROM schedules sch
-                                 JOIN student_group_assignments sga ON sga.group_id = sch.group_id AND sga.active = TRUE
+                                "SELECT tga.teacher_user_id FROM teacher_group_access tga
+                                 JOIN student_group_assignments sga ON sga.group_id = tga.group_id AND sga.active = TRUE
                                  JOIN academic_groups ag ON ag.group_id = sga.group_id
                                  WHERE sga.student_id = ?
-                                   AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))
-                                   AND sch.school_id = ?"
+                                   AND tga.school_id = ?"
                             );
                             $teacherStmt->execute([$studentIdForNotif, $instId]);
                             $teacherIds = $teacherStmt->fetchAll(PDO::FETCH_COLUMN);

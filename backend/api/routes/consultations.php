@@ -60,9 +60,9 @@ if ($cleanPath === '/consultations/query') {
     if ($isTeacher) {
         if ($groupName) {
             $checkStmt = $conn->prepare("
-                SELECT 1 FROM schedules sch
-                JOIN academic_groups ag ON ag.group_id = sch.group_id
-                WHERE sch.teacher_user_id = ? AND ag.group_name = ?
+                SELECT 1 FROM teacher_group_access tga
+                JOIN academic_groups ag ON ag.group_id = tga.group_id
+                WHERE tga.teacher_user_id = ? AND ag.group_name = ?
                 LIMIT 1
             ");
             $checkStmt->execute([$userId, $groupName]);
@@ -76,8 +76,8 @@ if ($cleanPath === '/consultations/query') {
             $safeUserId = $conn->quote($userId);
             $teacherGroupFilter = " AND s.student_id IN (
                 SELECT sga.student_id FROM student_group_assignments sga
-                JOIN schedules sch ON sch.group_id = sga.group_id
-                WHERE sch.teacher_user_id = {$safeUserId} AND sga.active = TRUE
+                JOIN teacher_group_access tga ON tga.group_id = sga.group_id
+                WHERE tga.teacher_user_id = {$safeUserId} AND sga.active = TRUE
             )";
         }
     }
@@ -653,7 +653,7 @@ if ($cleanPath === '/consultations/query') {
                     JOIN students s ON ai.student_id = s.student_id
                     LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
                     LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
-                    WHERE ai.school_id = ? AND ai.incident_type IN ('EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION')
+                    WHERE ai.school_id = ? AND ai.incident_type IN ('EVASION_INTERNA')
                       AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
                       {$gFilter}
                       {$sFilter}

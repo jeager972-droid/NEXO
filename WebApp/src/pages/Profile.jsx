@@ -21,6 +21,12 @@ import { humanizeError } from '../utils/messages';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
 
+const ALL_GRADES_LABELS = {
+  '1': 'Primero', '2': 'Segundo', '3': 'Tercero', '4': 'Cuarto', '5': 'Quinto',
+  '6': 'Sexto', '7': 'Séptimo', '8': 'Octavo', '9': 'Noveno', '10': 'Décimo', '11': 'Once',
+};
+const SHIFT_LABELS = { 'mañana': 'Mañana', 'tarde': 'Tarde', 'noche': 'Noche', 'completa': 'Completa' };
+
 const compressImage = (file, maxWidth = 800, quality = 0.85) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -427,6 +433,7 @@ const Profile = () => {
 
   // Configuración de grupos académicos
   const [groupsConfig, setGroupsConfig] = useState(null);
+  const [groupsDrawerOpen, setGroupsDrawerOpen] = useState(false);
   const [groupsEditOpen, setGroupsEditOpen] = useState(false);
 
   useEffect(() => {
@@ -769,11 +776,11 @@ const Profile = () => {
         </Card>
       )}
 
-      {/* ── Grupos académicos (solo RECTOR) ── */}
-      {user?.role === ROLES.RECTOR && (
+      {/* ── Grupos académicos (RECTOR y COORDINADOR) ── */}
+      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINATOR) && (
         <Card className="p-5">
           <button
-            onClick={() => setGroupsEditOpen(true)}
+            onClick={() => setGroupsDrawerOpen(true)}
             className="flex w-full items-center gap-3 text-left"
           >
             <GraduationCap size={18} className="text-[var(--nx-accent)] shrink-0" />
@@ -916,6 +923,107 @@ const Profile = () => {
         )}
       </AnimatePresence>
 
+      {/* Drawer de grupos académicos */}
+      <AnimatePresence>
+        {groupsDrawerOpen && (
+          <Drawer
+            title="Grupos académicos"
+            context={`Año ${groupsConfig?.onboarding_year ?? new Date().getFullYear()}`}
+            onClose={() => setGroupsDrawerOpen(false)}
+            size="md"
+            footer={
+              <div className="flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setGroupsDrawerOpen(false)}>Cerrar</Button>
+                {user?.role === ROLES.RECTOR && (
+                  <Button variant="primary" onClick={() => setGroupsEditOpen(true)}>Editar grupos</Button>
+                )}
+              </div>
+            }
+          >
+            <div className="p-6 space-y-4">
+              {schoolConfigToast && (
+                <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
+                  schoolConfigToast.type === 'success'
+                    ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
+                    : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
+                }`}>
+                  {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {schoolConfigToast.message}
+                </div>
+              )}
+              {groupsConfig?.onboarding_completed ? (
+                <>
+                  <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] px-4 py-3 text-body-sm text-[var(--nx-success)] flex items-center gap-2">
+                    <CheckCircle2 size={14} />
+                    Configurado para {groupsConfig.onboarding_year ?? new Date().getFullYear()}
+                  </div>
+                  {(groupsConfig?.groups || []).length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Agrupar por grado */}
+                      {Object.entries(
+                        (groupsConfig?.groups || []).reduce((acc, g) => {
+                          const grade = g.grade_level || '—';
+                          if (!acc[grade]) acc[grade] = [];
+                          acc[grade].push(g);
+                          return acc;
+                        }, {})
+                      ).sort(([a], [b]) => Number(a) - Number(b)).map(([grade, groups]) => (
+                        <div key={grade}>
+                          <p className="text-label font-semibold text-[var(--nx-text)] mb-2">
+                            {ALL_GRADES_LABELS[grade] || `Grado ${grade}`}
+                          </p>
+                          <div className="space-y-2">
+                            {groups.map((g) => (
+                              <div key={g.group_id} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-body-sm text-[var(--nx-text)] font-medium">{g.group_name}</p>
+                                    <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1">
+                                      {g.work_shift === 'mañana' && <Sun size={11} />}
+                                      {g.work_shift === 'tarde' && <Moon size={11} />}
+                                      {g.work_shift === 'noche' && <Clock size={11} />}
+                                      {g.work_shift === 'completa' && <GraduationCap size={11} />}
+                                      {SHIFT_LABELS[g.work_shift] || g.work_shift}
+                                    </p>
+                                  </div>
+                                  <span className="text-caption text-[var(--nx-text-muted)] shrink-0">
+                                    {(g.teachers || []).length} docente(s)
+                                  </span>
+                                </div>
+                                {(g.teachers || []).length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {g.teachers.map((t) => (
+                                      <span key={t.user_id} className="rounded-control bg-[var(--nx-surface-subtle)] px-2 py-1 text-caption text-[var(--nx-text-muted)]">
+                                        {t.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {(g.teachers || []).length === 0 && (
+                                  <p className="mt-2 text-caption text-[var(--nx-danger)]">Sin docentes asignados</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-body-sm text-[var(--nx-text-muted)]">
+                      No hay grupos configurados para este año.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
+                  Pendiente de configuración. {user?.role === ROLES.RECTOR ? 'Usa "Editar grupos" para configurar.' : 'El rector debe completar la configuración.'}
+                </div>
+              )}
+            </div>
+          </Drawer>
+        )}
+      </AnimatePresence>
+
       {/* Modal de edición de horarios (reutiliza OnboardingScheduleModal) */}
       {scheduleEditOpen && (
         <OnboardingScheduleModal
@@ -952,8 +1060,10 @@ const Profile = () => {
       {/* Modal de edición de grupos académicos (reutiliza OnboardingGroupsModal) */}
       {groupsEditOpen && (
         <OnboardingGroupsModal
+          onCancel={() => setGroupsEditOpen(false)}
           onCompleted={async () => {
             setGroupsEditOpen(false);
+            setGroupsDrawerOpen(false);
             setSchoolConfigToast({ type: 'success', message: 'Grupos académicos actualizados correctamente' });
             // Recargar estado de grupos
             try {

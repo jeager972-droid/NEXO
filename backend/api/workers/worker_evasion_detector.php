@@ -162,6 +162,8 @@ function getCurrentTeacher(PDO $conn, string $schoolId, string $studentId): ?arr
     $dayOfWeek = (int)$nowBogota->format('N'); // 1=Lunes, 7=Domingo
     $currentTime = $nowBogota->format('H:i:s');
 
+    // 1. Intentar schedules primero: ¿quién está en clase con el estudiante ahora?
+    //    (preciso: usa start_time/end_time/block_number del horario real)
     $stmt = $conn->prepare("
         SELECT u.user_id, u.first_name, u.last_name, u.phone,
                sch.start_time, sch.end_time, sch.block_number
@@ -176,6 +178,23 @@ function getCurrentTeacher(PDO $conn, string $schoolId, string $studentId): ?arr
     ");
     $stmt->execute([$studentId, $dayOfWeek, $currentTime, $currentTime]);
     $teacher = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($teacher) return $teacher;
+
+    // 2. Fallback: schedules puede estar vacío tras onboarding (modela horarios
+    //    reales, no acceso). Usar teacher_group_access para encontrar cualquier
+    //    docente del grupo del estudiante. start_time/end_time/block_number
+    //    serán NULL (el llamador debe tolerarlo).
+    $fallbackStmt = $conn->prepare("
+        SELECT u.user_id, u.first_name, u.last_name, u.phone,
+               NULL::time AS start_time, NULL::time AS end_time, NULL::INTEGER AS block_number
+        FROM teacher_group_access tga
+        JOIN student_group_assignments sga ON sga.group_id = tga.group_id AND sga.active = TRUE
+        JOIN users u ON u.user_id = tga.teacher_user_id
+        WHERE sga.student_id = ? AND tga.school_id = ?
+        LIMIT 1
+    ");
+    $fallbackStmt->execute([$studentId, $schoolId]);
+    $teacher = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
     return $teacher ?: null;
 }
 

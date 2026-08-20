@@ -204,3 +204,91 @@ if ($cleanPath === '/students') {
     exit;
 }
 
+// ============================================================================
+// POST /students/bulk-assign — Asignar múltiples estudiantes a un grupo
+//
+// Endpoint de recuperación post-onboarding: permite al RECTOR/SECRETARY
+// reasignar estudiantes que quedaron sin grupo (o mal asignados) tras un
+// onboarding. Útil cuando la migración 2026-36 no pudo inferir el grado
+// (students.grade_level era NULL).
+//
+// Payload: { group_id, student_ids: [uuid,...] }
+// ============================================================================
+if ($cleanPath === '/students/bulk-assign' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'SECRETARY']);
+    $schoolId = $authUser['school_id'];
+    $userId = $authUser['id'];
+
+    $groupId = trim((string)($input['group_id'] ?? ''));
+    $studentIds = $input['student_ids'] ?? [];
+
+    if ($groupId === '') {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'group_id es requerido']));
+    }
+    if (!is_array($studentIds) || empty($studentIds)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'student_ids debe ser un array no vacío']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $useSavepoint = $conn->inTransaction();
+        $sp = 'sp_bulk_assign';
+        if ($useSavepoint) {
+            $conn->exec("SAVEPOINT $sp");
+        } else {
+            $conn->beginTransaction();
+        }
+
+        // Validar que el grupo pertenece a la escuela y obtener grade_level
+        $groupStmt = $conn->prepare("SELECT group_id, grade_level FROM academic_groups WHERE group_id = ? AND school_id = ?");
+        $groupStmt->execute([$groupId, $schoolId]);
+        $group = $groupStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$group) {
+            if ($useSavepoint) { $conn->exec("ROLLBACK TO SAVEPOINT $sp"); } else { try { $conn->rollBack(); } catch (Exception $ignore) {} }
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Grupo no encontrado en esta institución']));
+        }
+
+        // Validar que los estudiantes pertenecen a la escuela
+        $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+        $validStmt = $conn->prepare("SELECT student_id FROM students WHERE student_id IN ($placeholders) AND school_id = ? AND deleted_at IS NULL");
+        $validStmt->execute(array_merge($studentIds, [$schoolId]));
+        $validIds = $validStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $assignStmt = $conn->prepare("
+            INSERT INTO student_group_assignments (student_id, group_id, active, start_date)
+            VALUES (?, ?, TRUE, CURRENT_DATE)
+            ON CONFLICT (student_id, group_id) DO UPDATE SET active = TRUE, start_date = CURRENT_DATE
+        ");
+        $deactivateStmt = $conn->prepare("UPDATE student_group_assignments SET active = FALSE WHERE student_id = ? AND group_id != ?");
+        $updateGradeStmt = $conn->prepare("UPDATE students SET grade_level = ? WHERE student_id = ?");
+
+        $assigned = 0;
+        foreach ($validIds as $sid) {
+            $deactivateStmt->execute([$sid, $groupId]);
+            $assignStmt->execute([$sid, $groupId]);
+            if ($group['grade_level']) {
+                $updateGradeStmt->execute([$group['grade_level'], $sid]);
+            }
+            $assigned++;
+        }
+
+        if ($useSavepoint) { $conn->exec("RELEASE SAVEPOINT $sp"); } else { $conn->commit(); }
+        securityLog('STUDENTS_BULK_ASSIGN', "School: $schoolId, Group: $groupId, Students: $assigned, By: $userId", $userId, $schoolId);
+        echo json_encode(['status' => 'ok', 'message' => 'Estudiantes asignados correctamente', 'assigned' => $assigned]);
+    } catch (Exception $e) {
+        if ($useSavepoint ?? false) {
+            try { $conn->exec("ROLLBACK TO SAVEPOINT $sp"); } catch (Exception $ignore) {}
+        } else {
+            try { $conn->rollBack(); } catch (Exception $ignore) {}
+        }
+        securityLog('STUDENTS_BULK_ASSIGN_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al asignar estudiantes', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+

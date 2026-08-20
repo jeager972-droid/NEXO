@@ -98,6 +98,23 @@ if ($cleanPath === '/dashboard/stats') {
             $groupParams = [$groupName];
         }
 
+        // Coordinador (vista global): restringir a estudiantes de grupos de su
+        // jornada. Se combina con groupFilter en la rama global (else).
+        // Los docentes no llegan aquí (van por la rama isTeacher con tga).
+        $isCoordinator = $userRole === 'COORDINATOR';
+        $coordShift = trim((string)($authUser['work_shift'] ?? ''));
+        $shiftFilter = '';
+        $shiftParams = [];
+        if ($isCoordinator && $coordShift !== '' && $coordShift !== 'completa') {
+            $shiftFilter = " AND student_id IN (
+                SELECT sga.student_id
+                FROM student_group_assignments sga
+                JOIN academic_groups ag ON ag.group_id = sga.group_id
+                WHERE ag.work_shift = ? AND sga.active = TRUE
+            )";
+            $shiftParams = [$coordShift];
+        }
+
         // ──────────────────────────────────────────────────────────────
         // Lógica de salida final (colegios que NO rotan salones):
         // Un estudiante que tiene un evento SALIDA_% después de su último
@@ -141,7 +158,7 @@ if ($cleanPath === '/dashboard/stats') {
             && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
         
         if ($isTeacher) {
-            // Para docentes: filtro por grupos asignados en schedules
+            // Para docentes: filtro por grupos asignados en teacher_group_access
             $statsSql = "
                 WITH present_cte AS (
                     SELECT COUNT(DISTINCT student_id) as cnt
@@ -154,8 +171,9 @@ if ($cleanPath === '/dashboard/stats') {
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                          JOIN teacher_group_access tga ON tga.group_id = ag.group_id
+                          WHERE tga.teacher_user_id = ? AND sga.active = TRUE
+                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                       AND NOT EXISTS (
                           SELECT 1 FROM biometric_events be2
@@ -179,8 +197,9 @@ if ($cleanPath === '/dashboard/stats') {
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                          JOIN teacher_group_access tga ON tga.group_id = ag.group_id
+                          WHERE tga.teacher_user_id = ? AND sga.active = TRUE
+                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                 ),
                 alerts_cte AS (
@@ -189,12 +208,13 @@ if ($cleanPath === '/dashboard/stats') {
                     WHERE school_id = ?
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
-                      AND (incident_type IN ('EARLY_EXIT', 'EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%')
+                      AND (incident_type IN ('EVASION_INTERNA') OR incident_type LIKE 'RISK_ALERT%')
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                          JOIN teacher_group_access tga ON tga.group_id = ag.group_id
+                          WHERE tga.teacher_user_id = ? AND sga.active = TRUE
+                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                           " . ($groupName ? " AND ag.group_name = ?" : "") . "
                       )
                 ),
@@ -209,8 +229,9 @@ if ($cleanPath === '/dashboard/stats') {
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                          JOIN teacher_group_access tga ON tga.group_id = ag.group_id
+                          WHERE tga.teacher_user_id = ? AND sga.active = TRUE
+                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                 ),
                 late_cte AS (
@@ -224,8 +245,9 @@ if ($cleanPath === '/dashboard/stats') {
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
-                          JOIN schedules sch ON sch.group_id = ag.group_id
-                          WHERE sch.teacher_user_id = ? AND sga.active = TRUE
+                          JOIN teacher_group_access tga ON tga.group_id = ag.group_id
+                          WHERE tga.teacher_user_id = ? AND sga.active = TRUE
+                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                 )
                 SELECT
@@ -243,16 +265,17 @@ if ($cleanPath === '/dashboard/stats') {
                 $groupName ? [$schoolId, $groupName, $authUser['id']] : [$schoolId, $authUser['id']]
             );
         } else {
-            // Para roles globales (RECTOR, ADMIN, etc.)
+            // Para roles globales (RECTOR, ADMIN, COORDINATOR, etc.)
+            // Coordinador: shiftFilter restringe a estudiantes de su jornada.
             $statsSql = "
                 WITH present_cte AS (
                     SELECT COUNT(DISTINCT student_id) as cnt
                     FROM biometric_events
                     WHERE school_id = ?
-                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND event_type LIKE 'INGRESO_%'
-                      {$groupFilter}
+                      {$groupFilter}{$shiftFilter}
                       AND NOT EXISTS (
                           SELECT 1 FROM biometric_events be2
                           WHERE be2.student_id = biometric_events.student_id
@@ -271,13 +294,13 @@ if ($cleanPath === '/dashboard/stats') {
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('INASISTENCIA', 'UNAUTHORIZED_ABSENCE')
-                      {$groupFilter}
+                      {$groupFilter}{$shiftFilter}
                 ),
                 alerts_cte AS (
                     SELECT
                         (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND emitted_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND emitted_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND resolved = FALSE)
                         +
-                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('EARLY_EXIT', 'EVASION', 'EVASION_INTERNA', 'CLASSROOM_EVASION', 'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter})
+                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('EVASION_INTERNA') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter}{$shiftFilter})
                     as cnt
                 ),
                 perm_cte AS (
@@ -287,7 +310,7 @@ if ($cleanPath === '/dashboard/stats') {
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type IN ('PERMISO', 'AUTORIZAR_SALIDA')
-                      {$groupFilter}
+                      {$groupFilter}{$shiftFilter}
                 ),
                 late_cte AS (
                     SELECT COUNT(DISTINCT student_id) as cnt
@@ -296,7 +319,7 @@ if ($cleanPath === '/dashboard/stats') {
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND incident_type = 'LATE_ARRIVAL'
-                      {$groupFilter}
+                      {$groupFilter}{$shiftFilter}
                 )
                 SELECT
                     (SELECT cnt FROM present_cte) as present_count,
@@ -305,13 +328,19 @@ if ($cleanPath === '/dashboard/stats') {
                     (SELECT cnt FROM perm_cte) as perm_count,
                     (SELECT cnt FROM late_cte) as late_count
             ";
-            $statsParams = array_merge(
-                $groupName ? array_merge([$schoolId, $groupName], $exitTimeParams) : array_merge([$schoolId], $exitTimeParams),
-                $groupName ? [$schoolId, $groupName] : [$schoolId],
-                $groupName ? [$schoolId, $schoolId, $groupName] : [$schoolId, $schoolId],
-                $groupName ? [$schoolId, $groupName] : [$schoolId],
-                $groupName ? [$schoolId, $groupName] : [$schoolId]
-            );
+            // Parámetros: cada CTE lleva groupParams + shiftParams (excepto alerts_cte
+            // que lleva schoolId, schoolId + groupParams + shiftParams).
+            // present_cte: schoolId + groupParams + shiftParams + exitTimeParams
+            // absent_cte: schoolId + groupParams + shiftParams
+            // alerts_cte: schoolId, schoolId + groupParams + shiftParams
+            // perm_cte: schoolId + groupParams + shiftParams
+            // late_cte: schoolId + groupParams + shiftParams
+            $presentParams = array_merge([$schoolId], $groupParams, $shiftParams, $exitTimeParams);
+            $absentParams  = array_merge([$schoolId], $groupParams, $shiftParams);
+            $alertsParams  = array_merge([$schoolId, $schoolId], $groupParams, $shiftParams);
+            $permParams    = array_merge([$schoolId], $groupParams, $shiftParams);
+            $lateParams    = array_merge([$schoolId], $groupParams, $shiftParams);
+            $statsParams = array_merge($presentParams, $absentParams, $alertsParams, $permParams, $lateParams);
         }
 
         $statsStmt = $conn->prepare($statsSql);
@@ -342,13 +371,18 @@ if ($cleanPath === '/dashboard/stats') {
             securityLog('DASHBOARD_TASKS_ERROR', $e->getMessage());
         }
 
-        // 5. Estudiantes por grupo (FIX: docentes solo ven grupos asignados via schedules)
+        // 5. Estudiantes por grupo (FIX: docentes solo ven grupos asignados via teacher_group_access)
         $teacherFilter = '';
+        $teacherFilterParams = [];
         if ($isTeacher) {
             $teacherFilter = " AND ag.group_id IN (
-                SELECT sch.group_id FROM schedules sch
-                WHERE sch.teacher_user_id = ?
+                SELECT tga.group_id FROM teacher_group_access tga
+                WHERE tga.teacher_user_id = ?
             )";
+            $teacherFilterParams = [$authUser['id']];
+        } elseif ($isCoordinator && $coordShift !== '' && $coordShift !== 'completa') {
+            $teacherFilter = " AND ag.work_shift = ?";
+            $teacherFilterParams = [$coordShift];
         }
 
         $groupsSql = "
@@ -359,11 +393,7 @@ if ($cleanPath === '/dashboard/stats') {
             WHERE s.school_id = ? {$teacherFilter}
         ";
         $groupsStmt = $conn->prepare($groupsSql);
-        if ($teacherFilter) {
-            $groupsStmt->execute([$schoolId, $authUser['id']]);
-        } else {
-            $groupsStmt->execute([$schoolId]);
-        }
+        $groupsStmt->execute(array_merge([$schoolId], $teacherFilterParams));
         $allStudents = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
         if ($isDev) $debugInfo .= " | students=" . count($allStudents) . " inTx3=" . ($conn->inTransaction() ? '1' : '0');
 
@@ -378,22 +408,33 @@ if ($cleanPath === '/dashboard/stats') {
             if ($isTeacher) {
                 $tgStmt = $conn->prepare("
                     SELECT DISTINCT ag.group_name
-                    FROM schedules sch
-                    JOIN academic_groups ag ON ag.group_id = sch.group_id
-                    WHERE sch.teacher_user_id = ?
+                    FROM teacher_group_access tga
+                    JOIN academic_groups ag ON ag.group_id = tga.group_id
+                    WHERE tga.teacher_user_id = ?
                     ORDER BY ag.group_name
                 ");
                 $tgStmt->execute([$authUser['id']]);
                 $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
             } else {
-                // Para otros roles, devolver todos los grupos de la institución
-                $tgStmt = $conn->prepare("
-                    SELECT DISTINCT group_name
-                    FROM academic_groups
-                    WHERE school_id = ?
-                    ORDER BY group_name
-                ");
-                $tgStmt->execute([$schoolId]);
+                // Para otros roles, devolver grupos de la institución.
+                // Coordinador: solo grupos de su jornada.
+                if ($isCoordinator && $coordShift !== '' && $coordShift !== 'completa') {
+                    $tgStmt = $conn->prepare("
+                        SELECT DISTINCT group_name
+                        FROM academic_groups
+                        WHERE school_id = ? AND work_shift = ?
+                        ORDER BY group_name
+                    ");
+                    $tgStmt->execute([$schoolId, $coordShift]);
+                } else {
+                    $tgStmt = $conn->prepare("
+                        SELECT DISTINCT group_name
+                        FROM academic_groups
+                        WHERE school_id = ?
+                        ORDER BY group_name
+                    ");
+                    $tgStmt->execute([$schoolId]);
+                }
                 $teacherGroups = $tgStmt->fetchAll(PDO::FETCH_COLUMN);
             }
             if ($isDev) $debugInfo .= " | tg=" . count($teacherGroups) . " inTx4=" . ($conn->inTransaction() ? '1' : '0');
@@ -466,7 +507,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     }
 
     try {
-        // Verificar que el docente tenga este grupo asignado (via schedules)
+        // Verificar que el docente tenga este grupo asignado (via teacher_group_access)
         $validGroup = true;
         $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
             && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
@@ -477,9 +518,9 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                 exit;
             }
             $checkStmt = $conn->prepare("
-                SELECT 1 FROM schedules sch
-                JOIN academic_groups ag ON ag.group_id = sch.group_id
-                WHERE sch.teacher_user_id = ? AND ag.group_name = ?
+                SELECT 1 FROM teacher_group_access tga
+                JOIN academic_groups ag ON ag.group_id = tga.group_id
+                WHERE tga.teacher_user_id = ? AND ag.group_name = ?
                 LIMIT 1
             ");
             $checkStmt->execute([$userId, $groupName]);
@@ -581,9 +622,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
                     FROM students s
                     {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
-                        AND (ai.incident_type IN ('EARLY_EXIT', 'EVASION', 'EVASION_INTERNA',
-                                                  'CLASSROOM_EVASION',
-                                                  'BIOMETRIC_FAILURE', 'SPAM_BIOMETRIC', 'SOS')
+                        AND (ai.incident_type IN ('EVASION_INTERNA', 'SOS')
                              OR ai.incident_type LIKE 'RISK_ALERT%')
                         AND (ai.detected_at)::date
                             BETWEEN ? AND ?

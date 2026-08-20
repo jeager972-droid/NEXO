@@ -40,28 +40,63 @@ if ($cleanPath === '/groups') {
     try {
         $userRole = strtoupper($authUser['role'] ?? '');
         $isTeacher = in_array($userRole, ['TEACHER', 'COUNSELOR']);
+        $isCoordinator = $userRole === 'COORDINATOR';
+        $currentYear = (int)date('Y');
 
         if ($teacherOnly && $isTeacher) {
+            // FIX: usar teacher_group_access en lugar de schedules.
+            // schedules modela horarios reales (aula+materia+día+bloque) y puede
+            // estar vacío tras onboarding. teacher_group_access es la fuente de
+            // verdad para "qué grupos puede ver este docente".
             $stmt = $conn->prepare("
-                SELECT ag.group_id as id, ag.group_name as name, ag.grade_level
-                FROM schedules sch
-                JOIN academic_groups ag ON ag.group_id = sch.group_id
-                WHERE sch.teacher_user_id = ?
-                GROUP BY ag.group_id, ag.group_name, ag.grade_level
-                ORDER BY ag.grade_level, ag.group_name
+                SELECT ag.group_id as id, ag.group_name as name, ag.grade_level, ag.work_shift
+                FROM teacher_group_access tga
+                JOIN academic_groups ag ON ag.group_id = tga.group_id
+                WHERE tga.teacher_user_id = ? AND tga.academic_year = ?
+                GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.work_shift
+                ORDER BY ag.grade_level::INT, ag.group_name
             ");
-            $stmt->execute([$authUser['id']]);
+            $stmt->execute([$authUser['id'], $currentYear]);
+            $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } elseif ($isCoordinator) {
+            // Coordinador: solo grupos de su jornada (users.work_shift).
+            // Si work_shift es NULL o 'completa', ve todos los grupos.
+            $coordShift = trim((string)($authUser['work_shift'] ?? ''));
+            if ($coordShift !== '' && $coordShift !== 'completa') {
+                $stmt = $conn->prepare("
+                    SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
+                           ag.academic_year, ag.work_shift,
+                           COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
+                    FROM academic_groups ag
+                    LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
+                    WHERE ag.school_id = ? AND ag.academic_year = ? AND ag.work_shift = ?
+                    GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
+                    ORDER BY ag.grade_level::INT, ag.group_name
+                ");
+                $stmt->execute([$schoolId, $currentYear, $coordShift]);
+            } else {
+                $stmt = $conn->prepare("
+                    SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
+                           ag.academic_year, ag.work_shift,
+                           COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
+                    FROM academic_groups ag
+                    LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
+                    WHERE ag.school_id = ? AND ag.academic_year = ?
+                    GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
+                    ORDER BY ag.grade_level::INT, ag.group_name
+                ");
+                $stmt->execute([$schoolId, $currentYear]);
+            }
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } else {
-            $currentYear = (int)date('Y');
             $stmt = $conn->prepare("
                 SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
-                       ag.academic_year,
+                       ag.academic_year, ag.work_shift,
                        COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
                 FROM academic_groups ag
                 LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
                 WHERE ag.school_id = ? AND ag.academic_year = ?
-                GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year
+                GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
                 ORDER BY ag.grade_level::INT, ag.group_name
             ");
             $stmt->execute([$schoolId, $currentYear]);
