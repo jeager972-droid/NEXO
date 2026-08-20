@@ -11,7 +11,7 @@ const LogoNexo = ({ className = 'h-12', showText = true, variant = 'default', us
   if (useImage && !imageFailed) {
     return (
       <img
-        src="/logo/logo_nexo_app.png"
+        src={`${import.meta.env.BASE_URL}logo/logo_nexo_app.png`}
         alt="NEXO"
         className={className}
         style={{ objectFit: 'contain', objectPosition: 'left center' }}

@@ -86,36 +86,36 @@ export default defineConfig({
             name: 'Panel',
             short_name: 'Panel',
             url: '/app/',
-            icons: [{ src: '/logo/logo_app.jpg', sizes: 'any', type: 'image/jpeg' }]
+            icons: [{ src: '/app/logo/logo_app.jpg', sizes: 'any', type: 'image/jpeg' }]
           },
           {
             name: 'Operación',
             short_name: 'Operación',
             url: '/app/operacion',
-            icons: [{ src: '/logo/logo_app.jpg', sizes: 'any', type: 'image/jpeg' }]
+            icons: [{ src: '/app/logo/logo_app.jpg', sizes: 'any', type: 'image/jpeg' }]
           }
         ],
         icons: [
           {
-            src: '/logo/logo_nexo_app.png',
+            src: '/app/logo/logo_nexo_app.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/logo/logo_nexo_app.png',
+            src: '/app/logo/logo_nexo_app.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/logo/logo_nexo_app.png',
+            src: '/app/logo/logo_nexo_app.png',
             sizes: '180x180',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/mask-icon.svg',
+            src: '/app/mask-icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'maskable'

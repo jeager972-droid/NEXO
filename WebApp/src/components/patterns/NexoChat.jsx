@@ -15,7 +15,7 @@ const NexoAvatar = ({ size = 40 }) => {
   }
   return (
     <img
-      src="/logo/logo_nexo_app.png"
+      src={`${import.meta.env.BASE_URL}logo/logo_nexo_app.png`}
       alt="NEXO"
       className="shrink-0 rounded-full object-cover"
       style={{ width: size, height: size }}
