@@ -48,6 +48,7 @@
 #include <nlohmann/json.hpp>
 #include <random>
 #include <sstream>
+#include <queue>
 #include <iomanip>
 #include <cstdlib>
 #include <array>
@@ -281,12 +282,29 @@ public:
         if (m_thread.joinable()) m_thread.join();
     }
 
+    // V2: Cola de comandos para que el main loop los procese con acceso a sensor/display/sync
+    bool hasPendingCommand() {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        return !m_commandQueue.empty();
+    }
+
+    std::string popCommand() {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        if (m_commandQueue.empty()) return "";
+        std::string cmd = std::move(m_commandQueue.front());
+        m_commandQueue.pop();
+        return cmd;
+    }
+
 private:
     std::thread m_thread;
     std::atomic<bool> m_stop{false};
     std::string m_apiBase;
     std::string m_deviceToken;
     std::string m_deviceId;
+
+    std::mutex m_queueMutex;
+    std::queue<std::string> m_commandQueue;
 
     static size_t writeCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
         userp->append((char*)contents, size * nmemb);
@@ -344,6 +362,10 @@ private:
                 for (const auto& cmd : json["data"]) {
                     std::string command = cmd.value("command", "");
                     LOG_INFO("[CommandWorker] Received command: {}", command);
+                    // V2: Encolar TODOS los comandos para que el main loop los procese
+                    // con acceso a biometricSensor, display, syncWorker, enrollStudentOnDevice.
+                    // Los comandos simples (RELOAD_CONFIG, FORCE_SYNC) se procesan inline;
+                    // los que necesitan hardware (ENROLL_REQUEST, AUTHORIZE_EXIT) van a la cola.
                     if (command == "REBOOT") {
                         LOG_WARN("[CommandWorker] Executing REBOOT command from cloud");
                         // En producción: system("reboot");
@@ -355,6 +377,12 @@ private:
                         // El SyncWorker se nudges desde el menú; aquí se podría usar una cv compartida
                     } else if (command == "UPDATE_FIRMWARE") {
                         LOG_WARN("[CommandWorker] Firmware update requested (placeholder)");
+                    } else {
+                        // ENROLL_REQUEST, AUTHORIZE_EXIT, DELETE_STUDENT, etc.
+                        // Encolar para que el main loop los procese con acceso al hardware
+                        std::lock_guard<std::mutex> lock(m_queueMutex);
+                        m_commandQueue.push(cmd.dump());
+                        LOG_INFO("[CommandWorker] Command {} enqueued for main loop", command);
                     }
                 }
             }
@@ -1051,6 +1079,73 @@ int main() {
                     }
                 } catch (const std::exception& e) {
                     LOG_WARN("[Main] Bad MQTT JSON: {}", e.what());
+                }
+            }
+        }
+
+        // V2: Procesar comandos del CommandWorker (HTTP polling fallback)
+        // Mismo procesamiento que el MQTT worker pero para comandos recibidos via polling.
+        if (commandWorker && commandWorker->hasPendingCommand()) {
+            std::string rawCmd = commandWorker->popCommand();
+            if (!rawCmd.empty()) {
+                try {
+                    auto j = nlohmann::json::parse(rawCmd);
+                    std::string cmd = j.value("command", "");
+                    LOG_INFO("[Main] Executing HTTP-polling command: {}", cmd);
+                    if (cmd == "ENROLL_REQUEST") {
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        std::string nombre = p.value("nombre", "");
+                        std::string tel = p.value("tel", p.value("parent_tel", ""));
+                        if (doc.empty() || nombre.empty()) {
+                            LOG_WARN("[Main] ENROLL_REQUEST sin doc/nombre. Ignorado.");
+                        } else {
+                            LOG_INFO("[Main] Remote enrollment requested (HTTP): doc={} ({})", doc, nombre);
+                            std::cout << "\n[REMOTO] Enrolamiento solicitado para " << nombre
+                                      << " (" << doc << "). Coloque el dedo en el lector...\n";
+                            display->showMessage("ENROLAMIENTO", "Coloque dedo");
+                            std::string err;
+                            if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err)) {
+                                display->showMessage("ENROLL OK", nombre.substr(0, 16));
+                                std::cout << "[REMOTO] Estudiante enrolado exitosamente.\n";
+                                AuditTrail::logEvent(doc, "ENROLL_OK");
+                                syncWorker.nudge();
+                            } else {
+                                display->showMessage("ENROLL FAIL", err.substr(0, 16));
+                                std::cout << "[REMOTO] Error de enrolamiento: " << err << "\n";
+                            }
+                        }
+                    } else if (cmd == "AUTHORIZE_EXIT") {
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        if (doc.empty()) {
+                            LOG_WARN("[Main] AUTHORIZE_EXIT sin doc. Ignorado.");
+                        } else {
+                            LOG_INFO("[Main] Exit authorized by cloud (HTTP) for doc={}", doc);
+                            AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
+                            syncWorker.nudge();
+                            display->showMessage("SALIDA", "AUTORIZADA");
+                            std::cout << "\n[REMOTO] Salida autorizada registrada para doc " << doc << ".\n";
+                        }
+                    } else if (cmd == "DELETE_STUDENT") {
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        if (!doc.empty()) {
+                            auto& db = SqliteManager::getInstance();
+                            Estudiante est;
+                            if (db.getEstudianteByDocumento(doc, est)) {
+                                db.deleteEstudiante(doc);
+                                biometricSensor->deleteUser(est.huella_id);
+                                CloudManager::getInstance().deleteStudent(doc);
+                                LOG_INFO("[Main] Student deleted by cloud command (HTTP): {}", doc);
+                                display->showMessage("ELIMINADO", doc.substr(0, 16));
+                            } else {
+                                LOG_WARN("[Main] DELETE_STUDENT para doc desconocido={}", doc);
+                            }
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    LOG_WARN("[Main] Bad HTTP-polling JSON: {}", e.what());
                 }
             }
         }

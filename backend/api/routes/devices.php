@@ -822,8 +822,26 @@ if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) &&
     }
 
     if (!$mqttOk && !$redisOk) {
-        http_response_code(500);
-        exit(json_encode(['status' => 'error', 'message' => 'No se pudo encolar el comando (MQTT y Redis no disponibles)']));
+        // FALLBACK: Guardar comando en PostgreSQL si Redis y MQTT no están disponibles
+        try {
+            $conn->prepare("
+                INSERT INTO device_commands (device_id, command, payload, issued_at, issued_by)
+                VALUES (?, ?, ?::jsonb, ?, ?)
+            ")->execute([
+                $deviceId,
+                $command,
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+                time(),
+                $authUser['id']
+            ]);
+            securityLog('DEVICE_COMMAND_PG_FALLBACK', "Device: $deviceId Command: $command saved to PG (Redis+MQTT unavailable)");
+            echo json_encode(['status' => 'ok', 'device_id' => $deviceId, 'command' => $command, 'channel' => 'PG_FALLBACK']);
+            exit;
+        } catch (Exception $pgErr) {
+            securityLog('DEVICE_COMMAND_PG_FALLBACK_ERROR', "PG fallback failed: " . $pgErr->getMessage());
+            http_response_code(500);
+            exit(json_encode(['status' => 'error', 'message' => 'No se pudo encolar el comando (MQTT, Redis y PG fallback no disponibles)']));
+        }
     }
 
     $channel = $mqttOk ? ($redisOk ? 'MQTT+REDIS' : 'MQTT') : 'REDIS';
@@ -887,7 +905,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
 
             $conn->commit();
 
-            // Redis best-effort: si falla, retornar comandos vacíos (no es crítico)
+            // Redis best-effort: si falla, usar fallback de PostgreSQL
             $commands = [];
             try {
                 $redis = getRedisConnection();
@@ -899,7 +917,42 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
                     }
                 }
             } catch (Exception $redisErr) {
-                securityLog('DEVICE_COMMANDS_REDIS_DOWN', "Redis unavailable, returning empty commands: " . $redisErr->getMessage());
+                securityLog('DEVICE_COMMANDS_REDIS_DOWN', "Redis unavailable, trying PG fallback: " . $redisErr->getMessage());
+            }
+
+            // FALLBACK: Leer comandos pendientes de PostgreSQL si Redis no los entregó
+            if (empty($commands)) {
+                try {
+                    $pgStmt = $conn->prepare("
+                        SELECT command_id, command, payload, issued_at, issued_by
+                        FROM device_commands
+                        WHERE device_id = ? AND delivered_at IS NULL
+                        ORDER BY command_id ASC
+                        LIMIT 10
+                    ");
+                    $pgStmt->execute([$deviceId]);
+                    $pgCommands = $pgStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    if (!empty($pgCommands)) {
+                        $deliveredIds = [];
+                        foreach ($pgCommands as $pgCmd) {
+                            $commands[] = [
+                                'command' => $pgCmd['command'],
+                                'payload' => json_decode($pgCmd['payload'], true) ?? [],
+                                'issued_at' => (int)$pgCmd['issued_at'],
+                                'issued_by' => $pgCmd['issued_by'],
+                            ];
+                            $deliveredIds[] = $pgCmd['command_id'];
+                        }
+                        // Marcar como entregados
+                        $deliveredPlaceholders = implode(',', array_fill(0, count($deliveredIds), '?'));
+                        $conn->prepare("UPDATE device_commands SET delivered_at = NOW() WHERE command_id IN ($deliveredPlaceholders)")
+                            ->execute($deliveredIds);
+                        securityLog('DEVICE_COMMANDS_PG_DELIVERED', "Delivered " . count($commands) . " commands from PG fallback to device: $deviceId");
+                    }
+                } catch (Exception $pgErr) {
+                    securityLog('DEVICE_COMMANDS_PG_FALLBACK_ERROR', "PG fallback read failed: " . $pgErr->getMessage());
+                }
             }
 
             echo json_encode([
