@@ -155,14 +155,14 @@ const Devices = () => {
     });
   }, [devices, search, gradeFilter]);
 
+  // Sensores con revocación pendiente: marcar visualmente como "En eliminación"
+  const pendingRevocationIds = useMemo(() => new Set(pendingRevocations.map((r) => r.device_id)), [pendingRevocations]);
+
   const configuredCount = devices.filter((d) => d.configured).length;
   const operativeCount = devices.filter((d) => {
     const s = getDeviceStatus(d, pendingRevocationIds);
     return s.scheme === 'success';
   }).length;
-
-  // Sensores con revocación pendiente: marcar visualmente como "En eliminación"
-  const pendingRevocationIds = useMemo(() => new Set(pendingRevocations.map((r) => r.device_id)), [pendingRevocations]);
 
   return (
     <div className="space-y-6">

@@ -21,6 +21,10 @@
       "destination": "/assets/:file*"
     },
     {
+      "source": "/app/logo/:file*",
+      "destination": "/logo/:file*"
+    },
+    {
       "source": "/app/:file.:ext",
       "destination": "/:file.:ext"
     },
