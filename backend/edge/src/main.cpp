@@ -118,7 +118,7 @@ bool readLineNonBlocking(std::string& out, int timeoutMs = 500) {
             if (errno == EINTR) continue;
             return false;
         }
-        if (ret == 0) continue; 
+        if (ret == 0) return false;  // FIX: timeout sin input → retornar false para que el main loop procese comandos
         if (pfd.revents & POLLIN) {
             char buf[256];
             ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
