@@ -72,13 +72,14 @@ if ($conn && strpos($cleanPath, '/devices') === 0) {
             $devName = $devInfo ? $devInfo['device_name'] : 'Sensor';
             $devLocation = $devInfo ? $devInfo['location'] : '';
 
+            // FIX: Eliminar la revocación ANTES del device para evitar FK violation (23503).
+            // Sin ON DELETE CASCADE, no se puede borrar edge_devices mientras sensor_revocation_requests lo referencia.
+            $conn->prepare("DELETE FROM sensor_revocation_requests WHERE revocation_id = ?")
+                ->execute([$revId]);
+
             // Eliminar el dispositivo
             $conn->prepare("DELETE FROM edge_devices WHERE device_id = ? AND school_id = ?")
                 ->execute([$devId, $schId]);
-
-            // Marcar revocación como completada
-            $conn->prepare("UPDATE sensor_revocation_requests SET completed = TRUE, completed_at = NOW() WHERE revocation_id = ?")
-                ->execute([$revId]);
 
             // Notificar a RECTOR y COORDINATOR
             $notifyRoles = ['RECTOR', 'COORDINATOR'];
@@ -388,6 +389,10 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
         $location = $devInfo['location'] ?? '';
         $userName = $authUser['nombre'] ?? $authUser['email'];
         $userRole = strtoupper($authUser['role'] ?? '');
+
+        // FIX: Eliminar revocaciones pendientes antes del device para evitar FK violation (23503)
+        $conn->prepare("DELETE FROM sensor_revocation_requests WHERE device_id = ? AND school_id = ?")
+            ->execute([$deviceId, $authUser['school_id']]);
 
         // Hard delete
         $conn->prepare("DELETE FROM edge_devices WHERE device_id = ? AND school_id = ?")
