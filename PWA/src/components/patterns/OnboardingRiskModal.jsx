@@ -12,7 +12,7 @@
  * Cada evento se analiza individualmente. No se suman patrones combinados.
  * Solo se configura: cuantas reincidencias y en cuantos dias activan alerta.
  *
- * Usa componentes del design system: Button, Badge, Stepper.
+ * Usa componentes del design system: Button, Stepper.
  * Estetica consistente con OnboardingGroupsModal y OnboardingScheduleModal.
  */
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -24,7 +24,6 @@ import {
 import { riskApi } from '../../api/risk';
 import { schoolApi } from '../../api/school';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
 import { Stepper } from '../ui/Stepper';
 import { humanizeError } from '../../utils/messages';
 
@@ -104,6 +103,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
+  const [hasActivePolicy, setHasActivePolicy] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -120,6 +120,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
 
       // Si el rector ya guardo una politica (version > 1), cargar sus valores
       const policy = policyRes.data?.policy;
+      setHasActivePolicy(!!policy && policy.version > 1);
       const existingRules = policyRes.data?.config?.rules ?? [];
       if (policy && policy.version > 1 && existingRules.length > 0) {
         const newThresholds = { ...DEFAULT_THRESHOLDS };
@@ -333,13 +334,15 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                       </div>
                     </div>
 
+                    {!hasActivePolicy && (
                     <div className="rounded-control bg-[var(--nx-subtle-bg-warning)] px-4 py-3 text-body-sm text-[var(--nx-warning)] flex items-start gap-2">
                       <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                       <span>
-                        El sistema esta inoperativo hasta que completes esta configuracion.
-                        Todos los usuarios veran una pantalla de bloqueo mientras tanto.
+                        El sistema está inoperativo hasta que completes esta configuración.
+                        Todos los usuarios verán una pantalla de bloqueo mientras tanto.
                       </span>
                     </div>
+                    )}
                   </div>
                 )}
 
@@ -368,10 +371,10 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                             key={lvl.value}
                             className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4"
                           >
-                            <div className="flex items-center gap-2 mb-3">
-                              <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
+                            <div className="flex items-baseline gap-2 mb-3">
+                              <span className="text-body-sm font-medium text-[var(--nx-text)]">{lvl.label}</span>
                               {isLocked && (
-                                <span className="text-caption text-[var(--nx-text-muted)] ml-auto">Activacion automatica</span>
+                                <span className="text-caption text-[var(--nx-text-muted)] ml-auto">Activación automática</span>
                               )}
                             </div>
 

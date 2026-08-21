@@ -234,7 +234,7 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
 
     // Obtener override de daily_schedule_config para hoy (extender_bloque / fusionar_bloque)
     $dscStmt = $conn->prepare("
-        SELECT dsc.group_id, dsc.expected_exit_time, dsc.metadata_json
+        SELECT dsc.group_id, dsc.expected_entry_time, dsc.expected_exit_time, dsc.metadata_json
         FROM daily_schedule_config dsc
         WHERE dsc.school_id = ?
           AND dsc.config_date = ?::date
@@ -244,6 +244,7 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
     $dscOverrides = [];
     foreach ($dscStmt->fetchAll(PDO::FETCH_ASSOC) as $dsc) {
         $dscOverrides[$dsc['group_id']] = [
+            'entry_time' => $dsc['expected_entry_time'],
             'exit_time' => $dsc['expected_exit_time'],
             'merged' => json_decode($dsc['metadata_json'] ?? '{}', true)['merged'] ?? false,
         ];
@@ -471,13 +472,19 @@ function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $t
 /**
  * Detección de evasión para colegios que SÍ rotan de salones.
  *
- * Entre el fin de una clase y el inicio de la siguiente hay 10 min de margen.
- * Si el estudiante no marca ingreso en la siguiente clase dentro de esos 10 min,
- * se considera evasión.
+ * El estudiante debe marcar huella al inicio de cada bloque de clase.
+ * Pasados 10 min del inicio del bloque sin registro, se considera evasión.
+ *
+ * Casos:
+ *   - Primer bloque: estudiantes en la institución (cualquier evento biométrico
+ *     hoy) que no marcaron ingreso en el bloque 1 + 10 min → EVASION_INTERNA.
+ *   - Bloques N→N+1: estudiantes que asistieron al bloque N pero no al N+1.
+ *   - fusionar_bloque: si el grupo tiene bloques fusionados, se omite la
+ *     verificación del par de bloques que cae dentro del periodo fusionado
+ *     (típicamente 1 hora = 2 bloques consecutivos). SOLO para ese grupo.
  */
 function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config, array $dscOverrides = []): int {
     $detected = 0;
-    $dayOfWeek = (int)$nowBogota->format('N');
 
     // Obtener bloques horarios de la institución para esta jornada
     $workShift = $config['work_shift'] ?? 'mañana';
@@ -490,135 +497,230 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
     $blocksStmt->execute([$schoolId, $workShift]);
     $blocks = $blocksStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if (count($blocks) < 2) return 0; // Necesita al menos 2 bloques para detectar evasión
+    if (count($blocks) < 1) return 0;
 
-    // Para cada par de bloques consecutivos, verificar estudiantes que asistieron
-    // al bloque N pero no marcaron ingreso en el bloque N+1 dentro del margen
-    for ($i = 0; $i < count($blocks) - 1; $i++) {
-        $currentBlock = $blocks[$i];
-        $nextBlock = $blocks[$i + 1];
-
-        $nextStart = DateTime::createFromFormat('H:i:s', $nextBlock['start_time'], new DateTimeZone('America/Bogota'));
-        if (!$nextStart) continue;
-
-        // El margen de 10 min empieza desde el inicio del siguiente bloque
-        $deadline = clone $nextStart;
-        $deadline->add(new DateInterval('PT10M'));
-
-        // Si aún no hemos pasado el deadline, no evaluar este par
-        if ($nowBogota < $deadline) continue;
-
-        // Estudiantes que asistieron al bloque actual (tienen evento entre start y end del bloque)
-        $attendedStmt = $conn->prepare("
-            SELECT DISTINCT be.student_id, s.first_name, s.last_name
-            FROM biometric_events be
-            JOIN students s ON s.student_id = be.student_id
-            WHERE be.school_id = ?
-              AND be.event_timestamp >= (?::date + ?::time)::timestamptz
-              AND be.event_timestamp <= (?::date + ?::time)::timestamptz
-              AND be.event_type LIKE 'INGRESO_%'
-              AND s.active = TRUE AND s.deleted_at IS NULL
+    // ── Helper: obtener group_id de un estudiante ──────────────────────
+    $groupCache = [];
+    $getGroupId = function(string $studentId) use ($conn, $schoolId, &$groupCache): ?string {
+        if (isset($groupCache[$studentId])) return $groupCache[$studentId];
+        $stmt = $conn->prepare("
+            SELECT sga.group_id FROM student_group_assignments sga
+            WHERE sga.student_id = ? AND sga.active = TRUE LIMIT 1
         ");
-        $attendedStmt->execute([
-            $schoolId,
-            $todayDate, $currentBlock['start_time'],
-            $todayDate, $currentBlock['end_time']
-        ]);
-        $attended = $attendedStmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->execute([$studentId]);
+        $gid = $stmt->fetchColumn() ?: null;
+        $groupCache[$studentId] = $gid;
+        return $gid;
+    };
 
-        foreach ($attended as $student) {
-            $studentId = $student['student_id'];
-            $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
+    // ── Helper: verificar si un par de bloques está fusionado para un grupo ──
+    $isMergedForGroup = function(?string $groupId, string $blockNStart, string $blockNEnd, string $blockN1Start) use ($dscOverrides): bool {
+        if (!$groupId || !isset($dscOverrides[$groupId])) return false;
+        $override = $dscOverrides[$groupId];
+        if (!$override['merged']) return false;
+        // El par de bloques está fusionado si la transición (fin de N → inicio de N+1)
+        // cae dentro del periodo fusionado (entry_time → exit_time del override).
+        $mergedEntry = $override['entry_time'];
+        $mergedExit = $override['exit_time'];
+        if (!$mergedEntry || !$mergedExit) return false;
+        // Si el inicio del bloque N y el inicio del bloque N+1 están ambos
+        // dentro del rango fusionado, este par está fusionado.
+        return ($blockNStart >= $mergedEntry && $blockN1Start <= $mergedExit);
+    };
 
-            if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
+    // ── 1. Primer bloque: estudiantes en la institución que no entraron a clase ──
+    $firstBlock = $blocks[0];
+    $firstStart = DateTime::createFromFormat('H:i:s', $firstBlock['start_time'], new DateTimeZone('America/Bogota'));
+    if ($firstStart) {
+        $firstDeadline = clone $firstStart;
+        $firstDeadline->add(new DateInterval('PT10M'));
 
-            // Verificar si el grupo del estudiante tiene bloque fusionado (fusionar_bloque)
-            if (!empty($dscOverrides)) {
-                $groupStmt = $conn->prepare("
-                    SELECT sga.group_id FROM student_group_assignments sga
-                    WHERE sga.student_id = ? AND sga.active = TRUE LIMIT 1
+        // Solo verificar si ya pasó el deadline del primer bloque
+        if ($nowBogota >= $firstDeadline) {
+            // Estudiantes con cualquier evento biométrico hoy (están en la institución)
+            $inInstitutionStmt = $conn->prepare("
+                SELECT DISTINCT be.student_id, s.first_name, s.last_name
+                FROM biometric_events be
+                JOIN students s ON s.student_id = be.student_id
+                WHERE be.school_id = ?
+                  AND be.event_timestamp >= ?::date
+                  AND be.event_timestamp < (?::date + INTERVAL '1 day')
+                  AND s.active = TRUE AND s.deleted_at IS NULL
+            ");
+            $inInstitutionStmt->execute([$schoolId, $todayDate, $todayDate]);
+            $inInstitution = $inInstitutionStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($inInstitution as $student) {
+                $studentId = $student['student_id'];
+                $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
+
+                if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
+
+                // Verificar si marcó ingreso en el primer bloque + 10 min
+                $block1Check = $conn->prepare("
+                    SELECT 1 FROM biometric_events
+                    WHERE school_id = ? AND student_id = ?
+                      AND event_timestamp >= (?::date + ?::time)::timestamptz
+                      AND event_timestamp <= (?::date + ?::time)::timestamptz
+                      AND event_type LIKE 'INGRESO_%'
+                    LIMIT 1
                 ");
-                $groupStmt->execute([$studentId]);
-                $groupId = $groupStmt->fetchColumn();
-                if ($groupId && isset($dscOverrides[$groupId]) && $dscOverrides[$groupId]['merged']) {
-                    continue; // Bloque fusionado, no alertar
-                }
+                $block1Check->execute([
+                    $schoolId, $studentId,
+                    $todayDate, $firstBlock['start_time'],
+                    $todayDate, $firstDeadline->format('H:i:s')
+                ]);
+                if ($block1Check->fetchColumn()) continue; // Sí asistió al primer bloque
+
+                // Verificar permiso activo
+                $permisoStmt = $conn->prepare("
+                    SELECT 1 FROM class_exit_authorizations
+                    WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
+                      AND exit_time <= NOW()
+                      AND (return_time IS NULL OR return_time >= NOW())
+                    LIMIT 1
+                ");
+                $permisoStmt->execute([$schoolId, $studentId]);
+                if ($permisoStmt->fetchColumn()) continue;
+
+                // Generar alerta de evasión (no asistió al primer bloque)
+                $detected += generateEvasionAlert(
+                    $conn, $redis, $schoolId, $studentId, $studentName,
+                    "No asistió al primer bloque ({$firstBlock['block_number']}) que inició a las " . substr($firstBlock['start_time'], 0, 5),
+                    ['current_block' => 0, 'next_block' => $firstBlock['block_number'], 'next_block_start' => $firstBlock['start_time']]
+                );
             }
+        }
+    }
 
-            // Verificar si marcó ingreso en el siguiente bloque (dentro del margen)
-            $nextCheck = $conn->prepare("
-                SELECT 1 FROM biometric_events
-                WHERE school_id = ? AND student_id = ?
-                  AND event_timestamp >= (?::date + ?::time)::timestamptz
-                  AND event_timestamp <= (?::date + ?::time)::timestamptz
-                  AND event_type LIKE 'INGRESO_%'
-                LIMIT 1
+    // ── 2. Bloques N→N+1: estudiantes que asistieron al bloque N pero no al N+1 ──
+    if (count($blocks) >= 2) {
+        for ($i = 0; $i < count($blocks) - 1; $i++) {
+            $currentBlock = $blocks[$i];
+            $nextBlock = $blocks[$i + 1];
+
+            $nextStart = DateTime::createFromFormat('H:i:s', $nextBlock['start_time'], new DateTimeZone('America/Bogota'));
+            if (!$nextStart) continue;
+
+            // El margen de 10 min empieza desde el inicio del siguiente bloque
+            $deadline = clone $nextStart;
+            $deadline->add(new DateInterval('PT10M'));
+
+            // Si aún no hemos pasado el deadline, no evaluar este par
+            if ($nowBogota < $deadline) continue;
+
+            // Estudiantes que asistieron al bloque actual
+            $attendedStmt = $conn->prepare("
+                SELECT DISTINCT be.student_id, s.first_name, s.last_name
+                FROM biometric_events be
+                JOIN students s ON s.student_id = be.student_id
+                WHERE be.school_id = ?
+                  AND be.event_timestamp >= (?::date + ?::time)::timestamptz
+                  AND be.event_timestamp <= (?::date + ?::time)::timestamptz
+                  AND be.event_type LIKE 'INGRESO_%'
+                  AND s.active = TRUE AND s.deleted_at IS NULL
             ");
-            $nextCheck->execute([
-                $schoolId, $studentId,
-                $todayDate, $nextBlock['start_time'],
-                $todayDate, $deadline->format('H:i:s')
+            $attendedStmt->execute([
+                $schoolId,
+                $todayDate, $currentBlock['start_time'],
+                $todayDate, $currentBlock['end_time']
             ]);
-            if ($nextCheck->fetchColumn()) continue; // Sí asistió al siguiente bloque
+            $attended = $attendedStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Verificar permiso activo
-            $permisoStmt = $conn->prepare("
-                SELECT authorization_id, exit_time, return_time
-                FROM class_exit_authorizations
-                WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
-                  AND exit_time <= NOW()
-                  AND (return_time IS NULL OR return_time >= NOW())
-                LIMIT 1
-            ");
-            $permisoStmt->execute([$schoolId, $studentId]);
-            $permiso = $permisoStmt->fetch(PDO::FETCH_ASSOC);
+            foreach ($attended as $student) {
+                $studentId = $student['student_id'];
+                $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
 
-            if ($permiso) continue; // Tiene permiso activo, no es evasión
+                if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
 
-            // Generar alerta de evasión
-            $teacher = getCurrentTeacher($conn, $schoolId, $studentId);
-            $coordinators = getCoordinators($conn, $schoolId);
-
-            $alertReason = "No asistió al bloque {$nextBlock['block_number']}" . ($nextBlock['block_name'] ? " ({$nextBlock['block_name']})" : '') . " que inició a las " . substr($nextBlock['start_time'], 0, 5);
-
-            $meta = json_encode([
-                'student_id' => $studentId,
-                'student_name' => $studentName,
-                'current_block' => $currentBlock['block_number'],
-                'next_block' => $nextBlock['block_number'],
-                'next_block_start' => $nextBlock['start_time'],
-                'alert_reason' => $alertReason,
-                'teacher_name' => $teacher ? trim($teacher['first_name'] . ' ' . $teacher['last_name']) : 'N/A',
-                'action' => 'evasion_interna',
-            ], JSON_UNESCAPED_UNICODE);
-
-            try {
-                insertEvasionIncident($conn, $schoolId, $studentId, $meta);
-                $detected++;
-                logE('EVASION_DETECTED', "school=$schoolId student=$studentName block={$nextBlock['block_number']} reason=$alertReason");
-
-                // Notificar al profesor del bloque actual
-                if ($teacher) {
-                    $teacherMsg = "⚠️ *NEXO — Evasión Detectada*\n\nEstudiante: *{$studentName}*\n{$alertReason}\n\nSe ha avisado al coordinador de la situación.";
-                    notifyUser($conn, $redis, $teacher['user_id'], $teacher['phone'] ?? '', $teacherMsg, $schoolId, 'EVASION_INTERNA', json_decode($meta, true));
+                // Verificar si este par de bloques está fusionado para el grupo del estudiante
+                $groupId = $getGroupId($studentId);
+                if ($isMergedForGroup($groupId, $currentBlock['start_time'], $currentBlock['end_time'], $nextBlock['start_time'])) {
+                    continue; // Bloque fusionado para este grupo, omitir transición
                 }
 
-                // Notificar a coordinadores
-                $coordMsg = "⚠️ *NEXO — Evasión Detectada*\n\nEstudiante: *{$studentName}*\n{$alertReason}";
-                if ($teacher) {
-                    $coordMsg .= "\nProfesor responsable: " . trim($teacher['first_name'] . ' ' . $teacher['last_name']);
-                }
-                foreach ($coordinators as $coord) {
-                    notifyUser($conn, $redis, $coord['user_id'], $coord['phone'] ?? '', $coordMsg, $schoolId, 'EVASION_INTERNA', json_decode($meta, true));
-                }
-            } catch (Exception $e) {
-                try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
-                logE('INSERT_FAIL', "student=$studentId error=" . $e->getMessage());
+                // Verificar si marcó ingreso en el siguiente bloque (dentro del margen)
+                $nextCheck = $conn->prepare("
+                    SELECT 1 FROM biometric_events
+                    WHERE school_id = ? AND student_id = ?
+                      AND event_timestamp >= (?::date + ?::time)::timestamptz
+                      AND event_timestamp <= (?::date + ?::time)::timestamptz
+                      AND event_type LIKE 'INGRESO_%'
+                    LIMIT 1
+                ");
+                $nextCheck->execute([
+                    $schoolId, $studentId,
+                    $todayDate, $nextBlock['start_time'],
+                    $todayDate, $deadline->format('H:i:s')
+                ]);
+                if ($nextCheck->fetchColumn()) continue; // Sí asistió al siguiente bloque
+
+                // Verificar permiso activo
+                $permisoStmt = $conn->prepare("
+                    SELECT 1 FROM class_exit_authorizations
+                    WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
+                      AND exit_time <= NOW()
+                      AND (return_time IS NULL OR return_time >= NOW())
+                    LIMIT 1
+                ");
+                $permisoStmt->execute([$schoolId, $studentId]);
+                if ($permisoStmt->fetchColumn()) continue;
+
+                // Generar alerta de evasión
+                $alertReason = "No asistió al bloque {$nextBlock['block_number']}" . ($nextBlock['block_name'] ? " ({$nextBlock['block_name']})" : '') . " que inició a las " . substr($nextBlock['start_time'], 0, 5);
+                $detected += generateEvasionAlert(
+                    $conn, $redis, $schoolId, $studentId, $studentName,
+                    $alertReason,
+                    ['current_block' => $currentBlock['block_number'], 'next_block' => $nextBlock['block_number'], 'next_block_start' => $nextBlock['start_time']]
+                );
             }
         }
     }
 
     return $detected;
+}
+
+/**
+ * Genera una alerta de evasión: inserta el incidente, notifica al profesor
+ * y a los coordinadores. Retorna 1 si se generó, 0 si falló.
+ */
+function generateEvasionAlert(PDO $conn, $redis, string $schoolId, string $studentId, string $studentName, string $alertReason, array $blockInfo): int {
+    $teacher = getCurrentTeacher($conn, $schoolId, $studentId);
+    $coordinators = getCoordinators($conn, $schoolId);
+
+    $meta = json_encode([
+        'student_id' => $studentId,
+        'student_name' => $studentName,
+        'current_block' => $blockInfo['current_block'] ?? null,
+        'next_block' => $blockInfo['next_block'] ?? null,
+        'next_block_start' => $blockInfo['next_block_start'] ?? null,
+        'alert_reason' => $alertReason,
+        'teacher_name' => $teacher ? trim($teacher['first_name'] . ' ' . $teacher['last_name']) : 'N/A',
+        'action' => 'evasion_interna',
+    ], JSON_UNESCAPED_UNICODE);
+
+    try {
+        insertEvasionIncident($conn, $schoolId, $studentId, $meta);
+        logE('EVASION_DETECTED', "school=$schoolId student=$studentName reason=$alertReason");
+
+        if ($teacher) {
+            $teacherMsg = "⚠️ *NEXO — Evasión Detectada*\n\nEstudiante: *{$studentName}*\n{$alertReason}\n\nSe ha avisado al coordinador de la situación.";
+            notifyUser($conn, $redis, $teacher['user_id'], $teacher['phone'] ?? '', $teacherMsg, $schoolId, 'EVASION_INTERNA', json_decode($meta, true));
+        }
+
+        $coordMsg = "⚠️ *NEXO — Evasión Detectada*\n\nEstudiante: *{$studentName}*\n{$alertReason}";
+        if ($teacher) {
+            $coordMsg .= "\nProfesor responsable: " . trim($teacher['first_name'] . ' ' . $teacher['last_name']);
+        }
+        foreach ($coordinators as $coord) {
+            notifyUser($conn, $redis, $coord['user_id'], $coord['phone'] ?? '', $coordMsg, $schoolId, 'EVASION_INTERNA', json_decode($meta, true));
+        }
+        return 1;
+    } catch (Exception $e) {
+        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+        logE('INSERT_FAIL', "student=$studentId error=" . $e->getMessage());
+        return 0;
+    }
 }
 
 /**

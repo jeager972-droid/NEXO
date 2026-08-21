@@ -131,12 +131,33 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Obtener entry_time por jornada desde school_schedule_config (multi-jornada)
-    $shiftConfigStmt = $conn->prepare("SELECT work_shift, entry_time FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE");
+    // Obtener entry_time y rotates_classrooms por jornada desde school_schedule_config
+    $shiftConfigStmt = $conn->prepare("SELECT work_shift, entry_time, rotates_classrooms FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE");
     $shiftConfigStmt->execute([$schoolId]);
     $shiftConfigs = [];
+    $rotatingShifts = [];
     foreach ($shiftConfigStmt->fetchAll(PDO::FETCH_ASSOC) as $sc) {
         $shiftConfigs[$sc['work_shift']] = $sc['entry_time'];
+        if ($sc['rotates_classrooms']) {
+            $rotatingShifts[$sc['work_shift']] = true;
+        }
+    }
+
+    // Para colegios que rotan: obtener bloques horarios por jornada
+    // (para verificar que el estudiante asistió a al menos un bloque de clase,
+    // no solo que entró a la institución)
+    $rotatingBlocks = [];
+    if (!empty($rotatingShifts)) {
+        $blocksStmt = $conn->prepare("
+            SELECT work_shift, block_number, start_time, end_time
+            FROM school_time_blocks
+            WHERE school_id = ? AND work_shift IN ('" . implode("','", array_keys($rotatingShifts)) . "')
+            ORDER BY work_shift, block_number
+        ");
+        $blocksStmt->execute([$schoolId]);
+        foreach ($blocksStmt->fetchAll(PDO::FETCH_ASSOC) as $blk) {
+            $rotatingBlocks[$blk['work_shift']][] = $blk;
+        }
     }
 
     foreach ($groups as $group) {
@@ -167,19 +188,80 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         if (empty($students)) continue;
 
         // 3. Obtener estudiantes que ya marcaron ingreso hoy
-        $presentStmt = $conn->prepare("
-            SELECT DISTINCT student_id
-            FROM biometric_events
-            WHERE school_id = ?
-              AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
-              AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
-              AND event_type LIKE 'INGRESO_%'
-              AND student_id IN (
-                  SELECT sga2.student_id FROM student_group_assignments sga2
-                  WHERE sga2.group_id = ? AND sga2.active = TRUE
-              )
-        ");
-        $presentStmt->execute([$schoolId, $groupId]);
+        // Para colegios que rotan: "presente" = asistió a al menos un bloque
+        // de clase (INGRESO dentro del rango horario de un bloque), no solo
+        // cualquier INGRESO_% (ej: INGRESO_MADRUGADA a las 3am no cuenta).
+        // Para colegios que no rotan: cualquier INGRESO_% cuenta como presente.
+        $groupShifts = array_unique(array_column($students, 'work_shift'));
+        $isRotating = false;
+        foreach ($groupShifts as $gs) {
+            if (isset($rotatingShifts[$gs])) { $isRotating = true; break; }
+        }
+
+        if ($isRotating && !empty($rotatingBlocks)) {
+            // Construir condición OR por cada bloque de las jornadas rotativas
+            // del grupo. Un estudiante está presente si tiene INGRESO dentro
+            // del rango de cualquier bloque + 10 min de margen.
+            $blockConditions = [];
+            $blockParams = [];
+            foreach ($groupShifts as $gs) {
+                if (!isset($rotatingBlocks[$gs])) continue;
+                foreach ($rotatingBlocks[$gs] as $blk) {
+                    $blockConditions[] = "
+                        (event_timestamp >= (?::date + ?::time)::timestamptz
+                         AND event_timestamp <= (?::date + ?::time + INTERVAL '10 min')::timestamptz
+                         AND event_type LIKE 'INGRESO_%')
+                    ";
+                    $blockParams[] = $today;
+                    $blockParams[] = $blk['start_time'];
+                    $blockParams[] = $today;
+                    $blockParams[] = $blk['end_time'];
+                }
+            }
+            if (empty($blockConditions)) {
+                // Sin bloques definidos, fallback a cualquier INGRESO
+                $presentStmt = $conn->prepare("
+                    SELECT DISTINCT student_id
+                    FROM biometric_events
+                    WHERE school_id = ?
+                      AND event_timestamp >= ?::date
+                      AND event_timestamp < (?::date + INTERVAL '1 day')
+                      AND event_type LIKE 'INGRESO_%'
+                      AND student_id IN (
+                          SELECT sga2.student_id FROM student_group_assignments sga2
+                          WHERE sga2.group_id = ? AND sga2.active = TRUE
+                      )
+                ");
+                $presentStmt->execute(array_merge([$schoolId], [$today, $today], [$groupId]));
+            } else {
+                $presentStmt = $conn->prepare("
+                    SELECT DISTINCT student_id
+                    FROM biometric_events
+                    WHERE school_id = ?
+                      AND student_id IN (
+                          SELECT sga2.student_id FROM student_group_assignments sga2
+                          WHERE sga2.group_id = ? AND sga2.active = TRUE
+                      )
+                      AND (" . implode(' OR ', $blockConditions) . ")
+                ");
+                $presentStmt->execute(array_merge([$schoolId, $groupId], $blockParams));
+            }
+        } else {
+            // No rota: cualquier INGRESO_% cuenta como presente
+            $presentStmt = $conn->prepare("
+                SELECT DISTINCT student_id
+                FROM biometric_events
+                WHERE school_id = ?
+                  AND event_timestamp >= ?::date
+                  AND event_timestamp < (?::date + INTERVAL '1 day')
+                  AND event_type LIKE 'INGRESO_%'
+                  AND student_id IN (
+                      SELECT sga2.student_id FROM student_group_assignments sga2
+                      WHERE sga2.group_id = ? AND sga2.active = TRUE
+                  )
+            ");
+            $presentStmt->execute([$schoolId, $today, $today, $groupId]);
+        }
         $presentIds = $presentStmt->fetchAll(PDO::FETCH_COLUMN);
 
         // 4. Determinar hora límite por jornada

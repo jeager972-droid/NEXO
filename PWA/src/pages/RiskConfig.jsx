@@ -391,8 +391,8 @@ export default function RiskConfig() {
                       const isLocked = lvl.value === 'MUY_ALTA';
                       return (
                         <div key={lvl.value} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
+                          <div className="flex items-baseline gap-2 mb-3">
+                            <span className="text-body-sm font-medium text-[var(--nx-text)]">{lvl.label}</span>
                             {isLocked && (
                               <span className="text-caption text-[var(--nx-text-muted)] ml-auto">Activación automática</span>
                             )}
