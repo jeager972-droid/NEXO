@@ -1577,20 +1577,7 @@ BEGIN
     FROM risk_event_types
     WHERE is_system = TRUE;
 
-    INSERT INTO risk_combination_rules (policy_id, school_id, rule_name,
-        condition_json, result_level, result_reason, is_active)
-    VALUES (v_policy_id, p_school_id,
-        'Evasión + Llegadas tarde repetidas',
-        jsonb_build_object(
-            'categories', jsonb_build_array(
-                jsonb_build_object('category', 'evasion', 'min_level', 'MODERADA'),
-                jsonb_build_object('category', 'asistencia', 'min_level', 'LEVE')
-            ),
-            'window_lecture_days', 5
-        ),
-        'ALTA',
-        'Si un estudiante evade clases y tambien llega tarde varias veces en la misma semana, el sistema sube la alerta a nivel Alto para que coordinacion lo revise.',
-        TRUE);
+    -- Combos desactivados: solo deteccion individual de eventos
 
     v_snapshot := jsonb_build_object(
         'engine_version', '3.0',
@@ -1600,8 +1587,7 @@ BEGIN
             'ALTA',     jsonb_build_object('weight', 6.0, 'half_life', 5, 'threshold', 3.0, 'cooldown', 3, 'recurrence_count', 3, 'window_days', 5),
             'MUY_ALTA', jsonb_build_object('weight', 10.0, 'half_life', 9999, 'threshold', 10.0, 'cooldown', 0, 'recurrence_count', 1, 'window_days', 1)
         ),
-        'event_mapping', 'default_nexo',
-        'combination_rules', 1
+        'event_mapping', 'default_nexo'
     );
     UPDATE risk_policies SET snapshot_json = v_snapshot WHERE policy_id = v_policy_id;
     RETURN v_policy_id;

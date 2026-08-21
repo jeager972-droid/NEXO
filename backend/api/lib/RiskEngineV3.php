@@ -243,7 +243,6 @@ class RiskEngineV3
                 'version'        => $newVersion,
                 'rules'          => $config['rules'] ?? [],
                 'mapping'         => $config['mapping'] ?? [],
-                'combos'         => $config['combos'] ?? [],
             ], JSON_UNESCAPED_UNICODE);
 
             // Insertar nueva política
@@ -294,18 +293,7 @@ class RiskEngineV3
                 ")->execute([$policyId, $schoolId, $typeId, $map['risk_level']]);
             }
 
-            // Insertar reglas de combinación
-            foreach (($config['combos'] ?? []) as $combo) {
-                $conn->prepare("
-                    INSERT INTO risk_combination_rules (policy_id, school_id, rule_name,
-                        condition_json, result_level, result_reason, is_active)
-                    VALUES (?, ?, ?, ?::jsonb, ?, ?, TRUE)
-                ")->execute([
-                    $policyId, $schoolId, $combo['rule_name'],
-                    json_encode($combo['condition'], JSON_UNESCAPED_UNICODE),
-                    $combo['result_level'], $combo['result_reason'],
-                ]);
-            }
+            // Combos desactivados por ahora (solo deteccion individual)
 
             // Registrar en audit log (Capa 6)
             $prevPolicy = self::getActivePolicy($conn, $schoolId);
@@ -343,14 +331,20 @@ class RiskEngineV3
         $level = $rule['risk_level'];
         $errors = [];
 
-        if ($rule['weight_base'] < $rule['min_weight'] || $rule['weight_base'] > $rule['max_weight']) {
-            $errors[] = "$level: peso base fuera de rango [{$rule['min_weight']}-{$rule['max_weight']}]";
+        // Validar reincidencias
+        $recurrence = $rule['recurrence_count'] ?? 4;
+        $minRec = $rule['min_recurrence'] ?? 1;
+        $maxRec = $rule['max_recurrence'] ?? 20;
+        if ($recurrence < $minRec || $recurrence > $maxRec) {
+            $errors[] = "$level: reincidencias fuera de rango [$minRec-$maxRec]";
         }
-        if ($rule['half_life_days'] < $rule['min_half_life'] || $rule['half_life_days'] > $rule['max_half_life']) {
-            $errors[] = "$level: vida media fuera de rango [{$rule['min_half_life']}-{$rule['max_half_life']}]";
-        }
-        if ($rule['activation_threshold'] < $rule['min_threshold'] || $rule['activation_threshold'] > $rule['max_threshold']) {
-            $errors[] = "$level: umbral fuera de rango [{$rule['min_threshold']}-{$rule['max_threshold']}]";
+
+        // Validar plazo de dias
+        $window = $rule['window_days'] ?? 7;
+        $minWin = $rule['min_window_days'] ?? 1;
+        $maxWin = $rule['max_window_days'] ?? 60;
+        if ($window < $minWin || $window > $maxWin) {
+            $errors[] = "$level: plazo de dias fuera de rango [$minWin-$maxWin]";
         }
 
         // MUY_ALTA siempre debe ser single_occurrence (protegido por NEXO)

@@ -85,15 +85,12 @@ class RiskEngineV3Test extends TestCase
     {
         return [
             'risk_level'           => 'LEVE',
-            'weight_base'          => 1.0,
-            'min_weight'           => 0.5,
-            'max_weight'           => 2.0,
-            'half_life_days'       => 7,
-            'min_half_life'        => 3,
-            'max_half_life'        => 14,
-            'activation_threshold' => 4.0,
-            'min_threshold'        => 2.0,
-            'max_threshold'        => 8.0,
+            'recurrence_count'     => 10,
+            'min_recurrence'       => 3,
+            'max_recurrence'       => 20,
+            'window_days'          => 5,
+            'min_window_days'      => 3,
+            'max_window_days'      => 14,
             'single_occurrence'    => false,
         ];
     }
@@ -105,30 +102,21 @@ class RiskEngineV3Test extends TestCase
         $this->assertTrue(true); // Si llegó aquí, pasó
     }
 
-    public function testValidateRuleRangesWeightOutOfRange(): void
+    public function testValidateRuleRangesRecurrenceOutOfRange(): void
     {
         $rule = $this->validRuleTemplate();
-        $rule['weight_base'] = 5.0; // max es 2.0
+        $rule['recurrence_count'] = 25; // max es 20
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('peso base fuera de rango');
+        $this->expectExceptionMessage('reincidencias fuera de rango');
         $this->callValidateRuleRanges($rule);
     }
 
-    public function testValidateRuleRangesHalfLifeOutOfRange(): void
+    public function testValidateRuleRangesWindowOutOfRange(): void
     {
         $rule = $this->validRuleTemplate();
-        $rule['half_life_days'] = 100; // max es 14
+        $rule['window_days'] = 30; // max es 14
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('vida media fuera de rango');
-        $this->callValidateRuleRanges($rule);
-    }
-
-    public function testValidateRuleRangesThresholdOutOfRange(): void
-    {
-        $rule = $this->validRuleTemplate();
-        $rule['activation_threshold'] = 0.1; // min es 2.0
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('umbral fuera de rango');
+        $this->expectExceptionMessage('plazo de dias fuera de rango');
         $this->callValidateRuleRanges($rule);
     }
 
