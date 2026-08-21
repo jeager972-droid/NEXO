@@ -200,7 +200,7 @@ const Layout = () => {
                 onClick={() => setProfileOpen((v) => !v)}
                 className="flex items-center gap-2.5 pl-2 pr-1 py-1 rounded-control hover:bg-[var(--nx-surface-subtle)] transition-colors"
               >
-                <div className="h-9 w-9 rounded-control bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-sm font-bold flex items-center justify-center overflow-hidden">
+                <div className="h-9 w-9 rounded-control bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] text-sm font-bold flex items-center justify-center overflow-hidden">
                   {user?.profile_photo_url ? <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" /> : initial}
                 </div>
                 <ChevronDown size={14} className="hidden sm:block text-[var(--nx-text-muted)]" />

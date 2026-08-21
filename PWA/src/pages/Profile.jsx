@@ -660,7 +660,7 @@ const Profile = () => {
           {profile?.profile_photo_url ? (
             <img src={profile.profile_photo_url} alt="Foto" className="h-20 w-20 rounded-full object-cover" />
           ) : (
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-h1">{initial}</div>
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] text-h1">{initial}</div>
           )}
           <button
             onClick={() => fileRef.current?.click()}
@@ -929,7 +929,7 @@ const Profile = () => {
                             {blocksForShift.map((b, bIdx) => (
                               <div key={bIdx} className="flex items-center justify-between rounded-control bg-[var(--nx-surface-subtle)] px-3 py-2">
                                 <div className="flex items-center gap-2">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-control bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-caption font-semibold">
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-control bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] text-caption font-semibold">
                                     {b.block_number}
                                   </span>
                                   <span className="text-body-sm text-[var(--nx-text)]">{b.block_name || `Bloque ${b.block_number}`}</span>

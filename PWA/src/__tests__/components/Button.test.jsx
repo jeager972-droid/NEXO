@@ -12,7 +12,7 @@ describe('Button', () => {
   it('applies primary variant by default', () => {
     render(<Button>Default</Button>);
     const btn = screen.getByRole('button');
-    expect(btn.className).toContain('bg-[var(--nx-accent)]');
+    expect(btn.className).toContain('bg-[var(--nx-surface-accent)]');
   });
 
   it('applies secondary variant', () => {

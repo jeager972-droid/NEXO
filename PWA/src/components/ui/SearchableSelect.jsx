@@ -183,7 +183,7 @@ export const SearchableSelect = ({
                         {multiple && (
                           <span className={clsx(
                             'grid h-4 w-4 shrink-0 place-items-center rounded-xs border',
-                            isSelected ? 'border-[var(--nx-accent)] bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface)]'
+                            isSelected ? 'border-[var(--nx-border-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface)]'
                           )}>
                             {isSelected && <Check size={12} />}
                           </span>

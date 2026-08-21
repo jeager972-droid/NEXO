@@ -10,8 +10,8 @@ import { clsx } from 'clsx';
 
 const variants = {
   primary:
-    'bg-[var(--nx-accent)] text-[var(--nx-accent-text)] shadow-low ' +
-    'hover:bg-[var(--nx-accent-strong)] hover:shadow-medium',
+    'bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] shadow-low ' +
+    'hover:bg-[color-mix(in_oklch,var(--nx-accent)_22%,var(--nx-tone-mix))] hover:border-[var(--nx-accent)] hover:shadow-medium',
   secondary:
     'bg-[var(--nx-surface)] text-[var(--nx-text)] border border-[var(--nx-border)] ' +
     'hover:bg-[var(--nx-surface-subtle)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),var(--nx-tint-base))]',

@@ -123,7 +123,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </button>
 
           <div className="flex items-center gap-2.5 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-2.5 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-control bg-[var(--nx-accent)] text-[var(--nx-accent-text)] text-xs font-bold shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-control bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] text-xs font-bold shrink-0">
               {user?.profile_photo_url ? <img src={user.profile_photo_url} alt="" className="h-full w-full object-cover" /> : initial}
             </div>
             <div className="min-w-0 flex-1">

@@ -6,7 +6,7 @@ import React from 'react';
 import { clsx } from 'clsx';
 
 const variants = {
-  primary:   'bg-[var(--nx-accent)] text-[var(--nx-accent-text)] hover:bg-[var(--nx-accent-strong)]',
+  primary:   'bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] hover:bg-[color-mix(in_oklch,var(--nx-accent)_22%,var(--nx-tone-mix))] hover:border-[var(--nx-accent)]',
   secondary: 'bg-transparent text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]',
   quiet:     'bg-transparent text-[var(--nx-text-muted)] hover:text-[var(--nx-text)]',
   danger:    'bg-transparent text-[var(--nx-danger)] hover:bg-[var(--nx-subtle-bg-danger)]',

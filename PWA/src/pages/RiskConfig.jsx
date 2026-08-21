@@ -20,11 +20,11 @@ import { Dialog } from '../components/ui/Overlay';
 import { humanizeError } from '../utils/messages';
 
 const LEVELS = [
-  { value: 'SIN_IMPORTANCIA', label: 'Sin importancia', color: '#9ca3af', desc: 'No alimenta el cálculo de riesgo. El evento se registra pero no suma puntos.' },
-  { value: 'LEVE', label: 'Leve', color: '#fbbf24', desc: 'Peso 1.0, vida media 7 días lectivos. Detecta patrones emergentes (~4 eventos en 10 días lectivos).' },
-  { value: 'MODERADA', label: 'Moderada', color: '#f97316', desc: 'Peso 3.0, vida media 10 días lectivos. Sensible a clustering (~3 eventos en 10 días lectivos).' },
-  { value: 'ALTA', label: 'Alta', color: '#ef4444', desc: 'Peso 6.0, vida media 15 días lectivos. Requiere revisión humana (~2 eventos en 5 días lectivos).' },
-  { value: 'MUY_ALTA', label: 'Muy Alta', color: '#7f1d1d', desc: 'Peso 10.0, no decae. 1 ocurrencia dispara alerta inmediata de atención.' },
+  { value: 'SIN_IMPORTANCIA', label: 'Sin importancia', scheme: 'neutral', desc: 'No alimenta el calculo de riesgo. El evento se registra pero no suma puntos.' },
+  { value: 'LEVE', label: 'Leve', scheme: 'warning', desc: 'Peso 1.0, vida media 5 dias lectivos. Detecta patrones emergentes (~10 eventos en 5 dias lectivos).' },
+  { value: 'MODERADA', label: 'Moderada', scheme: 'danger', desc: 'Peso 3.0, vida media 5 dias lectivos. Sensible a clustering (~5 eventos en 5 dias lectivos).' },
+  { value: 'ALTA', label: 'Alta', scheme: 'danger', desc: 'Peso 6.0, vida media 5 dias lectivos. Requiere revision humana (~3 eventos en 5 dias lectivos).' },
+  { value: 'MUY_ALTA', label: 'Muy Alta', scheme: 'danger', desc: 'Peso 10.0, no decae. 1 ocurrencia dispara alerta inmediata de atencion.' },
 ];
 
 const LEVEL_ORDER = ['SIN_IMPORTANCIA', 'LEVE', 'MODERADA', 'ALTA', 'MUY_ALTA'];
@@ -36,6 +36,12 @@ const CATEGORIES = {
   sistema: { label: 'Sistema', icon: Shield },
   administrativo: { label: 'Administrativo', icon: Info },
 };
+
+// Helpers de esquema de color del design system (pastel/glass, nunca solido)
+function schemeBorder(s) { const m = { neutral: "border-[var(--nx-border)]", accent: "border-[var(--nx-border-accent)]", success: "border-[var(--nx-border-success)]", warning: "border-[var(--nx-border-warning)]", danger: "border-[var(--nx-border-danger)]" }; return m[s] ?? m.neutral; }
+function schemeBg(s) { const m = { neutral: "bg-[var(--nx-surface-subtle)]", accent: "bg-[var(--nx-surface-accent)]", success: "bg-[var(--nx-surface-success)]", warning: "bg-[var(--nx-surface-warning)]", danger: "bg-[var(--nx-surface-danger)]" }; return m[s] ?? m.neutral; }
+function schemeText(s) { const m = { neutral: "text-[var(--nx-text-muted)]", accent: "text-[var(--nx-accent)]", success: "text-[var(--nx-success)]", warning: "text-[var(--nx-warning)]", danger: "text-[var(--nx-danger)]" }; return m[s] ?? m.neutral; }
+function schemeDot(s) { const m = { neutral: "bg-[var(--nx-text-muted)]", accent: "bg-[var(--nx-accent)]", success: "bg-[var(--nx-success)]", warning: "bg-[var(--nx-warning)]", danger: "bg-[var(--nx-danger)]" }; return m[s] ?? m.neutral; }
 
 export default function RiskConfig() {
   const { user } = useAuth();
@@ -153,10 +159,10 @@ export default function RiskConfig() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Shield className="w-7 h-7 text-blue-600" />
+          <Shield className="w-7 h-7 text-[var(--nx-accent)]" />
           <div>
-            <h1 className="text-xl font-bold text-neutral-900">Análisis de Riesgo Pedagógico</h1>
-            <p className="text-sm text-neutral-500">
+            <h1 className="text-xl font-bold text-[var(--nx-text)]">Análisis de Riesgo Pedagógico</h1>
+            <p className="text-sm text-[var(--nx-text-muted)]">
               {policy ? `Política v${policy.version} · Activa desde ${new Date(policy.activated_at).toLocaleDateString()}` : 'Sin política configurada'}
             </p>
           </div>
@@ -174,16 +180,16 @@ export default function RiskConfig() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-center gap-2">
+        <div className="bg-[var(--nx-subtle-bg-danger)] border border-[var(--nx-border-danger)] rounded-lg p-3 text-sm text-[var(--nx-danger)] flex items-center gap-2">
           <XCircle className="w-4 h-4 shrink-0" /> {error}
         </div>
       )}
 
       {/* Info banner */}
-      <Card className="p-4 bg-blue-50 border-blue-200">
+      <Card className="p-4 bg-[var(--nx-surface-accent)] border-[var(--nx-border-accent)]">
         <div className="flex gap-3">
-          <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-900">
+          <Info className="w-5 h-5 text-[var(--nx-accent)] shrink-0 mt-0.5" />
+          <div className="text-sm text-[var(--nx-accent)]">
             <p className="font-semibold mb-1">¿Cómo funciona?</p>
             <p>
               Cada evento se clasifica en un nivel de gravedad. El motor calcula el riesgo
@@ -197,19 +203,18 @@ export default function RiskConfig() {
 
       {/* Niveles de gravedad — referencia */}
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-neutral-700 mb-3">Niveles de gravedad</h2>
+        <h2 className="text-sm font-semibold text-[var(--nx-text)] mb-3">Niveles de gravedad</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {LEVELS.map((lvl) => (
             <div
               key={lvl.value}
-              className="rounded-lg p-3 border-2"
-              style={{ borderColor: lvl.color }}
+              className={`rounded-surface border p-3 ${schemeBorder(lvl.scheme)} ${schemeBg(lvl.scheme)}`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-3 h-3 rounded-full" style={{ background: lvl.color }} />
-                <span className="font-semibold text-sm">{lvl.label}</span>
+                <div className={`w-3 h-3 rounded-full ${schemeDot(lvl.scheme)}`} />
+                <span className="font-semibold text-sm text-[var(--nx-text)]">{lvl.label}</span>
               </div>
-              <p className="text-xs text-neutral-600 leading-snug">{lvl.desc}</p>
+              <p className="text-xs text-[var(--nx-text-muted)] leading-snug">{lvl.desc}</p>
             </div>
           ))}
         </div>
@@ -217,8 +222,8 @@ export default function RiskConfig() {
 
       {/* Configuración de eventos por categoría */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-neutral-700">Configuración de eventos</h2>
-        <p className="text-xs text-neutral-500">
+        <h2 className="text-sm font-semibold text-[var(--nx-text)]">Configuración de eventos</h2>
+        <p className="text-xs text-[var(--nx-text-muted)]">
           Selecciona qué nivel de gravedad tiene cada tipo de evento para tu institución.
         </p>
 
@@ -234,9 +239,9 @@ export default function RiskConfig() {
                 onClick={() => setExpandedCategory(isExpanded ? null : catKey)}
               >
                 <div className="flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-neutral-600" />
+                  <Icon className="w-4 h-4 text-[var(--nx-text-muted)]" />
                   <span className="font-semibold text-sm">{cat.label}</span>
-                  <span className="text-xs text-neutral-400">({events.length} eventos)</span>
+                  <span className="text-xs text-[var(--nx-text-muted)]">({events.length} eventos)</span>
                 </div>
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
@@ -249,8 +254,8 @@ export default function RiskConfig() {
                     return (
                       <div key={evt.type_code} className="flex items-center justify-between p-3 pl-6 gap-4">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-neutral-800">{evt.display_name}</p>
-                          <p className="text-xs text-neutral-500 truncate">{evt.description}</p>
+                          <p className="text-sm font-medium text-[var(--nx-text)]">{evt.display_name}</p>
+                          <p className="text-xs text-[var(--nx-text-muted)] truncate">{evt.description}</p>
                         </div>
                         <div className={`flex items-center gap-2 ${hasOverride ? 'ring-2 ring-blue-200 rounded-md px-2 py-1' : ''}`}>
                           {LEVELS.map((lvl) => {
@@ -259,12 +264,11 @@ export default function RiskConfig() {
                               <button
                                 key={lvl.value}
                                 onClick={() => handleLevelChange(evt.type_code, lvl.value)}
-                                className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                                className={`px-2.5 py-1 rounded-full border text-xs font-semibold transition-all ${
                                   isActive
-                                    ? 'text-white shadow-sm'
-                                    : 'text-neutral-500 hover:bg-neutral-100'
+                                    ? `${schemeBg(lvl.scheme)} ${schemeBorder(lvl.scheme)} ${schemeText(lvl.scheme)} shadow-low`
+                                    : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]'
                                 }`}
-                                style={isActive ? { background: lvl.color } : {}}
                                 title={lvl.desc}
                               >
                                 {lvl.label}
@@ -285,8 +289,8 @@ export default function RiskConfig() {
       {/* Reglas de combinación */}
       {config.combos && config.combos.length > 0 && (
         <Card className="p-4">
-          <h2 className="text-sm font-semibold text-neutral-700 mb-3">Reglas de combinación</h2>
-          <p className="text-xs text-neutral-500 mb-3">
+          <h2 className="text-sm font-semibold text-[var(--nx-text)] mb-3">Reglas de combinación</h2>
+          <p className="text-xs text-[var(--nx-text-muted)] mb-3">
             Cuando múltiples categorías superan un nivel mínimo simultáneamente, el sistema escala el riesgo.
           </p>
           <div className="space-y-2">
@@ -295,12 +299,15 @@ export default function RiskConfig() {
                 <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">{combo.rule_name}</p>
-                  <p className="text-xs text-neutral-600">{combo.result_reason}</p>
+                  <p className="text-xs text-[var(--nx-text-muted)]">{combo.result_reason}</p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-xs text-neutral-400">Escala a:</span>
+                    <span className="text-xs text-[var(--nx-text-muted)]">Escala a:</span>
                     <span
-                      className="px-2 py-0.5 rounded text-xs font-medium text-white"
-                      style={{ background: LEVELS.find((l) => l.value === combo.result_level)?.color || '#999' }}
+                      className={`px-2.5 py-0.5 rounded-full border text-xs font-semibold ${(() => {
+                        const lvl = LEVELS.find((l) => l.value === combo.result_level);
+                        if (!lvl) return 'border-[var(--nx-border)] text-[var(--nx-text-muted)] bg-[var(--nx-surface-subtle)]';
+                        return `${schemeBg(lvl.scheme)} ${schemeBorder(lvl.scheme)} ${schemeText(lvl.scheme)}`;
+                      })()}`}
                     >
                       {LEVELS.find((l) => l.value === combo.result_level)?.label || combo.result_level}
                     </span>
@@ -316,7 +323,7 @@ export default function RiskConfig() {
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <div className="p-6 max-w-md">
           <h3 className="text-lg font-semibold mb-2">Guardar nueva versión de política</h3>
-          <p className="text-sm text-neutral-600 mb-4">
+          <p className="text-sm text-[var(--nx-text-muted)] mb-4">
             Los cambios crean una nueva versión de la política. La versión anterior se
             desactiva pero se conserva para auditoría. Las alertas ya emitidas no cambian.
           </p>
@@ -345,7 +352,7 @@ export default function RiskConfig() {
         <div className="p-6 max-w-lg max-h-[70vh] overflow-y-auto">
           <h3 className="text-lg font-semibold mb-4">Historial de versiones</h3>
           {history.length === 0 ? (
-            <p className="text-sm text-neutral-500">No hay versiones registradas.</p>
+            <p className="text-sm text-[var(--nx-text-muted)]">No hay versiones registradas.</p>
           ) : (
             <div className="space-y-3">
               {history.map((h) => (
@@ -356,8 +363,8 @@ export default function RiskConfig() {
                       <span className="font-semibold text-sm">v{h.version}</span>
                       {h.is_active && <span className="text-xs text-green-600 font-medium">Activa</span>}
                     </div>
-                    <p className="text-xs text-neutral-600 mt-0.5">{h.change_reason}</p>
-                    <p className="text-xs text-neutral-400 mt-1">
+                    <p className="text-xs text-[var(--nx-text-muted)] mt-0.5">{h.change_reason}</p>
+                    <p className="text-xs text-[var(--nx-text-muted)] mt-1">
                       {new Date(h.created_at).toLocaleString()}
                     </p>
                   </div>

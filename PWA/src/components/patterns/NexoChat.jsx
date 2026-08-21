@@ -6,7 +6,7 @@ const NexoAvatar = ({ size = 40 }) => {
   if (failed) {
     return (
       <div
-        className="grid shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-accent-text)] font-bold"
+        className="grid shrink-0 place-items-center rounded-full bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] font-bold"
         style={{ width: size, height: size, fontSize: '0.875rem' }}
       >
         N

@@ -410,7 +410,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
               <div
                 key={i}
                 className={`h-1 flex-1 rounded-full transition-colors duration-fast ${
-                  i + 1 <= currentStep ? 'bg-[var(--nx-accent)]' : 'bg-[var(--nx-border)]'
+                  i + 1 <= currentStep ? 'bg-[var(--nx-border-accent)]' : 'bg-[var(--nx-border)]'
                 }`}
               />
             ))}
@@ -457,7 +457,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <div className={`grid h-6 w-6 place-items-center rounded-full ${hasMultipleShifts === false ? 'bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'}`}>
+                      <div className={`grid h-6 w-6 place-items-center rounded-full border ${hasMultipleShifts === false ? 'bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border-[var(--nx-border-accent)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] border-[var(--nx-border)]'}`}>
                         {hasMultipleShifts === false && <Check size={14} />}
                       </div>
                       <span className="text-body font-medium text-[var(--nx-text)]">No, una sola</span>
@@ -474,7 +474,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <div className={`grid h-6 w-6 place-items-center rounded-full ${hasMultipleShifts === true ? 'bg-[var(--nx-accent)] text-[var(--nx-accent-text)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]'}`}>
+                      <div className={`grid h-6 w-6 place-items-center rounded-full border ${hasMultipleShifts === true ? 'bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border-[var(--nx-border-accent)]' : 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] border-[var(--nx-border)]'}`}>
                         {hasMultipleShifts === true && <Check size={14} />}
                       </div>
                       <span className="text-body font-medium text-[var(--nx-text)]">Sí, varias</span>

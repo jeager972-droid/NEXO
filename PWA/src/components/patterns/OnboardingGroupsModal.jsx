@@ -250,7 +250,7 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel }) => {
                         >
                           <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-control border ${
                             checked
-                              ? 'border-[var(--nx-accent)] bg-[var(--nx-accent)] text-[var(--nx-accent-text)]'
+                              ? 'border-[var(--nx-border-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]'
                               : 'border-[var(--nx-border)] text-transparent'
                           }`}>
                             {checked && <Check size={14} strokeWidth={3} />}
