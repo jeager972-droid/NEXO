@@ -16,7 +16,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, ChevronLeft, ChevronRight,
-  GraduationCap, Hash, Type, Edit3, Calendar, Sun, Moon, Clock,
+  GraduationCap, Hash, Type, Edit3, Sun, Moon, Clock,
 } from 'lucide-react';
 import { schoolApi } from '../../api/school';
 import { Button } from '../ui/Button';
@@ -471,11 +471,7 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel, isEdit = false })
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--nx-border)] p-6">
-          <div className="flex items-center gap-1.5 text-caption text-[var(--nx-text-muted)]">
-            <Calendar size={13} />
-            <span>Esta configuración se renueva cada 1 de enero</span>
-          </div>
+        <div className="flex shrink-0 items-center justify-center gap-3 border-t border-[var(--nx-border)] p-6">
           <div className="flex gap-3">
             {onCancel && (
               <Button variant="secondary" onClick={onCancel}>
