@@ -444,22 +444,84 @@ if (isset($input['payload'])) {
                     'received_at' => time()
                 ], JSON_UNESCAPED_UNICODE);
 
-                $redisIngest->rPush('queue:biometric_ingest', $queuePayload);
-                $redisIngest->expire('queue:biometric_ingest', 86400);
-
-
+                // FIX: SYNC_ATTENDANCE siempre se procesa directo en PG además de encolar
+                // en Redis. Esto garantiza que el evento llegue a biometric_events incluso
+                // si Redis está intermitente y el worker no puede procesar la cola.
                 if ($action === 'SYNC_ATTENDANCE') {
-                    $today = gmdate('Y-m-d');
-                    $redisIngest->incr("school:{$instId}:present:{$today}");
-                    $redisIngest->expire("school:{$instId}:present:{$today}", 86400);
+                    try {
+                        $conn->exec("BEGIN");
+                        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$realSchoolId) . ", true)");
+                        $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+                        $attDoc = trim($data['doc'] ?? '');
+                        $attEvt = strtoupper($data['event'] ?? '');
+                        $attTs  = $data['captured_at'] ?? time();
+                        if ($attDoc && $attEvt) {
+                            $fingerprint = hash('sha256', implode(':', [(string)$realSchoolId, $attDoc, $attEvt, (string)$attTs]));
+                            $stmt = $conn->prepare(
+                                "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
+                                 SELECT uuid_generate_v4(),school_id,student_id,
+                                        ?, ?, 'PROCESSED', to_timestamp(?), ?
+                                 FROM students WHERE document_number = ? AND school_id = ?
+                                 ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
+                            );
+                            $stmt->execute([$row['device_id'], $attEvt, $attTs, $fingerprint, $attDoc, $realSchoolId]);
+                        }
+                        $conn->exec("COMMIT");
+                    } catch (Exception $pgEx3) {
+                        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+                        securityLog('EDGE_ATTENDANCE_PG_INLINE_FAIL', $pgEx3->getMessage(), null, $realSchoolId, $requestId);
+                    }
                 }
 
-                http_response_code(202);
-                echo json_encode(['status' => 'accepted', 'action' => $action, 'request_id' => $requestId]);
+                // También encolar en Redis si está disponible (para que el worker
+                // procese LATE_ARRIVAL, notificaciones, etc.)
+                try {
+                    $redisIngest->rPush('queue:biometric_ingest', $queuePayload);
+                    $redisIngest->expire('queue:biometric_ingest', 86400);
+                    if ($action === 'SYNC_ATTENDANCE') {
+                        $today = gmdate('Y-m-d');
+                        $redisIngest->incr("school:{$instId}:present:{$today}");
+                        $redisIngest->expire("school:{$instId}:present:{$today}", 86400);
+                    }
+                } catch (Exception $redisPushEx) {
+                    securityLog('EDGE_REDIS_PUSH_FAIL', $redisPushEx->getMessage(), null, $realSchoolId, $requestId);
+                    // No importa — SYNC_ATTENDANCE ya se procesó en PG arriba
+                }
+
+                http_response_code($action === 'SYNC_ATTENDANCE' ? 200 : 202);
+                echo json_encode(['status' => $action === 'SYNC_ATTENDANCE' ? 'ok' : 'accepted', 'action' => $action, 'request_id' => $requestId]);
                 exit;
             } catch (Exception $e) {
                 securityLog('EDGE_INGESTION_REDIS_FAIL', $e->getMessage(), null, null, $requestId);
-                // FAIL-OPEN: aceptar el payload aunque Redis falle en el catch
+                // FAIL-OPEN: Redis falló en el catch. Si es SYNC_ATTENDANCE, intentar PG.
+                if ($action === 'SYNC_ATTENDANCE') {
+                    try {
+                        $conn->exec("BEGIN");
+                        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$realSchoolId) . ", true)");
+                        $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+                        $attDoc = trim($data['doc'] ?? '');
+                        $attEvt = strtoupper($data['event'] ?? '');
+                        $attTs  = $data['captured_at'] ?? time();
+                        if ($attDoc && $attEvt) {
+                            $fingerprint = hash('sha256', implode(':', [(string)$realSchoolId, $attDoc, $attEvt, (string)$attTs]));
+                            $stmt = $conn->prepare(
+                                "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint)
+                                 SELECT uuid_generate_v4(),school_id,student_id,
+                                        ?, ?, 'PROCESSED', to_timestamp(?), ?
+                                 FROM students WHERE document_number = ? AND school_id = ?
+                                 ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
+                            );
+                            $stmt->execute([$row['device_id'], $attEvt, $attTs, $fingerprint, $attDoc, $realSchoolId]);
+                        }
+                        $conn->exec("COMMIT");
+                        securityLog('EDGE_ATTENDANCE_PG_CATCH', "doc=$attDoc evt=$attEvt (Redis exception, PG fallback)", null, $realSchoolId, $requestId);
+                        http_response_code(200);
+                        exit(json_encode(['status' => 'ok', 'action' => $action, 'request_id' => $requestId, 'fallback' => 'pg_catch']));
+                    } catch (Exception $pgEx2) {
+                        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+                        securityLog('EDGE_ATTENDANCE_PG_CATCH_FAIL', $pgEx2->getMessage(), null, $realSchoolId, $requestId);
+                    }
+                }
                 http_response_code(202);
                 exit(json_encode(['status'=>'accepted','action'=>$action,'request_id'=>$requestId,'warning'=>'redis_catch_fail']));
             }
