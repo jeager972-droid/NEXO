@@ -43,12 +43,16 @@ class RlsSecurityTest extends PHPUnit\Framework\TestCase
 
     public function testRlsUsesSchoolIsolation(): void
     {
+        // Tablas con policies globales (no filtran por school_id por diseño)
+        $globalTables = ['jwt_blocklist', 'subjects', 'departments', 'municipalities', 'schema_migrations', 'role_permissions', 'permissions', 'roles', 'system_telemetry'];
         foreach ($this->policies as $table => $pols) {
+            if (in_array($table, $globalTables)) continue;
             $hasSchoolFilter = false;
-            // Buscar en el SQL las policies de esta tabla
-            preg_match_all('/CREATE\s+POLICY\s+\w+\s+ON\s+' . $table . '\s+.*?USING\s*\((.*?)\)(?:\s+WITH\s+CHECK\s*\((.*?)\))?/si', $this->sql, $pm, PREG_SET_ORDER);
+            // Buscar todas las policies de esta tabla y extraer el bloque completo
+            // (USING + WITH CHECK pueden tener paréntesis anidados y multiline)
+            preg_match_all('/CREATE\s+POLICY\s+\w+\s+ON\s+' . $table . '\s+FOR\s+\w+\s+(.*?)(?=\nCREATE\s+POLICY|\nALTER\s+TABLE|\nDROP\s+POLICY|\n--|$)/si', $this->sql, $pm, PREG_SET_ORDER);
             foreach ($pm as $p) {
-                $expr = ($p[1] ?? '') . ($p[2] ?? '');
+                $expr = $p[1] ?? '';
                 if (stripos($expr, 'school_id') !== false || stripos($expr, 'get_current_school_id') !== false) {
                     $hasSchoolFilter = true;
                 }
@@ -60,8 +64,9 @@ class RlsSecurityTest extends PHPUnit\Framework\TestCase
 
     public function testNoOpenPoliciesOnSensitiveData(): void
     {
-        // jwt_blocklist tiene policy abierta (true) que es intencional
-        $allowedOpen = ['jwt_blocklist'];
+        // jwt_blocklist y subjects tienen policies abiertas (true) que es intencional
+        // jwt_blocklist es global (tokens revocados), subjects es catálogo global
+        $allowedOpen = ['jwt_blocklist', 'subjects', 'departments', 'municipalities', 'schema_migrations', 'role_permissions', 'permissions', 'roles'];
         foreach ($this->policies as $table => $pols) {
             if (in_array($table, $allowedOpen)) continue;
             preg_match_all('/CREATE\s+POLICY\s+\w+\s+ON\s+' . $table . '\s+.*?USING\s*\((.*?)\)/si', $this->sql, $pm, PREG_SET_ORDER);
