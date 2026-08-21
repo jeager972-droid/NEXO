@@ -1069,6 +1069,27 @@ DO $$ BEGIN
 END $$;
 CREATE INDEX IF NOT EXISTS idx_school_time_blocks_shift ON school_time_blocks(school_id, work_shift, block_number);
 
+-- Modalidad técnica: configuración por grado + jornada
+CREATE TABLE IF NOT EXISTS technical_modality_config (
+    config_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id     UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    grade_level   VARCHAR(10) NOT NULL,
+    work_shift    VARCHAR(50) NOT NULL,
+    enabled       BOOLEAN NOT NULL DEFAULT FALSE,
+    uses_blocks   BOOLEAN NOT NULL DEFAULT FALSE,
+    days_of_week  JSONB NOT NULL DEFAULT '[]'::jsonb,
+    entry_time    TIME,
+    exit_time     TIME,
+    academic_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM NOW())::INT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(school_id, grade_level, work_shift, academic_year)
+);
+CREATE INDEX IF NOT EXISTS idx_tech_modality_school_grade
+    ON technical_modality_config(school_id, grade_level, academic_year);
+COMMENT ON TABLE technical_modality_config IS 'Configuración de modalidad técnica por grado y jornada. days_of_week = array de números 1-7 (L=Domingo). uses_blocks indica si ese grado usa bloques horarios para técnica.';
+COMMENT ON COLUMN technical_modality_config.days_of_week IS 'Días de la semana con clases técnicas: [1,3,5] = Lunes, Miércoles, Viernes (ISO 1=Lunes, 7=Domingo).';
+
 -- =============================================================================
 -- FUNCIONES HELPER (RLS)
 -- =============================================================================

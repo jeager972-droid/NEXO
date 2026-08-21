@@ -1262,3 +1262,131 @@ if ($cleanPath === '/school/risk-config' && $method === 'POST') {
     }
     exit;
 }
+
+// ============================================================================
+// GET /school/technical-modality — Obtener configuración de modalidad técnica
+// ============================================================================
+if ($cleanPath === '/school/technical-modality' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $currentYear = (int)date('Y');
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT config_id, grade_level, work_shift, enabled, uses_blocks,
+                   days_of_week, entry_time, exit_time, academic_year
+            FROM technical_modality_config
+            WHERE school_id = ? AND academic_year = ?
+            ORDER BY grade_level::INT, work_shift
+        ");
+        $stmt->execute([$schoolId, $currentYear]);
+        $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'status' => 'ok',
+            'configs' => $configs,
+            'has_technical_modality' => count($configs) > 0,
+        ]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /school/technical-modality — Guardar configuración de modalidad técnica
+// Body: { configs: [{ grade_level, work_shift, uses_blocks, days_of_week, entry_time, exit_time }] }
+// ============================================================================
+if ($cleanPath === '/school/technical-modality' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $schoolId = $authUser['school_id'];
+    $currentYear = (int)date('Y');
+    $configs = $input['configs'] ?? [];
+
+    if (!is_array($configs)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'configs debe ser un array']));
+    }
+
+    try {
+        // Eliminar configuración existente del año actual
+        $conn->prepare("DELETE FROM technical_modality_config WHERE school_id = ? AND academic_year = ?")
+            ->execute([$schoolId, $currentYear]);
+
+        // Insertar nueva configuración
+        foreach ($configs as $cfg) {
+            $grade = trim((string)($cfg['grade_level'] ?? ''));
+            $shift = trim((string)($cfg['work_shift'] ?? 'mañana'));
+            $usesBlocks = (bool)($cfg['uses_blocks'] ?? false);
+            $days = $cfg['days_of_week'] ?? [];
+            $entryTime = $cfg['entry_time'] ?? null;
+            $exitTime = $cfg['exit_time'] ?? null;
+
+            if ($grade === '') continue;
+            if (!is_array($days)) $days = [];
+            // Filtrar días válidos (1-7)
+            $days = array_values(array_filter($days, fn($d) => $d >= 1 && $d <= 7));
+
+            $conn->prepare("
+                INSERT INTO technical_modality_config
+                    (school_id, grade_level, work_shift, enabled, uses_blocks, days_of_week, entry_time, exit_time, academic_year)
+                VALUES (?, ?, ?, TRUE, ?, ?::jsonb, ?, ?, ?)
+                ON CONFLICT (school_id, grade_level, work_shift, academic_year)
+                DO UPDATE SET enabled = TRUE, uses_blocks = EXCLUDED.uses_blocks,
+                    days_of_week = EXCLUDED.days_of_week, entry_time = EXCLUDED.entry_time,
+                    exit_time = EXCLUDED.exit_time, updated_at = NOW()
+            ")->execute([
+                $schoolId, $grade, $shift, $usesBlocks,
+                json_encode($days, JSON_UNESCAPED_UNICODE),
+                $entryTime ?: null, $exitTime ?: null,
+                $currentYear,
+            ]);
+        }
+
+        securityLog('TECHNICAL_MODALITY_SAVED', "School: $schoolId Configs: " . count($configs), $authUser['id'], $schoolId);
+        echo json_encode(['status' => 'ok', 'message' => 'Configuración de modalidad técnica guardada', 'count' => count($configs)]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+// Endpoint temporal para Render free tier (sin shell). Borrar después.
+// ============================================================================
+if ($cleanPath === '/school/seed' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR']);
+    $schoolId = $authUser['school_id'];
+
+    securityLog('SEED_TRIGGERED', "User: {$authUser['id']} School: $schoolId");
+
+    // Ejecutar el script de seed
+    $scriptPath = __DIR__ . '/../scripts/seed_school.php';
+    if (!file_exists($scriptPath)) {
+        http_response_code(404);
+        exit(json_encode(['status' => 'error', 'message' => 'Seed script not found']));
+    }
+
+    // Capturar output del script
+    ob_start();
+    try {
+        // El script usa $pdo global (definido en db.php que ya está incluido)
+        include $scriptPath;
+        $output = ob_get_clean();
+
+        echo json_encode([
+            'status' => 'ok',
+            'message' => 'Seed completado. Revisa el log para detalles.',
+            'output' => $output,
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        $output = ob_get_clean();
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'output' => $output,
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}

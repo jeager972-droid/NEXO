@@ -59,4 +59,16 @@ export const schoolApi = {
     const response = await client.post('/school/risk-config');
     return response.data;
   },
+  runSeed: async () => {
+    const response = await client.post('/school/seed');
+    return response.data;
+  },
+  getTechnicalModality: async () => {
+    const response = await client.get('/school/technical-modality');
+    return response.data;
+  },
+  saveTechnicalModality: async (configs) => {
+    const response = await client.post('/school/technical-modality', { configs });
+    return response.data;
+  },
 };

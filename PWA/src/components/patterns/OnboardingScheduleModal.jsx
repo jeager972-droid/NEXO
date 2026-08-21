@@ -138,8 +138,13 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Fase: 'multi' → 'select' → 'jornada' → 'review'
+  // Fase: 'multi' → 'select' → 'jornada' → 'technical' → 'review'
   const [phase, setPhase] = useState(saved?.phase || 'multi');
+
+  // Fase 'technical': modalidad técnica
+  const [hasTechModality, setHasTechModality] = useState(saved?.hasTechModality ?? null);
+  const [techGrades, setTechGrades] = useState(saved?.techGrades || []); // ['10','11']
+  const [techConfigs, setTechConfigs] = useState(saved?.techConfigs || {}); // { '10-mañana': { uses_blocks, days, entry, exit } }
 
   // Fase 'multi': ¿hay más de una jornada?
   const [hasMultipleShifts, setHasMultipleShifts] = useState(saved?.hasMultipleShifts ?? null);
@@ -154,8 +159,8 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
 
   // Persistir estado en localStorage cada vez que cambie
   useEffect(() => {
-    saveState({ phase, hasMultipleShifts, selectedShifts, jornadas, currentJornadaIdx, jornadaSubStep });
-  }, [phase, hasMultipleShifts, selectedShifts, jornadas, currentJornadaIdx, jornadaSubStep]);
+    saveState({ phase, hasMultipleShifts, selectedShifts, jornadas, currentJornadaIdx, jornadaSubStep, hasTechModality, techGrades, techConfigs });
+  }, [phase, hasMultipleShifts, selectedShifts, jornadas, currentJornadaIdx, jornadaSubStep, hasTechModality, techGrades, techConfigs]);
 
   // Inicializar bloques cuando cambia numBlocks o rotates de la jornada actual
   useEffect(() => {
@@ -177,11 +182,12 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
 
   // Calcular total de pasos y paso actual para la barra de progreso
   const { totalSteps, currentStep } = useMemo(() => {
-    let total = 1;
-    if (hasMultipleShifts === true) total += 1;
+    let total = 1; // multi
+    if (hasMultipleShifts === true) total += 1; // select
     const jornadaSteps = jornadas.reduce((acc, j) => acc + (j.rotates_classrooms ? 2 : 1), 0);
-    total += jornadaSteps;
-    if (jornadas.length > 0) total += 1;
+    total += jornadaSteps; // jornada steps
+    total += 1; // technical
+    if (jornadas.length > 0) total += 1; // review
 
     let current = 1;
     if (phase === 'multi') current = 1;
@@ -192,6 +198,8 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
         current += jornadas[i].rotates_classrooms ? 2 : 1;
       }
       current += jornadaSubStep + 1;
+    } else if (phase === 'technical') {
+      current = 2 + jornadaSteps + 1;
     } else if (phase === 'review') {
       current = total;
     }
@@ -227,6 +235,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
       if (j.recess_end_time && !j.recess_start_time) return false;
       return true;
     }
+    if (phase === 'technical') return hasTechModality !== null;
     if (phase === 'review') return true;
     return false;
   };
@@ -267,8 +276,20 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
         setCurrentJornadaIdx(currentJornadaIdx + 1);
         setJornadaSubStep(0);
       } else {
-        setPhase('review');
+        setPhase('technical');
       }
+      return;
+    }
+    if (phase === 'technical') {
+      if (hasTechModality === false) {
+        setPhase('review');
+        return;
+      }
+      if (hasTechModality === true && techGrades.length === 0) {
+        setError('Seleccione al menos un grado con modalidad técnica');
+        return;
+      }
+      setPhase('review');
       return;
     }
     if (phase === 'review') {
@@ -284,6 +305,10 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
       return;
     }
     if (phase === 'review') {
+      setPhase('technical');
+      return;
+    }
+    if (phase === 'technical') {
       const lastIdx = jornadas.length - 1;
       setCurrentJornadaIdx(lastIdx);
       setJornadaSubStep(jornadas[lastIdx].rotates_classrooms ? 1 : 0);
@@ -336,6 +361,29 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
       };
       const result = await schoolApi.completeOnboarding(payload);
       if (result.status === 'ok') {
+        // Guardar modalidad técnica si el usuario la configuró
+        if (hasTechModality === true && techGrades.length > 0) {
+          const techPayload = techGrades.flatMap((grade) => {
+            return jornadas.map((j) => {
+              const key = `${grade}-${j.work_shift}`;
+              const cfg = techConfigs[key] || {};
+              return {
+                grade_level: grade,
+                work_shift: j.work_shift,
+                uses_blocks: cfg.uses_blocks ?? false,
+                days_of_week: cfg.days || [],
+                entry_time: cfg.entry || null,
+                exit_time: cfg.exit || null,
+              };
+            });
+          });
+          try {
+            await schoolApi.saveTechnicalModality(techPayload);
+          } catch (techErr) {
+            console.error('[Onboarding] Error guardando modalidad técnica:', techErr);
+            // No bloquear el onboarding si falla la modalidad técnica
+          }
+        }
         clearSavedState();
         onCompleted?.(result);
       } else {
@@ -681,7 +729,136 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
             </div>
           )}
 
-          {/* FASE 4: Revisión final */}
+          {/* FASE: Modalidad técnica */}
+          {phase === 'technical' && (
+            <div className="space-y-5">
+              <div>
+                <p className="text-body text-[var(--nx-text)] mb-1">¿El colegio tiene modalidad técnica?</p>
+                <p className="text-caption text-[var(--nx-text-muted)]">La modalidad técnica tiene horarios y días diferentes al horario regular.</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setHasTechModality(true); setTechGrades([]); setTechConfigs({}); }}
+                  className={`flex-1 rounded-control border p-4 text-left transition-all ${hasTechModality === true ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)]' : 'border-[var(--nx-border)] hover:border-[var(--nx-border-accent)]'}`}
+                >
+                  <p className="text-body-sm font-medium text-[var(--nx-text)]">Sí, tiene modalidad técnica</p>
+                  <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Algunos grados tienen clases técnicas con horarios especiales</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setHasTechModality(false); setTechGrades([]); setTechConfigs({}); }}
+                  className={`flex-1 rounded-control border p-4 text-left transition-all ${hasTechModality === false ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)]' : 'border-[var(--nx-border)] hover:border-[var(--nx-border-accent)]'}`}
+                >
+                  <p className="text-body-sm font-medium text-[var(--nx-text)]">No, solo horario regular</p>
+                  <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Todos los grados siguen el mismo horario</p>
+                </button>
+              </div>
+
+              {hasTechModality === true && (
+                <div className="space-y-4">
+                  {/* Selección de grados con modalidad técnica */}
+                  <div>
+                    <p className="text-label text-[var(--nx-text)] mb-2">¿Qué grados tienen modalidad técnica?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {['9', '10', '11'].map((grade) => {
+                        const selected = techGrades.includes(grade);
+                        const labels = { '9': 'Noveno', '10': 'Décimo', '11': 'Once' };
+                        return (
+                          <button
+                            key={grade}
+                            type="button"
+                            onClick={() => {
+                              setTechGrades(prev => selected ? prev.filter(g => g !== grade) : [...prev, grade]);
+                            }}
+                            className={`flex items-center gap-1.5 rounded-control border px-3 py-2 text-caption transition-all ${selected ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]' : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:border-[var(--nx-border-accent)]'}`}
+                          >
+                            {selected && <Check size={12} strokeWidth={3} />}
+                            {labels[grade]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Configuración por grado */}
+                  {techGrades.map((grade) => {
+                    const labels = { '9': 'Noveno', '10': 'Décimo', '11': 'Once' };
+                    return jornadas.map((j) => {
+                      const key = `${grade}-${j.work_shift}`;
+                      const cfg = techConfigs[key] || {};
+                      const shiftLabels = { 'mañana': 'Mañana', 'tarde': 'Tarde', 'noche': 'Noche', 'completa': 'Completa' };
+                      const days = cfg.days || [];
+                      const dayLabels = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
+                      return (
+                        <div key={key} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-body-sm font-medium text-[var(--nx-text)]">
+                              {labels[grade]} · {shiftLabels[j.work_shift]}
+                            </p>
+                            <label className="flex items-center gap-2 text-caption text-[var(--nx-text-muted)]">
+                              <input
+                                type="checkbox"
+                                checked={cfg.uses_blocks ?? false}
+                                onChange={(e) => setTechConfigs(prev => ({ ...prev, [key]: { ...cfg, uses_blocks: e.target.checked } }))}
+                                className="accent-[var(--nx-accent)]"
+                              />
+                              Usar bloques
+                            </label>
+                          </div>
+
+                          {/* Días de la semana */}
+                          <div>
+                            <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Días con clases técnicas</p>
+                            <div className="flex gap-1.5">
+                              {dayLabels.map((dl, idx) => {
+                                const dayNum = idx + 1;
+                                const isSelected = days.includes(dayNum);
+                                return (
+                                  <button
+                                    key={dayNum}
+                                    type="button"
+                                    onClick={() => {
+                                      setTechConfigs(prev => ({
+                                        ...prev,
+                                        [key]: { ...cfg, days: isSelected ? days.filter(d => d !== dayNum) : [...days, dayNum] }
+                                      }));
+                                    }}
+                                    className={`grid h-9 w-9 place-items-center rounded-control border text-caption transition-all ${isSelected ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] font-semibold' : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:border-[var(--nx-border-accent)]'}`}
+                                  >
+                                    {dl}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Horario de entrada y salida */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              label="Entrada"
+                              type="time"
+                              value={cfg.entry || ''}
+                              onChange={(e) => setTechConfigs(prev => ({ ...prev, [key]: { ...cfg, entry: e.target.value } }))}
+                            />
+                            <Input
+                              label="Salida"
+                              type="time"
+                              value={cfg.exit || ''}
+                              onChange={(e) => setTechConfigs(prev => ({ ...prev, [key]: { ...cfg, exit: e.target.value } }))}
+                            />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FASE: Revisión final */}
           {phase === 'review' && (
             <div className="space-y-5">
               <div>
