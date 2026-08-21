@@ -53,7 +53,8 @@ function logA(string $e, string $m = ''): void {
 }
 
 /**
- * Envía un job de Twilio al Redis para notificación WhatsApp.
+ * Envía una notificación WhatsApp de inasistencia al acudiente.
+ * Usa enqueueTwilioJob (con fallback a PG si Redis no está disponible).
  */
 function enqueueAbsenceNotification($redis, string $phone, string $studentName, string $groupName, string $schoolId, string $studentId, string $userId, string $incidentId = null): void {
     if (empty($phone)) return;
@@ -64,34 +65,34 @@ function enqueueAbsenceNotification($redis, string $phone, string $studentName, 
          . "Responda:\n"
          . "  *1* — La inasistencia está justificada\n"
          . "  *2* — No estoy al tanto de esta inasistencia";
-    try {
-        $payload = json_encode([
-            'to' => $phone,
-            'body' => $msg,
-            'school_id' => $schoolId,
-            'student_id' => $studentId,
-            'sender_user_id' => $userId,
-            'type_code' => 'INASISTENCIA',
-            'retries' => 0,
-            'created_at' => time(),
-        ], JSON_UNESCAPED_UNICODE);
-        $redis->rPush('queue:twilio', $payload);
-        $redis->expire('queue:twilio', 86400);
 
-        // Guardar contexto en Redis para que el webhook sepa qué hacer
-        // cuando el acudiente responda 1 o 2
-        $normalizedPhone = preg_replace('/[^0-9+]/', '', $phone);
-        $ctxPayload = json_encode([
-            'action' => 'inasistencia',
-            'student_id' => $studentId,
-            'student_name' => $studentName,
-            'school_id' => $schoolId,
-            'incident_id' => $incidentId,
-            'ts' => time(),
-        ], JSON_UNESCAPED_UNICODE);
-        $redis->setex('inasistencia_context:' . $normalizedPhone, 86400, $ctxPayload);
-    } catch (Exception $e) {
-        logA('TWILIO_ENQUEUE_FAIL', $e->getMessage());
+    // Usar enqueueTwilioJob que ya tiene fallback a PG si Redis no está
+    require_once __DIR__ . '/../routes/operations.php';
+    $result = enqueueTwilioJob($phone, $msg, $schoolId, $studentId, null, $userId, 'INASISTENCIA');
+    if ($result['ok']) {
+        logA('ABSENCE_NOTIF_QUEUED', "student=$studentName phone=$phone reason={$result['reason']}");
+    } else {
+        $err = $result['error'] ?? 'unknown';
+        logA('ABSENCE_NOTIF_FAILED', "student=$studentName phone=$phone error=$err");
+    }
+
+    // Guardar contexto en Redis para que el webhook sepa qué hacer
+    // cuando el acudiente responda 1 o 2
+    if ($redis) {
+        try {
+            $normalizedPhone = preg_replace('/[^0-9+]/', '', $phone);
+            $ctxPayload = json_encode([
+                'action' => 'inasistencia',
+                'student_id' => $studentId,
+                'student_name' => $studentName,
+                'school_id' => $schoolId,
+                'incident_id' => $incidentId,
+                'ts' => time(),
+            ], JSON_UNESCAPED_UNICODE);
+            $redis->setex('inasistencia_context:' . $normalizedPhone, 86400, $ctxPayload);
+        } catch (Exception $e) {
+            logA('ABSENCE_CONTEXT_FAIL', $e->getMessage());
+        }
     }
 }
 
