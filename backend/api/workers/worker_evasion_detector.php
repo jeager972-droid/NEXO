@@ -154,6 +154,43 @@ function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, s
 }
 
 /**
+ * Verifica si ya existe un incidente de LATE_ARRIVAL para el estudiante hoy
+ * (evita duplicados por múltiples ejecuciones del worker).
+ */
+function hasLateArrivalToday(PDO $conn, string $schoolId, string $studentId): bool {
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+    $stmt = $conn->prepare("
+        SELECT 1 FROM attendance_incidents
+        WHERE student_id = ? AND school_id = ?
+          AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+          AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+          AND incident_type = 'LATE_ARRIVAL'
+        LIMIT 1
+    ");
+    $stmt->execute([$studentId, $schoolId]);
+    $exists = (bool)$stmt->fetchColumn();
+    $conn->exec("COMMIT");
+    return $exists;
+}
+
+/**
+ * Registra un incidente de LATE_ARRIVAL en attendance_incidents.
+ */
+function insertLateArrivalIncident(PDO $conn, string $schoolId, string $studentId, string $metaJson): void {
+    $conn->exec("BEGIN");
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+    $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
+    $stmt = $conn->prepare("
+        INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+        VALUES (uuid_generate_v4(), ?, ?, 'LATE_ARRIVAL', NOW(), ?::jsonb)
+    ");
+    $stmt->execute([$schoolId, $studentId, $metaJson]);
+    $conn->exec("COMMIT");
+}
+
+/**
  * Obtiene el profesor responsable actual de un estudiante según schedules
  * (bloque horario actual para el día de la semana y grupo del estudiante).
  */
@@ -283,10 +320,10 @@ function processSchoolEvasion(PDO $conn, $redis, string $schoolId): int {
         $exitTs = DateTime::createFromFormat('H:i:s', $exitTime, new DateTimeZone('America/Bogota'));
         if (!$entryTs || !$exitTs) continue;
 
-        // 5 minutos antes de exit_time: permitir salida final, no detectar evasión
-        $exitThreshold = clone $exitTs;
-        $exitThreshold->sub(new DateInterval('PT5M'));
-        if ($nowBogota >= $exitThreshold) continue;
+        // Al finalizar la jornada (exit_time exacto): dejar de detectar evasión.
+        // Los estudiantes se van a casa, el sistema se vacía.
+        $exitTsToday = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $exitTime", new DateTimeZone('America/Bogota'));
+        if ($nowBogota >= $exitTsToday) continue;
 
         // Antes de entry_time: no detectar evasión en esta jornada
         $entryTsToday = DateTime::createFromFormat('Y-m-d H:i:s', "$todayDate $entryTime", new DateTimeZone('America/Bogota'));
@@ -472,16 +509,27 @@ function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $t
 /**
  * Detección de evasión para colegios que SÍ rotan de salones.
  *
- * El estudiante debe marcar huella al inicio de cada bloque de clase.
- * Pasados 10 min del inicio del bloque sin registro, se considera evasión.
+ * FLUJO COMPLETO:
  *
- * Casos:
- *   - Primer bloque: estudiantes en la institución (cualquier evento biométrico
- *     hoy) que no marcaron ingreso en el bloque 1 + 10 min → EVASION_INTERNA.
- *   - Bloques N→N+1: estudiantes que asistieron al bloque N pero no al N+1.
- *   - fusionar_bloque: si el grupo tiene bloques fusionados, se omite la
- *     verificación del par de bloques que cae dentro del periodo fusionado
- *     (típicamente 1 hora = 2 bloques consecutivos). SOLO para ese grupo.
+ * Primer bloque:
+ *   - Ventana válida: 1hr antes del inicio → +10 min después del inicio.
+ *   - Marcó entre (inicio - 1hr) e (inicio exacto): a tiempo.
+ *   - Marcó entre (inicio) e (inicio + 10min): LATE_ARRIVAL.
+ *   - No marcó a las (inicio + 10min): EVASION_INTERNA (alerta MUY_ALTA
+ *     instantánea al coordinador).
+ *
+ * Bloques N → N+1:
+ *   - 5 min para llegar y marcar huella: a tiempo.
+ *   - +5 min más (total 10 min): LATE_ARRIVAL.
+ *   - Vencido el plazo (10 min): EVASION_INTERNA instantánea.
+ *
+ * fusionar_bloque:
+ *   - Si el profesor activó fusionar_bloque para un grupo, se omite la
+ *     verificación de la transición del par de bloques fusionado
+ *     (típicamente 1 hora = 2 bloques). SOLO para ese grupo.
+ *
+ * Fin de jornada:
+ *   - Al llegar exit_time, el worker deja de detectar (estudiantes se van).
  */
 function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config, array $dscOverrides = []): int {
     $detected = 0;
@@ -501,7 +549,7 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
 
     // ── Helper: obtener group_id de un estudiante ──────────────────────
     $groupCache = [];
-    $getGroupId = function(string $studentId) use ($conn, $schoolId, &$groupCache): ?string {
+    $getGroupId = function(string $studentId) use ($conn, &$groupCache): ?string {
         if (isset($groupCache[$studentId])) return $groupCache[$studentId];
         $stmt = $conn->prepare("
             SELECT sga.group_id FROM student_group_assignments sga
@@ -514,28 +562,42 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
     };
 
     // ── Helper: verificar si un par de bloques está fusionado para un grupo ──
-    $isMergedForGroup = function(?string $groupId, string $blockNStart, string $blockNEnd, string $blockN1Start) use ($dscOverrides): bool {
+    $isMergedForGroup = function(?string $groupId, string $blockNStart, string $blockN1Start) use ($dscOverrides): bool {
         if (!$groupId || !isset($dscOverrides[$groupId])) return false;
         $override = $dscOverrides[$groupId];
         if (!$override['merged']) return false;
-        // El par de bloques está fusionado si la transición (fin de N → inicio de N+1)
-        // cae dentro del periodo fusionado (entry_time → exit_time del override).
         $mergedEntry = $override['entry_time'];
         $mergedExit = $override['exit_time'];
         if (!$mergedEntry || !$mergedExit) return false;
-        // Si el inicio del bloque N y el inicio del bloque N+1 están ambos
-        // dentro del rango fusionado, este par está fusionado.
         return ($blockNStart >= $mergedEntry && $blockN1Start <= $mergedExit);
     };
 
-    // ── 1. Primer bloque: estudiantes en la institución que no entraron a clase ──
+    // ── Helper: verificar permiso activo ───────────────────────────────
+    $hasPermiso = function(string $studentId) use ($conn, $schoolId): bool {
+        $stmt = $conn->prepare("
+            SELECT 1 FROM class_exit_authorizations
+            WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
+              AND exit_time <= NOW()
+              AND (return_time IS NULL OR return_time >= NOW())
+            LIMIT 1
+        ");
+        $stmt->execute([$schoolId, $studentId]);
+        return (bool)$stmt->fetchColumn();
+    };
+
+    // ══════════════════════════════════════════════════════════════════
+    // 1. PRIMER BLOQUE
+    // ══════════════════════════════════════════════════════════════════
     $firstBlock = $blocks[0];
     $firstStart = DateTime::createFromFormat('H:i:s', $firstBlock['start_time'], new DateTimeZone('America/Bogota'));
     if ($firstStart) {
         $firstDeadline = clone $firstStart;
         $firstDeadline->add(new DateInterval('PT10M'));
+        // Ventena de "a tiempo": 1hr antes del inicio
+        $firstEarlyWindow = clone $firstStart;
+        $firstEarlyWindow->sub(new DateInterval('PT1H'));
 
-        // Solo verificar si ya pasó el deadline del primer bloque
+        // Solo verificar si ya pasó el deadline del primer bloque (+10 min)
         if ($nowBogota >= $firstDeadline) {
             // Estudiantes con cualquier evento biométrico hoy (están en la institución)
             $inInstitutionStmt = $conn->prepare("
@@ -556,8 +618,24 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
 
                 if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
 
-                // Verificar si marcó ingreso en el primer bloque + 10 min
-                $block1Check = $conn->prepare("
+                // ¿Marcó a tiempo? (entre 1hr antes y inicio exacto)
+                $onTimeCheck = $conn->prepare("
+                    SELECT 1 FROM biometric_events
+                    WHERE school_id = ? AND student_id = ?
+                      AND event_timestamp >= (?::date + ?::time)::timestamptz
+                      AND event_timestamp < (?::date + ?::time)::timestamptz
+                      AND event_type LIKE 'INGRESO_%'
+                    LIMIT 1
+                ");
+                $onTimeCheck->execute([
+                    $schoolId, $studentId,
+                    $todayDate, $firstEarlyWindow->format('H:i:s'),
+                    $todayDate, $firstBlock['start_time']
+                ]);
+                if ($onTimeCheck->fetchColumn()) continue; // A tiempo
+
+                // ¿Marcó tarde? (entre inicio exacto y +10 min)
+                $lateCheck = $conn->prepare("
                     SELECT 1 FROM biometric_events
                     WHERE school_id = ? AND student_id = ?
                       AND event_timestamp >= (?::date + ?::time)::timestamptz
@@ -565,25 +643,37 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
                       AND event_type LIKE 'INGRESO_%'
                     LIMIT 1
                 ");
-                $block1Check->execute([
+                $lateCheck->execute([
                     $schoolId, $studentId,
                     $todayDate, $firstBlock['start_time'],
                     $todayDate, $firstDeadline->format('H:i:s')
                 ]);
-                if ($block1Check->fetchColumn()) continue; // Sí asistió al primer bloque
 
-                // Verificar permiso activo
-                $permisoStmt = $conn->prepare("
-                    SELECT 1 FROM class_exit_authorizations
-                    WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
-                      AND exit_time <= NOW()
-                      AND (return_time IS NULL OR return_time >= NOW())
-                    LIMIT 1
-                ");
-                $permisoStmt->execute([$schoolId, $studentId]);
-                if ($permisoStmt->fetchColumn()) continue;
+                if ($lateCheck->fetchColumn()) {
+                    // LLEGADA TARDE — registrarlo si no tiene ya una hoy
+                    if (hasLateArrivalToday($conn, $schoolId, $studentId)) continue;
+                    if ($hasPermiso($studentId)) continue;
+                    $meta = json_encode([
+                        'student_id' => $studentId,
+                        'student_name' => $studentName,
+                        'block_number' => $firstBlock['block_number'],
+                        'block_start' => $firstBlock['start_time'],
+                        'alert_reason' => "Llegada tarde al bloque {$firstBlock['block_number']} (inicio " . substr($firstBlock['start_time'], 0, 5) . ")",
+                        'action' => 'late_arrival',
+                    ], JSON_UNESCAPED_UNICODE);
+                    try {
+                        insertLateArrivalIncident($conn, $schoolId, $studentId, $meta);
+                        $detected++;
+                        logE('LATE_ARRIVAL', "school=$schoolId student=$studentName block={$firstBlock['block_number']}");
+                    } catch (Exception $e) {
+                        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+                        logE('LATE_INSERT_FAIL', "student=$studentId error=" . $e->getMessage());
+                    }
+                    continue;
+                }
 
-                // Generar alerta de evasión (no asistió al primer bloque)
+                // No marcó nada → EVASION_INTERNA
+                if ($hasPermiso($studentId)) continue;
                 $detected += generateEvasionAlert(
                     $conn, $redis, $schoolId, $studentId, $studentName,
                     "No asistió al primer bloque ({$firstBlock['block_number']}) que inició a las " . substr($firstBlock['start_time'], 0, 5),
@@ -593,7 +683,9 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
         }
     }
 
-    // ── 2. Bloques N→N+1: estudiantes que asistieron al bloque N pero no al N+1 ──
+    // ══════════════════════════════════════════════════════════════════
+    // 2. BLOQUES N → N+1
+    // ══════════════════════════════════════════════════════════════════
     if (count($blocks) >= 2) {
         for ($i = 0; $i < count($blocks) - 1; $i++) {
             $currentBlock = $blocks[$i];
@@ -602,9 +694,12 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
             $nextStart = DateTime::createFromFormat('H:i:s', $nextBlock['start_time'], new DateTimeZone('America/Bogota'));
             if (!$nextStart) continue;
 
-            // El margen de 10 min empieza desde el inicio del siguiente bloque
+            // Deadline: +10 min desde el inicio del siguiente bloque
             $deadline = clone $nextStart;
             $deadline->add(new DateInterval('PT10M'));
+            // "A tiempo": primeros 5 min
+            $onTimeEnd = clone $nextStart;
+            $onTimeEnd->add(new DateInterval('PT5M'));
 
             // Si aún no hemos pasado el deadline, no evaluar este par
             if ($nowBogota < $deadline) continue;
@@ -633,14 +728,14 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
 
                 if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
 
-                // Verificar si este par de bloques está fusionado para el grupo del estudiante
+                // Verificar fusionar_bloque para este grupo
                 $groupId = $getGroupId($studentId);
-                if ($isMergedForGroup($groupId, $currentBlock['start_time'], $currentBlock['end_time'], $nextBlock['start_time'])) {
-                    continue; // Bloque fusionado para este grupo, omitir transición
+                if ($isMergedForGroup($groupId, $currentBlock['start_time'], $nextBlock['start_time'])) {
+                    continue; // Bloque fusionado para este grupo
                 }
 
-                // Verificar si marcó ingreso en el siguiente bloque (dentro del margen)
-                $nextCheck = $conn->prepare("
+                // ¿Marcó a tiempo? (0-5 min después del inicio del siguiente bloque)
+                $onTimeCheck = $conn->prepare("
                     SELECT 1 FROM biometric_events
                     WHERE school_id = ? AND student_id = ?
                       AND event_timestamp >= (?::date + ?::time)::timestamptz
@@ -648,25 +743,54 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
                       AND event_type LIKE 'INGRESO_%'
                     LIMIT 1
                 ");
-                $nextCheck->execute([
+                $onTimeCheck->execute([
                     $schoolId, $studentId,
                     $todayDate, $nextBlock['start_time'],
-                    $todayDate, $deadline->format('H:i:s')
+                    $todayDate, $onTimeEnd->format('H:i:s')
                 ]);
-                if ($nextCheck->fetchColumn()) continue; // Sí asistió al siguiente bloque
+                if ($onTimeCheck->fetchColumn()) continue; // A tiempo
 
-                // Verificar permiso activo
-                $permisoStmt = $conn->prepare("
-                    SELECT 1 FROM class_exit_authorizations
-                    WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
-                      AND exit_time <= NOW()
-                      AND (return_time IS NULL OR return_time >= NOW())
+                // ¿Marcó tarde? (5-10 min después del inicio)
+                $lateCheck = $conn->prepare("
+                    SELECT 1 FROM biometric_events
+                    WHERE school_id = ? AND student_id = ?
+                      AND event_timestamp > (?::date + ?::time)::timestamptz
+                      AND event_timestamp <= (?::date + ?::time)::timestamptz
+                      AND event_type LIKE 'INGRESO_%'
                     LIMIT 1
                 ");
-                $permisoStmt->execute([$schoolId, $studentId]);
-                if ($permisoStmt->fetchColumn()) continue;
+                $lateCheck->execute([
+                    $schoolId, $studentId,
+                    $todayDate, $onTimeEnd->format('H:i:s'),
+                    $todayDate, $deadline->format('H:i:s')
+                ]);
 
-                // Generar alerta de evasión
+                if ($lateCheck->fetchColumn()) {
+                    // LLEGADA TARDE
+                    if (hasLateArrivalToday($conn, $schoolId, $studentId)) continue;
+                    if ($hasPermiso($studentId)) continue;
+                    $meta = json_encode([
+                        'student_id' => $studentId,
+                        'student_name' => $studentName,
+                        'current_block' => $currentBlock['block_number'],
+                        'next_block' => $nextBlock['block_number'],
+                        'next_block_start' => $nextBlock['start_time'],
+                        'alert_reason' => "Llegada tarde al bloque {$nextBlock['block_number']}" . ($nextBlock['block_name'] ? " ({$nextBlock['block_name']})" : '') . " (inicio " . substr($nextBlock['start_time'], 0, 5) . ")",
+                        'action' => 'late_arrival',
+                    ], JSON_UNESCAPED_UNICODE);
+                    try {
+                        insertLateArrivalIncident($conn, $schoolId, $studentId, $meta);
+                        $detected++;
+                        logE('LATE_ARRIVAL', "school=$schoolId student=$studentName block={$nextBlock['block_number']}");
+                    } catch (Exception $e) {
+                        try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+                        logE('LATE_INSERT_FAIL', "student=$studentId error=" . $e->getMessage());
+                    }
+                    continue;
+                }
+
+                // No marcó nada → EVASION_INTERNA instantánea
+                if ($hasPermiso($studentId)) continue;
                 $alertReason = "No asistió al bloque {$nextBlock['block_number']}" . ($nextBlock['block_name'] ? " ({$nextBlock['block_name']})" : '') . " que inició a las " . substr($nextBlock['start_time'], 0, 5);
                 $detected += generateEvasionAlert(
                     $conn, $redis, $schoolId, $studentId, $studentName,

@@ -734,6 +734,10 @@ DELETE FROM risk_event_types
                      'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
                      'SALIDA_BANO');
 
+-- Fix display_name con ñ correcta (por si la DB tiene valor sin ñ)
+UPDATE risk_event_types SET display_name = 'Salida al baño', description = 'Salida al baño durante clase'
+ WHERE type_code = 'SALIDA_BAÑO' AND display_name != 'Salida al baño';
+
 -- Calendario lectivo institucional (para cálculo de días lectivos en decaimiento)
 CREATE TABLE IF NOT EXISTS school_calendar (
     calendar_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1586,7 +1590,7 @@ BEGIN
     SELECT v_policy_id, p_school_id, event_type_id,
         CASE type_code
             WHEN 'LATE_ARRIVAL'         THEN 'LEVE'
-            WHEN 'EVASION_INTERNA'       THEN 'MODERADA'
+            WHEN 'EVASION_INTERNA'       THEN 'MUY_ALTA'
             WHEN 'SALIDA_BAÑO'           THEN 'LEVE'
             ELSE 'SIN_IMPORTANCIA'
         END
