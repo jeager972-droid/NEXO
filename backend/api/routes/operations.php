@@ -144,7 +144,11 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
     try {
         $redis = getRedisConnection();
         if (!$redis) {
-            securityLog('TWILIO_REDIS_UNAVAILABLE', 'Redis unavailable for Twilio queue');
+            // Redis no disponible: el mensaje ya está en twilio_messages con
+            // delivery_status='QUEUED'. El worker_twilio.php en modo PG fallback
+            // lo procesará haciendo polling.
+            securityLog('TWILIO_REDIS_UNAVAILABLE', 'Redis unavailable — message stays QUEUED in PG for worker polling');
+            return ['ok' => true, 'reason' => 'queued_pg_fallback', 'phone_norm' => $toNorm, 'message_id' => $msgId];
         } else {
             $redis->rPush('queue:twilio', json_encode([
                 'message_id' => $msgId, 'to' => $toNorm, 'body' => $body,
@@ -155,15 +159,9 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
             return ['ok' => true, 'reason' => 'queued', 'queue' => 'queue:twilio', 'phone_norm' => $toNorm, 'message_id' => $msgId];
         }
     } catch (Exception $e) {
-        securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage());
+        securityLog('TWILIO_ENQUEUE_FAILED', $e->getMessage() . ' — message stays QUEUED in PG for worker polling');
+        return ['ok' => true, 'reason' => 'queued_pg_fallback', 'phone_norm' => $toNorm, 'message_id' => $msgId];
     }
-    $result = sendTwilioDirect($to, $body);
-    if ($result['ok']) {
-        securityLog('TWILIO_DIRECT_SENT', "SID: {$result['sid']} To: $to");
-        return ['ok' => true, 'reason' => 'direct', 'sid' => $result['sid'], 'phone_norm' => $toNorm];
-    }
-    securityLog('TWILIO_DIRECT_FAILED', "To: $to Error: {$result['error']}");
-    return ['ok' => false, 'reason' => 'direct_failed', 'error' => $result['error'], 'phone_norm' => $toNorm];
 }
 // ============================================================================
 // Rutas bajo /operations/*

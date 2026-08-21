@@ -325,14 +325,19 @@ try {
     securityLog('WORKER_ROLE_SET_SKIP', $e->getMessage());
 }
 
+// FIX: Redis es opcional. Si no está disponible, el worker entra en modo
+// PG fallback: hace polling de twilio_messages WHERE delivery_status='QUEUED'
+// cada 5 segundos. Esto permite que el sistema funcione sin Redis.
+$redis = null;
+$pgFallbackMode = false;
 try {
     $redis = getRedisConnection();
     if (!$redis) {
-        throw new Exception('Redis unavailable on startup');
+        throw new Exception('Redis returned null');
     }
 } catch (Exception $e) {
-    securityLog('TWILIO_WORKER_FATAL', "Failed to connect to Redis on startup: " . $e->getMessage());
-    exit(1);
+    securityLog('TWILIO_WORKER_PG_FALLBACK', "Redis unavailable, switching to PG polling mode: " . $e->getMessage());
+    $pgFallbackMode = true;
 }
 
 $mainQueue   = 'queue:twilio';
@@ -350,10 +355,17 @@ $lastSend = microtime(true) - $sendDelay;
 // Configurable vía TWILIO_MAX_SENDS_PER_HOUR (default: 500).
 // VF-022: Contador distribuido en Redis para que múltiples instancias
 // respeten el límite global, no por-instancia.
+// En modo PG fallback, el contador se lleva en memoria.
 $maxSendsPerHour = max(1, (int)(getenv('TWILIO_MAX_SENDS_PER_HOUR') ?: 500));
 $redisHourKey = 'twilio:sends:hour:' . date('YmdH'); // Clave rotativa por hora
+$pgSendsThisHour = 0;
+$pgHourKey = date('YmdH');
 
-securityLog('TWILIO_WORKER_START', "Worker initialized. Rate: {$rateLimit}/s | Max/hour: {$maxSendsPerHour} (distributed) | Queues: {$mainQueue}, {$delayQueue}");
+$mainQueue  = 'queue:twilio';
+$delayQueue = 'queue:twilio:delayed';
+
+$modeLabel = $pgFallbackMode ? 'PG_FALLBACK' : 'REDIS';
+securityLog('TWILIO_WORKER_START', "Worker initialized. Mode: {$modeLabel} | Rate: {$rateLimit}/s | Max/hour: {$maxSendsPerHour} | Queues: {$mainQueue}, {$delayQueue}");
 
 $shutdown = false;
 $iterations = 0;
@@ -364,6 +376,58 @@ while (!$shutdown) {
     try {
         pcntl_signal_dispatch();
 
+        if ($pgFallbackMode) {
+            // ── MODO PG FALLBACK: polling de twilio_messages WHERE QUEUED ──
+            $currentHour = date('YmdH');
+            if ($currentHour !== $pgHourKey) {
+                $pgHourKey = $currentHour;
+                $pgSendsThisHour = 0;
+            }
+            if ($pgSendsThisHour >= $maxSendsPerHour) {
+                securityLog('TWILIO_CIRCUIT_BREAKER_TRIPPED', "pg_sends={$pgSendsThisHour} >= max={$maxSendsPerHour}. Pausing 60s.");
+                sleep(60);
+                continue;
+            }
+
+            // Buscar mensajes QUEUED (sin Redis, leemos directamente de PG)
+            $stmt = $conn->prepare("
+                SELECT twilio_message_id, school_id, student_id, guardian_id, sender_user_id,
+                       type_code, phone_number, message_content
+                FROM twilio_messages
+                WHERE delivery_status = 'QUEUED'
+                ORDER BY sent_at ASC
+                LIMIT 1
+            ");
+            $stmt->execute();
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($row) {
+                // Marcar como PROCESSING para evitar que otra instancia lo tome
+                $conn->prepare("UPDATE twilio_messages SET delivery_status = 'PROCESSING' WHERE twilio_message_id = ? AND sent_at = ?")
+                    ->execute([$row['twilio_message_id'], $row['sent_at'] ?? null]);
+
+                $job = [
+                    'message_id' => $row['twilio_message_id'],
+                    'to' => $row['phone_number'],
+                    'body' => $row['message_content'],
+                    'school_id' => $row['school_id'],
+                    'student_id' => $row['student_id'],
+                    'guardian_id' => $row['guardian_id'],
+                    'sender_user_id' => $row['sender_user_id'],
+                    'type_code' => $row['type_code'],
+                    'retries' => 0,
+                    'created_at' => time(),
+                ];
+                processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
+                $pgSendsThisHour++;
+            } else {
+                // No hay mensajes, esperar 5s antes de volver a hacer polling
+                sleep(5);
+            }
+            continue;
+        }
+
+        // ── MODO REDIS (normal) ──────────────────────────────────────────
         // VF-022: Circuit breaker distribuido via Redis
         $currentHourKey = 'twilio:sends:hour:' . date('YmdH');
         // Resetear clave si cambió la hora
@@ -410,6 +474,10 @@ while (!$shutdown) {
         }
     } catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());
+        if ($pgFallbackMode) {
+            sleep(5);
+            continue;
+        }
         try { $redis = getRedisConnection(); } catch (Exception $re) { sleep(5); continue; }
         if (!$redis) { sleep(5); continue; }
         continue;
