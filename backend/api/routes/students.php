@@ -367,3 +367,48 @@ if ($cleanPath === '/students/bulk-assign' && $method === 'POST') {
     exit;
 }
 
+// ============================================================================
+// DELETE /students/{id} — Eliminar estudiante y todos sus datos relacionados.
+// Borra: biometric_events, attendance_incidents, class_exit_authorizations,
+// guardian_student_relationships, student_group_assignments, y el student.
+// Solo SECRETARY, RECTOR, COORDINATOR pueden eliminar.
+// ============================================================================
+if (preg_match('#^/students/([0-9a-fA-F\-]{36})$#', $cleanPath, $matches) && $method === 'DELETE') {
+    $authUser = requireAuth(['SECRETARY', 'RECTOR', 'COORDINATOR']);
+    $schoolId = $authUser['school_id'];
+    $studentId = $matches[1];
+
+    try {
+        // Verificar que el estudiante pertenece a la escuela
+        $checkStmt = $conn->prepare("SELECT student_id, first_name, last_name, document_number FROM students WHERE student_id = ? AND school_id = ?");
+        $checkStmt->execute([$studentId, $schoolId]);
+        $student = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$student) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+        }
+
+        $conn->beginTransaction();
+
+        // Eliminar datos relacionados en orden (FK constraints)
+        $conn->prepare("DELETE FROM biometric_events WHERE student_id = ?")->execute([$studentId]);
+        $conn->prepare("DELETE FROM attendance_incidents WHERE student_id = ?")->execute([$studentId]);
+        $conn->prepare("DELETE FROM class_exit_authorizations WHERE student_id = ?")->execute([$studentId]);
+        $conn->prepare("DELETE FROM guardian_student_relationships WHERE student_id = ?")->execute([$studentId]);
+        $conn->prepare("DELETE FROM student_group_assignments WHERE student_id = ?")->execute([$studentId]);
+        $conn->prepare("DELETE FROM students WHERE student_id = ?")->execute([$studentId]);
+
+        $conn->commit();
+
+        securityLog('STUDENT_DELETED', "ID:$studentId Doc:{$student['document_number']} Name:{$student['first_name']} {$student['last_name']}", $authUser['id'], $schoolId);
+        echo json_encode(['status' => 'ok', 'message' => 'Estudiante eliminado correctamente']);
+    } catch (Exception $e) {
+        try { if ($conn->inTransaction()) $conn->rollBack(); } catch (Exception $ignore) {}
+        securityLog('STUDENT_DELETE_ERROR', $e->getMessage(), $authUser['id'] ?? null, $schoolId ?? null);
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar estudiante', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+

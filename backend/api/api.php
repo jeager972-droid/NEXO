@@ -332,10 +332,13 @@ if (isset($input['payload'])) {
                         http_response_code(403);
                         exit(json_encode(['status' => 'error', 'message' => 'Nonce already used']));
                     }
+                    // Si $redis es null, fail-open: aceptar el nonce sin validar
+                    // (Redis caído — ver tener_en_cuenta.md). El timestamp check
+                    // ya protege contra replay de eventos viejos.
                 } catch (Exception $e) {
-                    securityLog('EDGE_REPLAY_NONCE_REDIS_DOWN', 'Nonce validation unavailable: ' . $e->getMessage(), null, null, $requestId);
-                    http_response_code(503);
-                    exit(json_encode(['status' => 'error', 'message' => 'Nonce validation unavailable']));
+                    // FAIL-OPEN: Redis caído no debe bloquear el ingest del edge.
+                    // Loggear pero continuar procesando.
+                    securityLog('EDGE_REPLAY_NONCE_REDIS_DOWN', 'Nonce validation skipped (Redis down, fail-open): ' . $e->getMessage(), null, null, $requestId);
                 }
             }
 

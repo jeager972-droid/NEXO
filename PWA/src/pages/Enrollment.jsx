@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { devicesApi } from '../api/devices';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
@@ -298,12 +298,13 @@ const StudentAvatar = ({ student, size = 'md' }) => {
   );
 };
 
-const StudentProfileDrawer = ({ student, onClose }) => {
+const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
   const [biometricStatus, setBiometricStatus] = useState('checking');
   const [edgeDevice, setEdgeDevice] = useState(null);
   const [enrollCmd, setEnrollCmd] = useState({ state: 'idle', message: '' });
   const [hasFingerprint, setHasFingerprint] = useState(null);
   const enrollPollRef = useRef(null);
+  const [deleteState, setDeleteState] = useState('idle'); // idle | confirm | deleting | error
 
   useEffect(() => {
     if (!student) return;
@@ -448,6 +449,63 @@ const StudentProfileDrawer = ({ student, onClose }) => {
               {enrollCmd.message}
             </div>
           )}
+        </div>
+
+        {/* Eliminar estudiante — opción sutil al final del drawer */}
+        <div className="border-t border-[var(--nx-border)] pt-4">
+          {deleteState === 'idle' ? (
+            <button
+              onClick={() => setDeleteState('confirm')}
+              className="text-caption text-[var(--nx-text-muted)] hover:text-[var(--nx-danger)] transition-colors duration-fast flex items-center gap-1.5"
+            >
+              <Trash2 size={12} />
+              Eliminar estudiante del sistema
+            </button>
+          ) : deleteState === 'confirm' ? (
+            <div className="rounded-panel border border-[var(--nx-border-danger)] bg-[var(--nx-surface-danger)] p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="shrink-0 text-[var(--nx-danger)] mt-0.5" />
+                <div>
+                  <p className="text-body-sm text-[var(--nx-danger)] font-medium">¿Eliminar a {student.last_name} {student.first_name}?</p>
+                  <p className="text-caption text-[var(--nx-text-muted)] mt-1">
+                    Se borrarán todos sus datos: huella, asistencias, permisos y grupo. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeleteState('idle')}
+                  className="flex-1 rounded-control border border-[var(--nx-border)] px-3 py-2 text-body-sm text-[var(--nx-text-muted)] hover:bg-[var(--nx-hover)] transition-colors duration-fast"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    setDeleteState('deleting');
+                    try {
+                      await studentsApi.delete(student.id);
+                      setDeleteState('idle');
+                      onDeleted?.(student.id);
+                      onClose();
+                    } catch (err) {
+                      setDeleteState('error');
+                    }
+                  }}
+                  disabled={deleteState === 'deleting'}
+                  className="flex-1 rounded-control bg-[var(--nx-danger)] px-3 py-2 text-body-sm text-white hover:opacity-90 transition-opacity duration-fast disabled:opacity-50"
+                >
+                  {deleteState === 'deleting' ? <Loader2 size={14} className="animate-spin inline" /> : 'Sí, eliminar'}
+                </button>
+              </div>
+            </div>
+          ) : deleteState === 'error' ? (
+            <div className="rounded-panel border border-[var(--nx-border-danger)] bg-[var(--nx-surface-danger)] p-3">
+              <p className="text-body-sm text-[var(--nx-danger)]">Error al eliminar. Intenta de nuevo.</p>
+              <button onClick={() => setDeleteState('confirm')} className="text-caption text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] mt-1">
+                Volver
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </Drawer>
@@ -650,7 +708,10 @@ const Enrollment = () => {
       </AnimatePresence>
 
       <AnimatePresence>
-        {selectedProfile && <StudentProfileDrawer student={selectedProfile} onClose={() => setSelectedProfile(null)} />}
+        {selectedProfile && <StudentProfileDrawer student={selectedProfile} onClose={() => setSelectedProfile(null)} onDeleted={(deletedId) => {
+          setStudents((prev) => prev.filter((s) => s.id !== deletedId));
+          setSelectedProfile(null);
+        }} />}
       </AnimatePresence>
     </div>
   );

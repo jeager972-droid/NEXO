@@ -9,8 +9,10 @@ import client from './client';
 const normalizeStudent = (student) => ({
   ...student,
   id: student.id ?? student.student_id ?? null,
+  document: student.document_number || student.document || '',
   name: `${student.last_name || ''} ${student.first_name || ''}`.trim(),
   group: student.group_name || student.group || 'Sin grupo',
+  grade: student.grade_level || student.grade || '',
   fingerprintId: student.fingerprint_id || null,
 });
 
@@ -87,6 +89,10 @@ export const studentsApi = {
   },
   create: async (data) => {
     const response = await client.post('/students', data);
+    return response.data;
+  },
+  delete: async (studentId) => {
+    const response = await client.delete(`/students/${studentId}`);
     return response.data;
   },
   bulkAssign: async (groupId, studentIds) => {
