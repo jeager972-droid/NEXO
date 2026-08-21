@@ -178,7 +178,91 @@ if (preg_match('#^/risk/alerts/([a-f0-9-]+)/resolve$#', $cleanPath, $m) && $meth
 }
 
 // ============================================================================
-// POST /risk/alerts/{id}/escalate — Cambia estado de escalamiento
+// POST /risk/incidents/{id}/resolve — Resuelve un incidente de EVASION_INTERNA
+// Body: { "resolution": "justificada" | "injustificada", "notes": "..." }
+// ============================================================================
+if (preg_match('#^/risk/incidents/([a-f0-9-]+)/resolve$#', $cleanPath, $m) && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $incidentId = $m[1];
+    $resolution = trim($input['resolution'] ?? '');
+    $notes = trim($input['notes'] ?? '');
+
+    if (!in_array($resolution, ['justificada', 'injustificada'], true)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'resolution debe ser "justificada" o "injustificada"']));
+    }
+
+    try {
+        // Cargar el incidente
+        $loadStmt = $conn->prepare("
+            SELECT incident_id, school_id, student_id, incident_type, metadata_json
+            FROM attendance_incidents
+            WHERE incident_id = ?::uuid
+        ");
+        $loadStmt->execute([$incidentId]);
+        $incident = $loadStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$incident) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Incidente no encontrado']));
+        }
+
+        // Verificar que pertenece a la escuela del usuario
+        if ($incident['school_id'] !== $authUser['school_id']) {
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'No autorizado']));
+        }
+
+        // Solo EVASION_INTERNA se resuelve con justificada/injustificada
+        if ($incident['incident_type'] !== 'EVASION_INTERNA') {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'Solo los incidentes de evasión se resuelven con justificada/injustificada']));
+        }
+
+        // Construir metadata de resolución
+        $existingMeta = json_decode($incident['metadata_json'] ?? '{}', true);
+        $existingMeta['resolution'] = $resolution;
+        $existingMeta['resolution_notes'] = $notes;
+        $existingMeta['resolved_by'] = $authUser['id'];
+        $existingMeta['resolved_at'] = date('c');
+
+        // Si es INJUSTIFICADA: marcar resolved=TRUE pero mantener el incidente
+        // para que cuente en el análisis de riesgo y sea consultable.
+        // Si es JUSTIFICADA: marcar resolved=TRUE y no cuenta para riesgo.
+        $updateStmt = $conn->prepare("
+            UPDATE attendance_incidents
+            SET resolved = TRUE,
+                metadata_json = ?::jsonb
+            WHERE incident_id = ?::uuid
+        ");
+        $updateStmt->execute([json_encode($existingMeta, JSON_UNESCAPED_UNICODE), $incidentId]);
+
+        // Audit trail
+        try {
+            $auditStmt = $conn->prepare(
+                "INSERT INTO student_record_audit (audit_id, school_id, student_id, performed_by_user_id, action_type, previous_data, new_data, performed_at)
+                 VALUES (uuid_generate_v4(), ?::uuid, ?::uuid, ?::uuid, ?, ?::jsonb, ?::jsonb, NOW())"
+            );
+            $auditStmt->execute([
+                $incident['school_id'],
+                $incident['student_id'],
+                $authUser['id'],
+                'EVASION_RESOLVED_' . strtoupper($resolution),
+                $incident['metadata_json'],
+                json_encode($existingMeta, JSON_UNESCAPED_UNICODE)
+            ]);
+        } catch (Exception $ae) {
+            securityLog('AUDIT_EVASION_RESOLVE_FAIL', $ae->getMessage());
+        }
+
+        securityLog('EVASION_RESOLVED', "Incident:$incidentId Resolution:$resolution User:{$authUser['id']}", $authUser['id'], $authUser['school_id']);
+        echo json_encode(['status' => 'ok', 'resolution' => $resolution]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
 // ============================================================================
 if (preg_match('#^/risk/alerts/([a-f0-9-]+)/escalate$#', $cleanPath, $m) && $method === 'POST') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);

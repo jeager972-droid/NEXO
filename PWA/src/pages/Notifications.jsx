@@ -5,13 +5,15 @@
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Trash2, ChevronRight, Loader2 } from 'lucide-react';
+import { Trash2, ChevronRight, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
+import { riskApi } from '../api/risk';
 import { ROLES, getRoleDisplay } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Drawer } from '../components/ui/Overlay';
+import { Button } from '../components/ui/Button';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
@@ -193,7 +195,10 @@ const Notifications = () => {
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState('');
   const isStaff = user?.role === ROLES.PORTERO || user?.role === ROLES.AUXILIAR;
+  const canResolveEvasion = user?.role === ROLES.COORDINADOR || user?.role === ROLES.RECTOR;
 
   useEffect(() => {
     const fetch = async () => {
@@ -243,6 +248,20 @@ const Notifications = () => {
 
   const markRead = (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id || n.notification_id === id ? { ...n, read: true } : n)));
+  };
+
+  const handleResolveEvasion = async (incidentId, resolution) => {
+    setResolving(true);
+    setResolveError('');
+    try {
+      await riskApi.resolveIncident(incidentId, resolution);
+      setDetail(null);
+      await refreshNotifications();
+    } catch (e) {
+      setResolveError(e?.response?.data?.message || 'Error al resolver el incidente');
+    } finally {
+      setResolving(false);
+    }
   };
 
   const refreshNotifications = async () => {
@@ -363,6 +382,52 @@ const Notifications = () => {
                   );
                 })()}
               </div>
+
+              {(() => {
+                const meta = parseMeta(detail.metadata_json);
+                if (canResolveEvasion && meta?.action === 'evasion_interna' && meta?.incident_id) {
+                  return (
+                    <div className="space-y-3 border-t border-[var(--nx-border)] pt-4">
+                      <div className="border-l-2 border-[var(--nx-danger)] pl-3">
+                        <p className="text-label text-[var(--nx-text)]">Resolver evasión</p>
+                      </div>
+                      <p className="text-body-sm text-[var(--nx-text-muted)]">
+                        Marca este incidente como resuelto. Si es justificada, no se guardará para análisis de riesgo. Si es injustificada, se registrará para el análisis y será consultable.
+                      </p>
+                      {resolveError && (
+                        <p className="text-body-sm text-[var(--nx-danger)]">{resolveError}</p>
+                      )}
+                      <div className="flex gap-3">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={resolving}
+                          onClick={() => handleResolveEvasion(meta.incident_id, 'justificada')}
+                        >
+                          <CheckCircle2 size={14} />
+                          Justificada
+                        </Button>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={resolving}
+                          onClick={() => handleResolveEvasion(meta.incident_id, 'injustificada')}
+                        >
+                          <XCircle size={14} />
+                          Injustificada
+                        </Button>
+                      </div>
+                      {resolving && (
+                        <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1">
+                          <Loader2 size={12} className="animate-spin" />
+                          Resolviendo...
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </Drawer>
         )}

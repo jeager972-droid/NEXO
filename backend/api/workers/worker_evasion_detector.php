@@ -141,16 +141,19 @@ function hasEvasionToday(PDO $conn, string $schoolId, string $studentId): bool {
  * FIX (RLS): Setea RLS context en su propia transacción para que el INSERT
  * respete la policy ai_insert (school_id = get_current_school_id()).
  */
-function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, string $metaJson): void {
+function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, string $metaJson): ?string {
+    $incidentId = bin2hex(random_bytes(16));
+    $incidentId = substr($incidentId, 0, 8) . '-' . substr($incidentId, 8, 4) . '-' . substr($incidentId, 12, 4) . '-' . substr($incidentId, 16, 4) . '-' . substr($incidentId, 20, 12);
     $conn->exec("BEGIN");
     $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
     $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
     $stmt = $conn->prepare("
         INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
-        VALUES (uuid_generate_v4(), ?, ?, 'EVASION_INTERNA', NOW(), ?::jsonb)
+        VALUES (?::uuid, ?, ?, 'EVASION_INTERNA', NOW(), ?::jsonb)
     ");
-    $stmt->execute([$schoolId, $studentId, $metaJson]);
+    $stmt->execute([$incidentId, $schoolId, $studentId, $metaJson]);
     $conn->exec("COMMIT");
+    return $incidentId;
 }
 
 /**
@@ -561,6 +564,13 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
         return $gid;
     };
 
+    // ── Detectar salidas al baño (20 min) y permisos expirados ──────────
+    // Retorna lista de estudiantes actualmente en baño (para omitirlos en
+    // la transición de bloques N→N+1).
+    $bathroomResult = detectBathroomAndPermissions($conn, $redis, $schoolId, $todayDate, $nowBogota, $config, $blocks, $dscOverrides);
+    $detected += $bathroomResult['detected'];
+    $inBathroom = $bathroomResult['in_bathroom'];
+
     // ── Helper: verificar si un par de bloques está fusionado para un grupo ──
     $isMergedForGroup = function(?string $groupId, string $blockNStart, string $blockN1Start) use ($dscOverrides): bool {
         if (!$groupId || !isset($dscOverrides[$groupId])) return false;
@@ -728,6 +738,62 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
 
                 if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
 
+                // Si está en baño, no flaggear por missing el siguiente bloque.
+                // El detector de baño ya está corriendo su propio timer de 20 min.
+                // Cuando vuelva del baño, tendrá 5 min para marcar el siguiente bloque.
+                if (isset($inBathroom[$studentId])) {
+                    // Verificar si ya volvió del baño (marcó en algún dispositivo
+                    // después del fin del bloque actual) y le dieron 5 min
+                    $returnAfterBlock = $conn->prepare("
+                        SELECT 1 FROM biometric_events
+                        WHERE school_id = ? AND student_id = ?
+                          AND event_timestamp > (?::date + ?::time)::timestamptz
+                          AND event_type LIKE 'INGRESO_%'
+                        LIMIT 1
+                    ");
+                    $returnAfterBlock->execute([
+                        $schoolId, $studentId,
+                        $todayDate, $currentBlock['end_time']
+                    ]);
+
+                    if (!$returnAfterBlock->fetchColumn()) {
+                        continue; // Aún no ha vuelto del baño, no flaggear
+                    }
+
+                    // Ya volvió del baño. ¿Marcó en el siguiente bloque dentro de 5 min?
+                    $blockEndTs = DateTime::createFromFormat('H:i:s', $currentBlock['end_time'], new DateTimeZone('America/Bogota'));
+                    $bathroomGraceEnd = clone $blockEndTs;
+                    $bathroomGraceEnd->add(new DateInterval('PT5M'));
+
+                    // Si aún no pasaron los 5 min, no evaluar
+                    if ($nowBogota < $bathroomGraceEnd) continue;
+
+                    $nextBathroomCheck = $conn->prepare("
+                        SELECT 1 FROM biometric_events
+                        WHERE school_id = ? AND student_id = ?
+                          AND event_timestamp > (?::date + ?::time)::timestamptz
+                          AND event_timestamp <= (?::date + ?::time)::timestamptz
+                          AND event_type LIKE 'INGRESO_%'
+                        LIMIT 1
+                    ");
+                    $nextBathroomCheck->execute([
+                        $schoolId, $studentId,
+                        $todayDate, $currentBlock['end_time'],
+                        $todayDate, $bathroomGraceEnd->format('H:i:s')
+                    ]);
+                    if ($nextBathroomCheck->fetchColumn()) continue; // Marcó en el siguiente bloque
+
+                    // No marcó en los 5 min después de volver del baño → EVASION_INTERNA
+                    if ($hasPermiso($studentId)) continue;
+                    $alertReason = "Volvió del baño pero no asistió al bloque {$nextBlock['block_number']} (5 min de gracia expirados)";
+                    $detected += generateEvasionAlert(
+                        $conn, $redis, $schoolId, $studentId, $studentName,
+                        $alertReason,
+                        ['current_block' => $currentBlock['block_number'], 'next_block' => $nextBlock['block_number'], 'next_block_start' => $nextBlock['start_time']]
+                    );
+                    continue;
+                }
+
                 // Verificar fusionar_bloque para este grupo
                 $groupId = $getGroupId($studentId);
                 if ($isMergedForGroup($groupId, $currentBlock['start_time'], $nextBlock['start_time'])) {
@@ -812,7 +878,7 @@ function generateEvasionAlert(PDO $conn, $redis, string $schoolId, string $stude
     $teacher = getCurrentTeacher($conn, $schoolId, $studentId);
     $coordinators = getCoordinators($conn, $schoolId);
 
-    $meta = json_encode([
+    $metaArr = [
         'student_id' => $studentId,
         'student_name' => $studentName,
         'current_block' => $blockInfo['current_block'] ?? null,
@@ -821,15 +887,17 @@ function generateEvasionAlert(PDO $conn, $redis, string $schoolId, string $stude
         'alert_reason' => $alertReason,
         'teacher_name' => $teacher ? trim($teacher['first_name'] . ' ' . $teacher['last_name']) : 'N/A',
         'action' => 'evasion_interna',
-    ], JSON_UNESCAPED_UNICODE);
+    ];
 
     try {
-        insertEvasionIncident($conn, $schoolId, $studentId, $meta);
-        logE('EVASION_DETECTED', "school=$schoolId student=$studentName reason=$alertReason");
+        $incidentId = insertEvasionIncident($conn, $schoolId, $studentId, json_encode($metaArr, JSON_UNESCAPED_UNICODE));
+        $metaArr['incident_id'] = $incidentId;
+        $meta = json_encode($metaArr, JSON_UNESCAPED_UNICODE);
+        logE('EVASION_DETECTED', "school=$schoolId student=$studentName incident=$incidentId reason=$alertReason");
 
         if ($teacher) {
             $teacherMsg = "⚠️ *NEXO — Evasión Detectada*\n\nEstudiante: *{$studentName}*\n{$alertReason}\n\nSe ha avisado al coordinador de la situación.";
-            notifyUser($conn, $redis, $teacher['user_id'], $teacher['phone'] ?? '', $teacherMsg, $schoolId, 'EVASION_INTERNA', json_decode($meta, true));
+            notifyUser($conn, $redis, $teacher['user_id'], $teacher['phone'] ?? '', $teacherMsg, $schoolId, 'EVASION_INTERNA', $metaArr);
         }
 
         $coordMsg = "⚠️ *NEXO — Evasión Detectada*\n\nEstudiante: *{$studentName}*\n{$alertReason}";
@@ -837,7 +905,7 @@ function generateEvasionAlert(PDO $conn, $redis, string $schoolId, string $stude
             $coordMsg .= "\nProfesor responsable: " . trim($teacher['first_name'] . ' ' . $teacher['last_name']);
         }
         foreach ($coordinators as $coord) {
-            notifyUser($conn, $redis, $coord['user_id'], $coord['phone'] ?? '', $coordMsg, $schoolId, 'EVASION_INTERNA', json_decode($meta, true));
+            notifyUser($conn, $redis, $coord['user_id'], $coord['phone'] ?? '', $coordMsg, $schoolId, 'EVASION_INTERNA', $metaArr);
         }
         return 1;
     } catch (Exception $e) {
@@ -845,6 +913,236 @@ function generateEvasionAlert(PDO $conn, $redis, string $schoolId, string $stude
         logE('INSERT_FAIL', "student=$studentId error=" . $e->getMessage());
         return 0;
     }
+}
+
+/**
+ * Detecta salidas al baño y permisos expirados durante bloques de clase
+ * para colegios que rotan de salones.
+ *
+ * SALIDA AL BAÑO:
+ *   - El estudiante marca huella al entrar al aula (1er INGRESO en dispositivo X).
+ *   - Si marca nuevamente en el MISMO dispositivo X → salida al baño (2do evento).
+ *   - Tiene 20 minutos para volver a marcar en el mismo dispositivo X.
+ *   - Si no vuelve en 20 min → EVASION_INTERNA.
+ *   - La alternación es por dispositivo: 1er=ingreso, 2do=salida baño, 3er=regreso, etc.
+ *
+ * BAÑO DURANTE TRANSICIÓN DE BLOQUE:
+ *   - Si el estudiante está en baño (último evento es par) cuando termina el bloque,
+ *     no se le flagged por missing el siguiente bloque.
+ *   - Cuando vuelve al dispositivo original (marca huella), tiene 5 min para
+ *     marcar en el dispositivo del siguiente bloque.
+ *
+ * PERMISO EXPIRADO CON CAMBIO DE BLOQUE:
+ *   - El permiso tiene return_time (plazo). El worker no le pide al estudiante
+ *     marcar durante el permiso.
+ *   - Al expirar el permiso, si el bloque en el que estaba ya terminó, tiene
+ *     5 min para marcar asistencia en el siguiente bloque.
+ *   - Si el bloque no terminó, debe regresar al aula actual sin gracia adicional.
+ *
+ * Retorna: ['detected' => int, 'in_bathroom' => array[studentId => true]]
+ * El array in_bathroom se usa para que el check de transición N→N+1 omita
+ * estudiantes que están en baño.
+ */
+function detectBathroomAndPermissions(PDO $conn, $redis, string $schoolId, string $todayDate, DateTime $nowBogota, array $config, array $blocks, array $dscOverrides = []): array {
+    $detected = 0;
+    $inBathroom = []; // studentId => true (estudiantes actualmente en baño)
+
+    if (count($blocks) < 1) return ['detected' => 0, 'in_bathroom' => []];
+
+    $workShift = $config['work_shift'] ?? 'mañana';
+
+    // ── Helper: permiso activo ─────────────────────────────────────────
+    $hasPermiso = function(string $studentId) use ($conn, $schoolId): ?array {
+        $stmt = $conn->prepare("
+            SELECT authorization_id, exit_time, return_time
+            FROM class_exit_authorizations
+            WHERE school_id = ? AND student_id = ? AND status = 'ACTIVE'
+              AND exit_time <= NOW()
+              AND (return_time IS NULL OR return_time >= NOW())
+            ORDER BY exit_time DESC LIMIT 1
+        ");
+        $stmt->execute([$schoolId, $studentId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    };
+
+    // ── 1. SALIDA AL BAÑO: detectar por bloque ─────────────────────────
+    foreach ($blocks as $block) {
+        $blockStart = $block['start_time'];
+        $blockEnd = $block['end_time'];
+
+        // Estudiantes con 2+ eventos INGRESO en el mismo dispositivo durante este bloque
+        // La alternación: 1er=ingreso, 2nd=salida baño, 3rd=regreso, etc.
+        $stmt = $conn->prepare("
+            SELECT be.student_id, s.first_name, s.last_name,
+                   be.device_id,
+                   be.event_timestamp,
+                   ROW_NUMBER() OVER (PARTITION BY be.student_id, be.device_id ORDER BY be.event_timestamp) as event_seq
+            FROM biometric_events be
+            JOIN students s ON s.student_id = be.student_id
+            WHERE be.school_id = ?
+              AND be.event_timestamp >= (?::date + ?::time)::timestamptz
+              AND be.event_timestamp <= (?::date + ?::time)::timestamptz
+              AND be.event_type LIKE 'INGRESO_%'
+              AND s.active = TRUE AND s.deleted_at IS NULL
+            ORDER BY be.student_id, be.device_id, be.event_timestamp
+        ");
+        $stmt->execute([$schoolId, $todayDate, $blockStart, $todayDate, $blockEnd]);
+        $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Agrupar por student_id + device_id y determinar el último event_seq
+        $studentDevices = [];
+        foreach ($events as $ev) {
+            $key = $ev['student_id'] . '|' . $ev['device_id'];
+            if (!isset($studentDevices[$key])) {
+                $studentDevices[$key] = [
+                    'student_id' => $ev['student_id'],
+                    'student_name' => trim($ev['first_name'] . ' ' . $ev['last_name']),
+                    'device_id' => $ev['device_id'],
+                    'last_seq' => (int)$ev['event_seq'],
+                    'last_timestamp' => $ev['event_timestamp'],
+                ];
+            } else {
+                $studentDevices[$key]['last_seq'] = (int)$ev['event_seq'];
+                $studentDevices[$key]['last_timestamp'] = $ev['event_timestamp'];
+            }
+        }
+
+        foreach ($studentDevices as $info) {
+            $studentId = $info['student_id'];
+            $studentName = $info['student_name'];
+            $lastSeq = $info['last_seq'];
+
+            // Si el último evento es par (2nd, 4th, etc.) → está en baño
+            if ($lastSeq % 2 === 0) {
+                $inBathroom[$studentId] = true;
+
+                if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
+
+                // Calcular tiempo transcurrido desde la salida al baño
+                $bathroomStart = new DateTime($info['last_timestamp'], new DateTimeZone('UTC'));
+                $bathroomStart->setTimezone(new DateTimeZone('America/Bogota'));
+                $elapsedMin = (int)(($nowBogota->getTimestamp() - $bathroomStart->getTimestamp()) / 60);
+
+                // 20 min para volver
+                if ($elapsedMin >= 20) {
+                    // Verificar permiso activo (si tiene permiso, no es evasión)
+                    if ($hasPermiso($studentId)) continue;
+
+                    $detected += generateEvasionAlert(
+                        $conn, $redis, $schoolId, $studentId, $studentName,
+                        "Salida al baño hace {$elapsedMin} min sin regresar (bloque {$block['block_number']}, límite 20 min)",
+                        ['current_block' => $block['block_number'], 'next_block' => null, 'next_block_start' => null]
+                    );
+                }
+            }
+        }
+    }
+
+    // ── 2. PERMISO EXPIRADO + CAMBIO DE BLOQUE ──────────────────────────
+    // Estudiantes con permiso cuyo return_time ya pasó. Si el bloque en el que
+    // estaban ya terminó, dar 5 min de gracia para marcar el siguiente bloque.
+    $expiredPermStmt = $conn->prepare("
+        SELECT cea.student_id, cea.return_time, cea.exit_time,
+               s.first_name, s.last_name
+        FROM class_exit_authorizations cea
+        JOIN students s ON s.student_id = cea.student_id
+        WHERE cea.school_id = ?
+          AND cea.status = 'ACTIVE'
+          AND cea.return_time IS NOT NULL
+          AND cea.return_time < NOW()
+          AND s.active = TRUE AND s.deleted_at IS NULL
+    ");
+    $expiredPermStmt->execute([$schoolId]);
+    $expiredPerms = $expiredPermStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($expiredPerms as $perm) {
+        $studentId = $perm['student_id'];
+        $studentName = trim($perm['first_name'] . ' ' . $perm['last_name']);
+
+        if (hasEvasionToday($conn, $schoolId, $studentId)) continue;
+        if (isset($inBathroom[$studentId])) continue; // Ya detectado como bathroom
+
+        // Determinar en qué bloque estaba cuando salió el permiso
+        $permExitTs = new DateTime($perm['exit_time'], new DateTimeZone('UTC'));
+        $permExitTs->setTimezone(new DateTimeZone('America/Bogota'));
+        $permExitStr = $permExitTs->format('H:i:s');
+
+        $currentBlock = null;
+        $nextBlock = null;
+        foreach ($blocks as $i => $blk) {
+            if ($blk['start_time'] <= $permExitStr && $blk['end_time'] >= $permExitStr) {
+                $currentBlock = $blk;
+                $nextBlock = $blocks[$i + 1] ?? null;
+                break;
+            }
+        }
+
+        if (!$currentBlock) continue;
+
+        // ¿El bloque en el que estaba ya terminó?
+        $blockEndTs = DateTime::createFromFormat('H:i:s', $currentBlock['end_time'], new DateTimeZone('America/Bogota'));
+        $blockEnded = ($nowBogota > $blockEndTs);
+
+        if ($blockEnded && $nextBlock) {
+            // El bloque terminó: dar 5 min desde el fin del bloque para marcar el siguiente
+            $graceDeadline = clone $blockEndTs;
+            $graceDeadline->add(new DateInterval('PT5M'));
+
+            // Si aún estamos dentro de los 5 min de gracia, no alertar
+            if ($nowBogota < $graceDeadline) continue;
+
+            // ¿Marcó en el siguiente bloque?
+            $nextStart = $nextBlock['start_time'];
+            $nextCheck = $conn->prepare("
+                SELECT 1 FROM biometric_events
+                WHERE school_id = ? AND student_id = ?
+                  AND event_timestamp >= (?::date + ?::time)::timestamptz
+                  AND event_timestamp <= (?::date + ?::time)::timestamptz
+                  AND event_type LIKE 'INGRESO_%'
+                LIMIT 1
+            ");
+            $nextCheck->execute([
+                $schoolId, $studentId,
+                $todayDate, $nextStart,
+                $todayDate, $graceDeadline->format('H:i:s')
+            ]);
+            if ($nextCheck->fetchColumn()) continue; // Marcó en el siguiente bloque
+
+            // No marcó → EVASION_INTERNA
+            $detected += generateEvasionAlert(
+                $conn, $redis, $schoolId, $studentId, $studentName,
+                "Permiso expirado y no regresó al siguiente bloque {$nextBlock['block_number']} (fin del bloque anterior: " . substr($currentBlock['end_time'], 0, 5) . ")",
+                ['current_block' => $currentBlock['block_number'], 'next_block' => $nextBlock['block_number'], 'next_block_start' => $nextBlock['start_time']]
+            );
+        } else {
+            // El bloque no ha terminado: debe estar en el aula. Si no marcó
+            // regreso en este bloque después del permiso, es evasión.
+            $returnCheck = $conn->prepare("
+                SELECT 1 FROM biometric_events
+                WHERE school_id = ? AND student_id = ?
+                  AND event_timestamp > ?::timestamptz
+                  AND event_timestamp <= (?::date + ?::time)::timestamptz
+                  AND event_type LIKE 'INGRESO_%'
+                LIMIT 1
+            ");
+            $returnCheck->execute([
+                $schoolId, $studentId,
+                $perm['return_time'],
+                $todayDate, $currentBlock['end_time']
+            ]);
+            if ($returnCheck->fetchColumn()) continue; // Regresó al aula
+
+            // No regresó → EVASION_INTERNA
+            $detected += generateEvasionAlert(
+                $conn, $redis, $schoolId, $studentId, $studentName,
+                "Permiso expirado y no regresó al bloque {$currentBlock['block_number']} (retorno esperado: " . substr($perm['return_time'], 0, 5) . ")",
+                ['current_block' => $currentBlock['block_number'], 'next_block' => null, 'next_block_start' => null]
+            );
+        }
+    }
+
+    return ['detected' => $detected, 'in_bathroom' => $inBathroom];
 }
 
 /**

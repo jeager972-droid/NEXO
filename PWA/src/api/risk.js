@@ -51,6 +51,14 @@ export const riskApi = {
     return res.data;
   },
 
+  resolveIncident: async (incidentId, resolution, notes = '') => {
+    const res = await client.post(`/risk/incidents/${incidentId}/resolve`, {
+      resolution,
+      notes,
+    });
+    return res.data;
+  },
+
   // ── Perfil de estudiante ────────────────────────────────────────────
   getStudentRisk: async (studentId) => {
     const res = await client.get(`/risk/student/${studentId}`);
