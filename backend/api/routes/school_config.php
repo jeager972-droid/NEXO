@@ -1240,7 +1240,7 @@ if ($cleanPath === '/school/risk-config' && $method === 'POST') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        // Resiliente: si la columna no existe, el UPDATE falla pero no bloqueamos.
+        // Resilient: the column may not exist yet on pre-migration databases.
         try {
             $conn->prepare("UPDATE schools SET risk_config_completed = TRUE WHERE school_id = ?")
                 ->execute([$schoolId]);
