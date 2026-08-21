@@ -7,6 +7,7 @@ Cargo.lock
 # === Entornos y secretos ===
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.secret
