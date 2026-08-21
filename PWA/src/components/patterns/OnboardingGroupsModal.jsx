@@ -22,6 +22,7 @@ import { schoolApi } from '../../api/school';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Stepper } from '../ui/Stepper';
+import { SearchableSelect } from '../ui/SearchableSelect';
 import { humanizeError } from '../../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -67,7 +68,7 @@ const generateGroupName = (grade, nomenclature, index, separator) => {
   return `${grade}${sep}${index + 1}`;
 };
 
-export const OnboardingGroupsModal = ({ onCompleted, onCancel }) => {
+export const OnboardingGroupsModal = ({ onCompleted, onCancel, isEdit = false }) => {
   const [step, setStep] = useState(1);
   const [selectedGrades, setSelectedGrades] = useState([]);
   const [nomenclature, setNomenclature] = useState('alphabetic');
@@ -131,16 +132,6 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel }) => {
 
   const setShiftForGrade = (grade, shift) => {
     setGradeShifts((prev) => ({ ...prev, [grade]: shift }));
-  };
-
-  const toggleTeacherForGroup = (groupName, teacherId) => {
-    setTeacherAssignments((prev) => {
-      const current = prev[groupName] || [];
-      const next = current.includes(teacherId)
-        ? current.filter((id) => id !== teacherId)
-        : [...current, teacherId];
-      return { ...prev, [groupName]: next };
-    });
   };
 
   const handleSave = async () => {
@@ -437,31 +428,22 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel }) => {
                               </span>
                             )}
                           </div>
-                          {/* Chips de docentes disponibles */}
+                          {/* Selección de docentes con búsqueda */}
                           {available.length === 0 ? (
                             <p className="text-caption text-[var(--nx-text-muted)]">No hay docentes para la jornada {shiftLabel}.</p>
                           ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {available.map((t) => {
-                                const selected = assigned.includes(t.user_id);
-                                const name = `${t.first_name} ${t.last_name}`.trim();
-                                return (
-                                  <button
-                                    key={t.user_id}
-                                    type="button"
-                                    onClick={() => toggleTeacherForGroup(g.name, t.user_id)}
-                                    className={`flex items-center gap-1.5 rounded-control border px-2.5 py-1.5 text-caption transition-all ${
-                                      selected
-                                        ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]'
-                                        : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:border-[var(--nx-border-accent)]'
-                                    }`}
-                                  >
-                                    {selected && <Check size={11} strokeWidth={3} />}
-                                    {name}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            <SearchableSelect
+                              multiple
+                              options={available.map((t) => ({
+                                value: t.user_id,
+                                label: `${t.first_name} ${t.last_name}`.trim() || t.user_id,
+                              }))}
+                              value={assigned}
+                              onChange={(ids) => setTeacherAssignments((prev) => ({ ...prev, [g.name]: ids || [] }))}
+                              placeholder="— Seleccionar docentes —"
+                              searchPlaceholder="Buscar docente…"
+                              emptyText="Sin docentes disponibles"
+                            />
                           )}
                         </div>
                       );
@@ -503,6 +485,11 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel }) => {
             {step > 1 && (
               <Button variant="secondary" onClick={() => setStep((s) => s - 1)} leftIcon={<ChevronLeft size={16} />}>
                 Atrás
+              </Button>
+            )}
+            {isEdit && step < 4 && (
+              <Button variant="ghost" onClick={() => setStep((s) => s + 1)} className="text-[var(--nx-text-muted)]">
+                Saltar
               </Button>
             )}
             {step < 4 ? (

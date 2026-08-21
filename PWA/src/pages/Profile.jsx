@@ -1092,6 +1092,7 @@ const Profile = () => {
       {/* Modal de edición de grupos académicos (reutiliza OnboardingGroupsModal) */}
       {groupsEditOpen && (
         <OnboardingGroupsModal
+          isEdit={groupsConfig?.onboarding_completed}
           onCancel={() => setGroupsEditOpen(false)}
           onCompleted={async () => {
             setGroupsEditOpen(false);
@@ -1165,6 +1166,7 @@ const Profile = () => {
       {/* Modal de edición de riesgo (reutiliza OnboardingRiskModal) */}
       {riskEditOpen && (
         <OnboardingRiskModal
+          isEdit={riskConfig?.policy?.version > 1}
           onCancel={() => setRiskEditOpen(false)}
           onCompleted={async () => {
             setRiskEditOpen(false);

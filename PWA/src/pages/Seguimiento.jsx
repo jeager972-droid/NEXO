@@ -91,11 +91,11 @@ export default function Casos() {
           <p className="text-body-sm text-[var(--nx-text-muted)]">
             Se encontraron {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--nx-surface-warning)]/30 p-4 rounded-surface border border-[var(--nx-border-warning)]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--nx-surface-warning)]/30 p-4 rounded-surface border border-[var(--nx-warning)]">
             {filtered.map((row) => (
-              <Card key={row.tracking_id || row.student_id} asAction tone="warning" className="border-[var(--nx-border-warning)] bg-[var(--nx-surface-warning)]" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
+              <Card key={row.tracking_id || row.student_id} asAction tone="warning" className="border-[var(--nx-warning)] bg-[var(--nx-surface-warning)]" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
                 <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1 border-l-2 border-[var(--nx-accent)] pl-3">
+                  <div className="min-w-0 flex-1">
                     <p className="text-h3 text-[var(--nx-text)] truncate" style={{ fontWeight: 620 }}>{row.last_name} {row.first_name}</p>
                     <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{formatGroupName(row.group_name) || 'Sin grupo'}</p>
                   </div>

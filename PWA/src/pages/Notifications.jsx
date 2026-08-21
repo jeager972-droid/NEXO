@@ -55,9 +55,15 @@ const humanizeMessage = (notif) => {
   const motive = get('motivo');
 
   const withGroup = (base) => (group ? `${base} del grupo ${group}` : base);
+  const humanizeRole = (r) => {
+    if (!r) return '';
+    const display = getRoleDisplay(r);
+    return display && display !== r ? display.toLowerCase() : '';
+  };
   const by = (name, role) => {
     if (!name) return '';
-    if (role && role !== name) return ` por ${name} (${role})`;
+    const roleLower = humanizeRole(role);
+    if (roleLower && role !== name) return ` por ${name} (${roleLower})`;
     return ` por ${name}`;
   };
 
@@ -74,7 +80,7 @@ const humanizeMessage = (notif) => {
       return `Se inició un seguimiento${withGroup(student ? ` para el estudiante ${student}` : '')} solicitado${by(sender)}.`;
     case 'solicitud': {
       const from = by(sender, get('sender_role'));
-      const roleText = get('sender_role') ? `${getRoleDisplay(get('sender_role')) || get('sender_role')}` : 'Personal de la institución';
+      const roleText = get('sender_role') ? (humanizeRole(get('sender_role')) || 'personal de la institución') : 'personal de la institución';
       return `${from ? `El ${roleText} ${sender}` : 'El personal de la institución'} te envió una solicitud. Revisa los detalles.`;
     }
     case 'incidente':
@@ -286,7 +292,7 @@ const Notifications = () => {
     const action = meta?.action;
     if (action === 'sensor_configurado' || action === 'sensor_eliminado' || action === 'sensor_revocacion_iniciada') {
       const parts = [];
-      if (meta?.device_name) parts.push(`Sensor: ${meta.device_name}`);
+      if (meta?.device_name) parts.push(`Sensor: "${meta.device_name}"`);
       if (meta?.location) parts.push(`Ubicación: ${meta.location}`);
       const byName = meta?.configured_by_name || meta?.deleted_by_name || meta?.requested_by_name;
       if (byName) parts.push(`Realizado por: ${byName}`);

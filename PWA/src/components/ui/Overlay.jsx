@@ -67,7 +67,7 @@ export const Drawer = ({
           className
         )}
       >
-        <header className="flex shrink-0 items-start gap-4 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-6 py-4">
+        <header className="flex shrink-0 items-center gap-4 border-b border-[var(--nx-border)] bg-[var(--nx-surface)] px-6 py-4">
           <div className="min-w-0 flex-1">
             {context && (
               <p className="mb-1 text-eyebrow uppercase text-[var(--nx-text-muted)]">{context}</p>

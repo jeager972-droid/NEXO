@@ -93,7 +93,7 @@ const DEFAULT_THRESHOLDS = {
   MUY_ALTA: { recurrence: 1, window: 1, minRec: 1, maxRec: 1, minWin: 1, maxWin: 1 },
 };
 
-export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
+export const OnboardingRiskModal = ({ onCompleted, onCancel, isEdit = false }) => {
   const [step, setStep] = useState(1);
   const [eventTypes, setEventTypes] = useState([]);
   const [config, setConfig] = useState({ rules: [], mapping: [] });
@@ -595,6 +595,11 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
             {step > 1 && (
               <Button variant="secondary" onClick={() => setStep((s) => s - 1)} leftIcon={<ChevronLeft size={16} />}>
                 Atras
+              </Button>
+            )}
+            {isEdit && step < 4 && (
+              <Button variant="ghost" onClick={() => setStep((s) => s + 1)} className="text-[var(--nx-text-muted)]">
+                Saltar
               </Button>
             )}
             {step < 4 ? (

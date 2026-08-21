@@ -178,7 +178,7 @@ const Devices = () => {
         }
       />
 
-      {/* StatCards */}
+      {/* StatCards: Total + Configurados arriba (2 cols), Operativos abajo (ancho completo) */}
       {!loading && !error && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card tone="accent" edge>
@@ -192,18 +192,7 @@ const Devices = () => {
               </div>
             </div>
           </Card>
-          <Card tone="success" edge>
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-icon-bg-success)] text-[var(--nx-success)]">
-                <Wifi size={20} />
-              </span>
-              <div>
-                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{operativeCount}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">Operativos ahora</p>
-              </div>
-            </div>
-          </Card>
-          <Card tone={configuredCount === devices.length ? 'success' : 'warning'} edge className="col-span-2 md:col-span-1">
+          <Card tone={configuredCount === devices.length ? 'success' : 'warning'} edge>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]">
                 <ShieldCheck size={20} />
@@ -211,6 +200,17 @@ const Devices = () => {
               <div>
                 <p className="text-h2 text-[var(--nx-text)] tabular-nums">{configuredCount}</p>
                 <p className="text-caption text-[var(--nx-text-muted)]">Configurados</p>
+              </div>
+            </div>
+          </Card>
+          <Card tone="success" edge className="col-span-2 md:col-span-1">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-icon-bg-success)] text-[var(--nx-success)]">
+                <Wifi size={20} />
+              </span>
+              <div>
+                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{operativeCount}</p>
+                <p className="text-caption text-[var(--nx-text-muted)]">Operativos ahora</p>
               </div>
             </div>
           </Card>
