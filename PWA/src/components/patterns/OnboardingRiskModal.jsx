@@ -209,7 +209,14 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
       await schoolApi.completeRiskConfig();
       onCompleted?.();
     } catch (err) {
-      setError(humanizeError(err, 'No se pudo guardar la configuracion de riesgo'));
+      // DEBUG (temporal): mostrar el error crudo del backend para diagnosticar.
+      // Se volverá a humanizar cuando el guardado funcione correctamente.
+      const status = err?.response?.status;
+      const payload = err?.response?.data;
+      const rawMsg = payload?.message || payload?.error || payload?.detail || err?.message || String(err);
+      const debug = payload?.debug ? ` | debug: ${payload.debug}` : '';
+      console.error('[OnboardingRisk] Error al guardar:', { status, payload, err });
+      setError(`[HTTP ${status ?? '?'}] ${rawMsg}${debug}`);
     } finally {
       setSaving(false);
     }
@@ -255,8 +262,9 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
 
         {/* Error */}
         {error && (
-          <div className="mx-6 mb-4 rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
-            {error}
+          <div className="mx-6 mb-4 rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3 role-alert" role="alert">
+            <p className="text-body-sm text-[var(--nx-danger)] font-medium">No se pudo guardar la configuración:</p>
+            <pre className="mt-1 text-caption text-[var(--nx-danger)] whitespace-pre-wrap break-words font-mono">{error}</pre>
           </div>
         )}
 

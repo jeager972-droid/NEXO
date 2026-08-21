@@ -224,6 +224,10 @@ class RiskEngineV3
             $startedTx = true;
         }
         try {
+            // Capturar política anterior ANTES de desactivarla (para audit log)
+            $prevPolicy = self::getActivePolicy($conn, $schoolId);
+            $prevSnapshot = $prevPolicy ? $prevPolicy['snapshot_json'] : null;
+
             // Desactivar política anterior
             $conn->prepare("
                 UPDATE risk_policies SET is_active = FALSE, deactivated_at = NOW()
@@ -257,6 +261,10 @@ class RiskEngineV3
             // Insertar reglas por nivel (validando rangos protegidos)
             foreach (($config['rules'] ?? []) as $rule) {
                 self::validateRuleRanges($rule);
+                // FIX: PDO con EMULATE_PREPARES convierte false de PHP a string
+                // vacío, y PostgreSQL rechaza ''::boolean. Convertir a 'true'/'false'.
+                $singleOcc = !empty($rule['single_occurrence']) ? 'true' : 'false';
+                $humanReview = !empty($rule['requires_human_review']) ? 'true' : 'false';
                 $conn->prepare("
                     INSERT INTO risk_rules (policy_id, school_id, risk_level,
                         weight_base, half_life_days, activation_threshold, cooldown_days,
@@ -265,13 +273,13 @@ class RiskEngineV3
                         min_recurrence, max_recurrence, min_window_days, max_window_days,
                         min_weight, max_weight, min_half_life, max_half_life,
                         min_threshold, max_threshold)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::boolean, ?::boolean, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ")->execute([
                     $policyId, $schoolId, $rule['risk_level'],
                     $rule['weight_base'], $rule['half_life_days'],
                     $rule['activation_threshold'], $rule['cooldown_days'],
-                    $rule['single_occurrence'] ?? false,
-                    $rule['requires_human_review'] ?? false,
+                    $singleOcc,
+                    $humanReview,
                     $rule['recurrence_count'] ?? 4,
                     $rule['window_days'] ?? 7,
                     $rule['min_recurrence'] ?? 1,
@@ -295,20 +303,34 @@ class RiskEngineV3
 
             // Combos desactivados por ahora (solo deteccion individual)
 
-            // Registrar en audit log (Capa 6)
-            $prevPolicy = self::getActivePolicy($conn, $schoolId);
-            $conn->prepare("
-                INSERT INTO risk_audit_log (school_id, actor_id, actor_role,
-                    entity_modified, entity_id, action,
-                    previous_config, new_config, change_reason, policy_version)
-                VALUES (?, ?, ?, 'risk_policy', ?, 'CREATE',
-                    ?::jsonb, ?::jsonb, ?, ?)
-            ")->execute([
-                $schoolId, $userId, $_SESSION['user_role'] ?? 'COORDINATOR',
-                $policyId,
-                $prevPolicy ? $prevPolicy['snapshot_json'] : null,
-                $snapshot, $reason, $newVersion,
-            ]);
+            // Registrar en audit log (Capa 6) — usar savepoint para que un fallo
+            // de auditoría no aborte el guardado de la política.
+            try {
+                if ($startedTx) {
+                    $conn->exec("SAVEPOINT nx_audit");
+                }
+                $conn->prepare("
+                    INSERT INTO risk_audit_log (school_id, actor_id, actor_role,
+                        entity_modified, entity_id, action,
+                        previous_config, new_config, change_reason, policy_version)
+                    VALUES (?, ?, ?, 'risk_policy', ?, 'CREATE',
+                        ?::jsonb, ?::jsonb, ?, ?)
+                ")->execute([
+                    $schoolId, $userId, $_SESSION['user_role'] ?? 'COORDINATOR',
+                    $policyId,
+                    $prevSnapshot,
+                    $snapshot, $reason, $newVersion,
+                ]);
+                if ($startedTx) {
+                    $conn->exec("RELEASE SAVEPOINT nx_audit");
+                }
+            } catch (Throwable $auditEx) {
+                // El audit log es best-effort: no debe impedir el guardado.
+                if ($startedTx) {
+                    try { $conn->exec("ROLLBACK TO SAVEPOINT nx_audit"); } catch (Exception $ignore) {}
+                }
+                error_log("RISK_AUDIT_LOG_FAILED: " . $auditEx->getMessage());
+            }
 
             if ($startedTx) {
                 $conn->commit();

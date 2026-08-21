@@ -98,9 +98,17 @@ if ($cleanPath === '/risk/policy' && $method === 'POST') {
     } catch (InvalidArgumentException $e) {
         http_response_code(422);
         echo json_encode(['status' => 'error', 'message' => 'Validación falló', 'details' => $e->getMessage()]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
+        // DEBUG (temporal): incluir traza completa para diagnosticar el 500.
+        // Se reducirá a mensaje genérico cuando el guardado funcione.
+        $debug = sprintf('%s: %s in %s:%d', get_class($e), $e->getMessage(), basename($e->getFile()), $e->getLine());
+        if ($e instanceof PDOException) {
+            $debug .= ' | SQLSTATE: ' . ($e->errorInfo[0] ?? $e->getCode());
+            if (isset($e->errorInfo[2])) $debug .= ' | PG: ' . $e->errorInfo[2];
+        }
+        securityLog('RISK_POLICY_CREATE_ERROR', $debug, $authUser['id'], $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage(), 'debug' => $debug]);
     }
     exit;
 }
