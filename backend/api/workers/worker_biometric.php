@@ -421,6 +421,8 @@ function processJob(array $job, PDO $conn): bool {
             $parentTel = trim($data['parent_tel'] ?? '');
             $parentDoc = trim($data['parent_doc'] ?? '');
             $parentName = trim($data['parent_name'] ?? '');
+            $huellaId = isset($data['huella_id']) ? (int)$data['huella_id'] : null;
+            $hasFingerprint = !empty($data['has_fingerprint']);
             if (empty($schoolId) || empty($doc) || empty($nombre)) return false;
 
             $conn->exec("BEGIN");
@@ -429,7 +431,15 @@ function processJob(array $job, PDO $conn): bool {
                 $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$schoolId) . ", true)");
                 $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
-                $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
+                // Si el edge reporta has_fingerprint, setear biometric_hash
+                if ($hasFingerprint) {
+                    $biometricHash = $huellaId !== null ? 'fp_' . $huellaId : 'fp_local';
+                    $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active,biometric_hash) VALUES(?,?,?,'',TRUE,?) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE,biometric_hash=EXCLUDED.biometric_hash RETURNING student_id");
+                    $stmt->execute([$schoolId, $doc, $nombre, $biometricHash]);
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
+                    $stmt->execute([$schoolId, $doc, $nombre]);
+                }
                 $stmt->execute([$schoolId, $doc, $nombre]);
                 $studentId = $stmt->fetchColumn();
 

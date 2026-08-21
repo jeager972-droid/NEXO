@@ -340,6 +340,50 @@ if (isset($input['payload'])) {
             }
 
             $action = $data['action'] ?? 'UNKNOWN';
+
+            // ====================================================================
+            // FAST PATH: REGISTER_STUDENT con has_fingerprint — procesar directo en
+            // PostgreSQL sin pasar por Redis/worker. Esto permite que el polling
+            // de la WebApp vea has_fingerprint=true inmediatamente después del
+            // enrolamiento, incluso si Redis está caído.
+            // ====================================================================
+            if ($action === 'REGISTER_STUDENT' && !empty($data['has_fingerprint'])) {
+                try {
+                    $pgSchoolId = (string)$realSchoolId;
+                    $pgDoc = trim($data['doc'] ?? '');
+                    $pgNombre = trim($data['nombre'] ?? '');
+                    $pgHuellaId = isset($data['huella_id']) ? (int)$data['huella_id'] : null;
+                    if (empty($pgDoc) || empty($pgNombre)) {
+                        http_response_code(400);
+                        exit(json_encode(['status' => 'error', 'message' => 'doc and nombre required for REGISTER_STUDENT']));
+                    }
+
+                    $conn->exec("BEGIN");
+                    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($pgSchoolId) . ", true)");
+                    $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
+
+                    // Upsert student y marcar biometric_hash con el huella_id del edge
+                    $biometricHash = $pgHuellaId !== null ? 'fp_' . $pgHuellaId : 'fp_local';
+                    $upStmt = $conn->prepare("
+                        INSERT INTO students (school_id, document_number, first_name, last_name, active, biometric_hash)
+                        VALUES (?, ?, ?, '', TRUE, ?)
+                        ON CONFLICT (school_id, document_number)
+                        DO UPDATE SET first_name = EXCLUDED.first_name, active = TRUE, biometric_hash = EXCLUDED.biometric_hash
+                        RETURNING student_id
+                    ");
+                    $upStmt->execute([$pgSchoolId, $pgDoc, $pgNombre, $biometricHash]);
+                    $conn->exec("COMMIT");
+
+                    securityLog('EDGE_ENROLL_DIRECT', "doc=$pgDoc huella_id=$pgHuellaId school=$pgSchoolId", null, $pgSchoolId, $requestId);
+                    http_response_code(200);
+                    exit(json_encode(['status' => 'ok', 'action' => 'REGISTER_STUDENT', 'student_doc' => $pgDoc, 'has_fingerprint' => true, 'request_id' => $requestId]));
+                } catch (Exception $directEx) {
+                    try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
+                    securityLog('EDGE_ENROLL_DIRECT_FAIL', $directEx->getMessage(), null, $realSchoolId, $requestId);
+                    // Caer al flujo normal de Redis como fallback
+                }
+            }
+
             try {
                 $redisIngest = getRedisConnection();
                 if (!$redisIngest) {

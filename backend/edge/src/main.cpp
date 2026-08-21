@@ -911,12 +911,13 @@ bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
             LOG_INFO("Estudiante enrolado localmente: doc={} nombre={}", doc, nombre);
 
             // Sincronizar con cloud (best-effort, no bloquea el enrolamiento local)
+            // Usar registerStudentWithFingerprint para que el backend marque biometric_hash
             auto& cloud = CloudManager::getInstance();
-            bool syncOk = cloud.registerStudent(doc, nombre, tel, "", "", "");
+            bool syncOk = cloud.registerStudentWithFingerprint(doc, nombre, tel, huellaId);
             if (!syncOk) {
                 LOG_WARN("Enrolamiento local OK pero sync cloud falló. Se reintentará en próximo sync cycle.");
             } else {
-                LOG_INFO("Enrolamiento sincronizado con cloud: doc={}", doc);
+                LOG_INFO("Enrolamiento sincronizado con cloud: doc={} huella_id={}", doc, huellaId);
             }
             return true;
         }

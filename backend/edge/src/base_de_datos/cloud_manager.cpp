@@ -25,6 +25,7 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cstdlib>
+#include <chrono>
 
 CloudManager::CloudManager() : m_apiUrl(loadApiUrl()) {}
 
@@ -219,6 +220,35 @@ bool CloudManager::registerStudent(const std::string& doc, const std::string& no
     std::string resp;
     bool ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp);
     if (ok && resp.find("\"status\":\"ok\"") != std::string::npos) return true;
+    if (!resp.empty()) LOG_WARN("Server response not OK: {}", resp);
+    return false;
+}
+
+bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const std::string& nombre,
+                                                   const std::string& tel, uint32_t huellaId) {
+    nlohmann::json j;
+    j["action"] = "REGISTER_STUDENT";
+    j["doc"] = doc;
+    j["nombre"] = nombre;
+    j["parent_tel"] = tel;
+    j["parent_doc"] = "";
+    j["parent_name"] = "";
+    j["salon"] = "";
+    j["huella_id"] = static_cast<int>(huellaId);
+    j["has_fingerprint"] = true;
+    j["device_token"] = Encryption::getInstance().getToken();
+    j["device_id"] = ConfigManager::getInstance().getDeviceId();
+    j["captured_at"] = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+    j["nonce"] = std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count()) + "_enroll_" + doc;
+    j["request_id"] = "enroll_" + doc + "_" + std::to_string(huellaId);
+    std::string body = buildAuthenticatedRequest(j.dump(), m_instId);
+    if (body.empty()) return false;
+    std::string resp;
+    bool ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp);
+    if (ok && (resp.find("\"status\":\"ok\"") != std::string::npos ||
+               resp.find("\"status\":\"accepted\"") != std::string::npos)) return true;
     if (!resp.empty()) LOG_WARN("Server response not OK: {}", resp);
     return false;
 }

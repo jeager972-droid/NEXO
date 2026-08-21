@@ -48,6 +48,8 @@ public:
 
     bool registerStudent(const std::string& doc, const std::string& nombre, const std::string& tel,
                          const std::string& salon, const std::string& parent_doc, const std::string& parent_name);
+    bool registerStudentWithFingerprint(const std::string& doc, const std::string& nombre,
+                                        const std::string& tel, uint32_t huellaId);
     bool registerStaff(const std::string& doc, const std::string& nombre, const std::string& tel,
                        const std::string& rol, const std::string& jornada);
     bool deleteStudent(const std::string& doc);

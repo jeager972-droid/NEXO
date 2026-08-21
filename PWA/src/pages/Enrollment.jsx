@@ -109,14 +109,14 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
       // Iniciar polling: verificar cada 5s si el estudiante ya tiene huella registrada
       const studentDoc = form.documento;
       let attempts = 0;
-      const maxAttempts = 72; // 72 * 5s = 6 minutos máximo
+      const maxAttempts = 36; // 36 * 5s = 3 minutos máximo
       enrollPollRef.current = setInterval(async () => {
         attempts++;
         if (attempts > maxAttempts) {
           if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
           setEnrollCmd({
             state: 'error',
-            message: 'Tiempo de espera agotado. El sensor no respondió en 6 minutos. Verifica que el alumno ponga el dedo correctamente e inténtalo de nuevo.',
+            message: 'Tiempo de espera agotado. El sensor no respondió en 3 minutos. Verifica que el alumno ponga el dedo correctamente e inténtalo de nuevo.',
           });
           return;
         }
@@ -338,12 +338,12 @@ const StudentProfileDrawer = ({ student, onClose }) => {
       // Polling: verificar cada 5s si la huella quedó registrada
       const studentDoc = student.document || student.documento;
       let attempts = 0;
-      const maxAttempts = 72;
+      const maxAttempts = 36; // 36 * 5s = 3 minutos máximo
       enrollPollRef.current = setInterval(async () => {
         attempts++;
         if (attempts > maxAttempts) {
           if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
-          setEnrollCmd({ state: 'error', message: 'Tiempo de espera agotado. El sensor no respondió en 6 minutos. Inténtalo de nuevo.' });
+          setEnrollCmd({ state: 'error', message: 'Tiempo de espera agotado. El sensor no respondió en 3 minutos. Inténtalo de nuevo.' });
           return;
         }
         try {
