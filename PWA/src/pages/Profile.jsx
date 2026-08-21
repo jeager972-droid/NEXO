@@ -839,7 +839,9 @@ const Profile = () => {
             footer={
               <div className="flex justify-end gap-3">
                 <Button variant="secondary" onClick={() => { setScheduleDrawerOpen(false); setExpandedJornada(null); }}>Cerrar</Button>
-                <Button variant="primary" onClick={() => setScheduleEditOpen(true)}>Editar calendario</Button>
+                {user?.role === ROLES.RECTOR && (
+                  <Button variant="primary" onClick={() => setScheduleEditOpen(true)}>Editar calendario</Button>
+                )}
               </div>
             }
           >

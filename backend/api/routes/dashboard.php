@@ -164,7 +164,7 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT COUNT(DISTINCT student_id) as cnt
                     FROM biometric_events
                     WHERE school_id = ?
-                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date 
+                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND event_type LIKE 'INGRESO_%'
                       {$groupFilter}
@@ -184,6 +184,15 @@ if ($cleanPath === '/dashboard/stats') {
                             AND be2.event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
                             AND be2.event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                             {$exitTimeCondition}
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM attendance_incidents ai
+                          WHERE ai.student_id = biometric_events.student_id
+                            AND ai.school_id = biometric_events.school_id
+                            AND ai.detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                            AND ai.detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                            AND ai.incident_type = 'EVASION_INTERNA'
+                            AND (ai.metadata_json->>'returned_to_class' IS DISTINCT FROM 'true')
                       )
                 ),
                 absent_cte AS (
@@ -286,6 +295,15 @@ if ($cleanPath === '/dashboard/stats') {
                             AND be2.event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
                             AND be2.event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                             {$exitTimeCondition}
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM attendance_incidents ai
+                          WHERE ai.student_id = biometric_events.student_id
+                            AND ai.school_id = biometric_events.school_id
+                            AND ai.detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                            AND ai.detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                            AND ai.incident_type = 'EVASION_INTERNA'
+                            AND (ai.metadata_json->>'returned_to_class' IS DISTINCT FROM 'true')
                       )
                 ),
                 absent_cte AS (

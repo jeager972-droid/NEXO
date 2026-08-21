@@ -59,34 +59,18 @@ if ($cleanPath === '/groups') {
             $stmt->execute([$authUser['id'], $currentYear]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($isCoordinator) {
-            // Coordinador: solo grupos de su jornada (users.work_shift).
-            // Si work_shift es NULL o 'completa', ve todos los grupos.
-            $coordShift = trim((string)($authUser['work_shift'] ?? ''));
-            if ($coordShift !== '' && $coordShift !== 'completa') {
-                $stmt = $conn->prepare("
-                    SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
-                           ag.academic_year, ag.work_shift,
-                           COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
-                    FROM academic_groups ag
-                    LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
-                    WHERE ag.school_id = ? AND ag.academic_year = ? AND ag.work_shift = ?
-                    GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
-                    ORDER BY ag.grade_level::INT, ag.group_name
-                ");
-                $stmt->execute([$schoolId, $currentYear, $coordShift]);
-            } else {
-                $stmt = $conn->prepare("
-                    SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
-                           ag.academic_year, ag.work_shift,
-                           COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
-                    FROM academic_groups ag
-                    LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
-                    WHERE ag.school_id = ? AND ag.academic_year = ?
-                    GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
-                    ORDER BY ag.grade_level::INT, ag.group_name
-                ");
-                $stmt->execute([$schoolId, $currentYear]);
-            }
+            // Coordinador: ve todos los grupos de la institución (todas las jornadas).
+            $stmt = $conn->prepare("
+                SELECT ag.group_id as id, ag.group_name as name, ag.grade_level,
+                       ag.academic_year, ag.work_shift,
+                       COUNT(sga.student_id) FILTER (WHERE sga.active = TRUE) as student_count
+                FROM academic_groups ag
+                LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
+                WHERE ag.school_id = ? AND ag.academic_year = ?
+                GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
+                ORDER BY ag.grade_level::INT, ag.group_name
+            ");
+            $stmt->execute([$schoolId, $currentYear]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } else {
             $stmt = $conn->prepare("
