@@ -83,8 +83,17 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     devicesApi.getByRole()
       .then((device) => {
         setEdgeDevice(device);
-        // FIX: Solo mostrar como "connected" si el edge está online (last_ping < 2min)
-        setBiometricStatus(device?.is_online ? 'connected' : 'error');
+        if (!device) {
+          setBiometricStatus('error');
+        } else {
+          // is_online viene del backend (last_ping < 2min). Si el campo no existe
+          // (backend viejo sin deploy), asumir online si hay last_ping reciente.
+          const isOnline = device.is_online === true ||
+                           device.is_online === 'true' ||
+                           device.is_online === 't' ||
+                           device.is_online === 1;
+          setBiometricStatus(isOnline ? 'connected' : 'offline');
+        }
       })
       .catch(() => setBiometricStatus('error'));
     return () => {
@@ -242,12 +251,14 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                 <div className="space-y-2">
                   <p className="text-label text-[var(--nx-text)]">Lector biométrico</p>
                   {biometricStatus === 'checking' ? <Skeleton className="h-12" /> : (
-                    <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]'}`}>
+                    <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : biometricStatus === 'offline' ? 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]' : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'}`}>
                       {biometricStatus === 'connected'
                         ? `El sensor "${edgeDevice?.device_name || 'Secretaría'}" está listo. Presiona "Registrar huella" para comenzar.`
-                        : edgeDevice
+                        : biometricStatus === 'offline'
                           ? `El sensor "${edgeDevice?.device_name || 'Secretaría'}" está asignado pero APAGADO. Enciende el dispositivo edge para registrar huellas.`
-                          : 'No tienes ningún sensor asignado. Pide al rector que te asigne uno para registrar huellas.'}
+                          : edgeDevice
+                            ? `Error al verificar el estado del sensor "${edgeDevice?.device_name || 'Secretaría'}". Intenta de nuevo.`
+                            : 'No tienes ningún sensor asignado. Pide al rector que te asigne uno para registrar huellas.'}
                     </div>
                   )}
                   <Button
@@ -311,8 +322,17 @@ const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
     devicesApi.getByRole()
       .then((device) => {
         setEdgeDevice(device);
-        // FIX: Solo mostrar como "connected" si el edge está online (last_ping < 2min)
-        setBiometricStatus(device?.is_online ? 'connected' : 'error');
+        if (!device) {
+          setBiometricStatus('error');
+        } else {
+          // is_online viene del backend (last_ping < 2min). Si el campo no existe
+          // (backend viejo sin deploy), asumir online si hay last_ping reciente.
+          const isOnline = device.is_online === true ||
+                           device.is_online === 'true' ||
+                           device.is_online === 't' ||
+                           device.is_online === 1;
+          setBiometricStatus(isOnline ? 'connected' : 'offline');
+        }
       })
       .catch(() => setBiometricStatus('error'));
     studentsApi.getAll({ search: student.document || student.documento, limit: 1 })
