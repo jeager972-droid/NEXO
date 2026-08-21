@@ -865,22 +865,50 @@ void handleBiometricMatch(uint32_t huellaId,
 }
 
 // =============================================================================
-// Main Menu
+// UI Helpers — output limpio sin flood del menú
 // =============================================================================
-// Menú interactivo de consola para modos: control de asistencia, PAE
-// (deprecado), modo secretaría, sync manual y opciones de simulación.
+
+static bool g_menuShown = false;  // Controla si el menú está visible en pantalla
+
 void showMainMenu() {
+    if (g_menuShown) return;  // No reimprimir si ya está visible
+    g_menuShown = true;
     std::cout << "\n"
-        "====================================================\n"
-        "              NEXO EDGE - MENU PRINCIPAL\n"
-        "====================================================\n"
-        "  1. MODO PERPETUO (Control Asistencia)\n"
-        "  2. MODO PAE (Control Alimentacion)\n"
-        "  3. MODO SECRETARIA\n"
-        "  4. Sync Pendientes (manual)\n"
-        "  0. Salir\n"
-        "====================================================\n"
-        "Seleccione: ";
+        "╔══════════════════════════════════════════════════╗\n"
+        "║         NEXO EDGE — NODO DE PRODUCCION           ║\n"
+        "╠══════════════════════════════════════════════════╣\n"
+        "║  1. Modo Perpetuo (Control Asistencia)          ║\n"
+        "║  3. Modo Secretaria (Enrolar/Eliminar)          ║\n"
+        "║  4. Sync Pendientes (manual)                    ║\n"
+        "║  0. Salir                                       ║\n"
+        "╚══════════════════════════════════════════════════╝\n"
+        "  > Seleccione opción (o Enter para status): ";
+    std::cout.flush();
+}
+
+void clearMenuLine() {
+    // Limpiar la línea del prompt del menú para imprimir un evento encima
+    if (g_menuShown) {
+        std::cout << "\r\033[K";  // CR + borrar línea
+        g_menuShown = false;
+    }
+}
+
+void printEvent(const std::string& tag, const std::string& msg, const std::string& color = "") {
+    clearMenuLine();
+    if (color == "green")      std::cout << "\033[32m";
+    else if (color == "red")   std::cout << "\033[31m";
+    else if (color == "yellow") std::cout << "\033[33m";
+    else if (color == "cyan")  std::cout << "\033[36m";
+    std::cout << "  [" << tag << "] " << msg;
+    if (!color.empty()) std::cout << "\033[0m";
+    std::cout << "\n";
+    std::cout.flush();
+}
+
+void reprintMenu() {
+    g_menuShown = false;
+    showMainMenu();
 }
 
 // =============================================================================
@@ -935,55 +963,73 @@ bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
 }
 
 void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
+    bool secMenuShown = false;
     while (!g_shutdownRequested.load()) {
-        std::cout << "\n--- MODO SECRETARIA ---\n"
-            "1. Enrolar Estudiante\n"
-            "2. Eliminar Estudiante\n"
-            "3. Sync Pendientes\n"
-            "4. Volver\n"
-            "Opcion: ";
+        if (!secMenuShown) {
+            std::cout << "\n  ── MODO SECRETARIA ──\n"
+                "  1. Enrolar Estudiante\n"
+                "  2. Eliminar Estudiante\n"
+                "  3. Sync Pendientes\n"
+                "  4. Volver al menú principal\n"
+                "  > Opción: ";
+            std::cout.flush();
+            secMenuShown = true;
+        }
 
         std::string ch;
-        if (!readLineNonBlocking(ch)) break;
+        if (!readLineNonBlocking(ch, 2000)) {
+            if (g_shutdownRequested.load()) break;
+            continue;  // No reimprimir el menú
+        }
         if (ch.empty()) continue;
+        secMenuShown = false;  // Se va a imprimir output, limpiar menú
+        std::cout << "\r\033[K";
 
         auto& db = SqliteManager::getInstance();
 
         if (ch[0] == '1') {
-            std::cout << "Documento: ";
+            std::cout << "  Documento: ";
+            std::cout.flush();
             std::string doc;
-            if (!readLineNonBlocking(doc)) break;
-            std::cout << "Nombre: ";
+            if (!readLineNonBlocking(doc, 30000)) break;
+            std::cout << "  Nombre: ";
+            std::cout.flush();
             std::string nombre;
-            if (!readLineNonBlocking(nombre)) break;
-            std::cout << "Tel Acudiente: ";
+            if (!readLineNonBlocking(nombre, 30000)) break;
+            std::cout << "  Tel Acudiente: ";
+            std::cout.flush();
             std::string tel;
-            if (!readLineNonBlocking(tel)) break;
+            if (!readLineNonBlocking(tel, 30000)) break;
 
+            printEvent("ENROLL", "Iniciando enrolamiento para " + nombre + " (" + doc + ")", "cyan");
+            printEvent("ENROLL", ">>> Coloque el dedo del alumno en el sensor <<<", "yellow");
             std::string err;
             if (enrollStudentOnDevice(sensor, doc, nombre, tel, err)) {
-                std::cout << "Estudiante enrolado exitosamente.\n";
+                printEvent("ENROLL", "✓ Estudiante enrolado exitosamente", "green");
             } else {
-                std::cout << "Error de enrolamiento: " << err << "\n";
+                printEvent("ENROLL", "✗ Error: " + err, "red");
             }
         } else if (ch[0] == '2') {
-            std::cout << "Documento a eliminar: ";
+            std::cout << "  Documento a eliminar: ";
+            std::cout.flush();
             std::string doc;
-            if (!readLineNonBlocking(doc)) break;
+            if (!readLineNonBlocking(doc, 30000)) break;
             Estudiante est;
             if (db.getEstudianteByDocumento(doc, est)) {
                 if (db.deleteEstudiante(doc)) {
                     sensor->deleteUser(est.huella_id);
                     LOG_INFO("Student deleted: {}", doc);
+                    printEvent("DELETE", "✓ Estudiante eliminado: " + doc, "green");
                 } else {
                     LOG_ERROR("DB delete failed for {}", doc);
+                    printEvent("DELETE", "✗ Error de BD al eliminar", "red");
                 }
             } else {
-                std::cout << "Estudiante no encontrado.\n";
+                printEvent("DELETE", "Estudiante no encontrado: " + doc, "red");
             }
         } else if (ch[0] == '3') {
             syncWorker.nudge();
-            std::cout << "Sync worker notificado.\n";
+            printEvent("SYNC", "Sincronización manual iniciada", "cyan");
         } else if (ch[0] == '4') {
             break;
         }
@@ -1184,6 +1230,9 @@ int main() {
 
     LOG_INFO("NEXO EDGE ready. Ctrl+C or SIGTERM for graceful shutdown.");
 
+    // Imprimir menú una sola vez al inicio
+    showMainMenu();
+
     while (!g_shutdownRequested.load(std::memory_order_acquire)) {
         if (watchdog.isOpen()) watchdog.pat();
 
@@ -1288,19 +1337,23 @@ int main() {
                             LOG_WARN("[Main] ENROLL_REQUEST sin doc/nombre. Ignorado.");
                         } else {
                             LOG_INFO("[Main] Remote enrollment requested (HTTP): doc={} ({})", doc, nombre);
-                            std::cout << "\n[REMOTO] Enrolamiento solicitado para " << nombre
-                                      << " (" << doc << "). Coloque el dedo en el lector...\n";
+                            printEvent("ENROLL", "Solicitud recibida de la WebApp", "cyan");
+                            printEvent("ENROLL", "Alumno: " + nombre + " (doc: " + doc + ")", "cyan");
+                            printEvent("ENROLL", ">>> Coloque el dedo del alumno en el sensor <<<", "yellow");
+                            printEvent("ENROLL", "    (4 capturas necesarias — levantar y poner 4 veces)", "");
                             display->showMessage("ENROLAMIENTO", "Coloque dedo");
                             std::string err;
                             if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err)) {
                                 display->showMessage("ENROLL OK", nombre.substr(0, 16));
-                                std::cout << "[REMOTO] Estudiante enrolado exitosamente.\n";
+                                printEvent("ENROLL", "✓ Huella registrada exitosamente para " + nombre, "green");
+                                printEvent("ENROLL", "  Sincronizando con la nube...", "cyan");
                                 AuditTrail::logEvent(doc, "ENROLL_OK");
                                 syncWorker.nudge();
                             } else {
                                 display->showMessage("ENROLL FAIL", err.substr(0, 16));
-                                std::cout << "[REMOTO] Error de enrolamiento: " << err << "\n";
+                                printEvent("ENROLL", "✗ Error: " + err, "red");
                             }
+                            reprintMenu();
                         }
                     } else if (cmd == "AUTHORIZE_EXIT") {
                         auto p = j.value("payload", nlohmann::json::object());
@@ -1312,7 +1365,8 @@ int main() {
                             AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
                             syncWorker.nudge();
                             display->showMessage("SALIDA", "AUTORIZADA");
-                            std::cout << "\n[REMOTO] Salida autorizada registrada para doc " << doc << ".\n";
+                            printEvent("SALIDA", "Salida autorizada para doc " + doc, "green");
+                            reprintMenu();
                         }
                     } else if (cmd == "DELETE_STUDENT") {
                         auto p = j.value("payload", nlohmann::json::object());
@@ -1326,13 +1380,21 @@ int main() {
                                 CloudManager::getInstance().deleteStudent(doc);
                                 LOG_INFO("[Main] Student deleted by cloud command (HTTP): {}", doc);
                                 display->showMessage("ELIMINADO", doc.substr(0, 16));
+                                printEvent("DELETE", "Estudiante eliminado: " + doc, "yellow");
                             } else {
                                 LOG_WARN("[Main] DELETE_STUDENT para doc desconocido={}", doc);
+                                printEvent("DELETE", "Doc no encontrado: " + doc, "red");
                             }
+                            reprintMenu();
                         }
+                    } else {
+                        printEvent("CMD", "Comando desconocido: " + cmd, "yellow");
+                        reprintMenu();
                     }
                 } catch (const std::exception& e) {
                     LOG_WARN("[Main] Bad HTTP-polling JSON: {}", e.what());
+                    printEvent("ERROR", "JSON parse error: " + std::string(e.what()), "red");
+                    reprintMenu();
                 }
             }
         }
@@ -1363,14 +1425,26 @@ int main() {
         //     continue;
         // }
 
-        showMainMenu();
-
+        // FIX: No reimprimir el menú en cada iteración. El menú se imprime
+        // una sola vez al inicio o después de procesar un evento. Aquí solo
+        // esperamos input del usuario con un timeout largo (2s) para no spamear.
         std::string choice;
-        if (!readLineNonBlocking(choice)) {
+        if (!readLineNonBlocking(choice, 2000)) {
+            // Timeout sin input — no hacer nada, el loop continúa y procesa
+            // comandos del CommandWorker. El menú sigue visible en pantalla.
             if (g_shutdownRequested.load()) break;
             continue;
         }
-        if (choice.empty()) continue;
+        if (choice.empty()) {
+            // Enter sin texto — mostrar status rápido
+            clearMenuLine();
+            std::cout << "  [STATUS] Edge operativo. Esperando comandos de la WebApp...\n";
+            reprintMenu();
+            continue;
+        }
+
+        clearMenuLine();
+        g_menuShown = false;
 
         switch (choice[0]) {
             case '1': {
@@ -1378,13 +1452,15 @@ int main() {
                 if (!g_clockValid.load(std::memory_order_acquire)) {
                     LOG_WARN("Biometric reads blocked: clock not synchronized");
                     display->showMessage("ERROR", "HORA NO SINCRONIZADA");
+                    printEvent("ERROR", "Reloj no sincronizado. Lecturas bloqueadas.", "red");
                     std::this_thread::sleep_for(std::chrono::seconds(3));
                     break;
                 }
                 LOG_INFO("Entering PERPETUAL mode (attendance)");
+                printEvent("MODO", "Perpetuo activado — escaneo de asistencia", "cyan");
+                printEvent("MODO", "Presione 's' + Enter para salir del modo", "");
                 display->showMessage("NEXO", "Listo para scan");
                 while (!g_shutdownRequested.load()) {
-                    // FIX: Verificar shutdown antes de cada adquisición bloqueante
                     if (g_shutdownRequested.load(std::memory_order_acquire)) break;
 
                     std::vector<uint8_t> mockTpl(256, 0);
@@ -1394,23 +1470,16 @@ int main() {
                     if (res) {
                         handleBiometricMatch(uid, display.get(), notification.get(), syncWorker);
                     }
-                    
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Evita 100% CPU si falla rápido
-                    
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
                     std::string key;
                     if (readLineNonBlocking(key, 200) && !key.empty() && key[0] == 's') {
                         LOG_INFO("Exiting PERPETUAL mode");
+                        printEvent("MODO", "Saliendo de modo perpetuo", "yellow");
                         break;
                     }
                 }
-                display->clear();
-                break;
-            }
-            case '2': {
-                // PAE (Programa de Alimentacion Escolar) eliminado por decision de arquitectura
-                LOG_WARN("PAE mode deprecated and removed");
-                display->showMessage("NEXO", "MODO PAE DESACTIVADO");
-                std::this_thread::sleep_for(std::chrono::seconds(2));
                 display->clear();
                 break;
             }
@@ -1420,26 +1489,16 @@ int main() {
             case '4':
                 LOG_INFO("Manual sync requested");
                 syncWorker.nudge();
-                std::cout << "Sync worker notificado.\n";
+                printEvent("SYNC", "Sincronización manual iniciada", "cyan");
                 break;
-            case '5': {
-                std::cout << "Simular estudiante al baño (ID: 100000001)..." << std::endl;
-                handleBiometricMatch(1, display.get(), notification.get(), syncWorker);
-                break;
-            }
-            case '6': {
-                std::cout << "Simular evento de inasistencia..." << std::endl;
-                AuditTrail::logEvent("100000001", "INASISTENCIA_MANUAL");
-                syncWorker.nudge();
-                break;
-            }
             case '0':
                 g_shutdownRequested.store(true);
                 break;
             default:
-                LOG_WARN("Invalid option: '{}'", choice);
+                printEvent("ERROR", "Opción inválida: " + choice, "red");
                 break;
         }
+        reprintMenu();
     }
 
     LOG_INFO("Shutting down...");
