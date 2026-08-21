@@ -142,11 +142,13 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
             <SkeletonRows count={3} />
           ) : (
             <>
-              <Surface className="p-4">
-                <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                  <span className="font-medium text-[var(--nx-text)] text-caption">{details?.status === 'active' ? 'En proceso' : details?.status === 'resuelto' ? 'Resuelto' : details?.status || 'En proceso'}</span>
+              <Surface className="p-5">
+                <div className="flex items-center gap-4">
+                  <CalendarDays size={40} className="text-[var(--nx-accent)] shrink-0" strokeWidth={1.5} />
+                  <div>
+                    {details?.created_at && <p className="text-h3 text-[var(--nx-text)]">Iniciado {new Date(details.created_at).toLocaleDateString('es-CO')}</p>}
+                  </div>
                 </div>
-                {details?.created_at && <p className="text-caption text-[var(--nx-text-muted)] mt-1.5 flex items-center gap-1"><CalendarDays size={12} /> Iniciado {new Date(details.created_at).toLocaleDateString('es-CO')}</p>}
               </Surface>
 
               <div className="space-y-3">
