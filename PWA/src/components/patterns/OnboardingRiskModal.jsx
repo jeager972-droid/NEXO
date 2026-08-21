@@ -240,6 +240,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
       counts[lvl].push(evt);
     }
     return counts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventTypes, overrides, config.mapping]);
 
   return (
@@ -307,7 +308,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                         hay reincidencias dentro de un plazo de dias para activar alertas a coordinacion.
                       </p>
                       <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
-                        Por ejemplo: si configuras "Llegada tarde" como Leve con 4 reincidencias en 7 dias,
+                        Por ejemplo: si configuras &ldquo;Llegada tarde&rdquo; como Leve con 4 reincidencias en 7 dias,
                         el sistema activara una alerta a coordinacion cuando un estudiante llegue tarde
                         4 veces dentro de cualquier ventana de 7 dias.
                       </p>
