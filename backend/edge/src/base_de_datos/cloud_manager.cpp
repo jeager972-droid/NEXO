@@ -48,6 +48,19 @@ std::string CloudManager::loadApiUrl() {
     return "";
 }
 
+// Construir la URL de ingesta: api_url base + "/ingest"
+// El backend detecta payloads del edge por la clave 'payload' en cualquier path,
+// pero la raíz "/" devuelve 405 de nginx. "/ingest" llega al handler de PHP.
+std::string CloudManager::getIngestUrl() const {
+    std::string base = m_apiUrl;
+    if (base.empty()) return "";
+    // Quitar trailing slash
+    while (!base.empty() && base.back() == '/') base.pop_back();
+    // Si ya termina en /ingest, no duplicar
+    if (base.size() >= 7 && base.substr(base.size() - 7) == "/ingest") return base;
+    return base + "/ingest";
+}
+
 static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     static_cast<std::string*>(userp)->append(static_cast<char*>(contents), size * nmemb);
     return size * nmemb;
@@ -144,9 +157,9 @@ bool CloudManager::syncRecord(const std::string& jsonData) {
 
     // Use IHttpClient stub if available (dev mode), otherwise use real libcurl
     if (m_httpClient) {
-        ok = httpClientPost(m_httpClient, m_apiUrl, body, Encryption::getInstance().getToken(), response);
+        ok = httpClientPost(m_httpClient, getIngestUrl(), body, Encryption::getInstance().getToken(), response);
     } else {
-        ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), response);
+        ok = curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), response);
     }
 
     if (ok) { LOG_DEBUG("Cloud sync OK"); } else { LOG_ERROR("Cloud sync failed"); }
@@ -158,7 +171,7 @@ bool CloudManager::deleteStudent(const std::string& doc) {
     std::string body = buildAuthenticatedRequest(json, m_instId);
     if (body.empty()) return false;
     std::string resp;
-    return curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)
+    return curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp)
         && resp.find("\"status\":\"ok\"") != std::string::npos;
 }
 
@@ -170,7 +183,7 @@ bool CloudManager::registerStaff(const std::string& doc, const std::string& nomb
     std::string body = buildAuthenticatedRequest(json, m_instId);
     if (body.empty()) return false;
     std::string resp;
-    return curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)
+    return curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp)
         && resp.find("\"status\":\"ok\"") != std::string::npos;
 }
 
@@ -179,7 +192,7 @@ bool CloudManager::wipeInstitution(const std::string& instId) {
     std::string body = buildAuthenticatedRequest(json, instId);
     if (body.empty()) return false;
     std::string resp;
-    return curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)
+    return curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp)
         && resp.find("\"status\":\"ok\"") != std::string::npos;
 }
 
@@ -188,7 +201,7 @@ std::string CloudManager::verifyInstitution(const std::string& nombre) {
     std::string body = buildAuthenticatedRequest(json, "");
     if (body.empty()) return "";
     std::string resp;
-    if (!curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)) return "";
+    if (!curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp)) return "";
     try {
         nlohmann::json j = nlohmann::json::parse(resp);
         if (j.contains("inst_id")) {
@@ -205,7 +218,7 @@ bool CloudManager::verifyGroup(const std::string& instId, const std::string& sal
     std::string body = buildAuthenticatedRequest(json, instId);
     if (body.empty()) return false;
     std::string resp;
-    return curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp)
+    return curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp)
         && resp.find("\"status\":\"ok\"") != std::string::npos;
 }
 
@@ -218,7 +231,7 @@ bool CloudManager::registerStudent(const std::string& doc, const std::string& no
     std::string body = buildAuthenticatedRequest(json, m_instId);
     if (body.empty()) return false;
     std::string resp;
-    bool ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp);
+    bool ok = curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp);
     if (ok && resp.find("\"status\":\"ok\"") != std::string::npos) return true;
     if (!resp.empty()) LOG_WARN("Server response not OK: {}", resp);
     return false;
@@ -246,7 +259,7 @@ bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const 
     std::string body = buildAuthenticatedRequest(j.dump(), m_instId);
     if (body.empty()) return false;
     std::string resp;
-    bool ok = curlPost(m_apiUrl, body, Encryption::getInstance().getToken(), resp);
+    bool ok = curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp);
     if (ok && (resp.find("\"status\":\"ok\"") != std::string::npos ||
                resp.find("\"status\":\"accepted\"") != std::string::npos)) return true;
     if (!resp.empty()) LOG_WARN("Server response not OK: {}", resp);

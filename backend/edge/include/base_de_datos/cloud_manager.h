@@ -70,4 +70,5 @@ private:
 
     std::string buildAuthenticatedRequest(const std::string& jsonData, const std::string& instId);
     std::string loadApiUrl();
+    std::string getIngestUrl() const;
 };
