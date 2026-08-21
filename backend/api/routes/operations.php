@@ -269,14 +269,38 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     }
 
     // Validación de presencia del estudiante para operaciones que lo requieren.
-    // Excepciones: 'seguimiento' y 'citacion' pueden hacerse aunque el estudiante no esté presente.
-    // FIX M9: 'incidente' y 'pedagogica' eximidas — un docente puede reportar
-    // un incidente de un estudiante ausente (ej: pelea fuera del colegio).
-    // 'sos', 'situacion_critica', 'solicitud', 'daño' no dependen de un estudiante específico.
+    // Estas operaciones no tienen sentido si el estudiante está inasistente:
+    //   - permiso: salida al baño (requiere estar en clase)
+    //   - autorizar_salida: salida de la institución (requiere estar dentro)
+    //   - horario: cambio de horario (requiere contexto de clase activa)
+    // Excepciones permitidas para ausentes: consultas, casos activos (sos,
+    // situacion_critica, solicitud, daño), citacion, incidente, seguimiento,
+    // pedagogica — estas operaciones pueden hacerse sobre estudiantes ausentes.
     $presenceRequiredActions = ['permiso', 'autorizar_salida', 'horario'];
     if (in_array($action, $presenceRequiredActions)) {
         $presenceStudentId = $params['student'] ?? $params['student_id'] ?? null;
         if ($presenceStudentId) {
+            // Verificar si tiene incidente de INASISTENCIA hoy
+            $absentStmt = $conn->prepare("
+                SELECT 1 FROM attendance_incidents
+                WHERE school_id = ? AND student_id = ?
+                  AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                  AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                  AND incident_type = 'INASISTENCIA'
+                  AND resolved = FALSE
+                LIMIT 1
+            ");
+            $absentStmt->execute([$schoolId, $presenceStudentId]);
+            $isAbsent = (bool)$absentStmt->fetchColumn();
+
+            if ($isAbsent) {
+                http_response_code(422);
+                exit(json_encode([
+                    'status' => 'error',
+                    'message' => 'El estudiante está marcado como inasistente hoy. No se pueden realizar operaciones que requieran su presencia.',
+                ]));
+            }
+
             $presentStmt = $conn->prepare("SELECT is_student_present_today(?, ?)");
             $presentStmt->execute([$schoolId, $presenceStudentId]);
             $isPresent = (bool)$presentStmt->fetchColumn();
@@ -783,13 +807,35 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 }
 
                 if ($studentId) {
+                    // Obtener documento del estudiante para el comando al edge
+                    $docStmt = $conn->prepare("SELECT document_number, first_name, last_name FROM students WHERE student_id = ? AND school_id = ?");
+                    $docStmt->execute([$studentId, $schoolId]);
+                    $stuDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
+                    if (!$stuDoc) {
+                        http_response_code(404);
+                        exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+                    }
+                    $studentDoc = $stuDoc['document_number'];
+                    $studentName = trim($stuDoc['first_name'] . ' ' . $stuDoc['last_name']);
+
+                    // Crear autorización con status PENDING_FINGERPRINT — el estudiante
+                    // debe poner su huella en el sensor de coordinación para completar la salida.
                     $stmt = $conn->prepare("
                         INSERT INTO school_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, status)
-                        VALUES (?, ?, ?, ?, NOW(), 'APPROVED')
+                        VALUES (?, ?, ?, ?, NOW(), 'PENDING_FINGERPRINT')
                     ");
                     $stmt->execute([$schoolId, $studentId, $userId, $reason]);
 
-                    // Notificar COORDINADOR vía notificaciones internas
+                    // Buscar el dispositivo edge asignado al coordinador (el que ejecuta la acción)
+                    $deviceStmt = $conn->prepare("
+                        SELECT device_id FROM edge_devices
+                        WHERE school_id = ? AND assigned_user_id = ? AND active = TRUE
+                        ORDER BY last_ping DESC NULLS LAST LIMIT 1
+                    ");
+                    $deviceStmt->execute([$schoolId, $userId]);
+                    $deviceId = $deviceStmt->fetchColumn();
+
+                    // Información adicional del estudiante
                     $stuMetaStmt = $conn->prepare("
                         SELECT s.first_name, s.last_name, ag.group_name
                         FROM students s
@@ -800,29 +846,64 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     ");
                     $stuMetaStmt->execute([$studentId]);
                     $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
-                    $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
                     $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
                     $teacherName = ($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '');
 
                     $meta = json_encode([
                         'student_id' => $studentId,
                         'student_name' => trim($studentName),
+                        'student_doc' => $studentDoc,
                         'group_name' => $groupName,
                         'teacher_name' => trim($teacherName) ?: $role,
                         'reason' => $reason,
                         'time_start' => $params['timeStart'] ?? null,
                         'time_end' => $params['timeEnd'] ?? null,
                         'action' => 'autorizar_salida',
+                        'status' => 'PENDING_FINGERPRINT',
                     ], JSON_UNESCAPED_UNICODE);
 
-                    // FIX: Insertar en attendance_incidents para que aparezca en el dashboard
+                    // Insertar en attendance_incidents para que aparezca en el dashboard
                     $incStmt = $conn->prepare("
                         INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
                         VALUES (uuid_generate_v4(), ?, ?, 'AUTORIZAR_SALIDA', NOW(), ?::jsonb)
                     ");
                     $incStmt->execute([$schoolId, $studentId, $meta]);
 
-                    // FIX: Batch INSERT notifications para coordinadores
+                    if ($deviceId) {
+                        // Enviar comando al edge: WAIT_EXIT_FINGERPRINT con el doc del estudiante
+                        $cmdPayload = [
+                            'command' => 'WAIT_EXIT_FINGERPRINT',
+                            'payload' => [
+                                'doc' => $studentDoc,
+                                'student_name' => $studentName,
+                            ],
+                            'issued_at' => time(),
+                            'issued_by' => $userId,
+                        ];
+
+                        // MQTT + Redis (igual que /devices/command)
+                        $mqttOk = false;
+                        if (file_exists(__DIR__ . '/../core/mqtt_publisher.php')) {
+                            require_once __DIR__ . '/../core/mqtt_publisher.php';
+                            $mqttOk = publishDeviceCommand($deviceId, $cmdPayload);
+                        }
+                        try {
+                            $redis = getRedisConnection();
+                            if ($redis) {
+                                $redis->lPush("device:{$deviceId}:commands", json_encode($cmdPayload, JSON_UNESCAPED_UNICODE));
+                                $redis->expire("device:{$deviceId}:commands", 86400);
+                            }
+                        } catch (Exception $e) {
+                            securityLog('SALIDA_CMD_REDIS_ERROR', $e->getMessage());
+                        }
+
+                        securityLog('SALIDA_FINGERPRINT_CMD', "Device:$deviceId Student:$studentId Doc:$studentDoc MQTT:" . ($mqttOk ? 'OK' : 'FAIL'), $userId, $schoolId);
+                    } else {
+                        // No hay dispositivo asignado al coordinador — registrar warning
+                        securityLog('SALIDA_NO_DEVICE', "No edge device assigned to user $userId for school $schoolId", $userId, $schoolId);
+                    }
+
+                    // Notificar coordinadores
                     $coordStmt = $conn->prepare("
                         SELECT user_id FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
@@ -831,24 +912,24 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
                     if (!empty($coords)) {
                         $rows = [];
-                        $params = [];
+                        $nParams = [];
                         foreach ($coords as $c) {
                             $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
-                            $params[] = $schoolId;
-                            $params[] = $c['user_id'];
-                            $params[] = 'Salida autorizada';
-                            $params[] = "Se autorizó una salida" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
-                            $params[] = $meta;
+                            $nParams[] = $schoolId;
+                            $nParams[] = $c['user_id'];
+                            $nParams[] = 'Salida autorizada (pendiente huella)';
+                            $nParams[] = "Se autorizó la salida de {$studentName}. El estudiante debe poner su huella en el sensor de coordinación para completar la salida.";
+                            $nParams[] = $meta;
                         }
                         $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                         try {
-                            $conn->prepare($sql)->execute($params);
+                            $conn->prepare($sql)->execute($nParams);
                         } catch (Throwable $e) {
                             error_log("[OPERATIONS] Autorizar salida notification batch insert error: " . $e->getMessage());
                         }
                     }
 
-                    // Notificar también al RECTOR
+                    // Notificar al RECTOR
                     $rectStmt = $conn->prepare("
                         SELECT user_id FROM users
                         WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
@@ -862,8 +943,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             $rows[] = "(?, ?, ?, ?, 'INFO', ?::jsonb, NOW())";
                             $rParams[] = $schoolId;
                             $rParams[] = $r['user_id'];
-                            $rParams[] = 'Salida autorizada';
-                            $rParams[] = "Se autorizó una salida" . ($studentName ? " para {$studentName}" : '') . ". Ver detalles.";
+                            $rParams[] = 'Salida autorizada (pendiente huella)';
+                            $rParams[] = "Se autorizó la salida de {$studentName}. Pendiente verificación biométrica.";
                             $rParams[] = $meta;
                         }
                         $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
@@ -874,6 +955,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
 
+                    // Notificar al acudiente (la salida ya está autorizada, solo falta huella)
                     if (!empty($stuMeta)) {
                         $guardsStmt = $conn->prepare("
                             SELECT g.guardian_id, g.whatsapp_phone, u.phone AS guardian_user_phone
@@ -887,7 +969,6 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         $gRow = $guardsStmt->fetch(PDO::FETCH_ASSOC);
                         if ($gRow && !empty($gRow['whatsapp_phone'])) {
                             $sName = trim($studentName);
-                            $issuerName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? ''));
                             $salidaMsg = "\xF0\x9F\x9F\xA2 *NEXO — Salida autorizada*\n\nSe ha permitido la salida de *{$sName}* del colegio.\n\nSi usted no autorizó esto o fue un error, responda *9* a este mensaje y le notificaremos a la institución inmediatamente.";
                             $sendResult = enqueueTwilioJob($gRow['whatsapp_phone'], $salidaMsg, $schoolId, $studentId, $gRow['guardian_id'], $userId, 'AUTORIZAR_SALIDA');
 
@@ -921,8 +1002,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 logUserCommand($conn, $schoolId, $userId, $action, $logParams);
                 echo json_encode([
                     'status'  => 'ok',
-                    'message' => 'Salida autorizada correctamente',
-                    'data'    => ['action' => $action, 'student_id' => $studentId]
+                    'message' => $deviceId
+                        ? 'Salida autorizada. El estudiante debe poner su huella en el sensor de coordinación para completar la salida.'
+                        : 'Salida autorizada (sin sensor asignado). Configure un sensor en coordinación para verificación biométrica.',
+                    'data'    => ['action' => $action, 'student_id' => $studentId, 'pending_fingerprint' => true]
                 ]);
                 break;
 

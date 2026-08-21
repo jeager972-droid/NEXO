@@ -209,6 +209,7 @@ if ($cleanPath === '/dashboard/stats') {
                       AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
                       AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                       AND (incident_type IN ('EVASION_INTERNA') OR incident_type LIKE 'RISK_ALERT%')
+                      AND (metadata_json->>'returned_to_class' IS DISTINCT FROM 'true')
                       AND student_id IN (
                           SELECT DISTINCT sga.student_id FROM student_group_assignments sga
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
@@ -300,7 +301,7 @@ if ($cleanPath === '/dashboard/stats') {
                     SELECT
                         (SELECT COUNT(*) FROM sos_alerts WHERE school_id = ? AND emitted_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND emitted_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND resolved = FALSE)
                         +
-                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('EVASION_INTERNA') OR incident_type LIKE 'RISK_ALERT%') {$groupFilter}{$shiftFilter})
+                        (SELECT COUNT(DISTINCT student_id) FROM attendance_incidents WHERE school_id = ? AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day') AND (incident_type IN ('EVASION_INTERNA') OR incident_type LIKE 'RISK_ALERT%') AND (metadata_json->>'returned_to_class' IS DISTINCT FROM 'true') {$groupFilter}{$shiftFilter})
                     as cnt
                 ),
                 perm_cte AS (

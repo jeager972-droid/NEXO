@@ -250,6 +250,52 @@ function processJob(array $job, PDO $conn): bool {
                 $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $metadataJson, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
 
+                // Si el evento es un INGRESO y el estudiante tenía una EVASION_INTERNA
+                // activa hoy, marcar returned_to_class=true en el incidente. La evasión
+                // persiste en la métrica hasta que el estudiante marque huella en su aula.
+                if ($inserted && strpos($evt, 'INGRESO_') === 0 && $studentId) {
+                    try {
+                        $evasionClearStmt = $conn->prepare("
+                            UPDATE attendance_incidents
+                            SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || '{\"returned_to_class\": true}'::jsonb
+                            WHERE school_id = ? AND student_id = ?
+                              AND incident_type = 'EVASION_INTERNA'
+                              AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                              AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                              AND (metadata_json->>'returned_to_class' IS DISTINCT FROM 'true')
+                        ");
+                        $evasionClearStmt->execute([$instId, $studentId]);
+                        $cleared = $evasionClearStmt->rowCount();
+                        if ($cleared > 0) {
+                            error_log("[BIOMETRIC] Evasion cleared for student {$studentId} — returned to class");
+                        }
+                    } catch (Exception $evasionErr) {
+                        error_log("[BIOMETRIC] Evasion clear failed: " . $evasionErr->getMessage());
+                    }
+                }
+
+                // Si el evento es SALIDA_AUTORIZADA, completar la autorización
+                // pendiente en school_exit_authorizations. El estudiante validó
+                // su huella en el sensor de coordinación y sale de la institución.
+                if ($inserted && strpos($evt, 'SALIDA_AUTORIZADA') !== false && $studentId) {
+                    try {
+                        $completeStmt = $conn->prepare("
+                            UPDATE school_exit_authorizations
+                            SET status = 'COMPLETED', actual_return_time = NOW()
+                            WHERE school_id = ? AND student_id = ?
+                              AND status = 'PENDING_FINGERPRINT'
+                              AND exit_time >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                        ");
+                        $completeStmt->execute([$instId, $studentId]);
+                        $completed = $completeStmt->rowCount();
+                        if ($completed > 0) {
+                            error_log("[BIOMETRIC] School exit authorization COMPLETED for student {$studentId}");
+                        }
+                    } catch (Exception $exitErr) {
+                        error_log("[BIOMETRIC] School exit completion failed: " . $exitErr->getMessage());
+                    }
+                }
+
                 // Si el evento NO es INGRESO_PUNTUAL, evaluar si es llegada tarde.
                 // Reglas:
                 //   INGRESO_MANANA (7:01-11:00) → LATE_ARRIVAL (siempre, 7:01+ es tarde para mañana)

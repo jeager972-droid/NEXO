@@ -1307,6 +1307,73 @@ int main() {
                             display->showMessage("SALIDA", "AUTORIZADA");
                             std::cout << "\n[REMOTO] Salida autorizada registrada para doc " << doc << ".\n";
                         }
+                    } else if (cmd == "WAIT_EXIT_FINGERPRINT") {
+                        // Salida autorizada que requiere verificación biométrica.
+                        // El coordinador autorizó desde la WebApp; el estudiante debe
+                        // poner su huella en este sensor para completar la salida.
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        std::string studentName = p.value("student_name", "");
+                        if (doc.empty()) {
+                            LOG_WARN("[Main] WAIT_EXIT_FINGERPRINT sin doc. Ignorado.");
+                        } else {
+                            LOG_INFO("[Main] Exit fingerprint verification requested for doc={} ({})", doc, studentName);
+                            std::cout << "\n\033[33m══════════════════════════════════════════\033[0m\n";
+                            std::cout << "\033[33m SALIDA AUTORIZADA — Verificación biométrica\033[0m\n";
+                            std::cout << "\033[33m Estudiante: " << studentName << " (doc: " << doc << ")\033[0m\n";
+                            std::cout << "\033[33m >>> Coloque el dedo del estudiante en el sensor <<<\033[0m\n";
+                            std::cout << "\033[33m══════════════════════════════════════════\033[0m\n\n";
+                            display->showMessage("SALIDA", "Ponga huella");
+
+                            // Esperar huella (timeout 60 segundos)
+                            auto& db = SqliteManager::getInstance();
+                            Estudiante est;
+                            bool matched = false;
+                            auto startTime = std::chrono::steady_clock::now();
+                            const int timeoutSec = 60;
+
+                            while (!g_shutdownRequested.load(std::memory_order_acquire)) {
+                                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                                    std::chrono::steady_clock::now() - startTime).count();
+                                if (elapsed >= timeoutSec) {
+                                    LOG_WARN("[Main] WAIT_EXIT_FINGERPRINT timeout for doc={}", doc);
+                                    display->showMessage("TIMEOUT", "Sin huella");
+                                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                                    break;
+                                }
+
+                                // Leer huella del sensor
+                                int templateId = biometricSensor->captureAndMatch();
+                                if (templateId > 0) {
+                                    // Verificar que la huella coincide con el estudiante
+                                    if (db.getEstudianteByHuellaID(templateId, est) && est.documento == doc) {
+                                        LOG_INFO("[Main] Exit fingerprint VERIFIED for doc={} ({})", doc, studentName);
+                                        AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
+                                        syncWorker.nudge();
+                                        display->showMessage("SALIDA OK", studentName.substr(0, 16));
+                                        notification->notifySuccess();
+                                        std::cout << "\n\033[32m✓ Huella verificada. Salida registrada para " << studentName << "\033[0m\n\n";
+                                        matched = true;
+                                        std::this_thread::sleep_for(std::chrono::seconds(2));
+                                        break;
+                                    } else {
+                                        // Huella no coincide con el estudiante esperado
+                                        LOG_WARN("[Main] Exit fingerprint MISMATCH for doc={} (got template {})", doc, templateId);
+                                        display->showMessage("ERROR", "Huella no coincide");
+                                        notification->notifyError();
+                                        std::this_thread::sleep_for(std::chrono::seconds(2));
+                                        display->showMessage("SALIDA", "Ponga huella");
+                                        // Continuar esperando
+                                    }
+                                }
+                                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                            }
+
+                            if (!matched) {
+                                std::cout << "\n\033[31m✗ Verificación de salida cancelada.\033[0m\n\n";
+                            }
+                            display->clear();
+                        }
                     } else if (cmd == "DELETE_STUDENT") {
                         auto p = j.value("payload", nlohmann::json::object());
                         std::string doc = p.value("doc", "");
@@ -1377,6 +1444,63 @@ int main() {
                             syncWorker.nudge();
                             display->showMessage("SALIDA", "AUTORIZADA");
                             printEvent("SALIDA", "Salida autorizada para doc " + doc, "green");
+                            reprintMenu();
+                        }
+                    } else if (cmd == "WAIT_EXIT_FINGERPRINT") {
+                        auto p = j.value("payload", nlohmann::json::object());
+                        std::string doc = p.value("doc", "");
+                        std::string studentName = p.value("student_name", "");
+                        if (doc.empty()) {
+                            LOG_WARN("[Main] WAIT_EXIT_FINGERPRINT (HTTP) sin doc. Ignorado.");
+                        } else {
+                            LOG_INFO("[Main] Exit fingerprint verification (HTTP) for doc={} ({})", doc, studentName);
+                            printEvent("SALIDA", "Verificacion biometrica: " + studentName, "yellow");
+                            printEvent("SALIDA", ">>> Coloque el dedo del estudiante <<<", "yellow");
+                            display->showMessage("SALIDA", "Ponga huella");
+
+                            auto& db = SqliteManager::getInstance();
+                            Estudiante est;
+                            bool matched = false;
+                            auto startTime = std::chrono::steady_clock::now();
+                            const int timeoutSec = 60;
+
+                            while (!g_shutdownRequested.load(std::memory_order_acquire)) {
+                                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                                    std::chrono::steady_clock::now() - startTime).count();
+                                if (elapsed >= timeoutSec) {
+                                    LOG_WARN("[Main] WAIT_EXIT_FINGERPRINT (HTTP) timeout for doc={}", doc);
+                                    display->showMessage("TIMEOUT", "Sin huella");
+                                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                                    break;
+                                }
+
+                                int templateId = biometricSensor->captureAndMatch();
+                                if (templateId > 0) {
+                                    if (db.getEstudianteByHuellaID(templateId, est) && est.documento == doc) {
+                                        LOG_INFO("[Main] Exit fingerprint VERIFIED (HTTP) for doc={}", doc);
+                                        AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
+                                        syncWorker.nudge();
+                                        display->showMessage("SALIDA OK", studentName.substr(0, 16));
+                                        notification->notifySuccess();
+                                        printEvent("SALIDA", "Huella verificada: " + studentName, "green");
+                                        matched = true;
+                                        std::this_thread::sleep_for(std::chrono::seconds(2));
+                                        break;
+                                    } else {
+                                        LOG_WARN("[Main] Exit fingerprint MISMATCH (HTTP) for doc={}", doc);
+                                        display->showMessage("ERROR", "Huella no coincide");
+                                        notification->notifyError();
+                                        std::this_thread::sleep_for(std::chrono::seconds(2));
+                                        display->showMessage("SALIDA", "Ponga huella");
+                                    }
+                                }
+                                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                            }
+
+                            if (!matched) {
+                                printEvent("SALIDA", "Verificacion cancelada", "red");
+                            }
+                            display->clear();
                             reprintMenu();
                         }
                     } else if (cmd == "DELETE_STUDENT") {
