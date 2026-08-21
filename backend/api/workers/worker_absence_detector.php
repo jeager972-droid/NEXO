@@ -264,6 +264,27 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         }
         $presentIds = $presentStmt->fetchAll(PDO::FETCH_COLUMN);
 
+        // Para colegios que rotan: obtener también los estudiantes que tienen
+        // CUALQUIER evento biométrico hoy (están en la institución aunque no
+        // hayan entrado a ningún bloque). Estos los maneja el evasion detector
+        // (EVASION_INTERNA), no el absence detector (INASISTENCIA).
+        $inInstitutionIds = [];
+        if ($isRotating) {
+            $inInstStmt = $conn->prepare("
+                SELECT DISTINCT student_id
+                FROM biometric_events
+                WHERE school_id = ?
+                  AND event_timestamp >= ?::date
+                  AND event_timestamp < (?::date + INTERVAL '1 day')
+                  AND student_id IN (
+                      SELECT sga2.student_id FROM student_group_assignments sga2
+                      WHERE sga2.group_id = ? AND sga2.active = TRUE
+                  )
+            ");
+            $inInstStmt->execute([$schoolId, $today, $today, $groupId]);
+            $inInstitutionIds = $inInstStmt->fetchAll(PDO::FETCH_COLUMN);
+        }
+
         // 4. Determinar hora límite por jornada
         $now = new DateTime('now', new DateTimeZone('America/Bogota'));
         $currentMinutes = (int)$now->format('H') * 60 + (int)$now->format('i');
@@ -273,6 +294,11 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
 
             // Si ya marcó ingreso, no es ausente
             if (in_array($studentId, $presentIds)) continue;
+
+            // Si está en la institución (cualquier evento biométrico hoy) pero
+            // no asistió a ningún bloque, el evasion detector lo marcará como
+            // EVASION_INTERNA. No duplicar como INASISTENCIA.
+            if (in_array($studentId, $inInstitutionIds)) continue;
 
             // 4.5. Verificar si tiene permiso activo (no marcar inasistencia si tiene permiso)
             $permisoStmt = $conn->prepare("
