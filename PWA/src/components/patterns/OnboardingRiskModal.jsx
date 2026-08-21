@@ -80,11 +80,12 @@ const DEFAULT_LEVEL_BY_CATEGORY = {
 
 // Umbrales por defecto: todas en 5 dias excepto MUY_ALTA (1/1).
 // Reincidencias: Leve 10, Moderada 5, Alta 3, MUY_ALTA 1.
+// Pesos: Leve 1, Moderada 3, Alta 6, MUY_ALTA 10.
 const DEFAULT_THRESHOLDS = {
-  LEVE: { recurrence: 10, window: 5, minRec: 3, maxRec: 20, minWin: 3, maxWin: 14 },
-  MODERADA: { recurrence: 5, window: 5, minRec: 2, maxRec: 15, minWin: 3, maxWin: 14 },
-  ALTA: { recurrence: 3, window: 5, minRec: 1, maxRec: 10, minWin: 3, maxWin: 14 },
-  MUY_ALTA: { recurrence: 1, window: 1, minRec: 1, maxRec: 1, minWin: 1, maxWin: 1 },
+  LEVE: { recurrence: 10, window: 5, weight: 1.0, minRec: 3, maxRec: 20, minWin: 3, maxWin: 14, minWeight: 0.5, maxWeight: 2.0 },
+  MODERADA: { recurrence: 5, window: 5, weight: 3.0, minRec: 2, maxRec: 15, minWin: 3, maxWin: 14, minWeight: 2.0, maxWeight: 5.0 },
+  ALTA: { recurrence: 3, window: 5, weight: 6.0, minRec: 1, maxRec: 10, minWin: 3, maxWin: 14, minWeight: 4.0, maxWeight: 8.0 },
+  MUY_ALTA: { recurrence: 1, window: 1, weight: 10.0, minRec: 1, maxRec: 1, minWin: 1, maxWin: 1, minWeight: 8.0, maxWeight: 15.0 },
 };
 
 export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
@@ -117,10 +118,13 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
             newThresholds[lvl] = {
               recurrence: rule.recurrence_count ?? newThresholds[lvl].recurrence,
               window: rule.window_days ?? newThresholds[lvl].window,
+              weight: rule.weight_base ?? newThresholds[lvl].weight,
               minRec: rule.min_recurrence ?? newThresholds[lvl].minRec,
               maxRec: rule.max_recurrence ?? newThresholds[lvl].maxRec,
               minWin: rule.min_window_days ?? newThresholds[lvl].minWin,
               maxWin: rule.max_window_days ?? newThresholds[lvl].maxWin,
+              minWeight: rule.min_weight ?? newThresholds[lvl].minWeight,
+              maxWeight: rule.max_weight ?? newThresholds[lvl].maxWeight,
             };
           }
         }
@@ -158,9 +162,12 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
     setThresholds((prev) => {
       const cur = prev[level];
       if (!cur) return prev;
-      const min = field === 'recurrence' ? cur.minRec : cur.minWin;
-      const max = field === 'recurrence' ? cur.maxRec : cur.maxWin;
-      const newVal = Math.max(min, Math.min(max, cur[field] + delta));
+      let min, max, step;
+      if (field === 'recurrence') { min = cur.minRec; max = cur.maxRec; step = 1; }
+      else if (field === 'window') { min = cur.minWin; max = cur.maxWin; step = 1; }
+      else if (field === 'weight') { min = cur.minWeight; max = cur.maxWeight; step = 0.5; }
+      else return prev;
+      const newVal = Math.max(min, Math.min(max, Math.round((cur[field] + delta) * 100) / 100));
       return { ...prev, [level]: { ...cur, [field]: newVal } };
     });
   };
@@ -182,9 +189,9 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
         const existing = (config.rules || []).find((r) => r.risk_level === lvl) || {};
         return {
           risk_level: lvl,
-          weight_base: existing.weight_base ?? 1.0,
+          weight_base: th.weight,
           half_life_days: th.window,
-          activation_threshold: existing.activation_threshold ?? th.recurrence,
+          activation_threshold: th.recurrence,
           cooldown_days: existing.cooldown_days ?? 5,
           single_occurrence: lvl === 'MUY_ALTA',
           requires_human_review: lvl === 'ALTA',
@@ -194,8 +201,8 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
           max_recurrence: th.maxRec,
           min_window_days: th.minWin,
           max_window_days: th.maxWin,
-          min_weight: existing.min_weight ?? 0.5,
-          max_weight: existing.max_weight ?? 2.0,
+          min_weight: th.minWeight,
+          max_weight: th.maxWeight,
           min_half_life: existing.min_half_life ?? 3,
           max_half_life: existing.max_half_life ?? 14,
           min_threshold: existing.min_threshold ?? 2.0,
@@ -365,7 +372,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                               )}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                               {/* Recurrencia */}
                               <div>
                                 <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Reincidencias</p>
@@ -411,6 +418,32 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                                     type="button"
                                     disabled={isLocked || th.window >= th.maxWin}
                                     onClick={() => adjustThreshold(lvl.value, 'window', 1)}
+                                    className="grid h-8 w-8 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Peso */}
+                              <div>
+                                <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Peso</p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={isLocked || th.weight <= th.minWeight}
+                                    onClick={() => adjustThreshold(lvl.value, 'weight', -0.5)}
+                                    className="grid h-8 w-8 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    <Minus size={14} />
+                                  </button>
+                                  <span className="nx-tnum flex-1 text-center text-body font-semibold text-[var(--nx-text)]">
+                                    {th.weight}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={isLocked || th.weight >= th.maxWeight}
+                                    onClick={() => adjustThreshold(lvl.value, 'weight', 0.5)}
                                     className="grid h-8 w-8 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                   >
                                     <Plus size={14} />
@@ -531,7 +564,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                             <div key={lvl.value} className="flex items-center gap-3">
                               <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
                               <span className="text-body-sm text-[var(--nx-text-muted)]">
-                                {th.recurrence} en {th.window} dias
+                                {th.recurrence} en {th.window} dias · peso {th.weight}
                               </span>
                             </div>
                           );

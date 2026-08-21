@@ -212,7 +212,11 @@ class RiskEngineV3
         string $reason,
         array $config
     ): string {
-        $conn->beginTransaction();
+        $startedTx = false;
+        if (!$conn->inTransaction()) {
+            $conn->beginTransaction();
+            $startedTx = true;
+        }
         try {
             // Desactivar política anterior
             $conn->prepare("
@@ -312,10 +316,14 @@ class RiskEngineV3
                 $snapshot, $reason, $newVersion,
             ]);
 
-            $conn->commit();
+            if ($startedTx) {
+                $conn->commit();
+            }
             return $policyId;
         } catch (Throwable $e) {
-            $conn->rollBack();
+            if ($startedTx) {
+                $conn->rollBack();
+            }
             throw $e;
         }
     }
@@ -515,7 +523,11 @@ class RiskEngineV3
             throw new InvalidArgumentException("Estado de escalamiento inválido: $newState");
         }
 
-        $conn->beginTransaction();
+        $startedTx = false;
+        if (!$conn->inTransaction()) {
+            $conn->beginTransaction();
+            $startedTx = true;
+        }
         try {
             $stmt = $conn->prepare("
                 UPDATE risk_alerts SET escalation_state = ?
@@ -525,7 +537,9 @@ class RiskEngineV3
             $stmt->execute([$newState, $alertId]);
             $prev = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$prev) {
-                $conn->rollBack();
+                if ($startedTx) {
+                    $conn->rollBack();
+                }
                 return false;
             }
 
@@ -542,10 +556,14 @@ class RiskEngineV3
                 $reason
             ]);
 
-            $conn->commit();
+            if ($startedTx) {
+                $conn->commit();
+            }
             return true;
         } catch (Throwable $e) {
-            $conn->rollBack();
+            if ($startedTx) {
+                $conn->rollBack();
+            }
             throw $e;
         }
     }
