@@ -726,15 +726,37 @@ class RiskEngineV3
     }
 
     /**
+     * Tipos de evento que NO deben aparecer en la configuración de riesgo.
+     * La inasistencia se detecta automáticamente (worker_absence_detector) y
+     * la salida no autorizada se gestiona vía notifications; ninguno de los
+     * dos debe ser clasificado manualmente por el rector.
+     */
+    private const EXCLUDED_EVENT_TYPES = [
+        'INASISTENCIA',
+        'INASISTENCIA_JUSTIFICADA',
+        'INASISTENCIA_NO_JUSTIFICADA',
+        'UNAUTHORIZED_ABSENCE',
+        'SALIDA_NO_AUTORIZADA',
+        'UNAUTHORIZED_EXIT',
+    ];
+
+    /**
      * Obtiene los tipos de evento disponibles para configuración.
      */
     public static function getEventTypes(PDO $conn): array
     {
-        $stmt = $conn->query("
+        // Excluir tipos de evento que no deben ser clasificados manualmente.
+        // Se construye la lista de placeholders dinámicamente.
+        $excluded = self::EXCLUDED_EVENT_TYPES;
+        $placeholders = implode(',', array_fill(0, count($excluded), '?'));
+        $stmt = $conn->prepare("
             SELECT event_type_id, type_code, display_name, description, category
-            FROM risk_event_types WHERE is_system = TRUE
+            FROM risk_event_types
+            WHERE is_system = TRUE
+              AND type_code NOT IN ($placeholders)
             ORDER BY category, display_name
         ");
+        $stmt->execute($excluded);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

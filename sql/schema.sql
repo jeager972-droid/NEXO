@@ -718,6 +718,22 @@ ON CONFLICT (type_code) DO UPDATE SET
     description  = EXCLUDED.description,
     category     = EXCLUDED.category;
 
+-- Migración: eliminar tipos de evento que no deben ser clasificados manualmente.
+-- La inasistencia se detecta automáticamente (worker_absence_detector) y la
+-- salida no autorizada se gestiona vía notifications. También limpiar
+-- variantes sin Ñ que pudieron insertarse por encoding.
+DELETE FROM risk_event_level_mapping
+ WHERE event_type_id IN (
+     SELECT event_type_id FROM risk_event_types
+      WHERE type_code IN ('INASISTENCIA','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA',
+                          'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
+                          'SALIDA_BANO')
+ );
+DELETE FROM risk_event_types
+ WHERE type_code IN ('INASISTENCIA','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA',
+                     'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
+                     'SALIDA_BANO');
+
 -- Calendario lectivo institucional (para cálculo de días lectivos en decaimiento)
 CREATE TABLE IF NOT EXISTS school_calendar (
     calendar_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

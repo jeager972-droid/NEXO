@@ -66,9 +66,19 @@ const LEVELS = [
 
 const CATEGORIES = {
   asistencia: { label: 'Asistencia', icon: Clock },
-  evasion: { label: 'Evasion', icon: AlertTriangle },
+  evasion: { label: 'Evasión', icon: AlertTriangle },
   comportamiento: { label: 'Comportamiento', icon: TrendingUp },
 };
+
+// Eventos que no deben aparecer en la configuración de riesgo.
+const EXCLUDED_EVENT_TYPES = [
+  'INASISTENCIA',
+  'INASISTENCIA_JUSTIFICADA',
+  'INASISTENCIA_NO_JUSTIFICADA',
+  'UNAUTHORIZED_ABSENCE',
+  'SALIDA_NO_AUTORIZADA',
+  'UNAUTHORIZED_EXIT',
+];
 
 const DEFAULT_LEVEL_BY_CATEGORY = {
   asistencia: 'LEVE',
@@ -103,7 +113,10 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
         riskApi.getEventTypes(),
       ]);
       setConfig(policyRes.data?.config ?? { rules: [], mapping: [] });
-      setEventTypes(typesRes.data ?? []);
+      // Filtrar eventos que no deben ser clasificados manualmente
+      setEventTypes((typesRes.data ?? []).filter(
+        (evt) => !EXCLUDED_EVENT_TYPES.includes(evt.type_code)
+      ));
 
       // Si el rector ya guardo una politica (version > 1), cargar sus valores
       const policy = policyRes.data?.policy;
@@ -308,16 +321,15 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
 
                     <div>
                       <p className="text-label text-[var(--nx-text)] mb-3">Niveles de gravedad</p>
-                      <div className="space-y-2">
-                        {LEVELS.map((lvl) => (
-                          <div
-                            key={lvl.value}
-                            className="flex items-start gap-3 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-3"
-                          >
-                            <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
-                            <p className="text-caption text-[var(--nx-text-muted)] leading-snug flex-1">{lvl.desc}</p>
-                          </div>
-                        ))}
+                      <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
+                        <dl className="space-y-2.5">
+                          {LEVELS.map((lvl) => (
+                            <div key={lvl.value} className="flex items-baseline gap-3">
+                              <dt className="text-body-sm font-medium text-[var(--nx-text)] shrink-0 min-w-[110px]">{lvl.label}</dt>
+                              <dd className="text-caption text-[var(--nx-text-muted)] leading-snug">{lvl.desc}</dd>
+                            </div>
+                          ))}
+                        </dl>
                       </div>
                     </div>
 
@@ -521,8 +533,8 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                           const th = thresholds[lvl.value];
                           if (!th) return null;
                           return (
-                            <div key={lvl.value} className="flex items-center gap-3">
-                              <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
+                            <div key={lvl.value} className="flex items-baseline gap-3">
+                              <span className="text-body-sm font-medium text-[var(--nx-text)] shrink-0 min-w-[110px]">{lvl.label}</span>
                               <span className="text-body-sm text-[var(--nx-text-muted)]">
                                 {th.recurrence} en {th.window} dia{th.window !== 1 ? 's' : ''}
                               </span>
@@ -535,27 +547,19 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                     {/* Eventos clasificados */}
                     <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
                       <p className="text-label text-[var(--nx-text)] mb-3">Eventos clasificados</p>
-                      <div className="space-y-3">
-                        {LEVELS.filter((l) => l.value !== 'SIN_IMPORTANCIA').map((lvl) => {
+                      <div className="space-y-2.5">
+                        {LEVELS.map((lvl) => {
                           const evts = eventsByLevel[lvl.value] || [];
                           if (evts.length === 0) return null;
                           return (
-                            <div key={lvl.value} className="flex items-start gap-3">
-                              <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
+                            <div key={lvl.value} className="flex items-baseline gap-3">
+                              <span className="text-body-sm font-medium text-[var(--nx-text)] shrink-0 min-w-[110px]">{lvl.label}</span>
                               <p className="text-caption text-[var(--nx-text-muted)] leading-snug flex-1">
                                 {evts.map((e) => e.display_name).join(', ')}
                               </p>
                             </div>
                           );
                         })}
-                        {(eventsByLevel['SIN_IMPORTANCIA'] || []).length > 0 && (
-                          <div className="flex items-start gap-3 pt-2 border-t border-[var(--nx-border)]">
-                            <Badge scheme="neutral" dot>Sin importancia</Badge>
-                            <p className="text-caption text-[var(--nx-text-muted)] leading-snug flex-1">
-                              {(eventsByLevel['SIN_IMPORTANCIA'] || []).map((e) => e.display_name).join(', ')}
-                            </p>
-                          </div>
-                        )}
                       </div>
                     </div>
 
