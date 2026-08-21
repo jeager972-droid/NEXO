@@ -15,11 +15,11 @@
  *   Capa 8 (opcional): Anomalía estadística (z-score individual) — esta clase
  *
  * NIVELES DE GRAVEDAD (ontología NEXO, no editable):
- *   SIN_IMPORTANCIA: peso 0, no alimenta scoring
- *   LEVE:           peso 1.0, vida media 7 días lectivos, umbral ~4.0
- *   MODERADA:        peso 3.0, vida media 10 días lectivos, umbral ~9.0
- *   ALTA:            peso 6.0, vida media 15 días lectivos, umbral ~12.0
- *   MUY_ALTA:        peso 10.0, no decae, 1 ocurrencia dispara
+ *   SIN_IMPORTANCIA: no alimenta el cálculo de riesgo
+ *   LEVE:           4 reincidencias en 7 días activa alerta a coordinación
+ *   MODERADA:        3 reincidencias en 10 días activa alerta a coordinación
+ *   ALTA:            2 reincidencias en 15 días, requiere revisión humana
+ *   MUY_ALTA:        1 ocurrencia activa alerta inmediata a coordinación
  *
  * LO QUE LA INSTITUCIÓN CONFIGURA:
  *   - Mapeo evento → nivel (qué evento es LEVE, MODERADA, etc.)
@@ -137,6 +137,8 @@ class RiskEngineV3
         $rulesStmt = $conn->prepare("
             SELECT risk_level, weight_base, half_life_days, activation_threshold,
                    cooldown_days, single_occurrence, requires_human_review,
+                   recurrence_count, window_days,
+                   min_recurrence, max_recurrence, min_window_days, max_window_days,
                    min_weight, max_weight, min_half_life, max_half_life,
                    min_threshold, max_threshold
             FROM risk_rules WHERE policy_id = ?
@@ -250,15 +252,23 @@ class RiskEngineV3
                     INSERT INTO risk_rules (policy_id, school_id, risk_level,
                         weight_base, half_life_days, activation_threshold, cooldown_days,
                         single_occurrence, requires_human_review,
+                        recurrence_count, window_days,
+                        min_recurrence, max_recurrence, min_window_days, max_window_days,
                         min_weight, max_weight, min_half_life, max_half_life,
                         min_threshold, max_threshold)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ")->execute([
                     $policyId, $schoolId, $rule['risk_level'],
                     $rule['weight_base'], $rule['half_life_days'],
                     $rule['activation_threshold'], $rule['cooldown_days'],
                     $rule['single_occurrence'] ?? false,
                     $rule['requires_human_review'] ?? false,
+                    $rule['recurrence_count'] ?? 4,
+                    $rule['window_days'] ?? 7,
+                    $rule['min_recurrence'] ?? 1,
+                    $rule['max_recurrence'] ?? 20,
+                    $rule['min_window_days'] ?? 1,
+                    $rule['max_window_days'] ?? 60,
                     $rule['min_weight'], $rule['max_weight'],
                     $rule['min_half_life'], $rule['max_half_life'],
                     $rule['min_threshold'], $rule['max_threshold'],

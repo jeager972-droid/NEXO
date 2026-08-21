@@ -89,12 +89,6 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.RECTOR, ROLES.COORDINATOR],
   },
   {
-    title: 'Riesgo',
-    path: '/riesgo',
-    icon: ShieldAlert,
-    roles: [ROLES.RECTOR, ROLES.COORDINATOR],
-  },
-  {
     title: 'Perfil',
     path: '/perfil',
     icon: User,

@@ -710,17 +710,11 @@ CREATE TABLE IF NOT EXISTS risk_event_types (
 );
 
 INSERT INTO risk_event_types (type_code, display_name, description, category) VALUES
-    ('LATE_ARRIVAL',        'Llegada tarde',              'Estudiante llega después de la hora de entrada + tolerancia', 'asistencia'),
-    ('INASISTENCIA',        'Inasistencia',               'Estudiante no asiste a clases sin justificación', 'asistencia'),
-    ('UNAUTHORIZED_ABSENCE','Ausencia no autorizada',      'Ausencia detectada sin permiso registrado', 'asistencia'),
-    ('EVASION_INTERNA',     'Evasión interna',             'Estudiante no entra a clase estando en el colegio', 'evasion'),
+    ('LATE_ARRIVAL',        'Llegada tarde',              'Estudiante llega después de la hora de entrada', 'asistencia'),
+    ('INASISTENCIA',        'Inasistencia',               'Estudiante no asiste a clases. El acudiente recibe mensaje por WhatsApp y confirma si es justificada. No alimenta el cálculo de riesgo.', 'asistencia'),
+    ('EVASION_INTERNA',     'Evasión interna',             'Estudiante no entra a clase estando en el colegio. Activación automática.', 'evasion'),
     ('SALIDA_BAÑO',         'Salida al baño',              'Salida al baño durante clase', 'comportamiento'),
-    ('SALIDA_NO_AUTORIZADA','Salida no autorizada',         'Estudiante sale del perímetro escolar sin autorización', 'evasion'),
-    ('PERMISO',             'Permiso justificado',          'Ausencia o salida con permiso previo', 'administrativo'),
-    ('RISK_ALERT_LEVE',     'Alerta de riesgo LEVE',        'Alerta generada por motor de riesgo', 'sistema'),
-    ('RISK_ALERT_MODERADA', 'Alerta de riesgo MODERADA',    'Alerta generada por motor de riesgo', 'sistema'),
-    ('RISK_ALERT_ALTA',     'Alerta de riesgo ALTA',        'Alerta generada por motor de riesgo', 'sistema'),
-    ('RISK_ALERT_MUY_ALTA', 'Alerta de riesgo MUY_ALTA',    'Alerta generada por motor de riesgo', 'sistema')
+    ('SALIDA_NO_AUTORIZADA','Salida no autorizada',         'Estudiante sale del perímetro escolar sin autorización. Activación automática.', 'evasion')
 ON CONFLICT (type_code) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     description  = EXCLUDED.description,
@@ -790,6 +784,12 @@ CREATE TABLE IF NOT EXISTS risk_rules (
     cooldown_days       INTEGER NOT NULL DEFAULT 0,
     single_occurrence   BOOLEAN NOT NULL DEFAULT FALSE,
     requires_human_review BOOLEAN NOT NULL DEFAULT FALSE,
+    recurrence_count    INTEGER NOT NULL DEFAULT 4,
+    window_days         INTEGER NOT NULL DEFAULT 7,
+    min_recurrence      INTEGER NOT NULL DEFAULT 1,
+    max_recurrence      INTEGER NOT NULL DEFAULT 20,
+    min_window_days     INTEGER NOT NULL DEFAULT 1,
+    max_window_days     INTEGER NOT NULL DEFAULT 60,
     min_weight          NUMERIC(5,2) NOT NULL,
     max_weight          NUMERIC(5,2) NOT NULL,
     min_half_life       INTEGER NOT NULL,
@@ -1526,46 +1526,56 @@ BEGIN
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
         single_occurrence, requires_human_review,
+        recurrence_count, window_days,
+        min_recurrence, max_recurrence, min_window_days, max_window_days,
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'LEVE',
         1.0, 7, 4.0, 5, FALSE, FALSE,
+        4, 7, 2, 10, 3, 14,
         0.5, 2.0, 3, 14, 2.0, 8.0);
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
         single_occurrence, requires_human_review,
+        recurrence_count, window_days,
+        min_recurrence, max_recurrence, min_window_days, max_window_days,
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'MODERADA',
         3.0, 10, 9.0, 7, FALSE, FALSE,
+        3, 10, 2, 8, 5, 21,
         2.0, 5.0, 5, 21, 5.0, 15.0);
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
         single_occurrence, requires_human_review,
+        recurrence_count, window_days,
+        min_recurrence, max_recurrence, min_window_days, max_window_days,
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'ALTA',
         6.0, 15, 12.0, 3, FALSE, TRUE,
+        2, 15, 1, 6, 7, 30,
         4.0, 8.0, 7, 30, 8.0, 20.0);
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
         single_occurrence, requires_human_review,
+        recurrence_count, window_days,
+        min_recurrence, max_recurrence, min_window_days, max_window_days,
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'MUY_ALTA',
         10.0, 9999, 10.0, 0, TRUE, FALSE,
+        1, 1, 1, 1, 1, 1,
         8.0, 15.0, 9999, 9999, 10.0, 10.0);
 
     INSERT INTO risk_event_level_mapping (policy_id, school_id, event_type_id, risk_level)
     SELECT v_policy_id, p_school_id, event_type_id,
         CASE type_code
             WHEN 'LATE_ARRIVAL'         THEN 'LEVE'
-            WHEN 'INASISTENCIA'          THEN 'MODERADA'
-            WHEN 'UNAUTHORIZED_ABSENCE'  THEN 'MODERADA'
+            WHEN 'INASISTENCIA'          THEN 'SIN_IMPORTANCIA'
             WHEN 'EVASION_INTERNA'       THEN 'MODERADA'
-            WHEN 'SALIDA_BAÑO'           THEN 'SIN_IMPORTANCIA'
+            WHEN 'SALIDA_BAÑO'           THEN 'LEVE'
             WHEN 'SALIDA_NO_AUTORIZADA'  THEN 'MUY_ALTA'
-            WHEN 'PERMISO'               THEN 'SIN_IMPORTANCIA'
             ELSE 'SIN_IMPORTANCIA'
         END
     FROM risk_event_types
@@ -1574,25 +1584,25 @@ BEGIN
     INSERT INTO risk_combination_rules (policy_id, school_id, rule_name,
         condition_json, result_level, result_reason, is_active)
     VALUES (v_policy_id, p_school_id,
-        'Evasión + Inasistencia simultánea',
+        'Evasión + Llegadas tarde simultáneas',
         jsonb_build_object(
             'categories', jsonb_build_array(
                 jsonb_build_object('category', 'evasion', 'min_level', 'MODERADA'),
-                jsonb_build_object('category', 'asistencia', 'min_level', 'MODERADA')
+                jsonb_build_object('category', 'asistencia', 'min_level', 'LEVE')
             ),
             'window_lecture_days', 10
         ),
         'ALTA',
-        'Patrón combinado: evasión interna + inasistencia detectadas simultáneamente',
+        'Patrón combinado: evasión interna + llegadas tarde detectadas simultáneamente',
         TRUE);
 
     v_snapshot := jsonb_build_object(
         'engine_version', '3.0',
         'levels', jsonb_build_object(
-            'LEVE',     jsonb_build_object('weight', 1.0, 'half_life', 7, 'threshold', 4.0, 'cooldown', 5),
-            'MODERADA', jsonb_build_object('weight', 3.0, 'half_life', 10, 'threshold', 9.0, 'cooldown', 7),
-            'ALTA',     jsonb_build_object('weight', 6.0, 'half_life', 15, 'threshold', 12.0, 'cooldown', 3),
-            'MUY_ALTA', jsonb_build_object('weight', 10.0, 'half_life', 9999, 'threshold', 10.0, 'cooldown', 0)
+            'LEVE',     jsonb_build_object('weight', 1.0, 'half_life', 7, 'threshold', 4.0, 'cooldown', 5, 'recurrence_count', 4, 'window_days', 7),
+            'MODERADA', jsonb_build_object('weight', 3.0, 'half_life', 10, 'threshold', 9.0, 'cooldown', 7, 'recurrence_count', 3, 'window_days', 10),
+            'ALTA',     jsonb_build_object('weight', 6.0, 'half_life', 15, 'threshold', 12.0, 'cooldown', 3, 'recurrence_count', 2, 'window_days', 15),
+            'MUY_ALTA', jsonb_build_object('weight', 10.0, 'half_life', 9999, 'threshold', 10.0, 'cooldown', 0, 'recurrence_count', 1, 'window_days', 1)
         ),
         'event_mapping', 'default_nexo',
         'combination_rules', 1
