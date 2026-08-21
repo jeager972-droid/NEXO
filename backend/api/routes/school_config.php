@@ -1193,9 +1193,15 @@ if ($cleanPath === '/school/risk-config' && $method === 'GET') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        $stmt = $conn->prepare("SELECT risk_config_completed FROM schools WHERE school_id = ?");
-        $stmt->execute([$schoolId]);
-        $school = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Resiliente: si la columna risk_config_completed no existe aun (pre-migracion),
+        // devolver needs_onboarding=false para no bloquear el sistema.
+        try {
+            $stmt = $conn->prepare("SELECT risk_config_completed FROM schools WHERE school_id = ?");
+            $stmt->execute([$schoolId]);
+            $school = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $colEx) {
+            $school = ['risk_config_completed' => true];
+        }
 
         if (!$school) {
             http_response_code(404);
@@ -1234,8 +1240,13 @@ if ($cleanPath === '/school/risk-config' && $method === 'POST') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        $conn->prepare("UPDATE schools SET risk_config_completed = TRUE WHERE school_id = ?")
-            ->execute([$schoolId]);
+        // Resiliente: si la columna no existe, el UPDATE falla pero no bloqueamos.
+        try {
+            $conn->prepare("UPDATE schools SET risk_config_completed = TRUE WHERE school_id = ?")
+                ->execute([$schoolId]);
+        } catch (PDOException $colEx) {
+            // Columna no existe aun. No bloquear.
+        }
 
         securityLog('RISK_CONFIG_COMPLETED', "School: $schoolId, By: $userId ($role)", $userId, $schoolId);
 

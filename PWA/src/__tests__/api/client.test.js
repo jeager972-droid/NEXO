@@ -68,7 +68,7 @@ describe('client (axios instance)', () => {
     const config = axios.create.mock.calls[0][0];
     expect(config.baseURL).toBe('');
     expect(config.withCredentials).toBe(true);
-    expect(config.timeout).toBe(25000);
+    expect(config.timeout).toBe(12000);
     expect(config.headers['X-Requested-With']).toBe('XMLHttpRequest');
   });
 
@@ -85,12 +85,12 @@ describe('client (axios instance)', () => {
 describe('request interceptor', () => {
   it('sets adaptive timeout for slow routes (/operations/)', () => {
     const config = { url: '/operations/bulk', method: 'post' };
-    expect(requestFulfilled(config).timeout).toBe(45000);
+    expect(requestFulfilled(config).timeout).toBe(30000);
   });
 
   it('sets adaptive timeout for slow routes (/reports/)', () => {
     const config = { url: '/reports/annual', method: 'get' };
-    expect(requestFulfilled(config).timeout).toBe(45000);
+    expect(requestFulfilled(config).timeout).toBe(30000);
   });
 
   it('keeps default timeout for normal routes', () => {

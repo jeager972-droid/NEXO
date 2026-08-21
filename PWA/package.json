@@ -17,13 +17,11 @@
     "@fontsource-variable/inter": "^5.2.8",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.378.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.23.1",
-    "react-select": "^5.10.2",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {

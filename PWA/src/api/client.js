@@ -19,8 +19,8 @@ if (import.meta.env.PROD && !API_BASE_URL.startsWith('https://')) {
 
 // Rutas que pueden tardar más (envío masivo de WhatsApp, reportes, etc.)
 const SLOW_ROUTE_PATTERNS = ['/operations/', '/reports/'];
-const DEFAULT_TIMEOUT = 25000;
-const SLOW_TIMEOUT = 45000;
+const DEFAULT_TIMEOUT = 12000;
+const SLOW_TIMEOUT = 30000;
 
 const client = axios.create({
   baseURL: API_BASE_URL,

@@ -13,13 +13,17 @@
     <link rel="apple-touch-icon" href="/logo/logo_nexo_app.png" />
     <!-- VitePWA inyecta <link rel="manifest" href="/app/manifest.webmanifest"> automáticamente -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#003366" />
+    <meta name="theme-color" content="#1e40af" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="NEXO" />
     <meta name="format-detection" content="telephone=no" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; base-uri 'self'; object-src 'none';" />
+
+    <!-- Preconnect al API para reducir latencia de primer request -->
+    <link rel="preconnect" href="https://nexo-80go.onrender.com" crossorigin />
+    <link rel="dns-prefetch" href="https://nexo-80go.onrender.com" />
 
     <!-- Stage 9: SEO Meta Tags -->
     <meta name="description" content="NEXO: Plataforma EdTech IoT con soberanía educativa digital. Infraestructura híbrida con audit chain inmutable, certificación IP66 y corresponsabilidad familiar en tiempo real." />

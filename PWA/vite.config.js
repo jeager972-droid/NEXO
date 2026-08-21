@@ -35,6 +35,13 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg', 'logo/logo_nexo_app.png', 'logo/icon-192.png', 'logo/icon-512.png', 'logo/icon-180.png'],
       workbox: {
         navigateFallback: '/app/index.html',
+        // Forzar activacion inmediata del nuevo SW sin esperar a que se cierren
+        // todas las pestanas. Esto asegura que los usuarios obtengan la nueva
+        // version de assets (logos, JS) sin tener que cerrar manualmente.
+        skipWaiting: true,
+        clientsClaim: true,
+        // Limpiar caches viejas automaticamente al activar un nuevo SW.
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: ({ url, request }) => url.pathname.startsWith('/v1') && request.method === 'POST',
@@ -53,18 +60,27 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'nexo-api-cache',
-              networkTimeoutSeconds: 5,
-              // BUGFIX: Status 0 = opaque/CORS failure. Cachearlo sirve datos corruptos.
+              networkTimeoutSeconds: 3,
               cacheableResponse: { statuses: [200] },
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 }
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 2 }
             }
           },
           {
-            urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style' || request.destination === 'image',
+            // Assets con hash (JS, CSS) — CacheFirst porque el hash cambia con cada build.
+            urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'nexo-hashed-assets',
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 90 }
+            }
+          },
+          {
+            // Imagenes (logos, iconos) — StaleWhileRevalidate para actualizar en background
+            urlPattern: ({ request }) => request.destination === 'image',
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'nexo-static-assets',
-              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 }
+              cacheName: 'nexo-images',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 }
             }
           }
         ]

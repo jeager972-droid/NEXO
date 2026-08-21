@@ -53,15 +53,17 @@ const Layout = () => {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  // Onboarding unificado: consulta horarios + grupos en paralelo
+  // Onboarding unificado: consulta horarios + grupos + riesgo en paralelo.
+  // Si alguna API falla (timeout, 500, red), NO se bloquea al usuario.
+  // Solo se muestra el modal de onboarding si la API responde explicitamente
+  // que falta configuracion.
   useEffect(() => {
-    // No consultar si no hay usuario autenticado
     if (!user?.id) {
       setOnboardingLoading(false);
       return;
     }
 
-    // Resetear loading a true al inicio de cada consulta
+    let cancelled = false;
     setOnboardingLoading(true);
 
     const checkOnboarding = async () => {
@@ -71,37 +73,33 @@ const Layout = () => {
           schoolApi.getGroupsOnboarding(),
           schoolApi.getRiskConfig(),
         ]);
+
+        if (cancelled) return;
+
         const config = configResult.status === 'fulfilled' ? configResult.value : null;
         const groupsResp = groupsResult.status === 'fulfilled' ? groupsResult.value : null;
         const riskResp = riskResult.status === 'fulfilled' ? riskResult.value : null;
 
-        if (configResult.status === 'rejected') {
-          console.error('[Onboarding] Schedule check failed:', configResult.reason);
-        }
-        if (groupsResult.status === 'rejected') {
-          console.error('[Onboarding] Groups check failed:', groupsResult.reason);
-        }
-        if (riskResult.status === 'rejected') {
-          console.error('[Onboarding] Risk check failed:', riskResult.reason);
-        }
-
+        // Solo bloquear si la API respondio OK y dice que falta configuracion.
+        // Si la API fallo (rejected), asumir que no falta (no bloquear).
         setScheduleOnboardingRequired(config ? !config.onboarding_completed : false);
         setGroupsOnboardingRequired(groupsResp ? !!groupsResp.needs_onboarding : false);
         setRiskOnboardingRequired(riskResp ? !!riskResp.needs_onboarding : false);
-
-        console.log('[Onboarding] Result:', {
-          scheduleRequired: config ? !config.onboarding_completed : 'no-config',
-          groupsRequired: groupsResp ? !!groupsResp.needs_onboarding : 'no-groups-resp',
-          riskRequired: riskResp ? !!riskResp.needs_onboarding : 'no-risk-resp',
-        });
       } catch (e) {
-        console.error('Onboarding check failed:', e);
+        if (!cancelled) {
+          // Error inesperado: no bloquear
+          setScheduleOnboardingRequired(false);
+          setGroupsOnboardingRequired(false);
+          setRiskOnboardingRequired(false);
+        }
       } finally {
-        setOnboardingLoading(false);
+        if (!cancelled) setOnboardingLoading(false);
       }
     };
     checkOnboarding();
-  }, [user]);
+
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';

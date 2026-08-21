@@ -1,6 +1,6 @@
 /**
  * WebApp entry / NEXO Institucional
- * Punto de entrada: monta la SPA, limpia service workers antiguos y provee contextos.
+ * Punto de entrada: monta la SPA, registra el service worker y provee contextos.
  */
 import '@fontsource-variable/inter';
 import React from 'react';
@@ -12,17 +12,36 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((r) => {
-      r.update().catch(() => {
-        r.unregister().then(() => console.log('[NEXO] Stale SW unregistered'));
+// Limpieza segura de caches antiguas de Workbox.
+// No desregistramos el SW activo, solo borramos caches obsoletas
+// para evitar que logos o assets viejos queden pegados.
+if ('serviceWorker' in navigator && 'caches' in window) {
+  window.addEventListener('load', () => {
+    caches.keys().then((cacheNames) => {
+      const validCaches = ['nexo-api-cache', 'nexo-hashed-assets', 'nexo-images', 'workbox-precache-v2'];
+      cacheNames.forEach((name) => {
+        if (!validCaches.includes(name)) {
+          caches.delete(name).then((deleted) => {
+            if (deleted) console.log('[NEXO] Removed stale cache:', name);
+          });
+        }
       });
-    });
+    }).catch(() => {});
   });
 }
 
-registerSW({ immediate: true });
+// Registro del SW con autoUpdate. El SW de vite-plugin-pwa maneja
+// su propio ciclo de vida. No forzamos unregister para evitar
+// perder el cache offline en conexiones inestables.
+registerSW({
+  immediate: true,
+  onRegistered(r) {
+    if (r) {
+      // Verificar actualizaciones cada hora
+      setInterval(() => r.update().catch(() => {}), 60 * 60 * 1000);
+    }
+  },
+});
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
