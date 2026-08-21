@@ -28,7 +28,7 @@
  *   - Redis no es necesario para este worker.
  */
 
-require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../core/db.php';
 
 $daemonMode = in_array('--daemon', $argv ?? [], true);
 $intervalSeconds = 3600; // 1 hora entre ciclos en modo daemon

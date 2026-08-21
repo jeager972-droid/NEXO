@@ -67,7 +67,7 @@ $redisOk = false;
 $redisConn = null;
 try {
     if (class_exists('Redis')) {
-        require_once __DIR__ . '/redis.php';
+        require_once __DIR__ . '/core/redis.php';
         $config = _nexoResolveRedisConfig();
         $redisConn = new Redis();
         $context = [];

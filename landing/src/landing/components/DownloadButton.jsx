@@ -4,7 +4,7 @@
  * =============================================================================
  * RESPONSABILIDAD:
  *   Renderiza un botón con efecto de rebote GSAP al hacer clic y abre el href
- *   en una nueva pestaña. Usado actualmente para la tarjeta Android en la
+ *   en una nueva pestaña. Usado para las tarjetas de instalación PWA en la
  *   sección de descargas. Implementado con forwardRef para exposición del DOM.
  *
  * DEPENDENCIAS:
@@ -18,13 +18,12 @@ import gsap from 'gsap'
 
 // Componente de descarga simple con efecto de rebote
 
-const AnimatedDownloadButton = forwardRef(function AnimatedDownloadButton({ 
-  href, 
-  filename = 'nexo.apk',
+const AnimatedDownloadButton = forwardRef(function AnimatedDownloadButton({
+  href,
   children,
   className = '',
   id,
-  ...props 
+  ...props
 }, ref) {
   const buttonRef = useRef()
 

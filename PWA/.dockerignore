@@ -1,0 +1,7 @@
+# Excluir del build de Docker
+.git
+.gitignore
+.dockerignore
+*.md
+dist/
+node_modules/

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    bootstrap="../backend/api/vendor/autoload.php"
+    colors="true"
+    convertNoticesToExceptions="true"
+    convertWarningsToExceptions="true"
+    convertErrorsToExceptions="true"
+    stopOnFailure="false"
+    failOnWarning="true"
+>
+    <testsuites>
+        <testsuite name="SQL Schema Tests">
+            <directory>./sql</directory>
+        </testsuite>
+        <testsuite name="API Unit Tests">
+            <directory>./api</directory>
+        </testsuite>
+        <testsuite name="Integration Tests">
+            <directory>./integration</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

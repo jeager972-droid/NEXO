@@ -64,6 +64,13 @@ http {
             try_files \$uri \$uri/ /api.php?\$query_string;
         }
 
+        # PWA static files (service worker, manifest, workbox)
+        location = /sw.js { root /var/www/html/public; }
+        location = /sw.js.map { root /var/www/html/public; }
+        location = /manifest.webmanifest { root /var/www/html/public; }
+        location ~ ^/workbox-.*\.js$ { root /var/www/html/public; }
+        location ~ ^/workbox-.*\.js\.map$ { root /var/www/html/public; }
+
         # PHP handler EXCLUSIVO para api.php y health.php
         # fastcgi_param HTTP_AUTHORIZATION: nginx NO pasa el header Authorization
         # a PHP-FPM por defecto. Sin esto, extractBearerToken() no encuentra el JWT.

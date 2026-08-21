@@ -802,7 +802,7 @@ if (preg_match('#^/devices/command/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) &&
     // V2: Intentar MQTT primero (Pub/Sub baja latencia)
     $mqttOk = false;
     if (file_exists(__DIR__ . '/../mqtt_publisher.php')) {
-        require_once __DIR__ . '/../mqtt_publisher.php';
+        require_once __DIR__ . '/../core/mqtt_publisher.php';
         $mqttOk = publishDeviceCommand($deviceId, $cmdPayload);
     }
 

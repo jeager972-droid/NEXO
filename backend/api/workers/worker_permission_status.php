@@ -23,8 +23,8 @@
  */
 
 declare(ticks=1);
-require_once __DIR__ . '/../db.php';
-require_once __DIR__ . '/../redis.php';
+require_once __DIR__ . '/../core/db.php';
+require_once __DIR__ . '/../core/redis.php';
 
 $shutdown = false;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
@@ -209,7 +209,7 @@ while (!$shutdown) {
         if ($iterations % 100 === 0) {
             // Reconectar PDO para evitar conexiones stale en daemon de larga duración
             $pdo = null;
-            require __DIR__ . '/../db.php';
+            require __DIR__ . '/../core/db.php';
         }
     } catch (Exception $e) {
         logE('FATAL', $e->getMessage());

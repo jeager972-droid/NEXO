@@ -56,8 +56,8 @@
  */
 
 declare(ticks=1);
-require_once __DIR__ . '/../db.php';
-require_once __DIR__ . '/../redis.php';
+require_once __DIR__ . '/../core/db.php';
+require_once __DIR__ . '/../core/redis.php';
 
 // Configurar rol de sistema para workers.
 // Nota: con PgBouncer transaction pooling, set_config(..., false) se pierde

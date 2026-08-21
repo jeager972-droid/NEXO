@@ -1,0 +1,5 @@
+.vercel
+.env*.local
+storybook-static/
+dist/
+.nexo/

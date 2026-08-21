@@ -62,8 +62,8 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Strict-Transport-Security: max-age=63072000; includeSubDomains; preload');
 header("Content-Security-Policy: frame-ancestors 'none';");
 
-require_once __DIR__ . '/boot_check.php';
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/core/boot_check.php';
+require_once __DIR__ . '/core/db.php';
 require_once __DIR__ . '/routes/_auth_middleware.php';
 
 $conn = $pdo;

@@ -1,11 +1,11 @@
 /**
  * =============================================================================
- * DownloadSection.jsx — Sección de descarga de aplicaciones de la landing NEXO.
+ * DownloadSection.jsx — Sección de descarga PWA de la landing NEXO.
  * =============================================================================
  * RESPONSABILIDAD:
- *   Presenta tarjetas de descarga para Android, iOS, Windows, Mac y Linux con
- *   iconos SVG personalizados. Aplica efectos de hover/tilt GSAP en desktop y
- *   responsive grid en móvil. Usa AnimatedDownloadButton para Android.
+ *   Presenta tarjetas de instalación PWA para Android, iOS, Windows, Mac y Linux
+ *   con iconos SVG personalizados. Aplica efectos de hover/tilt GSAP en desktop y
+ *   responsive grid en móvil. Usa AnimatedDownloadButton para el efecto de rebote.
  *
  * DEPENDENCIAS:
  *   - react hooks, gsap
@@ -24,12 +24,14 @@ import gsap from 'gsap'
 // GSAP magnetic/tilt + scale hover por plataforma con glow representativo.
 // CAMBIO 6: Sticky scroll
 
+const PWA_URL = 'https://nexo-eight-xi.vercel.app/app/instalar'
+
 const PLATFORMS = [
   {
     id: 'android',
     name: 'Android',
     glowColor: 'rgba(61,220,132,0.35)',   // Android green
-    href: 'https://nexo-eight-xi.vercel.app/app/instalar/android',
+    href: PWA_URL + '/android',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -46,7 +48,7 @@ const PLATFORMS = [
     id: 'ios',
     name: 'iOS',
     glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
-    href: 'https://nexo-eight-xi.vercel.app/app/instalar/ios',
+    href: PWA_URL + '/ios',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -59,7 +61,7 @@ const PLATFORMS = [
     id: 'windows',
     name: 'Windows',
     glowColor: 'rgba(0,120,212,0.35)',     // Windows blue
-    href: 'https://nexo-eight-xi.vercel.app/app/instalar/windows',
+    href: PWA_URL + '/windows',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -74,7 +76,7 @@ const PLATFORMS = [
     id: 'mac',
     name: 'Mac',
     glowColor: 'rgba(180,180,185,0.35)',   // Apple silver
-    href: 'https://nexo-eight-xi.vercel.app/app/instalar/mac',
+    href: PWA_URL + '/mac',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -89,7 +91,7 @@ const PLATFORMS = [
     id: 'linux',
     name: 'Linux',
     glowColor: 'rgba(255,185,0,0.30)',     // Tux yellow
-    href: 'https://nexo-eight-xi.vercel.app/app/instalar/linux',
+    href: PWA_URL + '/linux',
     icon: (
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor"
         strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
@@ -234,38 +236,19 @@ function PlatformCard({ id, name, icon, href, glowColor }) {
     </>
   )
 
-  // Si es Android, usar AnimatedDownloadButton
-  if (id === 'android') {
-    return (
-      <AnimatedDownloadButton
-        ref={cardRef}
-        href={href}
-        id={`download-btn-${id}`}
-        aria-label={`Descargar NEXO para ${name}`}
-        style={cardStyle}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
-      >
-        {cardContent}
-      </AnimatedDownloadButton>
-    )
-  }
-
-  // Para otras plataformas, usar link simple
+  // Usar AnimatedDownloadButton con efecto de rebote GSAP para todas las plataformas
   return (
-    <a
+    <AnimatedDownloadButton
       ref={cardRef}
       href={href}
-      target="_blank"
-      rel="noopener noreferrer"
       id={`download-btn-${id}`}
-      aria-label={`Descargar NEXO para ${name}`}
+      aria-label={`Instalar NEXO en ${name}`}
       style={cardStyle}
       onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(45, 110, 48, 0.4)'}
       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--nx-border)'}
     >
       {cardContent}
-    </a>
+    </AnimatedDownloadButton>
   )
 }
 
@@ -300,7 +283,7 @@ export default function DownloadSection() {
               Tu panel de control institucional.
             </h3>
             <p className="nx-body nx-reveal nx-reveal-delay-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
-              Disponible para Android, iOS, Windows, Mac y Linux.
+              Instálala como PWA en Android, iOS, Windows, Mac y Linux.
               La misma información, en tiempo real, donde estés.
             </p>
           </div>

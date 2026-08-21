@@ -48,8 +48,8 @@
  * Es utilizado por:
  *   - Rutas que llaman enqueueTwilioJob()/rPush('queue:twilio', ...).
  */
-require_once __DIR__ . '/../db.php';
-require_once __DIR__ . '/../redis.php';
+require_once __DIR__ . '/../core/db.php';
+require_once __DIR__ . '/../core/redis.php';
 require_once __DIR__ . '/../lib/twilio.php'; // normalizeWhatsAppPhone, getTwilioStatusCallbackUrl, sendTwilioDirect, logTwilioMessage
 
 /**

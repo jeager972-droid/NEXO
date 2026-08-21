@@ -71,7 +71,7 @@
 
 global $conn;
 
-require_once __DIR__ . '/../redis.php';
+require_once __DIR__ . '/../core/redis.php';
 
 /**
  * UNIFICACIÓN GLOBAL DE ROLES (Fuente de Verdad Única)

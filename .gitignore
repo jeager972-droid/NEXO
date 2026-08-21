@@ -39,10 +39,6 @@ out/
 # === Docker ===
 .docker/
 
-# === Tauri ===
-src-tauri/target/
-src-tauri/gen/
-
 # === Python ===
 __pycache__/
 *.pyc

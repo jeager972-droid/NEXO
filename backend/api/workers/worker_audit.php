@@ -40,8 +40,8 @@
  * Es utilizado por:
  *   - Sistema: arrancado por supervisor/Docker. Producido por securityLog() de api.php.
  */
-require_once __DIR__ . '/../db.php';
-require_once __DIR__ . '/../redis.php';
+require_once __DIR__ . '/../core/db.php';
+require_once __DIR__ . '/../core/redis.php';
 
 /**
  * Escribe un log del worker a stderr con timestamp.

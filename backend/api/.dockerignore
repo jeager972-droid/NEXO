@@ -6,6 +6,7 @@
 *.md
 _dev/
 dev_tools/
+tests/
 
 # Landing page separada — no va en el contenedor del backend
 frontend/

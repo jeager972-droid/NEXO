@@ -165,7 +165,8 @@ if ($cleanPath === '/students') {
                 (s.deleted_at IS NULL) as active,
                 s.created_at,
                 COALESCE(ag.group_name, 'Sin grupo') as group_name,
-                (s.biometric_hash IS NOT NULL) as has_fingerprint
+                (s.biometric_hash IS NOT NULL) as has_fingerprint,
+                s.biometric_hash as fingerprint_id
             FROM students s
             LEFT JOIN student_group_assignments sga
               ON s.student_id = sga.student_id AND sga.active = TRUE
