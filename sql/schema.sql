@@ -710,11 +710,9 @@ CREATE TABLE IF NOT EXISTS risk_event_types (
 );
 
 INSERT INTO risk_event_types (type_code, display_name, description, category) VALUES
-    ('LATE_ARRIVAL',        'Llegada tarde',              'Estudiante llega después de la hora de entrada', 'asistencia'),
-    ('INASISTENCIA',        'Inasistencia',               'Estudiante no asiste a clases. El acudiente recibe mensaje por WhatsApp y confirma si es justificada. No alimenta el cálculo de riesgo.', 'asistencia'),
+    ('LATE_ARRIVAL',        'Llegada tarde',              'Estudiante llega después de la hora de ingreso', 'asistencia'),
     ('EVASION_INTERNA',     'Evasión interna',             'Estudiante no entra a clase estando en el colegio. Activación automática.', 'evasion'),
-    ('SALIDA_BAÑO',         'Salida al baño',              'Salida al baño durante clase', 'comportamiento'),
-    ('SALIDA_NO_AUTORIZADA','Salida no autorizada',         'Estudiante sale del perímetro escolar sin autorización. Activación automática.', 'evasion')
+    ('SALIDA_BAÑO',         'Salida al baño',              'Salida al baño durante clase', 'comportamiento')
 ON CONFLICT (type_code) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     description  = EXCLUDED.description,
@@ -1531,8 +1529,8 @@ BEGIN
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'LEVE',
-        1.0, 7, 4.0, 5, FALSE, FALSE,
-        4, 7, 2, 10, 3, 14,
+        1.0, 5, 10.0, 5, FALSE, FALSE,
+        10, 5, 3, 20, 3, 14,
         0.5, 2.0, 3, 14, 2.0, 8.0);
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
@@ -1542,9 +1540,9 @@ BEGIN
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'MODERADA',
-        3.0, 10, 9.0, 7, FALSE, FALSE,
-        3, 10, 2, 8, 5, 21,
-        2.0, 5.0, 5, 21, 5.0, 15.0);
+        3.0, 5, 5.0, 7, FALSE, FALSE,
+        5, 5, 2, 15, 3, 14,
+        2.0, 5.0, 3, 14, 5.0, 15.0);
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
         single_occurrence, requires_human_review,
@@ -1553,9 +1551,9 @@ BEGIN
         min_weight, max_weight, min_half_life, max_half_life,
         min_threshold, max_threshold)
     VALUES (v_policy_id, p_school_id, 'ALTA',
-        6.0, 15, 12.0, 3, FALSE, TRUE,
-        2, 15, 1, 6, 7, 30,
-        4.0, 8.0, 7, 30, 8.0, 20.0);
+        6.0, 5, 3.0, 3, FALSE, TRUE,
+        3, 5, 1, 10, 3, 14,
+        4.0, 8.0, 3, 14, 8.0, 20.0);
     INSERT INTO risk_rules (policy_id, school_id, risk_level,
         weight_base, half_life_days, activation_threshold, cooldown_days,
         single_occurrence, requires_human_review,
@@ -1572,10 +1570,8 @@ BEGIN
     SELECT v_policy_id, p_school_id, event_type_id,
         CASE type_code
             WHEN 'LATE_ARRIVAL'         THEN 'LEVE'
-            WHEN 'INASISTENCIA'          THEN 'SIN_IMPORTANCIA'
             WHEN 'EVASION_INTERNA'       THEN 'MODERADA'
             WHEN 'SALIDA_BAÑO'           THEN 'LEVE'
-            WHEN 'SALIDA_NO_AUTORIZADA'  THEN 'MUY_ALTA'
             ELSE 'SIN_IMPORTANCIA'
         END
     FROM risk_event_types
@@ -1584,24 +1580,24 @@ BEGIN
     INSERT INTO risk_combination_rules (policy_id, school_id, rule_name,
         condition_json, result_level, result_reason, is_active)
     VALUES (v_policy_id, p_school_id,
-        'Evasión + Llegadas tarde simultáneas',
+        'Evasión + Llegadas tarde repetidas',
         jsonb_build_object(
             'categories', jsonb_build_array(
                 jsonb_build_object('category', 'evasion', 'min_level', 'MODERADA'),
                 jsonb_build_object('category', 'asistencia', 'min_level', 'LEVE')
             ),
-            'window_lecture_days', 10
+            'window_lecture_days', 5
         ),
         'ALTA',
-        'Patrón combinado: evasión interna + llegadas tarde detectadas simultáneamente',
+        'Si un estudiante evade clases y tambien llega tarde varias veces en la misma semana, el sistema sube la alerta a nivel Alto para que coordinacion lo revise.',
         TRUE);
 
     v_snapshot := jsonb_build_object(
         'engine_version', '3.0',
         'levels', jsonb_build_object(
-            'LEVE',     jsonb_build_object('weight', 1.0, 'half_life', 7, 'threshold', 4.0, 'cooldown', 5, 'recurrence_count', 4, 'window_days', 7),
-            'MODERADA', jsonb_build_object('weight', 3.0, 'half_life', 10, 'threshold', 9.0, 'cooldown', 7, 'recurrence_count', 3, 'window_days', 10),
-            'ALTA',     jsonb_build_object('weight', 6.0, 'half_life', 15, 'threshold', 12.0, 'cooldown', 3, 'recurrence_count', 2, 'window_days', 15),
+            'LEVE',     jsonb_build_object('weight', 1.0, 'half_life', 5, 'threshold', 10.0, 'cooldown', 5, 'recurrence_count', 10, 'window_days', 5),
+            'MODERADA', jsonb_build_object('weight', 3.0, 'half_life', 5, 'threshold', 5.0, 'cooldown', 7, 'recurrence_count', 5, 'window_days', 5),
+            'ALTA',     jsonb_build_object('weight', 6.0, 'half_life', 5, 'threshold', 3.0, 'cooldown', 3, 'recurrence_count', 3, 'window_days', 5),
             'MUY_ALTA', jsonb_build_object('weight', 10.0, 'half_life', 9999, 'threshold', 10.0, 'cooldown', 0, 'recurrence_count', 1, 'window_days', 1)
         ),
         'event_mapping', 'default_nexo',
@@ -1878,8 +1874,7 @@ RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.incident_type NOT LIKE 'RISK_ALERT%'
        AND NEW.incident_type IN (
-           'LATE_ARRIVAL', 'INASISTENCIA', 'UNAUTHORIZED_ABSENCE',
-           'EVASION_INTERNA', 'SALIDA_BAÑO', 'SALIDA_NO_AUTORIZADA'
+           'LATE_ARRIVAL', 'EVASION_INTERNA', 'SALIDA_BAÑO'
        ) THEN
         PERFORM fn_evaluate_student_risk(NEW.student_id, NEW.school_id);
     END IF;

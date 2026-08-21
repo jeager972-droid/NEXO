@@ -9,8 +9,8 @@
  *   Paso 3: Clasificar eventos por categoria
  *   Paso 4: Revision y guardado
  *
- * Al guardar: crea la primera version de politica via riskApi.createPolicyVersion
- * y marca risk_config_completed = TRUE via schoolApi.completeRiskConfig.
+ * Usa componentes del design system: Button, Badge, Stepper.
+ * Colores pastel via variables --nx-subtle-bg-* (nunca solidos).
  */
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,47 +21,47 @@ import {
 import { riskApi } from '../../api/risk';
 import { schoolApi } from '../../api/school';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 import { Stepper } from '../ui/Stepper';
 import { humanizeError } from '../../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
 const STEPS = ['Que hace', 'Umbrales', 'Clasificar eventos', 'Revision'];
 
-// Niveles con colores exactos del sistema de design NEXO (mismas variables que metricas del rector)
+// Niveles con esquema del design system (Badge schemes: neutral, warning, danger)
+// Sin importancia = neutral (gris pastel), Leve = warning (naranja pastel),
+// Moderada = danger (rojo pastel), Alta = danger (rojo pastel mas intenso),
+// Muy Alta = danger con borde fuerte.
+// Todos usan subtle-bg (pastel) nunca solidos.
 const LEVELS = [
   {
     value: 'SIN_IMPORTANCIA',
     label: 'Sin importancia',
-    colorVar: 'var(--nx-text-muted)',
-    bgClass: 'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] border-[var(--nx-border)]',
+    scheme: 'neutral',
     desc: 'El evento se registra pero no activa alertas.',
   },
   {
     value: 'LEVE',
     label: 'Leve',
-    colorVar: 'var(--nx-warning)',
-    bgClass: 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)] border-[var(--nx-border-warning)]',
-    desc: 'Durante 7 dias se detecta la reincidencia antes de generar una alerta a coordinacion.',
+    scheme: 'warning',
+    desc: 'Durante 5 dias se detecta la reincidencia antes de generar una alerta a coordinacion.',
   },
   {
     value: 'MODERADA',
     label: 'Moderada',
-    colorVar: 'var(--nx-danger)',
-    bgClass: 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border-[var(--nx-border-danger)]',
-    desc: 'Durante 10 dias se detecta la reincidencia antes de generar una alerta a coordinacion.',
+    scheme: 'danger',
+    desc: 'Durante 5 dias se detecta la reincidencia antes de generar una alerta a coordinacion.',
   },
   {
     value: 'ALTA',
     label: 'Alta',
-    colorVar: 'var(--nx-danger-strong)',
-    bgClass: 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger-strong)] border-[var(--nx-border-danger)]',
-    desc: 'Durante 15 dias se detecta la reincidencia. Requiere revision humana.',
+    scheme: 'danger',
+    desc: 'Durante 5 dias se detecta la reincidencia. Requiere revision humana.',
   },
   {
     value: 'MUY_ALTA',
     label: 'Muy Alta',
-    colorVar: 'var(--nx-danger-strong)',
-    bgClass: 'bg-[var(--nx-surface-danger)] text-[var(--nx-on-solid)] border-[var(--nx-danger-strong)]',
+    scheme: 'danger',
     desc: 'Este evento activa automaticamente una alerta a coordinacion al instante.',
   },
 ];
@@ -72,19 +72,19 @@ const CATEGORIES = {
   comportamiento: { label: 'Comportamiento', icon: TrendingUp },
 };
 
-// Defaults sugeridos por nivel para recurrencia y ventana
-const DEFAULT_THRESHOLDS = {
-  LEVE: { recurrence: 4, window: 7, minRec: 2, maxRec: 10, minWin: 3, maxWin: 14 },
-  MODERADA: { recurrence: 3, window: 10, minRec: 2, maxRec: 8, minWin: 5, maxWin: 21 },
-  ALTA: { recurrence: 2, window: 15, minRec: 1, maxRec: 6, minWin: 7, maxWin: 30 },
-  MUY_ALTA: { recurrence: 1, window: 1, minRec: 1, maxRec: 1, minWin: 1, maxWin: 1 },
-};
-
-// Defaults sugeridos por categoria para el mapeo de eventos
 const DEFAULT_LEVEL_BY_CATEGORY = {
   asistencia: 'LEVE',
   evasion: 'MODERADA',
   comportamiento: 'LEVE',
+};
+
+// Umbrales por defecto: todas en 5 dias excepto MUY_ALTA (1/1).
+// Reincidencias: Leve 10, Moderada 5, Alta 3, MUY_ALTA 1.
+const DEFAULT_THRESHOLDS = {
+  LEVE: { recurrence: 10, window: 5, minRec: 3, maxRec: 20, minWin: 3, maxWin: 14 },
+  MODERADA: { recurrence: 5, window: 5, minRec: 2, maxRec: 15, minWin: 3, maxWin: 14 },
+  ALTA: { recurrence: 3, window: 5, minRec: 1, maxRec: 10, minWin: 3, maxWin: 14 },
+  MUY_ALTA: { recurrence: 1, window: 1, minRec: 1, maxRec: 1, minWin: 1, maxWin: 1 },
 };
 
 export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
@@ -96,8 +96,6 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  // Umbrales editables (recurrencia + plazo por nivel)
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
 
   const loadData = useCallback(async () => {
@@ -110,7 +108,6 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
       setConfig(policyRes.data?.config ?? { rules: [], mapping: [], combos: [] });
       setEventTypes(typesRes.data ?? []);
 
-      // Si ya hay reglas cargadas, usar sus valores
       const existingRules = policyRes.data?.config?.rules ?? [];
       if (existingRules.length > 0) {
         const newThresholds = { ...DEFAULT_THRESHOLDS };
@@ -168,10 +165,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
     });
   };
 
-  const canNext = step === 1 ? true
-    : step === 2 ? true
-    : step === 3 ? true
-    : false;
+  const canNext = step === 1 ? true : step === 2 ? true : step === 3 ? true : false;
 
   const handleSave = async () => {
     setSaving(true);
@@ -182,7 +176,6 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
         risk_level: getLevelForType(evt.type_code, evt.category),
       }));
 
-      // Construir rules con los umbrales editados
       const ruleLevels = ['LEVE', 'MODERADA', 'ALTA', 'MUY_ALTA'];
       const newRules = ruleLevels.map((lvl) => {
         const th = thresholds[lvl];
@@ -231,7 +224,6 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
     }
   };
 
-  // Contar eventos por nivel para el resumen
   const eventsByLevel = useMemo(() => {
     const counts = {};
     for (const evt of (eventTypes || [])) {
@@ -240,7 +232,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
       counts[lvl].push(evt);
     }
     return counts;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventTypes, overrides, config.mapping]);
 
   return (
@@ -277,7 +269,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
           </div>
         )}
 
-        {/* Content. Scrollable area */}
+        {/* Content */}
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12 text-[var(--nx-text-muted)]">
@@ -308,9 +300,9 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                         hay reincidencias dentro de un plazo de dias para activar alertas a coordinacion.
                       </p>
                       <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
-                        Por ejemplo: si configuras &ldquo;Llegada tarde&rdquo; como Leve con 4 reincidencias en 7 dias,
+                        Por ejemplo: si configuras &ldquo;Llegada tarde&rdquo; como Leve con 10 reincidencias en 5 dias,
                         el sistema activara una alerta a coordinacion cuando un estudiante llegue tarde
-                        4 veces dentro de cualquier ventana de 7 dias.
+                        10 veces dentro de cualquier ventana de 5 dias.
                       </p>
                     </div>
 
@@ -322,14 +314,10 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                             key={lvl.value}
                             className="flex items-start gap-3 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-3"
                           >
-                            <div
-                              className="mt-0.5 h-3 w-3 shrink-0 rounded-full"
-                              style={{ background: lvl.colorVar }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-body-sm font-medium text-[var(--nx-text)]">{lvl.label}</p>
-                              <p className="text-caption text-[var(--nx-text-muted)] leading-snug">{lvl.desc}</p>
-                            </div>
+                            <Badge scheme={lvl.scheme} dot>
+                              {lvl.label}
+                            </Badge>
+                            <p className="text-caption text-[var(--nx-text-muted)] leading-snug flex-1">{lvl.desc}</p>
                           </div>
                         ))}
                       </div>
@@ -357,7 +345,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
 
                     <div className="rounded-control bg-[var(--nx-subtle-bg-accent)] px-4 py-3 text-body-sm text-[var(--nx-accent)] flex items-start gap-2">
                       <Info size={16} className="shrink-0 mt-0.5" />
-                      <span>Se recomienda dejar los valores predeterminados. Puedes ajustarlos segun el contexto de tu institucion.</span>
+                      <span>Se recomienda dejar los valores predeterminados. Puedes cambiarlos despues desde Configuracion cuando quieras.</span>
                     </div>
 
                     <div className="space-y-3">
@@ -371,8 +359,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                             className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4"
                           >
                             <div className="flex items-center gap-2 mb-3">
-                              <div className="h-3 w-3 rounded-full" style={{ background: lvl.colorVar }} />
-                              <span className="text-body-sm font-medium text-[var(--nx-text)]">{lvl.label}</span>
+                              <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
                               {isLocked && (
                                 <span className="text-caption text-[var(--nx-text-muted)] ml-auto">Activacion automatica</span>
                               )}
@@ -479,14 +466,13 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                             <div className="border-t border-[var(--nx-border)] divide-y divide-[var(--nx-border)]">
                               {events.map((evt) => {
                                 const currentLevel = getLevelForType(evt.type_code, evt.category);
-                                const hasOverride = overrides[evt.type_code] !== undefined;
                                 return (
                                   <div key={evt.type_code} className="p-3 pl-4">
                                     <div className="mb-2">
                                       <p className="text-body-sm text-[var(--nx-text)] font-medium">{evt.display_name}</p>
                                       <p className="text-caption text-[var(--nx-text-muted)] leading-snug">{evt.description}</p>
                                     </div>
-                                    <div className={`flex flex-wrap items-center gap-1 ${hasOverride ? 'ring-2 ring-[var(--nx-border-accent)] rounded-control px-1.5 py-1' : ''}`}>
+                                    <div className="flex flex-wrap items-center gap-1.5">
                                       {LEVELS.map((lvl) => {
                                         const isActive = currentLevel === lvl.value;
                                         return (
@@ -494,15 +480,19 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                                             key={lvl.value}
                                             type="button"
                                             onClick={() => handleLevelChange(evt.type_code, lvl.value)}
-                                            className={`rounded-control border px-2.5 py-1 text-caption font-medium transition-all ${
+                                            className={`rounded-full border px-2.5 py-1 text-caption font-semibold transition-all ${
                                               isActive
-                                                ? lvl.bgClass + ' shadow-low'
+                                                ? lvl.scheme === 'neutral'
+                                                  ? 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] border-[var(--nx-border-accent)] shadow-low'
+                                                  : lvl.scheme === 'warning'
+                                                  ? 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)] border-[var(--nx-border-warning)] shadow-low'
+                                                  : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border-[var(--nx-border-danger)] shadow-low'
                                                 : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]'
                                             }`}
                                             title={lvl.desc}
                                           >
                                             <span className="flex items-center gap-1.5">
-                                              <span className="h-2 w-2 rounded-full" style={{ background: lvl.colorVar }} />
+                                              <span className={cnDot(lvl.scheme)} />
                                               {lvl.label}
                                             </span>
                                           </button>
@@ -539,8 +529,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                           if (!th) return null;
                           return (
                             <div key={lvl.value} className="flex items-center gap-3">
-                              <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: lvl.colorVar }} />
-                              <span className="text-body-sm text-[var(--nx-text)] w-24 shrink-0">{lvl.label}</span>
+                              <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
                               <span className="text-body-sm text-[var(--nx-text-muted)]">
                                 {th.recurrence} en {th.window} dias
                               </span>
@@ -553,41 +542,36 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                     {/* Eventos clasificados */}
                     <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
                       <p className="text-label text-[var(--nx-text)] mb-3">Eventos clasificados</p>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {LEVELS.filter((l) => l.value !== 'SIN_IMPORTANCIA').map((lvl) => {
                           const evts = eventsByLevel[lvl.value] || [];
                           if (evts.length === 0) return null;
                           return (
                             <div key={lvl.value} className="flex items-start gap-3">
-                              <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: lvl.colorVar }} />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-body-sm font-medium text-[var(--nx-text)]">{lvl.label}</p>
-                                <p className="text-caption text-[var(--nx-text-muted)] leading-snug">
-                                  {evts.map((e) => e.display_name).join(', ')}
-                                </p>
-                              </div>
+                              <Badge scheme={lvl.scheme} dot>{lvl.label}</Badge>
+                              <p className="text-caption text-[var(--nx-text-muted)] leading-snug flex-1">
+                                {evts.map((e) => e.display_name).join(', ')}
+                              </p>
                             </div>
                           );
                         })}
                         {(eventsByLevel['SIN_IMPORTANCIA'] || []).length > 0 && (
                           <div className="flex items-start gap-3 pt-2 border-t border-[var(--nx-border)]">
-                            <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: 'var(--nx-text-muted)' }} />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-body-sm font-medium text-[var(--nx-text-muted)]">Sin importancia</p>
-                              <p className="text-caption text-[var(--nx-text-muted)] leading-snug">
-                                {(eventsByLevel['SIN_IMPORTANCIA'] || []).map((e) => e.display_name).join(', ')}
-                              </p>
-                            </div>
+                            <Badge scheme="neutral" dot>Sin importancia</Badge>
+                            <p className="text-caption text-[var(--nx-text-muted)] leading-snug flex-1">
+                              {(eventsByLevel['SIN_IMPORTANCIA'] || []).map((e) => e.display_name).join(', ')}
+                            </p>
                           </div>
                         )}
                       </div>
                     </div>
 
+                    {/* Reglas de combinacion explicadas de forma humana */}
                     {(config.combos || []).length > 0 && (
                       <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
-                        <p className="text-label text-[var(--nx-text)] mb-2">Reglas de combinacion automaticas</p>
+                        <p className="text-label text-[var(--nx-text)] mb-2">Como combina el sistema los eventos</p>
                         <p className="text-caption text-[var(--nx-text-muted)] mb-3">
-                          El sistema escala el riesgo cuando multiples categorias superan un nivel simultaneamente.
+                          A veces un solo tipo de evento no cuenta toda la historia. El sistema tambien revisa si un estudiante esta teniendo problemas en varias areas al mismo tiempo.
                         </p>
                         <div className="space-y-2">
                           {(config.combos || []).map((combo, i) => (
@@ -595,7 +579,7 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                               <AlertTriangle size={14} className="text-[var(--nx-warning)] shrink-0 mt-0.5" />
                               <div className="min-w-0">
                                 <p className="text-body-sm text-[var(--nx-text)] font-medium">{combo.rule_name}</p>
-                                <p className="text-caption text-[var(--nx-text-muted)]">{combo.result_reason}</p>
+                                <p className="text-caption text-[var(--nx-text-muted)] leading-snug">{combo.result_reason}</p>
                               </div>
                             </div>
                           ))}
@@ -649,5 +633,17 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
     </div>
   );
 };
+
+// Helper: clase CSS para el dot de color del Badge segun el scheme
+function cnDot(scheme) {
+  const dots = {
+    neutral: 'bg-[var(--nx-text-muted)]',
+    accent: 'bg-[var(--nx-accent)]',
+    success: 'bg-[var(--nx-success)]',
+    warning: 'bg-[var(--nx-warning)]',
+    danger: 'bg-[var(--nx-danger)]',
+  };
+  return `${dots[scheme] ?? dots.neutral} h-1.5 w-1.5 rounded-full`;
+}
 
 export default OnboardingRiskModal;
