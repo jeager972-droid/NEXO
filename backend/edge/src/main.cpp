@@ -1342,11 +1342,14 @@ int main() {
                                     break;
                                 }
 
-                                // Leer huella del sensor
-                                int templateId = biometricSensor->captureAndMatch();
-                                if (templateId > 0) {
+                                // Leer huella del sensor (searchUser 1:N)
+                                std::vector<uint8_t> tpl(256, 0);
+                                uint32_t uid = 0;
+                                float score = 0.0f;
+                                auto res = biometricSensor->searchUser(tpl, uid, score);
+                                if (res && uid > 0) {
                                     // Verificar que la huella coincide con el estudiante
-                                    if (db.getEstudianteByHuellaID(templateId, est) && est.documento == doc) {
+                                    if (db.getEstudianteByHuellaID(uid, est) && est.documento == doc) {
                                         LOG_INFO("[Main] Exit fingerprint VERIFIED for doc={} ({})", doc, studentName);
                                         AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
                                         syncWorker.nudge();
@@ -1474,9 +1477,12 @@ int main() {
                                     break;
                                 }
 
-                                int templateId = biometricSensor->captureAndMatch();
-                                if (templateId > 0) {
-                                    if (db.getEstudianteByHuellaID(templateId, est) && est.documento == doc) {
+                                std::vector<uint8_t> tpl(256, 0);
+                                uint32_t uid = 0;
+                                float score = 0.0f;
+                                auto res = biometricSensor->searchUser(tpl, uid, score);
+                                if (res && uid > 0) {
+                                    if (db.getEstudianteByHuellaID(uid, est) && est.documento == doc) {
                                         LOG_INFO("[Main] Exit fingerprint VERIFIED (HTTP) for doc={}", doc);
                                         AuditTrail::logEvent(doc, "SALIDA_AUTORIZADA");
                                         syncWorker.nudge();
