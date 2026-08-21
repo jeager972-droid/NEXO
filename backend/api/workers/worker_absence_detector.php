@@ -55,13 +55,15 @@ function logA(string $e, string $m = ''): void {
 /**
  * Envía un job de Twilio al Redis para notificación WhatsApp.
  */
-function enqueueAbsenceNotification($redis, string $phone, string $studentName, string $groupName, string $schoolId, string $studentId, string $userId): void {
+function enqueueAbsenceNotification($redis, string $phone, string $studentName, string $groupName, string $schoolId, string $studentId, string $userId, string $incidentId = null): void {
     if (empty($phone)) return;
     $msg = "📋 *NEXO — Inasistencia Detectada*\n\n"
          . "Estudiante: {$studentName}\n"
          . "Grupo: {$groupName}\n\n"
-         . "Su hijo/a no registró ingreso en el sistema biométrico. "
-         . "Si tiene alguna justificación, por favor contáctese con la institución.";
+         . "Su hijo/a no registró ingreso en el sistema biométrico.\n\n"
+         . "Responda:\n"
+         . "  *1* — La inasistencia está justificada\n"
+         . "  *2* — No estoy al tanto de esta inasistencia";
     try {
         $payload = json_encode([
             'to' => $phone,
@@ -75,6 +77,19 @@ function enqueueAbsenceNotification($redis, string $phone, string $studentName, 
         ], JSON_UNESCAPED_UNICODE);
         $redis->rPush('queue:twilio', $payload);
         $redis->expire('queue:twilio', 86400);
+
+        // Guardar contexto en Redis para que el webhook sepa qué hacer
+        // cuando el acudiente responda 1 o 2
+        $normalizedPhone = preg_replace('/[^0-9+]/', '', $phone);
+        $ctxPayload = json_encode([
+            'action' => 'inasistencia',
+            'student_id' => $studentId,
+            'student_name' => $studentName,
+            'school_id' => $schoolId,
+            'incident_id' => $incidentId,
+            'ts' => time(),
+        ], JSON_UNESCAPED_UNICODE);
+        $redis->setex('inasistencia_context:' . $normalizedPhone, 86400, $ctxPayload);
     } catch (Exception $e) {
         logA('TWILIO_ENQUEUE_FAIL', $e->getMessage());
     }
@@ -234,15 +249,17 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             if ($checkStmt->fetchColumn()) continue; // Ya registrado
 
             // 6. INSERT attendance_incidents (mismo contexto RLS, misma transacción)
+            $incidentId = bin2hex(random_bytes(16));
+            $incidentId = substr($incidentId, 0, 8) . '-' . substr($incidentId, 8, 4) . '-' . substr($incidentId, 12, 4) . '-' . substr($incidentId, 16, 4) . '-' . substr($incidentId, 20, 12);
             $incStmt = $conn->prepare("
                 INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
-                VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA', NOW())
+                VALUES (?::uuid, ?, ?, 'INASISTENCIA', NOW())
             ");
-            $incStmt->execute([$schoolId, $studentId]);
+            $incStmt->execute([$incidentId, $schoolId, $studentId]);
             $detected++;
 
             $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
-            logA('ABSENCE_DETECTED', "school=$schoolId group=$groupName student=$studentName doc={$student['document_number']} shift=$shift");
+            logA('ABSENCE_DETECTED', "school=$schoolId group=$groupName student=$studentName doc={$student['document_number']} shift=$shift incident_id=$incidentId");
 
             // 7. Notificar al acudiente (fuera de la transacción DB, pero después del INSERT confirmado)
             if (!empty($student['guardian_phone'])) {
@@ -253,7 +270,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
                     $groupName,
                     $schoolId,
                     $studentId,
-                    'SYSTEM'
+                    'SYSTEM',
+                    $incidentId
                 );
             }
         }

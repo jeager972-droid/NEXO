@@ -618,7 +618,10 @@ if ($cleanPath === '/consultations/query') {
                 $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
                 $sFilter = $studentId ? " AND ai.student_id = ?" : "";
                 $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type, s.student_id, ai.metadata_json
+                    SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type, s.student_id, ai.metadata_json,
+                           ai.metadata_json->>'motivo' as motivo,
+                           ai.metadata_json->>'guardian_phone' as guardian_phone,
+                           ai.metadata_json->>'justified_by' as justified_by
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
                     WHERE ai.school_id = ? AND ai.incident_type IN ('JUSTIFIED_ABSENCE', 'INASISTENCIA_JUSTIFICADA')
@@ -636,7 +639,34 @@ if ($cleanPath === '/consultations/query') {
                 if ($grade) $params[] = $grade;
                 $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo'];
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo', 'motivo' => 'Motivo'];
+                break;
+
+            case 'unjustified_absences':
+                $gFilter = $groupName ? " AND ai.student_id IN (SELECT sga.student_id FROM student_group_assignments sga JOIN academic_groups ag ON ag.group_id = sga.group_id WHERE ag.group_name = ? AND sga.active = TRUE)" : "";
+                $sFilter = $studentId ? " AND ai.student_id = ?" : "";
+                $stmt = $conn->prepare("
+                    SELECT s.first_name, s.last_name, ai.detected_at, ai.incident_type, s.student_id, ai.metadata_json,
+                           ai.metadata_json->>'guardian_phone' as guardian_phone,
+                           ai.metadata_json->>'guardian_response' as guardian_response
+                    FROM attendance_incidents ai
+                    JOIN students s ON ai.student_id = s.student_id
+                    WHERE ai.school_id = ? AND ai.incident_type = 'INASISTENCIA_NO_JUSTIFICADA'
+                      AND ai.detected_at >= (?::date) AND ai.detected_at < ((?::date + INTERVAL '1 day'))
+                      {$gFilter}
+                      {$sFilter}
+                      {$teacherGroupFilter}
+                      {$gradeFilter}
+                    ORDER BY ai.detected_at DESC
+                    LIMIT 50
+                ");
+                $params = [$schoolId, $fromDate, $toDate];
+                if ($groupName) $params[] = $groupName;
+                if ($studentId) $params[] = $studentId;
+                if ($grade) $params[] = $grade;
+                $stmt->execute($params);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'detected_at' => 'Fecha/Hora', 'incident_type' => 'Tipo', 'guardian_response' => 'Respuesta del acudiente'];
                 break;
 
             case 'evasions':

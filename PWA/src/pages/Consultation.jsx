@@ -55,6 +55,7 @@ const MODULE_SLUGS = {
   'Reportes': 'reports',
   'Permisos Activos Hoy': 'active_permissions',
   'Inasistencias Justificadas': 'justified_absences',
+  'Inasistencias No Justificadas': 'unjustified_absences',
   'Evasiones Internas': 'evasions',
   'SOS Emitidos': 'sos_emitted',
   'Daños Reportados': 'damages_reported',

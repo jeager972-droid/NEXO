@@ -825,6 +825,253 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             exit;
         }
 
+        // ── Inasistencia: 1 = justificada, 2 = no está al tanto ──
+        $inasistenciaCtxRaw = null;
+        try {
+            if ($redisConv) {
+                $inasistenciaCtxRaw = $redisConv->get('inasistencia_context:' . $normalizedFrom);
+            }
+        } catch (Throwable $e) {}
+
+        if ($inasistenciaCtxRaw && ($trimBody === '1' || $trimBody === '2')) {
+            $inaCtx = json_decode($inasistenciaCtxRaw, true);
+            $inaStudentId = $inaCtx['student_id'] ?? null;
+            $inaStudentName = $inaCtx['student_name'] ?? 'Estudiante';
+            $inaIncidentId = $inaCtx['incident_id'] ?? null;
+            $inaSchoolId = $inaCtx['school_id'] ?? $schoolId;
+
+            if ($trimBody === '1') {
+                // Justificada: pedir motivo
+                try {
+                    if ($redisConv) {
+                        $redisConv->setex('inasistencia_motivo:' . $normalizedFrom, 3600, json_encode([
+                            'student_id' => $inaStudentId,
+                            'student_name' => $inaStudentName,
+                            'school_id' => $inaSchoolId,
+                            'incident_id' => $inaIncidentId,
+                            'ts' => time(),
+                        ], JSON_UNESCAPED_UNICODE));
+                    }
+                } catch (Throwable $e) {}
+
+                $replyMsg = "Por favor, escriba brevemente el motivo de la inasistencia de {$inaStudentName}:";
+                sendTwilioDirect($from, $replyMsg);
+
+                // Log del mensaje saliente
+                $logAck = $conn->prepare("
+                    INSERT INTO twilio_messages (
+                        twilio_message_id, school_id, guardian_id, type_code, direction, phone_number,
+                        message_content, provider_message_sid, delivery_status, sent_at, metadata_json
+                    ) VALUES (
+                        uuid_generate_v4(), ?, ?, 'INASISTENCIA', 'OUTBOUND', ?, ?, ?, ?, NOW(), ?::jsonb
+                    )
+                ");
+                $sendAck = ['sid' => null, 'ok' => true];
+                $logAck->execute([
+                    $inaSchoolId, $guardianId, $from, $replyMsg, null, 'SENT',
+                    json_encode(['source' => 'twilio-webhook-inasistencia-justificada'], JSON_UNESCAPED_UNICODE)
+                ]);
+
+                securityLog('INASISTENCIA_JUSTIFICADA_PIDIENDO_MOTIVO', "Guardian:$guardianId Student:$inaStudentId");
+            } elseif ($trimBody === '2') {
+                // No está al tanto: alerta MUY_ALTA + notificar coordinación
+                // 1. Marcar el incidente original como no justificada
+                if ($inaIncidentId) {
+                    $updateIncident = $conn->prepare("
+                        UPDATE attendance_incidents
+                        SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || ?::jsonb
+                        WHERE incident_id = ?::uuid AND school_id = ?
+                    ");
+                    $updateMeta = json_encode([
+                        'justificada' => false,
+                        'guardian_response' => 'no_al_tanto',
+                        'guardian_phone' => $from,
+                        'responded_at' => date('c'),
+                    ], JSON_UNESCAPED_UNICODE);
+                    $updateIncident->execute([$updateMeta, $inaIncidentId, $inaSchoolId]);
+                }
+
+                // 2. Crear incidente de inasistencia no justificada
+                $noJustStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                    VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA_NO_JUSTIFICADA', NOW(), ?::jsonb)
+                ");
+                $noJustMeta = json_encode([
+                    'guardian_response' => 'no_al_tanto',
+                    'guardian_phone' => $from,
+                    'original_incident_id' => $inaIncidentId,
+                    'alert_level' => 'MUY_ALTA',
+                ], JSON_UNESCAPED_UNICODE);
+                $noJustStmt->execute([$inaSchoolId, $inaStudentId, $noJustMeta]);
+
+                // 3. Notificar a coordinación y rectoría
+                $coordStmt = $conn->prepare("
+                    SELECT user_id FROM users
+                    WHERE school_id = ? AND role_id IN (
+                        SELECT role_id FROM roles WHERE UPPER(role_name) IN ('COORDINATOR', 'RECTOR')
+                    ) AND active = TRUE
+                ");
+                $coordStmt->execute([$inaSchoolId]);
+                $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $alertMeta = json_encode([
+                    'student_id' => $inaStudentId,
+                    'student_name' => $inaStudentName,
+                    'action' => 'inasistencia_no_justificada',
+                    'guardian_phone' => $from,
+                    'alert_level' => 'MUY_ALTA',
+                ], JSON_UNESCAPED_UNICODE);
+
+                foreach ($coords as $c) {
+                    $notifStmt = $conn->prepare("
+                        INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                        VALUES (?, ?, ?, ?, 'ALERT', ?::jsonb, NOW())
+                    ");
+                    $notifStmt->execute([
+                        $inaSchoolId, $c['user_id'],
+                        'Inasistencia no justificada',
+                        "El acudiente de {$inaStudentName} reportó NO estar al tanto de la inasistencia. Verificar de inmediato.",
+                        $alertMeta,
+                    ]);
+                }
+
+                // 4. Responder al acudiente
+                $ackMsg = "Hemos registrado su reporte. La institución se ha notificado de inmediato y se comunicarán con usted pronto.";
+                sendTwilioDirect($from, $ackMsg);
+
+                // Log del mensaje saliente
+                $logAck = $conn->prepare("
+                    INSERT INTO twilio_messages (
+                        twilio_message_id, school_id, guardian_id, type_code, direction, phone_number,
+                        message_content, provider_message_sid, delivery_status, sent_at, metadata_json
+                    ) VALUES (
+                        uuid_generate_v4(), ?, ?, 'INASISTENCIA', 'OUTBOUND', ?, ?, ?, ?, NOW(), ?::jsonb
+                    )
+                ");
+                $logAck->execute([
+                    $inaSchoolId, $guardianId, $from, $ackMsg, null, 'SENT',
+                    json_encode(['source' => 'twilio-webhook-inasistencia-no-justificada'], JSON_UNESCAPED_UNICODE)
+                ]);
+
+                // Limpiar contexto
+                try {
+                    if ($redisConv) $redisConv->del('inasistencia_context:' . $normalizedFrom);
+                } catch (Throwable $e) {}
+
+                securityLog('INASISTENCIA_NO_JUSTIFICADA', "Guardian:$guardianId Student:$inaStudentId School:$inaSchoolId");
+            }
+
+            echo '<Response></Response>';
+            exit;
+        }
+
+        // ── Inasistencia: recibir motivo después de responder 1 ──
+        $inasistenciaMotivoRaw = null;
+        try {
+            if ($redisConv) {
+                $inasistenciaMotivoRaw = $redisConv->get('inasistencia_motivo:' . $normalizedFrom);
+            }
+        } catch (Throwable $e) {}
+
+        if ($inasistenciaMotivoRaw && $trimBody !== '1' && $trimBody !== '2' && $trimBody !== '9') {
+            $motivoCtx = json_decode($inasistenciaMotivoRaw, true);
+            $motStudentId = $motivoCtx['student_id'] ?? null;
+            $motStudentName = $motivoCtx['student_name'] ?? 'Estudiante';
+            $motIncidentId = $motivoCtx['incident_id'] ?? null;
+            $motSchoolId = $motivoCtx['school_id'] ?? $schoolId;
+            $motivo = $body;
+
+            // 1. Marcar el incidente original como justificada
+            if ($motIncidentId) {
+                $updateIncident = $conn->prepare("
+                    UPDATE attendance_incidents
+                    SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || ?::jsonb
+                    WHERE incident_id = ?::uuid AND school_id = ?
+                ");
+                $updateMeta = json_encode([
+                    'justificada' => true,
+                    'motivo' => $motivo,
+                    'guardian_phone' => $from,
+                    'responded_at' => date('c'),
+                ], JSON_UNESCAPED_UNICODE);
+                $updateIncident->execute([$updateMeta, $motIncidentId, $motSchoolId]);
+            }
+
+            // 2. Crear incidente de inasistencia justificada
+            $justStmt = $conn->prepare("
+                INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                VALUES (uuid_generate_v4(), ?, ?, 'INASISTENCIA_JUSTIFICADA', NOW(), ?::jsonb)
+            ");
+            $justMeta = json_encode([
+                'motivo' => $motivo,
+                'guardian_phone' => $from,
+                'original_incident_id' => $motIncidentId,
+                'justified_by' => 'guardian_whatsapp',
+            ], JSON_UNESCAPED_UNICODE);
+            $justStmt->execute([$motSchoolId, $motStudentId, $justMeta]);
+
+            // 3. Notificar a coordinación
+            $coordStmt = $conn->prepare("
+                SELECT user_id FROM users
+                WHERE school_id = ? AND role_id IN (
+                    SELECT role_id FROM roles WHERE UPPER(role_name) IN ('COORDINATOR', 'RECTOR')
+                ) AND active = TRUE
+            ");
+            $coordStmt->execute([$motSchoolId]);
+            $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $justNotifMeta = json_encode([
+                'student_id' => $motStudentId,
+                'student_name' => $motStudentName,
+                'action' => 'inasistencia_justificada',
+                'motivo' => $motivo,
+                'guardian_phone' => $from,
+            ], JSON_UNESCAPED_UNICODE);
+
+            foreach ($coords as $c) {
+                $notifStmt = $conn->prepare("
+                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
+                    VALUES (?, ?, ?, ?, 'INFO', ?::jsonb, NOW())
+                ");
+                $notifStmt->execute([
+                    $motSchoolId, $c['user_id'],
+                    'Inasistencia justificada',
+                    "El acudiente de {$motStudentName} justificó la inasistencia. Motivo: {$motivo}",
+                    $justNotifMeta,
+                ]);
+            }
+
+            // 4. Responder al acudiente
+            $ackMsg = "Gracias. Hemos registrado la justificación de la inasistencia de {$motStudentName}. La institución tomará nota del motivo.";
+            sendTwilioDirect($from, $ackMsg);
+
+            // Log del mensaje saliente
+            $logAck = $conn->prepare("
+                INSERT INTO twilio_messages (
+                    twilio_message_id, school_id, guardian_id, type_code, direction, phone_number,
+                    message_content, provider_message_sid, delivery_status, sent_at, metadata_json
+                ) VALUES (
+                    uuid_generate_v4(), ?, ?, 'INASISTENCIA', 'OUTBOUND', ?, ?, ?, ?, NOW(), ?::jsonb
+                )
+            ");
+            $logAck->execute([
+                $motSchoolId, $guardianId, $from, $ackMsg, null, 'SENT',
+                json_encode(['source' => 'twilio-webhook-inasistencia-motivo'], JSON_UNESCAPED_UNICODE)
+            ]);
+
+            // Limpiar contexto
+            try {
+                if ($redisConv) {
+                    $redisConv->del('inasistencia_motivo:' . $normalizedFrom);
+                    $redisConv->del('inasistencia_context:' . $normalizedFrom);
+                }
+            } catch (Throwable $e) {}
+
+            securityLog('INASISTENCIA_JUSTIFICADA_MOTIVO', "Guardian:$guardianId Student:$motStudentId Motivo:$motivo");
+            echo '<Response></Response>';
+            exit;
+        }
+
         echo '<Response></Response>';
     } catch (Exception $e) {
         securityLog('TWILIO_WEBHOOK_ERROR', $e->getMessage());
