@@ -51,4 +51,12 @@ export const schoolApi = {
     const response = await client.delete('/school/assign-teacher', { data: { group_id: groupId, teacher_user_id: teacherUserId } });
     return response.data;
   },
+  getRiskConfig: async () => {
+    const response = await client.get('/school/risk-config');
+    return response.data;
+  },
+  completeRiskConfig: async () => {
+    const response = await client.post('/school/risk-config');
+    return response.data;
+  },
 };

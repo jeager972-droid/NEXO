@@ -89,10 +89,21 @@ if ($cleanPath === '/school/config' && $method === 'GET') {
         $response = [
             'status' => 'ok',
             'onboarding_completed' => !empty($configs) && (bool)$configs[0]['onboarding_completed'],
+            'risk_config_completed' => false, // se actualiza abajo
             'configs' => $formattedConfigs,
             'config' => $formattedConfigs[0] ?? null, // retrocompatibilidad
             'time_blocks' => $blocksByShift,
         ];
+
+        // Incluir estado de configuración de riesgo
+        try {
+            $riskStmt = $conn->prepare("SELECT risk_config_completed FROM schools WHERE school_id = ?");
+            $riskStmt->execute([$schoolId]);
+            $riskRow = $riskStmt->fetch(PDO::FETCH_ASSOC);
+            $response['risk_config_completed'] = $riskRow ? (bool)$riskRow['risk_config_completed'] : false;
+        } catch (Exception $riskEx) {
+            // Columna puede no existir en BDs no migradas — default false
+        }
 
         echo json_encode($response);
     } catch (Exception $e) {
@@ -1163,6 +1174,80 @@ if ($cleanPath === '/school/sensor-master-key' && $method === 'POST') {
         securityLog('SENSOR_MASTER_KEY_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ============================================================================
+// GET /school/risk-config — Estado del onboarding de configuración de riesgo
+// ============================================================================
+if ($cleanPath === '/school/risk-config' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+
+    if (!$schoolId) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'ID de institución requerido']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $stmt = $conn->prepare("SELECT risk_config_completed FROM schools WHERE school_id = ?");
+        $stmt->execute([$schoolId]);
+        $school = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$school) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Institución no encontrada']));
+        }
+
+        echo json_encode([
+            'status' => 'ok',
+            'risk_config_completed' => (bool)$school['risk_config_completed'],
+            'needs_onboarding' => !$school['risk_config_completed'],
+        ]);
+    } catch (Exception $e) {
+        securityLog('RISK_CONFIG_GET_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estado de configuración de riesgo']);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /school/risk-config — Marcar configuración de riesgo como completada
+// ============================================================================
+if ($cleanPath === '/school/risk-config' && $method === 'POST') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userId = $authUser['id'];
+    $role = strtoupper($authUser['role'] ?? '');
+
+    // Solo RECTOR puede completar la configuración de riesgo
+    if ($role !== 'RECTOR') {
+        securityLog('RISK_CONFIG_UNAUTHORIZED', "User: $userId, Role: $role");
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Solo el rector puede completar la configuración de riesgo']));
+    }
+
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+
+        $conn->prepare("UPDATE schools SET risk_config_completed = TRUE WHERE school_id = ?")
+            ->execute([$schoolId]);
+
+        securityLog('RISK_CONFIG_COMPLETED', "School: $schoolId, By: $userId ($role)", $userId, $schoolId);
+
+        echo json_encode([
+            'status' => 'ok',
+            'message' => 'Configuración de riesgo completada',
+            'risk_config_completed' => true,
+        ]);
+    } catch (Exception $e) {
+        securityLog('RISK_CONFIG_SET_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar configuración de riesgo']);
     }
     exit;
 }

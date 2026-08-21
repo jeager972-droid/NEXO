@@ -26,7 +26,6 @@ const Downloads = lazy(() => import('./pages/Downloads'));
 const InstallPage = lazy(() => import('./pages/InstallPage'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Devices = lazy(() => import('./pages/Devices'));
-const RiskConfig = lazy(() => import('./pages/RiskConfig'));
 
 function App() {
   const { user } = useAuth();
@@ -97,14 +96,12 @@ function App() {
                   <Route path="/dispositivos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR]} />}>
                     <Route index element={<ErrorBoundary><Devices /></ErrorBoundary>} />
                   </Route>
-                  <Route path="/riesgo" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINATOR]} />}>
-                    <Route index element={<ErrorBoundary><RiskConfig /></ErrorBoundary>} />
-                  </Route>
                 </Route>
               </Route>
 
               <Route path="/descargas" element={<Downloads />} />
               <Route path="/auditoria" element={<Navigate to="/consulta" replace />} />
+              <Route path="/riesgo" element={<Navigate to="/perfil" replace />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
         </div>

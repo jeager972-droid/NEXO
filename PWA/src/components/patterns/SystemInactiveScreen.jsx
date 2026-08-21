@@ -4,7 +4,7 @@
  * El rector/coordinador debe completar la configuración antes de que
  * el sistema funcione para los demás roles.
  */
-import { GraduationCap, Clock, CalendarClock } from 'lucide-react';
+import { GraduationCap, Clock, CalendarClock, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LogoNexo from '../LogoNexo';
 
@@ -12,12 +12,13 @@ const EASE = [0.22, 1, 0.36, 1];
 
 export const SystemInactiveScreen = ({ roleDisplay, reason = 'groups' }) => {
   const isSchedule = reason === 'schedule';
-  const Icon = isSchedule ? CalendarClock : GraduationCap;
-  const title = isSchedule
-    ? 'El sistema está en configuración'
-    : 'El sistema está en configuración';
+  const isRisk = reason === 'risk';
+  const Icon = isSchedule ? CalendarClock : (isRisk ? Shield : GraduationCap);
+  const title = 'El sistema está en configuración';
   const description = isSchedule
     ? 'El rector o coordinador de tu institución está configurando los horarios institucionales. Una vez complete la configuración, podrás acceder a todas las funciones de NEXO.'
+    : isRisk
+    ? 'El rector de tu institución está configurando el Motor de Análisis de Riesgo Pedagógico. Esta configuración es obligatoria para que el sistema pueda operar. Una vez complete la configuración, podrás acceder a todas las funciones de NEXO.'
     : 'El rector de tu institución está configurando los grupos académicos para este año electivo. Una vez complete la configuración, podrás acceder a todas las funciones de NEXO.';
 
   return (

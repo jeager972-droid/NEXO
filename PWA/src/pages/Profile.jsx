@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown, ChevronRight, GraduationCap } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown, ChevronRight, GraduationCap, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -20,6 +20,7 @@ import { ROLES } from '../config/roles';
 import { humanizeError } from '../utils/messages';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
+import { OnboardingRiskModal } from '../components/patterns/OnboardingRiskModal';
 
 const ALL_GRADES_LABELS = {
   '1': 'Primero', '2': 'Segundo', '3': 'Tercero', '4': 'Cuarto', '5': 'Quinto',
@@ -436,6 +437,11 @@ const Profile = () => {
   const [groupsDrawerOpen, setGroupsDrawerOpen] = useState(false);
   const [groupsEditOpen, setGroupsEditOpen] = useState(false);
 
+  // Configuración de riesgo pedagógico
+  const [riskConfig, setRiskConfig] = useState(null);
+  const [riskDrawerOpen, setRiskDrawerOpen] = useState(false);
+  const [riskEditOpen, setRiskEditOpen] = useState(false);
+
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
       if (res.status === 'ok' && res.data) {
@@ -474,6 +480,11 @@ const Profile = () => {
       // Cargar estado de onboarding de grupos
       schoolApi.getGroupsOnboarding().then((res) => {
         if (res?.status === 'ok') setGroupsConfig(res);
+      }).catch(() => {});
+
+      // Cargar estado de configuración de riesgo
+      schoolApi.getRiskConfig().then((res) => {
+        if (res?.status === 'ok') setRiskConfig(res);
       }).catch(() => {});
     } else {
       setSchoolConfigLoading(false);
@@ -797,6 +808,27 @@ const Profile = () => {
         </Card>
       )}
 
+      {/* ── Análisis de riesgo pedagógico (RECTOR y COORDINADOR) ── */}
+      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && (
+        <Card className="p-5">
+          <button
+            onClick={() => setRiskDrawerOpen(true)}
+            className="flex w-full items-center gap-3 text-left"
+          >
+            <Shield size={18} className="text-[var(--nx-accent)] shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-h3 text-[var(--nx-text)]">Análisis de riesgo pedagógico</p>
+              <p className="text-caption text-[var(--nx-text-muted)]">
+                {riskConfig?.risk_config_completed
+                  ? 'Motor configurado y activo'
+                  : 'Pendiente de configuración'}
+              </p>
+            </div>
+            <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
+          </button>
+        </Card>
+      )}
+
       {/* Drawer con info de horarios */}
       <AnimatePresence>
         {scheduleDrawerOpen && (
@@ -1069,6 +1101,79 @@ const Profile = () => {
             try {
               const fresh = await schoolApi.getGroupsOnboarding();
               if (fresh?.status === 'ok') setGroupsConfig(fresh);
+            } catch { /* ignore reload error */ }
+            setTimeout(() => setSchoolConfigToast(null), 4000);
+          }}
+        />
+      )}
+
+      {/* Drawer con info de riesgo pedagógico */}
+      <AnimatePresence>
+        {riskDrawerOpen && (
+          <Drawer
+            title="Análisis de riesgo pedagógico"
+            onClose={() => setRiskDrawerOpen(false)}
+            size="md"
+            footer={
+              <div className="flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setRiskDrawerOpen(false)}>Cerrar</Button>
+                {user?.role === ROLES.RECTOR && (
+                  <Button variant="primary" onClick={() => setRiskEditOpen(true)}>
+                    {riskConfig?.risk_config_completed ? 'Editar configuración' : 'Configurar ahora'}
+                  </Button>
+                )}
+              </div>
+            }
+          >
+            <div className="p-6 space-y-4">
+              {schoolConfigToast && (
+                <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
+                  schoolConfigToast.type === 'success'
+                    ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
+                    : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
+                }`}>
+                  {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {schoolConfigToast.message}
+                </div>
+              )}
+              {riskConfig?.risk_config_completed ? (
+                <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] px-4 py-3 text-body-sm text-[var(--nx-success)] flex items-center gap-2">
+                  <CheckCircle2 size={14} />
+                  Motor configurado y activo
+                </div>
+              ) : (
+                <div className="rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
+                  Pendiente de configuración. {user?.role === ROLES.RECTOR ? 'Usa "Configurar ahora" para completar el onboarding.' : 'El rector debe completar la configuración.'}
+                </div>
+              )}
+              <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4 space-y-2">
+                <p className="text-body-sm text-[var(--nx-text)] leading-relaxed">
+                  El <strong>Motor de Análisis de Riesgo Pedagógico</strong> evalúa los eventos
+                  de cada estudiante y calcula su nivel de riesgo usando decaimiento exponencial
+                  y detección de patrones.
+                </p>
+                <p className="text-caption text-[var(--nx-text-muted)]">
+                  La configuración define qué gravedad tiene cada tipo de evento para tu institución.
+                  Sin esta configuración, el sistema no puede operar.
+                </p>
+              </div>
+            </div>
+          </Drawer>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de edición de riesgo (reutiliza OnboardingRiskModal) */}
+      {riskEditOpen && (
+        <OnboardingRiskModal
+          onCancel={() => setRiskEditOpen(false)}
+          onCompleted={async () => {
+            setRiskEditOpen(false);
+            setRiskDrawerOpen(false);
+            setSchoolConfigToast({ type: 'success', message: 'Configuración de riesgo guardada correctamente' });
+            // Recargar estado de riesgo
+            try {
+              const fresh = await schoolApi.getRiskConfig();
+              if (fresh?.status === 'ok') setRiskConfig(fresh);
             } catch { /* ignore reload error */ }
             setTimeout(() => setSchoolConfigToast(null), 4000);
           }}

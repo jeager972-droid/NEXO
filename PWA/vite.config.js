@@ -32,7 +32,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg', 'logo/logo_nexo_app.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'mask-icon.svg', 'logo/logo_nexo_app.png', 'logo/icon-192.png', 'logo/icon-512.png', 'logo/icon-180.png'],
       workbox: {
         navigateFallback: '/app/index.html',
         runtimeCaching: [
@@ -97,19 +97,19 @@ export default defineConfig({
         ],
         icons: [
           {
-            src: '/app/logo/logo_nexo_app.png',
+            src: '/app/logo/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/app/logo/logo_nexo_app.png',
+            src: '/app/logo/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/app/logo/logo_nexo_app.png',
+            src: '/app/logo/icon-180.png',
             sizes: '180x180',
             type: 'image/png',
             purpose: 'any'

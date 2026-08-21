@@ -15,6 +15,7 @@ import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { schoolApi } from '../api/school';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
+import { OnboardingRiskModal } from '../components/patterns/OnboardingRiskModal';
 import { SystemInactiveScreen } from '../components/patterns/SystemInactiveScreen';
 import { NavLink } from 'react-router-dom';
 
@@ -31,6 +32,7 @@ const Layout = () => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const [scheduleOnboardingRequired, setScheduleOnboardingRequired] = useState(false);
   const [groupsOnboardingRequired, setGroupsOnboardingRequired] = useState(false);
+  const [riskOnboardingRequired, setRiskOnboardingRequired] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
@@ -64,12 +66,14 @@ const Layout = () => {
 
     const checkOnboarding = async () => {
       try {
-        const [configResult, groupsResult] = await Promise.allSettled([
+        const [configResult, groupsResult, riskResult] = await Promise.allSettled([
           schoolApi.getConfig(),
           schoolApi.getGroupsOnboarding(),
+          schoolApi.getRiskConfig(),
         ]);
         const config = configResult.status === 'fulfilled' ? configResult.value : null;
         const groupsResp = groupsResult.status === 'fulfilled' ? groupsResult.value : null;
+        const riskResp = riskResult.status === 'fulfilled' ? riskResult.value : null;
 
         if (configResult.status === 'rejected') {
           console.error('[Onboarding] Schedule check failed:', configResult.reason);
@@ -77,14 +81,18 @@ const Layout = () => {
         if (groupsResult.status === 'rejected') {
           console.error('[Onboarding] Groups check failed:', groupsResult.reason);
         }
+        if (riskResult.status === 'rejected') {
+          console.error('[Onboarding] Risk check failed:', riskResult.reason);
+        }
 
         setScheduleOnboardingRequired(config ? !config.onboarding_completed : false);
         setGroupsOnboardingRequired(groupsResp ? !!groupsResp.needs_onboarding : false);
+        setRiskOnboardingRequired(riskResp ? !!riskResp.needs_onboarding : false);
 
         console.log('[Onboarding] Result:', {
           scheduleRequired: config ? !config.onboarding_completed : 'no-config',
           groupsRequired: groupsResp ? !!groupsResp.needs_onboarding : 'no-groups-resp',
-          groupsData: groupsResp,
+          riskRequired: riskResp ? !!riskResp.needs_onboarding : 'no-risk-resp',
         });
       } catch (e) {
         console.error('Onboarding check failed:', e);
@@ -103,12 +111,14 @@ const Layout = () => {
   const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
 
   // Onboarding unificado — flujo secuencial
-  // 1. Horarios (RECTOR + COORDINADOR pueden completar)
+  // 1. Horarios (RECTOR + COORDINATOR pueden completar)
   // 2. Grupos (solo RECTOR puede completar)
+  // 3. Riesgo (solo RECTOR puede completar)
   // Otros roles: bloqueo si cualquiera falta
   if (!onboardingLoading) {
     const needsSchedule = scheduleOnboardingRequired;
     const needsGroups = groupsOnboardingRequired;
+    const needsRisk = riskOnboardingRequired;
     const isRector = user?.role === ROLES.RECTOR;
     const isCoordinator = user?.role === ROLES.COORDINADOR;
     const canConfigureSchedule = isRector || isCoordinator;
@@ -138,13 +148,24 @@ const Layout = () => {
       );
     }
 
-    // Cualquier rol: si algo falta y no puede configurarlo, ve pantalla de bloqueo
-    if ((needsSchedule || needsGroups) && !canConfigureSchedule) {
-      return <SystemInactiveScreen roleDisplay={roleDisplay} reason={needsSchedule ? 'schedule' : 'groups'} />;
+    // RECTOR: ven el modal de riesgo si falta (después de grupos)
+    if (needsRisk && isRector) {
+      return (
+        <OnboardingRiskModal
+          onCompleted={() => {
+            setRiskOnboardingRequired(false);
+          }}
+        />
+      );
     }
-    // COORDINADOR: si horarios está OK pero grupos falta, ve pantalla de bloqueo
-    if (needsGroups && isCoordinator && !needsSchedule) {
-      return <SystemInactiveScreen roleDisplay={roleDisplay} reason="groups" />;
+
+    // Cualquier rol: si algo falta y no puede configurarlo, ve pantalla de bloqueo
+    if ((needsSchedule || needsGroups || needsRisk) && !canConfigureSchedule) {
+      return <SystemInactiveScreen roleDisplay={roleDisplay} reason={needsSchedule ? 'schedule' : (needsGroups ? 'groups' : 'risk')} />;
+    }
+    // COORDINADOR: si horarios está OK pero grupos o riesgo falta, ve pantalla de bloqueo
+    if ((needsGroups || needsRisk) && isCoordinator && !needsSchedule) {
+      return <SystemInactiveScreen roleDisplay={roleDisplay} reason={needsGroups ? 'groups' : 'risk'} />;
     }
   }
 

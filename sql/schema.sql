@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS schools (
     onboarding_completed       BOOLEAN NOT NULL DEFAULT FALSE,
     groups_onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
     groups_onboarding_year     INTEGER,
+    risk_config_completed      BOOLEAN NOT NULL DEFAULT FALSE,
     sensor_master_key_hash     VARCHAR(255),
     created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -143,6 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_school_municipality ON schools(municipality_id);
 COMMENT ON COLUMN schools.onboarding_completed IS 'TRUE cuando el coordinador/rector completó el onboarding de horarios institucionales';
 COMMENT ON COLUMN schools.groups_onboarding_completed IS 'TRUE cuando el rector completó el onboarding de grupos académicos (grados + nomenclatura + grupos por grado)';
 COMMENT ON COLUMN schools.groups_onboarding_year IS 'Año electivo para el que se configuraron los grupos. Cada 1 de enero se resetea si el año no coincide';
+COMMENT ON COLUMN schools.risk_config_completed IS 'TRUE cuando el rector completó la configuración inicial del Motor de Análisis de Riesgo Pedagógico';
 COMMENT ON COLUMN schools.sensor_master_key_hash IS 'Hash bcrypt de la llave maestra para reconfigurar tokens de sensores';
 
 CREATE TABLE IF NOT EXISTS roles (
