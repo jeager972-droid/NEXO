@@ -79,13 +79,73 @@ if ($cleanPath === '/students') {
                          WHERE student_id = ? AND group_id != ?"
                     );
                     $deactivateStmt->execute([$studentId, $groupId]);
-                    
+
                     $assignStmt = $conn->prepare("
                         INSERT INTO student_group_assignments (student_id, group_id, active)
                         VALUES (?, ?, TRUE)
                         ON CONFLICT (student_id, group_id) DO UPDATE SET active = TRUE
                     ");
                     $assignStmt->execute([$studentId, $groupId]);
+                }
+            }
+
+            // Guardar datos del acudiente (guardian)
+            $guardianName = trim($input['guardian_name'] ?? '');
+            $guardianDoc  = trim($input['guardian_document'] ?? '');
+            $guardianPhone = trim($input['guardian_phone'] ?? '');
+            if ($guardianName && $guardianDoc) {
+                // Buscar acudiente existente por documento
+                $gStmt = $conn->prepare("
+                    SELECT g.guardian_id, u.user_id FROM guardians g
+                    JOIN users u ON u.user_id = g.user_id
+                    WHERE u.document_number = ? AND u.school_id = ?
+                ");
+                $gStmt->execute([$guardianDoc, $schoolId]);
+                $gRow = $gStmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($gRow) {
+                    $guardianId = $gRow['guardian_id'];
+                    $gUserId = $gRow['user_id'];
+                    // Actualizar nombre y teléfono
+                    $nameParts = explode(' ', $guardianName, 2);
+                    $gFirst = $nameParts[0];
+                    $gLast = $nameParts[1] ?? $gFirst;
+                    $conn->prepare("UPDATE users SET first_name=?, last_name=?, phone=COALESCE(?,phone) WHERE user_id=?")
+                        ->execute([$gFirst, $gLast, $guardianPhone, $gUserId]);
+                    if ($guardianPhone) {
+                        $conn->prepare("UPDATE guardians SET whatsapp_phone=COALESCE(?,whatsapp_phone) WHERE guardian_id=?")
+                            ->execute([$guardianPhone, $guardianId]);
+                    }
+                } else {
+                    // Crear nuevo acudiente
+                    $roleStmt = $conn->prepare("SELECT role_id FROM roles WHERE role_name = 'GUARDIAN' LIMIT 1");
+                    $roleStmt->execute();
+                    $guardianRoleId = $roleStmt->fetchColumn();
+                    if ($guardianRoleId) {
+                        $nameParts = explode(' ', $guardianName, 2);
+                        $gFirst = $nameParts[0];
+                        $gLast = $nameParts[1] ?? $gFirst;
+                        $lockedHash = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
+                        $uStmt = $conn->prepare("
+                            INSERT INTO users (school_id, role_id, document_number, first_name, last_name, phone, password_hash, password_salt, active)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, '', TRUE) RETURNING user_id
+                        ");
+                        $uStmt->execute([$schoolId, $guardianRoleId, $guardianDoc, $gFirst, $gLast, $guardianPhone, $lockedHash]);
+                        $gUserId = $uStmt->fetchColumn();
+                        $gStmt2 = $conn->prepare("INSERT INTO guardians (user_id, whatsapp_phone) VALUES (?, ?) RETURNING guardian_id");
+                        $gStmt2->execute([$gUserId, $guardianPhone]);
+                        $guardianId = $gStmt2->fetchColumn();
+                    }
+                }
+
+                // Vincular acudiente con estudiante
+                if (!empty($guardianId)) {
+                    $linkStmt = $conn->prepare("
+                        INSERT INTO guardian_student_relationships (student_id, guardian_id, primary_guardian, relationship_type)
+                        VALUES (?, ?, TRUE, 'GUARDIAN')
+                        ON CONFLICT (student_id, guardian_id) DO NOTHING
+                    ");
+                    $linkStmt->execute([$studentId, $guardianId]);
                 }
             }
 
@@ -164,14 +224,26 @@ if ($cleanPath === '/students') {
                 s.document_number,
                 (s.deleted_at IS NULL) as active,
                 s.created_at,
+                s.work_shift,
                 COALESCE(ag.group_name, 'Sin grupo') as group_name,
+                ag.grade_level,
                 (s.biometric_hash IS NOT NULL) as has_fingerprint,
-                s.biometric_hash as fingerprint_id
+                s.biometric_hash as fingerprint_id,
+                gu.first_name || ' ' || gu.last_name as guardian_name,
+                gu.document_number as guardian_document,
+                gu.phone as guardian_phone,
+                gr.whatsapp_phone as guardian_whatsapp
             FROM students s
             LEFT JOIN student_group_assignments sga
               ON s.student_id = sga.student_id AND sga.active = TRUE
             LEFT JOIN academic_groups ag
               ON sga.group_id = ag.group_id
+            LEFT JOIN guardian_student_relationships gsr
+              ON s.student_id = gsr.student_id AND gsr.primary_guardian = TRUE
+            LEFT JOIN guardians gr
+              ON gsr.guardian_id = gr.guardian_id
+            LEFT JOIN users gu
+              ON gr.user_id = gu.user_id
             WHERE {$whereSql}
             ORDER BY s.created_at DESC, s.student_id DESC
             LIMIT ?

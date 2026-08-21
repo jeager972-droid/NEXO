@@ -1059,6 +1059,73 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
     exit;
 }
 
+// ============================================================================
+// POST /devices/enroll-confirm — Confirmar enrolamiento de huella SIN AES.
+// El edge envía JSON plano con X-Device-Token header para autenticar.
+// Esto evita el problema de "Integrity fail" cuando la clave AES no coincide.
+// ============================================================================
+if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
+    $deviceToken = $_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '';
+    if (empty($deviceToken)) {
+        http_response_code(401);
+        exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
+    }
+
+    $requestDeviceId = trim($input['device_id'] ?? '');
+    $doc = trim($input['doc'] ?? '');
+    $nombre = trim($input['nombre'] ?? '');
+    $huellaId = isset($input['huella_id']) ? (int)$input['huella_id'] : null;
+
+    if (empty($requestDeviceId) || empty($doc)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'device_id y doc son requeridos']));
+    }
+
+    try {
+        // Validar device token
+        $stmt = $conn->prepare("SELECT school_id, token_hash FROM edge_devices WHERE device_id = ? AND active = TRUE");
+        $stmt->execute([$requestDeviceId]);
+        $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$device || !password_verify($deviceToken, $device['token_hash'])) {
+            securityLog('ENROLL_CONFIRM_INVALID_TOKEN', "Device: $requestDeviceId");
+            http_response_code(403);
+            exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+        }
+
+        $schoolId = (string)$device['school_id'];
+        $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
+        $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
+
+        // Upsert student y marcar biometric_hash
+        $biometricHash = $huellaId !== null ? 'fp_' . $huellaId : 'fp_local';
+        $upStmt = $conn->prepare("
+            INSERT INTO students (school_id, document_number, first_name, last_name, active, biometric_hash)
+            VALUES (?, ?, ?, '', TRUE, ?)
+            ON CONFLICT (school_id, document_number)
+            DO UPDATE SET first_name = EXCLUDED.first_name, active = TRUE, biometric_hash = EXCLUDED.biometric_hash
+            RETURNING student_id
+        ");
+        $upStmt->execute([$schoolId, $doc, $nombre, $biometricHash]);
+        $studentId = $upStmt->fetchColumn();
+
+        securityLog('EDGE_ENROLL_CONFIRMED', "doc=$doc huella_id=$huellaId student=$studentId school=$schoolId", null, $schoolId);
+
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'ok',
+            'student_id' => $studentId,
+            'doc' => $doc,
+            'has_fingerprint' => true,
+        ]);
+    } catch (Exception $e) {
+        securityLog('EDGE_ENROLL_CONFIRM_FAIL', $e->getMessage(), null, $device['school_id'] ?? null);
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al confirmar enrolamiento', 'debug' => $e->getMessage()]);
+    }
+    exit;
+}
+
 // Admin: listar dispositivos con health check
 if ($cleanPath === '/admin/devices' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR']);

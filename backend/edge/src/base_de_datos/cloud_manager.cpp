@@ -239,29 +239,56 @@ bool CloudManager::registerStudent(const std::string& doc, const std::string& no
 
 bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const std::string& nombre,
                                                    const std::string& tel, uint32_t huellaId) {
+    // Usar endpoint /devices/enroll-confirm sin AES (JSON plano + X-Device-Token header)
+    // Esto evita el problema de "Integrity fail" cuando la clave AES no coincide.
+    std::string baseUrl = m_apiUrl;
+    while (!baseUrl.empty() && baseUrl.back() == '/') baseUrl.pop_back();
+    std::string enrollUrl = baseUrl + "/devices/enroll-confirm";
+
     nlohmann::json j;
-    j["action"] = "REGISTER_STUDENT";
+    j["device_id"] = ConfigManager::getInstance().getDeviceId();
     j["doc"] = doc;
     j["nombre"] = nombre;
-    j["parent_tel"] = tel;
-    j["parent_doc"] = "";
-    j["parent_name"] = "";
-    j["salon"] = "";
     j["huella_id"] = static_cast<int>(huellaId);
     j["has_fingerprint"] = true;
-    j["device_token"] = Encryption::getInstance().getToken();
-    j["device_id"] = ConfigManager::getInstance().getDeviceId();
-    j["captured_at"] = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count());
-    j["nonce"] = std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count()) + "_enroll_" + doc;
-    j["request_id"] = "enroll_" + doc + "_" + std::to_string(huellaId);
-    std::string body = buildAuthenticatedRequest(j.dump(), m_instId);
-    if (body.empty()) return false;
-    std::string resp;
-    bool ok = curlPost(getIngestUrl(), body, Encryption::getInstance().getToken(), resp);
-    if (ok && (resp.find("\"status\":\"ok\"") != std::string::npos ||
-               resp.find("\"status\":\"accepted\"") != std::string::npos)) return true;
-    if (!resp.empty()) LOG_WARN("Server response not OK: {}", resp);
-    return false;
+
+    std::string postData = j.dump();
+    std::string response;
+    std::string deviceToken = Encryption::getInstance().getToken();
+
+    CURL* curl = curl_easy_init();
+    if (!curl) { LOG_ERROR("curl_easy_init failed for enroll-confirm"); return false; }
+
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "User-Agent: NEXO-Edge-RPi4/2.0");
+    headers = curl_slist_append(headers, "Accept: application/json");
+    headers = curl_slist_append(headers, ("X-Device-Token: " + deviceToken).c_str());
+
+    curl_easy_setopt(curl, CURLOPT_URL, enrollUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+
+    CURLcode res = curl_easy_perform(curl);
+    long httpCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        LOG_ERROR("enroll-confirm curl failed: {}", curl_easy_strerror(res));
+        return false;
+    }
+    if (httpCode != 200) {
+        LOG_ERROR("enroll-confirm HTTP {}: {}", httpCode, response.substr(0, 200));
+        return false;
+    }
+    LOG_INFO("enroll-confirm OK: doc={} huella_id={}", doc, huellaId);
+    return true;
 }
