@@ -186,6 +186,12 @@ class RiskEngineV3
         $comboStmt->execute([$policyId]);
         $combos = $comboStmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Parsear condition_json (PostgreSQL JSONB llega como string)
+        foreach ($combos as &$combo) {
+            $combo['condition'] = json_decode($combo['condition_json'], true);
+            unset($combo['condition_json']);
+        }
+
         return [
             'rules'      => $rules,
             'mapping'    => $mapping,

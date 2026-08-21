@@ -109,8 +109,14 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
       setConfig(policyRes.data?.config ?? { rules: [], mapping: [], combos: [] });
       setEventTypes(typesRes.data ?? []);
 
+      // Onboarding inicial: siempre usar defaults nuevos (10/5, 5/5, 3/5, 1/1).
+      // Solo cargar valores existentes si el rector ya guardo una politica
+      // (version > 1 significa que no es el seed automatico).
+      const policy = policyRes.data?.policy;
+      const isSeedPolicy = policy && policy.version === 1;
       const existingRules = policyRes.data?.config?.rules ?? [];
-      if (existingRules.length > 0) {
+
+      if (existingRules.length > 0 && !isSeedPolicy) {
         const newThresholds = { ...DEFAULT_THRESHOLDS };
         for (const rule of existingRules) {
           const lvl = rule.risk_level;
@@ -604,18 +610,61 @@ export const OnboardingRiskModal = ({ onCompleted, onCancel }) => {
                       <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4">
                         <p className="text-label text-[var(--nx-text)] mb-2">Como combina el sistema los eventos</p>
                         <p className="text-caption text-[var(--nx-text-muted)] mb-3">
-                          A veces un solo tipo de evento no cuenta toda la historia. El sistema tambien revisa si un estudiante esta teniendo problemas en varias areas al mismo tiempo.
+                          A veces un solo tipo de evento no cuenta toda la historia. El sistema
+                          tambien revisa si un estudiante esta teniendo problemas en varias areas
+                          al mismo tiempo. Cuando dos categorias alcanzan un nivel minimo
+                          simultaneamente, el sistema genera una alerta directa al nivel
+                          resultante, independiente del puntaje individual de cada categoria.
                         </p>
-                        <div className="space-y-2">
-                          {(config.combos || []).map((combo, i) => (
-                            <div key={i} className="flex items-start gap-2">
-                              <AlertTriangle size={14} className="text-[var(--nx-warning)] shrink-0 mt-0.5" />
-                              <div className="min-w-0">
-                                <p className="text-body-sm text-[var(--nx-text)] font-medium">{combo.rule_name}</p>
-                                <p className="text-caption text-[var(--nx-text-muted)] leading-snug">{combo.result_reason}</p>
+                        <div className="space-y-3">
+                          {(config.combos || []).map((combo, i) => {
+                            const cond = typeof combo.condition === 'string'
+                              ? JSON.parse(combo.condition)
+                              : combo.condition;
+                            const cats = cond?.categories ?? [];
+                            const window = cond?.window_lecture_days ?? 5;
+                            const resultLvl = LEVELS.find((l) => l.value === combo.result_level);
+                            return (
+                              <div key={i} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <AlertTriangle size={14} className="text-[var(--nx-warning)] shrink-0" />
+                                  <p className="text-body-sm text-[var(--nx-text)] font-medium flex-1">{combo.rule_name}</p>
+                                  {resultLvl && <Badge scheme={resultLvl.scheme} dot>{resultLvl.label}</Badge>}
+                                </div>
+                                <p className="text-caption text-[var(--nx-text-muted)] leading-snug mb-2">
+                                  {combo.result_reason}
+                                </p>
+                                {/* Como se dispara */}
+                                <div className="rounded-control bg-[var(--nx-surface-subtle)] px-3 py-2 border border-[var(--nx-border)]">
+                                  <p className="text-caption text-[var(--nx-text-muted)] mb-1.5 font-medium">
+                                    Como se dispara:
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {cats.map((c, j) => {
+                                      const catInfo = CATEGORIES[c.category] || { label: c.category };
+                                      const minLvl = LEVELS.find((l) => l.value === c.min_level);
+                                      return (
+                                        <span key={j} className="inline-flex items-center gap-1">
+                                          {j > 0 && <span className="text-caption text-[var(--nx-text-muted)]">+</span>}
+                                          <span className="inline-flex items-center gap-1 rounded-control bg-[var(--nx-surface)] border border-[var(--nx-border)] px-2 py-0.5">
+                                            <span className="text-caption text-[var(--nx-text)]">{catInfo.label}</span>
+                                            {minLvl && <Badge scheme={minLvl.scheme}>{minLvl.label}</Badge>}
+                                          </span>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="text-caption text-[var(--nx-text-muted)] mt-2 leading-snug">
+                                    Si ambas condiciones se cumplen a la vez dentro de una ventana
+                                    de <strong className="text-[var(--nx-text)]">{window} dias lectivos</strong>,
+                                    el sistema crea una alerta directa de nivel{' '}
+                                    <strong className="text-[var(--nx-text)]">{resultLvl?.label || combo.result_level}</strong>{' '}
+                                    sin importar el puntaje individual de cada categoria.
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
