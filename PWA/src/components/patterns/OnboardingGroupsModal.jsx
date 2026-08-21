@@ -180,10 +180,10 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel, isEdit = false })
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: EASE }}
-        className="w-full max-w-2xl rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-large"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] shadow-large"
       >
         {/* Header */}
-        <div className="relative overflow-hidden rounded-t-surface">
+        <div className="relative shrink-0 overflow-hidden rounded-t-surface">
           <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[var(--nx-accent)] via-[oklch(52%_0.125_245)] to-[var(--nx-accent)]" />
           <div className="flex items-center justify-between p-6 pb-4">
             <div className="flex items-center gap-3">
@@ -209,7 +209,7 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel, isEdit = false })
         )}
 
         {/* Content */}
-        <div className="max-h-[55vh] overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -471,7 +471,7 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel, isEdit = false })
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 border-t border-[var(--nx-border)] p-6">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--nx-border)] p-6">
           <div className="flex items-center gap-1.5 text-caption text-[var(--nx-text-muted)]">
             <Calendar size={13} />
             <span>Esta configuración se renueva cada 1 de enero</span>
