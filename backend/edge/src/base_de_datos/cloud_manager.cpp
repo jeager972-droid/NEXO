@@ -239,8 +239,43 @@ bool CloudManager::registerStudent(const std::string& doc, const std::string& no
 
 bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const std::string& nombre,
                                                    const std::string& tel, uint32_t huellaId) {
-    // Usar endpoint /devices/enroll-confirm sin AES (JSON plano + X-Device-Token header)
-    // Esto evita el problema de "Integrity fail" cuando la clave AES no coincide.
+    Encryption& crypto = Encryption::getInstance();
+
+    // RUTA PRIMARIA: Si la clave AES está provisionada, usar el ingest cifrado
+    // (defense-in-depth: payload cifrado además de TLS).
+    if (crypto.isKeyProvisioned()) {
+        nlohmann::json j;
+        j["action"] = "REGISTER_STUDENT";
+        j["doc"] = doc;
+        j["nombre"] = nombre;
+        j["parent_tel"] = tel;
+        j["parent_doc"] = "";
+        j["parent_name"] = "";
+        j["salon"] = "";
+        j["huella_id"] = static_cast<int>(huellaId);
+        j["has_fingerprint"] = true;
+        j["device_token"] = crypto.getToken();
+        j["device_id"] = ConfigManager::getInstance().getDeviceId();
+        j["captured_at"] = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count());
+        j["nonce"] = std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count()) + "_enroll_" + doc;
+        j["request_id"] = "enroll_" + doc + "_" + std::to_string(huellaId);
+        std::string body = buildAuthenticatedRequest(j.dump(), m_instId);
+        if (!body.empty()) {
+            std::string resp;
+            bool ok = curlPost(getIngestUrl(), body, crypto.getToken(), resp);
+            if (ok && (resp.find("\"status\":\"ok\"") != std::string::npos ||
+                       resp.find("\"status\":\"accepted\"") != std::string::npos)) {
+                LOG_INFO("Enroll sync via AES ingest OK: doc={} huella_id={}", doc, huellaId);
+                return true;
+            }
+            if (!resp.empty()) LOG_WARN("AES ingest failed, falling back to enroll-confirm: {}", resp.substr(0, 200));
+        }
+    }
+
+    // RUTA FALLBACK: /devices/enroll-confirm sin AES (JSON plano + X-Device-Token header).
+    // Se usa cuando la clave AES no está provisionada o el ingest cifrado falla.
     std::string baseUrl = m_apiUrl;
     while (!baseUrl.empty() && baseUrl.back() == '/') baseUrl.pop_back();
     std::string enrollUrl = baseUrl + "/devices/enroll-confirm";
@@ -254,7 +289,7 @@ bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const 
 
     std::string postData = j.dump();
     std::string response;
-    std::string deviceToken = Encryption::getInstance().getToken();
+    std::string deviceToken = crypto.getToken();
 
     CURL* curl = curl_easy_init();
     if (!curl) { LOG_ERROR("curl_easy_init failed for enroll-confirm"); return false; }
@@ -289,6 +324,6 @@ bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const 
         LOG_ERROR("enroll-confirm HTTP {}: {}", httpCode, response.substr(0, 200));
         return false;
     }
-    LOG_INFO("enroll-confirm OK: doc={} huella_id={}", doc, huellaId);
+    LOG_INFO("enroll-confirm OK (fallback): doc={} huella_id={}", doc, huellaId);
     return true;
 }

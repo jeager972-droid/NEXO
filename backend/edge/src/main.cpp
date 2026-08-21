@@ -629,6 +629,17 @@ bool runSecurityProvisioning() {
         LOG_INFO("API token auto-provisioned from config.json");
     }
 
+    // Auto-provision AES key from config.json if available (32 chars exactos)
+    std::string configAesKey = ConfigManager::getInstance().getString("aes_key", "");
+    if (!configAesKey.empty() && !crypto.isKeyProvisioned()) {
+        if (configAesKey.length() == 32) {
+            crypto.provisionKey(configAesKey);
+            LOG_INFO("AES key auto-provisioned from config.json");
+        } else {
+            LOG_WARN("config.json has aes_key but length is {} (need 32). Ignored.", configAesKey.length());
+        }
+    }
+
     const std::string provisionPath = ConfigManager::getInstance().getString("provision_file", "/boot/nexo_provision.json");
 
     while (!crypto.isKeyProvisioned() || !crypto.isTokenProvisioned()) {
