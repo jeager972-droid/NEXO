@@ -37,7 +37,9 @@ if ($cleanPath === '/students') {
         $firstName  = trim($input['first_name'] ?? '');
         $lastName   = trim($input['last_name']  ?? '');
         $document   = trim($input['document']   ?? '');
-        $groupName  = trim($input['grade']      ?? '');
+        // FIX: El frontend envía 'group' (nombre del grupo, ej "6A") y 'grade' (grado, ej "6°").
+        // Usar 'group' para buscar en academic_groups.group_name.
+        $groupName  = trim($input['group'] ?? $input['grade'] ?? '');
         $workShift  = trim($input['work_shift'] ?? 'mañana');
 
         if (!$firstName || !$lastName || !$document) {

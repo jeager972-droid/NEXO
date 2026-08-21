@@ -751,7 +751,8 @@ if ($cleanPath === '/devices/by-role' && $method === 'GET') {
         $stmt = $conn->prepare("
             SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
                    ed.last_ping, ed.created_at, ed.group_id, ed.assigned_user_id,
-                   ag.group_name, ag.grade_level
+                   ag.group_name, ag.grade_level,
+                   (ed.last_ping IS NOT NULL AND ed.last_ping > NOW() - INTERVAL '2 minutes') as is_online
             FROM edge_devices ed
             LEFT JOIN academic_groups ag ON ed.group_id = ag.group_id
             WHERE ed.school_id = ?
@@ -762,6 +763,11 @@ if ($cleanPath === '/devices/by-role' && $method === 'GET') {
         ");
         $stmt->execute([$authUser['school_id'], $authUser['id']]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // FIX: is_online viene como string de PostgreSQL, convertir a bool
+        if ($device) {
+            $device['is_online'] = filter_var($device['is_online'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        }
 
         echo json_encode(['status' => 'ok', 'data' => $device ?: null]);
     } catch (Exception $e) {
@@ -1097,13 +1103,16 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
         $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
         $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
 
-        // Upsert student y marcar biometric_hash
+        // Upsert student y marcar biometric_hash.
+        // FIX: No sobreescribir first_name/last_name si el estudiante ya existe
+        // (fue creado via POST /students con nombre split correcto).
+        // Solo setear biometric_hash y reactivar.
         $biometricHash = $huellaId !== null ? 'fp_' . $huellaId : 'fp_local';
         $upStmt = $conn->prepare("
             INSERT INTO students (school_id, document_number, first_name, last_name, active, biometric_hash)
             VALUES (?, ?, ?, '', TRUE, ?)
             ON CONFLICT (school_id, document_number)
-            DO UPDATE SET first_name = EXCLUDED.first_name, active = TRUE, biometric_hash = EXCLUDED.biometric_hash
+            DO UPDATE SET active = TRUE, biometric_hash = EXCLUDED.biometric_hash
             RETURNING student_id
         ");
         $upStmt->execute([$schoolId, $doc, $nombre, $biometricHash]);
