@@ -138,10 +138,15 @@ if (!function_exists('getRedisConnection')) {
      *
      * @return Redis|null Instancia conectada, o null en caso de fallo.
      */
-    function getRedisConnection(): ?Redis {
+    function getRedisConnection($forceReconnect = false): ?Redis {
         // Singleton: solo se intenta una conexión por petición/proceso.
         static $redis = null;
         static $attempted = false;
+
+        if ($forceReconnect) {
+            $redis = null;
+            $attempted = false;
+        }
 
         if ($redis !== null) {
             return $redis;

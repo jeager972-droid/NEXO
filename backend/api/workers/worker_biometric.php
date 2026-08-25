@@ -628,30 +628,43 @@ $GC_MAX_AGE_SEC = (int)(getenv('BIOMETRIC_GC_MAX_AGE') ?: 300);
 $EMPTY_QUEUE_SLEEP_US = (int)(getenv('BIOMETRIC_EMPTY_QUEUE_SLEEP_US') ?: 1_000_000); // 1s por defecto (evita 20 polls/s en Upstash)
 
 logW('START', 'Biometric async worker started');
-$redis = getRedisConnection();
-if (!$redis) {
-    logW('FATAL', 'Redis unavailable on startup');
-    exit(1);
-}
+$redis = null;
+try {
+    $redis = getRedisConnection(true);
+} catch (Exception $e) {}
+
 $iterations = 0;
 $lastGc = 0;
 $lastHeartbeat = 0;
 
 while (!$shutdown) {
     try {
+        if (!$redis) {
+            sleep(15);
+            try { $redis = getRedisConnection(true); } catch (Exception $e) {}
+            if (!$redis) continue;
+        }
+
         // FIX: Enviar heartbeat cada 30 segundos
         if (time() - $lastHeartbeat >= 30) {
             $lastHeartbeat = time();
-            sendHeartbeat($redis);
+            try { sendHeartbeat($redis); } catch (Exception $e) {}
         }
 
         // FIX (SRE-2): Atomic Lua pop + timestamp injection.
-        $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing', time()], 2);
+        $item = false;
+        try {
+            $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing', time()], 2);
+        } catch (Exception $e) {
+            logW('REDIS_ERR', $e->getMessage());
+            $redis = null; // Force reconnect on next iteration
+            continue;
+        }
         if (!$item) { usleep($EMPTY_QUEUE_SLEEP_US); continue; }
 
         $job = json_decode($item, true);
         if (!$job) {
-            $redis->lRem('queue:biometric_processing', $item, 0);
+            try { $redis->lRem('queue:biometric_processing', $item, 0); } catch (Exception $e) {}
             continue;
         }
 
@@ -679,12 +692,16 @@ while (!$shutdown) {
                 $redis->rPush('queue:biometric_dlq', json_encode($jobArray, JSON_UNESCAPED_UNICODE));
             }
             $redis->lRem('queue:biometric_processing', $item, 0);
-            // Escalar al catch externo para forzar restart del supervisor (reconecta PDO)
-            throw $e;
+            
+            // Reconnect PDO if it failed
+            if (strpos($e->getMessage(), 'server closed the connection') !== false || strpos($e->getMessage(), 'gone away') !== false) {
+                $pdo = getDbConnection();
+            }
         }
     } catch (Exception $e) {
         logW('FATAL', $e->getMessage());
-        exit(1); // Let supervisor restart with backoff (reconnects both Redis and PDO)
+        sleep(15);
+        $redis = null; // Force reconnect
     }
 
     // FIX (SRE-2): Ejecutar GC de zombies cada 60 segundos.
