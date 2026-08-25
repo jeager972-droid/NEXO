@@ -478,8 +478,15 @@ while (!$shutdown) {
             sleep(15);
             continue;
         }
-        try { $redis = getRedisConnection(); } catch (Exception $re) { sleep(15); continue; }
-        if (!$redis) { sleep(15); continue; }
+        
+        // If Redis failed, we must sleep to prevent infinite fast-loop, 
+        // then try to reconnect, or switch to pgFallbackMode.
+        sleep(15);
+        try { $redis = getRedisConnection(true); } catch (Exception $re) {}
+        
+        if (!$redis) { 
+            $pgFallbackMode = true; 
+        }
         continue;
     }
 
