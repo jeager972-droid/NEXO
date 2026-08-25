@@ -221,20 +221,26 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
 
     // FIX: Dedup por número+contenido en ventana de 30s para evitar envenenamiento de cola
     $dedupKey = 'twilio:dedup:' . md5($to . '|' . $body);
-    if ($redis->get($dedupKey)) {
-        securityLog('TWILIO_DEDUP_SKIP', "Skipped duplicate to $to within 30s window");
-        return;
-    }
+    try {
+        if ($redis && $redis->get($dedupKey)) {
+            securityLog('TWILIO_DEDUP_SKIP', "Skipped duplicate to $to within 30s window");
+            return;
+        }
+    } catch (Exception $e) {}
 
     // FIX C5: Límite diario por número de teléfono para controlar costo económico.
     // Máximo 10 SMS/día por destinatario. Configurable vía TWILIO_MAX_DAILY_PER_PHONE.
     $maxDailyPerPhone = (int)(getenv('TWILIO_MAX_DAILY_PER_PHONE') ?: 10);
     $todayKey = 'twilio:daily:' . $to . ':' . date('Ymd');
-    $dailyCount = (int)$redis->get($todayKey);
-    if ($dailyCount >= $maxDailyPerPhone) {
-        securityLog('TWILIO_DAILY_LIMIT_SKIP', "Skipped to $to: $dailyCount/$maxDailyPerPhone SMS today");
-        return;
-    }
+    try {
+        if ($redis) {
+            $dailyCount = (int)$redis->get($todayKey);
+            if ($dailyCount >= $maxDailyPerPhone) {
+                securityLog('TWILIO_DAILY_LIMIT_SKIP', "Skipped to $to: $dailyCount/$maxDailyPerPhone SMS today");
+                return;
+            }
+        }
+    } catch (Exception $e) {}
 
     // FIX: Leaky Bucket rate limiter para no exceder límites de Twilio
     $now = microtime(true);
@@ -286,7 +292,16 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         $job['retries'] = $retries + 1;
         $delayMs = min(pow(2, $retries) * 1000, 30000); // Backoff exponencial hasta 30 s
         $nextTry = microtime(true) + ($delayMs / 1000);
-        $redis->zAdd($delayQueue, $nextTry, json_encode($job, JSON_UNESCAPED_UNICODE));
+        try {
+            if ($redis) {
+                $redis->zAdd($delayQueue, $nextTry, json_encode($job, JSON_UNESCAPED_UNICODE));
+            } else if (!empty($job['message_id'])) {
+                // Fallback: update PG to retry, we use QUEUED so polling picks it up again
+                // It will be picked up immediately in next polling loop but that's acceptable in degraded mode
+                $upd = $conn->prepare("UPDATE twilio_messages SET delivery_status = 'QUEUED', metadata_json = ?::jsonb WHERE twilio_message_id = ?");
+                $upd->execute([json_encode(['action' => 'worker_retry', 'retries' => $job['retries'], 'error' => $send['error']], JSON_UNESCAPED_UNICODE), $job['message_id']]);
+            }
+        } catch (Exception $e) {}
         securityLog('TWILIO_WORKER_RETRY', "To: $to Retry: {$job['retries']} Delay: {$delayMs}ms Error: {$send['error']}");
     } else {
         // FIX (PgBouncer): SET LOCAL dentro de transacción para RLS
@@ -310,7 +325,11 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
             securityLog('TWILIO_WORKER_UPD_FAIL', $e->getMessage());
             throw $e;
         }
-        $redis->rPush('queue:twilio:dlq', json_encode($job, JSON_UNESCAPED_UNICODE));
+        try {
+            if ($redis) {
+                $redis->rPush('queue:twilio:dlq', json_encode($job, JSON_UNESCAPED_UNICODE));
+            }
+        } catch (Exception $e) {}
         securityLog('TWILIO_WORKER_DEAD_LETTER', "To: $to Error: {$send['error']}");
     }
 }
@@ -392,7 +411,7 @@ while (!$shutdown) {
             // Buscar mensajes QUEUED (sin Redis, leemos directamente de PG)
             $stmt = $conn->prepare("
                 SELECT twilio_message_id, school_id, student_id, guardian_id, sender_user_id,
-                       type_code, phone_number, message_content
+                       type_code, phone_number, message_content, metadata_json
                 FROM twilio_messages
                 WHERE delivery_status = 'QUEUED'
                 ORDER BY sent_at ASC
@@ -406,6 +425,7 @@ while (!$shutdown) {
                 $conn->prepare("UPDATE twilio_messages SET delivery_status = 'PROCESSING' WHERE twilio_message_id = ? AND sent_at = ?")
                     ->execute([$row['twilio_message_id'], $row['sent_at'] ?? null]);
 
+                $meta = json_decode($row['metadata_json'] ?? '{}', true) ?: [];
                 $job = [
                     'message_id' => $row['twilio_message_id'],
                     'to' => $row['phone_number'],
@@ -415,7 +435,7 @@ while (!$shutdown) {
                     'guardian_id' => $row['guardian_id'],
                     'sender_user_id' => $row['sender_user_id'],
                     'type_code' => $row['type_code'],
-                    'retries' => 0,
+                    'retries' => (int)($meta['retries'] ?? 0),
                     'created_at' => time(),
                 ];
                 processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
@@ -474,6 +494,7 @@ while (!$shutdown) {
         }
     } catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());
+        @touch('/tmp/redis_circuit_open'); // Trip circuit breaker manually
         if ($pgFallbackMode) {
             sleep(15);
             continue;

@@ -36,6 +36,9 @@ if ($databaseUrl) {
     if ($dbparts) {
         $host = $dbparts['host'];
         $port = $dbparts['port'] ?? '6543';
+        if (strpos($host, 'supabase.com') !== false || strpos($host, 'pooler') !== false) {
+            $port = '6543'; // FORCE pooler port for Supabase
+        }
         $user = $dbparts['user'];
         $pass = $dbparts['pass'];
         $dbname = ltrim($dbparts['path'], '/');

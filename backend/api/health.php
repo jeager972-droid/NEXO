@@ -30,6 +30,9 @@ try {
             if ($parts) {
                 $host = $parts['host'] ?? '127.0.0.1';
                 $port = $parts['port'] ?? 6543;
+                if (strpos($host, 'supabase.com') !== false || strpos($host, 'pooler') !== false) {
+                    $port = 6543;
+                }
                 $dbname = ltrim($parts['path'] ?? '', '/');
                 $user = $parts['user'] ?? '';
                 $pass = $parts['pass'] ?? '';

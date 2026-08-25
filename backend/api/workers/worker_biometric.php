@@ -658,6 +658,7 @@ while (!$shutdown) {
         } catch (Exception $e) {
             logW('REDIS_ERR', $e->getMessage());
             $redis = null; // Force reconnect on next iteration
+            @touch('/tmp/redis_circuit_open'); // Trip circuit breaker manually
             continue;
         }
         if (!$item) { usleep($EMPTY_QUEUE_SLEEP_US); continue; }
