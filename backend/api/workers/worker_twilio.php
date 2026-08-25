@@ -472,7 +472,7 @@ while (!$shutdown) {
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
             }
         }
-    catch (Exception $e) {
+    } catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());
         if ($pgFallbackMode) {
             sleep(15);
