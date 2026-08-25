@@ -187,7 +187,8 @@ pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
 // Worker audit: si no está habilitado, salir sin conectar a Redis.
 $auditEnabled = getenv('AUDIT_WORKER_ENABLED') === '1';
 if (!$auditEnabled) {
-    logWorker('DISABLED', 'AUDIT_WORKER_ENABLED no está activo. No se consumirá Redis.');
+    logWorker('DISABLED', 'AUDIT_WORKER_ENABLED no está activo. Worker dormido por 1 hora para evitar consumo.');
+    sleep(3600);
     exit(0);
 }
 
