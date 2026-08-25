@@ -46,7 +46,9 @@ client.interceptors.request.use(
     const token = localStorage.getItem('nexo:auth-token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      if (isTokenExpiringSoon(token, 5)) {
+      // Prevent infinite loop: do not trigger token-check if this request is already for refreshing
+      const isAuthReq = config.url?.includes('/auth/refresh') || config.url?.includes('/auth/login');
+      if (!isAuthReq && !isRefreshing && isTokenExpiringSoon(token, 5)) {
         window.dispatchEvent(new CustomEvent('nexo:token-check'));
       }
     }
@@ -136,6 +138,8 @@ client.interceptors.response.use(
         } catch (refreshError) {
           isRefreshing = false;
           onRefreshed(null);
+          localStorage.removeItem('nexo:auth-token');
+          localStorage.removeItem('nexo:auth-refresh-token');
           window.dispatchEvent(new CustomEvent('nexo:auth-logout'));
           return Promise.reject(error);
         }

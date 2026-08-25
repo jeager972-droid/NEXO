@@ -98,6 +98,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       saveUserFallback(null);
       saveToken(null);
+      saveRefreshToken(null);
       setLoading(true);
       navigateRef.current('/login');
     };
