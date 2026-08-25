@@ -156,9 +156,9 @@ if (!function_exists('getRedisConnection')) {
         }
         $attempted = true;
 
-        // Circuit breaker: si falló en los últimos 60 segundos, no intentar
+        // Circuit breaker: si falló, no intentar por 45 minutos (2700s) para evitar log spam
         $circuitFile = '/tmp/redis_circuit_open';
-        if (file_exists($circuitFile) && (time() - filemtime($circuitFile)) < 60) {
+        if (file_exists($circuitFile) && (time() - filemtime($circuitFile)) < 2700) {
             return null;
         }
 
