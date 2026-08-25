@@ -1267,11 +1267,10 @@ if ($runMode === 'cron') {
 }
 
 // Modo daemon
-$redis = getRedisConnection();
-if (!$redis) {
-    logE('FATAL', 'Redis unavailable');
-    exit(1);
-}
+$redis = null;
+try {
+    $redis = getRedisConnection();
+} catch (Exception $e) {}
 
 $iterations = 0;
 $lastHeartbeat = 0;
@@ -1279,9 +1278,13 @@ $CHECK_INTERVAL_SEC = (int)(getenv('EVASION_CHECK_INTERVAL') ?: 120);
 
 while (!$shutdown) {
     try {
-        if (time() - $lastHeartbeat >= 30) {
+        try {
+            $redis = getRedisConnection();
+        } catch (Exception $e) {}
+
+        if ($redis && time() - $lastHeartbeat >= 30) {
             $lastHeartbeat = time();
-            $redis->set('worker:evasion_detector:last_heartbeat', time());
+            try { $redis->set('worker:evasion_detector:last_heartbeat', time()); } catch (Exception $e) {}
         }
 
         try {
@@ -1290,14 +1293,24 @@ while (!$shutdown) {
 
             $total = 0;
             foreach ($schools as $schoolId) {
+                // Si Redis está disponible, usamos lock. Si no, asumimos que es seguro procesar (single instance fallback).
                 $lockKey = "lock:evasion_detector:$schoolId";
-                if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
-                    continue;
+                $hasLock = false;
+                if ($redis) {
+                    try {
+                        if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                            continue;
+                        }
+                        $hasLock = true;
+                    } catch (Exception $e) {}
                 }
+
                 try {
                     $total += processSchoolEvasion($pdo, $redis, $schoolId);
                 } finally {
-                    $redis->del($lockKey);
+                    if ($hasLock && $redis) {
+                        try { $redis->del($lockKey); } catch (Exception $e) {}
+                    }
                 }
             }
             if ($total > 0) {

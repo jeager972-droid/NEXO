@@ -432,11 +432,10 @@ if ($runMode === 'cron') {
 }
 
 // Modo daemon: loop continuo
-$redis = getRedisConnection();
-if (!$redis) {
-    logA('FATAL', 'Redis unavailable');
-    exit(1);
-}
+$redis = null;
+try {
+    $redis = getRedisConnection();
+} catch (Exception $e) {}
 
 $iterations = 0;
 $lastHeartbeat = 0;
@@ -444,9 +443,13 @@ $CHECK_INTERVAL_SEC = (int)(getenv('ABSENCE_CHECK_INTERVAL') ?: 60); // 1 min po
 
 while (!$shutdown) {
     try {
-        if (time() - $lastHeartbeat >= 30) {
+        try {
+            $redis = getRedisConnection();
+        } catch (Exception $e) {}
+
+        if ($redis && time() - $lastHeartbeat >= 30) {
             $lastHeartbeat = time();
-            $redis->set('worker:absence_detector:last_heartbeat', time());
+            try { $redis->set('worker:absence_detector:last_heartbeat', time()); } catch (Exception $e) {}
         }
 
         try {
@@ -456,13 +459,22 @@ while (!$shutdown) {
             $total = 0;
             foreach ($schools as $schoolId) {
                 $lockKey = "lock:absence_detector:$schoolId";
-                if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
-                    continue;
+                $hasLock = false;
+                if ($redis) {
+                    try {
+                        if (!$redis->set($lockKey, '1', ['nx', 'ex' => 300])) {
+                            continue;
+                        }
+                        $hasLock = true;
+                    } catch (Exception $e) {}
                 }
+
                 try {
                     $total += processSchool($pdo, $redis, $schoolId);
                 } finally {
-                    $redis->del($lockKey);
+                    if ($hasLock && $redis) {
+                        try { $redis->del($lockKey); } catch (Exception $e) {}
+                    }
                 }
             }
             if ($total > 0) {
