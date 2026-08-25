@@ -593,6 +593,11 @@ if (!function_exists('requireAuth')) {
     function requireAuth($allowedRoles = null) {
         global $conn;
 
+        if (!$conn) {
+            http_response_code(503);
+            exit(json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible (BD).']));
+        }
+
         if (in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'DELETE', 'PATCH'])) {
             if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest') {
                 http_response_code(403);
@@ -779,6 +784,11 @@ if (!function_exists('checkCriticalAlerts')) {
             }
         } catch (Exception $e) {
             // ignore
+        }
+
+        // 6. Redis Circuit Breaker State
+        if (file_exists('/tmp/redis_circuit_open') && (time() - filemtime('/tmp/redis_circuit_open')) < 60) {
+            $alerts[] = "CRITICAL: Redis Circuit Breaker is OPEN";
         }
 
         // Log alerts

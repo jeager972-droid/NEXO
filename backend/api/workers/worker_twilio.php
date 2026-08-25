@@ -421,8 +421,8 @@ while (!$shutdown) {
                 processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
                 $pgSendsThisHour++;
             } else {
-                // No hay mensajes, esperar 5s antes de volver a hacer polling
-                sleep(5);
+                // No hay mensajes, esperar 15s antes de volver a hacer polling
+                sleep(15);
             }
             continue;
         }
@@ -472,14 +472,14 @@ while (!$shutdown) {
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
             }
         }
-    } catch (Exception $e) {
+    catch (Exception $e) {
         securityLog('TWILIO_WORKER_FATAL', $e->getMessage());
         if ($pgFallbackMode) {
-            sleep(5);
+            sleep(15);
             continue;
         }
-        try { $redis = getRedisConnection(); } catch (Exception $re) { sleep(5); continue; }
-        if (!$redis) { sleep(5); continue; }
+        try { $redis = getRedisConnection(); } catch (Exception $re) { sleep(15); continue; }
+        if (!$redis) { sleep(15); continue; }
         continue;
     }
 

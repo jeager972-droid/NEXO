@@ -29,7 +29,7 @@ try {
             $parts = parse_url(str_replace(['postgres://', 'postgresql://'], 'http://', $databaseUrl));
             if ($parts) {
                 $host = $parts['host'] ?? '127.0.0.1';
-                $port = $parts['port'] ?? 5432;
+                $port = $parts['port'] ?? 6543;
                 $dbname = ltrim($parts['path'] ?? '', '/');
                 $user = $parts['user'] ?? '';
                 $pass = $parts['pass'] ?? '';
@@ -42,7 +42,7 @@ try {
         }
     } else {
         $host = getenv('PGHOST') ?: '127.0.0.1';
-        $port = getenv('PGPORT') ?: 5432;
+        $port = getenv('PGPORT') ?: 6543;
         $dbname = getenv('PGDATABASE') ?: 'nexo';
         $user = getenv('PGUSER') ?: 'nexo';
         $pass = getenv('PGPASSWORD') ?: '';

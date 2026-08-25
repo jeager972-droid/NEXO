@@ -35,7 +35,7 @@ if ($databaseUrl) {
     $dbparts = parse_url($databaseUrl);
     if ($dbparts) {
         $host = $dbparts['host'];
-        $port = $dbparts['port'] ?? '5432';
+        $port = $dbparts['port'] ?? '6543';
         $user = $dbparts['user'];
         $pass = $dbparts['pass'];
         $dbname = ltrim($dbparts['path'], '/');

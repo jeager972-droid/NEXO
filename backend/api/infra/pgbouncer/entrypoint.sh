@@ -15,7 +15,7 @@ chmod 600 /etc/pgbouncer/userlist.txt
 chown pgbouncer:pgbouncer /etc/pgbouncer/userlist.txt
 
 # Expandir variables en pgbouncer.ini usando envsubst
-export DB_PORT=${DB_PORT:-5432}
+export DB_PORT=${DB_PORT:-6543}
 envsubst < /etc/pgbouncer/pgbouncer.ini > /tmp/pgbouncer.ini
 mv /tmp/pgbouncer.ini /etc/pgbouncer/pgbouncer.ini
 chown pgbouncer:pgbouncer /etc/pgbouncer/pgbouncer.ini

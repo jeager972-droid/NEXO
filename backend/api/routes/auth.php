@@ -537,93 +537,102 @@ if ($cleanPath === '/auth/refresh' && $method === 'POST') {
 
     $refreshTokenHash = hash('sha256', $refreshToken);
 
-    // Buscar la sesión activa con este refresh token
-    $stmt = $conn->prepare("
-        SELECT us.session_id, us.user_id, us.expires_at, us.revoked,
-               u.email, r.role_name, u.school_id, u.first_name, u.last_name,
-               u.profile_photo_url, u.work_shift, u.active as user_active,
-               s.school_name
-        FROM user_sessions us
-        JOIN users u ON u.user_id = us.user_id
-        INNER JOIN roles r ON u.role_id = r.role_id
-        LEFT JOIN schools s ON s.school_id = u.school_id
-        WHERE us.refresh_token_hash = ?
-          AND us.revoked = FALSE
-          AND us.expires_at > NOW()
-          AND u.active = TRUE
-        LIMIT 1
-    ");
-    $stmt->execute([$refreshTokenHash]);
-    $session = $stmt->fetch(PDO::FETCH_ASSOC);
+    try {
+        if (!$conn) throw new Exception("Conexión a BD no disponible");
+        
+        // Buscar la sesión activa con este refresh token
+        $stmt = $conn->prepare("
+            SELECT us.session_id, us.user_id, us.expires_at, us.revoked,
+                   u.email, r.role_name, u.school_id, u.first_name, u.last_name,
+                   u.profile_photo_url, u.work_shift, u.active as user_active,
+                   s.school_name
+            FROM user_sessions us
+            JOIN users u ON u.user_id = us.user_id
+            INNER JOIN roles r ON u.role_id = r.role_id
+            LEFT JOIN schools s ON s.school_id = u.school_id
+            WHERE us.refresh_token_hash = ?
+              AND us.revoked = FALSE
+              AND us.expires_at > NOW()
+              AND u.active = TRUE
+            LIMIT 1
+        ");
+        $stmt->execute([$refreshTokenHash]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$session) {
-        securityLog('REFRESH_TOKEN_INVALID', 'Refresh token not found, expired, or revoked');
-        http_response_code(401);
-        exit(json_encode(['status' => 'error', 'message' => 'Refresh token inválido o expirado']));
-    }
+        if (!$session) {
+            securityLog('REFRESH_TOKEN_INVALID', 'Refresh token not found, expired, or revoked');
+            http_response_code(401);
+            exit(json_encode(['status' => 'error', 'message' => 'Refresh token inválido o expirado']));
+        }
 
-    // Rotar: revocar el refresh token actual
-    $revokeStmt = $conn->prepare("UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE session_id = ?::uuid");
-    $revokeStmt->execute([$session['session_id']]);
+        // Rotar: revocar el refresh token actual
+        $revokeStmt = $conn->prepare("UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE session_id = ?::uuid");
+        $revokeStmt->execute([$session['session_id']]);
 
-    // Emitir nuevo access token
-    $normalizedRole = normalizeRole($session['role_name']);
-    $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
-    $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800);
+        // Emitir nuevo access token
+        $normalizedRole = normalizeRole($session['role_name']);
+        $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
+        $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800);
 
-    $newToken = issueJwtToken([
-        'sub' => (string)$session['user_id'],
-        'email' => $session['email'],
-        'role' => $normalizedRole,
-        'school_id' => $session['school_id'],
-        'exp' => time() + $tokenTtlSeconds
-    ]);
-
-    // Emitir nuevo refresh token (rotación)
-    $newRefreshToken = bin2hex(random_bytes(32));
-    $newRefreshTokenHash = hash('sha256', $newRefreshToken);
-    $newRefreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
-    $clientIp = getRealClientIp();
-    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
-    $newSessionStmt = $conn->prepare("
-        INSERT INTO user_sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
-        VALUES (?::uuid, ?, ?::inet, ?, ?::timestamptz)
-    ");
-    $newSessionStmt->execute([$session['user_id'], $newRefreshTokenHash, $clientIp, $userAgent, $newRefreshExpiresAt]);
-
-    // Setear cookies
-    $cookieOpts = [
-        'expires' => time() + $tokenTtlSeconds,
-        'path' => '/',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'None'
-    ];
-    setcookie('token', $newToken, $cookieOpts);
-    $refreshCookieOpts = [
-        'expires' => time() + $refreshTtlSeconds,
-        'path' => '/',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'None'
-    ];
-    setcookie('refresh_token', $newRefreshToken, $refreshCookieOpts);
-
-    echo json_encode([
-        'status' => 'ok',
-        'token' => $newToken,
-        'refresh_token' => $newRefreshToken,
-        'token_expires_in' => $tokenTtlSeconds,
-        'user' => [
-            'id' => $session['user_id'],
-            'nombre' => $session['first_name'] . ' ' . $session['last_name'],
+        $newToken = issueJwtToken([
+            'sub' => (string)$session['user_id'],
             'email' => $session['email'],
             'role' => $normalizedRole,
             'school_id' => $session['school_id'],
-            'school_name' => $session['school_name'],
-            'profile_photo_url' => $session['profile_photo_url'] ?? null,
-            'work_shift' => $session['work_shift'] ?? null
-        ]
-    ]);
+            'exp' => time() + $tokenTtlSeconds
+        ]);
+
+        // Emitir nuevo refresh token (rotación)
+        $newRefreshToken = bin2hex(random_bytes(32));
+        $newRefreshTokenHash = hash('sha256', $newRefreshToken);
+        $newRefreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
+        $clientIp = getRealClientIp();
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+        $newSessionStmt = $conn->prepare("
+            INSERT INTO user_sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at)
+            VALUES (?::uuid, ?, ?::inet, ?, ?::timestamptz)
+        ");
+        $newSessionStmt->execute([$session['user_id'], $newRefreshTokenHash, $clientIp, $userAgent, $newRefreshExpiresAt]);
+
+        // Setear cookies
+        $cookieOpts = [
+            'expires' => time() + $tokenTtlSeconds,
+            'path' => '/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'None'
+        ];
+        setcookie('token', $newToken, $cookieOpts);
+        $refreshCookieOpts = [
+            'expires' => time() + $refreshTtlSeconds,
+            'path' => '/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'None'
+        ];
+        setcookie('refresh_token', $newRefreshToken, $refreshCookieOpts);
+
+        echo json_encode([
+            'status' => 'ok',
+            'token' => $newToken,
+            'refresh_token' => $newRefreshToken,
+            'token_expires_in' => $tokenTtlSeconds,
+            'user' => [
+                'id' => $session['user_id'],
+                'nombre' => $session['first_name'] . ' ' . $session['last_name'],
+                'email' => $session['email'],
+                'role' => $normalizedRole,
+                'school_id' => $session['school_id'],
+                'school_name' => $session['school_name'],
+                'profile_photo_url' => $session['profile_photo_url'] ?? null,
+                'work_shift' => $session['work_shift'] ?? null
+            ]
+        ]);
+    } catch (Throwable $e) {
+        securityLog('AUTH_REFRESH_DB_ERROR', $e->getMessage());
+        http_response_code(503);
+        // Exponential backoff frontend hint
+        exit(json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible (BD).', 'retry_after' => 60]));
+    }
     exit;
 }

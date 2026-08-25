@@ -88,7 +88,7 @@ if (!function_exists('getRedisConnection')) {
                 'user'         => $user,
                 'pass'         => $pass,
                 'db'           => $db,
-                'timeout'      => (float)(getenv('REDIS_CONNECT_TIMEOUT') ?: 0.5),
+                'timeout'      => (float)(getenv('REDIS_CONNECT_TIMEOUT') ?: 2.0),
                 'read_timeout' => (float)(getenv('REDIS_READ_TIMEOUT') ?: 0.0),
             ];
         }
@@ -125,7 +125,7 @@ if (!function_exists('getRedisConnection')) {
             'user'         => $user,
             'pass'         => $pass,
             'db'           => $db,
-            'timeout'      => (float)(getenv('REDIS_CONNECT_TIMEOUT') ?: 0.5),
+            'timeout'      => (float)(getenv('REDIS_CONNECT_TIMEOUT') ?: 2.0),
             'read_timeout' => (float)(getenv('REDIS_READ_TIMEOUT') ?: 0.0),
         ];
     }
@@ -150,6 +150,12 @@ if (!function_exists('getRedisConnection')) {
             return null;
         }
         $attempted = true;
+
+        // Circuit breaker: si falló en los últimos 60 segundos, no intentar
+        $circuitFile = '/tmp/redis_circuit_open';
+        if (file_exists($circuitFile) && (time() - filemtime($circuitFile)) < 60) {
+            return null;
+        }
 
         try {
             // Si la extensión phpredis no está cargada, no bloquear la API.
@@ -215,6 +221,8 @@ if (!function_exists('getRedisConnection')) {
             return $redis;
         } catch (Throwable $e) {
             $redis = null;
+            // Abrir el circuit breaker por 60s
+            touch($circuitFile);
             error_log('Redis connection error: ' . $e->getMessage());
             return null;
         }

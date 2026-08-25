@@ -112,8 +112,9 @@ listen.group = www-data
 listen.mode = 0660
 clear_env = no
 pm = dynamic
-pm.max_children = 25
+pm.max_children = 10
 pm.start_servers = 2
+pm.max_requests = 1000
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 FPMCONF
