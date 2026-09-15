@@ -26,26 +26,20 @@ import { humanizeError } from '../../utils/messages';
 const EASE = [0.22, 1, 0.36, 1];
 const STORAGE_KEY = 'nexo:onboarding-schedule';
 
-/** Convierte "HH:MM" (24h) a "h:mm AM/PM" (12h) para display */
-function format12h(time24) {
-  if (!time24) return '';
-  const [h, m] = time24.split(':').map(Number);
-  if (isNaN(h) || isNaN(m)) return '';
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
-}
-
-/** Campo de hora con reloj nativo pero display en formato 12h */
+/** Campo de hora nativo */
 const TimeField = ({ label, value, onChange, required, leftIcon: Icon }) => {
   const auto = useId();
   const id = `nx-ti-${auto}`;
-  const display = format12h(value);
+  
   const fieldClass = clsx(
-    'w-full rounded-control border bg-[var(--nx-surface)] text-body',
+    'w-full h-12 flex items-center rounded-control border bg-[var(--nx-surface)] text-body text-[var(--nx-text)]',
     'outline-none transition-[border-color,box-shadow] duration-fast ease-out',
-    'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),var(--nx-tint-base))] focus:border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]'
+    'border-[var(--nx-border)] hover:border-[color-mix(in_oklch,var(--nx-text)_var(--nx-subtle-mix-w),var(--nx-tint-base))] focus:border-[var(--nx-accent)] focus:shadow-[var(--nx-ring)]',
+    Icon ? 'pl-11' : 'pl-4', 'pr-4',
+    '[&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100',
+    !value && 'text-[var(--nx-text-muted)]'
   );
+
   return (
     <div className="space-y-2">
       {label && (
@@ -62,26 +56,13 @@ const TimeField = ({ label, value, onChange, required, leftIcon: Icon }) => {
             <Icon size={16} />
           </span>
         )}
-        <div
-          className={clsx(
-            fieldClass, 'h-12 flex items-center pointer-events-none',
-            Icon ? 'pl-11' : 'pl-4', 'pr-4',
-            display ? 'text-[var(--nx-text)]' : 'text-[var(--nx-text-muted)]'
-          )}
-        >
-          {display || '--:--'}
-        </div>
         <input
           id={id}
           type="time"
           required={required}
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
-          className={clsx(
-            fieldClass, 'absolute inset-0 h-12 bg-transparent',
-            Icon ? 'pl-11' : 'pl-4', 'pr-4',
-            'text-transparent caret-transparent cursor-pointer'
-          )}
+          className={fieldClass}
         />
       </div>
     </div>
@@ -137,6 +118,7 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationError, setValidationError] = useState('');
 
   // Fase: 'multi' → 'select' → 'jornada' → 'technical' → 'review'
   const [phase, setPhase] = useState(saved?.phase || 'multi');
@@ -220,19 +202,56 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
 
   const shiftLabel = (s) => SHIFT_OPTIONS.find(o => o.value === s)?.label || s;
 
-  // Validar paso actual
+  // Validar paso actual con mensajes de error específicos
   const canProceed = () => {
+    setValidationError('');
     if (phase === 'multi') return hasMultipleShifts !== null;
     if (phase === 'select') return selectedShifts.length > 0;
     if (phase === 'jornada') {
       const j = jornadas[currentJornadaIdx];
       if (!j) return false;
       if (jornadaSubStep === 1) {
-        return j.blocks.length > 0 && j.blocks.every(b => b.start_time && b.end_time);
+        if (j.blocks.length === 0) {
+          setValidationError('Debes configurar al menos un bloque horario');
+          return false;
+        }
+        if (!j.blocks.every(b => b.start_time && b.end_time)) {
+          setValidationError('Todos los bloques deben tener hora de inicio y fin');
+          return false;
+        }
+        // Validar que los bloques estén en orden cronológico
+        for (let i = 0; i < j.blocks.length - 1; i++) {
+          if (j.blocks[i].end_time > j.blocks[i + 1].start_time) {
+            setValidationError('Los bloques horarios deben estar en orden cronológico');
+            return false;
+          }
+        }
+        return true;
       }
-      if (!j.entry_time || !j.exit_time) return false;
-      if (j.recess_start_time && !j.recess_end_time) return false;
-      if (j.recess_end_time && !j.recess_start_time) return false;
+      if (!j.entry_time || !j.exit_time) {
+        setValidationError('Debes ingresar hora de entrada y salida');
+        return false;
+      }
+      // Validar que entrada < salida
+      if (j.entry_time >= j.exit_time) {
+        setValidationError('La hora de entrada debe ser anterior a la hora de salida');
+        return false;
+      }
+      if (j.recess_start_time && !j.recess_end_time) {
+        setValidationError('Debes ingresar hora de fin del receso');
+        return false;
+      }
+      if (j.recess_end_time && !j.recess_start_time) {
+        setValidationError('Debes ingresar hora de inicio del receso');
+        return false;
+      }
+      // Validar que receso esté dentro del horario escolar
+      if (j.recess_start_time && j.recess_end_time) {
+        if (j.recess_start_time < j.entry_time || j.recess_end_time > j.exit_time) {
+          setValidationError('El receso debe estar dentro del horario escolar');
+          return false;
+        }
+      }
       return true;
     }
     if (phase === 'technical') return hasTechModality !== null;
@@ -473,6 +492,12 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
               <p className="text-body-sm text-[var(--nx-danger)]">{error}</p>
             </div>
           )}
+          {validationError && (
+            <div className="flex items-start gap-2 rounded-control border border-[var(--nx-border-warning)] bg-[var(--nx-subtle-bg-warning)] px-4 py-3">
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--nx-warning)]" />
+              <p className="text-body-sm text-[var(--nx-warning)]">{validationError}</p>
+            </div>
+          )}
 
           {/* FASE 1: ¿Hay más de una jornada? */}
           {phase === 'multi' && (
@@ -587,6 +612,12 @@ export const OnboardingScheduleModal = ({ schoolId, userId, role, onCompleted, o
                       leftIcon={Clock}
                     />
                   </div>
+                  {jornadas[currentJornadaIdx].entry_time && jornadas[currentJornadaIdx].exit_time && (
+                    <div className="flex items-center gap-2 text-caption text-[var(--nx-text-muted)]">
+                      <Clock size={14} />
+                      <span>Jornada: {jornadas[currentJornadaIdx].entry_time} - {jornadas[currentJornadaIdx].exit_time}</span>
+                    </div>
+                  )}
 
                   <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-4 space-y-3">
                     <p className="text-label text-[var(--nx-text)]">

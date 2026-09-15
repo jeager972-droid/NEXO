@@ -168,10 +168,9 @@ export const OnboardingGroupsModal = ({ onCompleted, onCancel, isEdit = false })
     return previews;
   }, [selectedGrades, nomenclature, separator, groupsPerGrade]);
 
-  // Filtrar docentes por jornada del grupo (mañana/tarde/noche) + completas + sin jornada
+  // Mostrar todos los docentes disponibles para cualquier grupo (sin filtrar por jornada)
   const teachersForShift = (shift) => {
-    if (shift === 'completa') return teachers;
-    return teachers.filter((t) => !t.work_shift || t.work_shift === shift || t.work_shift === 'completa');
+    return teachers;
   };
 
   return (

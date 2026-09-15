@@ -1,0 +1,47 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "nexo_repomix.xml",
+    "style": "xml",
+    "removeComments": false,
+    "showLineNumbers": false
+  },
+  "include": [
+    "**/*.js",
+    "**/*.jsx",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.cjs",
+    "**/*.mjs",
+    "**/*.php",
+    "**/*.sql",
+    "**/*.css",
+    "**/*.html",
+    "**/*.sh",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "**/*.cc",
+    "**/*.c",
+    "**/*.md",
+    "**/*.txt"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/vendor/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/sensorvendor/**",
+      "**/.git/**",
+      "**/.github/**",
+      "**/composer.lock",
+      "**/package-lock.json",
+      "**/yarn.lock",
+      "**/pnpm-lock.yaml",
+      "nexo_repomix.xml"
+    ]
+  }
+}

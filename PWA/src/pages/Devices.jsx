@@ -674,6 +674,30 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
             aparecerá automáticamente como <strong className="text-[var(--nx-text)]">Operativo</strong>.
           </p>
         </div>
+        {device.group_name && (
+          <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[var(--nx-success)]">🎯</span>
+              <p className="text-body-sm font-semibold text-[var(--nx-text)]">Asignación automática</p>
+            </div>
+            <p className="text-body-sm text-[var(--nx-text-muted)]">
+              Este sensor está asignado al grupo <strong className="text-[var(--nx-text)]">{device.group_name}</strong>.
+              Esta asignación no se puede cambiar durante la configuración.
+            </p>
+          </div>
+        )}
+        {device.assigned_user_name && (
+          <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[var(--nx-success)]">👤</span>
+              <p className="text-body-sm font-semibold text-[var(--nx-text)]">Usuario asignado</p>
+            </div>
+            <p className="text-body-sm text-[var(--nx-text-muted)]">
+              Este sensor está asignado a <strong className="text-[var(--nx-text)]">{device.assigned_user_name}</strong>.
+              Esta asignación no se puede cambiar durante la configuración.
+            </p>
+          </div>
+        )}
         <div className="rounded-control border border-[var(--nx-border-warning)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
             <strong className="text-[var(--nx-text)]">Importante:</strong> El código de activación solo se muestra una vez.
@@ -695,7 +719,8 @@ const TokenDrawer = ({ info, onClose }) => {
   const deviceId = info.device_id || '';
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(token).then(() => {
+    const textToCopy = `ID del sensor: ${deviceId}\nCódigo de activación: ${token}`;
+    navigator.clipboard.writeText(textToCopy).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -711,7 +736,7 @@ const TokenDrawer = ({ info, onClose }) => {
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose}>Cerrar</Button>
           <Button className="flex-1" onClick={handleCopy} leftIcon={copied ? <Check size={16} /> : <Cpu size={16} />}>
-            {copied ? 'Copiado' : 'Copiar código de activación'}
+            {copied ? 'Copiado' : 'Copiar ID y código de activación'}
           </Button>
         </div>
       }

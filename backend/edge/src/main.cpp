@@ -941,7 +941,7 @@ bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
         return false;
     }
 
-    Estudiante est{doc, nombre, tel, "", huellaId, tpl.empty() ? std::vector<uint8_t>(256, 0) : tpl};
+    Estudiante est{doc, nombre, tel, "", huellaId, tpl.empty() ? std::vector<uint8_t>(256, 0) : tpl, ""};
     sqlite3_exec(db.getDB(), "BEGIN;", nullptr, nullptr, nullptr);
     if (db.saveEstudiante(est)) {
         auto cacheRes = sensor->addTemplate(huellaId, est.template_huella);
@@ -1361,7 +1361,7 @@ int main() {
                                         break;
                                     } else {
                                         // Huella no coincide con el estudiante esperado
-                                        LOG_WARN("[Main] Exit fingerprint MISMATCH for doc={} (got template {})", doc, templateId);
+                                        LOG_WARN("[Main] Exit fingerprint MISMATCH for doc={} (got template {})", doc, uid);
                                         display->showMessage("ERROR", "Huella no coincide");
                                         notification->notifyError();
                                         std::this_thread::sleep_for(std::chrono::seconds(2));
