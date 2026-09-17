@@ -65,12 +65,14 @@
 #include "base_de_datos/cloud_manager.h"
 #include "mqtt/mqtt_command_worker.h"
 #include "hardware/watchdog.h"
+#include "hardware/node_monitor.h"
 #include "hardware/dev_stub/DevStubBiometricSensor.h"
 #include "hardware/real/Zk9500BiometricSensor.h"
 #include "hardware/real/UareU5300BiometricSensor.h"
 #include "hardware/dev_stub/DevStubDisplay.h"
 #include "hardware/dev_stub/DevStubNotification.h"
 #include "interoperabilidad/audit_trail.h"
+#include "interoperabilidad/ota_manager.h"
 
 // FIX C8: Hardware real condicional — OLED SSD1306 + GPIO LEDs/buzzer
 #if defined(HAS_REAL_DISPLAY)
@@ -188,9 +190,23 @@ private:
             if (++cycleCount >= 2880) {
                 cycleCount = 0;
                 auto& db = SqliteManager::getInstance();
-                int purged = db.purgeOldAuditTrail(30, 90);
+                // V-427: retenciones configurables vía config.json
+                // (retention_days_synced / retention_days_dlq; defaults 30/90)
+                auto& cfg = ConfigManager::getInstance();
+                int daysSynced = cfg.getInt("retention_days_synced", 30);
+                int daysDlq    = cfg.getInt("retention_days_dlq", 90);
+                int purged = db.purgeOldAuditTrail(daysSynced, daysDlq);
                 if (purged > 0) {
                     db.vacuum();  // Reclamar espacio físico solo si hubo purgado
+                }
+            }
+            // F-13: DLQ — reintento de largo plazo cada ~1h (120 ciclos × 30s).
+            // Registros synced=-1 reactivan con attempts=0 para un nuevo ciclo;
+            // si el fallo era transitorio (red, central caído) se sincronizan.
+            if (cycleCount % 120 == 0) {
+                int requeued = SqliteManager::getInstance().requeueDlqItems(20);
+                if (requeued > 0) {
+                    LOG_WARN("[DLQ] {} registros reactivados para reintento de largo plazo", requeued);
                 }
             }
             std::unique_lock<std::mutex> lk(m_mtx);
@@ -288,6 +304,10 @@ private:
 // FIX C7: HeartbeatWorker — envía POST /devices/ping cada 30s siempre,
 // incluso cuando MQTT está habilitado. Esto asegura que el edge aparezca
 // online en el dashboard de health check del RECTOR.
+
+// V-493/V-495: definida más abajo — resincronización NTP forzada por el central.
+void forceTimeResync();
+
 class HeartbeatWorker {
 public:
     void start(const std::string& apiBase, const std::string& deviceToken, const std::string& deviceId) {
@@ -307,6 +327,13 @@ private:
     std::atomic<bool> m_stop{false};
     std::string m_apiBase, m_deviceToken, m_deviceId;
     std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
+    // F-06/F-09/F-10/F-13: monitores físicos del nodo
+    PowerMonitor m_power{"/sys/class/power_supply/nexo_ups"};
+    CellularManager m_cell{getenv("NEXO_CELL_IFACE") ? getenv("NEXO_CELL_IFACE") : "wwan0"};
+    NodeTelemetry m_telemetry{".", "/sys/class/thermal/thermal_zone0/temp"};
+    // V-333: microswitch de apertura del gabinete (GPIO inyectable por env)
+    TamperMonitor m_tamper{getenv("NEXO_TAMPER_GPIO_VALUE") ? getenv("NEXO_TAMPER_GPIO_VALUE") : ""};
+    long m_lastServerTs = 0;
 
     static size_t writeCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
         userp->append((char*)contents, size * nmemb);
@@ -333,12 +360,32 @@ private:
         }
 
         std::string url = m_apiBase + "/devices/ping";
-        std::string body = nlohmann::json({
+
+        // F-06: telemetría operativa del nodo (disco, cola, DLQ, temperatura,
+        // energía, celular, deriva de reloj). El central la persiste y genera
+        // incidentes por umbral — ver ctProcessTelemetry en contingency_lib.
+        NodeMetrics metrics;
+        auto& db = SqliteManager::getInstance();
+        metrics.pending_events = db.getPendingAuditCount();
+        metrics.dlq_count      = db.getDlqCount();
+        metrics.disk_free_mb   = m_telemetry.diskFreeMb();
+        metrics.cpu_temp_c     = m_telemetry.cpuTempC();
+        metrics.power_state    = m_power.readState();
+        metrics.cell           = m_cell.readStatus();
+        metrics.tamper_open    = m_tamper.isOpen();
+        if (m_lastServerTs > 0) {
+            long nowTs = static_cast<long>(std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count());
+            metrics.clock_drift_s = static_cast<int>(std::labs(nowTs - m_lastServerTs));
+        }
+        nlohmann::json bodyJson = {
             {"device_id", m_deviceId},
             {"status", "online"},
             {"timestamp", std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count()}
-        }).dump();
+                std::chrono::system_clock::now().time_since_epoch()).count()},
+            {"telemetry", m_telemetry.toJson(metrics)}
+        };
+        std::string body = bodyJson.dump();
 
         CURL* curl = curl_easy_init();
         if (!curl) return;
@@ -368,6 +415,28 @@ private:
         if (res != CURLE_OK || (httpCode != 200 && httpCode != 202)) {
             LOG_WARN("[HeartbeatWorker] Ping failed: HTTP {} | {}", httpCode, curl_easy_strerror(res));
         } else {
+            // F-06: guardar el timestamp del servidor para medir clock_drift_s
+            try {
+                auto rj = nlohmann::json::parse(readBuffer);
+                if (rj.contains("received_at")) m_lastServerTs = rj["received_at"].get<long>();
+                // V-493/V-495: resync ordenado por el central ante drift excesivo
+                if (rj.value("resync_required", false)) {
+                    forceTimeResync();
+                }
+                // V-183/V-196: el central publica las franjas horarias de la
+                // jornada del nodo; se persisten para clasificación en origen.
+                if (rj.contains("schedule") && rj["schedule"].is_object()) {
+                    auto& cfg = ConfigManager::getInstance();
+                    const char* keys[] = {"sched_punctual_start", "sched_punctual_end",
+                                          "sched_morning_end", "sched_afternoon_start",
+                                          "sched_afternoon_end"};
+                    for (const char* k : keys) {
+                        if (rj["schedule"].contains(k) && rj["schedule"][k].is_number()) {
+                            cfg.setValue(k, std::to_string(rj["schedule"][k].get<int>()), true);
+                        }
+                    }
+                }
+            } catch (...) {}
             LOG_DEBUG("[HeartbeatWorker] Ping OK (HTTP {})", httpCode);
         }
     }
@@ -521,15 +590,26 @@ LocalTime getLocalTimeBogota() {
     return {tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, true};
 }
 
+// V-183/V-196: las franjas de clasificación ya no son constantes — leen la
+// configuración del colegio que el central envía en la respuesta de
+// /devices/ping (clave "schedule"). Los defaults reproducen el comportamiento
+// previo (jornada mañana 6:40-16:00) cuando el nodo aún no ha sincronizado.
 std::string checkLateStatus() {
     auto t = getLocalTimeBogota();
     if (!t.valid) return "ERROR_TIME";
 
+    auto& cfg = ConfigManager::getInstance();
+    const int punctualStart  = cfg.getInt("sched_punctual_start",  400); // 06:40
+    const int punctualEnd    = cfg.getInt("sched_punctual_end",    420); // 07:00
+    const int morningEnd     = cfg.getInt("sched_morning_end",     660); // 11:00
+    const int afternoonStart = cfg.getInt("sched_afternoon_start", 690); // 11:30
+    const int afternoonEnd   = cfg.getInt("sched_afternoon_end",   960); // 16:00
+
     int totalMin = t.hour * 60 + t.min;
-    if (totalMin >= 400 && totalMin <= 420) return "PUNTUAL";
-    if (totalMin > 420 && totalMin <= 660) return "MANANA";
-    if (totalMin > 690 && totalMin <= 960) return "TARDE";
-    if (totalMin < 400) return "MADRUGADA";
+    if (totalMin >= punctualStart && totalMin <= punctualEnd) return "PUNTUAL";
+    if (totalMin > punctualEnd && totalMin <= morningEnd) return "MANANA";
+    if (totalMin > afternoonStart && totalMin <= afternoonEnd) return "TARDE";
+    if (totalMin < punctualStart) return "MADRUGADA";
     return "EXTRAORDINARIO";
 }
 
@@ -596,6 +676,26 @@ bool checkNtpSync() {
     }
     LOG_WARN("Could not determine NTP offset, falling back to year check");
     return true;
+}
+
+// V-493/V-495: el central puede ordenar resincronización forzada cuando el
+// drift reportado en /devices/ping excede el umbral (resync_required=true).
+// Intenta chronyc makestep → ntpdate → reinicio de chronyd/timesyncd.
+void forceTimeResync() {
+    LOG_WARN("[NTP] Resync forzado ordenado por el servidor central");
+    const char* cmds[] = {
+        "chronyc makestep 2>/dev/null",
+        "ntpdate -u pool.ntp.org 2>/dev/null",
+        "systemctl restart chronyd 2>/dev/null || systemctl restart systemd-timesyncd 2>/dev/null",
+    };
+    for (const char* cmd : cmds) {
+        int rc = std::system(cmd);
+        if (rc == 0) {
+            LOG_INFO("[NTP] Resync ejecutado: {}", cmd);
+            return;
+        }
+    }
+    LOG_WARN("[NTP] Ningún método de resync disponible en este sistema");
 }
 
 bool checkSystemClock() {
@@ -928,10 +1028,28 @@ void reprintMenu() {
 // Captura la huella vía sensor y persiste en SQLite ANTES de actualizar la
 // cache del sensor. La transacción explícita permite rollback completo.
 // Devuelve true solo si el estudiante queda persistido y en cache.
+// F-03: fingerSlot ∈ {1,2} — cada dedo ocupa un huella_id (slot de sensor)
+// distinto; ambos resuelven al mismo estudiante en la identificación.
 bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
                            const std::string& nombre, const std::string& tel,
-                           std::string& errOut) {
+                           std::string& errOut, int fingerSlot = 1) {
+    if (fingerSlot < 1 || fingerSlot > 2) {
+        errOut = "finger_slot inválido (debe ser 1 o 2)";
+        return false;
+    }
     auto& db = SqliteManager::getInstance();
+
+    Estudiante existing;
+    bool studentExists = db.getEstudianteByDocumento(doc, existing);
+    if (studentExists && db.huellaSlotExists(doc, fingerSlot)) {
+        errOut = "El dedo " + std::to_string(fingerSlot) + " ya está enrolado para este estudiante";
+        return false;
+    }
+    if (!studentExists && fingerSlot == 2) {
+        errOut = "El estudiante no existe localmente; enrolar primero el dedo 1";
+        return false;
+    }
+
     uint32_t huellaId = db.getNextHuellaID();
     std::vector<uint8_t> tpl;
     auto res = sensor->enrollUser(huellaId, tpl);
@@ -940,23 +1058,32 @@ bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
         LOG_ERROR("Enroll failed: {} - {}", toString(res.error), res.message);
         return false;
     }
+    if (tpl.empty()) tpl.assign(256, 0);
 
-    Estudiante est{doc, nombre, tel, "", huellaId, tpl.empty() ? std::vector<uint8_t>(256, 0) : tpl, ""};
     sqlite3_exec(db.getDB(), "BEGIN;", nullptr, nullptr, nullptr);
-    if (db.saveEstudiante(est)) {
-        auto cacheRes = sensor->addTemplate(huellaId, est.template_huella);
+    bool dbOk;
+    if (studentExists) {
+        // Segundo dedo: solo la fila de estudiante_huellas
+        dbOk = db.saveHuella(doc, fingerSlot, huellaId, tpl, existing.school_id);
+    } else {
+        // Estudiante nuevo: fila de estudiantes (compat) + fila de huellas
+        Estudiante est{doc, nombre, tel, "", huellaId, tpl, ""};
+        dbOk = db.saveEstudiante(est) && db.saveHuella(doc, fingerSlot, huellaId, tpl, "");
+    }
+
+    if (dbOk) {
+        auto cacheRes = sensor->addTemplate(huellaId, tpl);
         if (cacheRes) {
             sqlite3_exec(db.getDB(), "COMMIT;", nullptr, nullptr, nullptr);
-            LOG_INFO("Estudiante enrolado localmente: doc={} nombre={}", doc, nombre);
+            LOG_INFO("Huella enrolada localmente: doc={} slot={} huella_id={}", doc, fingerSlot, huellaId);
 
             // Sincronizar con cloud (best-effort, no bloquea el enrolamiento local)
-            // Usar registerStudentWithFingerprint para que el backend marque biometric_hash
             auto& cloud = CloudManager::getInstance();
-            bool syncOk = cloud.registerStudentWithFingerprint(doc, nombre, tel, huellaId);
+            bool syncOk = cloud.registerStudentWithFingerprint(doc, nombre, tel, huellaId, fingerSlot);
             if (!syncOk) {
                 LOG_WARN("Enrolamiento local OK pero sync cloud falló. Se reintentará en próximo sync cycle.");
             } else {
-                LOG_INFO("Enrolamiento sincronizado con cloud: doc={} huella_id={}", doc, huellaId);
+                LOG_INFO("Enrolamiento sincronizado con cloud: doc={} huella_id={} slot={}", doc, huellaId, fingerSlot);
             }
             return true;
         }
@@ -1017,6 +1144,21 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             std::string err;
             if (enrollStudentOnDevice(sensor, doc, nombre, tel, err)) {
                 printEvent("ENROLL", "✓ Estudiante enrolado exitosamente", "green");
+                // F-03: ofrecer segundo dedo (respaldo ante fallo de lectura)
+                if (db.getHuellaCount(doc) == 1) {
+                    std::cout << "  ¿Registrar un segundo dedo de respaldo? [s/N]: ";
+                    std::cout.flush();
+                    std::string ans;
+                    if (readLineNonBlocking(ans, 15000) && (ans == "s" || ans == "S")) {
+                        printEvent("ENROLL", ">>> Coloque el SEGUNDO dedo del alumno <<<", "yellow");
+                        std::string err2;
+                        if (enrollStudentOnDevice(sensor, doc, nombre, tel, err2, 2)) {
+                            printEvent("ENROLL", "✓ Segundo dedo enrolado", "green");
+                        } else {
+                            printEvent("ENROLL", "✗ Segundo dedo falló: " + err2, "red");
+                        }
+                    }
+                }
             } else {
                 printEvent("ENROLL", "✗ Error: " + err, "red");
             }
@@ -1027,9 +1169,13 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             if (!readLineNonBlocking(doc, 30000)) break;
             Estudiante est;
             if (db.getEstudianteByDocumento(doc, est)) {
+                // F-03: purgar TODOS los dedos del caché del sensor
+                std::vector<uint32_t> huellaIds;
+                db.getHuellaIdsByDocumento(doc, huellaIds);
+                if (huellaIds.empty()) huellaIds.push_back(est.huella_id);
                 if (db.deleteEstudiante(doc)) {
-                    sensor->deleteUser(est.huella_id);
-                    LOG_INFO("Student deleted: {}", doc);
+                    for (uint32_t hid : huellaIds) sensor->deleteUser(hid);
+                    LOG_INFO("Student deleted: {} ({} fingerprints purged)", doc, huellaIds.size());
                     printEvent("DELETE", "✓ Estudiante eliminado: " + doc, "green");
                 } else {
                     LOG_ERROR("DB delete failed for {}", doc);
@@ -1100,6 +1246,10 @@ int main() {
         LOG_CRITICAL("SQLite init failed");
         return 1;
     }
+
+    // OTA M2M (Bloque D): resolver estado pendiente de actualización tras
+    // arranque (confirmación de binario nuevo o detección de rollback).
+    OtaManager::getInstance().onBoot();
 
     // TZ se configura una sola vez antes de que cualquier hilo use localtime_r
     setenv("TZ", "America/Bogota", 1);
@@ -1178,6 +1328,21 @@ int main() {
     syncWorker.start();
     LOG_INFO("Cloud sync worker started (background thread)");
 
+    // OTA M2M (Bloque D): hilo que consulta al central y avanza la máquina
+    // de estados persistente cada ota_check_interval_s (default 30 min).
+    std::thread otaThread([] {
+        int interval = ConfigManager::getInstance().getInt("ota_check_interval_s", 1800);
+        if (interval < 60) interval = 60;
+        while (!g_shutdownRequested.load(std::memory_order_acquire)) {
+            try { OtaManager::getInstance().tick(); }
+            catch (const std::exception& e) { LOG_ERROR("[OTA] tick: {}", e.what()); }
+            for (int i = 0; i < interval && !g_shutdownRequested.load(); ++i)
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+    otaThread.detach();
+    LOG_INFO("OTA update worker started (background thread)");
+
     // V2: MqttCommandWorker — conexión persistente MQTT en vez de polling HTTP cada 30s
     std::unique_ptr<MqttCommandWorker> mqttWorker;
     std::string mqttHost = ConfigManager::getInstance().getString("mqtt_host", "");
@@ -1247,6 +1412,70 @@ int main() {
     while (!g_shutdownRequested.load(std::memory_order_acquire)) {
         if (watchdog.isOpen()) watchdog.pat();
 
+        // F-09: monitoreo de energía — transición de fuente → evento + sync
+        {
+            static PowerMonitor powerMon("/sys/class/power_supply/nexo_ups");
+            static int powerTick = 0;
+            if (++powerTick >= 10) { // ~10 ciclos de menú ≈ chequeo periódico
+                powerTick = 0;
+                PowerState ps;
+                if (powerMon.pollTransition(ps)) {
+                    const char* ev = (ps == PowerState::MAINS) ? "POWER_RESTORED" : "POWER_BACKUP";
+                    AuditTrail::logEvent("SYSTEM", ev);
+                    syncWorker.nudge();
+                    LOG_WARN("[PowerMonitor] Transición de energía → {}", ev);
+                    // V-515: señal luminosa/sonora del estado energético
+                    if (notification) notification->notifyPowerState(static_cast<int>(ps));
+                    if (ps == PowerState::LOW_BATTERY || ps == PowerState::CRITICAL) {
+                        display->showMessage("ENERGIA", "BATERIA BAJA");
+                    }
+                }
+                if (powerMon.shouldShutdown()) {
+                    LOG_ERROR("[PowerMonitor] Batería crítica — shutdown ordenado");
+                    AuditTrail::logEvent("SYSTEM", "POWER_SHUTDOWN_IMMINENT");
+                    syncWorker.nudge();
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                    g_shutdownRequested.store(true, std::memory_order_release);
+                    // El main() hará shutdown ordenado; si el proceso systemd
+                    // tiene permisos, 'poweroff' ocurre al agotar grace period.
+                }
+
+                // V-333/397/398: apertura física del gabinete → evento de
+                // seguridad + sync inmediato (el central genera TAMPER_OPEN
+                // vía telemetría del próximo ping; el evento local queda en
+                // el audit trail aunque el nodo quede offline).
+                static TamperMonitor tamperMon(getenv("NEXO_TAMPER_GPIO_VALUE") ? getenv("NEXO_TAMPER_GPIO_VALUE") : "");
+                if (tamperMon.pollOpen()) {
+                    AuditTrail::logEvent("SECURITY", "TAMPER_OPEN");
+                    syncWorker.nudge();
+                    LOG_WARN("[Tamper] Gabinete abierto — evento TAMPER_OPEN");
+                    if (display) display->showMessage("ALERTA", "GABINETE ABIERTO");
+                }
+
+                // V-310: ventilación activa por temperatura del SoC con
+                // histéresis (encender >fan_on_temp_c, apagar <fan_off_temp_c).
+                static NodeTelemetry thermMon(".", "/sys/class/thermal/thermal_zone0/temp");
+                static bool fanOn = false;
+                int tempC = thermMon.cpuTempC();
+                if (tempC >= 0) {
+                    auto& cfg = ConfigManager::getInstance();
+                    int onT  = cfg.getInt("fan_on_temp_c", 70);
+                    int offT = cfg.getInt("fan_off_temp_c", 60);
+                    if (!fanOn && tempC >= onT) {
+                        fanOn = true;
+                        if (notification) notification->setFan(true);
+                        AuditTrail::logEvent("SYSTEM", "FAN_ON");
+                        LOG_WARN("[Thermal] {}°C ≥ {}°C — ventilador ON", tempC, onT);
+                    } else if (fanOn && tempC <= offT) {
+                        fanOn = false;
+                        if (notification) notification->setFan(false);
+                        AuditTrail::logEvent("SYSTEM", "FAN_OFF");
+                        LOG_INFO("[Thermal] {}°C ≤ {}°C — ventilador OFF", tempC, offT);
+                    }
+                }
+            }
+        }
+
         // V2: Safe MQTT command consumption — main thread only. Callback solo pushea a queue.
         if (mqttWorker && mqttWorker->hasPendingCommand()) {
             std::string rawCmd = mqttWorker->popCommand();
@@ -1276,15 +1505,18 @@ int main() {
                         std::string doc = p.value("doc", "");
                         std::string nombre = p.value("nombre", "");
                         std::string tel = p.value("tel", p.value("parent_tel", ""));
+                        // F-03: dedo a enrolar (1=principal, 2=secundario)
+                        int fingerSlot = p.value("finger_slot", 1);
+                        if (fingerSlot < 1 || fingerSlot > 2) fingerSlot = 1;
                         if (doc.empty() || nombre.empty()) {
                             LOG_WARN("[Main] ENROLL_REQUEST sin doc/nombre. Ignorado.");
                         } else {
-                            LOG_INFO("[Main] Remote enrollment requested: doc={} ({})", doc, nombre);
+                            LOG_INFO("[Main] Remote enrollment requested: doc={} ({}) slot={}", doc, nombre, fingerSlot);
                             std::cout << "\n[REMOTO] Enrolamiento solicitado para " << nombre
-                                      << " (" << doc << "). Coloque el dedo en el lector...\n";
-                            display->showMessage("ENROLAMIENTO", "Coloque dedo");
+                                      << " (" << doc << ") dedo " << fingerSlot << ". Coloque el dedo en el lector...\n";
+                            display->showMessage("ENROLAMIENTO", fingerSlot == 2 ? "Coloque dedo 2" : "Coloque dedo");
                             std::string err;
-                            if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err)) {
+                            if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err, fingerSlot)) {
                                 display->showMessage("ENROLL OK", nombre.substr(0, 16));
                                 std::cout << "[REMOTO] Estudiante enrolado exitosamente.\n";
                                 AuditTrail::logEvent(doc, "ENROLL_OK");
@@ -1384,10 +1616,13 @@ int main() {
                             auto& db = SqliteManager::getInstance();
                             Estudiante est;
                             if (db.getEstudianteByDocumento(doc, est)) {
+                                std::vector<uint32_t> huellaIds;
+                                db.getHuellaIdsByDocumento(doc, huellaIds);
+                                if (huellaIds.empty()) huellaIds.push_back(est.huella_id);
                                 db.deleteEstudiante(doc);
-                                biometricSensor->deleteUser(est.huella_id);
+                                for (uint32_t hid : huellaIds) biometricSensor->deleteUser(hid);
                                 CloudManager::getInstance().deleteStudent(doc);
-                                LOG_INFO("[Main] Student deleted by cloud command: {}", doc);
+                                LOG_INFO("[Main] Student deleted by cloud command: {} ({} fingerprints)", doc, huellaIds.size());
                                 display->showMessage("ELIMINADO", doc.substr(0, 16));
                             } else {
                                 LOG_WARN("[Main] DELETE_STUDENT para doc desconocido={}", doc);
@@ -1414,17 +1649,20 @@ int main() {
                         std::string doc = p.value("doc", "");
                         std::string nombre = p.value("nombre", "");
                         std::string tel = p.value("tel", p.value("parent_tel", ""));
+                        // F-03: dedo a enrolar (1=principal, 2=secundario)
+                        int fingerSlot = p.value("finger_slot", 1);
+                        if (fingerSlot < 1 || fingerSlot > 2) fingerSlot = 1;
                         if (doc.empty() || nombre.empty()) {
                             LOG_WARN("[Main] ENROLL_REQUEST sin doc/nombre. Ignorado.");
                         } else {
-                            LOG_INFO("[Main] Remote enrollment requested (HTTP): doc={} ({})", doc, nombre);
+                            LOG_INFO("[Main] Remote enrollment requested (HTTP): doc={} ({}) slot={}", doc, nombre, fingerSlot);
                             printEvent("ENROLL", "Solicitud recibida de la WebApp", "cyan");
-                            printEvent("ENROLL", "Alumno: " + nombre + " (doc: " + doc + ")", "cyan");
+                            printEvent("ENROLL", "Alumno: " + nombre + " (doc: " + doc + ") dedo " + std::to_string(fingerSlot), "cyan");
                             printEvent("ENROLL", ">>> Coloque el dedo del alumno en el sensor <<<", "yellow");
                             printEvent("ENROLL", "    (4 capturas necesarias — levantar y poner 4 veces)", "");
-                            display->showMessage("ENROLAMIENTO", "Coloque dedo");
+                            display->showMessage("ENROLAMIENTO", fingerSlot == 2 ? "Coloque dedo 2" : "Coloque dedo");
                             std::string err;
-                            if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err)) {
+                            if (enrollStudentOnDevice(biometricSensor.get(), doc, nombre, tel, err, fingerSlot)) {
                                 display->showMessage("ENROLL OK", nombre.substr(0, 16));
                                 printEvent("ENROLL", "✓ Huella registrada exitosamente para " + nombre, "green");
                                 printEvent("ENROLL", "  Sincronizando con la nube...", "cyan");
@@ -1516,10 +1754,13 @@ int main() {
                             auto& db = SqliteManager::getInstance();
                             Estudiante est;
                             if (db.getEstudianteByDocumento(doc, est)) {
+                                std::vector<uint32_t> huellaIds;
+                                db.getHuellaIdsByDocumento(doc, huellaIds);
+                                if (huellaIds.empty()) huellaIds.push_back(est.huella_id);
                                 db.deleteEstudiante(doc);
-                                biometricSensor->deleteUser(est.huella_id);
+                                for (uint32_t hid : huellaIds) biometricSensor->deleteUser(hid);
                                 CloudManager::getInstance().deleteStudent(doc);
-                                LOG_INFO("[Main] Student deleted by cloud command (HTTP): {}", doc);
+                                LOG_INFO("[Main] Student deleted by cloud command (HTTP): {} ({} fingerprints)", doc, huellaIds.size());
                                 display->showMessage("ELIMINADO", doc.substr(0, 16));
                                 printEvent("DELETE", "Estudiante eliminado: " + doc, "yellow");
                             } else {

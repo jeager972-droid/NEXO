@@ -44,6 +44,7 @@
 declare(ticks=1);
 require_once __DIR__ . '/../core/db.php';
 require_once __DIR__ . '/../core/redis.php';
+require_once __DIR__ . '/contingency_lib.php';
 
 $shutdown = false;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
@@ -66,8 +67,24 @@ function enqueueAbsenceNotification($redis, string $phone, string $studentName, 
          . "  *1* — La inasistencia está justificada\n"
          . "  *2* — No estoy al tanto de esta inasistencia";
 
-    // Usar enqueueTwilioJob que ya tiene fallback a PG si Redis no está
+    // Usar enqueueTwilioJob que ya tiene fallback a PG si Redis no está.
+    // operations.php referencia securityLog() (definida en api.php) en sus
+    // catch — shim mínimo para contexto worker.
+    if (!function_exists('securityLog')) {
+        function securityLog($event, $details = '', $actorId = null, $schoolId = null, $requestId = null) {
+            error_log("[SECURITY_LOG] $event $details");
+        }
+    }
     require_once __DIR__ . '/../routes/operations.php';
+    // enqueueTwilioJob inserta en twilio_messages (RLS): contexto de sesión
+    // (no SET LOCAL — el enqueue no maneja transacción propia).
+    global $conn;
+    try {
+        if ($conn) {
+            $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", false)");
+            $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', false)");
+        }
+    } catch (Exception $e) {}
     $result = enqueueTwilioJob($phone, $msg, $schoolId, $studentId, null, $userId, 'INASISTENCIA');
     if ($result['ok']) {
         logA('ABSENCE_NOTIF_QUEUED', "student=$studentName phone=$phone reason={$result['reason']}");
@@ -132,6 +149,11 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // F-04: grupos cuyo nodo asignado está caído (sin cobertura de datos).
+    // Un grupo sin dispositivo asignado NO se suprime (no hay forma de saber
+    // si tiene cobertura) — regla documentada en contingency_lib.php.
+    $offlineGroups = ctGateEnabled() ? ctGetOfflineGroupIds($conn, $schoolId, ctOfflineSeconds()) : [];
+
     // Obtener entry_time y rotates_classrooms por jornada desde school_schedule_config
     $shiftConfigStmt = $conn->prepare("SELECT work_shift, entry_time, rotates_classrooms FROM school_schedule_config WHERE school_id = ? AND onboarding_completed = TRUE");
     $shiftConfigStmt->execute([$schoolId]);
@@ -168,10 +190,18 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         $groupName = $group['group_name'];
         $expectedEntry = $group['expected_entry_time'];
 
+        // F-04 gate: nodo del grupo caído → no hay datos para decidir ausencia.
+        if (isset($offlineGroups[$groupId])) {
+            if (ctMarkNoNodeData($conn, $schoolId, $groupId, $groupName, 'absence_gate')) {
+                logA('NO_NODE_DATA', "school=$schoolId group=$groupName — detección de ausencias suspendida (nodo offline)");
+            }
+            continue;
+        }
+
         // 2. Obtener estudiantes activos del grupo
         $studentsStmt = $conn->prepare("
             SELECT s.student_id, s.first_name, s.last_name, s.document_number,
-                   s.work_shift,
+                   s.work_shift, s.biometric_exempt, s.manual_pending_until,
                    COALESCE(g.whatsapp_phone, u.phone) as guardian_phone,
                    g.guardian_id
             FROM students s
@@ -290,8 +320,19 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         $now = new DateTime('now', new DateTimeZone('America/Bogota'));
         $currentMinutes = (int)$now->format('H') * 60 + (int)$now->format('i');
 
+        // F-05: fase 1 — recolectar candidatos a ausente (todas las reglas de
+        // exclusión intactas). La decisión cluster se toma antes de insertar
+        // para no convertir una condición externa en N WhatsApps falsos.
+        $absentees = [];
         foreach ($students as $student) {
             $studentId = $student['student_id'];
+
+            // F-02: estudiante exento de biometría — la falta de huella no
+            // implica ausencia (su presencia se registra por vía manual).
+            if (!empty($student['biometric_exempt'])) continue;
+
+            // Doc §9.6: registro manual pendiente → suspender detección temporal
+            if (!empty($student['manual_pending_until']) && strtotime($student['manual_pending_until']) > time()) continue;
 
             // Si ya marcó ingreso, no es ausente
             if (in_array($studentId, $presentIds)) continue;
@@ -311,6 +352,18 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             ");
             $permisoStmt->execute([$schoolId, $studentId]);
             if ($permisoStmt->fetchColumn()) continue; // Tiene permiso activo, no es inasistencia
+
+            // Salida pedagógica autorizada en curso → ausencia legítima grupal,
+            // no se marca inasistencia individual (Bloque C — 'pedagogica').
+            $tripStmt = $conn->prepare("
+                SELECT 1 FROM pedagogical_trip_authorizations
+                WHERE school_id = ? AND student_id = ?
+                  AND departure_time <= NOW()
+                  AND (return_time IS NULL OR return_time >= NOW())
+                LIMIT 1
+            ");
+            $tripStmt->execute([$schoolId, $studentId]);
+            if ($tripStmt->fetchColumn()) continue;
 
             // Determinar hora límite
             $shift = $student['work_shift'] ?? 'mañana';
@@ -349,7 +402,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             $checkStmt = $conn->prepare("
                 SELECT 1 FROM attendance_incidents
                 WHERE student_id = ? AND school_id = ?
-                  AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                  AND (detected_at AT TIME ZONE 'America/Bogota')::date
+              = (NOW() AT TIME ZONE 'America/Bogota')::date
                   AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
                   AND incident_type = 'INASISTENCIA'
                 LIMIT 1
@@ -357,21 +411,74 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             $checkStmt->execute([$studentId, $schoolId]);
             if ($checkStmt->fetchColumn()) continue; // Ya registrado
 
+            $student['shift'] = $shift;
+            $absentees[] = $student;
+        }
+
+        // F-05: fase 2 — si las ausencias nuevas superan el umbral de cluster,
+        // es una condición externa probable (nodo caído, evento institucional):
+        // se crea ANOMALIA_OPERATIVA y las individuales quedan pending_context
+        // (sin WhatsApp al acudiente) hasta que un actor confirme.
+        $minAbsences = (int)(getenv('ANOMALY_MIN_ABSENCES') ?: 5);
+        $minFraction = (float)(getenv('ANOMALY_GROUP_FRACTION') ?: 0.5);
+        $isAnomaly = ctIsAnomalyCluster(count($absentees), count($students), $minAbsences, $minFraction);
+        $anomalyIncidentId = null;
+
+        if ($isAnomaly) {
+            $anomalyIncidentId = ctCreateSecurityIncident(
+                $conn, $schoolId, 'ANOMALIA_OPERATIVA', 'HIGH',
+                "Concentración anómala de ausencias en {$groupName}: " . count($absentees) . " de " . count($students) . " estudiantes. Las inasistencias quedan pendientes de contexto hasta confirmación.",
+                [
+                    'group_id' => $groupId,
+                    'group_name' => $groupName,
+                    'absent_count' => count($absentees),
+                    'group_size' => count($students),
+                    'threshold_min' => $minAbsences,
+                    'threshold_fraction' => $minFraction,
+                ]
+            );
+            ctNotifyCoordinators(
+                $conn, $schoolId,
+                'Anomalía operativa: ausencias concentradas',
+                "Grupo {$groupName}: " . count($absentees) . "/" . count($students) . " ausentes sin registro. Posible condición externa (nodo, evento). Revise y confirme; no se notificó a acudientes.",
+                ['group_id' => $groupId, 'incident_id' => $anomalyIncidentId, 'kind' => 'ANOMALIA_OPERATIVA'],
+                'ANOMALIA:' . $groupId . ':' . $today
+            );
+            logA('ANOMALY_CLUSTER', "school=$schoolId group=$groupName absent=" . count($absentees) . "/" . count($students) . " incident=$anomalyIncidentId");
+        }
+
+        foreach ($absentees as $student) {
+            $studentId = $student['student_id'];
+            $shift = $student['shift'];
+
             // 6. INSERT attendance_incidents (mismo contexto RLS, misma transacción)
             $incidentId = bin2hex(random_bytes(16));
             $incidentId = substr($incidentId, 0, 8) . '-' . substr($incidentId, 8, 4) . '-' . substr($incidentId, 12, 4) . '-' . substr($incidentId, 16, 4) . '-' . substr($incidentId, 20, 12);
-            $incStmt = $conn->prepare("
-                INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
-                VALUES (?::uuid, ?, ?, 'INASISTENCIA', NOW())
-            ");
-            $incStmt->execute([$incidentId, $schoolId, $studentId]);
+            if ($isAnomaly) {
+                $incStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                    VALUES (?::uuid, ?, ?, 'INASISTENCIA', NOW(), ?::jsonb)
+                ");
+                $incStmt->execute([$incidentId, $schoolId, $studentId, json_encode([
+                    'pending_context' => true,
+                    'anomaly_incident_id' => $anomalyIncidentId,
+                    'anomaly_group' => $groupName,
+                ], JSON_UNESCAPED_UNICODE)]);
+            } else {
+                $incStmt = $conn->prepare("
+                    INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at)
+                    VALUES (?::uuid, ?, ?, 'INASISTENCIA', NOW())
+                ");
+                $incStmt->execute([$incidentId, $schoolId, $studentId]);
+            }
             $detected++;
 
             $studentName = trim($student['first_name'] . ' ' . $student['last_name']);
-            logA('ABSENCE_DETECTED', "school=$schoolId group=$groupName student=$studentName doc={$student['document_number']} shift=$shift incident_id=$incidentId");
+            logA('ABSENCE_DETECTED', "school=$schoolId group=$groupName student=$studentName doc={$student['document_number']} shift=$shift incident_id=$incidentId" . ($isAnomaly ? ' pending_context' : ''));
 
-            // 7. Notificar al acudiente (fuera de la transacción DB, pero después del INSERT confirmado)
-            if (!empty($student['guardian_phone'])) {
+            // 7. Notificar al acudiente — omitido cuando el incidente queda
+            // pendiente de contexto (anomalía): esperar confirmación humana.
+            if (!$isAnomaly && !empty($student['guardian_phone'])) {
                 enqueueAbsenceNotification(
                     $redis,
                     $student['guardian_phone'],
@@ -399,6 +506,10 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
 // Bucle principal
 // ============================================================================
 logA('START', 'Absence detector worker started');
+
+// enqueueTwilioJob usa `global $conn` — asignarlo para que los mensajes de
+// inasistencia queden registrados en twilio_messages (trazabilidad de entrega).
+$conn = $pdo;
 
 $runMode = getenv('ABSENCE_DETECTOR_MODE') ?: 'cron'; // 'cron' = una vez y salir, 'daemon' = loop
 
@@ -487,9 +598,9 @@ while (!$shutdown) {
         sleep($CHECK_INTERVAL_SEC);
         $iterations++;
 
-        // Reconectar PDO cada 100 iteraciones
+        // Reconectar PDO cada 100 iteraciones (db.php recrea $pdo global)
         if ($iterations % 100 === 0) {
-            $pdo = getDbConnection();
+            require __DIR__ . '/../core/db.php';
         }
     } catch (Exception $e) {
         logA('FATAL', $e->getMessage());

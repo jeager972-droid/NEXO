@@ -129,6 +129,7 @@ function auditFilters($tableAlias, $dateCol, $studentCol = 'student_id') {
 
 // GET /audit/global — Returns global audit logs (legacy alias)
 if ($cleanPath === '/audit/global' && $method === 'GET') {
+    securityLog('AUDIT_LOGS_VIEWED', 'Consultó registros globales de auditoría', $authUser['id'], $schoolId);
     try {
         $f = auditFilters('gal', 'created_at', null);
         $where = $f['conds'] ? ' AND ' . implode(' AND ', $f['conds']) : '';
@@ -175,15 +176,18 @@ if ($cleanPath === '/audit/integrity' && $method === 'GET') {
         $status = $parsed['status'] ?? 'ok';
         $valid = ($status === 'ok');
 
+        securityLog('AUDIT_INTEGRITY_CHECKED', 'Validación de cadena de hashes ejecutada', $authUser['id'], $schoolId);
+
+        // data como array de una fila: el grid de Consultation.jsx renderiza res.data[]
         auditJson([
             'status' => 'ok',
-            'data' => [
-                'school_id' => $schoolId,
-                'integrity_valid' => $valid,
+            'data' => [[
+                'integrity_valid' => $valid ? 'válida' : 'COMPROMETIDA',
                 'chain_status' => $status,
                 'total_records' => $parsed['total_records'] ?? 0,
                 'checked_at' => date('c'),
-            ],
+            ]],
+            'integrity_valid' => $valid,
             'message' => $valid
                 ? 'La cadena de auditoría es válida'
                 : 'Se detectó una interrupción en la cadena de auditoría'

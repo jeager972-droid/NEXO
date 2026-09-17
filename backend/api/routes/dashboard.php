@@ -42,6 +42,7 @@ if ($cleanPath === '/dashboard/stats') {
     $authUser = requireAuth();
     $schoolId = $authUser['school_id'];
     $userRole = strtoupper($authUser['role'] ?? '');
+    requireSchoolOnboarding($conn, (string)$schoolId, $userRole);
     $groupName = $_GET['group_name'] ?? '';
     securityLog('DASHBOARD_STATS_REQUEST', "School ID: " . ($schoolId ?? 'NULL') . " Group: " . ($groupName ?: 'ALL') . " Role: $userRole");
 
@@ -498,7 +499,7 @@ if ($cleanPath === '/dashboard/stats') {
     } catch (Exception $e) {
         securityLog('DASHBOARD_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estadísticas', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener estadísticas']);
     }
     exit;
 }
@@ -521,7 +522,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
     if (!in_array($category, ['present', 'absent', 'alert', 'permiso', 'late'])) {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Category requerida', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Category requerida']);
         exit;
     }
 
@@ -533,7 +534,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
         if ($isTeacher) {
             if (!$groupName) {
                 http_response_code(400);
-                echo json_encode(['status' => 'error', 'message' => 'group_name requerido para docentes', 'debug' => $e->getMessage()]);
+                echo json_encode(['status' => 'error', 'message' => 'group_name requerido para docentes']);
                 exit;
             }
             $checkStmt = $conn->prepare("
@@ -548,7 +549,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
 
         if (!$validGroup) {
             http_response_code(403);
-            echo json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']);
             exit;
         }
 
@@ -617,7 +618,8 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
             case 'absent':
                 $stmt = $conn->prepare("
                     SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.document_number,
-                           ag.group_name, ai.detected_at as absent_since
+                           ag.group_name, ai.detected_at as absent_since,
+                           COALESCE(ai.metadata_json->>'pending_context', 'false') as pending_context
                     FROM students s
                     {$groupJoin}
                     JOIN attendance_incidents ai ON ai.student_id = s.student_id
@@ -720,7 +722,7 @@ if ($cleanPath === '/dashboard/teacher-group-detail') {
     } catch (Exception $e) {
         securityLog('TEACHER_GROUP_DETAIL_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles del grupo', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles del grupo']);
     }
     exit;
 }
@@ -827,7 +829,7 @@ if ($cleanPath === '/dashboard/events') {
     } catch (Exception $e) {
         securityLog('DASHBOARD_EVENTS_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener eventos', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener eventos']);
     }
     exit;
 }

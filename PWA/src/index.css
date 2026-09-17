@@ -326,3 +326,25 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 @media (prefers-reduced-motion: reduce) {
   .nx-blink { animation: none; }
 }
+
+/* ── Nexus (guía del onboarding): flotación y pulso de anillo ── */
+@keyframes nx-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+@keyframes nx-pulse {
+  0%   { transform: scale(0.92); opacity: 0.9; }
+  70%  { transform: scale(1.12); opacity: 0; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-bot-float, .nx-bot-ring { animation: none !important; }
+}
+
+/* Spotlight suave sobre el bloque que Nexus está explicando */
+.nx-spotlight {
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, var(--nx-accent) 8%, transparent),
+    0 0 0 1.5px var(--nx-border-accent) !important;
+  transition: box-shadow var(--nx-deliberate) var(--nx-ease-out);
+}

@@ -21,8 +21,8 @@ export const devicesApi = {
     const response = await client.post(`/devices/command/${deviceId}`, { command, payload });
     return response.data;
   },
-  requestEnrollment: (deviceId, { doc, nombre, tel }) =>
-    devicesApi.sendCommand(deviceId, 'ENROLL_REQUEST', { doc, nombre, tel }),
+  requestEnrollment: (deviceId, { doc, nombre, tel, finger_slot = 1 }) =>
+    devicesApi.sendCommand(deviceId, 'ENROLL_REQUEST', { doc, nombre, tel, finger_slot }),
   authorizeExit: (deviceId, doc) =>
     devicesApi.sendCommand(deviceId, 'AUTHORIZE_EXIT', { doc }),
   register: async ({ name, location, group_id, assigned_user_id }) => {

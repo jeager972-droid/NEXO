@@ -168,12 +168,40 @@ function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
                 securityLog('TWILIO_TEMPLATE_FALLBACK_OK', "SID: {$templateSend['sid']} To: $to");
                 return $templateSend;
             }
-            return ['ok' => false, 'error' => 'Template fallback también falló: ' . $templateSend['error'], 'sid' => null];
+            $send = ['ok' => false, 'error' => 'Template fallback también falló: ' . $templateSend['error'], 'sid' => null];
+        } else {
+            $send = ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID como variable de entorno.", 'sid' => null];
         }
-        return ['ok' => false, 'error' => "[$twilioCode] Fuera de ventana de 24h. Configura TWILIO_WHATSAPP_TEMPLATE_SID como variable de entorno.", 'sid' => null];
+    }
+
+    // 3) Fallback SMS (documento §9.8: "cuando el canal preferente no está
+    //    disponible, NEXO puede utilizar SMS"). Requiere TWILIO_SMS_FROM.
+    if (!$send['ok']) {
+        $sms = sendTwilioSms($to, $body);
+        if ($sms['ok']) {
+            securityLog('TWILIO_SMS_FALLBACK_OK', "SID: {$sms['sid']} To: $to");
+            return $sms;
+        }
     }
 
     return $send;
+}
+
+/**
+ * Envía SMS plano vía Twilio cuando WhatsApp no está disponible.
+ * Solo activo si TWILIO_SMS_FROM está configurado (número SMS-capable).
+ */
+function sendTwilioSms(string $to, string $body): array {
+    $fromSms = getenv('TWILIO_SMS_FROM');
+    if (!$fromSms) {
+        return ['ok' => false, 'error' => 'SMS fallback no configurado (TWILIO_SMS_FROM)', 'sid' => null];
+    }
+    $payload = [
+        'From' => normalizeWhatsAppPhone($fromSms),
+        'To'   => normalizeWhatsAppPhone($to),
+        'Body' => $body,
+    ];
+    return sendTwilioWhatsAppRequest($payload); // misma API Messages.json
 }
 
 /**
@@ -397,6 +425,22 @@ while (!$shutdown) {
 
         if ($pgFallbackMode) {
             // ── MODO PG FALLBACK: polling de twilio_messages WHERE QUEUED ──
+            // Re-sondear Redis periódicamente: si vuelve, salir de fallback y
+            // reanudar la cola (antes el worker quedaba atrapado en PG para
+            // siempre y /health lo reportaba caído por falta de heartbeat).
+            static $lastRedisProbe = 0;
+            if (time() - $lastRedisProbe >= 60) {
+                $lastRedisProbe = time();
+                try {
+                    $probe = getRedisConnection(true);
+                    if ($probe) {
+                        $redis = $probe;
+                        $pgFallbackMode = false;
+                        securityLog('TWILIO_WORKER_REDIS_RECOVERED', 'Redis volvió — saliendo de PG fallback a modo REDIS');
+                        continue;
+                    }
+                } catch (Throwable $probeErr) {}
+            }
             $currentHour = date('YmdH');
             if ($currentHour !== $pgHourKey) {
                 $pgHourKey = $currentHour;
@@ -478,6 +522,14 @@ while (!$shutdown) {
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
             }
             continue;
+        }
+
+        // Heartbeat independiente de trabajos — un worker ocioso no debe
+        // aparecer como caído en /health (bloque A: stack real lo evidenció).
+        static $lastHb = 0;
+        if (time() - $lastHb >= 10) {
+            try { $redis->set('worker:twilio:last_heartbeat', time(), 600); } catch (Throwable $e) {}
+            $lastHb = time();
         }
 
         // 2. Esperar nuevo trabajo (max 1 s)

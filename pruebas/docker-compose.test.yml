@@ -1,0 +1,127 @@
+# =============================================================================
+# pruebas/docker-compose.test.yml — Entorno de pruebas integral NEXO.
+# =============================================================================
+# Levanta el sistema COMPLETO igual que producción: PostgreSQL + PgBouncer +
+# Redis + API (que internamente arranca los 6 workers + mosquitto + supercronic
+# vía docker-entrypoint.sh — misma topología que prod).
+#
+# Uso: ./runner.py up  (o: docker compose -f docker-compose.test.yml --env-file env.test up -d --build)
+#
+# DIFERENCIAS vs producción (solo para pruebas):
+#   - Schema se auto-aplica al crear el volumen (sql/schema.sql → initdb).
+#   - Credenciales débiles fijas (solo entorno local aislado).
+#   - ABSENCE/EVASION/DEVICE_HEALTH intervals acelerados para escenarios.
+#   - Sin Twilio real: TWILIO_* apuntan a valores dummy; el worker registra.
+# =============================================================================
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: nexo_test
+      POSTGRES_USER: nexo_test
+      POSTGRES_PASSWORD: nexo_test_pw
+    volumes:
+      - nexo-test-db:/var/lib/postgresql/data
+      # Schema idempotente → se aplica automáticamente al crear el volumen
+      - ../sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,z
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro,z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexo_test -d nexo_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [nexo-test]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass nexo_test_redis --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "nexo_test_redis", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [nexo-test]
+
+  pgbouncer:
+    build:
+      context: ../backend/api/infra/pgbouncer
+    environment:
+      DB_USER: nexo_test
+      DB_PASSWORD: nexo_test_pw
+      DB_HOST: db
+      DB_NAME: nexo_test
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [nexo-test]
+
+  api:
+    build:
+      context: ../backend/api
+      dockerfile: Dockerfile
+    ports:
+      - "18080:8080"
+    environment:
+      # boot_check exige exactamente 32 bytes — ASCII de 32 caracteres
+      NEXO_AES_KEY: "NEXOTEST_AES_KEY_32BYTES_PAD!!!!"
+      APP_NEXO_HMAC_SECRET: "nexo-test-hmac-secret-do-not-use-in-prod"
+      METRICS_SECRET_KEY: "nexo-test-metrics-secret"
+      CORS_ALLOW_ORIGINS: "*"
+      JWT_PRIVATE_KEY: "${JWT_PRIVATE_KEY_TEST}"
+      JWT_PUBLIC_KEY: "${JWT_PUBLIC_KEY_TEST}"
+      JWT_KEY_ID: "test-key-1"
+      JWT_ACCESS_TTL_SECONDS: "3600"
+      JWT_ISSUER: "nexo-test"
+      JWT_AUDIENCE: "nexo-test"
+      TWILIO_ACCOUNT_SID: "ACtestdummy"
+      TWILIO_AUTH_TOKEN: "dummy"
+      TWILIO_WHATSAPP_FROM: "whatsapp:+10000000000"
+      PGHOST: pgbouncer
+      PGPORT: 6432
+      PGDATABASE: nexo_test
+      PGUSER: nexo_test
+      PGPASSWORD: nexo_test_pw
+      DATABASE_URL: "postgresql://nexo_test:nexo_test_pw@pgbouncer:6432/nexo_test"
+      PORT: 8080
+      REDISHOST: redis
+      REDISPORT: 6379
+      REDIS_PASSWORD: nexo_test_redis
+      REDIS_DB: 0
+      # Workers acelerados para pruebas (intervalos cortos)
+      ABSENCE_DETECTOR_MODE: daemon
+      EVASION_DETECTOR_MODE: daemon
+      PERMISSION_STATUS_MODE: daemon
+      DEVICE_HEALTH_MODE: daemon
+      TEACHER_ALERTS_MODE: daemon
+      ABSENCE_FOLLOWUP_MODE: daemon
+      ABSENCE_FOLLOWUP_INTERVAL: "5"
+      ABSENCE_FOLLOWUP_MINUTES: "1"
+      ABSENCE_FOLLOWUP_MAX: "2"
+      ABSENCE_ESCALATE_MINUTES: "3"
+      ABSENCE_CHECK_INTERVAL: "10"
+      EVASION_CHECK_INTERVAL: "10"
+      DEVICE_HEALTH_INTERVAL: "5"
+      TEACHER_ALERTS_INTERVAL: "5"
+      NODE_OFFLINE_SECONDS: "15"
+      # Rate limit alto: el escenario stress envía miles de eventos;
+      # la protección 429 se valida por separado con límites bajos.
+      RATE_LIMIT_MAX: "100000"
+      MQTT_USER: ""
+      MQTT_PASS: ""
+    depends_on:
+      pgbouncer: {condition: service_started}
+      redis: {condition: service_healthy}
+      db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    networks: [nexo-test]
+
+networks:
+  nexo-test:
+    driver: bridge
+
+volumes:
+  nexo-test-db:

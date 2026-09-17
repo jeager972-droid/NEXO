@@ -13,12 +13,15 @@ public:
     void notifySuccess() override;
     void notifyError() override;
     void notifyWarning() override;
+    void notifyPowerState(int state) override;
+    void setFan(bool on) override;
 
 private:
     struct gpiod_chip* m_chip = nullptr;
     struct gpiod_line* m_ledGreen = nullptr;
     struct gpiod_line* m_ledRed = nullptr;
     struct gpiod_line* m_buzzer = nullptr;
+    struct gpiod_line* m_fan = nullptr;
 
     void beep(int ms);
 };

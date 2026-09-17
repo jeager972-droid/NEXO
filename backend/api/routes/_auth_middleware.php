@@ -702,6 +702,54 @@ if (!function_exists('requireAuth')) {
     }
 }
 
+if (!function_exists('requireSchoolOnboarding')) {
+    /**
+     * Gate de onboarding institucional — bloquea la operación hasta que la
+     * escuela completó la configuración obligatoria (horarios + grupos).
+     *
+     * REGLA (según documento, §10.5): el sistema no interpreta acontecimientos
+     * sin estructura configurada — sin horarios no hay "tardanza", sin grupos
+     * no hay "ausencia". Operar sin onboarding produce falsos positivos.
+     *
+     * Comportamiento:
+     *   - Onboarding completo → return sin efecto.
+     *   - Roles de configuración (RECTOR, COORDINATOR, TEACHER) → 428 con
+     *     payload detallado {onboarding_required, missing:[...]}.
+     *   - Resto de roles → 428 con mensaje genérico.
+     */
+    function requireSchoolOnboarding($conn, string $schoolId, string $role): void {
+        static $cache = [];
+        if (isset($cache[$schoolId])) { $s = $cache[$schoolId]; }
+        else {
+            $stmt = $conn->prepare(
+                "SELECT onboarding_completed, groups_onboarding_completed, risk_config_completed
+                   FROM schools WHERE school_id = ?"
+            );
+            $stmt->execute([$schoolId]);
+            $s = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $cache[$schoolId] = $s;
+        }
+        $missing = [];
+        if (empty($s['onboarding_completed']))        $missing[] = 'schedule';
+        if (empty($s['groups_onboarding_completed'])) $missing[] = 'groups';
+        if (empty($s['risk_config_completed']))       $missing[] = 'risk_config';
+        if (!$missing) return;
+
+        http_response_code(428);
+        if (in_array(strtoupper($role), ['RECTOR', 'COORDINATOR', 'TEACHER'], true)) {
+            exit(json_encode([
+                'status'  => 'onboarding_required',
+                'message' => 'La institución no ha completado la configuración inicial.',
+                'missing' => $missing,
+            ]));
+        }
+        exit(json_encode([
+            'status'  => 'error',
+            'message' => 'La configuración del sistema para su institución no ha sido completada.',
+        ]));
+    }
+}
+
 // =============================================================================
 // ALERTAS PROACTIVAS — Detectar condiciones críticas y notificar
 // =============================================================================

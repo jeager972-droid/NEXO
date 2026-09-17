@@ -36,6 +36,7 @@ if ($cleanPath === '/consultations/query') {
     $schoolId = $authUser['school_id'];
     $userId   = $authUser['id'];
     $role     = $authUser['role'];
+    requireSchoolOnboarding($conn, (string)$schoolId, $role);
 
     // El frontend DEBE enviar slugs inmutables, no textos de UI en español.
     $module = filter_var($input['module'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
@@ -57,6 +58,12 @@ if ($cleanPath === '/consultations/query') {
     $hasGlobalView = in_array('consultations.global_view', $authUser['permissions'] ?? []);
     $isTeacher = in_array('consultations.teacher_view', $authUser['permissions'] ?? [])
         && !$hasGlobalView;
+    // FIX auditoría: el endpoint requiere permiso de consultas — sin él, 403.
+    // (Antes cualquier rol autenticado, p. ej. GUARDIAN, podía ejecutar módulos).
+    if (!$hasGlobalView && !$isTeacher) {
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Sin permiso para consultas institucionales']));
+    }
     if ($isTeacher) {
         if ($groupName) {
             $checkStmt = $conn->prepare("
@@ -73,6 +80,11 @@ if ($cleanPath === '/consultations/query') {
             }
         } else {
             // FIX: Si el docente NO envía grupo, forzamos que solo vea estudiantes de sus propios grupos
+            // $userId viene del JWT (UUID); se valida formato antes de interpolar (defensa en profundidad).
+            if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', (string)$userId)) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'Identidad de usuario inválida.']));
+            }
             $safeUserId = $conn->quote($userId);
             $teacherGroupFilter = " AND s.student_id IN (
                 SELECT sga.student_id FROM student_group_assignments sga
@@ -204,38 +216,64 @@ if ($cleanPath === '/consultations/query') {
             case 'attendance_history':
                 $dateFrom = $input['date_from'] ?? $fromDate;
                 $dateTo   = $input['date_to']   ?? $toDate;
+                // Filtros opcionales que el frontend ya enviaba pero se ignoraban
+                $ahGroup   = $groupName  ? " AND ag.group_name = :gname" : "";
+                $ahStudent = $studentId  ? " AND s.student_id = :stuid"  : "";
+                $ahGrade   = $grade      ? " AND ag.grade_level = :grade" : "";
+                $needJoin  = ($groupName || $grade) ? "
+                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    JOIN academic_groups ag ON ag.group_id = sga.group_id" : "";
 
                 $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, be.event_timestamp, be.event_type
+                    SELECT DISTINCT s.first_name, s.last_name, be.event_timestamp, be.event_type
                     FROM biometric_events be
                     JOIN students s ON be.student_id = s.student_id
+                    {$needJoin}
                     WHERE be.school_id = :sid
                       AND be.event_timestamp >= (:date_from::date)
                       AND be.event_timestamp < ((:date_to::date + INTERVAL '1 day'))
                       {$teacherGroupFilter}
+                      {$ahGroup}
+                      {$ahStudent}
+                      {$ahGrade}
                     ORDER BY be.event_timestamp DESC
                     LIMIT 500
                 ");
-                $stmt->execute([
-                    ':sid'       => $schoolId,
-                    ':date_from' => $dateFrom,
-                    ':date_to'   => $dateTo,
-                ]);
+                $params = [':sid' => $schoolId, ':date_from' => $dateFrom, ':date_to' => $dateTo];
+                if ($groupName)  $params[':gname'] = $groupName;
+                if ($studentId)  $params[':stuid'] = $studentId;
+                if ($grade)      $params[':grade'] = $grade;
+                $stmt->execute($params);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'event_timestamp' => 'Fecha/Hora', 'event_type' => 'Evento'];
                 break;
 
             case 'incidents':
+                // Filtros opcionales (antes ignorados): grupo/estudiante/grado
+                $incGroup   = $groupName  ? " AND ag.group_name = ?" : "";
+                $incStudent = $studentId  ? " AND s.student_id = ?"  : "";
+                $incGrade   = $grade      ? " AND ag.grade_level = ?" : "";
+                $incJoin    = ($groupName || $grade) ? "
+                    JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    JOIN academic_groups ag ON ag.group_id = sga.group_id" : "";
                 $stmt = $conn->prepare("
-                    SELECT s.first_name, s.last_name, ai.incident_type, ai.detected_at, ai.metadata_json, s.student_id
+                    SELECT DISTINCT s.first_name, s.last_name, ai.incident_type, ai.detected_at, ai.metadata_json, s.student_id
                     FROM attendance_incidents ai
                     JOIN students s ON ai.student_id = s.student_id
+                    {$incJoin}
                     WHERE ai.school_id = ? AND (ai.incident_type IN ('INCIDENTE', 'DAÑO', 'SOS') OR ai.incident_type LIKE 'RISK_ALERT%')
                       {$teacherGroupFilter}
+                      {$incGroup}
+                      {$incStudent}
+                      {$incGrade}
                     ORDER BY ai.detected_at DESC
                     LIMIT 50
                 ");
-                $stmt->execute([$schoolId]);
+                $p = [$schoolId];
+                if ($groupName)  $p[] = $groupName;
+                if ($studentId)  $p[] = $studentId;
+                if ($grade)      $p[] = $grade;
+                $stmt->execute($p);
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $columns = ['first_name' => 'Nombre', 'last_name' => 'Apellido', 'incident_type' => 'Tipo', 'detected_at' => 'Fecha'];
                 break;
@@ -269,6 +307,7 @@ if ($cleanPath === '/consultations/query') {
                         JOIN students s ON st.student_id = s.student_id
                         WHERE st.school_id = ?
                           AND st.status != 'en proceso'
+                          {$teacherGroupFilter}
                         ORDER BY st.updated_at DESC
                         LIMIT 100
                     ");
@@ -291,6 +330,8 @@ if ($cleanPath === '/consultations/query') {
                         "SELECT
                              m.twilio_message_id,
                              m.phone_number,
+                             m.type_code,
+                             m.direction,
                              m.message_content,
                              m.delivery_status,
                              m.sent_at
@@ -305,8 +346,10 @@ if ($cleanPath === '/consultations/query') {
                         "SELECT
                              m.twilio_message_id,
                              m.phone_number,
-                             m.message_content,
+                             m.type_code,
                              m.direction,
+                             m.message_content,
+                             m.delivery_status,
                              m.sent_at
                          FROM twilio_messages m
                          WHERE m.school_id  = :sid
@@ -316,7 +359,7 @@ if ($cleanPath === '/consultations/query') {
                     $stmt->execute([':sid' => $schoolId, ':tid' => $userId]);
                 }
                 $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $columns = ['phone_number' => 'Teléfono', 'type_code' => 'Tipo', 'message_content' => 'Mensaje', 'sent_at' => 'Enviado', 'delivery_status' => 'Estado'];
+                $columns = ['phone_number' => 'Teléfono', 'type_code' => 'Tipo', 'direction' => 'Dirección', 'message_content' => 'Mensaje', 'sent_at' => 'Enviado', 'delivery_status' => 'Estado'];
                 break;
 
             case 'internal_messages':
@@ -597,10 +640,10 @@ if ($cleanPath === '/consultations/query') {
 
             case 'reports':
                 $stmt = $conn->prepare("
-                    SELECT report_type as tipo, 
+                    SELECT report_type as tipo,
                            TO_CHAR(generated_at, 'DD/MM/YYYY HH12:MI AM') as generado_en,
-                           format as formato,
-                           COALESCE(status, 'completado') as estado
+                           file_format as formato,
+                           COALESCE(metadata_json->>'status', 'completado') as estado
                     FROM report_exports
                     WHERE school_id = ?
                     ORDER BY generated_at DESC
@@ -708,6 +751,9 @@ if ($cleanPath === '/consultations/query') {
                 break;
 
             case 'sos_emitted':
+                // sos_alerts no tiene student_id: para vista docente, solo los
+                // SOS emitidos por el propio docente (sus "alertas").
+                $sosScope = ($isTeacher && !$groupName) ? " AND sa.emitted_by_user_id = " . $conn->quote($userId) : "";
                 $stmt = $conn->prepare("
                     SELECT sa.alert_id, sa.alert_description, sa.emitted_at, sa.resolved_at,
                            u.first_name AS emitter_first, u.last_name AS emitter_last,
@@ -716,6 +762,7 @@ if ($cleanPath === '/consultations/query') {
                     LEFT JOIN users u ON sa.emitted_by_user_id = u.user_id
                     WHERE sa.school_id = ?
                       AND sa.emitted_at >= (?::date) AND sa.emitted_at < ((?::date + INTERVAL '1 day'))
+                      {$sosScope}
                     ORDER BY sa.emitted_at DESC
                     LIMIT 100
                 ");
@@ -793,7 +840,7 @@ if ($cleanPath === '/consultations/query') {
     } catch (Exception $e) {
         securityLog('CONSULTATION_QUERY_ERROR', $e->getMessage(), $userId, $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al consultar datos', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al consultar datos']);
     }
     exit;
 }

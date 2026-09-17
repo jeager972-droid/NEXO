@@ -59,8 +59,10 @@ add_executable(nexo-edge
     src/hardware/dev_stub/DevStubNotification.cpp
     src/hardware/dev_stub/DevStubHttpClient.cpp
     src/interoperabilidad/audit_trail.cpp
+    src/interoperabilidad/ota_manager.cpp
     src/mqtt/mqtt_command_worker.cpp
     src/hardware/watchdog.cpp
+    src/hardware/node_monitor.cpp
 )
 
 target_include_directories(nexo-edge PRIVATE ${EDGE_INCLUDE_DIR})
@@ -238,6 +240,9 @@ if(BUILD_TESTING)
         tests/test_mqtt_command_worker.cpp
         tests/test_audit_trail.cpp
         tests/test_watchdog.cpp
+        tests/test_multi_finger.cpp
+        tests/test_node_monitor.cpp
+        tests/test_ota_manager.cpp
         # Implementation files needed by tests
         src/utils/ConfigManager.cpp
         src/base_de_datos/sqlite_manager.cpp
@@ -246,8 +251,10 @@ if(BUILD_TESTING)
         src/hardware/dev_stub/DevStubBiometricSensor.cpp
         src/hardware/dev_stub/DevStubHttpClient.cpp
         src/interoperabilidad/audit_trail.cpp
+        src/interoperabilidad/ota_manager.cpp
         src/mqtt/mqtt_command_worker.cpp
         src/hardware/watchdog.cpp
+        src/hardware/node_monitor.cpp
     )
 
     target_include_directories(nexo-tests PRIVATE ${EDGE_INCLUDE_DIR} ${MOSQUITTO_INCLUDE_DIRS})

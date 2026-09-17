@@ -64,6 +64,8 @@ header("Content-Security-Policy: frame-ancestors 'none';");
 
 require_once __DIR__ . '/core/boot_check.php';
 require_once __DIR__ . '/core/db.php';
+require_once __DIR__ . '/lib/notify_routing.php';
+require_once __DIR__ . '/lib/attendance_reconcile.php';
 require_once __DIR__ . '/routes/_auth_middleware.php';
 
 $conn = $pdo;
@@ -162,7 +164,11 @@ function enforceRateLimitRedis($userId = null, $maxReqs = 100, $window = 60) {
 }
 
 // Aplicar rate limiting global antes de procesar la petición.
-enforceRateLimitRedis();
+// RATE_LIMIT_MAX / RATE_LIMIT_WINDOW permiten ajustar la protección por
+// entorno (test, despliegue con múltiples nodos detrás de NAT, etc.).
+enforceRateLimitRedis(null,
+    (int)(getenv('RATE_LIMIT_MAX') ?: 100),
+    (int)(getenv('RATE_LIMIT_WINDOW') ?: 60));
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -233,7 +239,7 @@ $routeMap = [
     'webhooks' => ['twilio_delivery.php', 'misc.php'],
     'operations' => 'operations.php',
     'devices' => 'devices.php',
-    'audit' => ['audit_logs.php', 'audit_integrity.php', 'audit_full.php'],
+    'audit' => 'audit_full.php',
     'security' => 'security_panic.php',
     'behavior' => 'behavior.php',
     'risk' => 'risk.php',
@@ -245,6 +251,8 @@ $routeMap = [
     'consultations' => 'consultations.php',
     'tracking' => 'tracking.php',
     'school' => 'school_config.php',
+    'teacher' => 'teacher_alerts.php',
+    'events' => 'events.php',
 ];
 
 // ============================================================================
@@ -415,6 +423,13 @@ if (isset($input['payload'])) {
                                      ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                                 );
                                 $stmt->execute([$row['device_id'], $attEvt, $attTs, $fingerprint, $attDoc, $realSchoolId]);
+                                // V-530/531/574: reconciliar INASISTENCIA abierta si el
+                                // ingreso llega tarde (también en el camino Redis-down)
+                                if ($stmt->rowCount() > 0) {
+                                    $sidStmt = $conn->prepare("SELECT student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
+                                    $sidStmt->execute([$attDoc, $realSchoolId]);
+                                    nexoReconcileAbsence($conn, (string)$realSchoolId, $sidStmt->fetchColumn() ?: null, $attEvt);
+                                }
                             }
                             $conn->exec("COMMIT");
                             securityLog('EDGE_ATTENDANCE_DIRECT_PG', "doc=$attDoc evt=$attEvt (Redis down, direct PG)", null, $realSchoolId, $requestId);
@@ -465,6 +480,14 @@ if (isset($input['payload'])) {
                                  ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                             );
                             $stmt->execute([$row['device_id'], $attEvt, $attTs, $fingerprint, $attDoc, $realSchoolId]);
+                            // V-530/531/574: reconciliar INASISTENCIA abierta si el
+                            // ingreso llega tarde — el ingest síncrono es el camino
+                            // principal; el worker re-procesa idempotentemente.
+                            if ($stmt->rowCount() > 0) {
+                                $sidStmt = $conn->prepare("SELECT student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
+                                $sidStmt->execute([$attDoc, $realSchoolId]);
+                                nexoReconcileAbsence($conn, (string)$realSchoolId, $sidStmt->fetchColumn() ?: null, $attEvt);
+                            }
                         }
                         $conn->exec("COMMIT");
                     } catch (Exception $pgEx3) {
@@ -579,6 +602,9 @@ if ($cleanPath === '/health' || $cleanPath === '/health/workers') {
             'twilio_worker' => 'worker:twilio:last_heartbeat',
             'biometric_worker' => 'worker:biometric:last_heartbeat',
             'absence_detector_worker' => 'worker:absence_detector:last_heartbeat',
+            'evasion_detector_worker' => 'worker:evasion_detector:last_heartbeat',
+            'permission_status_worker' => 'worker:permission_status:last_heartbeat',
+            'device_health_worker' => 'worker:device_health:last_heartbeat',
         ];
         if (getenv('AUDIT_WORKER_ENABLED') === '1') {
             $workers['audit_worker'] = 'worker:audit:last_heartbeat';

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>NEXO · Panel del Nodo (Simulador 2D)</title>
+<style>
+  :root{--bg:#0d1117;--card:#161b22;--line:#30363d;--txt:#e6edf3;--mut:#8b949e;
+        --ok:#3fb950;--warn:#d29922;--err:#f85149;--acc:#58a6ff;}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--txt);font:14px/1.5 'Segoe UI',system-ui,sans-serif;padding:16px}
+  h1{font-size:18px;margin-bottom:4px}
+  .sub{color:var(--mut);font-size:12px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:460px 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card h2{font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .nodo{position:relative;height:300px;background:linear-gradient(145deg,#1c2128,#0f141a);
+        border:2px solid #444c56;border-radius:14px;overflow:hidden}
+  .part{position:absolute;border:2px solid var(--acc);border-radius:8px;background:rgba(88,166,255,.08);
+        display:flex;align-items:center;justify-content:center;font-size:11px;text-align:center;
+        cursor:pointer;transition:.15s;padding:2px}
+  .part:hover{background:rgba(88,166,255,.25)}
+  .part.alarm{border-color:var(--err);background:rgba(248,81,73,.15);animation:blink 1s infinite}
+  .part.warn{border-color:var(--warn);background:rgba(210,153,34,.15)}
+  @keyframes blink{50%{opacity:.4}}
+  .sw{position:absolute;right:12px;width:44px;height:22px;border-radius:12px;background:#30363d;cursor:pointer}
+  .sw.on{background:var(--ok)} .sw::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;
+        border-radius:50%;background:#fff;transition:.15s}
+  .sw.on::after{left:24px}
+  .leds{position:absolute;bottom:10px;left:12px;display:flex;gap:8px}
+  .led{width:12px;height:12px;border-radius:50%;background:#30363d}
+  .led.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .led.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .led.err{background:var(--err);box-shadow:0 0 8px var(--err)}
+  .bat{position:absolute;top:10px;right:12px;text-align:right;font-size:12px}
+  .bat .v{font-size:22px;font-weight:700}
+  .bar{width:90px;height:8px;background:#30363d;border-radius:4px;overflow:hidden;margin-top:4px}
+  .bar i{display:block;height:100%;background:var(--ok)}
+  button{background:#21262d;border:1px solid var(--line);color:var(--txt);border-radius:6px;
+         padding:7px 12px;cursor:pointer;font-size:12px}
+  button:hover{border-color:var(--acc);background:#2d333b}
+  button.acc{background:var(--acc);color:#0d1117;border-color:var(--acc);font-weight:600}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  input{background:#0d1117;border:1px solid var(--line);border-radius:6px;color:var(--txt);
+        padding:6px 8px;width:110px;font-size:12px}
+  input[type=range]{width:100%}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  td,th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{color:var(--mut);font-weight:600}
+  .log{max-height:260px;overflow:auto}
+  .tag{font-size:10px;padding:1px 6px;border-radius:8px;background:#21262d;border:1px solid var(--line)}
+  .tag.HIGH{background:rgba(248,81,73,.15);border-color:var(--err);color:var(--err)}
+  .st{font-size:12px;color:var(--mut);margin-top:8px}
+  .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+  .kv .v{font-size:20px;font-weight:700}
+  .mut{color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>NEXO · Panel del Nodo <span class="tag">simulador 2D → stack real</span></h1>
+<div class="sub">Cada control acciona el sistema real (API + PostgreSQL + workers). Los incidentes aparecen abajo.</div>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>Nodo NEXO-EDGE-01</h2>
+      <div class="nodo">
+        <div class="bat">
+          <div id="batState" class="mut">AC · MAINS</div>
+          <div class="v" id="batPct">100%</div>
+          <div class="bar"><i id="batBar" style="width:100%"></i></div>
+        </div>
+        <div class="part" id="p-fp"   style="top:20px;left:16px;width:130px;height:64px"  title="Sensor biométrico">&#129534;<br>Sensor huella<br><span class="mut">click = marcar</span></div>
+        <div class="part" id="p-tmp"  style="top:20px;left:170px;width:90px;height:64px"   title="Sensor térmico">&#127777;<br><span id="cpuV">45°C</span></div>
+        <div class="part" id="p-tpr"  style="top:20px;left:284px;width:90px;height:64px"   title="Microswitch tamper (GPIO)">&#128275;<br>Gabinete<br><span class="mut">cerrado</span></div>
+        <div class="part" id="p-net"  style="top:104px;left:16px;width:130px;height:56px"  title="Módem celular M2M">&#128246;<br>Celular M2M<br><span class="mut" id="netV">Claro · 72%</span></div>
+        <div class="part" id="p-ups"  style="top:104px;left:170px;width:204px;height:56px" title="UPS / alimentación">&#9889;<br>Fuente + UPS<br><span class="mut" id="upsV">Red eléctrica</span></div>
+        <div class="part" id="p-mqtt" style="top:180px;left:16px;width:130px;height:56px"  title="Enlace MQTT → central">&#128279;<br>MQTT<br><span class="mut">conectado</span></div>
+        <div class="part" id="p-db"   style="top:180px;left:170px;width:130px;height:56px" title="SQLite local cifrado">&#128190;<br>BD local<br><span class="mut">AES-256-GCM</span></div>
+        <div class="part" id="p-ota"  style="top:180px;left:324px;width:50px;height:56px"  title="OTA">&#8679;<br>OTA</div>
+        <div class="leds">
+          <div class="led on"  id="led-pwr"  title="LED energía"></div>
+          <div class="led on"  id="led-net"  title="LED red"></div>
+          <div class="led"     id="led-tpr"  title="LED tamper"></div>
+          <div class="led"     id="led-err"  title="LED error"></div>
+        </div>
+      </div>
+      <div class="st" id="lastResp">—</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2>Acciones del nodo</h2>
+      <div class="row">
+        <input id="doc" value="1001" title="documento">
+        <button class="acc" onclick="fp('INGRESO')">&#129534; INGRESO</button>
+        <button class="acc" onclick="fp('SALIDA')">&#129534; SALIDA</button>
+        <button onclick="reg()">Registrar estudiante</button>
+        <button onclick="ping()">&#128279; Ping</button>
+      </div>
+      <div class="row">
+        <button onclick="net(false)">&#10060; Cortar red</button>
+        <button onclick="net(true)">&#128246; Restaurar red</button>
+        <button onclick="power('BATTERY')">&#9889; Cortar luz (UPS)</button>
+        <button onclick="power('MAINS')">&#128268; Restaurar luz</button>
+      </div>
+      <div class="row">
+        <button onclick="tamper(true)">&#128275; Abrir gabinete</button>
+        <button onclick="tamper(false)">&#128274; Cerrar gabinete</button>
+        <button onclick="cpu(95)">&#127777; CPU 95°</button>
+        <button onclick="cpu(45)">&#10052; CPU 45°</button>
+      </div>
+      <div class="row">
+        Batería: <input type="range" id="batSlide" min="0" max="100" value="100" onchange="setBat(this.value)"> <span id="batSlideV">100%</span>
+      </div>
+      <div class="row">
+        <input id="sN" value="100" title="eventos" style="width:70px">
+        <input id="sR" value="50" title="req/s" style="width:70px">
+        <button onclick="stress()">&#128293; Stress</button>
+        <span class="st" id="stressV"></span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Estado central (PostgreSQL)</h2>
+      <div class="kv">
+        <div><div class="v" id="kEv">0</div><div class="mut">eventos 30m</div></div>
+        <div><div class="v" id="kNot">0</div><div class="mut">notif 30m</div></div>
+        <div><div class="v" id="kSec">0</div><div class="mut">incid. seguridad</div></div>
+        <div><div class="v" id="kAtt">0</div><div class="mut">incid. asistencia</div></div>
+      </div>
+    </div>
+    <div class="card log" style="margin-top:12px">
+      <h2>Incidentes de seguridad (tiempo real)</h2>
+      <table><thead><tr><th>tipo</th><th>sev</th><th>cuándo</th></tr></thead><tbody id="tSec"></tbody></table>
+    </div>
+    <div class="card log" style="margin-top:12px">
+      <h2>Incidentes de asistencia</h2>
+      <table><thead><tr><th>tipo</th><th>estudiante</th><th>cuándo</th></tr></thead><tbody id="tAtt"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+const J = r => r.json();
+const post = (p,b) => fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(J);
+
+function say(t,ok=true){
+  const e=document.getElementById('lastResp');
+  e.textContent=t; e.style.color=ok?'var(--ok)':'var(--err)';
+}
+async function fp(ev){
+  const r=await post('/api/fingerprint',{document:document.getElementById('doc').value,event_type:ev});
+  say(`Huella ${ev} → HTTP ${r.http} ${JSON.stringify(r.resp).slice(0,80)}`, r.http<300);
+}
+async function reg(){
+  const r=await post('/api/register',{document:document.getElementById('doc').value});
+  say(`Registro → HTTP ${r.http}`, r.http<300);
+}
+async function ping(){ const r=await post('/api/ping'); say(`Ping → HTTP ${r.http}`, r.http<300); }
+async function power(s){
+  const r=await post('/api/power',{power_state:s,battery_pct:+document.getElementById('batSlide').value});
+  document.getElementById('upsV').textContent = s==='MAINS'?'Red eléctrica':'En batería UPS';
+  document.getElementById('batState').textContent = s==='MAINS'?'AC · MAINS':'DC · '+s;
+  document.getElementById('led-pwr').className = 'led '+(s==='MAINS'?'on':(s==='CRITICAL'?'err':'warn'));
+  say(`Energía ${s} → HTTP ${r.http}`, r.http<300);
+}
+async function setBat(v){
+  document.getElementById('batSlideV').textContent=v+'%';
+  document.getElementById('batPct').textContent=v+'%';
+  document.getElementById('batBar').style.width=v+'%';
+  document.getElementById('batBar').style.background = v>50?'var(--ok)':(v>15?'var(--warn)':'var(--err)');
+  const ps = document.getElementById('upsV').textContent==='Red eléctrica'?'MAINS':(v<=5?'CRITICAL':(v<=20?'LOW_BATTERY':'BATTERY'));
+  await post('/api/power',{power_state:ps,battery_pct:+v});
+}
+async function tamper(open){
+  const r=await post('/api/tamper',{open});
+  document.getElementById('p-tpr').classList.toggle('alarm',open);
+  document.getElementById('led-tpr').className='led '+(open?'err':'');
+  document.getElementById('p-tpr').querySelector('.mut').textContent=open?'¡ABIERTO!':'cerrado';
+  say(`Gabinete ${open?'ABIERTO':'cerrado'} → HTTP ${r.http}`, r.http<300);
+}
+async function net(up){
+  const r=await post('/api/network',{up});
+  document.getElementById('netV').textContent=up?'Claro · 72%':'SIN SEÑAL';
+  document.getElementById('p-net').classList.toggle('warn',!up);
+  document.getElementById('led-net').className='led '+(up?'on':'err');
+  document.getElementById('p-mqtt').querySelector('.mut').textContent=up?'conectado':'buffer local';
+  say(`Red ${up?'ON':'OFF'} → HTTP ${r.http}`, r.http<300);
+}
+async function cpu(t){
+  const r=await post('/api/cpu',{temp_c:t});
+  document.getElementById('cpuV').textContent=t+'°C';
+  document.getElementById('p-tmp').classList.toggle('alarm',t>=90);
+  say(`CPU ${t}°C → HTTP ${r.http}`, r.http<300);
+}
+async function stress(){
+  const n=+document.getElementById('sN').value, r=+document.getElementById('sR').value;
+  await post('/api/stress',{n,rate:r});
+  say(`Stress ${n}@${r}/s iniciado…`);
+}
+function ago(ts){const d=(Date.now()-new Date(ts).getTime())/1000;
+  return d<60?Math.floor(d)+'s':d<3600?Math.floor(d/60)+'m':Math.floor(d/3600)+'h';}
+async function refresh(){
+  try{
+    const s=await fetch('/api/state').then(J);
+    document.getElementById('kEv').textContent=s.events_30m;
+    document.getElementById('kNot').textContent=s.notifs_30m;
+    document.getElementById('kSec').textContent=s.security_incidents.length;
+    document.getElementById('kAtt').textContent=s.attendance_incidents.length;
+    document.getElementById('tSec').innerHTML=s.security_incidents.map(i=>
+      `<tr><td><span class="tag ${i.severity==='HIGH'?'HIGH':''}">${i.incident_type}</span></td><td>${i.severity||''}</td><td>${ago(i.detected_at)}</td></tr>`).join('');
+    document.getElementById('tAtt').innerHTML=s.attendance_incidents.map(i=>
+      `<tr><td><span class="tag">${i.incident_type}</span></td><td>${i.student||''}</td><td>${ago(i.detected_at)}</td></tr>`).join('');
+    const st=s.sim.stress;
+    if(st.running||st.sent>0)
+      document.getElementById('stressV').textContent=`${st.sent}/${st.n} · ok=${st.ok} · 429=${st.rl} · err=${st.err}${st.running?' ⏳':' ✔'}`;
+  }catch(e){}
+}
+setInterval(refresh,2000); refresh();
+</script>
+</body>
+</html>

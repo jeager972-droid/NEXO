@@ -86,7 +86,7 @@ export const SIDEBAR_ITEMS = [
     title: 'Sensores',
     path: '/dispositivos',
     icon: Cpu,
-    roles: [ROLES.RECTOR, ROLES.COORDINATOR],
+    roles: [ROLES.RECTOR, ROLES.COORDINADOR],
   },
   {
     title: 'Perfil',

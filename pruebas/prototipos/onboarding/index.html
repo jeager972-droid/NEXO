@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexus — Configuración inicial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<style>
+/* ══ NEXO Quiet Operations — tokens (03_DESIGN_SYSTEM) ══ */
+:root{
+  --canvas:      oklch(98% 0.006 245);
+  --surface:     oklch(99.3% 0.004 245);
+  --surface-sub: oklch(96% 0.009 245);
+  --text:        oklch(23% 0.018 245);
+  --text-muted:  oklch(48% 0.018 245);
+  --border:      oklch(88% 0.010 245);
+  --accent:      oklch(48% 0.115 245);
+  --accent-soft: oklch(48% 0.115 245 / .08);
+  --accent-line: oklch(48% 0.115 245 / .18);
+  --success:     oklch(52% 0.125 155);
+  --warning:     oklch(62% 0.135 70);
+  --danger:      oklch(52% 0.175 25);
+  --ease-out:    cubic-bezier(.22,1,.36,1);
+  --r-ctl:8px; --r-surf:12px; --r-panel:16px;
+}
+*{box-sizing:border-box; margin:0}
+body{
+  font-family:'Inter',system-ui,sans-serif; font-size:16px; line-height:1.5;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, oklch(94% .025 245 / .5), transparent 60%),
+    var(--canvas);
+  color:var(--text); min-height:100vh; -webkit-font-smoothing:antialiased;
+}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+
+/* ══ Shell de onboarding — pantalla completa, nada del sistema detrás ══ */
+.topbar{
+  display:flex; align-items:center; gap:12px;
+  padding:16px 24px; border-bottom:1px solid var(--border);
+  background:oklch(99.3% .004 245 / .8); backdrop-filter:blur(6px);
+  position:sticky; top:0; z-index:20;
+}
+.mark{display:flex; align-items:center; gap:10px; font-weight:650; font-size:15px}
+.mark img{width:34px; height:34px; object-fit:contain}
+.steps{margin-left:auto; display:flex; align-items:center; gap:10px}
+.steps .lbl{font-size:13px; color:var(--text-muted); font-variant-numeric:tabular-nums}
+.steps .dots{display:flex; gap:6px}
+.steps .dots i{width:8px; height:8px; border-radius:50%; background:var(--border); transition:all .2s var(--ease-out)}
+.steps .dots i.on{background:var(--accent); transform:scale(1.15)}
+.steps .dots i.done{background:oklch(48% .115 245 / .4)}
+
+main{max-width:680px; margin:0 auto; padding:44px 24px 200px; display:flex; flex-direction:column; gap:22px}
+@media(max-width:640px){main{padding:32px 16px 220px}}
+.kicker{font-size:13px; font-weight:600; color:var(--accent); letter-spacing:.02em}
+h1{font-size:28px; line-height:1.25; font-weight:650; letter-spacing:-.01em}
+@media(max-width:640px){h1{font-size:24px}}
+.lede{font-size:15.5px; color:var(--text-muted); max-width:56ch}
+
+/* ══ Bloques de trabajo ══ */
+.work{
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-panel); padding:24px;
+  display:flex; flex-direction:column; gap:20px;
+  transition:box-shadow .25s var(--ease-out);
+}
+@media(max-width:640px){.work{padding:18px}}
+.work h2{font-size:17px; font-weight:620}
+.work .sub{font-size:13.5px; color:var(--text-muted); margin-top:-12px}
+.row{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.row.three{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:560px){.row,.row.three{grid-template-columns:1fr}}
+.field label{display:block; font-size:13.5px; font-weight:600; margin-bottom:6px}
+.field select,.field input{
+  width:100%; height:48px; padding:0 14px; font-size:15.5px;
+  border:1px solid var(--border); border-radius:var(--r-ctl);
+  background:var(--canvas); color:var(--text);
+}
+.field .help{font-size:12px; color:var(--text-muted); margin-top:5px}
+
+/* tarjetas seleccionables (chips grandes touch-first) */
+.pickgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(88px,1fr)); gap:10px}
+.pick{
+  height:52px; border:1.5px solid var(--border); border-radius:var(--r-ctl);
+  background:var(--canvas); font-weight:600; font-size:15px;
+  transition:all .15s var(--ease-out);
+}
+.pick:hover{border-color:var(--accent-line)}
+.pick.on{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}
+
+/* stepper numérico */
+.stepper{display:flex; align-items:center; gap:4px}
+.stepper button{
+  width:40px; height:40px; border:1px solid var(--border); border-radius:var(--r-ctl);
+  background:var(--canvas); font-size:18px; font-weight:600; color:var(--text-muted);
+}
+.stepper button:hover{border-color:var(--accent); color:var(--accent)}
+.stepper .val{min-width:44px; text-align:center; font-size:17px; font-weight:650; font-variant-numeric:tabular-nums}
+
+/* switch */
+.sw{display:flex; align-items:center; gap:12px; padding:10px 0}
+.sw input{position:absolute; opacity:0; pointer-events:none}
+.sw .trk{width:46px; height:26px; border-radius:999px; background:var(--border); position:relative; transition:background .15s; flex-shrink:0}
+.sw .trk::after{content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:transform .2s var(--ease-out); box-shadow:0 1px 3px rgb(0 0 0/.18)}
+.sw input:checked+.trk{background:var(--accent)}
+.sw input:checked+.trk::after{transform:translateX(20px)}
+.sw input:focus-visible+.trk{outline:2px solid var(--accent); outline-offset:2px}
+.sw .sl{font-size:14.5px; font-weight:550}
+.sw .sh{font-size:12.5px; color:var(--text-muted); display:block; font-weight:400}
+
+/* fila de regla / jornada */
+.item{
+  display:flex; align-items:center; gap:14px; padding:14px 16px;
+  border:1px solid var(--border); border-radius:var(--r-surf); background:var(--canvas);
+  animation:pop .2s var(--ease-out);
+}
+.item .main{flex:1; min-width:0}
+.item .main b{font-size:14.5px; font-weight:620}
+.item .main span{font-size:12.5px; color:var(--text-muted); display:block}
+.item .rm{width:36px; height:36px; border:none; border-radius:8px; background:none; color:var(--text-muted); font-size:18px}
+.item .rm:hover{color:var(--danger); background:oklch(52% .175 25 / .08)}
+.add{
+  border:1.5px dashed var(--border); background:none; border-radius:var(--r-surf);
+  padding:13px; font-size:14px; font-weight:600; color:var(--accent); width:100%;
+}
+.add:hover{border-color:var(--accent); background:var(--accent-soft)}
+
+.actions{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:2px}
+.actions .right{display:flex; gap:10px; align-items:center}
+.btn-primary{
+  height:46px; padding:0 24px; border:none; border-radius:var(--r-ctl);
+  background:var(--accent); color:#fff; font-weight:600; font-size:15px;
+  transition:background .15s var(--ease-out);
+}
+.btn-primary:hover{background:oklch(42% .12 245)}
+.btn-quiet{height:46px; padding:0 16px; border:none; background:none; color:var(--text-muted); font-size:15px}
+.btn-quiet:hover{color:var(--text)}
+.btn-sec{height:46px; padding:0 18px; border:1px solid var(--border); border-radius:var(--r-ctl); background:var(--surface); font-weight:600; font-size:14.5px}
+.btn-sec:hover{border-color:var(--accent); color:var(--accent)}
+
+/* vista previa de grupos generados */
+.preview{display:flex; flex-wrap:wrap; gap:8px}
+.preview b{font-size:13px; font-weight:600; background:var(--surface-sub); border:1px solid var(--border); padding:5px 12px; border-radius:999px}
+
+/* pantalla final */
+.done{display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; padding:48px 0}
+.done img{width:120px; animation:hover 3.2s ease-in-out infinite}
+.done h1{max-width:16ch}
+.done .lede{max-width:44ch}
+
+/* ══ Nexus — el guía (esquina, estilo aldeano) ══ */
+.guide{position:fixed; right:24px; bottom:24px; z-index:50; display:flex; flex-direction:column; align-items:flex-end; gap:10px}
+@media(max-width:640px){.guide{right:14px; bottom:14px}}
+.bot{width:96px; height:96px; border:none; background:none; padding:0; position:relative; filter:drop-shadow(0 8px 16px oklch(30% .08 245 / .25))}
+@media(max-width:640px){.bot{width:80px; height:80px}}
+.bot img{width:100%; height:100%; object-fit:contain; border-radius:50%}
+.bot .ring{position:absolute; inset:-6px; border-radius:50%; border:2px solid var(--accent-line); animation:pulse 2.4s var(--ease-out) infinite}
+.bot .dot{position:absolute; top:2px; right:2px; width:16px; height:16px; background:var(--accent); border:3px solid var(--surface); border-radius:50%}
+@keyframes pulse{0%{transform:scale(.92);opacity:.9}70%{transform:scale(1.12);opacity:0}100%{opacity:0}}
+.bot.float{animation:hover 3.2s ease-in-out infinite}
+@keyframes hover{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.bot.enter{animation:enter .5s var(--ease-out) both}
+@keyframes enter{from{transform:translateY(40px) scale(.6);opacity:0}to{transform:none;opacity:1}}
+.bot.wave img{animation:wave .55s var(--ease-out)}
+@keyframes wave{0%{transform:rotate(0)}30%{transform:rotate(-8deg)}65%{transform:rotate(5deg)}100%{transform:rotate(0)}}
+.bot.celebrate img{animation:celebrate .7s var(--ease-out)}
+@keyframes celebrate{0%{transform:scale(1)}35%{transform:scale(1.12) rotate(-6deg)}70%{transform:scale(1.06) rotate(4deg)}100%{transform:scale(1)}}
+
+.bubble{
+  width:min(348px, calc(100vw - 130px));
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-panel) var(--r-panel) 4px var(--r-panel);
+  padding:14px 16px 12px; text-align:left;
+  box-shadow:0 6px 18px -6px oklch(30% .08 245 / .2);
+  animation:pop .2s var(--ease-out); position:relative;
+}
+@keyframes pop{from{transform:translateY(8px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+.bubble::after{content:''; position:absolute; right:22px; bottom:-7px; width:12px; height:12px; background:var(--surface); border-right:1px solid var(--border); border-bottom:1px solid var(--border); transform:rotate(45deg)}
+.bubble .who{font-size:12px; font-weight:650; color:var(--accent); margin-bottom:2px; letter-spacing:.02em}
+.bubble .txt{font-size:14.5px; line-height:1.5; min-height:42px}
+.bubble .txt .caret{display:inline-block; width:7px; height:15px; background:var(--accent); border-radius:2px; vertical-align:-2px; animation:blink .9s steps(1) infinite; margin-left:2px}
+@keyframes blink{50%{opacity:0}}
+.bubble .foot{display:flex; align-items:center; justify-content:space-between; margin-top:10px}
+.bubble .prog{font-size:12px; color:var(--text-muted); font-variant-numeric:tabular-nums}
+.bubble .next{border:none; background:var(--accent-soft); color:var(--accent); font-size:13px; font-weight:600; padding:6px 14px; border-radius:999px}
+.bubble .next:hover{background:oklch(48% .115 245 / .15)}
+.bubble .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.bubble .chip{border:1px solid var(--accent-line); background:var(--accent-soft); color:var(--accent); font-size:13px; font-weight:600; padding:7px 14px; border-radius:999px}
+.bubble .chip:hover{background:oklch(48% .115 245 / .15)}
+.hl{box-shadow:0 0 0 4px var(--accent-soft), 0 0 0 1.5px var(--accent-line) !important}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+
+<!-- Selector de prototipo (solo demo) -->
+<div style="position:fixed; left:14px; top:14px; z-index:60; display:flex; gap:6px" id="demoroles">
+  <button class="btn-sec" style="height:34px;padding:0 12px;font-size:12.5px" onclick="setRole('rector')">Rector</button>
+  <button class="btn-sec" style="height:34px;padding:0 12px;font-size:12.5px" onclick="setRole('coordinador')">Coordinador</button>
+  <button class="btn-sec" style="height:34px;padding:0 12px;font-size:12.5px" onclick="setRole('docente')">Docente</button>
+</div>
+
+<header class="topbar">
+  <div class="mark"><img src="imagenbot.png" alt=""><span>Nexus</span></div>
+  <div class="steps"><span class="lbl" id="steplbl"></span><span class="dots" id="dots"></span></div>
+</header>
+
+<main id="main"></main>
+
+<!-- Nexus -->
+<div class="guide" aria-live="polite">
+  <div class="bubble" id="bubble" hidden>
+    <div class="who">NEXUS</div>
+    <p class="txt"><span id="btext"></span><span class="caret"></span></p>
+    <div class="chips" id="bchips"></div>
+    <div class="foot"><span class="prog" id="bprog"></span><button class="next" id="bnext">Siguiente</button></div>
+  </div>
+  <button class="bot enter float" id="bot" aria-label="Nexus, tu asistente">
+    <img src="imagenbot.png" alt="Nexus, tu asistente"><span class="ring"></span><span class="dot" id="bdot"></span>
+  </button>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   NEXUS — guion por paso. Cada paso tiene su secuencia; el bot
+   explica, la pantalla solo muestra lo esencial.
+   ══════════════════════════════════════════════════════════════ */
+const ROLE = { label: localStorage.nxRole || 'rector' };
+
+const FLOWS = {
+rector: {
+  name:'Rectoría',
+  steps:[
+  { id:'welcome', title:'Bienvenid@ a Nexus', kicker:'Configuración inicial',
+    lede:'Tu institución aún no está configurada. Nexus te acompaña — son 3 pasos cortos.',
+    script:[
+      {t:"¡Hola! Soy <b>Nexus</b> — el sistema de tu institución, y también tu guía. Te acompaño en la configuración inicial."},
+      {t:"Son <b>3 pasos</b>: la jornada, los grupos y los criterios de aviso. Menos de 10 minutos, y todo se puede cambiar después."},
+      {t:"Sin esto Nexus no puede interpretar la jornada: sin horarios no hay «llegada tarde», sin grupos no hay «ausencia». Por eso el sistema espera aquí, a que lo configures."},
+      {t:"Cuando estés list@, toca <b>Comenzar</b>. Yo te explico cada paso.", chips:[{label:"Comenzar →", act:"advance"}]}
+    ]},
+  { id:'schedule', title:'Las jornadas del colegio', kicker:'Paso 1 de 3',
+    lede:'Define cuándo entran y salen los estudiantes en cada jornada.',
+    render:renderSchedule,
+    script:[
+      {t:"Esta pantalla define <b>las jornadas</b>: mañana, tarde, o las que tenga tu institución.", hl:"work"},
+      {t:"Con eso yo sé cuándo una llegada es <b>a tiempo</b>, cuándo es <b>tarde</b> y cuándo alguien <b>faltó</b>."},
+      {t:"Si una jornada tiene <b>rotación de aulas</b>, actívala y dime cuántos bloques tiene — así sé cuándo un estudiante debería estar en otro salón."},
+      {t:"El descanso es opcional, pero ayuda: durante ese rango no cuento salidas como evasiones."},
+      {t:"Configura tus jornadas y toca <b>Continuar</b>. Lo que pongas se puede ajustar después desde configuración.", chips:[{label:"Entendido", act:"next"}]}
+    ]},
+  { id:'groups', title:'Grados y grupos', kicker:'Paso 2 de 3',
+    lede:'Genera los grupos del año: qué grados hay, cuántos grupos por grado y su nomenclatura.',
+    render:renderGroups,
+    script:[
+      {t:"Ahora los <b>grupos</b>. Dime qué grados tiene el colegio y cuántos grupos hay en cada uno.", hl:"work"},
+      {t:"La <b>nomenclatura</b> es cómo se llaman: 7A, 7B… o 7-1, 7-2… Yo genero los nombres, tú no escribes nada."},
+      {t:"Cada grado lleva su <b>jornada</b>. Y cada grupo necesita <b>al menos un docente</b> asignado — es quien recibe sus avisos."},
+      {t:"Abajo verás la vista previa de los grupos que voy a crear. Si falta un docente te aviso antes de guardar — nada se rompe."},
+      {t:"Cuando la lista se vea bien, toca <b>Continuar</b>.", chips:[{label:"Entendido", act:"next"}]}
+    ]},
+  { id:'risk', title:'Cuándo quieres que te avise', kicker:'Paso 3 de 3',
+    lede:'Los umbrales del motor de riesgo: a partir de cuántas repeticiones Nexus te alerta.',
+    render:renderRisk,
+    script:[
+      {t:"Último paso: el <b>motor de avisos</b>. Aquí decides desde cuándo una repetición se vuelve una situación.", hl:"work"},
+      {t:"Ejemplo: «3 llegadas tarde en 30 días» genera un aviso al docente y a coordinación. La institución manda; yo solo detecto y aviso."},
+      {t:"Los valores sugeridos son un punto de partida razonable — afinarlos es trabajo de rectoría y coordinación, y se puede hacer siempre."},
+      {t:"Revisa los umbrales y toca <b>Finalizar configuración</b>.", chips:[{label:"Revisar y finalizar", act:"next"}]}
+    ]},
+  { id:'done', title:'', final:true, render:renderDone },
+]},
+coordinador: {
+  name:'Coordinación',
+  steps:[
+  { id:'welcome', title:'Bienvenid@ a Nexus', kicker:'Configuración inicial',
+    lede:'Tu institución aún no está configurada. Nexus te acompaña por lo que puedes hacer hoy.',
+    script:[
+      {t:"¡Hola! Soy <b>Nexus</b>. Como coordinación, completas 2 de los 3 pasos: <b>jornada</b> y <b>criterios de aviso</b>."},
+      {t:"Los <b>grupos</b> los configura rectoría — te muestro el avance cuando lleguemos ahí, y el sistema quedará listo cuando ambos terminen."},
+      {t:"Cuando estés list@, toca <b>Comenzar</b>.", chips:[{label:"Comenzar →", act:"advance"}]}
+    ]},
+  { id:'schedule', title:'Las jornadas del colegio', kicker:'Paso 1 de 3',
+    lede:'Define cuándo entran y salen los estudiantes en cada jornada.',
+    render:renderSchedule,
+    script:[
+      {t:"Esta pantalla define <b>las jornadas</b>: mañana, tarde, o las que tenga tu institución.", hl:"work"},
+      {t:"Con eso sé cuándo una llegada es <b>a tiempo</b>, cuándo es <b>tarde</b> y cuándo alguien <b>faltó</b>. Si hay rotación de aulas, actívala y dime los bloques."},
+      {t:"Configura las jornadas y toca <b>Continuar</b>.", chips:[{label:"Entendido", act:"next"}]}
+    ]},
+  { id:'groups', title:'Grados y grupos', kicker:'Paso 2 de 3 · rectoría',
+    lede:'La estructura de grupos la define rectoría. Aquí puedes revisar cómo quedará.',
+    render:renderGroupsReadonly,
+    script:[
+      {t:"Este paso lo completa <b>rectoría</b>: los grados, los grupos y sus docentes.", hl:"work"},
+      {t:"Abajo ves la estructura planeada. Si ya está lista, continúa — si falta, el sistema espera a que rectoría la termine, sin bloquear tu parte."},
+      {t:"Toca <b>Continuar</b> para el último paso.", chips:[{label:"Continuar", act:"next"}]}
+    ]},
+  { id:'risk', title:'Cuándo quieres que te avise', kicker:'Paso 3 de 3',
+    lede:'Los umbrales del motor de riesgo, acordados con rectoría.',
+    render:renderRisk,
+    script:[
+      {t:"El <b>motor de avisos</b>: desde cuándo una repetición se vuelve situación. Ejemplo: «3 llegadas tarde en 30 días» avisa al docente y a ti."},
+      {t:"Los valores sugeridos son punto de partida — la institución los afina cuando quiera."},
+      {t:"Revisa y toca <b>Finalizar</b>.", chips:[{label:"Finalizar", act:"next"}]}
+    ]},
+  { id:'done', title:'', final:true, render:renderDone },
+]},
+docente: {
+  name:'Docente',
+  steps:[
+  { id:'welcome', title:'Bienvenid@ a Nexus', kicker:'Primer acceso',
+    lede:'Un solo paso opcional: decide desde cuándo quieres que Nexus te avise de repeticiones en tus clases.',
+    script:[
+      {t:"¡Hola! Soy <b>Nexus</b>, el sistema del colegio — y tu guía rápida. Esto toma menos de 2 minutos."},
+      {t:"Tu única decisión: <b>criterios de aviso</b>. Yo observo tus clases; tú me dices a partir de cuántas repeticiones avisarte."},
+      {t:"Por ejemplo: «avísame cuando un estudiante acumule 3 llegadas tarde a mi clase en 30 días». Yo detecto, tú decides qué hacer."},
+      {t:"Puedes configurarlo ahora o tocar <b>Omitir</b> — lo cambias cuando quieras desde tu panel. Tú mandas.", chips:[{label:"Configurar →", act:"advance"},{label:"Omitir por ahora", act:"skipall"}]}
+    ]},
+  { id:'rules', title:'Tus criterios de aviso', kicker:'Configuración opcional',
+    lede:'Avisos cuando un estudiante repita una situación en tus clases.',
+    render:renderRules,
+    script:[
+      {t:"Aquí creas tus reglas: <b>qué te aviso</b>, <b>después de cuántas veces</b> y <b>en cuántos días</b>.", hl:"work"},
+      {t:"Son solo para ti y solo sobre tus grupos. Si no agregas ninguna, usaré los avisos generales de la institución."},
+      {t:"Cuando termines toca <b>Guardar y entrar</b> — u <b>Omitir</b> si prefieres dejarlo para después.", chips:[{label:"Listo", act:"next"}]}
+    ]},
+  { id:'done', title:'', final:true, render:renderDoneTeacher },
+]},
+};
+
+/* ── estado ── */
+let role, stepIdx = 0;
+const state = {
+  jornadas:[{shift:'mañana', entry:'07:00', exit:'12:30', recess:'', recessEnd:'', rotates:false, blocks:4}],
+  grades:['6','7','8','9','10','11'],
+  perGrade:{6:2,7:2,8:2,9:2,10:1,11:1},
+  nomenclature:'alphabetic',
+  risk:{tarde:{n:3,d:30,on:true}, inasist:{n:2,d:15,on:true}, evasion:{n:1,d:7,on:true}},
+  rules:[{kind:'Llegadas tarde', n:3, d:30}],
+};
+const TEACHERS=['Prof. Amparo Ruiz','Prof. Daniel Cortés','Prof. Lucía Peña','Prof. Martín Díaz'];
+const GRADES=['Prescolar','1','2','3','4','5','6','7','8','9','10','11'];
+const RULEKINDS=['Llegadas tarde','Inasistencias','Salidas del salón','Salidas al baño'];
+
+/* ═══════════ renders de cada paso ═══════════ */
+function renderWelcome(){return `
+  <span class="kicker">${cur().kicker}</span>
+  <h1>${cur().title}</h1>
+  <p class="lede">${cur().lede}</p>
+  <section class="work" style="align-items:center; text-align:center; padding:36px 24px">
+    <img src="imagenbot.png" style="width:110px; animation:hover 3.2s ease-in-out infinite" alt="Nexus">
+    <div>
+      <h2 style="font-size:19px">Nexus configura tu institución contigo</h2>
+      <p class="sub" style="margin:6px 0 0; max-width:42ch">Soy la voz del sistema: te explico cada paso en la esquina, sin manuales ni letra pequeña.</p>
+    </div>
+  </section>
+  <div class="actions"><span></span><span class="right"><button class="btn-primary" onclick="advance()">Comenzar</button></span></div>`;}
+
+function renderSchedule(){return `
+  <span class="kicker">${cur().kicker}</span><h1>${cur().title}</h1><p class="lede">${cur().lede}</p>
+  <section class="work" id="work"><h2>Jornadas</h2><div id="jlist"></div>
+    <button class="add" onclick="addJornada()">+ Agregar jornada</button></section>
+  <div class="actions"><span></span><span class="right">
+    <button class="btn-quiet" onclick="advance()">Configurar después</button>
+    <button class="btn-primary" onclick="advance()">Guardar y continuar</button></span></div>`;}
+
+function renderGroups(){return `
+  <span class="kicker">${cur().kicker}</span><h1>${cur().title}</h1><p class="lede">${cur().lede}</p>
+  <section class="work" id="work"><h2>Grados que tiene el colegio</h2>
+    <div class="pickgrid" id="grades"></div>
+    <h2 style="margin-top:8px">Grupos por grado</h2><div id="perg"></div>
+    <h2 style="margin-top:8px">Nomenclatura</h2>
+    <div class="row three">
+      <button class="pick" data-n="alphabetic">7A · 7B</button>
+      <button class="pick" data-n="numeric">7-1 · 7-2</button>
+      <button class="pick" data-n="other">Otra</button>
+    </div>
+    <div><h2>Vista previa</h2><div class="preview" id="gprev"></div></div>
+    <p class="sub" id="gwarn"></p></section>
+  <div class="actions"><span></span><span class="right">
+    <button class="btn-quiet" onclick="advance()">Lo hace rectoría</button>
+    <button class="btn-primary" onclick="advance()">Guardar y continuar</button></span></div>`;}
+
+function renderGroupsReadonly(){return `
+  <span class="kicker">${cur().kicker}</span><h1>${cur().title}</h1><p class="lede">${cur().lede}</p>
+  <section class="work" id="work"><h2>Estructura planeada</h2>
+    <div class="preview" id="gprev"></div>
+    <p class="sub">Estado: <b style="color:var(--warning)">pendiente de rectoría</b> — tu parte no se bloquea; el sistema se activa cuando ambos terminen.</p></section>
+  <div class="actions"><span></span><span class="right"><button class="btn-primary" onclick="advance()">Continuar</button></span></div>`;}
+
+function renderRisk(){return `
+  <span class="kicker">${cur().kicker}</span><h1>${cur().title}</h1><p class="lede">${cur().lede}</p>
+  <section class="work" id="work"><h2>Umbrales de aviso</h2><div id="rlist"></div></section>
+  <div class="actions"><span></span><span class="right"><button class="btn-primary" onclick="advance()">Finalizar configuración</button></span></div>`;}
+
+function renderRules(){return `
+  <span class="kicker">${cur().kicker}</span><h1>${cur().title}</h1><p class="lede">${cur().lede}</p>
+  <section class="work" id="work"><h2>Tus reglas</h2><div id="rules"></div>
+    <button class="add" onclick="addRule()">+ Agregar regla</button>
+    <p class="sub">Sin reglas propias, recibes los avisos generales de la institución.</p></section>
+  <div class="actions"><button class="btn-quiet" onclick="finish()">Omitir</button>
+    <span class="right"><button class="btn-primary" onclick="finish()">Guardar y entrar</button></span></div>`;}
+
+function renderDone(){return `
+  <div class="done">
+    <img src="imagenbot.png" alt="Nexus">
+    <span class="kicker">Configuración completa</span>
+    <h1>Tu institución ya está operando con Nexus</h1>
+    <p class="lede">Jornada, grupos y criterios de aviso quedaron guardados. Desde ahora, Nexus interpreta la jornada y te avisa de lo que necesite atención.</p>
+    <button class="btn-primary" onclick="alert('→ Entrar al sistema')">Entrar a mi jornada</button>
+  </div>`;}
+
+function renderDoneTeacher(){return `
+  <div class="done">
+    <img src="imagenbot.png" alt="Nexus">
+    <span class="kicker">Listo</span>
+    <h1>Tu panel ya te espera</h1>
+    <p class="lede">Cuando algo se repita en tus clases, Nexus te avisa con el motivo y qué puedes hacer. Nada más que configurar.</p>
+    <button class="btn-primary" onclick="alert('→ Entrar a Inicio')">Entrar a Inicio</button>
+  </div>`;}
+
+/* ═══════════ lógica ═══════════ */
+function setRole(r){ localStorage.nxRole=r; stepIdx=0; state.jornadas=[{shift:'mañana',entry:'07:00',exit:'12:30',recess:'',recessEnd:'',rotates:false,blocks:4}]; mount(); }
+function cur(){ return FLOWS[role].steps[stepIdx]; }
+function advance(){ if(stepIdx < FLOWS[role].steps.length-1){ stepIdx++; mount(); } }
+function finish(){ stepIdx = FLOWS[role].steps.length-1; mount(); }
+
+function mount(){
+  role = ROLE.label;
+  const s = cur();
+  const main = document.getElementById('main');
+  main.innerHTML = (s.render? s.render() : renderWelcome());
+  // dots
+  const steps = FLOWS[role].steps;
+  document.getElementById('dots').innerHTML = steps.map((_,i)=>
+    `<i class="${i===stepIdx?'on':i<stepIdx?'done':''}"></i>`).join('');
+  document.getElementById('steplbl').textContent = s.final ? '' : (s.kicker||'');
+  // post-render bindings
+  if(s.id==='schedule') mountSchedule();
+  if(s.id==='groups') mountGroups();
+  if(s.id==='groups'||s.id==='groups') {}
+  if(s.id==='risk') mountRisk();
+  if(s.id==='rules') mountRules();
+  if(s.id==='groups') previewGroups();
+  if(s.id==='groups_readonly'||s.id==='groups') {}
+  if(s.final){ document.getElementById('bot').classList.add('celebrate'); setTimeout(()=>document.getElementById('bot').classList.remove('celebrate'),800);
+    playScript([{t:"¡Listo! 🎉 La configuración quedó guardada. A partir de ahora trabajo en silencio — te aviso solo cuando algo necesite tu atención."}]); }
+  else playScript(s.script || []);
+}
+
+/* schedule */
+function mountSchedule(){
+  const el = document.getElementById('jlist');
+  el.innerHTML = state.jornadas.map((j,i)=>`
+    <div class="item"><div class="main"><b>Jornada ${j.shift}</b>
+      <span>${j.entry} – ${j.exit}${j.rotates?` · rotación · ${j.blocks} bloques`:''}${j.recess?` · descanso ${j.recess}`:''}</span></div>
+      <button class="rm" onclick="state.jornadas.splice(${i},1);mountSchedule()" aria-label="Quitar">×</button></div>`).join('') || '<p class="sub">Sin jornadas aún.</p>';
+  if(!document.getElementById('jform')){
+    const f = document.createElement('div'); f.id='jform';
+    f.innerHTML = `<div class="row three">
+      <div class="field"><label>Jornada</label><select id="js"><option>mañana</option><option>tarde</option><option>noche</option><option>completa</option></select></div>
+      <div class="field"><label>Entrada</label><input id="je" type="time" value="07:00"></div>
+      <div class="field"><label>Salida</label><input id="jx" type="time" value="12:30"></div></div>
+    <div class="row">
+      <div class="field"><label>Descanso (opcional)</label><input id="jr" type="time" value="09:30"></div>
+      <div class="field"><label>Fin del descanso</label><input id="jre" type="time" value="10:00"></div></div>
+    <label class="sw"><input type="checkbox" id="jrot"><span class="trk"></span>
+      <span class="sl">Los estudiantes rotan de aula por bloques<span class="sh">Nexus necesita los bloques para saber dónde debería estar cada grupo</span></span></label>
+    <div class="row" id="jblocks" style="display:none">
+      <div class="field"><label>Número de bloques</label><input id="jb" type="number" min="1" max="12" value="4"></div></div>`;
+    document.getElementById('work').insertBefore(f, document.querySelector('#work .add'));
+    document.getElementById('jrot').onchange = e=>{ document.getElementById('jblocks').style.display = e.target.checked?'grid':'none'; };
+  }
+}
+function addJornada(){
+  const g=id=>document.getElementById(id)?.value;
+  state.jornadas.push({shift:g('js'), entry:g('je')||'07:00', exit:g('jx')||'12:30',
+    recess:g('jr'), recessEnd:g('jre'), rotates:document.getElementById('jrot').checked, blocks:+g('jb')||4});
+  mountSchedule();
+}
+
+/* groups */
+function mountGroups(){
+  document.getElementById('grades').innerHTML = GRADES.map(g=>
+    `<button class="pick ${state.grades.includes(g)?'on':''}" onclick="toggleGrade('${g}',this)">${g}</button>`).join('');
+  document.querySelectorAll('[data-n]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.n===state.nomenclature);
+    b.onclick=()=>{state.nomenclature=b.dataset.n; mountGroups();};
+  });
+  mountPerGrade();
+}
+function toggleGrade(g,el){
+  const i=state.grades.indexOf(g);
+  if(i<0){state.grades.push(g); state.perGrade[g]=state.perGrade[g]||1;} else state.grades.splice(i,1);
+  el.classList.toggle('on'); mountPerGrade(); previewGroups();
+}
+function mountPerGrade(){
+  document.getElementById('perg').innerHTML = state.grades.map(g=>`
+    <div class="item"><div class="main"><b>Grado ${g}</b><span>grupos en este grado</span></div>
+      <div class="stepper">
+        <button onclick="chg('${g}',-1)">−</button><span class="val">${state.perGrade[g]||1}</span><button onclick="chg('${g}',1)">+</button>
+      </div></div>`).join('');
+  previewGroups();
+}
+function chg(g,d){ state.perGrade[g]=Math.min(9,Math.max(1,(state.perGrade[g]||1)+d)); mountPerGrade(); }
+function previewGroups(){
+  const el = document.getElementById('gprev'); if(!el) return;
+  const names=[];
+  state.grades.forEach(g=>{ const n=state.perGrade[g]||1;
+    for(let i=0;i<n;i++) names.push(state.nomenclature==='alphabetic'? g+String.fromCharCode(65+i) : g+'-'+(i+1)); });
+  el.innerHTML = names.map(n=>`<b>${n}</b>`).join('');
+  const w=document.getElementById('gwarn'); if(w) w.innerHTML='Cada grupo llevará al menos un docente asignado — Nexus lo valida al guardar.';
+}
+
+/* risk */
+const RISKS=[['tarde','Llegadas tarde','avisa cuando un estudiante repita llegadas tarde'],
+             ['inasist','Inasistencias','avisa ante inasistencias acumuladas'],
+             ['evasion','Evasiones','avisa ante salidas del aula sin retorno']];
+function mountRisk(){
+  document.getElementById('rlist').innerHTML = RISKS.map(([k,name,desc])=>{const r=state.risk[k];return `
+    <div class="item"><div class="main"><b>${name}</b><span>${desc}</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="stepper"><button onclick="chgRisk('${k}','n',-1)">−</button><span class="val">${r.n}</span><button onclick="chgRisk('${k}','n',1)">+</button></div>
+        <span style="font-size:13px;color:var(--text-muted)">en</span>
+        <div class="stepper"><button onclick="chgRisk('${k}','d',-5)">−</button><span class="val">${r.d}</span><button onclick="chgRisk('${k}','d',5)">+</button></div>
+        <span style="font-size:13px;color:var(--text-muted)">días</span>
+      </div></div>`;}).join('');
+}
+function chgRisk(k,f,d){ state.risk[k][f]=Math.max(1,state.risk[k][f]+d); mountRisk(); }
+
+/* teacher rules */
+function mountRules(){
+  document.getElementById('rules').innerHTML = state.rules.map((r,i)=>`
+    <div class="item"><div class="main"><b>${r.kind}</b><span>avísame al llegar a ${r.n} en ${r.d} días</span></div>
+      <button class="rm" onclick="state.rules.splice(${i},1);mountRules()">×</button></div>`).join('') || '<p class="sub">Sin reglas propias — usaré los avisos generales.</p>';
+}
+function addRule(){
+  const kind = RULEKINDS[state.rules.length % RULEKINDS.length];
+  state.rules.push({kind, n:3, d:30}); mountRules();
+}
+
+/* ═══════════ Nexus — motor de diálogo ═══════════ */
+let script=[], sIdx=-1, typing=null;
+const bubble=document.getElementById('bubble'), btext=document.getElementById('btext'),
+      bnext=document.getElementById('bnext'), bprog=document.getElementById('bprog'),
+      bchips=document.getElementById('bchips'), bdot=document.getElementById('bdot'),
+      bot=document.getElementById('bot');
+
+function typewrite(el, html){
+  clearInterval(typing); el.innerHTML='';
+  const tmp=document.createElement('div'); tmp.innerHTML=html; const full=tmp.textContent; let i=0;
+  typing=setInterval(()=>{ i+=2; el.textContent=full.slice(0,i);
+    if(i>=full.length){clearInterval(typing); el.innerHTML=html;} },18);
+}
+function show(i){
+  sIdx=i; const m=script[i];
+  if(!m){bubble.hidden=true; bdot.style.display='none'; return;}
+  bubble.hidden=false; bdot.style.display='none';
+  bot.classList.add('wave'); setTimeout(()=>bot.classList.remove('wave'),600);
+  typewrite(btext,m.t); bprog.textContent=`${i+1} / ${script.length}`;
+  bchips.innerHTML='';
+  const w=document.getElementById('work'); if(w) w.classList.toggle('hl', !!m.hl);
+  if(m.chips){
+    bnext.style.display='none';
+    m.chips.forEach(c=>{const b=document.createElement('button'); b.className='chip'; b.textContent=c.label;
+      b.onclick=()=>{ if(c.act==='advance'){bubble.hidden=true; advance();}
+                      else if(c.act==='skipall'){bubble.hidden=true; finish();}
+                      else show(i+1); }; bchips.appendChild(b);});
+  } else {
+    bnext.style.display=''; bnext.textContent = i===script.length-1 ? 'Listo' : 'Siguiente';
+  }
+}
+function playScript(scr){ script=scr||[]; show(script.length?0:-1); }
+bnext.onclick=()=>show(sIdx+1);
+bot.onclick=()=>{ if(bubble.hidden) show(Math.max(sIdx,0)); };
+
+window.addEventListener('load', ()=>{ role=ROLE.label; mount(); });
+</script>
+</body>
+</html>

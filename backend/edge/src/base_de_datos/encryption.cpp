@@ -19,12 +19,15 @@
 #include "base_de_datos/sqlite_manager.h"
 #include "utils/Logger.h"
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 #include <openssl/rand.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/kdf.h>
 #include <cstring>
 #include <vector>
+#include <sstream>
+#include <iomanip>
 #include <openssl/crypto.h>
 #include <sys/mman.h>
 #include <cerrno>
@@ -463,4 +466,22 @@ bool Encryption::loadKeyFromFileEncrypted(std::string& key) {
     OPENSSL_cleanse(plaintext.data(), plaintext.size());
     LOG_INFO("[C5] AES key loaded from hardware-bound encrypted file");
     return true;
+}
+
+// ── V-243: hash con clave para campos-busqueda (determinístico) ────────────
+// HMAC-SHA256 sobre "dockey|" + plaintext con la clave AES del dispositivo.
+// Determinístico → sirve como PK/join sin exponer el valor real en reposo.
+std::string Encryption::keyedHash(const std::string& plaintext) {
+    if (!isKeyProvisioned() || plaintext.empty()) return "";
+    std::string msg = "dockey|" + plaintext;
+    unsigned char mac[EVP_MAX_MD_SIZE];
+    unsigned int macLen = 0;
+    HMAC(EVP_sha256(), m_aesKey.data(), (int)m_aesKey.size(),
+         reinterpret_cast<const unsigned char*>(msg.data()), msg.size(),
+         mac, &macLen);
+    std::ostringstream hex;
+    for (unsigned int i = 0; i < macLen; ++i)
+        hex << std::hex << std::setfill('0') << std::setw(2) << (int)mac[i];
+    OPENSSL_cleanse(mac, sizeof(mac));
+    return hex.str();
 }

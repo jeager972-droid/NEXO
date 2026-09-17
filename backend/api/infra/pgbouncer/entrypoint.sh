@@ -6,16 +6,14 @@ if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ] || [ -z "$DB_HOST" ] || [ -z "$DB_
     exit 1
 fi
 
-# Generar hash MD5 esperado por PgBouncer: md5 + md5(password + username)
-HASH=$(echo -n "${DB_PASSWORD}${DB_USER}" | md5sum | awk '{print $1}')
-
-# Crear archivo de usuarios con el formato exacto "username" "md5hash"
-echo "\"${DB_USER}\" \"md5${HASH}\"" > /etc/pgbouncer/userlist.txt
+# PgBouncer con auth_type=scram-sha-256 (Postgres 15): el userlist lleva el
+# password en CLARO para que pgbouncer pueda responder SCRAM hacia el servidor.
+echo "\"${DB_USER}\" \"${DB_PASSWORD}\"" > /etc/pgbouncer/userlist.txt
 chmod 600 /etc/pgbouncer/userlist.txt
 chown pgbouncer:pgbouncer /etc/pgbouncer/userlist.txt
 
 # Expandir variables en pgbouncer.ini usando envsubst
-export DB_PORT=${DB_PORT:-6543}
+export DB_PORT=${DB_PORT:-5432}
 envsubst < /etc/pgbouncer/pgbouncer.ini > /tmp/pgbouncer.ini
 mv /tmp/pgbouncer.ini /etc/pgbouncer/pgbouncer.ini
 chown pgbouncer:pgbouncer /etc/pgbouncer/pgbouncer.ini

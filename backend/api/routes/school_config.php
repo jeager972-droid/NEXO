@@ -109,7 +109,7 @@ if ($cleanPath === '/school/config' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('SCHOOL_CONFIG_GET_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener configuración', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener configuración']);
     }
     exit;
 }
@@ -271,7 +271,7 @@ if ($cleanPath === '/school/onboarding' && $method === 'POST') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('ONBOARDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración. Contacte al administrador.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración. Contacte al administrador.']);
     }
     exit;
 }
@@ -380,7 +380,7 @@ if ($cleanPath === '/school/config' && $method === 'PUT') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('SCHOOL_CONFIG_UPDATE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al actualizar configuración', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al actualizar configuración']);
     }
     exit;
 }
@@ -417,7 +417,7 @@ if ($cleanPath === '/school/time-blocks' && $method === 'GET') {
         echo json_encode(['status' => 'ok', 'time_blocks' => $formatted]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener bloques horarios', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener bloques horarios']);
     }
     exit;
 }
@@ -483,7 +483,7 @@ if ($cleanPath === '/school/time-blocks' && $method === 'POST') {
         try { $conn->exec("ROLLBACK"); } catch (Exception $ignore) {}
         securityLog('TIME_BLOCKS_UPDATE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar bloques horarios', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar bloques horarios']);
     }
     exit;
 }
@@ -603,7 +603,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('GROUPS_ONBOARDING_GET_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener el estado de configuración de grupos', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener el estado de configuración de grupos']);
     }
     exit;
 }
@@ -968,7 +968,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
         }
         securityLog('GROUPS_ONBOARDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración de grupos. Contacte al administrador.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al guardar la configuración de grupos. Contacte al administrador.']);
     }
     exit;
 }
@@ -1074,7 +1074,7 @@ if ($cleanPath === '/school/assign-teacher' && in_array($method, ['POST', 'DELET
         }
         securityLog('ASSIGN_TEACHER_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al gestionar asignación de docente', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al gestionar asignación de docente']);
     }
     exit;
 }
@@ -1108,7 +1108,7 @@ if ($cleanPath === '/school/teachers' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('SCHOOL_TEACHERS_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener docentes', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener docentes']);
     }
     exit;
 }
@@ -1173,7 +1173,7 @@ if ($cleanPath === '/school/sensor-master-key' && $method === 'POST') {
     } catch (Exception $e) {
         securityLog('SENSOR_MASTER_KEY_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al configurar la llave maestra']);
     }
     exit;
 }
@@ -1289,7 +1289,7 @@ if ($cleanPath === '/school/technical-modality' && $method === 'GET') {
         ]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -1348,7 +1348,317 @@ if ($cleanPath === '/school/technical-modality' && $method === 'POST') {
         echo json_encode(['status' => 'ok', 'message' => 'Configuración de modalidad técnica guardada', 'count' => count($configs)]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
+    }
+    exit;
+}
+
+// ============================================================================
+// F-01a — Modelo espacial operativo: CRUD de aulas, asignaturas y horarios.
+// ============================================================================
+
+// GET /school/classrooms — Listar aulas de la escuela
+if ($cleanPath === '/school/classrooms' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    try {
+        $stmt = $conn->prepare("
+            SELECT classroom_id, classroom_name, building, created_at
+            FROM classrooms WHERE school_id = ? ORDER BY classroom_name
+        ");
+        $stmt->execute([$schoolId]);
+        echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener aulas']);
+    }
+    exit;
+}
+
+// POST /school/classrooms — Crear aula
+if ($cleanPath === '/school/classrooms' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $schoolId = $authUser['school_id'];
+    $name = trim((string)($input['classroom_name'] ?? $input['name'] ?? ''));
+    $building = trim((string)($input['building'] ?? ''));
+    if ($name === '') {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'El nombre del aula es obligatorio']));
+    }
+    try {
+        $stmt = $conn->prepare("
+            INSERT INTO classrooms (school_id, classroom_name, building)
+            VALUES (?, ?, ?) RETURNING classroom_id
+        ");
+        $stmt->execute([$schoolId, $name, $building !== '' ? $building : null]);
+        echo json_encode(['status' => 'ok', 'data' => ['classroom_id' => $stmt->fetchColumn()]]);
+    } catch (Exception $e) {
+        securityLog('CLASSROOM_CREATE_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al crear el aula']);
+    }
+    exit;
+}
+
+// DELETE /school/classrooms?id= — Eliminar aula (falla si tiene horarios referenciándola)
+if ($cleanPath === '/school/classrooms' && $method === 'DELETE') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $schoolId = $authUser['school_id'];
+    $id = $input['classroom_id'] ?? $_GET['id'] ?? null;
+    if (!$id || !preg_match('/^[0-9a-fA-F-]{36}$/', (string)$id)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'classroom_id inválido']));
+    }
+    try {
+        $stmt = $conn->prepare("DELETE FROM classrooms WHERE classroom_id = ?::uuid AND school_id = ?");
+        $stmt->execute([$id, $schoolId]);
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Aula no encontrada']));
+        }
+        echo json_encode(['status' => 'ok', 'message' => 'Aula eliminada']);
+    } catch (Exception $e) {
+        http_response_code(409);
+        echo json_encode(['status' => 'error', 'message' => 'No se puede eliminar: el aula tiene horarios o dispositivos asociados']);
+    }
+    exit;
+}
+
+// GET /school/subjects — Catálogo global de asignaturas
+if ($cleanPath === '/school/subjects' && $method === 'GET') {
+    requireAuth();
+    try {
+        $rows = $conn->query("SELECT subject_id, subject_name FROM subjects ORDER BY subject_name")->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['status' => 'ok', 'data' => $rows]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener asignaturas']);
+    }
+    exit;
+}
+
+// POST /school/subjects — Crear asignatura en el catálogo global
+if ($cleanPath === '/school/subjects' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR', 'SECRETARY']);
+    $name = trim((string)($input['subject_name'] ?? $input['name'] ?? ''));
+    if ($name === '') {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'El nombre de la asignatura es obligatorio']));
+    }
+    try {
+        $stmt = $conn->prepare("
+            INSERT INTO subjects (subject_name) VALUES (?)
+            ON CONFLICT DO NOTHING RETURNING subject_id
+        ");
+        $stmt->execute([$name]);
+        $id = $stmt->fetchColumn();
+        if (!$id) {
+            $id = $conn->prepare("SELECT subject_id FROM subjects WHERE subject_name = ?");
+            $id->execute([$name]);
+            $id = $id->fetchColumn();
+        }
+        echo json_encode(['status' => 'ok', 'data' => ['subject_id' => $id]]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al crear la asignatura']);
+    }
+    exit;
+}
+
+// GET /school/schedules?group_id= — Listar horarios (con joins descriptivos)
+if ($cleanPath === '/school/schedules' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $groupId = $_GET['group_id'] ?? null;
+    try {
+        $sql = "
+            SELECT sch.schedule_id, sch.day_of_week, sch.block_number,
+                   sch.start_time, sch.end_time,
+                   ag.group_id, ag.group_name,
+                   c.classroom_id, c.classroom_name,
+                   u.user_id AS teacher_user_id, u.first_name || ' ' || u.last_name AS teacher_name,
+                   sub.subject_id, sub.subject_name
+            FROM schedules sch
+            JOIN academic_groups ag ON ag.group_id = sch.group_id
+            LEFT JOIN classrooms c ON c.classroom_id = sch.classroom_id
+            LEFT JOIN users u ON u.user_id = sch.teacher_user_id
+            LEFT JOIN subjects sub ON sub.subject_id = sch.subject_id
+            WHERE ag.school_id = ?
+        ";
+        $params = [$schoolId];
+        if ($groupId && preg_match('/^[0-9a-fA-F-]{36}$/', (string)$groupId)) {
+            $sql .= " AND sch.group_id = ?::uuid";
+            $params[] = $groupId;
+        }
+        $sql .= " ORDER BY sch.day_of_week, sch.block_number";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute($params);
+        echo json_encode(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener horarios']);
+    }
+    exit;
+}
+
+// POST /school/schedules — Crear franja horaria (grupo+aula+profesor+materia+bloque)
+if ($cleanPath === '/school/schedules' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR', 'SECRETARY']);
+    $schoolId = $authUser['school_id'];
+
+    $groupId    = $input['group_id'] ?? null;
+    $classroomId = $input['classroom_id'] ?? null;
+    $teacherId  = $input['teacher_user_id'] ?? null;
+    $subjectId  = $input['subject_id'] ?? null;
+    $subjectName = trim((string)($input['subject_name'] ?? ''));
+    $dayOfWeek  = isset($input['day_of_week']) ? (int)$input['day_of_week'] : null;
+    $blockNum   = isset($input['block_number']) ? (int)$input['block_number'] : null;
+    $startTime  = trim((string)($input['start_time'] ?? ''));
+    $endTime    = trim((string)($input['end_time'] ?? ''));
+
+    $uuidRe = '/^[0-9a-fA-F-]{36}$/';
+    $missing = [];
+    if (!$groupId || !preg_match($uuidRe, (string)$groupId)) $missing[] = 'group_id';
+    if (!$classroomId || !preg_match($uuidRe, (string)$classroomId)) $missing[] = 'classroom_id';
+    if (!$teacherId || !preg_match($uuidRe, (string)$teacherId)) $missing[] = 'teacher_user_id';
+    if (!$subjectId && $subjectName === '') $missing[] = 'subject_id|subject_name';
+    if ($dayOfWeek === null || $dayOfWeek < 1 || $dayOfWeek > 7) $missing[] = 'day_of_week(1-7)';
+    if ($blockNum === null || $blockNum < 1) $missing[] = 'block_number';
+    if (!preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $startTime)) $missing[] = 'start_time';
+    if (!preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $endTime)) $missing[] = 'end_time';
+    if ($missing) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'Campos requeridos: ' . implode(', ', $missing)]));
+    }
+
+    try {
+        // Validar pertenencia a la escuela (grupo, aula, profesor)
+        $chk = $conn->prepare("SELECT 1 FROM academic_groups WHERE group_id = ?::uuid AND school_id = ?");
+        $chk->execute([$groupId, $schoolId]);
+        if (!$chk->fetchColumn()) { http_response_code(404); exit(json_encode(['status'=>'error','message'=>'Grupo no encontrado'])); }
+
+        $chk = $conn->prepare("SELECT 1 FROM classrooms WHERE classroom_id = ?::uuid AND school_id = ?");
+        $chk->execute([$classroomId, $schoolId]);
+        if (!$chk->fetchColumn()) { http_response_code(404); exit(json_encode(['status'=>'error','message'=>'Aula no encontrada'])); }
+
+        $chk = $conn->prepare("SELECT 1 FROM users WHERE user_id = ?::uuid AND school_id = ? AND active = TRUE");
+        $chk->execute([$teacherId, $schoolId]);
+        if (!$chk->fetchColumn()) { http_response_code(404); exit(json_encode(['status'=>'error','message'=>'Profesor no encontrado'])); }
+
+        // Resolver asignatura: por id o crear/buscar por nombre
+        if (!$subjectId) {
+            $sub = $conn->prepare("INSERT INTO subjects (subject_name) VALUES (?) ON CONFLICT DO NOTHING RETURNING subject_id");
+            $sub->execute([$subjectName]);
+            $subjectId = $sub->fetchColumn();
+            if (!$subjectId) {
+                $sub = $conn->prepare("SELECT subject_id FROM subjects WHERE subject_name = ?");
+                $sub->execute([$subjectName]);
+                $subjectId = $sub->fetchColumn();
+            }
+        }
+
+        $stmt = $conn->prepare("
+            INSERT INTO schedules (group_id, classroom_id, teacher_user_id, subject_id, day_of_week, block_number, start_time, end_time)
+            VALUES (?::uuid, ?::uuid, ?::uuid, ?::uuid, ?, ?, ?::time, ?::time)
+            RETURNING schedule_id
+        ");
+        $stmt->execute([$groupId, $classroomId, $teacherId, $subjectId, $dayOfWeek, $blockNum, $startTime, $endTime]);
+        echo json_encode(['status' => 'ok', 'data' => ['schedule_id' => $stmt->fetchColumn()]]);
+    } catch (Exception $e) {
+        securityLog('SCHEDULE_CREATE_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al crear el horario (verifique que no se solape el bloque)']);
+    }
+    exit;
+}
+
+// DELETE /school/schedules?id= — Eliminar franja horaria
+if ($cleanPath === '/school/schedules' && $method === 'DELETE') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR', 'SECRETARY']);
+    $schoolId = $authUser['school_id'];
+    $id = $input['schedule_id'] ?? $_GET['id'] ?? null;
+    if (!$id || !preg_match('/^[0-9a-fA-F-]{36}$/', (string)$id)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'schedule_id inválido']));
+    }
+    try {
+        $stmt = $conn->prepare("
+            DELETE FROM schedules WHERE schedule_id = ?::uuid
+              AND group_id IN (SELECT group_id FROM academic_groups WHERE school_id = ?)
+        ");
+        $stmt->execute([$id, $schoolId]);
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Horario no encontrado']));
+        }
+        echo json_encode(['status' => 'ok', 'message' => 'Horario eliminado']);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar el horario']);
+    }
+    exit;
+}
+
+// ============================================================================
+// F-01c — Enforcement espacial (flag por escuela, default OFF).
+// ============================================================================
+
+// GET /school/spatial-enforcement — Estado del flag + conteo de datos espaciales
+if ($cleanPath === '/school/spatial-enforcement' && $method === 'GET') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    try {
+        $flag = $conn->prepare("SELECT spatial_enforcement FROM schools WHERE school_id = ?");
+        $flag->execute([$schoolId]);
+        $counts = $conn->prepare("
+            SELECT
+              (SELECT COUNT(*) FROM classrooms WHERE school_id = ?) AS classrooms,
+              (SELECT COUNT(*) FROM schedules sch JOIN academic_groups ag ON ag.group_id = sch.group_id WHERE ag.school_id = ?) AS schedules,
+              (SELECT COUNT(*) FROM edge_devices WHERE school_id = ? AND classroom_id IS NOT NULL AND active = TRUE) AS devices_mapped
+        ");
+        $counts->execute([$schoolId, $schoolId, $schoolId]);
+        $row = $counts->fetch(PDO::FETCH_ASSOC);
+        echo json_encode(['status' => 'ok', 'data' => [
+            'spatial_enforcement' => (bool)$flag->fetchColumn(),
+            'classrooms' => (int)$row['classrooms'],
+            'schedules' => (int)$row['schedules'],
+            'devices_mapped' => (int)$row['devices_mapped'],
+        ]]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al consultar enforcement espacial']);
+    }
+    exit;
+}
+
+// POST /school/spatial-enforcement — Activar/desactivar verificación de aula.
+// Solo se permite activar si hay aulas, horarios y dispositivos mapeados.
+if ($cleanPath === '/school/spatial-enforcement' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $schoolId = $authUser['school_id'];
+    $enable = (bool)($input['enabled'] ?? false);
+    try {
+        if ($enable) {
+            $counts = $conn->prepare("
+                SELECT
+                  (SELECT COUNT(*) FROM classrooms WHERE school_id = ?) AS classrooms,
+                  (SELECT COUNT(*) FROM schedules sch JOIN academic_groups ag ON ag.group_id = sch.group_id WHERE ag.school_id = ?) AS schedules,
+                  (SELECT COUNT(*) FROM edge_devices WHERE school_id = ? AND classroom_id IS NOT NULL AND active = TRUE) AS devices_mapped
+            ");
+            $counts->execute([$schoolId, $schoolId, $schoolId]);
+            $row = $counts->fetch(PDO::FETCH_ASSOC);
+            if (!$row['classrooms'] || !$row['schedules']) {
+                http_response_code(422);
+                exit(json_encode(['status' => 'error', 'message' => 'No se puede activar: primero debe crear aulas y horarios (salones y franjas por grupo).']));
+            }
+        }
+        $conn->prepare("UPDATE schools SET spatial_enforcement = ? WHERE school_id = ?")
+            ->execute([$enable, $schoolId]);
+        securityLog('SPATIAL_ENFORCEMENT_' . ($enable ? 'ENABLED' : 'DISABLED'), "school=$schoolId", $authUser['id'], $schoolId);
+        echo json_encode(['status' => 'ok', 'data' => ['spatial_enforcement' => $enable]]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al actualizar enforcement espacial']);
     }
     exit;
 }

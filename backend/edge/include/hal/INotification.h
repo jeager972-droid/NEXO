@@ -14,4 +14,11 @@ public:
     virtual void notifySuccess() = 0;
     virtual void notifyError() = 0;
     virtual void notifyWarning() = 0;
+
+    // V-515: patrón luminoso/sonoro para el estado energético del nodo.
+    // state: 0=MAINS, 1=BATTERY, 2=LOW_BATTERY, 3=CRITICAL (orden de PowerState).
+    virtual void notifyPowerState(int /*state*/) {}
+
+    // V-310: control de ventilación activa (GPIO fan). No-op en stubs.
+    virtual void setFan(bool /*on*/) {}
 };

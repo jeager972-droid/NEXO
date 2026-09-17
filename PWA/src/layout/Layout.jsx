@@ -13,10 +13,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { schoolApi } from '../api/school';
-import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
-import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
-import { OnboardingRiskModal } from '../components/patterns/OnboardingRiskModal';
+import OnboardingFlow from '../pages/onboarding/OnboardingFlow';
 import { SystemInactiveScreen } from '../components/patterns/SystemInactiveScreen';
+import { teacherApi } from '../api/teacher';
 import { NavLink } from 'react-router-dom';
 
 const getGreeting = () => {
@@ -33,6 +32,7 @@ const Layout = () => {
   const [scheduleOnboardingRequired, setScheduleOnboardingRequired] = useState(false);
   const [groupsOnboardingRequired, setGroupsOnboardingRequired] = useState(false);
   const [riskOnboardingRequired, setRiskOnboardingRequired] = useState(false);
+  const [teacherOnboardingRequired, setTeacherOnboardingRequired] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
@@ -57,6 +57,7 @@ const Layout = () => {
   // Si alguna API falla (timeout, 500, red), NO se bloquea al usuario.
   // Solo se muestra el modal de onboarding si la API responde explicitamente
   // que falta configuracion.
+  const checkOnboardingRun = useRef(null);
   useEffect(() => {
     if (!user?.id) {
       setOnboardingLoading(false);
@@ -65,26 +66,34 @@ const Layout = () => {
 
     let cancelled = false;
     setOnboardingLoading(true);
-
-    const checkOnboarding = async () => {
+    const run = async () => {
       try {
-        const [configResult, groupsResult, riskResult] = await Promise.allSettled([
+        const requests = [
           schoolApi.getConfig(),
           schoolApi.getGroupsOnboarding(),
           schoolApi.getRiskConfig(),
-        ]);
+        ];
+        // El docente tiene su propio onboarding (criterios de aviso)
+        if (user?.role === ROLES.DOCENTE) requests.push(teacherApi.getOnboarding());
+
+        const [configResult, groupsResult, riskResult, teacherResult] = await Promise.allSettled(requests);
 
         if (cancelled) return;
 
         const config = configResult.status === 'fulfilled' ? configResult.value : null;
         const groupsResp = groupsResult.status === 'fulfilled' ? groupsResult.value : null;
         const riskResp = riskResult.status === 'fulfilled' ? riskResult.value : null;
+        const teacherResp = teacherResult?.status === 'fulfilled' ? teacherResult.value : null;
 
         // Solo bloquear si la API respondio OK y dice que falta configuracion.
         // Si la API fallo (rejected), asumir que no falta (no bloquear).
         setScheduleOnboardingRequired(config ? !config.onboarding_completed : false);
         setGroupsOnboardingRequired(groupsResp ? !!groupsResp.needs_onboarding : false);
         setRiskOnboardingRequired(riskResp ? !!riskResp.needs_onboarding : false);
+        // El onboarding docente solo aplica cuando el de la escuela ya está completo
+        setTeacherOnboardingRequired(
+          teacherResp ? !teacherResp.onboarding_completed : false
+        );
       } catch (e) {
         if (!cancelled) {
           // Error inesperado: no bloquear
@@ -96,10 +105,11 @@ const Layout = () => {
         if (!cancelled) setOnboardingLoading(false);
       }
     };
-    checkOnboarding();
+    checkOnboardingRun.current = run;
+    run();
 
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
 
   const roleDisplay = getRoleDisplay(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
@@ -108,62 +118,46 @@ const Layout = () => {
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
   const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
 
-  // Onboarding unificado — flujo secuencial
-  // 1. Horarios (RECTOR + COORDINATOR pueden completar)
-  // 2. Grupos (solo RECTOR puede completar)
-  // 3. Riesgo (solo RECTOR puede completar)
-  // Otros roles: bloqueo si cualquiera falta
+  // Onboarding unificado — pantalla completa guiada por Nexus.
+  // Nada del sistema se muestra hasta completar (o quedar pendiente
+  // de otro rol). RECTOR/COORDINATOR: jornadas → grupos → riesgo.
+  // DOCENTE: criterios de aviso. Otros roles: pantalla de espera.
+  // Al terminar el flujo se re-verifica contra el backend — así un
+  // coordinador con grupos aún pendientes de rector no se "desbloquea"
+  // por arte de la UI; la verdad la da el servidor.
+  const refetchOnboarding = () => {
+    setOnboardingLoading(true);
+    checkOnboardingRun.current?.();
+  };
   if (!onboardingLoading) {
     const needsSchedule = scheduleOnboardingRequired;
     const needsGroups = groupsOnboardingRequired;
     const needsRisk = riskOnboardingRequired;
     const isRector = user?.role === ROLES.RECTOR;
     const isCoordinator = user?.role === ROLES.COORDINADOR;
-    const canConfigureSchedule = isRector || isCoordinator;
+    const isTeacher = user?.role === ROLES.DOCENTE;
+    const canConfigure = isRector || isCoordinator;
+    const anySchoolMissing = needsSchedule || needsGroups || needsRisk;
 
-    // RECTOR/COORDINADOR: ven el modal de horarios si falta
-    if (needsSchedule && canConfigureSchedule) {
+    if (anySchoolMissing && canConfigure) {
       return (
-        <OnboardingScheduleModal
-          schoolId={user?.school_id}
-          userId={user?.id}
+        <OnboardingFlow
           role={user?.role}
-          onCompleted={() => {
-            setScheduleOnboardingRequired(false);
-          }}
+          missing={{ schedule: needsSchedule, groups: needsGroups, risk: needsRisk }}
+          onAllDone={refetchOnboarding}
         />
       );
     }
 
-    // RECTOR: ven el modal de grupos si falta (después de horarios)
-    if (needsGroups && isRector) {
-      return (
-        <OnboardingGroupsModal
-          onCompleted={() => {
-            setGroupsOnboardingRequired(false);
-          }}
-        />
-      );
-    }
-
-    // RECTOR: ven el modal de riesgo si falta (después de grupos)
-    if (needsRisk && isRector) {
-      return (
-        <OnboardingRiskModal
-          onCompleted={() => {
-            setRiskOnboardingRequired(false);
-          }}
-        />
-      );
-    }
-
-    // Cualquier rol: si algo falta y no puede configurarlo, ve pantalla de bloqueo
-    if ((needsSchedule || needsGroups || needsRisk) && !canConfigureSchedule) {
+    // Roles sin potestad de configuración (incluido docente): espera
+    // institucional — primero debe completarse la config de la escuela
+    if (anySchoolMissing && !canConfigure) {
       return <SystemInactiveScreen roleDisplay={roleDisplay} reason={needsSchedule ? 'schedule' : (needsGroups ? 'groups' : 'risk')} />;
     }
-    // COORDINADOR: si horarios está OK pero grupos o riesgo falta, ve pantalla de bloqueo
-    if ((needsGroups || needsRisk) && isCoordinator && !needsSchedule) {
-      return <SystemInactiveScreen roleDisplay={roleDisplay} reason={needsGroups ? 'groups' : 'risk'} />;
+
+    // Onboarding propio del docente (solo cuando la escuela ya está lista)
+    if (isTeacher && teacherOnboardingRequired) {
+      return <OnboardingFlow role={user?.role} missing={{}} onAllDone={refetchOnboarding} />;
     }
   }
 

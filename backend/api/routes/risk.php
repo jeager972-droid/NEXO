@@ -33,6 +33,8 @@ require_once __DIR__ . '/../lib/RiskEngineV3.php';
 if ($cleanPath === '/risk/policy' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $schoolId = $authUser['school_id'];
+    // /risk/* NO se bloquea por onboarding — RECTOR/COORDINATOR necesitan
+    // configurar el motor para completar risk_config_completed.
 
     try {
         $policy = RiskEngineV3::getActivePolicy($conn, $schoolId);
@@ -53,7 +55,7 @@ if ($cleanPath === '/risk/policy' && $method === 'GET') {
         ]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener política', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener política']);
     }
     exit;
 }
@@ -70,7 +72,7 @@ if ($cleanPath === '/risk/policy/history' && $method === 'GET') {
         echo json_encode(['status' => 'ok', 'data' => $history]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -91,16 +93,19 @@ if ($cleanPath === '/risk/policy' && $method === 'POST') {
     try {
         $policyId = RiskEngineV3::createPolicyVersion(
             $conn, $schoolId, $authUser['id'], $reason,
-            $input['config'] ?? []
+            $input['config'] ?? [], $authUser['role'] ?? 'COORDINATOR'
         );
         securityLog('RISK_POLICY_VERSION_CREATED', "New policy version: $policyId", $authUser['id'], $schoolId);
+        // Marcar configuración del motor como completada (onboarding gate)
+        try {
+            $conn->prepare("UPDATE schools SET risk_config_completed = TRUE WHERE school_id = ?")
+                 ->execute([$schoolId]);
+        } catch (Throwable $e) { /* columna ausente pre-migración — no fatal */ }
         echo json_encode(['status' => 'ok', 'policy_id' => $policyId]);
     } catch (InvalidArgumentException $e) {
         http_response_code(422);
         echo json_encode(['status' => 'error', 'message' => 'Validación falló', 'details' => $e->getMessage()]);
     } catch (Throwable $e) {
-        // DEBUG (temporal): incluir traza completa para diagnosticar el 500.
-        // Se reducirá a mensaje genérico cuando el guardado funcione.
         $debug = sprintf('%s: %s in %s:%d', get_class($e), $e->getMessage(), basename($e->getFile()), $e->getLine());
         if ($e instanceof PDOException) {
             $debug .= ' | SQLSTATE: ' . ($e->errorInfo[0] ?? $e->getCode());
@@ -108,7 +113,7 @@ if ($cleanPath === '/risk/policy' && $method === 'POST') {
         }
         securityLog('RISK_POLICY_CREATE_ERROR', $debug, $authUser['id'], $schoolId);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage(), 'debug' => $debug]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno al guardar la política']);
     }
     exit;
 }
@@ -123,7 +128,7 @@ if ($cleanPath === '/risk/event-types' && $method === 'GET') {
         echo json_encode(['status' => 'ok', 'data' => $types]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -145,7 +150,7 @@ if ($cleanPath === '/risk/alerts' && $method === 'GET') {
         ]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -172,7 +177,7 @@ if (preg_match('#^/risk/alerts/([a-f0-9-]+)/resolve$#', $cleanPath, $m) && $meth
         }
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -259,7 +264,7 @@ if (preg_match('#^/risk/incidents/([a-f0-9-]+)/resolve$#', $cleanPath, $m) && $m
         echo json_encode(['status' => 'ok', 'resolution' => $resolution]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -278,7 +283,7 @@ if (preg_match('#^/risk/alerts/([a-f0-9-]+)/escalate$#', $cleanPath, $m) && $met
         echo json_encode(['status' => $ok ? 'ok' : 'error']);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -294,7 +299,7 @@ if (preg_match('#^/risk/student/([a-f0-9-]+)$#', $cleanPath, $m) && $method === 
         echo json_encode(['status' => 'ok', 'data' => $profile]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -326,7 +331,7 @@ if ($cleanPath === '/risk/justify' && $method === 'POST') {
         echo json_encode(['status' => 'ok', 'justification_id' => $justId]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -342,7 +347,7 @@ if ($cleanPath === '/risk/recalculate' && $method === 'POST') {
         echo json_encode(['status' => 'ok', 'processed' => $count]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }
@@ -359,7 +364,7 @@ if (preg_match('#^/risk/anomaly/([a-f0-9-]+)$#', $cleanPath, $m) && $method === 
         echo json_encode(['status' => 'ok', 'data' => $anomaly]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno del servidor']);
     }
     exit;
 }

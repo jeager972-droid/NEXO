@@ -182,7 +182,7 @@ if ($cleanPath === '/users/by-role' && $method === 'GET') {
         $stmt->execute($params);
         usersJson(['status' => 'ok', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -205,7 +205,7 @@ if ($cleanPath === '/users/me/extended' && $method === 'GET') {
         }
         usersJson(['status' => 'ok', 'data' => $user]);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -246,7 +246,7 @@ if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
 
         usersJson(['status' => 'ok', 'photo_url' => $base64]);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -313,7 +313,7 @@ if ($cleanPath === '/users/send-verification' && $method === 'POST') {
         usersJson(['status' => 'ok', 'message' => 'Código enviado por WhatsApp', 'expires_in_minutes' => 10]);
     } catch (Throwable $e) {
         error_log("[OTP-EXCEPTION] " . $e->getMessage() . " @ " . $e->getFile() . ":" . $e->getLine());
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -376,7 +376,7 @@ if ($cleanPath === '/users/verify-code' && $method === 'POST') {
 
         usersJson(['status' => 'ok', 'message' => 'Código verificado', 'target_value' => $row['target_value']]);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -438,7 +438,7 @@ if ($cleanPath === '/users/update-profile' && $method === 'POST') {
 
         usersJson(['status' => 'ok', 'message' => 'Perfil actualizado correctamente']);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -480,7 +480,7 @@ if ($cleanPath === '/users/delete-field' && $method === 'POST') {
 
         usersJson(['status' => 'ok', 'message' => ucfirst(str_replace('_', ' ', $field)) . ' eliminado correctamente']);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -520,7 +520,7 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
 
         usersJson(['status' => 'ok', 'message' => 'Contraseña actualizada correctamente']);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -575,7 +575,7 @@ if ($cleanPath === '/users/reset-password' && $method === 'POST') {
 
         usersJson(['status' => 'ok', 'message' => 'Contraseña actualizada correctamente']);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }
 
@@ -589,6 +589,6 @@ if ($cleanPath === '/users/me/photo' && $method === 'GET') {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         usersJson(['status' => 'ok', 'photo_url' => $row['profile_photo_url'] ?? null]);
     } catch (Throwable $e) {
-        usersJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+        usersJson(['status' => 'error', 'message' => 'Error interno del servidor'], 500);
     }
 }

@@ -50,6 +50,7 @@
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 require_once __DIR__ . '/../lib/twilio.php';
+require_once __DIR__ . '/../workers/contingency_lib.php';
 
 /**
  * Registra un comando ejecutado por un usuario en user_commands.
@@ -125,6 +126,12 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         securityLog('TWILIO_ENQUEUE_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
+    // V-406: las condiciones de disparo son configurables por escuela —
+    // school_action_policies 'WHATSAPP_<TYPE>' enabled=false omite el envío.
+    if ($conn && function_exists('nexoPolicyEnabled')
+        && !nexoPolicyEnabled($conn, (string)$schoolId, 'WHATSAPP_' . strtoupper($typeCode))) {
+        return ['ok' => true, 'reason' => 'policy_disabled', 'phone_norm' => $toNorm];
+    }
     $msgId = null;
     try {
         if ($conn) {
@@ -169,7 +176,7 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
 //   - POST /operations/<command>     : dispatcher a switch de comandos operativos.
 // También acepta action=EXECUTE_COMMAND legacy por compatibilidad.
 // ============================================================================
-if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $input['action'] === 'EXECUTE_COMMAND')) {
+if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) && $input['action'] === 'EXECUTE_COMMAND')) {
     
     // POST /operations/twilio-status — Estado de mensajes, fallback a API de Twilio.
     if ($cleanPath === '/operations/twilio-status' && $method === 'POST') {
@@ -249,6 +256,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
         '/operations/seguimiento' => 'seguimiento',
         '/operations/fusionar_bloque' => 'fusionar_bloque',
         '/operations/extender_bloque' => 'extender_bloque',
+        '/operations/registro_manual' => 'registro_manual',
+        '/operations/registro_manual_pendiente' => 'registro_manual_pendiente',
     ];
     if (isset($pathMap[$cleanPath])) {
         $action = $pathMap[$cleanPath];
@@ -258,6 +267,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     $userId = $authUser['id'];
     $schoolId = $authUser['school_id'];
     $role = $authUser['role'];
+    requireSchoolOnboarding($conn, (string)$schoolId, $role);
     $params = $input['params'] ?? [];
 
     if (!in_array('operations.' . $action, $authUser['permissions'] ?? [])) {
@@ -270,11 +280,12 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     // Estas operaciones no tienen sentido si el estudiante está inasistente:
     //   - permiso: salida al baño (requiere estar en clase)
     //   - autorizar_salida: salida de la institución (requiere estar dentro)
-    //   - horario: cambio de horario (requiere contexto de clase activa)
+    // NOTA: 'horario' se removió — es una operación de GRUPO (daily_schedule_config);
+    // un cambio de jornada no depende de la presencia de un estudiante individual.
     // Excepciones permitidas para ausentes: consultas, casos activos (sos,
     // situacion_critica, solicitud, daño), citacion, incidente, seguimiento,
     // pedagogica — estas operaciones pueden hacerse sobre estudiantes ausentes.
-    $presenceRequiredActions = ['permiso', 'autorizar_salida', 'horario'];
+    $presenceRequiredActions = ['permiso', 'autorizar_salida'];
     if (in_array($action, $presenceRequiredActions)) {
         $presenceStudentId = $params['student'] ?? $params['student_id'] ?? null;
         if ($presenceStudentId) {
@@ -477,7 +488,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para inasistencia', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para inasistencia']);
                     break;
                 }
 
@@ -494,7 +505,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $target = $studentStmt->fetch(PDO::FETCH_ASSOC);
                 if (!$target) {
                     http_response_code(404);
-                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante']);
                     break;
                 }
 
@@ -526,11 +537,11 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     if ($allMissingPhone) {
                         securityLog('INASISTENCIA_NO_PHONE', "Student:$studentId Guardian:{$target['guardian_id']} has no whatsapp_phone");
                         http_response_code(422);
-                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.', 'debug' => $e->getMessage()]);
+                        echo json_encode(['status' => 'error', 'message' => 'El acudiente principal no tiene número de WhatsApp configurado. Actualice los datos del acudiente.']);
                     } else {
                         securityLog('INASISTENCIA_DELIVERY_FAILED', "Student:$studentId Results:" . json_encode($deliveryResults));
                         http_response_code(500);
-                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.', 'debug' => $e->getMessage()]);
+                        echo json_encode(['status' => 'error', 'message' => 'No se pudo enviar el mensaje. Verifique las credenciales de Twilio.']);
                     }
                     break;
                 }
@@ -548,7 +559,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para citación', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'student_id requerido para citación']);
                     break;
                 }
 
@@ -563,7 +574,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $valStmt->execute([$studentId, $userId]);
                     if (!$valStmt->fetchColumn()) {
                         http_response_code(403);
-                        echo json_encode(['status' => 'error', 'message' => 'No puedes citar a un estudiante que no pertenece a tus grupos.', 'debug' => $e->getMessage()]);
+                        echo json_encode(['status' => 'error', 'message' => 'No puedes citar a un estudiante que no pertenece a tus grupos.']);
                         break;
                     }
                 }
@@ -581,7 +592,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $target = $studentStmt->fetch(PDO::FETCH_ASSOC);
                 if (!$target) {
                     http_response_code(404);
-                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'No se encontró acudiente principal para el estudiante']);
                     break;
                 }
 
@@ -656,27 +667,27 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 if (!$studentId) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Estudiante requerido para permiso', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'Estudiante requerido para permiso']);
                     break;
                 }
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 if ($reason === '') {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Motivo requerido para permiso', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'Motivo requerido para permiso']);
                     break;
                 }
                 $timeStart = trim((string)($params['timeStart'] ?? ''));
                 $timeEnd = trim((string)($params['timeEnd'] ?? ''));
                 if (empty($timeStart) || empty($timeEnd)) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Hora de inicio y hora de fin son obligatorias para generar un permiso', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'Hora de inicio y hora de fin son obligatorias para generar un permiso']);
                     break;
                 }
                 // Validar formato de hora (HH:MM o HH:MM:SS)
                 foreach ([$timeStart, $timeEnd] as $t) {
                     if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $t)) {
                         http_response_code(400);
-                        echo json_encode(['status' => 'error', 'message' => 'Formato de hora inválido. Use HH:MM', 'debug' => $e->getMessage()]);
+                        echo json_encode(['status' => 'error', 'message' => 'Formato de hora inválido. Use HH:MM']);
                         break 2;
                     }
                 }
@@ -685,7 +696,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $stuCheck->execute([$studentId, $schoolId]);
                 if (!$stuCheck->fetchColumn()) {
                     http_response_code(404);
-                    echo json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado o inactivo', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado o inactivo']);
                     break;
                 }
                 // Construir timestamps con zona Bogotá
@@ -695,22 +706,35 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     $returnTs = new DateTime("$bogotaToday $timeEnd", new DateTimeZone('America/Bogota'));
                 } catch (Exception $e) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'Hora inválida', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'Hora inválida']);
                     break;
                 }
                 // Validar que returnTs sea futuro
                 $nowBogota = new DateTime('now', new DateTimeZone('America/Bogota'));
                 if ($returnTs <= $nowBogota) {
                     http_response_code(400);
-                    echo json_encode(['status' => 'error', 'message' => 'La hora de retorno debe ser una hora futura', 'debug' => $e->getMessage()]);
+                    echo json_encode(['status' => 'error', 'message' => 'La hora de retorno debe ser una hora futura']);
                     break;
                 }
-                // Insertar permiso con horas reales
-                $stmt = $conn->prepare("
-                    INSERT INTO class_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, return_time)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                // V-031: resolver el bloque/espacio esperado del estudiante al momento del permiso
+                $schStmt = $conn->prepare("
+                    SELECT sch.schedule_id
+                    FROM schedules sch
+                    JOIN student_group_assignments sga ON sga.group_id = sch.group_id AND sga.active = TRUE
+                    WHERE sga.student_id = ? AND sch.school_id = ?
+                      AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))
+                    ORDER BY sch.start_time
+                    LIMIT 1
                 ");
-                $stmt->execute([$schoolId, $studentId, $userId, $reason, $exitTs->format('Y-m-d H:i:s'), $returnTs->format('Y-m-d H:i:s')]);
+                $schStmt->execute([$studentId, $schoolId]);
+                $permScheduleId = $schStmt->fetchColumn() ?: null;
+
+                // Insertar permiso con horas reales y contexto espacial
+                $stmt = $conn->prepare("
+                    INSERT INTO class_exit_authorizations (school_id, student_id, authorized_by_user_id, authorization_reason, exit_time, return_time, schedule_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$schoolId, $studentId, $userId, $reason, $exitTs->format('Y-m-d H:i:s'), $returnTs->format('Y-m-d H:i:s'), $permScheduleId]);
 
                 // Notificar COORDINADOR vía notificaciones internas
                 $stuMetaStmt = $conn->prepare("
@@ -745,13 +769,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 ");
                 $incStmt->execute([$schoolId, $studentId, $meta]);
 
-                // FIX: Batch INSERT notifications para coordinadores
-                $coordStmt = $conn->prepare("
-                    SELECT user_id FROM users
-                    WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
-                ");
-                $coordStmt->execute([$schoolId]);
-                $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+                // FIX: Batch INSERT notifications — destinatarios vía
+                // school_notification_routes (event_kind PERMISO; default COORDINATOR)
+                $coords = array_map(fn($uid) => ['user_id' => $uid],
+                    nexoRouteUserIds($conn, (string)$schoolId, 'PERMISO', ['COORDINATOR']));
                 if (!empty($coords)) {
                     $rows = [];
                     $notifParams = [];
@@ -901,13 +922,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         securityLog('SALIDA_NO_DEVICE', "No edge device assigned to user $userId for school $schoolId", $userId, $schoolId);
                     }
 
-                    // Notificar coordinadores
-                    $coordStmt = $conn->prepare("
-                        SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COORDINATOR') AND active = TRUE
-                    ");
-                    $coordStmt->execute([$schoolId]);
-                    $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
+                    // Notificar coordinadores — routing configurable (event_kind SALIDA)
+                    $coords = array_map(fn($uid) => ['user_id' => $uid],
+                        nexoRouteUserIds($conn, (string)$schoolId, 'SALIDA', ['COORDINATOR']));
                     if (!empty($coords)) {
                         $rows = [];
                         $nParams = [];
@@ -927,13 +944,10 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
 
-                    // Notificar al RECTOR
-                    $rectStmt = $conn->prepare("
-                        SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
-                    ");
-                    $rectStmt->execute([$schoolId]);
-                    $rects = $rectStmt->fetchAll(PDO::FETCH_ASSOC);
+                    // Notificar al RECTOR — routing configurable (event_kind SALIDA,
+                    // solo si la ruta incluye RECTOR; default: sí)
+                    $rectIds = nexoRouteUserIds($conn, (string)$schoolId, 'SALIDA_RECTOR', ['RECTOR']);
+                    $rects = array_map(fn($uid) => ['user_id' => $uid], $rectIds);
                     if (!empty($rects)) {
                         $rows = [];
                         $rParams = [];
@@ -1007,10 +1021,152 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 ]);
                 break;
 
+            // F-02: Registro manual de presencia — contingencia cuando la
+            // biometría falla o el estudiante está exento. Genera un evento
+            // INGRESO_MANUAL (cuenta como presencia: matchea 'INGRESO_%') y un
+            // incidente REGISTRO_MANUAL con trazabilidad del actor + motivo.
+            case 'registro_manual':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                $reason    = trim((string)($params['reason'] ?? $params['message'] ?? ''));
+                if (!$studentId) {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => 'Debe seleccionar un estudiante']));
+                }
+                if ($reason === '') {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => 'El motivo del registro manual es obligatorio']));
+                }
+
+                $stuStmt = $conn->prepare("
+                    SELECT first_name, last_name, document_number, biometric_exempt
+                    FROM students
+                    WHERE student_id = ? AND school_id = ? AND active = TRUE AND deleted_at IS NULL
+                ");
+                $stuStmt->execute([$studentId, $schoolId]);
+                $stuRow = $stuStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$stuRow) {
+                    http_response_code(404);
+                    exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+                }
+                $studentName = trim($stuRow['first_name'] . ' ' . $stuRow['last_name']);
+
+                // Evitar doble registro: si ya tiene cualquier INGRESO_% hoy, ya está presente
+                $dupStmt = $conn->prepare("
+                    SELECT 1 FROM biometric_events
+                    WHERE school_id = ? AND student_id = ?
+                      AND event_timestamp >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                      AND event_timestamp < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                      AND event_type LIKE 'INGRESO_%'
+                    LIMIT 1
+                ");
+                $dupStmt->execute([$schoolId, $studentId]);
+                if ($dupStmt->fetchColumn()) {
+                    http_response_code(409);
+                    exit(json_encode(['status' => 'error', 'message' => "{$studentName} ya tiene un ingreso registrado hoy"]));
+                }
+
+                // Punto de registro: dispositivo asignado al actor; si no tiene,
+                // el nodo activo más reciente de la escuela. device_id es NOT NULL.
+                $deviceStmt = $conn->prepare("
+                    SELECT device_id, device_name FROM edge_devices
+                    WHERE school_id = ? AND active = TRUE
+                    ORDER BY (assigned_user_id = ?) DESC, last_ping DESC NULLS LAST
+                    LIMIT 1
+                ");
+                $deviceStmt->execute([$schoolId, $userId]);
+                $devRow = $deviceStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$devRow) {
+                    http_response_code(422);
+                    exit(json_encode(['status' => 'error', 'message' => 'No hay ningún nodo activo en la institución para asociar el registro manual']));
+                }
+
+                $meta = json_encode([
+                    'source'       => 'manual',
+                    'reason'       => $reason,
+                    'registered_by' => $userId,
+                    'registered_by_name' => trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')),
+                    'student_name' => $studentName,
+                    'biometric_exempt' => (bool)($stuRow['biometric_exempt'] ?? false),
+                ], JSON_UNESCAPED_UNICODE);
+
+                ctRegisterManualPresence($conn, $schoolId, $studentId, $devRow['device_id'], $meta);
+                // Limpiar estado de registro manual pendiente (doc §9.6)
+                $conn->prepare("UPDATE students SET manual_pending_until = NULL WHERE student_id = ? AND school_id = ?")
+                     ->execute([$studentId, $schoolId]);
+
+                logUserCommand($conn, $schoolId, $userId, $action, [
+                    'student_id' => $studentId, 'student_name' => $studentName, 'reason' => $reason,
+                ]);
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => "Presencia manual registrada para {$studentName} (nodo: {$devRow['device_name']})",
+                    'data'    => ['action' => $action, 'student_id' => $studentId],
+                ]);
+                break;
+
+            // Doc §9.6: marca al estudiante como "registro manual pendiente" —
+            // suspende inasistencia/evasión mientras se gestiona el registro.
+            case 'registro_manual_pendiente':
+                $studentId = $params['student'] ?? $params['student_id'] ?? null;
+                $minutes   = max(5, min(480, (int)($params['minutes'] ?? 60)));
+                $reason    = trim((string)($params['reason'] ?? ''));
+                if (!$studentId) {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => 'Debe seleccionar un estudiante']));
+                }
+                $mpStmt = $conn->prepare("
+                    UPDATE students
+                    SET manual_pending_until = NOW() + make_interval(mins => ?),
+                        updated_at = NOW()
+                    WHERE student_id = ? AND school_id = ? AND active = TRUE AND deleted_at IS NULL
+                ");
+                $mpStmt->execute([$minutes, $studentId, $schoolId]);
+                if ($mpStmt->rowCount() === 0) {
+                    http_response_code(404);
+                    exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+                }
+                logUserCommand($conn, $schoolId, $userId, $action, [
+                    'student_id' => $studentId, 'minutes' => $minutes, 'reason' => $reason,
+                ]);
+                echo json_encode([
+                    'status'  => 'ok',
+                    'message' => "Registro manual pendiente marcado por {$minutes} minutos",
+                    'data'    => ['action' => $action, 'student_id' => $studentId, 'pending_minutes' => $minutes],
+                ]);
+                break;
+
             case 'pedagogica':
                 $groupName   = trim((string)($params['group'] ?? ''));
                 $purpose     = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
                 $destination = trim((string)($params['destination'] ?? $purpose));
+                $tripReturn  = trim((string)($params['return_time'] ?? $params['end_time'] ?? ''));
+
+                // FIX Bloque C: persistir la autorización para que los detectores
+                // excluyan a estos estudiantes (ausencia/evasión) durante la salida.
+                // Antes solo se enviaba WhatsApp — los detectores seguían marcando
+                // inasistencia a todo el grupo en salida pedagógica.
+                if ($groupName) {
+                    $tripReturnExpr = $tripReturn !== ''
+                        ? "?::timestamptz"
+                        : "((NOW() AT TIME ZONE 'America/Bogota')::date + ssc.exit_time)::timestamptz";
+                    $authIns = $conn->prepare("
+                        INSERT INTO pedagogical_trip_authorizations
+                            (school_id, student_id, authorized_by_user_id, destination, departure_time, return_time, purpose, metadata_json)
+                        SELECT ag.school_id, sga.student_id, ?, ?, NOW(), {$tripReturnExpr}, ?, ?::jsonb
+                        FROM student_group_assignments sga
+                        JOIN academic_groups ag ON ag.group_id = sga.group_id
+                        LEFT JOIN school_schedule_config ssc ON ssc.school_id = ag.school_id AND ssc.work_shift = ag.work_shift
+                        WHERE ag.group_name = ? AND ag.school_id = ? AND sga.active = TRUE
+                        ON CONFLICT DO NOTHING
+                    ");
+                    $pa = [$userId, $destination];
+                    if ($tripReturn !== '') $pa[] = $tripReturn;
+                    $pa[] = $purpose;
+                    $pa[] = json_encode(['group_name' => $groupName, 'action' => 'pedagogica'], JSON_UNESCAPED_UNICODE);
+                    $pa[] = $groupName;
+                    $pa[] = $schoolId;
+                    $authIns->execute($pa);
+                }
 
                 if ($groupName) {
                     $guardStmt = $conn->prepare("
@@ -1042,13 +1198,9 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 ], JSON_UNESCAPED_UNICODE);
 
                 $pedagNotifyUsers = [$userId]; // El coordinador que la ejecutó
-                $rectStmt = $conn->prepare("
-                    SELECT user_id FROM users
-                    WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
-                ");
-                $rectStmt->execute([$schoolId]);
-                while ($rRow = $rectStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $pedagNotifyUsers[] = $rRow['user_id'];
+                // routing configurable (event_kind PEDAGOGICA; default RECTOR)
+                foreach (nexoRouteUserIds($conn, (string)$schoolId, 'PEDAGOGICA', ['RECTOR']) as $rid) {
+                    $pedagNotifyUsers[] = $rid;
                 }
                 $pedagMsg = "Se programó una salida pedagógica" . ($groupName ? " para el grupo {$groupName}" : '') . ". Ver detalles.";
                 $rows = [];
@@ -1104,12 +1256,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         'action' => 'iniciar_seguimiento',
                     ], JSON_UNESCAPED_UNICODE);
 
-                    $psicoStmt = $conn->prepare("
-                        SELECT user_id FROM users
-                        WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'COUNSELOR') AND active = TRUE
-                    ");
-                    $psicoStmt->execute([$schoolId]);
-                    $psicos = $psicoStmt->fetchAll(PDO::FETCH_ASSOC);
+                    $psicos = array_map(fn($uid) => ['user_id' => $uid],
+                        nexoRouteUserIds($conn, (string)$schoolId, 'SEGUIMIENTO', ['COUNSELOR']));
                     if (!empty($psicos)) {
                         $rows = [];
                         $notifParams = [];
@@ -1131,13 +1279,8 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                     // Notificar también al RECTOR y al usuario que solicitó el seguimiento
                     $segNotifyUsers = [$userId]; // El coordinador que lo pidió
                     if ($role !== 'RECTOR') {
-                        $rectStmt = $conn->prepare("
-                            SELECT user_id FROM users
-                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = 'RECTOR') AND active = TRUE
-                        ");
-                        $rectStmt->execute([$schoolId]);
-                        while ($rRow = $rectStmt->fetch(PDO::FETCH_ASSOC)) {
-                            $segNotifyUsers[] = $rRow['user_id'];
+                        foreach (nexoRouteUserIds($conn, (string)$schoolId, 'SEGUIMIENTO_RECTOR', ['RECTOR']) as $rid) {
+                            $segNotifyUsers[] = $rid;
                         }
                     }
                     $segMsg = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderRoleDisplay} {$senderName}. Ver detalles.";
@@ -1281,34 +1424,55 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                 $checkStmt->execute([$schoolId]);
                 $existingCount = (int)$checkStmt->fetchColumn();
 
+                // FIX Bloque C: extender_bloque también debe suprimir las
+                // transiciones de bloque dentro de la ventana extendida (igual
+                // que fusionar_bloque → metadata merged=true + entry_time).
+                // Sin esto, el grupo quedaba marcado como evasión/ausente al
+                // no pasar al siguiente salón aunque el docente lo retuvo
+                // legítimamente (documento §4.5).
+                $extMeta = json_encode(['action' => 'extender_bloque', 'merged' => true], JSON_UNESCAPED_UNICODE);
                 if ($existingCount > 0) {
                     // UPDATE existing configs for today
                     if ($groupName !== '') {
                         // VF-021: Filtrar por group_name si se especifica
                         $updStmt = $conn->prepare("
-                            UPDATE daily_schedule_config
-                            SET expected_exit_time = ?::time
-                            WHERE school_id = ? AND config_date = {$todayDate}
-                              AND group_id IN (
+                            UPDATE daily_schedule_config dsc
+                            SET expected_exit_time = ?::time,
+                                expected_entry_time = COALESCE(dsc.expected_entry_time,
+                                    (SELECT MIN(start_time) FROM schedules sch
+                                      WHERE sch.group_id = dsc.group_id AND sch.school_id = dsc.school_id
+                                        AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota')))),
+                                metadata_json = COALESCE(dsc.metadata_json, '{}'::jsonb) || ?::jsonb
+                            WHERE dsc.school_id = ? AND dsc.config_date = {$todayDate}
+                              AND dsc.group_id IN (
                                   SELECT group_id FROM academic_groups
                                   WHERE school_id = ? AND group_name = ?
                               )
                         ");
-                        $updStmt->execute([$newExitTime, $schoolId, $schoolId, $groupName]);
+                        $updStmt->execute([$newExitTime, $extMeta, $schoolId, $schoolId, $groupName]);
                     } else {
                         $updStmt = $conn->prepare("
-                            UPDATE daily_schedule_config
-                            SET expected_exit_time = ?::time
-                            WHERE school_id = ? AND config_date = {$todayDate}
+                            UPDATE daily_schedule_config dsc
+                            SET expected_exit_time = ?::time,
+                                expected_entry_time = COALESCE(dsc.expected_entry_time,
+                                    (SELECT MIN(start_time) FROM schedules sch
+                                      WHERE sch.group_id = dsc.group_id AND sch.school_id = dsc.school_id
+                                        AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota')))),
+                                metadata_json = COALESCE(dsc.metadata_json, '{}'::jsonb) || ?::jsonb
+                            WHERE dsc.school_id = ? AND dsc.config_date = {$todayDate}
                         ");
-                        $updStmt->execute([$newExitTime, $schoolId]);
+                        $updStmt->execute([$newExitTime, $extMeta, $schoolId]);
                     }
                 } else {
-                    // INSERT para todos los grupos activos de la institución
+                    // INSERT para todos los grupos activos de la institución —
+                    // entry_time = primer bloque del día para cubrir la ventana
                     if ($groupName !== '') {
                         $insStmt = $conn->prepare("
-                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
-                            SELECT ?, ag.group_id, {$todayDate}, TRUE, NULL, ?::time, ?
+                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id, metadata_json)
+                            SELECT ?, ag.group_id, {$todayDate}, TRUE,
+                                   (SELECT MIN(start_time) FROM schedules sch WHERE sch.group_id = ag.group_id AND sch.school_id = ag.school_id
+                                     AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))),
+                                   ?::time, ?, ?::jsonb
                             FROM academic_groups ag
                             WHERE ag.school_id = ?
                               AND ag.group_name = ?
@@ -1317,11 +1481,14 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                                   WHERE sga.group_id = ag.group_id AND sga.active = TRUE
                               )
                         ");
-                        $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $schoolId, $groupName]);
+                        $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $extMeta, $schoolId, $groupName]);
                     } else {
                         $insStmt = $conn->prepare("
-                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id)
-                            SELECT ?, ag.group_id, {$todayDate}, TRUE, NULL, ?::time, ?
+                            INSERT INTO daily_schedule_config (school_id, group_id, config_date, has_classes, expected_entry_time, expected_exit_time, created_by_user_id, metadata_json)
+                            SELECT ?, ag.group_id, {$todayDate}, TRUE,
+                                   (SELECT MIN(start_time) FROM schedules sch WHERE sch.group_id = ag.group_id AND sch.school_id = ag.school_id
+                                     AND sch.day_of_week = EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))),
+                                   ?::time, ?, ?::jsonb
                             FROM academic_groups ag
                             WHERE ag.school_id = ?
                               AND EXISTS (
@@ -1329,7 +1496,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                                   WHERE sga.group_id = ag.group_id AND sga.active = TRUE
                               )
                         ");
-                        $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $schoolId]);
+                        $insStmt->execute([$schoolId, $newExitTime, $authUser['id'], $extMeta, $schoolId]);
                     }
                 }
 
@@ -1365,7 +1532,17 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
 
                 if ($action === 'horario') {
                     // Persistir configuración de jornada (ScheduleTask) en daily_schedule_config
+                    // V-030/V-045: cada grupo afectado se comunica a sus acudientes.
                     $changes = $params['changes'] ?? [];
+                    // Camino simple (Operation.jsx): un solo grupo + hora de salida opcional
+                    if (empty($changes) && !empty($params['group'])) {
+                        $changes = [[
+                            'group'      => $params['group'],
+                            'no_classes' => !empty($params['no_classes']),
+                            'entry_time' => $params['entry_time'] ?? null,
+                            'exit_time'  => $params['exit_time'] ?? $params['time'] ?? null,
+                        ]];
+                    }
                     foreach ($changes as $change) {
                         $groupName = $change['group'] ?? '';
                         $noClasses = $change['no_classes'] ?? false;
@@ -1385,6 +1562,29 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                             DO UPDATE SET has_classes = EXCLUDED.has_classes, expected_entry_time = EXCLUDED.expected_entry_time, expected_exit_time = EXCLUDED.expected_exit_time
                         ");
                         $dscStmt->execute([$schoolId, $groupId, !$noClasses, $entryTime, $exitTime, $authUser['id']]);
+
+                        // Comunicar la modificación de jornada a los acudientes del grupo
+                        $guardStmt = $conn->prepare("
+                            SELECT DISTINCT g.whatsapp_phone, g.guardian_id
+                            FROM guardians g
+                            JOIN guardian_student_relationships gsr ON g.guardian_id = gsr.guardian_id
+                            JOIN student_group_assignments sga ON gsr.student_id = sga.student_id AND sga.active = TRUE
+                            WHERE sga.group_id = ?
+                        ");
+                        $guardStmt->execute([$groupId]);
+                        if ($noClasses) {
+                            $horarioMsg = "📅 *NEXO — Cambio de jornada*\n\nGrupo: *{$groupName}*\nHoy *no habrá clases* para este grupo.\nMotivo: {$reason}";
+                        } else {
+                            $detalle = [];
+                            if ($entryTime) $detalle[] = "entrada {$entryTime}";
+                            if ($exitTime)  $detalle[] = "salida {$exitTime}";
+                            $horarioMsg = "📅 *NEXO — Cambio de jornada*\n\nGrupo: *{$groupName}*\n" . ($detalle ? "Nuevo horario de hoy: " . implode(' · ', $detalle) . "\n" : '') . "Motivo: {$reason}";
+                        }
+                        while ($gRow = $guardStmt->fetch(PDO::FETCH_ASSOC)) {
+                            if (!empty($gRow['whatsapp_phone'])) {
+                                enqueueTwilioJob($gRow['whatsapp_phone'], $horarioMsg, $schoolId, null, $gRow['guardian_id'], $userId, 'HORARIO');
+                            }
+                        }
                     }
                 }
 
@@ -1470,16 +1670,17 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
                         }
                     }
                     if (empty($targets) && !$studentId) {
-                        $targetRole = 'COORDINATOR';
                         $msg = "⚠️ *NEXO — Alerta institucional*\n\nTipo: *INCIDENTE*\nReportado por: {$role}\nDetalle: {$reason}";
-                        $fStmt = $conn->prepare("
-                            SELECT phone FROM users
-                            WHERE school_id = ? AND role_id IN (SELECT role_id FROM roles WHERE UPPER(role_name) = ?)
-                        ");
-                        $fStmt->execute([$schoolId, $targetRole]);
-                        while ($fRow = $fStmt->fetch(PDO::FETCH_ASSOC)) {
-                            if (!empty($fRow['phone'])) {
-                                enqueueTwilioJob($fRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                        // routing configurable (event_kind INCIDENTE; default COORDINATOR)
+                        $incidentUids = nexoRouteUserIds($conn, (string)$schoolId, 'INCIDENTE', ['COORDINATOR']);
+                        if (!empty($incidentUids)) {
+                            $ph = implode(',', array_fill(0, count($incidentUids), '?'));
+                            $fStmt = $conn->prepare("SELECT phone FROM users WHERE user_id IN ($ph)");
+                            $fStmt->execute($incidentUids);
+                            while ($fRow = $fStmt->fetch(PDO::FETCH_ASSOC)) {
+                                if (!empty($fRow['phone'])) {
+                                    enqueueTwilioJob($fRow['phone'], $msg, $schoolId, null, null, $userId, 'NOTIFY_ROLE');
+                                }
                             }
                         }
                     }
@@ -1594,7 +1795,7 @@ if (strpos($cleanPath, '/operations/') === 0 || (isset($input['action']) && $inp
     } catch (Exception $e) {
         securityLog('OPERATION_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error en la operación', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error en la operación']);
     }
     exit;
 }

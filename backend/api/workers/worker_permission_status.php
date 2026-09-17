@@ -25,6 +25,7 @@
 declare(ticks=1);
 require_once __DIR__ . '/../core/db.php';
 require_once __DIR__ . '/../core/redis.php';
+require_once __DIR__ . '/../lib/notify_routing.php';
 
 $shutdown = false;
 pcntl_signal(SIGTERM, function() use (&$shutdown) { $shutdown = true; });
@@ -48,13 +49,15 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
     $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
     $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
-    // Obtener todos los permisos ACTIVE de esta escuela
+    // Obtener todos los permisos ACTIVE de esta escuela (con contexto espacial V-031)
     $stmt = $conn->prepare("
-        SELECT authorization_id, student_id, exit_time, return_time
-        FROM class_exit_authorizations
-        WHERE school_id = ?
-          AND status = 'ACTIVE'
-        ORDER BY exit_time ASC
+        SELECT cea.authorization_id, cea.student_id, cea.exit_time, cea.return_time,
+               cea.schedule_id, sch.classroom_id AS expected_classroom_id
+        FROM class_exit_authorizations cea
+        LEFT JOIN schedules sch ON sch.schedule_id = cea.schedule_id
+        WHERE cea.school_id = ?
+          AND cea.status = 'ACTIVE'
+        ORDER BY cea.exit_time ASC
     ");
     $stmt->execute([$schoolId]);
     $permissions = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -64,30 +67,59 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
         $studentId = $perm['student_id'];
         $exitTime  = $perm['exit_time'];
 
-        // 1. Verificar si hay un evento biométrico INGRESO_% después de exit_time
+        // 1. Buscar el evento de retorno (INGRESO_% posterior a exit_time).
+        //    V-063: si el permiso conoce el aula esperada, el retorno debe ocurrir
+        //    en ese espacio — no vale identificarse en cualquier nodo.
+        $expectedClassroom = $perm['expected_classroom_id'] ?? null;
         $returnCheck = $conn->prepare("
-            SELECT 1 FROM biometric_events
+            SELECT event_id, event_timestamp, classroom_id
+            FROM biometric_events
             WHERE school_id = ?
               AND student_id = ?
               AND event_timestamp > ?
               AND event_type LIKE 'INGRESO_%'
-            LIMIT 1
+            ORDER BY event_timestamp ASC
         ");
         $returnCheck->execute([$schoolId, $studentId, $exitTime]);
-        $hasReturned = (bool)$returnCheck->fetchColumn();
+        $returnEvent = null;
+        $spaceValidated = null; // null = no verificable (sin contexto espacial)
+        while ($ev = $returnCheck->fetch(PDO::FETCH_ASSOC)) {
+            if ($expectedClassroom === null) {
+                $returnEvent = $ev;
+                $spaceValidated = null;
+                break;
+            }
+            if ($ev['classroom_id'] !== null && $ev['classroom_id'] === $expectedClassroom) {
+                $returnEvent = $ev;
+                $spaceValidated = true;
+                break;
+            }
+            // Evento en espacio distinto al esperado: no cuenta como retorno,
+            // pero se registra para trazabilidad.
+            logE('RETURN_WRONG_SPACE', "auth=$authId student=$studentId event_classroom=" . ($ev['classroom_id'] ?? 'null') . " expected=$expectedClassroom");
+        }
 
-        if ($hasReturned) {
-            // El estudiante regresó: marcar como COMPLETED
+        if ($returnEvent) {
+            // El estudiante regresó: marcar como COMPLETED con hora real de retorno
             try {
                 $upd = $conn->prepare("
                     UPDATE class_exit_authorizations
-                    SET status = 'COMPLETED'
+                    SET status = 'COMPLETED',
+                        actual_return_time = ?,
+                        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || ?::jsonb
                     WHERE authorization_id = ? AND status = 'ACTIVE'
                 ");
-                $upd->execute([$authId]);
+                $upd->execute([
+                    $returnEvent['event_timestamp'],
+                    json_encode([
+                        'return_event_id' => $returnEvent['event_id'],
+                        'return_space_validated' => $spaceValidated,
+                    ]),
+                    $authId,
+                ]);
                 if ($upd->rowCount() > 0) {
                     $updated++;
-                    logE('COMPLETED', "auth=$authId student=$studentId school=$schoolId");
+                    logE('COMPLETED', "auth=$authId student=$studentId school=$schoolId space_validated=" . var_export($spaceValidated, true));
                 }
             } catch (Exception $e) {
                 logE('UPDATE_COMPLETED_FAIL', "auth=$authId error=" . $e->getMessage());
@@ -116,6 +148,24 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
                     if ($upd->rowCount() > 0) {
                         $updated++;
                         logE('EXPIRED', "auth=$authId student=$studentId school=$schoolId return_time=" . $perm['return_time']);
+
+                        // V-041: notificar a los destinatarios configurados
+                        // (school_notification_routes, event_kind PERMISSION_EXPIRED;
+                        // default COORDINATOR+RECTOR)
+                        try {
+                            foreach (nexoRouteUserIds($conn, (string)$schoolId, 'PERMISSION_EXPIRED') as $uid) {
+                                $conn->prepare("
+                                    INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, dedup_key)
+                                    VALUES (?, ?, 'Permiso vencido', ?, 'ALERT', ?::jsonb, ?)
+                                    ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING
+                                ")->execute([$schoolId, $uid,
+                                    "El permiso del estudiante venció sin registro de retorno.",
+                                    json_encode(['authorization_id' => $authId, 'student_id' => $studentId, 'event' => 'PERMISSION_EXPIRED']),
+                                    hash('sha256', "perm_expired|$authId")]);
+                            }
+                        } catch (Exception $ne) {
+                            logE('EXPIRED_NOTIFY_FAIL', "auth=$authId error=" . $ne->getMessage());
+                        }
                     }
                 } catch (Exception $e) {
                     logE('UPDATE_EXPIRED_FAIL', "auth=$authId error=" . $e->getMessage());

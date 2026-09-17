@@ -69,7 +69,7 @@ describe('devicesApi', () => {
       await devicesApi.requestEnrollment('dev1', { doc: '123', nombre: 'Juan', tel: '555' });
       expect(client.post).toHaveBeenCalledWith('/devices/command/dev1', {
         command: 'ENROLL_REQUEST',
-        payload: { doc: '123', nombre: 'Juan', tel: '555' },
+        payload: { doc: '123', nombre: 'Juan', tel: '555', finger_slot: 1 },
       });
     });
   });

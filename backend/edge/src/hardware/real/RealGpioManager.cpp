@@ -41,6 +41,13 @@ RealGpioManager::RealGpioManager()
         LOG_ERROR("[GPIO] Failed to request buzzer line 22");
         m_buzzer = nullptr;
     }
+
+    // V-310: ventilador en GPIO 23 (activación térmica por software)
+    m_fan = gpiod_chip_get_line(m_chip, 23);
+    if (m_fan && gpiod_line_request_output(m_fan, "NEXO-FAN", 0) != 0) {
+        LOG_ERROR("[GPIO] Failed to request fan line 23");
+        m_fan = nullptr;
+    }
 }
 
 RealGpioManager::~RealGpioManager() {
@@ -68,4 +75,57 @@ void RealGpioManager::notifyError() {
 
 void RealGpioManager::notifyWarning() {
     beep(100);
+}
+
+// V-515: patrones por estado energético
+//   0=MAINS        → verde fijo breve (confirmación visual de red eléctrica)
+//   1=BATTERY      → verde+rojo alternos (operando en respaldo)
+//   2=LOW_BATTERY  → rojo parpadeante + beep corto
+//   3=CRITICAL     → rojo fijo + beeps largos (shutdown inminente)
+void RealGpioManager::notifyPowerState(int state) {
+    switch (state) {
+        case 0: // MAINS
+            if (m_ledRed) gpiod_line_set_value(m_ledRed, 0);
+            if (m_ledGreen) {
+                gpiod_line_set_value(m_ledGreen, 1);
+                std::this_thread::sleep_for(std::chrono::milliseconds(400));
+                gpiod_line_set_value(m_ledGreen, 0);
+            }
+            break;
+        case 1: // BATTERY
+            for (int i = 0; i < 3; ++i) {
+                if (m_ledGreen) gpiod_line_set_value(m_ledGreen, 1);
+                if (m_ledRed) gpiod_line_set_value(m_ledRed, 0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                if (m_ledGreen) gpiod_line_set_value(m_ledGreen, 0);
+                if (m_ledRed) gpiod_line_set_value(m_ledRed, 1);
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            }
+            if (m_ledRed) gpiod_line_set_value(m_ledRed, 0);
+            break;
+        case 2: // LOW_BATTERY
+            if (m_ledRed) {
+                for (int i = 0; i < 4; ++i) {
+                    gpiod_line_set_value(m_ledRed, 1);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+                    gpiod_line_set_value(m_ledRed, 0);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+                }
+            }
+            beep(150);
+            break;
+        case 3: // CRITICAL
+            if (m_ledRed) gpiod_line_set_value(m_ledRed, 1);
+            beep(800); beep(800);
+            if (m_ledRed) gpiod_line_set_value(m_ledRed, 0);
+            break;
+        default:
+            break;
+    }
+}
+
+// V-310: ventilación activa controlada por software (histéresis la aplica main)
+void RealGpioManager::setFan(bool on) {
+    if (!m_fan) return;
+    gpiod_line_set_value(m_fan, on ? 1 : 0);
 }

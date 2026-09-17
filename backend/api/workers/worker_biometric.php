@@ -58,6 +58,7 @@
 declare(ticks=1);
 require_once __DIR__ . '/../core/db.php';
 require_once __DIR__ . '/../core/redis.php';
+require_once __DIR__ . '/../lib/attendance_reconcile.php';
 
 // Configurar rol de sistema para workers.
 // Nota: con PgBouncer transaction pooling, set_config(..., false) se pierde
@@ -239,15 +240,57 @@ function processJob(array $job, PDO $conn): bool {
                     ? json_encode($permisoMetadata, JSON_UNESCAPED_UNICODE)
                     : null;
 
+                // ── F-01b: resolución espacial — dispositivo→grupo→schedule del bloque actual ──
+                // edge_devices.group_id → schedules(group_id, day_of_week, ventana horaria)
+                // → classroom_id + schedule_id del evento. Sin grupo o sin schedule → NULLs
+                // (comportamiento degradado, no bloqueante).
+                $classroomId = null; $scheduleId = null;
+                try {
+                    $spatialStmt = $conn->prepare("
+                        SELECT sch.schedule_id, sch.classroom_id AS scheduled_classroom,
+                               ed.classroom_id AS device_classroom
+                        FROM edge_devices ed
+                        LEFT JOIN schedules sch
+                          ON sch.group_id = ed.group_id
+                         AND sch.day_of_week = EXTRACT(ISODOW FROM (to_timestamp(?) AT TIME ZONE 'America/Bogota'))::int
+                         AND (to_timestamp(?) AT TIME ZONE 'America/Bogota')::time BETWEEN sch.start_time AND sch.end_time
+                        WHERE ed.device_id = ?::uuid
+                        LIMIT 1
+                    ");
+                    $spatialStmt->execute([$capturedAt, $capturedAt, $deviceId]);
+                    $spatial = $spatialStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($spatial) {
+                        $classroomId = $spatial['scheduled_classroom'] ?? null;
+                        $scheduleId = $spatial['schedule_id'] ?? null;
+                        // F-01c: enforcement — aula del dispositivo ≠ aula programada → wrong_classroom
+                        if (!empty($spatial['device_classroom']) && !empty($spatial['scheduled_classroom'])
+                            && $spatial['device_classroom'] !== $spatial['scheduled_classroom']) {
+                            $flagStmt = $conn->prepare("SELECT spatial_enforcement FROM schools WHERE school_id = ?");
+                            $flagStmt->execute([$instId]);
+                            if ($flagStmt->fetchColumn()) {
+                                $meta = $permisoMetadata ?? [];
+                                $meta['wrong_classroom'] = true;
+                                $meta['device_classroom'] = $spatial['device_classroom'];
+                                $meta['scheduled_classroom'] = $spatial['scheduled_classroom'];
+                                $metadataJson = json_encode($meta, JSON_UNESCAPED_UNICODE);
+                                error_log("[SPATIAL] wrong_classroom: device={$deviceId} student={$studentId}");
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    // Resolución espacial nunca debe tumbar el ingest del evento
+                    error_log("[SPATIAL] resolución falló (no bloqueante): " . $e->getMessage());
+                }
+
                 $stmt = $conn->prepare(
-                    "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,event_type,event_result,event_timestamp,event_fingerprint,metadata_json)
+                    "INSERT INTO biometric_events(event_id,school_id,student_id,device_id,classroom_id,schedule_id,event_type,event_result,event_timestamp,event_fingerprint,metadata_json)
                      SELECT uuid_generate_v4(),school_id,student_id,
-                            ?,
+                            ?,?::uuid,?::uuid,
                             ?,'PROCESSED',to_timestamp(?),?,?::jsonb
                      FROM students WHERE document_number = ? AND school_id = ? LIMIT 1
                      ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                 );
-                $stmt->execute([$deviceId, $evt, $capturedAt, $fingerprint, $metadataJson, $doc, $instId]);
+                $stmt->execute([$deviceId, $classroomId, $scheduleId, $evt, $capturedAt, $fingerprint, $metadataJson, $doc, $instId]);
                 $inserted = $stmt->rowCount() > 0;
 
                 // Si el evento es un INGRESO y el estudiante tenía una EVASION_INTERNA
@@ -260,8 +303,8 @@ function processJob(array $job, PDO $conn): bool {
                             SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || '{\"returned_to_class\": true}'::jsonb
                             WHERE school_id = ? AND student_id = ?
                               AND incident_type = 'EVASION_INTERNA'
-                              AND detected_at >= (NOW() AT TIME ZONE 'America/Bogota')::date
-                              AND detected_at < ((NOW() AT TIME ZONE 'America/Bogota')::date + INTERVAL '1 day')
+                              AND (detected_at AT TIME ZONE 'America/Bogota')::date
+                                  = (NOW() AT TIME ZONE 'America/Bogota')::date
                               AND (metadata_json->>'returned_to_class' IS DISTINCT FROM 'true')
                         ");
                         $evasionClearStmt->execute([$instId, $studentId]);
@@ -272,19 +315,52 @@ function processJob(array $job, PDO $conn): bool {
                     } catch (Exception $evasionErr) {
                         error_log("[BIOMETRIC] Evasion clear failed: " . $evasionErr->getMessage());
                     }
+
+                    // V-530/V-531/V-574: un INGRESO tardío reconcilia la INASISTENCIA
+                    // abierta del día — la ausencia deja de tratarse como hecho y se
+                    // genera alerta de reaparición con el espacio donde apareció.
+                    try {
+                        nexoReconcileAbsence($conn, (string)$instId, $studentId, $evt, $classroomId, $scheduleId);
+                    } catch (Exception $recErr) {
+                        error_log("[BIOMETRIC] Absence reconciliation failed: " . $recErr->getMessage());
+                    }
+
+                    // Un INGRESO_* posterior a una salida con retorno esperado cierra
+                    // la autorización: registra actual_return_time real del retorno.
+                    try {
+                        $returnStmt = $conn->prepare("
+                            UPDATE school_exit_authorizations
+                            SET status = 'COMPLETED', actual_return_time = NOW()
+                            WHERE school_id = ? AND student_id = ?
+                              AND status = 'APPROVED'
+                              AND expected_return_time IS NOT NULL
+                              AND actual_return_time IS NULL
+                              AND (exit_time AT TIME ZONE 'America/Bogota')::date
+                                  = (NOW() AT TIME ZONE 'America/Bogota')::date
+                        ");
+                        $returnStmt->execute([$instId, $studentId]);
+                        if ($returnStmt->rowCount() > 0) {
+                            error_log("[BIOMETRIC] School exit return recorded for student {$studentId}");
+                        }
+                    } catch (Exception $retErr) {
+                        error_log("[BIOMETRIC] School exit return update failed: " . $retErr->getMessage());
+                    }
                 }
 
                 // Si el evento es SALIDA_AUTORIZADA, completar la autorización
                 // pendiente en school_exit_authorizations. El estudiante validó
                 // su huella en el sensor de coordinación y sale de la institución.
+                // actual_return_time NO se escribe aquí: corresponde al retorno real
+                // (un INGRESO_* posterior). Si no hay retorno esperado → COMPLETED.
                 if ($inserted && strpos($evt, 'SALIDA_AUTORIZADA') !== false && $studentId) {
                     try {
                         $completeStmt = $conn->prepare("
                             UPDATE school_exit_authorizations
-                            SET status = 'COMPLETED', actual_return_time = NOW()
+                            SET status = CASE WHEN expected_return_time IS NOT NULL THEN 'APPROVED' ELSE 'COMPLETED' END
                             WHERE school_id = ? AND student_id = ?
                               AND status = 'PENDING_FINGERPRINT'
-                              AND exit_time >= (NOW() AT TIME ZONE 'America/Bogota')::date
+                              AND (exit_time AT TIME ZONE 'America/Bogota')::date
+                                  = (NOW() AT TIME ZONE 'America/Bogota')::date
                         ");
                         $completeStmt->execute([$instId, $studentId]);
                         $completed = $completeStmt->rowCount();
@@ -436,17 +512,29 @@ function processJob(array $job, PDO $conn): bool {
 
                     if (!$studentExists) {
                         logW('UNKNOWN_STUDENT', "doc=$doc evt=$evt school=$instId device=$deviceId — estudiante no existe en BD");
-                        // Registrar como incidente de seguridad para trazabilidad
+                        // Incidente de seguridad para trazabilidad — dedup por
+                        // documento (1/hora): un lector con doc inválido repetido
+                        // no debe inundar security_incidents.
                         try {
-                            $secStmt = $conn->prepare(
-                                "INSERT INTO security_incidents (incident_id, school_id, incident_type, severity_level, description, detected_at, metadata_json)
-                                 VALUES (uuid_generate_v4(), ?, 'UNKNOWN_STUDENT', 'WARNING', ?, NOW(), ?::jsonb)"
+                            $dupStmt = $conn->prepare(
+                                "SELECT 1 FROM security_incidents
+                                 WHERE school_id = ? AND incident_type = 'UNKNOWN_STUDENT'
+                                   AND metadata_json->>'document' = ?
+                                   AND detected_at > NOW() - INTERVAL '1 hour'
+                                 LIMIT 1"
                             );
-                            $secStmt->execute([
-                                $instId,
-                                "Evento biométrico recibido para documento no registrado: $doc",
-                                json_encode(['document' => $doc, 'event_type' => $evt, 'device_id' => $deviceId, 'captured_at' => $capturedAt])
-                            ]);
+                            $dupStmt->execute([$instId, $doc]);
+                            if (!$dupStmt->fetchColumn()) {
+                                $secStmt = $conn->prepare(
+                                    "INSERT INTO security_incidents (incident_id, school_id, incident_type, severity_level, description, detected_at, metadata_json)
+                                     VALUES (uuid_generate_v4(), ?, 'UNKNOWN_STUDENT', 'WARNING', ?, NOW(), ?::jsonb)"
+                                );
+                                $secStmt->execute([
+                                    $instId,
+                                    "Evento biométrico recibido para documento no registrado: $doc",
+                                    json_encode(['document' => $doc, 'event_type' => $evt, 'device_id' => $deviceId, 'captured_at' => $capturedAt])
+                                ]);
+                            }
                         } catch (Exception $se) {
                             logW('UNKNOWN_STUDENT_INCIDENT_FAIL', $se->getMessage());
                         }
@@ -486,8 +574,25 @@ function processJob(array $job, PDO $conn): bool {
                     $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
                     $stmt->execute([$schoolId, $doc, $nombre]);
                 }
-                $stmt->execute([$schoolId, $doc, $nombre]);
+                // FIX: se eliminó un execute() duplicado que re-ejecutaba el
+                // statement con solo 3 params — en la rama has_fingerprint el
+                // statement espera 4 → PDOException → rollback del enrolamiento.
                 $studentId = $stmt->fetchColumn();
+
+                // F-03: registrar el slot de dedo en student_fingerprints
+                if ($hasFingerprint && $studentId) {
+                    $fingerSlot = isset($data['finger_slot']) ? (int)$data['finger_slot'] : 1;
+                    if (!in_array($fingerSlot, [1, 2], true)) $fingerSlot = 1;
+                    $devId = $deviceId ?? null;
+                    if ($devId && !preg_match('/^[0-9a-fA-F-]{36}$/', (string)$devId)) $devId = null;
+                    $fpStmt = $conn->prepare("
+                        INSERT INTO student_fingerprints (student_id, school_id, finger_slot, edge_huella_id, device_id)
+                        VALUES (?, ?, ?, ?, ?::uuid)
+                        ON CONFLICT (student_id, finger_slot)
+                        DO UPDATE SET edge_huella_id = EXCLUDED.edge_huella_id, device_id = EXCLUDED.device_id
+                    ");
+                    $fpStmt->execute([$studentId, $schoolId, $fingerSlot, $huellaId, $devId ?: null]);
+                }
 
                 if (!empty($parentDoc) && !empty($parentName)) {
                     // Search for guardian by document_number in users table
@@ -694,9 +799,9 @@ while (!$shutdown) {
             }
             $redis->lRem('queue:biometric_processing', $item, 0);
             
-            // Reconnect PDO if it failed
+            // Reconnect PDO if it failed (db.php recrea $pdo global)
             if (strpos($e->getMessage(), 'server closed the connection') !== false || strpos($e->getMessage(), 'gone away') !== false) {
-                $pdo = getDbConnection();
+                require __DIR__ . '/../core/db.php';
             }
         }
     } catch (Exception $e) {

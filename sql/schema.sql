@@ -137,8 +137,12 @@ CREATE TABLE IF NOT EXISTS schools (
     groups_onboarding_year     INTEGER,
     risk_config_completed      BOOLEAN NOT NULL DEFAULT FALSE,
     sensor_master_key_hash     VARCHAR(255),
+    spatial_enforcement        BOOLEAN NOT NULL DEFAULT FALSE,
     created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- F-01c: migración idempotente
+ALTER TABLE schools ADD COLUMN IF NOT EXISTS spatial_enforcement BOOLEAN NOT NULL DEFAULT FALSE;
+COMMENT ON COLUMN schools.spatial_enforcement IS 'F-01c: TRUE activa la verificación aula-del-dispositivo vs aula-programada (marca wrong_classroom en eventos). Requiere classrooms+schedules poblados.';
 CREATE INDEX IF NOT EXISTS idx_school_municipality ON schools(municipality_id);
 
 COMMENT ON COLUMN schools.onboarding_completed IS 'TRUE cuando el coordinador/rector completó el onboarding de horarios institucionales';
@@ -246,11 +250,31 @@ CREATE TABLE IF NOT EXISTS students (
     active          BOOLEAN NOT NULL DEFAULT TRUE,
     work_shift      VARCHAR(50) DEFAULT 'mañana',
     grade_level     VARCHAR(50),
+    biometric_exempt BOOLEAN NOT NULL DEFAULT FALSE,
+    exemption_reason TEXT,
+    manual_pending_until TIMESTAMPTZ,
+    -- V-342/344: habeas data — base jurídica del tratamiento biométrico
+    consent_status      VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+    consent_channel     VARCHAR(30),
+    consent_recorded_at TIMESTAMPTZ,
+    consent_recorded_by UUID,
+    consent_document_ref VARCHAR(255),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ,
     deleted_at      TIMESTAMPTZ,
-    CONSTRAINT uq_students_school_document UNIQUE (school_id, document_number)
+    CONSTRAINT uq_students_school_document UNIQUE (school_id, document_number),
+    CONSTRAINT chk_students_consent_status CHECK (consent_status IN ('PENDIENTE','OTORGADO','REVOCADO','NO_APLICA'))
 );
+-- F-02: migración idempotente para bases ya desplegadas
+ALTER TABLE students ADD COLUMN IF NOT EXISTS biometric_exempt BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS exemption_reason TEXT;
+COMMENT ON COLUMN students.biometric_exempt IS 'TRUE cuando el estudiante no puede usar biometría (condición física/médica); su presencia se registra manual (INGRESO_MANUAL) y los detectores no generan incidentes por falta de huella';
+COMMENT ON COLUMN students.exemption_reason IS 'Motivo de la exención biométrica (obligatorio si biometric_exempt=TRUE)';
+
+-- Doc §9.6: mientras el registro manual está pendiente, los detectores
+-- suspenden inasistencia/evasión para ese estudiante (falla de lector, etc.)
+ALTER TABLE students ADD COLUMN IF NOT EXISTS manual_pending_until TIMESTAMPTZ;
+COMMENT ON COLUMN students.manual_pending_until IS 'Si > NOW(), el estudiante tiene un registro manual pendiente (falla biométrica temporal); detectores suspenden sus incidentes hasta esa hora';
 CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
 CREATE INDEX IF NOT EXISTS idx_students_school_last_first ON students(school_id, last_name, first_name);
 CREATE INDEX IF NOT EXISTS idx_students_document_number ON students(document_number);
@@ -258,6 +282,15 @@ CREATE INDEX IF NOT EXISTS idx_students_school_grade ON students(school_id, grad
 
 COMMENT ON COLUMN students.work_shift IS 'mañana, tarde, completa. Usado para detección automática de ausentes por jornada';
 COMMENT ON COLUMN students.grade_level IS 'Grado actual del estudiante. Sincronizado al asignar grupo. Permite reconstruir student_group_assignments tras onboarding.';
+
+-- =============================================================================
+-- F-03: Huellas dactilares por estudiante (multi-dedo, máx 2).
+-- Cada dedo ocupa un slot de sensor distinto en el edge (huella_id local del
+-- dispositivo). biometric_hash en students queda como flag de compatibilidad
+-- (NOT NULL = tiene al menos una huella); esta tabla es la fuente normalizada.
+-- NOTA: student_fingerprints se define DESPUÉS de edge_devices (FK hacia
+-- edge_devices.device_id) — ver bloque tras la tabla edge_devices.
+-- =============================================================================
 
 CREATE TABLE IF NOT EXISTS guardian_student_relationships (
     relationship_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -396,8 +429,68 @@ CREATE TABLE IF NOT EXISTS edge_devices (
     last_seen_timestamp  TIMESTAMPTZ,
     location             TEXT,
     assigned_user_id     UUID REFERENCES users(user_id),
+    telemetry_json       JSONB,
+    telemetry_at         TIMESTAMPTZ,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- F-06: migración idempotente para bases existentes
+ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS telemetry_json JSONB;
+ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS telemetry_at TIMESTAMPTZ;
+COMMENT ON COLUMN edge_devices.telemetry_json IS 'F-06: última telemetría del nodo (clock_drift_s, disk_free_mb, pending_events, dlq_count, cpu_temp_c, power_state, cell)';
+
+-- Bloque D: OTA M2M — versión del nodo y clave OTA por-dispositivo
+ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS app_version VARCHAR(40) DEFAULT '1.0.0';
+ALTER TABLE edge_devices ADD COLUMN IF NOT EXISTS ota_key VARCHAR(64);
+
+-- Actualizaciones OTA publicadas (payload en almacenamiento externo/central)
+CREATE TABLE IF NOT EXISTS ota_updates (
+    update_id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id      UUID REFERENCES schools(school_id) ON DELETE CASCADE, -- NULL = global
+    version        VARCHAR(40) NOT NULL,
+    payload_url    TEXT NOT NULL,
+    payload_sha256 CHAR(64) NOT NULL,
+    min_version    VARCHAR(40),            -- anti-rollback: actual debe ser >= min_version
+    notes          TEXT,
+    active         BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by     UUID,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_ota_school_version UNIQUE (school_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_ota_updates_active ON ota_updates(active, created_at DESC);
+COMMENT ON TABLE ota_updates IS 'Versiones de firmware/app ofertadas a los nodos vía M2M. Manifiesto firmado HMAC con ota_key del dispositivo.';
+
+-- Auditoría de despliegue por nodo
+CREATE TABLE IF NOT EXISTS ota_deployments (
+    deployment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    update_id     UUID NOT NULL REFERENCES ota_updates(update_id) ON DELETE CASCADE,
+    device_id     UUID NOT NULL REFERENCES edge_devices(device_id) ON DELETE CASCADE,
+    school_id     UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    status        VARCHAR(20) NOT NULL, -- OFFERED/DOWNLOADING/STAGED/APPLYING/APPLIED/FAILED/ROLLED_BACK
+    detail        TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_ota_deploy UNIQUE (update_id, device_id)
+);
+
+-- =============================================================================
+-- F-03: hasta 2 huellas por estudiante (movida aquí: referencia edge_devices)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS student_fingerprints (
+    fingerprint_id  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id      UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    school_id       UUID NOT NULL REFERENCES schools(school_id),
+    finger_slot     SMALLINT NOT NULL CHECK(finger_slot IN (1,2)),
+    edge_huella_id  INTEGER,
+    device_id       UUID REFERENCES edge_devices(device_id),
+    enrolled_by     UUID REFERENCES users(user_id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_student_finger UNIQUE (student_id, finger_slot)
+);
+CREATE INDEX IF NOT EXISTS idx_student_fingerprints_school ON student_fingerprints(school_id);
+CREATE INDEX IF NOT EXISTS idx_student_fingerprints_edge ON student_fingerprints(device_id, edge_huella_id);
+
+COMMENT ON TABLE student_fingerprints IS 'F-03: hasta 2 huellas por estudiante (finger_slot 1|2). edge_huella_id = id local del template en el nodo; los templates nunca salen del edge.';
+COMMENT ON COLUMN student_fingerprints.edge_huella_id IS 'ID local del template en la SQLite del nodo edge (sensor slot id). Permite correlacionar eventos sincronizados.';
 CREATE INDEX IF NOT EXISTS idx_edge_devices_school_active ON edge_devices(school_id, active);
 CREATE INDEX IF NOT EXISTS idx_edge_devices_classroom ON edge_devices(classroom_id);
 CREATE INDEX IF NOT EXISTS idx_edge_devices_group ON edge_devices(group_id);
@@ -473,9 +566,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     type            VARCHAR(50) NOT NULL DEFAULT 'INFO',
     metadata_json   JSONB,
     dedup_key       VARCHAR(64),
+    -- V-028: vínculo estructurado al acontecimiento origen (polimórfico —
+    -- los orígenes viven en tablas heterogéneas, no admite FK única)
+    origin_type     VARCHAR(40),
+    origin_id       UUID,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_origin ON notifications(origin_type, origin_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_dedup
     ON notifications (dedup_key) WHERE dedup_key IS NOT NULL;
 
@@ -524,6 +622,23 @@ CREATE TABLE IF NOT EXISTS twilio_message_types (
     type_code    VARCHAR(100) PRIMARY KEY,
     description  TEXT NOT NULL
 );
+
+-- Catálogo de tipos de mensaje (documentación + clasificación; sin FK)
+INSERT INTO twilio_message_types (type_code, description) VALUES
+    ('INASISTENCIA',       'Notificación/respuesta de inasistencia con menú 1-2'),
+    ('CITACION',           'Citación al acudiente'),
+    ('AUTORIZAR_SALIDA',   'Autorización de salida escolar'),
+    ('CRITICAL_SITUATION', 'Situación crítica (emergencia/pánico)'),
+    ('INCIDENTE',          'Incidente disciplinario/de seguridad'),
+    ('NOTIFY_ROLE',        'Notificación dirigida a un rol'),
+    ('OUTBOUND',           'Mensaje saliente genérico'),
+    ('PEDAGOGICA',         'Salida pedagógica grupal'),
+    ('SOLICITUD',          'Solicitud del acudiente'),
+    ('SOS_ALERT',          'Alerta SOS de botón de pánico'),
+    ('HORARIO',            'Modificación de jornada/horario del día'),
+    ('SEGUIMIENTO',        'Derivación/seguimiento de caso'),
+    ('ABSENCE_FOLLOWUP',   'Recordatorio/escalación por falta de respuesta')
+ON CONFLICT (type_code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS twilio_messages (
     twilio_message_id    UUID NOT NULL DEFAULT uuid_generate_v4(),
@@ -612,6 +727,7 @@ CREATE TABLE IF NOT EXISTS class_exit_authorizations (
     authorization_reason  TEXT,
     exit_time             TIMESTAMPTZ NOT NULL,
     return_time           TIMESTAMPTZ,
+    actual_return_time    TIMESTAMPTZ,
     status                VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     metadata_json         JSONB,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -712,7 +828,7 @@ CREATE TABLE IF NOT EXISTS risk_event_types (
 INSERT INTO risk_event_types (type_code, display_name, description, category) VALUES
     ('LATE_ARRIVAL',        'Llegada tarde',              'Estudiante llega después de la hora de ingreso', 'asistencia'),
     ('EVASION_INTERNA',     'Evasión interna',             'Estudiante no entra a clase estando en el colegio. Activación automática.', 'evasion'),
-    ('SALIDA_BAÑO',         'Salida al baño',              'Salida al baño durante clase', 'comportamiento')
+    ('SALIDA_BAÑO',         'Salida',                      'Salida temporal del aula (informativa — no implica falta por sí misma)', 'comportamiento')
 ON CONFLICT (type_code) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     description  = EXCLUDED.description,
@@ -722,21 +838,28 @@ ON CONFLICT (type_code) DO UPDATE SET
 -- La inasistencia se detecta automáticamente (worker_absence_detector) y la
 -- salida no autorizada se gestiona vía notifications. También limpiar
 -- variantes sin Ñ que pudieron insertarse por encoding.
-DELETE FROM risk_event_level_mapping
- WHERE event_type_id IN (
-     SELECT event_type_id FROM risk_event_types
-      WHERE type_code IN ('INASISTENCIA','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA',
-                          'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
-                          'SALIDA_BANO')
- );
-DELETE FROM risk_event_types
- WHERE type_code IN ('INASISTENCIA','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA',
-                     'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
-                     'SALIDA_BANO');
-
--- Fix display_name con ñ correcta (por si la DB tiene valor sin ñ)
-UPDATE risk_event_types SET display_name = 'Salida al baño', description = 'Salida al baño durante clase'
- WHERE type_code = 'SALIDA_BAÑO' AND display_name != 'Salida al baño';
+-- (Guardadas con to_regclass: en una BD nueva las tablas aún no existen aquí —
+-- se crean más abajo; estas limpiezas solo aplican a despliegues existentes.)
+DO $$ BEGIN
+  IF to_regclass('risk_event_level_mapping') IS NOT NULL THEN
+    DELETE FROM risk_event_level_mapping
+     WHERE event_type_id IN (
+         SELECT event_type_id FROM risk_event_types
+          WHERE type_code IN ('INASISTENCIA','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA',
+                              'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
+                              'SALIDA_BANO')
+     );
+  END IF;
+  IF to_regclass('risk_event_types') IS NOT NULL THEN
+    DELETE FROM risk_event_types
+     WHERE type_code IN ('INASISTENCIA','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA',
+                         'UNAUTHORIZED_ABSENCE','SALIDA_NO_AUTORIZADA','UNAUTHORIZED_EXIT',
+                         'SALIDA_BANO');
+    -- Fix display_name (por si la DB tiene valor antiguo)
+    UPDATE risk_event_types SET display_name = 'Salida', description = 'Salida temporal del aula (informativa — no implica falta por sí misma)'
+     WHERE type_code = 'SALIDA_BAÑO' AND display_name != 'Salida';
+  END IF;
+END $$;
 
 -- Calendario lectivo institucional (para cálculo de días lectivos en decaimiento)
 CREATE TABLE IF NOT EXISTS school_calendar (
@@ -802,6 +925,7 @@ CREATE TABLE IF NOT EXISTS risk_rules (
     cooldown_days       INTEGER NOT NULL DEFAULT 0,
     single_occurrence   BOOLEAN NOT NULL DEFAULT FALSE,
     requires_human_review BOOLEAN NOT NULL DEFAULT FALSE,
+    detect_only         BOOLEAN NOT NULL DEFAULT FALSE,
     recurrence_count    INTEGER NOT NULL DEFAULT 4,
     window_days         INTEGER NOT NULL DEFAULT 7,
     min_recurrence      INTEGER NOT NULL DEFAULT 1,
@@ -930,15 +1054,88 @@ CREATE INDEX IF NOT EXISTS idx_risk_audit_school_entity
 CREATE INDEX IF NOT EXISTS idx_risk_audit_actor
     ON risk_audit_log(actor_id, created_at DESC);
 
+-- =============================================================================
+-- F-18: Criterios de aviso por docente (documento §4.5 / §9.9):
+-- "Los docentes pueden establecer criterios de aviso asociados con su propia
+-- actividad, como una cantidad determinada de llegadas tardías, inasistencias
+-- o salidas dentro de un período definido."
+-- El docente define: tipo de evento + umbral (N veces) + ventana (M días).
+-- worker_teacher_alerts evalúa las reglas y notifica al docente (dedup diario).
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS teacher_alert_rules (
+    rule_id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id       UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    teacher_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    group_id        UUID REFERENCES academic_groups(group_id) ON DELETE CASCADE,
+    student_id      UUID REFERENCES students(student_id) ON DELETE CASCADE,
+    event_kind      VARCHAR(30) NOT NULL CHECK(event_kind IN
+        ('LATE','ABSENCE','EVASION','EXIT','PERMISSION_EXPIRY')),
+    threshold_count INTEGER NOT NULL CHECK(threshold_count > 0 AND threshold_count <= 60),
+    window_days     INTEGER NOT NULL DEFAULT 7 CHECK(window_days BETWEEN 1 AND 90),
+    active          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_teacher_alert_rules_teacher ON teacher_alert_rules(teacher_user_id, active);
+CREATE INDEX IF NOT EXISTS idx_teacher_alert_rules_school  ON teacher_alert_rules(school_id, active);
+COMMENT ON TABLE teacher_alert_rules IS 'F-18: criterios de aviso configurables por docente (N eventos en M días → notificación al docente). group_id NULL = todos los grupos del docente; student_id NULL = todos los estudiantes del alcance.';
+COMMENT ON COLUMN teacher_alert_rules.event_kind IS 'LATE=llegada tarde (INGRESO_TARDE), ABSENCE=inasistencia, EVASION=evasión interna, EXIT=salidas del aula, PERMISSION_EXPIRY=permiso vencido sin retorno';
+
+-- F-18: onboarding por usuario — el docente marca cuando configuró (u omitió
+-- conscientemente) sus criterios de aviso.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;
+COMMENT ON COLUMN users.onboarding_completed IS 'TRUE cuando el usuario completó su onboarding personal (p.ej. docente configuró criterios de aviso o los omitió explícitamente)';
+
+-- =============================================================================
+-- Enrutamiento configurable de notificaciones/escalaciones (documento §4.5:
+-- "qué actores deben conocerlas y bajo qué condiciones"). Por defecto las
+-- respuestas de inasistencia van a COORDINATOR+RECTOR; la institución puede
+-- ajustar roles destino por tipo de evento.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS school_notification_routes (
+    route_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id   UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    event_kind  VARCHAR(50) NOT NULL,              -- p.ej. ABSENCE_RESPONSE, ABSENCE_NO_REPLY
+    target_role VARCHAR(50) NOT NULL,              -- role_name destino (COORDINATOR, RECTOR, TEACHER, COUNSELOR)
+    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_school_route UNIQUE (school_id, event_kind, target_role)
+);
+CREATE INDEX IF NOT EXISTS idx_snr_school ON school_notification_routes(school_id, event_kind, enabled);
+COMMENT ON TABLE school_notification_routes IS 'Destinos configurables por escuela para respuestas/escalaciones. Sin filas = default COORDINATOR+RECTOR.';
+
+-- V-013/041/058/406: políticas de acción configurables por institución.
+-- event_type: 'EVASION_INTERNA', 'WHATSAPP_<TYPE>' (INASISTENCIA, HORARIO,
+-- CITACION…), 'PERMISSION_EXPIRED'… action: código de acción o 'NONE'.
+-- Sin fila = comportamiento por defecto (habilitado, acción estándar).
+CREATE TABLE IF NOT EXISTS school_action_policies (
+    policy_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id   UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    event_type  VARCHAR(60) NOT NULL,
+    action      VARCHAR(60) NOT NULL DEFAULT 'DEFAULT',
+    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+    params      JSONB,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_action_policy UNIQUE (school_id, event_type)
+);
+CREATE INDEX IF NOT EXISTS idx_sap_school ON school_action_policies(school_id, event_type);
+
 CREATE TABLE IF NOT EXISTS student_tracking (
     tracking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     school_id   UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     student_id  UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
     status      VARCHAR(50) NOT NULL DEFAULT 'en proceso',
+    dependency  VARCHAR(60),
+    assigned_to_user_id UUID REFERENCES users(user_id),
+    origin_type VARCHAR(40) DEFAULT 'manual',
+    origin_id   UUID,
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
-    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT (NOW() AT TIME ZONE 'America/Bogota')
+    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
+    -- V-150: status con workflow formal (antes texto libre)
+    CONSTRAINT chk_tracking_status CHECK (status IN ('en proceso','resuelto','descartado','escalado'))
 );
 CREATE INDEX IF NOT EXISTS idx_tracking_school_status ON student_tracking(school_id, status);
+CREATE INDEX IF NOT EXISTS idx_tracking_origin ON student_tracking(origin_type, origin_id);
 
 CREATE TABLE IF NOT EXISTS student_tracking_notes (
     note_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1522,6 +1719,41 @@ CREATE TRIGGER trg_guardian_limit
     FOR EACH ROW
     EXECUTE FUNCTION fn_check_guardian_limit();
 
+-- V-028: rellena notifications.origin_type/origin_id desde metadata_json
+-- cuando el llamador no los pasó. Cobertura sistemática sin tocar los ~30
+-- INSERT INTO notifications dispersos.
+CREATE OR REPLACE FUNCTION fn_notifications_origin()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.origin_id IS NULL AND NEW.metadata_json IS NOT NULL THEN
+        IF NEW.metadata_json ? 'security_incident_id' THEN
+            NEW.origin_type := 'security_incident';
+            NEW.origin_id := (NEW.metadata_json->>'security_incident_id')::uuid;
+        ELSIF NEW.metadata_json ? 'incident_id' THEN
+            NEW.origin_type := 'incident';
+            NEW.origin_id := (NEW.metadata_json->>'incident_id')::uuid;
+        ELSIF NEW.metadata_json ? 'alert_id' THEN
+            NEW.origin_type := 'risk_alert';
+            NEW.origin_id := (NEW.metadata_json->>'alert_id')::uuid;
+        ELSIF NEW.metadata_json ? 'tracking_id' THEN
+            NEW.origin_type := 'student_tracking';
+            NEW.origin_id := (NEW.metadata_json->>'tracking_id')::uuid;
+        ELSIF NEW.metadata_json ? 'authorization_id' THEN
+            NEW.origin_type := 'authorization';
+            NEW.origin_id := (NEW.metadata_json->>'authorization_id')::uuid;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_notifications_origin ON notifications;
+CREATE TRIGGER trg_notifications_origin
+    BEFORE INSERT ON notifications
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_notifications_origin();
+
 -- =============================================================================
 -- RISK ENGINE v3.0 — Funciones de cálculo
 -- =============================================================================
@@ -1697,6 +1929,9 @@ BEGIN
           AND ai.incident_type = v_rule_record.type_code
           AND ai.detected_at >= v_now - (p_lookback_days || ' days')::INTERVAL
           AND ai.incident_type NOT LIKE 'RISK_ALERT%'
+          -- F-05: incidentes pendientes de contexto (cluster anómalo sin
+          -- confirmación humana) no alimentan el score de riesgo.
+          AND COALESCE(ai.metadata_json->>'pending_context', 'false') <> 'true'
           AND NOT EXISTS (
               SELECT 1 FROM risk_justifications rj
               WHERE rj.student_id = ai.student_id
@@ -1716,6 +1951,7 @@ BEGIN
                   AND incident_type = v_rule_record.type_code
                   AND detected_at >= v_now - (p_lookback_days || ' days')::INTERVAL
                   AND incident_type NOT LIKE 'RISK_ALERT%'
+                  AND COALESCE(metadata_json->>'pending_context', 'false') <> 'true'
             ) sub;
             IF array_length(v_intervals, 1) >= 2 THEN
                 SELECT COALESCE(stddev(interval_days), 0),
@@ -1764,6 +2000,17 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Evalúa todas las categorías + combinaciones + genera alertas
+-- Orden protegido de la ontología de niveles (NONE < LEVE < MODERADA < ALTA < MUY_ALTA)
+CREATE OR REPLACE FUNCTION fn_risk_level_rank(p_level TEXT) RETURNS INT AS $$
+    SELECT CASE p_level
+        WHEN 'MUY_ALTA'  THEN 4
+        WHEN 'ALTA'      THEN 3
+        WHEN 'MODERADA'  THEN 2
+        WHEN 'LEVE'      THEN 1
+        ELSE 0
+    END;
+$$ LANGUAGE SQL IMMUTABLE;
+
 CREATE OR REPLACE FUNCTION fn_evaluate_student_risk(
     p_student_id UUID,
     p_school_id  UUID
@@ -1781,6 +2028,11 @@ DECLARE
     v_max_level VARCHAR := 'NONE';
     v_max_score NUMERIC(8,2) := 0.0;
     v_combo_record RECORD;
+    v_cat_cond JSONB;
+    v_cat_level VARCHAR;
+    v_combo_all_met BOOLEAN;
+    v_trigger_reason TEXT := NULL;
+    v_detect_only BOOLEAN := FALSE;
     v_alert_id UUID;
     v_cooldown_until TIMESTAMPTZ;
     v_should_alert BOOLEAN := FALSE;
@@ -1830,11 +2082,32 @@ BEGIN
             END IF;
         END IF;
     END LOOP;
+    -- Capa de combinación: correlación entre categorías. Una combinación se
+    -- dispara cuando TODAS las categorías listadas alcanzan su min_level y
+    -- puede elevar el nivel resultante por encima de la detección individual.
     FOR v_combo_record IN
         SELECT * FROM risk_combination_rules
         WHERE policy_id = v_policy_id AND is_active = TRUE
     LOOP
-        NULL;
+        v_combo_all_met := jsonb_array_length(
+            COALESCE(v_combo_record.condition_json->'categories', '[]'::jsonb)) > 0;
+        FOR v_cat_cond IN
+            SELECT * FROM jsonb_array_elements(
+                COALESCE(v_combo_record.condition_json->'categories', '[]'::jsonb))
+        LOOP
+            v_cat_level := COALESCE(
+                v_results -> (v_cat_cond->>'category') ->> 'level', 'NONE');
+            IF fn_risk_level_rank(v_cat_level) < fn_risk_level_rank(v_cat_cond->>'min_level') THEN
+                v_combo_all_met := FALSE;
+                EXIT;
+            END IF;
+        END LOOP;
+        IF v_combo_all_met
+           AND fn_risk_level_rank(v_combo_record.result_level) > fn_risk_level_rank(v_max_level) THEN
+            v_max_level := v_combo_record.result_level;
+            v_trigger_reason := 'Combinación: ' || v_combo_record.rule_name
+                                || ' — ' || v_combo_record.result_reason;
+        END IF;
     END LOOP;
     IF v_max_level != 'NONE' THEN
         v_alert_level := v_max_level;
@@ -1856,31 +2129,52 @@ BEGIN
             v_should_alert := FALSE;
         END IF;
         IF v_should_alert THEN
-            SELECT cooldown_days INTO v_cooldown_days
+            SELECT cooldown_days, detect_only INTO v_cooldown_days, v_detect_only
             FROM risk_rules
             WHERE policy_id = v_policy_id AND risk_level = v_alert_level;
-            INSERT INTO risk_alerts (
-                school_id, student_id, alert_level, escalation_state,
-                trigger_category, trigger_rule, trigger_score,
-                policy_id, involved_events, status, cooldown_until, metadata_json
-            ) VALUES (
-                p_school_id, p_student_id, v_alert_level, v_escalation,
-                v_cat, 'Riesgo activo superó umbral de ' || v_alert_level,
-                v_max_score, v_policy_id,
-                v_details, 'abierta',
-                CASE WHEN v_cooldown_days > 0
-                     THEN NOW() + (v_cooldown_days || ' days')::INTERVAL
-                     ELSE NULL END,
-                jsonb_build_object(
-                    'engine_version', '3.0',
-                    'policy_version', (SELECT version FROM risk_policies WHERE policy_id = v_policy_id),
-                    'categories', v_results
-                )
-            ) RETURNING alert_id INTO v_alert_id;
-            INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
-            VALUES (uuid_generate_v4(), p_school_id, p_student_id,
-                    'RISK_ALERT_' || v_alert_level, NOW(),
-                    jsonb_build_object('alert_id', v_alert_id, 'risk_score', v_max_score));
+            IF COALESCE(v_detect_only, FALSE) THEN
+                -- V-377: detectar sin alertar — queda en snapshot e incidente
+                -- auditable, pero no genera risk_alert ni notificación.
+                INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                VALUES (uuid_generate_v4(), p_school_id, p_student_id,
+                        'RISK_DETECTED_' || v_alert_level, NOW(),
+                        jsonb_build_object('risk_score', v_max_score, 'detect_only', TRUE,
+                                           'trigger', COALESCE(v_trigger_reason, 'umbral')));
+            ELSE
+                INSERT INTO risk_alerts (
+                    school_id, student_id, alert_level, escalation_state,
+                    trigger_category, trigger_rule, trigger_score,
+                    policy_id, involved_events, status, cooldown_until, metadata_json
+                ) VALUES (
+                    p_school_id, p_student_id, v_alert_level, v_escalation,
+                    v_cat, COALESCE(v_trigger_reason, 'Riesgo activo superó umbral de ' || v_alert_level),
+                    v_max_score, v_policy_id,
+                    v_details, 'abierta',
+                    CASE WHEN v_cooldown_days > 0
+                         THEN NOW() + (v_cooldown_days || ' days')::INTERVAL
+                         ELSE NULL END,
+                    jsonb_build_object(
+                        'engine_version', '3.0',
+                        'policy_version', (SELECT version FROM risk_policies WHERE policy_id = v_policy_id),
+                        'categories', v_results
+                    )
+                ) RETURNING alert_id INTO v_alert_id;
+                INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
+                VALUES (uuid_generate_v4(), p_school_id, p_student_id,
+                        'RISK_ALERT_' || v_alert_level, NOW(),
+                        jsonb_build_object('alert_id', v_alert_id, 'risk_score', v_max_score));
+                -- V-069/V-151: derivación automática — una alerta que nace en
+                -- estado SEGUIMIENTO instancia el caso de seguimiento si no hay
+                -- uno abierto para el estudiante.
+                IF v_escalation = 'SEGUIMIENTO'
+                   AND NOT EXISTS (SELECT 1 FROM student_tracking
+                                   WHERE student_id = p_student_id
+                                     AND school_id = p_school_id
+                                     AND status = 'en proceso') THEN
+                    INSERT INTO student_tracking (school_id, student_id, status, dependency, origin_type, origin_id)
+                    VALUES (p_school_id, p_student_id, 'en proceso', 'coordinacion', 'risk_alert', v_alert_id);
+                END IF;
+            END IF;
         END IF;
     END IF;
     RETURN jsonb_build_object(
@@ -1889,7 +2183,8 @@ BEGIN
         'categories', v_results,
         'max_level', v_max_level,
         'max_score', v_max_score,
-        'alert_generated', v_should_alert AND v_max_level != 'NONE',
+        'detect_only', v_detect_only,
+        'alert_generated', v_should_alert AND v_max_level != 'NONE' AND NOT v_detect_only,
         'alert_id', v_alert_id
     );
 END;
@@ -2044,6 +2339,46 @@ CREATE POLICY ed_select ON edge_devices FOR SELECT USING(
 CREATE POLICY ed_insert ON edge_devices FOR INSERT WITH CHECK(school_id = get_current_school_id());
 CREATE POLICY ed_update ON edge_devices FOR UPDATE USING(school_id = get_current_school_id());
 CREATE POLICY ed_delete ON edge_devices FOR DELETE USING(school_id = get_current_school_id());
+
+-- ota_updates / ota_deployments (Bloque D) — EDGE_NODE lee ofertas de su escuela
+-- (o globales) y reporta su despliegue; staff gestiona las publicaciones.
+ALTER TABLE ota_updates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ota_u_select ON ota_updates;
+DROP POLICY IF EXISTS ota_u_insert ON ota_updates;
+DROP POLICY IF EXISTS ota_u_update ON ota_updates;
+CREATE POLICY ota_u_select ON ota_updates FOR SELECT USING(school_id IS NULL OR school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','SUPER_ADMIN'));
+CREATE POLICY ota_u_insert ON ota_updates FOR INSERT WITH CHECK(school_id = get_current_school_id() OR school_id IS NULL);
+CREATE POLICY ota_u_update ON ota_updates FOR UPDATE USING(school_id = get_current_school_id() OR school_id IS NULL);
+
+ALTER TABLE ota_deployments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ota_d_select ON ota_deployments;
+DROP POLICY IF EXISTS ota_d_insert ON ota_deployments;
+DROP POLICY IF EXISTS ota_d_update ON ota_deployments;
+CREATE POLICY ota_d_select ON ota_deployments FOR SELECT USING(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','EDGE_NODE','SUPER_ADMIN'));
+CREATE POLICY ota_d_insert ON ota_deployments FOR INSERT WITH CHECK(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','EDGE_NODE'));
+CREATE POLICY ota_d_update ON ota_deployments FOR UPDATE USING(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','EDGE_NODE','SUPER_ADMIN'));
+
+-- teacher_alert_rules: aislamiento por escuela; el worker SYSTEM_WORKER evalúa todas
+ALTER TABLE teacher_alert_rules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tar_select ON teacher_alert_rules;
+DROP POLICY IF EXISTS tar_insert ON teacher_alert_rules;
+DROP POLICY IF EXISTS tar_update ON teacher_alert_rules;
+DROP POLICY IF EXISTS tar_delete ON teacher_alert_rules;
+CREATE POLICY tar_select ON teacher_alert_rules FOR SELECT USING(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','SUPER_ADMIN'));
+CREATE POLICY tar_insert ON teacher_alert_rules FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY tar_update ON teacher_alert_rules FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY tar_delete ON teacher_alert_rules FOR DELETE USING(school_id = get_current_school_id());
+
+-- school_notification_routes: configuración de enrutamiento por escuela
+ALTER TABLE school_notification_routes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS snr_select ON school_notification_routes;
+DROP POLICY IF EXISTS snr_insert ON school_notification_routes;
+DROP POLICY IF EXISTS snr_update ON school_notification_routes;
+DROP POLICY IF EXISTS snr_delete ON school_notification_routes;
+CREATE POLICY snr_select ON school_notification_routes FOR SELECT USING(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','SUPER_ADMIN'));
+CREATE POLICY snr_insert ON school_notification_routes FOR INSERT WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY snr_update ON school_notification_routes FOR UPDATE USING(school_id = get_current_school_id());
+CREATE POLICY snr_delete ON school_notification_routes FOR DELETE USING(school_id = get_current_school_id());
 
 -- student_behavior_metrics
 ALTER TABLE student_behavior_metrics ENABLE ROW LEVEL SECURITY;
@@ -2659,9 +2994,10 @@ SELECT uuid_generate_v4(), d.department_id, 'Bogotá D.C.'
 FROM departments d WHERE d.department_name = 'Bogotá D.C.'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO schools(school_id, municipality_id, dane_code, school_name, address, phone, email, active)
+INSERT INTO schools(school_id, municipality_id, dane_code, school_name, address, phone, email, active,
+                    onboarding_completed, groups_onboarding_completed, risk_config_completed)
 SELECT uuid_generate_v4(), m.municipality_id, '000000000', 'Institución Educativa NEXO',
-       'Calle 1 # 1-1', '6010000000', 'contacto@nexo.edu', TRUE
+       'Calle 1 # 1-1', '6010000000', 'contacto@nexo.edu', TRUE, TRUE, TRUE, TRUE
 FROM municipalities m JOIN departments d ON d.department_id = m.department_id
 WHERE d.department_name = 'Bogotá D.C.'
 ON CONFLICT DO NOTHING;
@@ -2680,10 +3016,10 @@ INSERT INTO roles(role_id, role_name, description) VALUES
     (uuid_generate_v4(), 'SYSTEM_WORKER', 'Internal system worker / background process')
 ON CONFLICT(role_name) DO NOTHING;
 
--- Admin user (password: admin123)
+-- Admin user (password: admin123 — bcrypt coste 10; el hash anterior era de 'password')
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, password_hash, password_salt, active)
 SELECT uuid_generate_v4(), s.school_id, r.role_id, '111111111', 'Admin', 'NEXO', 'admin@nexo.edu',
-       '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'salt', TRUE
+       '$2y$10$ixBEl1HY/wGL5DBEHQ/q/u1fdohSvdAQnji83oWGyzSK0IFR3Yxly', 'salt', TRUE
 FROM schools s, roles r WHERE r.role_name = 'RECTOR'
 ON CONFLICT(email) DO NOTHING;
 
@@ -2705,6 +3041,7 @@ INSERT INTO permissions (permission_id, permission_code, description) VALUES
     (uuid_generate_v4(), 'operations.fusionar_bloque', 'Merge class blocks for sensor logic'),
     (uuid_generate_v4(), 'operations.extender_bloque', 'Extend current block end time for the day'),
     (uuid_generate_v4(), 'operations.situacion_critica', 'Report critical situation to rector and coordinator'),
+    (uuid_generate_v4(), 'operations.registro_manual', 'Register student presence manually (biometric failure/exemption)'),
     (uuid_generate_v4(), 'consultations.teacher_view', 'View queries filtered by assigned groups'),
     (uuid_generate_v4(), 'consultations.global_view', 'View all institution queries'),
     (uuid_generate_v4(), 'reports.preview', 'View biometric report preview'),
@@ -2751,6 +3088,7 @@ SELECT assign_permission_to_role('RECTOR', 'operations.incidente');
 SELECT assign_permission_to_role('RECTOR', 'operations.seguimiento');
 SELECT assign_permission_to_role('RECTOR', 'operations.extender_bloque');
 SELECT assign_permission_to_role('RECTOR', 'operations.situacion_critica');
+SELECT assign_permission_to_role('RECTOR', 'operations.registro_manual');
 SELECT assign_permission_to_role('RECTOR', 'consultations.global_view');
 SELECT assign_permission_to_role('RECTOR', 'reports.preview');
 SELECT assign_permission_to_role('RECTOR', 'reports.export');
@@ -2780,6 +3118,7 @@ SELECT assign_permission_to_role('COORDINATOR', 'operations.incidente');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.seguimiento');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.extender_bloque');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.situacion_critica');
+SELECT assign_permission_to_role('COORDINATOR', 'operations.registro_manual');
 SELECT assign_permission_to_role('COORDINATOR', 'consultations.global_view');
 SELECT assign_permission_to_role('COORDINATOR', 'reports.preview');
 SELECT assign_permission_to_role('COORDINATOR', 'reports.export');
@@ -2803,7 +3142,9 @@ SELECT assign_permission_to_role('TEACHER', 'operations.incidente');
 SELECT assign_permission_to_role('TEACHER', 'operations.seguimiento');
 SELECT assign_permission_to_role('TEACHER', 'operations.solicitud');
 SELECT assign_permission_to_role('TEACHER', 'operations.fusionar_bloque');
+SELECT assign_permission_to_role('TEACHER', 'operations.extender_bloque');
 SELECT assign_permission_to_role('TEACHER', 'operations.situacion_critica');
+SELECT assign_permission_to_role('TEACHER', 'operations.registro_manual');
 SELECT assign_permission_to_role('TEACHER', 'consultations.teacher_view');
 SELECT assign_permission_to_role('TEACHER', 'reports.preview');
 SELECT assign_permission_to_role('TEACHER', 'students.view');
@@ -2818,6 +3159,8 @@ SELECT assign_permission_to_role('SECRETARY', 'reports.preview');
 SELECT assign_permission_to_role('SECRETARY', 'reports.export');
 SELECT assign_permission_to_role('SECRETARY', 'operations.solicitud');
 SELECT assign_permission_to_role('SECRETARY', 'operations.situacion_critica');
+SELECT assign_permission_to_role('SECRETARY', 'operations.registro_manual');
+SELECT assign_permission_to_role('SECRETARY', 'operations.citacion');
 
 -- COUNSELOR
 SELECT assign_permission_to_role('COUNSELOR', 'dashboard.teacher_view');
@@ -2838,6 +3181,7 @@ SELECT assign_permission_to_role('SECURITY', 'reports.preview');
 SELECT assign_permission_to_role('SECURITY', 'operations.solicitud');
 SELECT assign_permission_to_role('SECURITY', 'operations.daño');
 SELECT assign_permission_to_role('SECURITY', 'operations.situacion_critica');
+SELECT assign_permission_to_role('SECURITY', 'operations.registro_manual');
 
 -- AUXILIARY
 SELECT assign_permission_to_role('AUXILIARY', 'dashboard.global_view');

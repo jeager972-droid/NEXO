@@ -105,12 +105,23 @@ try {
 $response['redis'] = $redisOk;
 if (!$redisOk) $allHealthy = false;
 
-// 3. Worker heartbeats — verificar twilio, biometric, absence_detector
+// 3. Worker heartbeats — verificar todos los workers daemon activos.
+// Umbral 300s: evasion_detector heartbea cada ~120s (EVASION_CHECK_INTERVAL),
+// un umbral menor generaría falsos negativos. audit_worker es opcional
+// (solo corre con AUDIT_WORKER_ENABLED=1) y no debe tumbar el health.
 $workerKeys = [
-    'twilio'           => 'worker:twilio:last_heartbeat',
-    'biometric'        => 'worker:biometric:last_heartbeat',
-    'absence_detector' => 'worker:absence_detector:last_heartbeat',
+    'twilio'            => 'worker:twilio:last_heartbeat',
+    'biometric'         => 'worker:biometric:last_heartbeat',
+    'absence_detector'  => 'worker:absence_detector:last_heartbeat',
+    'evasion_detector'  => 'worker:evasion_detector:last_heartbeat',
+    'permission_status' => 'worker:permission_status:last_heartbeat',
+    'device_health'     => 'worker:device_health:last_heartbeat',
+    'teacher_alerts'    => 'worker:teacher_alerts:last_heartbeat',
+    'absence_followup'  => 'worker:absence_followup:last_heartbeat',
 ];
+if (getenv('AUDIT_WORKER_ENABLED') === '1') {
+    $workerKeys['audit'] = 'worker:audit:last_heartbeat';
+}
 foreach ($workerKeys as $name => $key) {
     $response['workers'][$name] = false;
 }
@@ -125,7 +136,7 @@ if ($redisOk && $redisConn) {
             $idx++;
             if ($heartbeat !== false && is_numeric($heartbeat)) {
                 $age = $now - (int)$heartbeat;
-                $response['workers'][$name] = ($age <= 120);
+                $response['workers'][$name] = ($age <= 300);
             }
         }
     } catch (Exception $e) {

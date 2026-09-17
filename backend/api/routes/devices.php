@@ -44,6 +44,25 @@
 
 global $cleanPath, $conn, $method, $input;
 require_once __DIR__ . '/_auth_middleware.php';
+require_once __DIR__ . '/../workers/contingency_lib.php';
+
+if (!function_exists('logUserCommand')) {
+    /** Registra un comando administrativo en user_commands (auditoría). */
+    function logUserCommand($conn, $schoolId, $userId, $action, $payload = []) {
+        try {
+            $conn->prepare("
+                INSERT INTO user_commands (command_id, school_id, executed_by_user_id, command_type, command_payload, executed_at, metadata_json)
+                VALUES (uuid_generate_v4(), ?, ?, ?, ?::jsonb, NOW(), ?::jsonb)
+            ")->execute([
+                $schoolId, $userId, strtoupper($action),
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+                json_encode(['source' => 'webapp'], JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (Exception $e) {
+            securityLog('USER_COMMAND_LOG_ERROR', $e->getMessage());
+        }
+    }
+}
 
 // ============================================================================
 // WORKER DE REVOCACIÓN AUTOMÁTICA (lazy execution)
@@ -133,6 +152,7 @@ if ($cleanPath === '/devices' && $method === 'GET') {
         $stmt = $conn->prepare("
             SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
                    ed.last_ping, ed.created_at, ed.group_id, ed.assigned_user_id,
+                   ed.app_version,
                    ag.group_name, ag.grade_level,
                    u.first_name AS assigned_user_first_name,
                    u.last_name AS assigned_user_last_name,
@@ -203,11 +223,12 @@ if ($cleanPath === '/devices' && $method === 'POST') {
 
         $rawToken = bin2hex(random_bytes(32));
         $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
+        $otaKey   = bin2hex(random_bytes(32)); // clave OTA por-dispositivo (Bloque D)
 
         // Sensores registrados manualmente nacen configurados (tienen token).
         // Solo los sensores auto-creados por grupos nacen sin configurar.
-        $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, group_id, assigned_user_id, configured) VALUES (?, ?, ?, ?, ?, ?, TRUE) RETURNING device_id");
-        $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $validGroupId, $validAssignedUserId]);
+        $stmt = $conn->prepare("INSERT INTO edge_devices (school_id, device_name, location, token_hash, ota_key, group_id, assigned_user_id, configured) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE) RETURNING device_id");
+        $stmt->execute([$authUser['school_id'], $name, $location, $tokenHash, $otaKey, $validGroupId, $validAssignedUserId]);
         $deviceId = $stmt->fetchColumn();
 
         // Pasando el ID del usuario y escuela para trazabilidad
@@ -254,7 +275,7 @@ if ($cleanPath === '/devices' && $method === 'POST') {
 
         echo json_encode([
             'status' => 'ok',
-            'data' => ['device_id' => $deviceId, 'name' => $name, 'token' => $rawToken]
+            'data' => ['device_id' => $deviceId, 'name' => $name, 'token' => $rawToken, 'ota_key' => $otaKey]
         ]);
     } catch (PDOException $e) {
         error_log("[DEVICES] POST /devices error: " . $e->getMessage());
@@ -293,8 +314,9 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/configure$#', $cleanPath, $matches) 
         if (empty($existingTokenHash)) {
             $rawToken = bin2hex(random_bytes(32));
             $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
-            $conn->prepare("UPDATE edge_devices SET configured = TRUE, token_hash = ? WHERE device_id = ? AND school_id = ?")
-                ->execute([$tokenHash, $deviceId, $authUser['school_id']]);
+            $newOtaKey = bin2hex(random_bytes(32));
+            $conn->prepare("UPDATE edge_devices SET configured = TRUE, token_hash = ?, ota_key = ? WHERE device_id = ? AND school_id = ?")
+                ->execute([$tokenHash, $newOtaKey, $deviceId, $authUser['school_id']]);
         } else {
             // Ya tiene token (registrado manualmente), solo marcar como configurado
             $conn->prepare("UPDATE edge_devices SET configured = TRUE WHERE device_id = ? AND school_id = ?")
@@ -353,11 +375,12 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/configure$#', $cleanPath, $matches) 
             'message' => 'Sensor configurado correctamente',
             'device_id' => $deviceId,
             'token' => $rawToken, // null si ya tenía token, string si se generó uno nuevo
+            'ota_key' => $newOtaKey ?? null, // null si ya tenía token (se genera al provisionar)
         ]);
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_CONFIGURE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al configurar el sensor', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al configurar el sensor']);
     }
     exit;
 }
@@ -443,7 +466,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_DELETE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar el sensor', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar el sensor']);
     }
     exit;
 }
@@ -575,7 +598,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation$#', $cleanPath, $matches)
     } catch (Exception $e) {
         securityLog('SENSOR_REVOCATION_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al iniciar la revocación del sensor', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al iniciar la revocación del sensor']);
     }
     exit;
 }
@@ -685,7 +708,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/revocation/cancel$#', $cleanPath, $m
     } catch (Exception $e) {
         securityLog('SENSOR_REVOCATION_CANCEL_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al cancelar la revocación', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al cancelar la revocación']);
     }
     exit;
 }
@@ -731,7 +754,7 @@ if ($cleanPath === '/devices/revocations/pending' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('REVOCATIONS_PENDING_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener revocaciones pendientes', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener revocaciones pendientes']);
     }
     exit;
 }
@@ -1044,9 +1067,67 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
                 exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
             }
 
+            // F-06/F-09/F-10/F-13: telemetría del nodo — persistir + evaluar umbrales.
+            // Nunca bloquea el ping: un error de telemetría no debe tumbar el heartbeat.
+            $telemetry = $input['telemetry'] ?? null;
+            if (is_array($telemetry) && !empty($telemetry)) {
+                try {
+                    ctProcessTelemetry($conn, (string)$device['school_id'], $deviceId, $telemetry);
+                } catch (Exception $e) {
+                    securityLog('DEVICE_TELEMETRY_ERROR', "Device $deviceId: " . $e->getMessage());
+                }
+            }
+
+            // V-493/V-494/V-495: comparar el reloj reportado por el nodo con la
+            // hora del servidor y ordenar resincronización si excede el umbral.
+            $nowTs = time();
+            $drift = abs($nowTs - (int)$timestamp);
+            if (is_array($telemetry) && isset($telemetry['clock_drift_s'])) {
+                $drift = max($drift, abs((int)$telemetry['clock_drift_s']));
+            }
+            $resyncThreshold = (int)(getenv('CLOCK_RESYNC_THRESHOLD_S') ?: 300);
+            $resp = ['status' => 'ok', 'received_at' => $nowTs, 'server_time' => $nowTs];
+            if ($drift > $resyncThreshold) {
+                $resp['resync_required'] = true;
+                $resp['clock_drift_s'] = $drift;
+                securityLog('DEVICE_CLOCK_DRIFT', "Device $deviceId drift={$drift}s > {$resyncThreshold}s — resync ordenado");
+            }
+
+            // V-183/V-196: publicar las franjas horarias de la jornada del nodo
+            // para que el edge clasifique PUNTUAL/MANANA/TARDE con la config
+            // real del colegio, no con constantes.
+            try {
+                $schedStmt = $conn->prepare("
+                    SELECT ssc.entry_time, ssc.exit_time
+                    FROM edge_devices ed
+                    LEFT JOIN academic_groups ag ON ag.group_id = ed.group_id
+                    LEFT JOIN school_schedule_config ssc
+                      ON ssc.school_id = ed.school_id
+                     AND ssc.work_shift = COALESCE(ag.work_shift, 'mañana')
+                    WHERE ed.device_id = ?
+                    LIMIT 1
+                ");
+                $schedStmt->execute([$deviceId]);
+                $sc = $schedStmt->fetch(PDO::FETCH_ASSOC);
+                if ($sc && !empty($sc['entry_time'])) {
+                    $toMin = fn($t) => ((int)substr($t, 0, 2)) * 60 + (int)substr($t, 3, 2);
+                    $entryMin = $toMin($sc['entry_time']);
+                    $exitMin = !empty($sc['exit_time']) ? $toMin($sc['exit_time']) : 960;
+                    $resp['schedule'] = [
+                        'sched_punctual_start'  => max(0, $entryMin - 20),
+                        'sched_punctual_end'    => $entryMin,
+                        'sched_morning_end'     => 660,
+                        'sched_afternoon_start' => 690,
+                        'sched_afternoon_end'   => $exitMin,
+                    ];
+                }
+            } catch (Exception $e) {
+                securityLog('DEVICE_SCHEDULE_PUSH_ERROR', "Device $deviceId: " . $e->getMessage());
+            }
+
             $conn->commit();
 
-            echo json_encode(['status' => 'ok', 'received_at' => time()]);
+            echo json_encode($resp);
             exit;
 
         } catch (Exception $e) {
@@ -1081,6 +1162,9 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
     $doc = trim($input['doc'] ?? '');
     $nombre = trim($input['nombre'] ?? '');
     $huellaId = isset($input['huella_id']) ? (int)$input['huella_id'] : null;
+    // F-03: dedo enrolado (1=principal, 2=respaldo). Default 1 para compat.
+    $fingerSlot = isset($input['finger_slot']) ? (int)$input['finger_slot'] : 1;
+    if (!in_array($fingerSlot, [1, 2], true)) $fingerSlot = 1;
 
     if (empty($requestDeviceId) || empty($doc)) {
         http_response_code(400);
@@ -1118,7 +1202,16 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
         $upStmt->execute([$schoolId, $doc, $nombre, $biometricHash]);
         $studentId = $upStmt->fetchColumn();
 
-        securityLog('EDGE_ENROLL_CONFIRMED', "doc=$doc huella_id=$huellaId student=$studentId school=$schoolId", null, $schoolId);
+        // F-03: registrar el slot de dedo en la tabla normalizada
+        $fpStmt = $conn->prepare("
+            INSERT INTO student_fingerprints (student_id, school_id, finger_slot, edge_huella_id, device_id)
+            VALUES (?, ?, ?, ?, ?::uuid)
+            ON CONFLICT (student_id, finger_slot)
+            DO UPDATE SET edge_huella_id = EXCLUDED.edge_huella_id, device_id = EXCLUDED.device_id
+        ");
+        $fpStmt->execute([$studentId, $schoolId, $fingerSlot, $huellaId, $requestDeviceId]);
+
+        securityLog('EDGE_ENROLL_CONFIRMED', "doc=$doc huella_id=$huellaId slot=$fingerSlot student=$studentId school=$schoolId", null, $schoolId);
 
         http_response_code(200);
         echo json_encode([
@@ -1130,7 +1223,7 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
     } catch (Exception $e) {
         securityLog('EDGE_ENROLL_CONFIRM_FAIL', $e->getMessage(), null, $device['school_id'] ?? null);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al confirmar enrolamiento', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al confirmar enrolamiento']);
     }
     exit;
 }
@@ -1173,7 +1266,7 @@ if ($cleanPath === '/admin/devices' && $method === 'GET') {
     } catch (Exception $e) {
         securityLog('ADMIN_DEVICES_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener dispositivos', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener dispositivos']);
     }
     exit;
 }
@@ -1249,7 +1342,263 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/reconfigure$#', $cleanPath, $matches
     } catch (Exception $e) {
         securityLog('EDGE_DEVICE_RECONFIGURE_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al reconfigurar el sensor', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al reconfigurar el sensor']);
+    }
+    exit;
+}
+
+// ============================================================================
+// OTA M2M (Bloque D) — Actualización remota firmada por dispositivo.
+// ============================================================================
+require_once __DIR__ . '/../lib/ota.php';
+
+/** Autentica dispositivo por X-Device-Token + ?device_id= ; retorna la fila. */
+function otaDeviceAuth(PDO $conn): array {
+    $deviceToken = $_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '';
+    $deviceId    = $_GET['device_id'] ?? ($GLOBALS['input']['device_id'] ?? '');
+    if (!$deviceToken || !$deviceId) {
+        http_response_code(401);
+        exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token y device_id requeridos']));
+    }
+    $stmt = $conn->prepare("SELECT device_id, school_id, token_hash, ota_key, app_version, active FROM edge_devices WHERE device_id = ?::uuid LIMIT 1");
+    $stmt->execute([$deviceId]);
+    $dev = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$dev || !$dev['token_hash'] || !password_verify($deviceToken, $dev['token_hash']) || !$dev['active']) {
+        http_response_code(403);
+        exit(json_encode(['status' => 'error', 'message' => 'Token de dispositivo inválido']));
+    }
+    return $dev;
+}
+
+// ── GET /devices/ota/check — el nodo pregunta por actualización ────────────
+if ($cleanPath === '/devices/ota/check' && $method === 'GET') {
+    $dev = otaDeviceAuth($conn);
+    $current = trim((string)($_GET['version'] ?? $dev['app_version'] ?? '0.0.0'));
+
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($dev['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+
+    // Última actualización activa aplicable (global o de su escuela)
+    $uStmt = $conn->prepare("
+        SELECT update_id, version, payload_url, payload_sha256, min_version
+        FROM ota_updates
+        WHERE active = TRUE AND (school_id IS NULL OR school_id = ?)
+        ORDER BY created_at DESC
+    ");
+    $uStmt->execute([$dev['school_id']]);
+    $offer = null;
+    while ($u = $uStmt->fetch(PDO::FETCH_ASSOC)) {
+        // anti-rollback: nueva > actual, y actual >= min_version si se exige
+        if (otaVersionCompare($u['version'], $current) <= 0) continue;
+        if (!empty($u['min_version']) && otaVersionCompare($current, $u['min_version']) < 0) continue;
+        $offer = $u;
+        break;
+    }
+
+    if (!$offer) { echo json_encode(['status' => 'ok', 'update' => null]); exit; }
+
+    $manifest = [
+        'update_id' => $offer['update_id'],
+        'version'   => $offer['version'],
+        'url'       => $offer['payload_url'],
+        'sha256'    => $offer['payload_sha256'],
+    ];
+    $manifest['signature'] = $dev['ota_key']
+        ? otaSignManifest($manifest['version'], $manifest['sha256'], $manifest['url'], $dev['ota_key'])
+        : null;
+
+    // Registrar oferta (auditoría de despliegue)
+    $conn->prepare("
+        INSERT INTO ota_deployments (update_id, device_id, school_id, status, detail)
+        VALUES (?, ?, ?, 'OFFERED', ?)
+        ON CONFLICT (update_id, device_id) DO UPDATE SET status = 'OFFERED', updated_at = NOW()
+    ")->execute([$offer['update_id'], $dev['device_id'], $dev['school_id'], "ofertada a v$current"]);
+
+    echo json_encode(['status' => 'ok', 'update' => $manifest]);
+    exit;
+}
+
+// ── POST /devices/ota/report — el nodo reporta estado del despliegue ───────
+if ($cleanPath === '/devices/ota/report' && $method === 'POST') {
+    $dev = otaDeviceAuth($conn);
+    $updateId = $input['update_id'] ?? null;
+    $status   = strtoupper(trim((string)($input['status'] ?? '')));
+    $detail   = substr((string)($input['detail'] ?? ''), 0, 500);
+    $allowed  = ['DOWNLOADING','STAGED','APPLYING','APPLIED','FAILED','ROLLED_BACK'];
+    if (!$updateId || !in_array($status, $allowed, true)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'update_id y status válidos requeridos (' . implode(',', $allowed) . ')']));
+    }
+
+    $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($dev['school_id']) . ", true), set_config('app.current_role', 'EDGE_NODE', true)");
+
+    $conn->prepare("
+        INSERT INTO ota_deployments (update_id, device_id, school_id, status, detail)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (update_id, device_id) DO UPDATE SET status = EXCLUDED.status, detail = EXCLUDED.detail, updated_at = NOW()
+    ")->execute([$updateId, $dev['device_id'], $dev['school_id'], $status, $detail]);
+
+    if ($status === 'APPLIED') {
+        $vStmt = $conn->prepare("SELECT version FROM ota_updates WHERE update_id = ? LIMIT 1");
+        $vStmt->execute([$updateId]);
+        if ($v = $vStmt->fetchColumn()) {
+            $conn->prepare("UPDATE edge_devices SET app_version = ? WHERE device_id = ?")
+                 ->execute([$v, $dev['device_id']]);
+        }
+    }
+    if (in_array($status, ['FAILED', 'ROLLED_BACK'], true)) {
+        securityLog('OTA_DEPLOY_' . $status, "Device: {$dev['device_id']} Update: $updateId — $detail");
+    }
+
+    echo json_encode(['status' => 'ok']);
+    exit;
+}
+
+// ── POST /devices/ota/publish — publicar nueva versión (RECTOR/COORDINATOR) ─
+if ($cleanPath === '/devices/ota/publish' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    requireSchoolOnboarding($conn, $authUser['school_id'], $authUser['role'] ?? '');
+
+    $version  = trim((string)($input['version'] ?? ''));
+    $url      = trim((string)($input['payload_url'] ?? ''));
+    $sha256   = strtolower(trim((string)($input['payload_sha256'] ?? '')));
+    $notes    = substr((string)($input['notes'] ?? ''), 0, 500);
+    $minVer   = trim((string)($input['min_version'] ?? ''));
+    $global   = !empty($input['global']); // true → todas las escuelas del tenant admin? solo SUPER_ADMIN
+
+    if (!$version || !$url || !preg_match('/^[0-9a-f]{64}$/', $sha256)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'version, payload_url y payload_sha256 (hex 64) requeridos']));
+    }
+    if (otaVersionCompare($version, '0.0.0') <= 0) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'version debe ser semver positiva']));
+    }
+    $targetSchool = ($global && ($authUser['role'] ?? '') === 'SUPER_ADMIN') ? null : $authUser['school_id'];
+
+    $stmt = $conn->prepare("
+        INSERT INTO ota_updates (school_id, version, payload_url, payload_sha256, min_version, notes, created_by)
+        VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?)
+        ON CONFLICT (school_id, version) DO UPDATE
+          SET payload_url = EXCLUDED.payload_url, payload_sha256 = EXCLUDED.payload_sha256,
+              min_version = EXCLUDED.min_version, notes = EXCLUDED.notes, active = TRUE
+        RETURNING update_id
+    ");
+    $stmt->execute([$targetSchool, $version, $url, $sha256, $minVer, $notes, $authUser['id']]);
+    $updateId = $stmt->fetchColumn();
+
+    securityLog('OTA_PUBLISHED', "v$version update=$updateId school=" . ($targetSchool ?? 'global'), $authUser['id'], $authUser['school_id']);
+    echo json_encode(['status' => 'ok', 'update_id' => $updateId]);
+    exit;
+}
+
+// ── POST /devices/ota/revoke — desactivar una versión publicada ────────────
+if ($cleanPath === '/devices/ota/revoke' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $updateId = $input['update_id'] ?? null;
+    if (!$updateId) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'update_id requerido']));
+    }
+    $conn->prepare("UPDATE ota_updates SET active = FALSE WHERE update_id = ? AND (school_id = ? OR school_id IS NULL)")
+         ->execute([$updateId, $authUser['school_id']]);
+    securityLog('OTA_REVOKED', "update=$updateId", $authUser['id'], $authUser['school_id']);
+    echo json_encode(['status' => 'ok']);
+    exit;
+}
+
+// ── POST /devices/reassign — V-523/V-526/V-527: reubicación de nodo ─────────
+// Cuando un nodo se reubica físicamente (otra aula, otro grupo), el contexto
+// espacial debe actualizarse para que los eventos se interpreten correctamente.
+if ($cleanPath === '/devices/reassign' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $deviceId = $input['device_id'] ?? null;
+    $groupId = $input['group_id'] ?? null;        // null = desasignar grupo
+    $classroomId = $input['classroom_id'] ?? null; // null = desasignar aula
+    $reason = trim((string)($input['reason'] ?? 'Reubicación de nodo'));
+
+    if (!$deviceId || !preg_match('/^[0-9a-f-]{36}$/i', (string)$deviceId)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'device_id requerido']));
+    }
+
+    try {
+        $devStmt = $conn->prepare("SELECT device_id, group_id, classroom_id FROM edge_devices WHERE device_id = ? AND school_id = ?");
+        $devStmt->execute([$deviceId, $authUser['school_id']]);
+        $dev = $devStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$dev) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
+        }
+        if ($groupId) {
+            $chk = $conn->prepare("SELECT 1 FROM academic_groups WHERE group_id = ? AND school_id = ?");
+            $chk->execute([$groupId, $authUser['school_id']]);
+            if (!$chk->fetchColumn()) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'El grupo no pertenece a tu institución']));
+            }
+        }
+        if ($classroomId) {
+            $chk = $conn->prepare("SELECT 1 FROM classrooms WHERE classroom_id = ? AND school_id = ?");
+            $chk->execute([$classroomId, $authUser['school_id']]);
+            if (!$chk->fetchColumn()) {
+                http_response_code(403);
+                exit(json_encode(['status' => 'error', 'message' => 'El aula no pertenece a tu institución']));
+            }
+        }
+
+        $conn->prepare("UPDATE edge_devices SET group_id = ?, classroom_id = ? WHERE device_id = ?")
+             ->execute([$groupId, $classroomId, $deviceId]);
+        logUserCommand($conn, $authUser['school_id'], $authUser['id'], 'device_reassign', [
+            'device_id' => $deviceId, 'from_group' => $dev['group_id'], 'to_group' => $groupId,
+            'from_classroom' => $dev['classroom_id'], 'to_classroom' => $classroomId, 'reason' => $reason,
+        ]);
+        securityLog('DEVICE_REASSIGNED', "device=$deviceId group=$groupId classroom=$classroomId", $authUser['id'], $authUser['school_id']);
+        echo json_encode(['status' => 'ok', 'message' => 'Nodo reubicado']);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al reubicar el nodo']);
+    }
+    exit;
+}
+
+// ── POST /devices/reprovision — V-534/V-535: recuperación de nodo averiado ──
+// Marca el nodo averiado como inactivo y rota su token para el reemplazo.
+// Devuelve el nuevo token una sola vez; el operador lo instala en el nodo nuevo.
+if ($cleanPath === '/devices/reprovision' && $method === 'POST') {
+    $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
+    $deviceId = $input['device_id'] ?? null;
+    $reason = trim((string)($input['reason'] ?? 'Reprovisión por falla de hardware'));
+
+    if (!$deviceId || !preg_match('/^[0-9a-f-]{36}$/i', (string)$deviceId)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'device_id requerido']));
+    }
+
+    try {
+        $devStmt = $conn->prepare("SELECT device_id, active FROM edge_devices WHERE device_id = ? AND school_id = ?");
+        $devStmt->execute([$deviceId, $authUser['school_id']]);
+        $dev = $devStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$dev) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
+        }
+
+        // Rotar credenciales: nuevo token + nueva clave OTA. El token viejo
+        // queda invalidado (un nodo clonado/averiado ya no puede autenticarse).
+        $rawToken = bin2hex(random_bytes(32));
+        $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
+        $otaKey = bin2hex(random_bytes(32));
+        $conn->prepare("UPDATE edge_devices SET token_hash = ?, ota_key = ?, configured = FALSE, status = 'reprovisioned', last_ping = NULL WHERE device_id = ?")
+             ->execute([$tokenHash, $otaKey, $deviceId]);
+
+        logUserCommand($conn, $authUser['school_id'], $authUser['id'], 'device_reprovision', [
+            'device_id' => $deviceId, 'reason' => $reason,
+        ]);
+        securityLog('DEVICE_REPROVISIONED', "device=$deviceId", $authUser['id'], $authUser['school_id']);
+        echo json_encode(['status' => 'ok', 'device_id' => $deviceId, 'device_token' => $rawToken]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al reprovisionar el nodo']);
     }
     exit;
 }

@@ -124,7 +124,7 @@ if ($cleanPath === '/security/panic' && $method === 'POST') {
     } catch (Exception $e) {
         securityLog('SECURITY_PANIC_ERROR', $e->getMessage(), $authUser['id'], $authUser['school_id']);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error crítico al activar pánico', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error crítico al activar pánico']);
     }
     
     exit;

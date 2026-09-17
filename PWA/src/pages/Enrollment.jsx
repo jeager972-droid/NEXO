@@ -12,7 +12,7 @@ import { ROLES } from '../config/roles';
 import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface } from '../components/ui/Surface';
-import { Input } from '../components/ui/Input';
+import { Input, Textarea } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -37,6 +37,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     nombres: '', apellidos: '', documento: '', jornada: '',
     acudienteNombre: '', acudienteApellidos: '', acudienteDocumento: '', acudienteCelular: '',
     grado: '', grupo: '',
+    biometricExempt: false, exemptionReason: '',
   });
   const [groups, setGroups] = useState([]);
   const [biometricStatus, setBiometricStatus] = useState('checking');
@@ -46,7 +47,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
 
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
   const canNext =
-    step === 1 ? !!(form.nombres && form.apellidos && form.documento) :
+    step === 1 ? !!(form.nombres && form.apellidos && form.documento) && (!form.biometricExempt || !!form.exemptionReason.trim()) :
     step === 2 ? !!(form.acudienteNombre && form.acudienteApellidos && form.acudienteDocumento && form.acudienteCelular) :
     step === 3 ? !!(form.grado && form.grupo) :
     step === 4 ? true :
@@ -66,9 +67,12 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
         grade: form.grado, group: form.grupo,
         guardian_name: `${form.acudienteNombre} ${form.acudienteApellidos}`,
         guardian_document: form.acudienteDocumento, guardian_phone: form.acudienteCelular,
+        biometric_exempt: form.biometricExempt,
+        exemption_reason: form.biometricExempt ? form.exemptionReason.trim() : undefined,
       });
       onRefresh?.();
-      setStep(4);
+      // F-02: exento de biometría → salta el paso de huella directo a finalizado
+      setStep(form.biometricExempt ? 5 : 4);
     } catch (err) {
       setSaveError(humanizeError(err, 'Error al guardar el estudiante. Intenta de nuevo.'));
     } finally {
@@ -101,7 +105,9 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
     };
   }, [step]);
 
-  const handleEnrollCommand = async () => {
+  const [fingerSlot, setFingerSlot] = useState(1);
+
+  const handleEnrollCommand = async (slot = fingerSlot) => {
     if (!edgeDevice) return;
     setEnrollCmd({ state: 'sending', message: '' });
     // Limpiar polling anterior si existe
@@ -111,12 +117,13 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
         doc: form.documento,
         nombre: `${form.nombres} ${form.apellidos}`.trim(),
         tel: form.acudienteCelular,
+        finger_slot: slot,
       });
       setEnrollCmd({
         state: 'sent',
-        message: `Listo. Coloca el dedo del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella. Debes levantar y poner el dedo 4 veces.`,
+        message: `Listo. Coloca ${slot === 2 ? 'el SEGUNDO dedo' : 'el dedo'} del alumno en el sensor de secretaría ("${edgeDevice.device_name || 'Secretaría'}") para registrar su huella. Debes levantar y poner el dedo 4 veces.`,
       });
-      // Iniciar polling: verificar cada 5s si el estudiante ya tiene huella registrada
+      // Iniciar polling: verificar cada 5s si el estudiante ya tiene la huella del slot registrada
       const studentDoc = form.documento;
       let attempts = 0;
       const maxAttempts = 36; // 36 * 5s = 3 minutos máximo
@@ -133,11 +140,15 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
         try {
           const res = await studentsApi.getAll({ search: studentDoc, limit: 1 });
           const found = res.students?.[0] || res.data?.[0];
-          if (found?.has_fingerprint) {
+          const fpCount = Number(found?.fingerprint_count ?? (found?.has_fingerprint ? 1 : 0));
+          if (fpCount >= slot) {
             if (enrollPollRef.current) { clearInterval(enrollPollRef.current); enrollPollRef.current = null; }
+            setFingerSlot(2); // ofrecer dedo 2 tras éxito del dedo 1
             setEnrollCmd({
               state: 'success',
-              message: `¡Huella registrada exitosamente para ${form.nombres} ${form.apellidos}! El alumno ya puede usar el sensor para registrar su asistencia.`,
+              message: slot === 1
+                ? `¡Huella registrada para ${form.nombres} ${form.apellidos}! Puedes registrar un segundo dedo de respaldo o finalizar.`
+                : `¡Segundo dedo registrado para ${form.nombres} ${form.apellidos}! El alumno tiene doble respaldo biométrico.`,
             });
           }
         } catch (e) {
@@ -202,6 +213,27 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     <option value="completa">Completa</option>
                   </select>
                 </div>
+                {/* F-02: exención biométrica — el alumno no puede usar el sensor;
+                    su presencia se registra manualmente (comando Registro manual). */}
+                <label className="flex items-start gap-3 rounded-control border border-[var(--nx-border)] p-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-[var(--nx-accent)]"
+                    checked={form.biometricExempt}
+                    onChange={(e) => setForm((p) => ({ ...p, biometricExempt: e.target.checked }))}
+                  />
+                  <span className="text-body-sm text-[var(--nx-text)]">
+                    El alumno <strong>no puede usar el sensor biométrico</strong> (condición física/médica). Su asistencia se registrará por vía manual.
+                  </span>
+                </label>
+                {form.biometricExempt && (
+                  <Textarea
+                    label="Motivo de la exención (obligatorio)"
+                    value={form.exemptionReason}
+                    onChange={set('exemptionReason')}
+                    placeholder="Ej. condición dermatológica en dedos, amputación, etc."
+                  />
+                )}
               </>
             )}
             {step === 2 && (
@@ -266,11 +298,25 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                     className="w-full"
                     disabled={biometricStatus !== 'connected' || enrollCmd.state === 'sending'}
                     loading={enrollCmd.state === 'sending'}
-                    onClick={handleEnrollCommand}
+                    onClick={() => handleEnrollCommand(fingerSlot)}
                     leftIcon={<Fingerprint size={16} />}
                   >
-                    {enrollCmd.state === 'sent' ? 'Volver a enviar la instrucción' : 'Registrar huella'}
+                    {enrollCmd.state === 'sent'
+                      ? 'Volver a enviar la instrucción'
+                      : fingerSlot === 2 ? 'Registrar segundo dedo' : 'Registrar huella'}
                   </Button>
+                  {/* F-03: tras enrolar el dedo 1 se ofrece el dedo de respaldo */}
+                  {enrollCmd.state === 'success' && fingerSlot === 1 && (
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      disabled={biometricStatus !== 'connected' || enrollCmd.state === 'sending'}
+                      onClick={() => { setFingerSlot(2); handleEnrollCommand(2); }}
+                      leftIcon={<Fingerprint size={16} />}
+                    >
+                      Registrar segundo dedo (respaldo)
+                    </Button>
+                  )}
                   {enrollCmd.message && (
                     <div className={`rounded-control p-4 text-body-sm ${enrollCmd.state === 'error' ? 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' : enrollCmd.state === 'success' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-info)] text-[var(--nx-info)]'}`} role="status">
                       {enrollCmd.state === 'success' && <Check size={16} className="inline mr-2" />}
@@ -285,7 +331,12 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                 <div className="rounded-control bg-[var(--nx-subtle-bg-success)] p-4 text-body text-[var(--nx-success)] flex items-center gap-2">
                   <Check size={18} /> Alumno registrado exitosamente.
                 </div>
-                {biometricStatus !== 'connected' && (
+                {form.biometricExempt && (
+                  <div className="rounded-control bg-[var(--nx-subtle-bg-info)] p-4 text-body text-[var(--nx-info)] flex items-center gap-2">
+                    <Fingerprint size={18} /> Exento de biometría: su asistencia se registra con el comando «Registro manual» (Operación).
+                  </div>
+                )}
+                {!form.biometricExempt && biometricStatus !== 'connected' && (
                   <div className="rounded-control bg-[var(--nx-subtle-bg-warning)] p-4 text-body text-[var(--nx-warning)] flex items-center gap-2">
                     <AlertCircle size={18} /> No tienes sensor asignado. El alumno queda pendiente de registrar su huella.
                   </div>

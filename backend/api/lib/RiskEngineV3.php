@@ -209,6 +209,7 @@ class RiskEngineV3
      * @param string $userId
      * @param string $reason  Motivo obligatorio del cambio
      * @param array $config   {rules: [...], mapping: [...], combos: [...]}
+     * @param string $actorRole Rol del actor para el audit log (la API es JWT, no hay $_SESSION)
      * @return string policy_id de la nueva política
      */
     public static function createPolicyVersion(
@@ -216,7 +217,8 @@ class RiskEngineV3
         string $schoolId,
         string $userId,
         string $reason,
-        array $config
+        array $config,
+        string $actorRole = 'COORDINATOR'
     ): string {
         $startedTx = false;
         if (!$conn->inTransaction()) {
@@ -247,6 +249,7 @@ class RiskEngineV3
                 'version'        => $newVersion,
                 'rules'          => $config['rules'] ?? [],
                 'mapping'         => $config['mapping'] ?? [],
+                'combos'         => $config['combos'] ?? [],
             ], JSON_UNESCAPED_UNICODE);
 
             // Insertar nueva política
@@ -265,21 +268,23 @@ class RiskEngineV3
                 // vacío, y PostgreSQL rechaza ''::boolean. Convertir a 'true'/'false'.
                 $singleOcc = !empty($rule['single_occurrence']) ? 'true' : 'false';
                 $humanReview = !empty($rule['requires_human_review']) ? 'true' : 'false';
+                $detectOnly = !empty($rule['detect_only']) ? 'true' : 'false';
                 $conn->prepare("
                     INSERT INTO risk_rules (policy_id, school_id, risk_level,
                         weight_base, half_life_days, activation_threshold, cooldown_days,
-                        single_occurrence, requires_human_review,
+                        single_occurrence, requires_human_review, detect_only,
                         recurrence_count, window_days,
                         min_recurrence, max_recurrence, min_window_days, max_window_days,
                         min_weight, max_weight, min_half_life, max_half_life,
                         min_threshold, max_threshold)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::boolean, ?::boolean, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::boolean, ?::boolean, ?::boolean, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ")->execute([
                     $policyId, $schoolId, $rule['risk_level'],
                     $rule['weight_base'], $rule['half_life_days'],
                     $rule['activation_threshold'], $rule['cooldown_days'],
                     $singleOcc,
                     $humanReview,
+                    $detectOnly,
                     $rule['recurrence_count'] ?? 4,
                     $rule['window_days'] ?? 7,
                     $rule['min_recurrence'] ?? 1,
@@ -301,7 +306,25 @@ class RiskEngineV3
                 ")->execute([$policyId, $schoolId, $typeId, $map['risk_level']]);
             }
 
-            // Combos desactivados por ahora (solo deteccion individual)
+            // Reglas de combinación (correlación entre categorías)
+            foreach (($config['combos'] ?? []) as $combo) {
+                if (empty($combo['rule_name']) || empty($combo['result_level']) || empty($combo['condition'])) {
+                    continue;
+                }
+                if (!in_array($combo['result_level'], ['MODERADA', 'ALTA', 'MUY_ALTA'])) {
+                    throw new InvalidArgumentException("result_level de combinación inválido: " . $combo['result_level']);
+                }
+                $conn->prepare("
+                    INSERT INTO risk_combination_rules
+                        (policy_id, school_id, rule_name, condition_json, result_level, result_reason)
+                    VALUES (?, ?, ?, ?::jsonb, ?, ?)
+                ")->execute([
+                    $policyId, $schoolId, $combo['rule_name'],
+                    json_encode($combo['condition'], JSON_UNESCAPED_UNICODE),
+                    $combo['result_level'],
+                    $combo['result_reason'] ?? $combo['rule_name'],
+                ]);
+            }
 
             // Registrar en audit log (Capa 6) — usar savepoint para que un fallo
             // de auditoría no aborte el guardado de la política.
@@ -316,7 +339,7 @@ class RiskEngineV3
                     VALUES (?, ?, ?, 'risk_policy', ?, 'CREATE',
                         ?::jsonb, ?::jsonb, ?, ?)
                 ")->execute([
-                    $schoolId, $userId, $_SESSION['user_role'] ?? 'COORDINATOR',
+                    $schoolId, $userId, $actorRole,
                     $policyId,
                     $prevSnapshot,
                     $snapshot, $reason, $newVersion,
@@ -577,6 +600,22 @@ class RiskEngineV3
                 json_encode(['escalation_state' => $newState]),
                 $reason
             ]);
+
+            // V-069/V-151: una alerta escalada a SEGUIMIENTO instancia el caso
+            // de seguimiento (derivación automática a coordinación).
+            if ($newState === self::STATE_SEGUIMIENTO) {
+                $chk = $conn->prepare("
+                    SELECT 1 FROM student_tracking
+                    WHERE student_id = ? AND school_id = ? AND status = 'en proceso'
+                ");
+                $chk->execute([$prev['student_id'], $prev['school_id']]);
+                if (!$chk->fetchColumn()) {
+                    $conn->prepare("
+                        INSERT INTO student_tracking (school_id, student_id, status, dependency, origin_type, origin_id)
+                        VALUES (?, ?, 'en proceso', 'coordinacion', 'risk_alert', ?)
+                    ")->execute([$prev['school_id'], $prev['student_id'], $alertId]);
+                }
+            }
 
             if ($startedTx) {
                 $conn->commit();

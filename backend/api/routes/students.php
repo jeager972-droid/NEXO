@@ -41,10 +41,17 @@ if ($cleanPath === '/students') {
         // Usar 'group' para buscar en academic_groups.group_name.
         $groupName  = trim($input['group'] ?? $input['grade'] ?? '');
         $workShift  = trim($input['work_shift'] ?? 'mañana');
+        // F-02: exención biométrica (condición física/médica) — motivo obligatorio
+        $biometricExempt = !empty($input['biometric_exempt']);
+        $exemptionReason = trim((string)($input['exemption_reason'] ?? ''));
 
         if (!$firstName || !$lastName || !$document) {
             http_response_code(400);
             exit(json_encode(['status' => 'error', 'message' => 'Nombre, apellido y documento son obligatorios']));
+        }
+        if ($biometricExempt && $exemptionReason === '') {
+            http_response_code(400);
+            exit(json_encode(['status' => 'error', 'message' => 'La exención biométrica requiere un motivo (exemption_reason)']));
         }
 
         try {
@@ -59,16 +66,18 @@ if ($cleanPath === '/students') {
             }
 
             $stmt = $conn->prepare("
-                INSERT INTO students (school_id, first_name, last_name, document_number, work_shift)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO students (school_id, first_name, last_name, document_number, work_shift, biometric_exempt, exemption_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (school_id, document_number) DO UPDATE
                   SET first_name = EXCLUDED.first_name,
                       last_name  = EXCLUDED.last_name,
                       work_shift = EXCLUDED.work_shift,
+                      biometric_exempt = EXCLUDED.biometric_exempt,
+                      exemption_reason = EXCLUDED.exemption_reason,
                       deleted_at = NULL
                 RETURNING student_id
             ");
-            $stmt->execute([$schoolId, $firstName, $lastName, $document, $workShift]);
+            $stmt->execute([$schoolId, $firstName, $lastName, $document, $workShift, $biometricExempt ? 'true' : 'false', $exemptionReason !== '' ? $exemptionReason : null]);
             $studentId = $stmt->fetchColumn();
 
             if ($groupName) {
@@ -166,7 +175,7 @@ if ($cleanPath === '/students') {
                 try { $conn->rollBack(); } catch (Exception $ignore) {}
             }
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al registrar estudiante', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Error al registrar estudiante']);
         }
         exit;
     }
@@ -227,10 +236,13 @@ if ($cleanPath === '/students') {
                 (s.deleted_at IS NULL) as active,
                 s.created_at,
                 s.work_shift,
+                s.biometric_exempt,
+                s.exemption_reason,
                 COALESCE(ag.group_name, 'Sin grupo') as group_name,
                 ag.grade_level,
                 (s.biometric_hash IS NOT NULL) as has_fingerprint,
                 s.biometric_hash as fingerprint_id,
+                COALESCE(fc.fingerprint_count, CASE WHEN s.biometric_hash IS NOT NULL THEN 1 ELSE 0 END) as fingerprint_count,
                 gu.first_name || ' ' || gu.last_name as guardian_name,
                 gu.document_number as guardian_document,
                 gu.phone as guardian_phone,
@@ -246,6 +258,10 @@ if ($cleanPath === '/students') {
               ON gsr.guardian_id = gr.guardian_id
             LEFT JOIN users gu
               ON gr.user_id = gu.user_id
+            LEFT JOIN (
+                SELECT student_id, COUNT(*) AS fingerprint_count
+                FROM student_fingerprints GROUP BY student_id
+            ) fc ON fc.student_id = s.student_id
             WHERE {$whereSql}
             ORDER BY s.created_at DESC, s.student_id DESC
             LIMIT ?
@@ -362,7 +378,7 @@ if ($cleanPath === '/students/bulk-assign' && $method === 'POST') {
         }
         securityLog('STUDENTS_BULK_ASSIGN_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al asignar estudiantes', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al asignar estudiantes']);
     }
     exit;
 }
@@ -407,7 +423,64 @@ if (preg_match('#^/students/([0-9a-fA-F\-]{36})$#', $cleanPath, $matches) && $me
         try { if ($conn->inTransaction()) $conn->rollBack(); } catch (Exception $ignore) {}
         securityLog('STUDENT_DELETE_ERROR', $e->getMessage(), $authUser['id'] ?? null, $schoolId ?? null);
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar estudiante', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al eliminar estudiante']);
+    }
+    exit;
+}
+
+// ============================================================================
+// POST /students/{id}/consent — Registro de consentimiento del tratamiento de
+// datos biométricos (habeas data / V-342/V-344).
+//   Body: {status: OTORGADO|REVOCADO|NO_APLICA|PENDIENTE, channel?, document_ref?,
+//          reason?}
+//   REVOCADO marca biometric_exempt=TRUE automáticamente — el estudiante deja
+//   de procesarse biométricamente hasta nuevo consentimiento.
+// ============================================================================
+if (preg_match('#^/students/([0-9a-fA-F\-]{36})/consent$#', $cleanPath, $matches) && $method === 'POST') {
+    $authUser = requireAuth(['SECRETARY', 'RECTOR', 'COORDINATOR']);
+    $schoolId = $authUser['school_id'];
+    $studentId = $matches[1];
+
+    $status = strtoupper(trim($input['status'] ?? ''));
+    $channel = trim($input['channel'] ?? '');
+    $docRef = trim($input['document_ref'] ?? '');
+    $reason = trim($input['reason'] ?? '');
+    if (!in_array($status, ['PENDIENTE','OTORGADO','REVOCADO','NO_APLICA'], true)) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => "status debe ser PENDIENTE|OTORGADO|REVOCADO|NO_APLICA"]));
+    }
+    if ($status === 'REVOCADO' && $reason === '') {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'La revocación requiere reason']));
+    }
+
+    try {
+        $upd = $conn->prepare("
+            UPDATE students
+            SET consent_status = ?,
+                consent_channel = NULLIF(?, ''),
+                consent_recorded_at = NOW(),
+                consent_recorded_by = ?,
+                consent_document_ref = NULLIF(?, ''),
+                biometric_exempt = CASE WHEN ? = 'REVOCADO' THEN TRUE ELSE biometric_exempt END,
+                exemption_reason = CASE WHEN ? = 'REVOCADO' THEN ? ELSE exemption_reason END,
+                updated_at = NOW()
+            WHERE student_id = ? AND school_id = ? AND deleted_at IS NULL
+        ");
+        $upd->execute([$status, $channel, $authUser['id'], $docRef,
+                       $status, $status, ('Consentimiento revocado: ' . $reason),
+                       $studentId, $schoolId]);
+        if ($upd->rowCount() === 0) {
+            http_response_code(404);
+            exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+        }
+        securityLog('STUDENT_CONSENT_' . $status, "student=$studentId channel=$channel" . ($reason ? " reason=$reason" : ''), $authUser['id'], $schoolId);
+        echo json_encode(['status' => 'ok', 'student_id' => $studentId, 'consent_status' => $status,
+                          'biometric_exempt' => $status === 'REVOCADO']);
+    } catch (Exception $e) {
+        securityLog('STUDENT_CONSENT_ERROR', $e->getMessage(), $authUser['id'] ?? null, $schoolId ?? null);
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al registrar consentimiento']);
     }
     exit;
 }

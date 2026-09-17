@@ -284,7 +284,7 @@ const Consultation = () => {
         .catch((err) => { if (!abortController.signal.aborted) setQueryError(humanizeError(err, 'Error de red')); })
         .finally(() => { if (!abortController.signal.aborted) setLoadingData(false); });
     } else {
-      consultationsApi.queryModule(moduleSlug, '', '', '', '', null, '', abortController.signal)
+      consultationsApi.queryModule(moduleSlug, '', '', '', '', abortController.signal, '')
         .then((res) => {
           if (!abortController.signal.aborted) { setDynamicData(res.data || []); setDynamicColumns(res.columns || {}); }
         })

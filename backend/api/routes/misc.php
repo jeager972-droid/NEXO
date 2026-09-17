@@ -77,7 +77,7 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         if (!$rl) {
             // VF-023: Fail-closed — si Redis cae, no permitir spam
             http_response_code(503);
-            echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
             exit;
         }
         $key = "rl:contacto:{$contactIp}";
@@ -85,13 +85,13 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
         if ($hits === 1) $rl->expire($key, 3600);
         if ($hits > 5) {
             http_response_code(429);
-            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Demasiadas solicitudes. Inténtalo más tarde.']);
             exit;
         }
     } catch (Throwable $e) {
         // VF-023: Fail-closed también en excepciones
         http_response_code(503);
-        echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
         exit;
     }
 
@@ -105,18 +105,18 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
 
     if ($nombre === '' || $cargo === '' || $institucion === '' || $municipio === '' || $email === '' || $whatsapp === '') {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Todos los campos obligatorios deben completarse.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Todos los campos obligatorios deben completarse.']);
         exit;
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         http_response_code(422);
-        echo json_encode(['status' => 'error', 'message' => 'Correo electrónico inválido.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Correo electrónico inválido.']);
         exit;
     }
     $digits = preg_replace('/\D/', '', $whatsapp);
     if (strlen($digits) < 10) {
         http_response_code(422);
-        echo json_encode(['status' => 'error', 'message' => 'Número de WhatsApp inválido.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Número de WhatsApp inválido.']);
         exit;
     }
 
@@ -175,7 +175,7 @@ if ($cleanPath === '/notifications') {
         $meta = $input['metadata'] ?? $input['metadata_json'] ?? null;
         if ($desc === '') {
             http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => 'Mensaje de notificación requerido', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Mensaje de notificación requerido']);
             exit;
         }
 
@@ -194,7 +194,7 @@ if ($cleanPath === '/notifications') {
         } catch (Throwable $e) {
             securityLog('NOTIFICATIONS_INSERT_ERROR', $e->getMessage());
             http_response_code(500);
-            echo json_encode(['status' => 'error', 'message' => 'Error al crear notificación', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Error al crear notificación']);
         }
         exit;
     }
@@ -243,7 +243,7 @@ if ($cleanPath === '/notifications') {
     } catch (Throwable $e) {
         securityLog('NOTIFICATIONS_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener notificaciones', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener notificaciones']);
     }
     exit;
 }
@@ -259,7 +259,7 @@ if ($cleanPath === '/notifications/clear' && $method === 'POST') {
     } catch (Throwable $e) {
         securityLog('NOTIFICATIONS_CLEAR_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al vaciar notificaciones', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al vaciar notificaciones']);
     }
     exit;
 }
@@ -272,7 +272,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
 
     if (!in_array($action, ['justify', 'no_justify'], true)) {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Acción no válida. Use justify o no_justify.', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Acción no válida. Use justify o no_justify.']);
         exit;
     }
 
@@ -288,7 +288,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
 
         if (!$notif) {
             http_response_code(404);
-            echo json_encode(['status' => 'error', 'message' => 'Notificación no encontrada', 'debug' => $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Notificación no encontrada']);
             exit;
         }
 
@@ -336,7 +336,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
     } catch (Throwable $e) {
         securityLog('NOTIFICATION_ACTION_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al procesar la acción', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al procesar la acción']);
     }
     exit;
 }
@@ -375,7 +375,7 @@ if ($cleanPath === '/consultation/search') {
     } catch (Exception $e) {
         securityLog('CONSULTATION_SEARCH_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error en consulta', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error en consulta']);
     }
     exit;
 }
@@ -422,7 +422,7 @@ if ($cleanPath === '/reports/preview') {
     } catch (Exception $e) {
         securityLog('REPORTS_PREVIEW_ERROR', $e->getMessage());
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Error al obtener vista previa de reportes', 'debug' => $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Error al obtener vista previa de reportes']);
     }
     exit;
 }
@@ -826,6 +826,8 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         }
 
         // ── Inasistencia: 1 = justificada, 2 = no está al tanto ──
+        // Bloque C: aceptar dígitos Y lenguaje natural (el acudiente no siempre
+        // responde con el número del menú).
         $inasistenciaCtxRaw = null;
         try {
             if ($redisConv) {
@@ -833,14 +835,37 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             }
         } catch (Throwable $e) {}
 
-        if ($inasistenciaCtxRaw && ($trimBody === '1' || $trimBody === '2')) {
+        $menuChoice = null;
+        if ($inasistenciaCtxRaw) {
+            if ($trimBody === '1') $menuChoice = '1';
+            elseif ($trimBody === '2') $menuChoice = '2';
+            else {
+                $lower = function_exists('mb_strtolower') ? mb_strtolower($trimBody) : strtolower($trimBody);
+                // "no sabía / no estaba al tanto / no me avisaron / desconozco"
+                if (preg_match('/no sab|no estaba|no me (enter|avis|dij)|desconoz|no ten|ignorab|no sabia/u', $lower)) {
+                    $menuChoice = '2';
+                // "justificada / está enfermo / cita médica / tiene permiso"
+                } elseif (preg_match('/justific|enferm|cita|medic|permiso|calamidad|domest|si sab|lo se\b/u', $lower)) {
+                    $menuChoice = '1';
+                } else {
+                    // Contexto existe pero respuesta irreconocible → recordar menú
+                    $inaCtxTmp = json_decode($inasistenciaCtxRaw, true);
+                    $nameTmp = $inaCtxTmp['student_name'] ?? 'su estudiante';
+                    sendTwilioDirect($from, "Para registrar su respuesta sobre la inasistencia de {$nameTmp}, responda:\n1 — La inasistencia está justificada\n2 — No estaba al tanto");
+                    echo '<Response></Response>';
+                    exit;
+                }
+            }
+        }
+
+        if ($inasistenciaCtxRaw && $menuChoice) {
             $inaCtx = json_decode($inasistenciaCtxRaw, true);
             $inaStudentId = $inaCtx['student_id'] ?? null;
             $inaStudentName = $inaCtx['student_name'] ?? 'Estudiante';
             $inaIncidentId = $inaCtx['incident_id'] ?? null;
             $inaSchoolId = $inaCtx['school_id'] ?? $schoolId;
 
-            if ($trimBody === '1') {
+            if ($menuChoice === '1') {
                 // Justificada: pedir motivo
                 try {
                     if ($redisConv) {
@@ -854,7 +879,9 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                     }
                 } catch (Throwable $e) {}
 
-                $replyMsg = "Por favor, escriba brevemente el motivo de la inasistencia de {$inaStudentName}:";
+                // Documento: al justificar se pide la excusa/soporte y se indica
+                // que el estudiante debe ponerse al día en actividades.
+                $replyMsg = "Por favor, escriba brevemente el motivo de la inasistencia de {$inaStudentName}.\n\nAl reintegrarse, el estudiante debe adjuntar la excusa o soporte correspondiente y ponerse al día en las actividades pendientes.";
                 sendTwilioDirect($from, $replyMsg);
 
                 // Log del mensaje saliente
@@ -873,7 +900,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 ]);
 
                 securityLog('INASISTENCIA_JUSTIFICADA_PIDIENDO_MOTIVO', "Guardian:$guardianId Student:$inaStudentId");
-            } elseif ($trimBody === '2') {
+            } elseif ($menuChoice === '2') {
                 // No está al tanto: alerta MUY_ALTA + notificar coordinación
                 // 1. Marcar el incidente original como no justificada
                 if ($inaIncidentId) {
@@ -904,14 +931,24 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 ], JSON_UNESCAPED_UNICODE);
                 $noJustStmt->execute([$inaSchoolId, $inaStudentId, $noJustMeta]);
 
-                // 3. Notificar a coordinación y rectoría
+                // 3. Notificar a los destinos configurados (default COORDINATOR+RECTOR)
                 $coordStmt = $conn->prepare("
-                    SELECT user_id FROM users
-                    WHERE school_id = ? AND role_id IN (
-                        SELECT role_id FROM roles WHERE UPPER(role_name) IN ('COORDINATOR', 'RECTOR')
-                    ) AND active = TRUE
+                    SELECT DISTINCT u.user_id FROM users u
+                    JOIN roles r ON u.role_id = r.role_id
+                    WHERE u.school_id = ? AND UPPER(r.role_name) IN (
+                        SELECT UPPER(target_role) FROM school_notification_routes
+                        WHERE school_id = ? AND event_kind = 'ABSENCE_RESPONSE' AND enabled = TRUE
+                        UNION ALL
+                        SELECT 'COORDINATOR' WHERE NOT EXISTS (
+                            SELECT 1 FROM school_notification_routes
+                            WHERE school_id = ? AND event_kind = 'ABSENCE_RESPONSE' AND enabled = TRUE)
+                        UNION ALL
+                        SELECT 'RECTOR' WHERE NOT EXISTS (
+                            SELECT 1 FROM school_notification_routes
+                            WHERE school_id = ? AND event_kind = 'ABSENCE_RESPONSE' AND enabled = TRUE)
+                    ) AND u.active = TRUE
                 ");
-                $coordStmt->execute([$inaSchoolId]);
+                $coordStmt->execute([$inaSchoolId, $inaSchoolId, $inaSchoolId, $inaSchoolId]);
                 $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
 
                 $alertMeta = json_encode([
@@ -1010,14 +1047,24 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
             ], JSON_UNESCAPED_UNICODE);
             $justStmt->execute([$motSchoolId, $motStudentId, $justMeta]);
 
-            // 3. Notificar a coordinación
+            // 3. Notificar a los destinos configurados (default COORDINATOR+RECTOR)
             $coordStmt = $conn->prepare("
-                SELECT user_id FROM users
-                WHERE school_id = ? AND role_id IN (
-                    SELECT role_id FROM roles WHERE UPPER(role_name) IN ('COORDINATOR', 'RECTOR')
-                ) AND active = TRUE
+                SELECT DISTINCT u.user_id FROM users u
+                JOIN roles r ON u.role_id = r.role_id
+                WHERE u.school_id = ? AND UPPER(r.role_name) IN (
+                    SELECT UPPER(target_role) FROM school_notification_routes
+                    WHERE school_id = ? AND event_kind = 'ABSENCE_RESPONSE' AND enabled = TRUE
+                    UNION ALL
+                    SELECT 'COORDINATOR' WHERE NOT EXISTS (
+                        SELECT 1 FROM school_notification_routes
+                        WHERE school_id = ? AND event_kind = 'ABSENCE_RESPONSE' AND enabled = TRUE)
+                    UNION ALL
+                    SELECT 'RECTOR' WHERE NOT EXISTS (
+                        SELECT 1 FROM school_notification_routes
+                        WHERE school_id = ? AND event_kind = 'ABSENCE_RESPONSE' AND enabled = TRUE)
+                ) AND u.active = TRUE
             ");
-            $coordStmt->execute([$motSchoolId]);
+            $coordStmt->execute([$motSchoolId, $motSchoolId, $motSchoolId, $motSchoolId]);
             $coords = $coordStmt->fetchAll(PDO::FETCH_ASSOC);
 
             $justNotifMeta = json_encode([
@@ -1041,8 +1088,8 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
                 ]);
             }
 
-            // 4. Responder al acudiente
-            $ackMsg = "Gracias. Hemos registrado la justificación de la inasistencia de {$motStudentName}. La institución tomará nota del motivo.";
+            // 4. Responder al acudiente — excusa pendiente + ponerse al día
+            $ackMsg = "Gracias. Hemos registrado la justificación de la inasistencia de {$motStudentName}. Recuerde adjuntar la excusa o soporte al reintegrarse; el estudiante debe ponerse al día en las actividades pendientes.";
             sendTwilioDirect($from, $ackMsg);
 
             // Log del mensaje saliente

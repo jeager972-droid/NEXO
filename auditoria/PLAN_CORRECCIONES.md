@@ -37,6 +37,34 @@ Hardware-dependientes (no bloquean nada, pero nada los desbloquea):
 
 ---
 
+## REGLA TRANSVERSAL — HARDWARE / FIRMWARE / FÍSICO: SIMULADOR + TEST DE VALIDACIÓN (OBLIGATORIO)
+
+Todo ítem que involucre hardware, firmware o lo estrictamente físico — comunicación M2M, resiliencia ante apagones, resiliencia de datos, criptografía/almacenamiento cifrado, térmico, sensores biométricos, telemetría/salud del nodo — **no se entrega solo con el código del arreglo**. Cada entrega incluye obligatoriamente tres artefactos:
+
+| Artefacto | Dónde | Qué es |
+|-----------|-------|--------|
+| **1. Implementación** | Código producto (`backend/edge/src`, `backend/api`, workers) | El arreglo o función nueva. |
+| **2. Simulador integrado** | `simulaciones/` (carpeta nueva en raíz del repo) | Simulador del fenómeno físico, usable sin hardware real. En edge C++ se implementa detrás de las interfaces HAL ya existentes (`include/hal/`, mismo patrón que `dev_stub`): p. ej. `IPowerMonitor` + `SimulatedPowerMonitor`. |
+| **3. Test de validación bidireccional o multidimensional** | `test/` (PHP/PHPUnit) y `backend/edge/tests/` (C++) | Valida **todos** los ejes que el ítem exige, aunque el código ya funcione. Bidireccional = ambos sentidos del flujo (edge→central y central→edge; fallo→detección→contingencia→recuperación→normalidad). Multidimensional = estados, timing, persistencia, dedup, umbrales y recuperación según aplique. |
+
+**Estructura de `simulaciones/`:**
+
+```
+simulaciones/
+  energia/        # F-09: corte de red, respaldo UPS, agotamiento de batería, shutdown ordenado
+  m2m/            # F-10: módem, pérdida de señal, reconexión, latencia, cambio de transporte
+  termico/        # F-12: curva de temperatura, respuesta del ventilador PWM
+  almacenamiento/ # F-11/F-13: disco lleno, DLQ, corrupción, cifrado de campos
+  nodo/           # F-04/F-06: heartbeat caído, drift de reloj, cola creciente (lado central: simula estados de edge_devices en BD)
+  biometria/      # F-03: enrolamiento de 2 dedos, match/no-match por finger_index
+```
+
+**Ítems del plan sujetos a esta regla:** F-03, F-04, F-06, F-09, F-10, F-11, F-12, F-13 y cualquier detector cuya entrada dependa de señal física. F-31 (test integral de continuidad) consume estos simuladores.
+
+**Criterio de aceptación por ítem:** el test corre contra el simulador en CI sin hardware; el simulador reproduce al menos los estados nominal/degradado/fallo/recuperación que el ítem declare; si el hardware objetivo no existe físicamente (p. ej. no hay UPS ni módem en el diseño real), el ítem se reclasifica a ◻️ (dossier F-34) en vez de implementarse contra aire.
+
+---
+
 ## FASE 0 — BUGS Y DEUDAS INMEDIATAS (sin dependencias)
 
 Correcciones puntuales de código defectuoso o inseguro. No requieren diseño nuevo.
@@ -158,12 +186,14 @@ Correcciones puntuales de código defectuoso o inseguro. No requieren diseño nu
 
 ## FASE 3 — EDGE: ENERGÍA, M2M, ALMACENAMIENTO, TÉRMICO (hardware-dependiente)
 
+> ⚠️ **Todos los ítems de esta fase están sujetos a la REGLA TRANSVERSAL** (simulador en `simulaciones/` + test bidireccional/multidimensional en `test/` o `backend/edge/tests/`). Igualmente F-03, F-04 y F-06.
+
 | ID | Qué arreglar | Componentes | Desbloquea | Severidad |
 |----|--------------|-------------|------------|-----------|
 | F-09 | Gestión de energía de respaldo: leer estado UPS (GPIO/UPS HAT/I2C fuel gauge), evento `POWER_BACKUP`/`POWER_LOST`, LED de estado energético, shutdown ordenado al agotar batería | `edge/src/hardware/` (nuevo `PowerMonitor`), `RealGpioManager`, `main.cpp` | V-229–V-232, V-420–V-422, V-512–V-516, V-518 | Crítica |
 | F-10 | Conectividad celular M2M: integración módem (ModemManager/ppp scripts), watchdog de interfaz, métricas de señal en telemetría | `edge/scripts/`, nuevo módulo `net/CellularManager` | V-204–V-207, V-326 | Crítica |
 | F-11 | Cifrado completo del almacenamiento local: migrar a SQLCipher o cifrar campos `estudiantes`(doc/nombre/teléfonos) y `audit_trail` | `sqlite_manager.cpp`, `encryption.cpp` | V-243–V-245, V-328, V-394 | Alta |
-| F-12 | Control térmico: ventilador PWM por temperatura (sensor SoC/`/sys/class/thermal`) | `edge` nuevo `ThermalManager` | V-310 | Media |
+| ~~F-12~~ | **◻️ RECLASIFICADO (veredicto 2026-09-15): el nodo usa disipación pasiva, sin ventilador controlable.** No hay código que escribir; V-310 pasa a dossier físico (F-34). La temperatura del SoC igualmente se reporta en telemetría (F-06) como observabilidad. | — | V-310 → ◻️ | — |
 | F-13 | DLQ edge con reintento de largo plazo + reporte a central | `main.cpp` SyncWorker | V-509 | Media |
 
 **Nota:** V-293–V-309, V-311–V-323, V-333, V-334, V-587, V-588, V-597, V-598 son atributos físicos/de instalación (◻️). Requieren dossier de hardware y checklist de instalación, no cambios de código — documentarlos como anexo de cumplimiento físico.
@@ -222,6 +252,22 @@ Correcciones puntuales de código defectuoso o inseguro. No requieren diseño nu
 6. **Fase 5** y **Fase 6** — cierre funcional, pruebas y cumplimiento.
 
 **Regla de dependencias crítica:** nada de validación espacial (F-01 hijos, F-04, F-07, F-08 espacial, F-23) puede implementarse antes del modelo de aulas/horarios poblado; nada de contingencia manual antes de F-02.
+
+---
+
+## REGLA DE DOCUMENTACIÓN — CORRECCIONES_IMPLEMENTADAS.md (OBLIGATORIO)
+
+Al terminar **cada fase** (o lote acordado) se documenta en `auditoria/CORRECCIONES_IMPLEMENTADAS.md`, por ítem:
+
+1. **Qué se hizo** — cambios concretos (archivos, funciones, migraciones).
+2. **Por qué** — el defecto/incumplimiento que corrige (IDs V-/B-/F-).
+3. **Qué cambió** — comportamiento anterior vs. nuevo.
+4. **Impacto** — qué flujos/actores se ven afectados; flags o toggles introducidos.
+5. **Bajo qué decisión** — veredicto del usuario, criterio de la auditoría o descarte como falso positivo (con la razón).
+
+Además: antes de iniciar una fase con dependencia de trabajo previo, se escribe una **deliberación de dependencias** en el mismo documento (qué se asume del trabajo anterior, qué se verificó, qué riesgo queda abierto). El sistema debe quedar completamente íntegro: ningún cambio sin rastro.
+
+**Veredictos registrados (2026-09-15):** F-09 ✅ real (UPS existe) · F-10 ✅ real (módem M2M existe) · F-12 ◻️ (disipación pasiva, sin ventilador) · B-07 pendiente de decisión (fix invasivo; ver Fase 0).
 
 ---
 

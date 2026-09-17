@@ -10,7 +10,7 @@ import {
   AlertOctagon, ShieldCheck, ShieldAlert,
   Clock, Bus, Calendar, Wrench, Send, UserCheck,
   ChevronRight, Loader2, FileText, Siren,
-  GitMerge, Maximize2
+  GitMerge, Maximize2, PenLine
 } from 'lucide-react';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
@@ -43,7 +43,8 @@ const COMMANDS_CATALOG = [
   { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason'], tone: 'warning' },
   { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
   { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'warning' },
-  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group'], tone: 'warning' },
+  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'warning' },
+  { id: 'registro_manual', title: 'Registro manual', icon: PenLine,    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning' },
   // ── Rojo (danger) — acciones críticas/emergencias ──
   { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
   { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
@@ -275,6 +276,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         case 'incidente':   result = await operationsApi.execute('incidente', payload, '/operations/incidente'); break;
         case 'fusionar_bloque': result = await operationsApi.execute('fusionar_bloque', payload, '/operations/fusionar_bloque'); break;
         case 'extender_bloque': result = await operationsApi.execute('extender_bloque', payload, '/operations/extender_bloque'); break;
+        case 'registro_manual': result = await operationsApi.execute('registro_manual', payload, '/operations/registro_manual'); break;
         default: throw new Error('Comando no soportado');
       }
 

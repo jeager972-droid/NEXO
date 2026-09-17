@@ -238,7 +238,7 @@ bool CloudManager::registerStudent(const std::string& doc, const std::string& no
 }
 
 bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const std::string& nombre,
-                                                   const std::string& tel, uint32_t huellaId) {
+                                                   const std::string& tel, uint32_t huellaId, int fingerSlot) {
     Encryption& crypto = Encryption::getInstance();
 
     // RUTA PRIMARIA: Si la clave AES está provisionada, usar el ingest cifrado
@@ -253,6 +253,7 @@ bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const 
         j["parent_name"] = "";
         j["salon"] = "";
         j["huella_id"] = static_cast<int>(huellaId);
+        j["finger_slot"] = fingerSlot;
         j["has_fingerprint"] = true;
         j["device_token"] = crypto.getToken();
         j["device_id"] = ConfigManager::getInstance().getDeviceId();
@@ -285,6 +286,7 @@ bool CloudManager::registerStudentWithFingerprint(const std::string& doc, const 
     j["doc"] = doc;
     j["nombre"] = nombre;
     j["huella_id"] = static_cast<int>(huellaId);
+    j["finger_slot"] = fingerSlot;
     j["has_fingerprint"] = true;
 
     std::string postData = j.dump();

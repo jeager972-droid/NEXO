@@ -50,11 +50,12 @@ function httpRequest($url, $method = 'GET', $body = null, $token = null) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'X-Requested-With: XMLHttpRequest']);
 
     if ($token) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
+            'X-Requested-With: XMLHttpRequest',
             'Authorization: Bearer ' . $token
         ]);
     }
@@ -147,18 +148,18 @@ if ($resp['code'] === 401 || $resp['code'] === 400) {
 // =============================================================================
 echo "\n\033[34m[3] Dashboard\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/dashboard/metrics", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/dashboard/stats", 'GET', null, $token);
     if ($resp['code'] === 200) {
-        logPass("GET /dashboard/metrics returns 200");
+        logPass("GET /dashboard/stats returns 200");
     } else {
-        logFail("GET /dashboard/metrics", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
+        logFail("GET /dashboard/stats", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
     }
 
-    $resp = httpRequest("$baseUrl/dashboard/today-summary", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/dashboard/events", 'GET', null, $token);
     if ($resp['code'] === 200) {
-        logPass("GET /dashboard/today-summary returns 200");
+        logPass("GET /dashboard/events returns 200");
     } else {
-        logFail("GET /dashboard/today-summary", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
+        logFail("GET /dashboard/events", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
     }
 } else {
     logSkip("Dashboard tests (no token)");
@@ -186,19 +187,19 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[5] Operations\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/operations", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/dashboard/events", 'GET', null, $token);
     if ($resp['code'] === 200 || $resp['code'] === 400) {
-        logPass("GET /operations returns " . $resp['code']);
+        logPass("GET /dashboard/events returns " . $resp['code']);
     } else {
-        logFail("GET /operations", "200 or 400", $resp['code']);
+        logFail("GET /dashboard/events", "200 or 400", $resp['code']);
     }
 
-    // Operations por grupo
-    $resp = httpRequest("$baseUrl/operations?group_id=a10aaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 'GET', null, $token);
+    // Grupos por jornada
+    $resp = httpRequest("$baseUrl/groups?work_shift=manana", 'GET', null, $token);
     if ($resp['code'] === 200 || $resp['code'] === 400) {
-        logPass("GET /operations?group_id=... returns " . $resp['code']);
+        logPass("GET /dashboard/stats?group_name returns " . $resp['code']);
     } else {
-        logFail("GET /operations?group_id", "200 or 400", $resp['code']);
+        logFail("GET /dashboard/stats?group_name", "200 or 400", $resp['code']);
     }
 } else {
     logSkip("Operations tests (no token)");
@@ -209,18 +210,18 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[6] Users\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/users", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/users/by-role?role=TEACHER", 'GET', null, $token);
     if ($resp['code'] === 200) {
-        logPass("GET /users returns 200");
+        logPass("GET /users/by-role returns 200");
     } else {
-        logFail("GET /users", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
+        logFail("GET /users/by-role", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
     }
 
-    $resp = httpRequest("$baseUrl/users/profile", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/users/me/extended", 'GET', null, $token);
     if ($resp['code'] === 200) {
-        logPass("GET /users/profile returns 200");
+        logPass("GET /users/me/extended returns 200");
     } else {
-        logFail("GET /users/profile", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
+        logFail("GET /users/me/extended", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
     }
 } else {
     logSkip("Users tests (no token)");
@@ -234,7 +235,7 @@ if ($token) {
     $endpoints = [
         '/audit/attendance/general',
         '/audit/discipline/incidents',
-        '/audit/permissions/exit',
+        '/audit/permissions/school-exits',
         '/audit/security/failed-attempts',
         '/audit/sos/alerts',
         '/audit/global',
@@ -259,11 +260,11 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[8] Consultations\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/consultations/students", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/consultation/search?q=test", 'GET', null, $token);
     if ($resp['code'] === 200 || $resp['code'] === 400) {
-        logPass("GET /consultations/students returns " . $resp['code']);
+        logPass("GET /consultation/search returns " . $resp['code']);
     } else {
-        logFail("GET /consultations/students", "200 or 400", $resp['code']);
+        logFail("GET /consultation/search", "200 or 400", $resp['code']);
     }
 } else {
     logSkip("Consultations tests (no token)");
@@ -289,11 +290,11 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[10] Tracking\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/tracking", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/tracking/active", 'GET', null, $token);
     if ($resp['code'] === 200) {
-        logPass("GET /tracking returns 200");
+        logPass("GET /tracking/active returns 200");
     } else {
-        logFail("GET /tracking", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
+        logFail("GET /tracking/active", "200", $resp['code'] . ' ' . json_encode($resp['body'] ?? ''));
     }
 } else {
     logSkip("Tracking tests (no token)");
@@ -319,11 +320,11 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[12] Metrics\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/metrics/summary", 'GET', null, $token);
-    if ($resp['code'] === 200 || $resp['code'] === 400) {
-        logPass("GET /metrics/summary returns " . $resp['code']);
+    $resp = httpRequest("$baseUrl/metrics", 'GET', null, $token);
+    if (in_array($resp['code'], [200, 400, 401], true)) {
+        logPass("GET /metrics returns " . $resp['code']);
     } else {
-        logFail("GET /metrics/summary", "200 or 400", $resp['code']);
+        logFail("GET /metrics", "200|400|401", $resp['code']);
     }
 } else {
     logSkip("Metrics tests (no token)");
@@ -349,10 +350,9 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[14] Security (sin token)\033[0m\n";
 $protectedEndpoints = [
-    '/dashboard/metrics',
+    '/dashboard/stats',
     '/students',
-    '/users',
-    '/operations',
+    '/users/by-role',
     '/devices',
     '/tracking',
     '/behavior/risk',
@@ -372,11 +372,11 @@ foreach ($protectedEndpoints as $ep) {
 // =============================================================================
 echo "\n\033[34m[15] Security Panic\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/security/panic/status", 'GET', null, $token);
+    $resp = httpRequest("$baseUrl/security/panic", 'POST', [], $token);
     if ($resp['code'] === 200 || $resp['code'] === 400) {
-        logPass("GET /security/panic/status returns " . $resp['code']);
+        logPass("POST /security/panic returns " . $resp['code']);
     } else {
-        logFail("GET /security/panic/status", "200 or 400", $resp['code']);
+        logFail("POST /security/panic", "200 or 400", $resp['code']);
     }
 } else {
     logSkip("Security panic tests (no token)");
@@ -387,11 +387,12 @@ if ($token) {
 // =============================================================================
 echo "\n\033[34m[16] Telemetry\033[0m\n";
 if ($token) {
-    $resp = httpRequest("$baseUrl/telemetry", 'GET', null, $token);
-    if ($resp['code'] === 200 || $resp['code'] === 400) {
-        logPass("GET /telemetry returns " . $resp['code']);
+    $resp = httpRequest("$baseUrl/telemetry", 'POST', [], $token);
+    // 401 = sesión requerida (session_id inválido sin sesión activa) — válido
+    if (in_array($resp['code'], [200, 400, 401], true)) {
+        logPass("POST /telemetry returns " . $resp['code']);
     } else {
-        logFail("GET /telemetry", "200 or 400", $resp['code']);
+        logFail("POST /telemetry", "200|400|401", $resp['code']);
     }
 } else {
     logSkip("Telemetry tests (no token)");

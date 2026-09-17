@@ -44,14 +44,15 @@ http {
         # Bloquear archivos sensibles
         location ~ /\. { deny all; }
 
-        # Health check
+        # Health check — rewrite (no try_files): try_files servía health.php
+        # como archivo estático exponiendo el código fuente PHP.
         location = /health {
-            try_files /health.php =404;
+            rewrite ^ /health.php last;
         }
 
         # Health check workers
         location = /health/workers {
-            try_files /health.php =404;
+            rewrite ^ /health.php last;
         }
 
         # Root should hit the PHP API, not a static landing page
@@ -197,6 +198,13 @@ run_worker_with_backoff "workers/worker_biometric.php" > /dev/stdout 2>&1 &
 run_periodic_worker "workers/worker_absence_detector.php" "ABSENCE_DETECTOR_MODE" > /dev/stdout 2>&1 &
 run_periodic_worker "workers/worker_evasion_detector.php" "EVASION_DETECTOR_MODE" > /dev/stdout 2>&1 &
 run_periodic_worker "workers/worker_permission_status.php" "PERMISSION_STATUS_MODE" > /dev/stdout 2>&1 &
+# F-04: monitor de salud de nodos — detecta dispositivos offline y marca
+# SIN_DATOS_NODO para que los detectores no generen falsos positivos.
+run_periodic_worker "workers/worker_device_health.php" "DEVICE_HEALTH_MODE" > /dev/stdout 2>&1 &
+# F-18: evaluador de criterios de aviso configurables por docente
+run_periodic_worker "workers/worker_teacher_alerts.php" "TEACHER_ALERTS_MODE" > /dev/stdout 2>&1 &
+# Bloque C: seguimiento de inasistencias sin respuesta del acudiente
+run_periodic_worker "workers/worker_absence_followup.php" "ABSENCE_FOLLOWUP_MODE" > /dev/stdout 2>&1 &
 
 echo "[nexo] Iniciando Mosquitto MQTT broker..."
 # Create mosquitto config for production (Auth si hay variables, fallback a open solo si faltan)
