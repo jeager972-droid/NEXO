@@ -14,13 +14,9 @@ import { Search, ChevronRight, ChevronLeft, Activity, Database, Users, UserCheck
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
-import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
-import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { Select } from '../components/ui/Select';
 import { humanizeError } from '../utils/messages';
-import { GRADO_OPTIONS } from '../config/grados';
-import { formatGroupName } from '../utils/groupFormat';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Inasistencias Justificadas', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
@@ -157,7 +153,6 @@ const Consultation = () => {
   const [hasQueried, setHasQueried] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState('');
-  const [quickModule, setQuickModule] = useState('');
 
   useEffect(() => {
     const isTeacherRole = user?.role === ROLES.DOCENTE || user?.role === ROLES.PSICORIENTADOR;
@@ -168,8 +163,12 @@ const Consultation = () => {
 
   useEffect(() => {
     const mod = searchParams.get('mod');
-    if (mod) setActiveItem(mod);
-  }, [searchParams]);
+    if (!mod) return;
+    // Resolver el módulo padre del ítem solicitado
+    const parent = modules.find((m) => m.items.some((it) => it.label === mod));
+    if (parent) setActiveModule(parent.title);
+    setActiveItem(mod);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persistir solo el grado, no grupo ni estudiante
   useEffect(() => {
@@ -448,16 +447,13 @@ const Consultation = () => {
   const modules = rbacModules[user?.role] || [];
   const currentModule = modules.find(m => m.title === activeModule);
 
-  // Barra unificada: todos los submódulos en un solo selector, agrupados por módulo
-  const allItems = modules.flatMap((m) => m.items.map((it) => ({ value: it.label, label: `${it.label} — ${m.title}` })));
-  const quickQuery = () => {
-    if (!quickModule) return;
-    openSubmodule(quickModule);
-  };
-
   const openModule = (modTitle) => {
     setActiveModule(modTitle);
     setSearchTerm('');
+    // Entrar al módulo abre directo la vista de consulta de su primer
+    // submódulo — el usuario cambia de tipo con el selector, no con tarjetas.
+    const mod = modules.find((m) => m.title === modTitle);
+    if (mod?.items?.length) openSubmodule(mod.items[0].label);
   };
 
   const openSubmodule = (item) => {
@@ -466,7 +462,6 @@ const Consultation = () => {
     setDynamicColumns({});
     setHasQueried(false);
     setQueryError(null);
-    setSelectedGrade('');
   };
 
   const goBackToModules = () => {
@@ -474,22 +469,27 @@ const Consultation = () => {
     setActiveItem(null);
   };
 
-  const goBackToSubmodules = () => {
-    setActiveItem(null);
-  };
-
-  // ── Nivel 3: ConsultationDrawer (submódulo seleccionado) ──
-  if (activeItem) {
+  // ── Nivel 2/3 unificado: dentro del módulo, selector de tipo + consulta ──
+  if (activeItem && currentModule) {
+    const itemOptions = currentModule.items.map((it) => ({ value: it.label, label: it.label }));
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
           <div className="border-l-2 border-[var(--nx-accent)] pl-3">
             <p className="text-label text-[var(--nx-text)]">{activeModule || 'Consulta'}</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={goBackToSubmodules} leftIcon={<ChevronLeft size={16} />}>
+          <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
         </div>
+        {itemOptions.length > 1 && (
+          <Select
+            label="Tipo de consulta"
+            value={activeItem}
+            onChange={(e) => openSubmodule(e.target.value)}
+            options={itemOptions}
+          />
+        )}
         <ConsultationDrawer
           item={activeItem}
           riskStudents={riskStudents}
@@ -510,62 +510,10 @@ const Consultation = () => {
           toDate={toDate}
           setToDate={setToDate}
           onQuery={executeQuery}
-          onClose={goBackToSubmodules}
+          onClose={goBackToModules}
           error={queryError}
           executeQuery={executeQuery}
         />
-      </div>
-    );
-  }
-
-  // ── Nivel 2: Grid de submódulos ──
-  if (activeModule && currentModule) {
-    const ts = TONE_STYLES[currentModule.tone] || TONE_STYLES.accent;
-    const filteredItems = currentModule.items.filter(it =>
-      it.label.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
-          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-            <p className="text-label text-[var(--nx-text)]">{currentModule.title}</p>
-          </div>
-          <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
-            Volver
-          </Button>
-        </div>
-        <Input
-          placeholder="Filtrar…"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          leftIcon={<Search size={16} className="text-[var(--nx-text-muted)]" />}
-        />
-        {filteredItems.length === 0 ? (
-          <Surface className="p-6">
-            <p className="text-body text-[var(--nx-text-muted)] text-center">Sin coincidencias.</p>
-          </Surface>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map((sub) => {
-              const SubIcon = sub.icon;
-              return (
-                <button
-                  key={sub.label}
-                  onClick={() => openSubmodule(sub.label)}
-                  className={`flex flex-col rounded-panel border p-5 text-left transition-all duration-fast ${ts.bg} ${ts.border} hover:shadow-medium`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-control ${ts.icon}`}>
-                      <SubIcon size={20} />
-                    </div>
-                    <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
-                  </div>
-                  <p className="mt-4 text-h3 text-[var(--nx-text)]">{sub.label}</p>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
     );
   }
@@ -578,41 +526,6 @@ const Consultation = () => {
           <p className="text-label text-[var(--nx-text)]">Consultas</p>
         </div>
       </div>
-
-      {/* Barra unificada de consulta — el módulo abre directo su vista */}
-      <Surface className="p-5">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
-          <SearchableSelect
-            label="Módulo"
-            options={allItems}
-            value={quickModule}
-            onChange={(v) => setQuickModule(v)}
-            placeholder="¿Qué quieres consultar?"
-            searchPlaceholder="Buscar módulo…"
-          />
-          <Select
-            label="Grado"
-            value={selectedGrade}
-            onChange={(e) => setSelectedGrade(e.target.value)}
-            options={GRADO_OPTIONS}
-            placeholder="Todos"
-          />
-          <Select
-            label="Grupo"
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            options={groups.map((g) => {
-              const name = g?.name || g?.group_name || g;
-              return { value: name, label: formatGroupName(name) };
-            })}
-            placeholder="Todos"
-          />
-          <Button onClick={quickQuery} disabled={!quickModule} className="md:mb-0">Consultar</Button>
-        </div>
-        <p className="mt-2.5 text-caption text-[var(--nx-text-muted)]">
-          Los filtros específicos de cada módulo (estudiante, estado, motivo…) aparecen dentro de la vista.
-        </p>
-      </Surface>
 
       <Input
         placeholder="Filtrar módulos…"

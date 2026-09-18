@@ -207,8 +207,24 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
   // reglas docente — todos los casos pre-cargados; el docente desactiva
   // los que no quiera en sus clases (no borra: solo no aplica)
   const [rules, setRules] = useState(() =>
-    RULE_KINDS.map((k) => ({ kind: k.v, n: k.v === 'EVASION' || k.v === 'EXIT' ? 1 : 3, d: 30, on: true }))
+    RULE_KINDS.map((k) => ({ kind: k.v, n: k.v === 'EVASION' || k.v === 'EXIT' ? 1 : 3, d: 30, on: !isUpdate ? true : false, id: null }))
   );
+
+  // En modo actualización: pre-cargar las reglas existentes del docente
+  useEffect(() => {
+    if (!(isTeacher && isUpdate) || simulate) return;
+    teacherApi.getAlertRules()
+      .then((res) => {
+        const existing = res?.data?.rules || res?.rules || res?.data || [];
+        setRules((prev) => prev.map((r) => {
+          const found = (existing || []).find((x) => x.event_kind === r.kind);
+          return found
+            ? { ...r, n: found.threshold_count ?? r.n, d: found.window_days ?? r.d, on: !!found.active, id: found.rule_id }
+            : { ...r, on: false, id: null };
+        }));
+      })
+      .catch(() => { /* mantener defaults */ });
+  }, [isTeacher, isUpdate, simulate]);
 
   /* cargar docentes para asignación de grupos */
   useEffect(() => {
@@ -337,10 +353,15 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     if (simulate) return fakeSave();
     setSaving(true); setError('');
     try {
-      for (const r of rules.filter((x) => x.on)) {
-        await teacherApi.createAlertRule({ event_kind: r.kind, threshold_count: r.n, window_days: r.d });
+      for (const r of rules) {
+        if (r.id) {
+          // regla existente → actualizar umbral/ventana y activación
+          await teacherApi.updateAlertRule(r.id, { threshold_count: r.n, window_days: r.d, active: r.on });
+        } else if (r.on) {
+          await teacherApi.createAlertRule({ event_kind: r.kind, threshold_count: r.n, window_days: r.d });
+        }
       }
-      await teacherApi.completeOnboarding({ skipped: !rules.length });
+      await teacherApi.completeOnboarding({ skipped: isUpdate ? false : !rules.length });
       next();
     } catch (e) { setError(humanizeError(e, 'No se pudieron guardar tus criterios.')); }
     finally { setSaving(false); }
@@ -661,7 +682,9 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
             </div>
           ))}
           <p className="text-[13px] text-[var(--nx-text-muted)]">
-            Las reglas desactivadas no se guardan — puedes activarlas después desde tu panel.
+            {isUpdate
+              ? 'Las desactivadas quedan pausadas — vuelves a activarlas cuando quieras.'
+              : 'Las reglas desactivadas no se guardan — puedes activarlas después desde tu panel.'}
           </p>
         </div>
       </Work>

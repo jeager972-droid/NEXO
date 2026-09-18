@@ -184,13 +184,7 @@ const AdminDashboard = ({ stats, loading }) => {
       {loading ? (
         <SkeletonMetrics count={5} />
       ) : (
-        <div className="space-y-4">
-          <div className="border-b border-[var(--nx-border)] pb-3">
-            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-              <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
-            </div>
-          </div>
-          {/* PC: todas en una fila */}
+        <div className="space-y-4">          {/* PC: todas en una fila */}
           <div className="hidden md:grid md:grid-cols-5 gap-4">
             {kpis.map((k) => (
               <StatCard
@@ -284,13 +278,7 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
   const navigate = useNavigate();
 
   return (
-    <div className="space-y-8">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
-        </div>
-      </div>
-      {parentLoading ? (
+    <div className="space-y-8">      {parentLoading ? (
         <SkeletonMetrics count={4} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -500,13 +488,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             groupLoading ? (
               <SkeletonMetrics count={5} />
             ) : (
-              <div className="space-y-4">
-                <div className="border-b border-[var(--nx-border)] pb-3">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Presencia estudiantil en tiempo real</p>
-                  </div>
-                </div>
-                {/* PC: todas en una fila */}
+              <div className="space-y-4">                {/* PC: todas en una fila */}
                 <div className="hidden md:grid md:grid-cols-5 gap-4">
                   {cards.map((s) => (
                     <StatCard

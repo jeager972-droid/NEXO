@@ -265,7 +265,52 @@ function nx_compute_insights(PDO $conn, string $schoolId, string $role, array $g
         ];
     }
 
-    // ── 6. Umbral de riesgo alcanzado recientemente ──
+    // ── 6. Lectura semanal — deltas de los últimos 7 días vs los 7 anteriores ──
+    // No compara conteos aislados: mide la variación relativa por tipo y
+    // resume las dos categorías con mayor cambio significativo.
+    $stmt = $conn->prepare("
+        SELECT ai.incident_type,
+               COUNT(*) FILTER (WHERE ai.detected_at >= NOW() - INTERVAL '7 days') AS cur,
+               COUNT(*) FILTER (WHERE ai.detected_at <  NOW() - INTERVAL '7 days'
+                                  AND ai.detected_at >= NOW() - INTERVAL '14 days') AS prev
+        FROM attendance_incidents ai
+        WHERE ai.school_id = ?
+          AND ai.incident_type IN ('LATE_ARRIVAL','UNAUTHORIZED_ABSENCE','INASISTENCIA','EVASION','REAPARICION_TARDIA')
+          AND ai.detected_at >= NOW() - INTERVAL '14 days' $gFilter
+        GROUP BY ai.incident_type
+    ");
+    $stmt->execute($params);
+    $deltas = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $cur = (int)$r['cur']; $prev = (int)$r['prev'];
+        if ($cur + $prev < 4) continue; // masa insuficiente — no inventar variaciones
+        $deltas[] = ['type' => $r['incident_type'], 'cur' => $cur, 'prev' => $prev,
+                     'rel' => ($cur - $prev) / max($prev, 1)];
+    }
+    if ($deltas) {
+        usort($deltas, fn($a, $b) => abs($b['rel']) <=> abs($a['rel']));
+        $parts = [];
+        $worse = 0;
+        foreach (array_slice($deltas, 0, 3) as $d) {
+            [$lbl] = $TYPE_LABEL[$d['type']] ?? [strtolower($d['type'])];
+            $pct = round(abs($d['rel']) * 100);
+            $dir = $d['rel'] >= 0 ? "más" : "menos";
+            if ($d['rel'] > 0.15) $worse++;
+            $parts[] = "{$d['cur']} {$lbl} ({$pct}% {$dir})";
+        }
+        if ($parts) {
+            $insights[] = [
+                'kind' => 'WEEKLY_DIGEST', 'severity' => $worse ? 'MEDIUM' : 'LOW',
+                'score' => round(0.35 + 0.65 * nx_sig($worse, 1, 1.5), 3),
+                'title' => 'Lectura de la semana',
+                'body' => 'Últimos 7 días vs la semana anterior: ' . implode(' · ', $parts) . '.',
+                'action' => ['label' => 'Ver detalle', 'target' => 'consulta'],
+                'data' => ['deltas' => array_map(fn($d) => ['type' => $d['type'], 'cur' => $d['cur'], 'prev' => $d['prev'], 'rel' => round($d['rel'], 2)], $deltas)],
+            ];
+        }
+    }
+
+    // ── 7. Umbral de riesgo alcanzado recientemente ──
     $stmt = $conn->prepare("
         SELECT COUNT(*) FROM notifications
         WHERE school_id = ? AND type LIKE 'RISK%' AND created_at >= NOW() - INTERVAL '24 hours'

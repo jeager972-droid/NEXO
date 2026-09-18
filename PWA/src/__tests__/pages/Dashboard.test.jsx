@@ -58,9 +58,9 @@ describe('Dashboard page (RECTOR)', () => {
 
   it('renders without crashing', async () => {
     renderDashboard();
-    // La lectura de la jornada de Nexus reemplaza a "Novedades"
+    // La lectura de la jornada de Nexus (burbujas de chat) reemplaza a "Novedades"
     await waitFor(() => {
-      expect(screen.getByText(/lectura de la jornada/i)).toBeInTheDocument();
+      expect(screen.getByText(/Todo dentro de lo normal/i)).toBeInTheDocument();
     });
   });
 
@@ -73,10 +73,12 @@ describe('Dashboard page (RECTOR)', () => {
     expect(screen.getAllByText('Inasistentes').length).toBeGreaterThan(0);
   });
 
-  it('renders the real-time presence label', async () => {
+  it('renders the KPI section without loose headers', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText(/Presencia estudiantil en tiempo real/i)).toBeInTheDocument();
+      expect(screen.getAllByText('Llegadas tarde').length).toBeGreaterThan(0);
     });
+    // El header "Presencia estudiantil en tiempo real" se eliminó del diseño
+    expect(screen.queryByText(/Presencia estudiantil en tiempo real/i)).not.toBeInTheDocument();
   });
 });

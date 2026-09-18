@@ -17,6 +17,7 @@ import OnboardingFlow from '../pages/onboarding/OnboardingFlow';
 import { SystemInactiveScreen } from '../components/patterns/SystemInactiveScreen';
 import { NexusGuide } from '../components/patterns/NexusGuide';
 import { teacherApi } from '../api/teacher';
+import { dashboardApi } from '../api/dashboard';
 import { NavLink } from 'react-router-dom';
 
 const getGreeting = () => {
@@ -290,23 +291,93 @@ const Layout = () => {
   );
 };
 
-// Bot flotante: "Llegaron N notificaciones" + botón Revisar.
-// El usuario avanza/cierra la burbuja; el bot queda visible mientras haya
-// notificaciones nuevas — tocarlo repite el aviso.
+// Nexus proactivo — tres fuentes, una burbuja a la vez:
+//   1. notificaciones nuevas ("Llegaron N" + Revisar)
+//   2. guía contextual: primeras 3 visitas a cada sección explica qué hacer
+//   3. lectura inteligente: en Inicio muestra el insight top del motor
+//      (una vez por sesión por insight — protagonista sin ser invasivo)
+const PAGE_HINTS = {
+  '/': 'Este es tu tablero — las tarjetas cuentan la jornada en vivo y yo leo abajo lo que necesita tu decisión.',
+  '/operacion': 'Cada tarjeta es un comando real — elige una y te guío en el formulario. Nada se envía sin confirmar.',
+  '/consulta': 'Elige un módulo y filtra — todo lo que ves es verificable con fecha y origen.',
+  '/casos': 'Cada ficha es un caso abierto con origen y responsable — el historial guarda también lo que responde el acudiente.',
+  '/dispositivos': 'Desde aquí reasignas nodos sin tocar llaves — lo crítico siempre se hace en el punto físico.',
+  '/config': 'Tu cuenta y lo institucional viven aquí — «Editar con Nexus» reabre la configuración para actualizarla.',
+};
+const HINT_LIMIT = 3;
+const hintKey = (path) => `nx:hint:${path}`;
+
 const NexusBotAnnouncer = () => {
   const { notifCount } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
+  const [insights, setInsights] = useState(null);
 
-  const onNotifPage = location.pathname === '/notificaciones';
-  const visible = notifCount > 0 && !onNotifPage;
+  const path = location.pathname;
+  const onNotifPage = path === '/notificaciones';
 
-  const script = useMemo(() => [{
-    text: `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`,
-    chips: [{ label: 'Revisar', action: () => navigate('/notificaciones') }],
-  }], [notifCount, navigate]);
+  // Motor de insights — una vez por sesión, para la lectura proactiva
+  useEffect(() => {
+    let alive = true;
+    dashboardApi.getInsights()
+      .then((res) => { if (alive) setInsights(res?.data?.insights || []); })
+      .catch(() => { if (alive) setInsights([]); });
+    return () => { alive = false; };
+  }, []);
 
-  return <NexusGuide script={script} active={visible} />;
+  // Contador de guía contextual por sección (persistente entre sesiones)
+  const hintCount = useMemo(() => {
+    try { return parseInt(localStorage.getItem(hintKey(path)) || '0', 10); } catch { return HINT_LIMIT; }
+  }, [path]);
+  const showHint = !!PAGE_HINTS[path] && hintCount < HINT_LIMIT;
+  useEffect(() => {
+    if (!showHint) return;
+    try { localStorage.setItem(hintKey(path), String(hintCount + 1)); } catch { /* sin storage */ }
+  }, [showHint, hintCount, path]);
+
+  // Lectura proactiva: top insight en Inicio, una vez por sesión
+  const proactiveInsight = useMemo(() => {
+    if (path !== '/' || !insights?.length) return null;
+    const top = insights[0];
+    try {
+      const shown = JSON.parse(sessionStorage.getItem('nx:shown-insights') || '[]');
+      return shown.includes(top.kind) ? null : top;
+    } catch { return top; }
+  }, [path, insights]);
+  useEffect(() => {
+    if (!proactiveInsight) return;
+    try {
+      const shown = JSON.parse(sessionStorage.getItem('nx:shown-insights') || '[]');
+      sessionStorage.setItem('nx:shown-insights', JSON.stringify([...shown, proactiveInsight.kind]));
+    } catch { /* sin storage */ }
+  }, [proactiveInsight]);
+
+  const script = useMemo(() => {
+    // Prioridad 1: notificaciones nuevas
+    if (notifCount > 0 && !onNotifPage) {
+      return [{
+        text: `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`,
+        chips: [{ label: 'Revisar', action: () => navigate('/notificaciones') }],
+      }];
+    }
+    // Prioridad 2: guía contextual (primeras N visitas a la sección)
+    if (showHint) {
+      return [{ text: PAGE_HINTS[path] }];
+    }
+    // Prioridad 3: lectura inteligente de la jornada
+    if (proactiveInsight) {
+      return [{
+        text: `<b>${proactiveInsight.title}</b> — ${proactiveInsight.body}`,
+        chips: proactiveInsight.action ? [{
+          label: proactiveInsight.action.label,
+          action: () => navigate(proactiveInsight.action.target === 'consulta' ? '/consulta' : `/${proactiveInsight.action.target}`),
+        }] : undefined,
+      }];
+    }
+    return [];
+  }, [notifCount, onNotifPage, showHint, proactiveInsight, path, navigate]);
+
+  return <NexusGuide script={script} active={script.length > 0} />;
 };
 
 export default Layout;

@@ -763,6 +763,23 @@ const Profile = () => {
         <Toast toast={actionToast} />
       </Card>
 
+      {/* ── Docente: criterios de aviso (re-edición) ── */}
+      {(user?.role === ROLES.DOCENTE || user?.role === ROLES.PSICORIENTADOR) && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-h3 text-[var(--nx-text)]">Tus criterios de aviso</p>
+              <p className="mt-0.5 text-caption text-[var(--nx-text-muted)]">
+                Los casos que Nexus vigila en tus clases — ajusta umbrales o desactiva los que no quieras.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setOnboardingUpdate(true)} leftIcon={<Settings size={15} />}>
+              Editar con Nexus
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* ── Configuración institucional — onboarding en modo actualización ── */}
       {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && schoolConfig?.config && (
         <Card className="p-5">

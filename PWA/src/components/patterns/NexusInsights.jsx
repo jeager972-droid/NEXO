@@ -1,9 +1,8 @@
 /**
- * NexusInsights — "Nexus · lectura de la jornada".
- * Reemplaza la sección Novedades del dashboard: en vez de un stream de
- * eventos crudos, muestra los insights que computa GET /dashboard/insights
- * (z-score, ventana modal, mínimos cuadrados sobre datos reales).
- * Diseño: avatar del bot + texto + botón de acción. Sin barras de color.
+ * NexusInsights — "lectura de la jornada" como conversación con Nexus.
+ * Reemplaza la sección Novedades: los insights de GET /dashboard/insights
+ * (z-score, ventana modal, mínimos cuadrados) se muestran como burbujas
+ * de chat del bot — no como texto suelto.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,12 +18,12 @@ const TARGET_ROUTES = {
   notificaciones: '/notificaciones',
 };
 
-const InsightItem = ({ insight, onGo }) => (
-  <div className="border-t border-[var(--nx-border)] pt-4 first:border-t-0 first:pt-0">
-    <p className="text-[14.5px] font-[620] text-[var(--nx-text)]">{insight.title}</p>
+const InsightBubble = ({ insight, onGo }) => (
+  <div className="rounded-[16px_16px_16px_4px] border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3">
+    <p className="text-[14px] font-[620] text-[var(--nx-text)]">{insight.title}</p>
     <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--nx-text-muted)]">{insight.body}</p>
     {insight.action?.label && TARGET_ROUTES[insight.action.target] && (
-      <div className="mt-3">
+      <div className="mt-2.5">
         <Button variant="secondary" size="sm" onClick={() => onGo(insight.action.target)}>
           {insight.action.label}
         </Button>
@@ -49,34 +48,33 @@ export const NexusInsights = () => {
 
   const go = (target) => navigate(TARGET_ROUTES[target] || '/');
 
-  return (
-    <section aria-label="Lectura de la jornada de Nexus">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Nexus · lectura de la jornada</p>
+  if (loading) {
+    return (
+      <div className="flex items-start gap-4">
+        <NexoAvatar size={48} />
+        <div className="min-w-0 flex-1 space-y-3">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-3/5" />
         </div>
       </div>
-      <div className="mt-4 flex items-start gap-4">
-        <NexoAvatar size={48} />
-        <div className="min-w-0 flex-1">
-          {loading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-4 w-3/5" />
-            </div>
-          ) : !insights?.length ? (
+    );
+  }
+
+  return (
+    <section aria-label="Lectura de la jornada de Nexus" className="flex items-start gap-4">
+      <NexoAvatar size={48} />
+      <div className="min-w-0 flex-1 space-y-3">
+        <p className="text-caption font-semibold tracking-wide text-[var(--nx-accent)]">NEXUS</p>
+        {!insights?.length ? (
+          <div className="rounded-[16px_16px_16px_4px] border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3">
             <p className="text-[14px] leading-relaxed text-[var(--nx-text)]">
               Todo dentro de lo normal — la jornada sigue su patrón habitual. Te aviso si algo cambia.
             </p>
-          ) : (
-            <div className="space-y-4">
-              {insights.map((ins) => (
-                <InsightItem key={ins.kind} insight={ins} onGo={go} />
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          insights.map((ins) => <InsightBubble key={ins.kind} insight={ins} onGo={go} />)
+        )}
       </div>
     </section>
   );
