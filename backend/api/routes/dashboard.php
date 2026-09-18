@@ -833,4 +833,60 @@ if ($cleanPath === '/dashboard/events') {
     }
     exit;
 }
+
+// ============================================================================
+// GET /dashboard/insights — Lectura inteligente de la jornada (Nexus)
+// ============================================================================
+// Motor matemático (lib/insights.php): z-score vs línea base móvil,
+// ventana modal de clusters horarios, regresión por mínimos cuadrados,
+// score de prioridad. No hay textos fijos: cada tarjeta sale de funciones
+// sobre los datos reales de la escuela.
+// Docente: insights acotados a sus grupos asignados.
+// ============================================================================
+if ($cleanPath === '/dashboard/insights') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userRole = strtoupper($authUser['role'] ?? '');
+    requireSchoolOnboarding($conn, (string)$schoolId, $userRole);
+
+    try {
+        require_once __DIR__ . '/../lib/insights.php';
+
+        // Caché 60s por escuela+rol+usuario (los datos cambian por minutos,
+        // no por segundos; evita recomputar las regresiones por request)
+        $cacheKey = "dashboard:insights:{$schoolId}:{$userRole}:{$authUser['id']}";
+        try {
+            $redis = getRedisConnection();
+            if ($redis) {
+                $cached = $redis->get($cacheKey);
+                if ($cached !== false) { header('X-Insights-Cache: HIT'); echo $cached; exit; }
+            }
+        } catch (Throwable $e) { /* sin caché */ }
+
+        // Docente: restringir a sus grupos asignados
+        $groupIds = [];
+        if ($userRole === 'TEACHER') {
+            $g = $conn->prepare("SELECT group_id FROM teacher_group_access WHERE teacher_user_id = ?");
+            $g->execute([$authUser['id']]);
+            $groupIds = array_column($g->fetchAll(PDO::FETCH_ASSOC), 'group_id');
+        }
+
+        $insights = nx_compute_insights($conn, (string)$schoolId, $userRole, $groupIds);
+        $payload = json_encode([
+            'status' => 'ok',
+            'data' => [
+                'insights' => $insights,
+                'computed_at' => gmdate('c'),
+                'role' => $userRole,
+            ],
+        ]);
+        try { if ($redis) $redis->setex($cacheKey, 60, $payload); } catch (Throwable $e) { /* sin caché */ }
+        echo $payload;
+    } catch (Throwable $e) {
+        securityLog('DASHBOARD_INSIGHTS_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al calcular insights']);
+    }
+    exit;
+}
 ?>

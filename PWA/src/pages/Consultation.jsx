@@ -16,7 +16,11 @@ import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
 import { Surface } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { Select } from '../components/ui/Select';
 import { humanizeError } from '../utils/messages';
+import { GRADO_OPTIONS } from '../config/grados';
+import { formatGroupName } from '../utils/groupFormat';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Inasistencias Justificadas', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
 
@@ -153,6 +157,7 @@ const Consultation = () => {
   const [hasQueried, setHasQueried] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState('');
+  const [quickModule, setQuickModule] = useState('');
 
   useEffect(() => {
     const isTeacherRole = user?.role === ROLES.DOCENTE || user?.role === ROLES.PSICORIENTADOR;
@@ -443,6 +448,13 @@ const Consultation = () => {
   const modules = rbacModules[user?.role] || [];
   const currentModule = modules.find(m => m.title === activeModule);
 
+  // Barra unificada: todos los submódulos en un solo selector, agrupados por módulo
+  const allItems = modules.flatMap((m) => m.items.map((it) => ({ value: it.label, label: `${it.label} — ${m.title}` })));
+  const quickQuery = () => {
+    if (!quickModule) return;
+    openSubmodule(quickModule);
+  };
+
   const openModule = (modTitle) => {
     setActiveModule(modTitle);
     setSearchTerm('');
@@ -566,6 +578,42 @@ const Consultation = () => {
           <p className="text-label text-[var(--nx-text)]">Consultas</p>
         </div>
       </div>
+
+      {/* Barra unificada de consulta — el módulo abre directo su vista */}
+      <Surface className="p-5">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
+          <SearchableSelect
+            label="Módulo"
+            options={allItems}
+            value={quickModule}
+            onChange={(v) => setQuickModule(v)}
+            placeholder="¿Qué quieres consultar?"
+            searchPlaceholder="Buscar módulo…"
+          />
+          <Select
+            label="Grado"
+            value={selectedGrade}
+            onChange={(e) => setSelectedGrade(e.target.value)}
+            options={GRADO_OPTIONS}
+            placeholder="Todos"
+          />
+          <Select
+            label="Grupo"
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            options={groups.map((g) => {
+              const name = g?.name || g?.group_name || g;
+              return { value: name, label: formatGroupName(name) };
+            })}
+            placeholder="Todos"
+          />
+          <Button onClick={quickQuery} disabled={!quickModule} className="md:mb-0">Consultar</Button>
+        </div>
+        <p className="mt-2.5 text-caption text-[var(--nx-text-muted)]">
+          Los filtros específicos de cada módulo (estudiante, estado, motivo…) aparecen dentro de la vista.
+        </p>
+      </Surface>
+
       <Input
         placeholder="Filtrar módulos…"
         value={searchTerm}

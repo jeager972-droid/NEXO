@@ -18,9 +18,27 @@ import { humanizeError } from '../utils/messages';
 
 const scoreToLevel = (s) => s >= 70 ? 'critico' : s >= 40 ? 'medio' : 'bajo';
 
+const ORIGIN_LABELS = {
+  risk_alert: 'Alerta de riesgo',
+  incident: 'Incidente',
+  manual: 'Derivación manual',
+};
+const DEPENDENCY_LABELS = {
+  coordinacion: 'Coordinación',
+  psicoorientacion: 'Psicoorientación',
+  rectoria: 'Rectoría',
+  docencia: 'Docencia',
+};
+const INCIDENT_LABELS = {
+  UNAUTHORIZED_ABSENCE: 'Ausencia', INASISTENCIA: 'Ausencia',
+  INASISTENCIA_NO_JUSTIFICADA: 'Ausencia', LATE_ARRIVAL: 'Llegada tarde',
+  EVASION: 'Evasión', REAPARICION_TARDIA: 'Reaparición tardía',
+};
+
 export const TrackingModal = ({ trackingId, studentId, studentName, metadata, onClose, onRefresh }) => {
   const [details, setDetails] = useState(null);
   const [notes, setNotes] = useState([]);
+  const [guardianResponses, setGuardianResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTrackingId, setActiveTrackingId] = useState(trackingId);
   const [noteText, setNoteText] = useState('');
@@ -45,6 +63,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
           if (res.status === 'ok') {
             setDetails(res.tracking);
             setNotes(res.notes || []);
+            setGuardianResponses(res.guardian_responses || []);
           }
         }
       } catch (e) {
@@ -145,11 +164,46 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               <Surface className="p-5">
                 <div className="flex items-center gap-4">
                   <CalendarDays size={40} className="text-[var(--nx-accent)] shrink-0" strokeWidth={1.5} />
-                  <div>
+                  <div className="min-w-0 flex-1">
                     {details?.created_at && <p className="text-h3 text-[var(--nx-text)]">Iniciado {new Date(details.created_at).toLocaleDateString('es-CO')}</p>}
+                    <div className="mt-1.5 space-y-0.5 text-caption text-[var(--nx-text-muted)]">
+                      {details?.origin_type && (
+                        <p>Origen: <b className="font-semibold text-[var(--nx-text)]">{ORIGIN_LABELS[details.origin_type] || details.origin_type}</b></p>
+                      )}
+                      {details?.dependency && (
+                        <p>Dependencia: <b className="font-semibold text-[var(--nx-text)]">{DEPENDENCY_LABELS[details.dependency] || details.dependency}</b></p>
+                      )}
+                      {details?.assigned_name && (
+                        <p>Responsable: <b className="font-semibold text-[var(--nx-text)]">{details.assigned_name}</b></p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </Surface>
+
+              {guardianResponses.length > 0 && (
+                <div className="space-y-3">
+                  <div className="border-b border-[var(--nx-border)] pb-2">
+                    <div className="border-l-2 border-[var(--nx-success)] pl-3">
+                      <p className="text-label text-[var(--nx-text)]">Respuestas del acudiente</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {guardianResponses.map((g, i) => (
+                      <Surface key={i} className="border-l-[3px] border-l-[var(--nx-success)] p-3">
+                        <p className="text-caption font-semibold text-[var(--nx-success)]">
+                          {INCIDENT_LABELS[g.incident_type] || g.incident_type}
+                          {g.guardian_name ? ` · ${g.guardian_name}` : ''}
+                        </p>
+                        <p className="mt-1 text-body-sm italic text-[var(--nx-text)]">«{g.guardian_response}»</p>
+                        <p className="mt-1 text-caption text-[var(--nx-text-muted)]">
+                          {g.responded_at || g.detected_at ? new Date(g.responded_at || g.detected_at).toLocaleString('es-CO') : ''}
+                        </p>
+                      </Surface>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="border-b border-[var(--nx-border)] pb-2">

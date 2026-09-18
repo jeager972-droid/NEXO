@@ -21,6 +21,7 @@ import { humanizeError } from '../utils/messages';
 import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
 import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
 import { OnboardingRiskModal } from '../components/patterns/OnboardingRiskModal';
+import OnboardingFlow from './onboarding/OnboardingFlow';
 
 const ALL_GRADES_LABELS = {
   '1': 'Primero', '2': 'Segundo', '3': 'Tercero', '4': 'Cuarto', '5': 'Quinto',
@@ -442,6 +443,9 @@ const Profile = () => {
   const [riskDrawerOpen, setRiskDrawerOpen] = useState(false);
   const [riskEditOpen, setRiskEditOpen] = useState(false);
 
+  // Onboarding en modo actualización (full-screen con Nexus)
+  const [onboardingUpdate, setOnboardingUpdate] = useState(false);
+
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
       if (res.status === 'ok' && res.data) {
@@ -758,6 +762,23 @@ const Profile = () => {
 
         <Toast toast={actionToast} />
       </Card>
+
+      {/* ── Configuración institucional — onboarding en modo actualización ── */}
+      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && schoolConfig?.config && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-h3 text-[var(--nx-text)]">Configuración institucional</p>
+              <p className="mt-0.5 text-caption text-[var(--nx-text-muted)]">
+                Jornadas, grupos, docentes y umbrales — el mismo flujo del inicio, ahora para actualizar.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setOnboardingUpdate(true)} leftIcon={<Settings size={15} />}>
+              Editar con Nexus
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* ── Calendario escolar (horarios) ── */}
       {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && !schoolConfigLoading && (
@@ -1287,6 +1308,22 @@ const Profile = () => {
           />
         )}
       </AnimatePresence>
+
+      {/* Onboarding en modo actualización — pantalla completa bloqueante */}
+      {onboardingUpdate && (
+        <div className="fixed inset-0 z-[70] overflow-y-auto bg-[var(--nx-canvas)]">
+          <OnboardingFlow
+            role={user?.role}
+            missing={{ schedule: true, groups: true, risk: true }}
+            mode="update"
+            onCancel={() => setOnboardingUpdate(false)}
+            onAllDone={() => {
+              setOnboardingUpdate(false);
+              window.location.reload();
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

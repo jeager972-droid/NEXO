@@ -15,6 +15,7 @@ import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
 import { schoolApi } from '../api/school';
 import OnboardingFlow from '../pages/onboarding/OnboardingFlow';
 import { SystemInactiveScreen } from '../components/patterns/SystemInactiveScreen';
+import { NexusGuide } from '../components/patterns/NexusGuide';
 import { teacherApi } from '../api/teacher';
 import { NavLink } from 'react-router-dom';
 
@@ -281,8 +282,31 @@ const Layout = () => {
           </div>
         </nav>
       </div>
+
+      {/* Nexus proactivo — avisa cuando llegan notificaciones nuevas.
+          No aparece en /notificaciones (ya estás viéndolas). */}
+      <NexusBotAnnouncer />
     </div>
   );
+};
+
+// Bot flotante: "Llegaron N notificaciones" + botón Revisar.
+// El usuario avanza/cierra la burbuja; el bot queda visible mientras haya
+// notificaciones nuevas — tocarlo repite el aviso.
+const NexusBotAnnouncer = () => {
+  const { notifCount } = useNotifications();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const onNotifPage = location.pathname === '/notificaciones';
+  const visible = notifCount > 0 && !onNotifPage;
+
+  const script = useMemo(() => [{
+    text: `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`,
+    chips: [{ label: 'Revisar', action: () => navigate('/notificaciones') }],
+  }], [notifCount, navigate]);
+
+  return <NexusGuide script={script} active={visible} />;
 };
 
 export default Layout;

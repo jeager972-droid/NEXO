@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, Clock, Layers, BellRing } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -155,7 +155,8 @@ const Switch = ({ checked, onChange, title, help }) => (
 );
 
 /* ══════════════════════════ flujo ══════════════════════════ */
-export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate = false }) {
+export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate = false, mode = 'initial', onCancel }) {
+  const isUpdate = mode === 'update'; // re-configuración desde Configuración
   const isTeacher = role === ROLES.DOCENTE;
   const isRector = role === ROLES.RECTOR;
 
@@ -203,8 +204,11 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     LEVE: { n: 2, d: 30 }, MODERADA: { n: 3, d: 30 }, ALTA: { n: 2, d: 15 }, MUY_ALTA: { n: 1, d: 1 },
   });
 
-  // reglas docente
-  const [rules, setRules] = useState([]);
+  // reglas docente — todos los casos pre-cargados; el docente desactiva
+  // los que no quiera en sus clases (no borra: solo no aplica)
+  const [rules, setRules] = useState(() =>
+    RULE_KINDS.map((k) => ({ kind: k.v, n: k.v === 'EVASION' || k.v === 'EXIT' ? 1 : 3, d: 30, on: true }))
+  );
 
   /* cargar docentes para asignación de grupos */
   useEffect(() => {
@@ -333,10 +337,10 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     if (simulate) return fakeSave();
     setSaving(true); setError('');
     try {
-      for (const r of rules) {
+      for (const r of rules.filter((x) => x.on)) {
         await teacherApi.createAlertRule({ event_kind: r.kind, threshold_count: r.n, window_days: r.d });
       }
-      await teacherApi.completeOnboarding();
+      await teacherApi.completeOnboarding({ skipped: !rules.length });
       next();
     } catch (e) { setError(humanizeError(e, 'No se pudieron guardar tus criterios.')); }
     finally { setSaving(false); }
@@ -345,31 +349,69 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
   const skipTeacherRules = async () => {
     if (simulate) return fakeSave();
     setSaving(true);
-    try { await teacherApi.completeOnboarding(); next(); }
+    try { await teacherApi.completeOnboarding({ skipped: true }); next(); }
     catch (e) { setError(humanizeError(e, 'No se pudo continuar.')); }
     finally { setSaving(false); }
   };
 
   /* ══════════ pasos ══════════ */
-  const renderWelcome = () => (
-    <>
-      <StepHead kicker="Configuración inicial" title="Bienvenid@" lede="Tu institución aún no está configurada. Nexus te acompaña — son unos pocos pasos." />
-      <Work>
-        <div className="flex flex-col items-center gap-5 py-6 text-center">
-          <img src="/imagenbot.png" alt="Nexus" className="h-28 w-28" style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
-          <div className="space-y-2">
-            <h2 className="text-[19px] font-[620] text-[var(--nx-text)]">Nexus configura tu institución contigo</h2>
-            <p className="mx-auto max-w-[44ch] text-[14px] text-[var(--nx-text-muted)]">
-              Soy la voz del sistema: te explico cada paso desde la esquina, sin manuales ni letra pequeña.
-            </p>
-          </div>
+  const renderWelcome = () => {
+    const agenda = isTeacher
+      ? [{ icon: BellRing, t: 'Tus criterios de aviso', d: 'Desde cuándo te aviso de repeticiones en tus clases' }]
+      : [
+          { icon: Clock, t: 'Jornadas y horarios', d: 'Entrada, salida, descanso y bloques por jornada' },
+          { icon: Layers, t: 'Grados, grupos y docentes', d: 'La estructura del año con su docente asignado' },
+          { icon: BellRing, t: 'Umbrales de aviso', d: 'A partir de cuántas repeticiones Nexus alerta' },
+        ];
+    return (
+      <div className="flex flex-col items-center gap-8 pt-4 text-center">
+        {/* hero: bot centrado, silencioso hasta Comenzar */}
+        <div className="relative">
+          <img src="/imagenbot.png" alt="Nexus" className="h-32 w-32 rounded-full object-contain"
+            style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
+          <span className="absolute -inset-2 rounded-full border-2 border-[var(--nx-border-accent)]"
+            style={{ animation: 'nx-pulse 2.6s var(--nx-ease-out, ease-out) infinite' }} aria-hidden />
         </div>
-      </Work>
-      <div className="flex justify-end">
-        <Button size="lg" onClick={next}>Comenzar</Button>
+
+        <div className="space-y-3">
+          <span className="text-[12.5px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
+            {isUpdate ? 'Configuración' : 'Configuración inicial'}
+          </span>
+          <h1 className="text-[30px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
+          <p className="mx-auto max-w-[46ch] text-[15.5px] leading-relaxed text-[var(--nx-text-muted)]">
+            {isUpdate
+              ? 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.'
+              : 'Tu institución aún no está configurada. Nexus — la voz del sistema — te acompaña paso a paso.'}
+          </p>
+        </div>
+
+        {/* agenda del flujo */}
+        <div className="flex w-full max-w-[520px] flex-col gap-3">
+          {agenda.map((a, i) => (
+            <div key={i} className="flex items-center gap-4 rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] px-5 py-4 text-left">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
+                <a.icon size={18} />
+              </span>
+              <div className="flex-1">
+                <p className="text-[14.5px] font-[620]">{a.t}</p>
+                <p className="text-[12.5px] text-[var(--nx-text-muted)]">{a.d}</p>
+              </div>
+              <span className="text-[12px] font-semibold tabular-nums text-[var(--nx-text-muted)]">{i + 1}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          <Button size="lg" onClick={next}>
+            {isUpdate ? 'Actualizar configuración' : 'Comenzar'} <ArrowRight size={17} className="ml-1" />
+          </Button>
+          {isUpdate && onCancel && (
+            <Button variant="ghost" size="sm" onClick={onCancel}>Volver sin cambios</Button>
+          )}
+        </div>
       </div>
-    </>
-  );
+    );
+  };
 
   const renderSchedule = () => {
     /* fase A: cuáles jornadas existen */
@@ -591,15 +633,19 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
   const renderRules = () => (
     <>
       <StepHead kicker="Configuración opcional" title="Tus criterios de aviso"
-        lede="Avisos cuando un estudiante repita una situación en tus clases." />
+        lede="Todos los casos vienen listos — ajusta los números y desactiva lo que no quieras en tus clases." />
       <Work spotlight>
         <h2 className="text-[17px] font-[620]">Tus reglas</h2>
         <div className="flex flex-col gap-4">
           {rules.map((r, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-x-6 gap-y-4 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-canvas)] px-4 py-4">
-              <Select aria-label="Tipo de aviso" className="min-w-[200px] flex-1" value={r.kind}
-                onChange={(e) => setRules((p) => p.map((x, xi) => xi === i ? { ...x, kind: e.target.value } : x))}
-                options={RULE_KINDS.map((k) => ({ value: k.v, label: k.l }))} />
+            <div key={r.kind} className={clsx(
+              'flex flex-wrap items-center gap-x-6 gap-y-4 rounded-surface border px-4 py-4 transition-opacity',
+              r.on ? 'border-[var(--nx-border)] bg-[var(--nx-canvas)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] opacity-55'
+            )}>
+              <div className="min-w-[190px] flex-1">
+                <p className="text-[14.5px] font-[620]">{RULE_KINDS.find((k) => k.v === r.kind)?.l}</p>
+                <p className="text-[12.5px] text-[var(--nx-text-muted)]">en mis clases</p>
+              </div>
               <div className="flex items-center gap-4">
                 <Stepper label="repeticiones" value={r.n} min={1} max={60}
                   onChange={(n) => setRules((p) => p.map((x, xi) => xi === i ? { ...x, n } : x))} />
@@ -610,17 +656,13 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
                   onChange={(d) => setRules((p) => p.map((x, xi) => xi === i ? { ...x, d } : x))} />
                 <span className="text-[13px] text-[var(--nx-text-muted)]">días</span>
               </div>
-              <button type="button" aria-label="Quitar regla" onClick={() => setRules((p) => p.filter((_, xi) => xi !== i))}
-                className="rounded-control p-2 text-[var(--nx-text-muted)] transition-colors hover:bg-[var(--nx-subtle-bg-danger)] hover:text-[var(--nx-danger)]">
-                <Trash2 size={17} />
-              </button>
+              <Switch checked={r.on} title={r.on ? 'Aplicar en mis clases' : 'No aplicar'}
+                onChange={(v) => setRules((p) => p.map((x, xi) => xi === i ? { ...x, on: v } : x))} />
             </div>
           ))}
-          {!rules.length && <p className="text-[13.5px] text-[var(--nx-text-muted)]">Sin reglas propias — recibirás los avisos generales de la institución.</p>}
-          <button type="button" onClick={() => setRules((p) => [...p, { kind: 'LATE', n: 3, d: 30 }])}
-            className="flex items-center justify-center gap-2 rounded-surface border-[1.5px] border-dashed border-[var(--nx-border)] py-3.5 text-[14px] font-semibold text-[var(--nx-accent)] transition-colors hover:border-[var(--nx-accent)] hover:bg-[var(--nx-subtle-bg-accent)]">
-            <Plus size={16} /> Agregar regla
-          </button>
+          <p className="text-[13px] text-[var(--nx-text-muted)]">
+            Las reglas desactivadas no se guardan — puedes activarlas después desde tu panel.
+          </p>
         </div>
       </Work>
       {error && <p role="alert" className="text-[14px] text-[var(--nx-danger)]">{error}</p>}
@@ -635,17 +677,17 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     <div className="flex flex-col items-center gap-5 py-10 text-center">
       <img src="/imagenbot.png" alt="Nexus" className="h-28 w-28" style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
       <span className="text-[13px] font-semibold tracking-wide text-[var(--nx-accent)]">
-        {isTeacher ? 'Listo' : 'Configuración completa'}
+        {isUpdate ? 'Cambios guardados' : isTeacher ? 'Listo' : 'Configuración completa'}
       </span>
       <h1 className="max-w-[18ch] text-[26px] font-[650] leading-tight tracking-[-.01em] text-[var(--nx-text)]">
-        {isTeacher ? 'Tu panel ya te espera' : 'Tu institución ya está operando con Nexus'}
+        {isUpdate ? 'Tu institución quedó actualizada' : isTeacher ? 'Tu panel ya te espera' : 'Tu institución ya está operando con Nexus'}
       </h1>
       <p className="max-w-[46ch] text-[15px] text-[var(--nx-text-muted)]">
         {isTeacher
           ? 'Cuando algo se repita en tus clases, Nexus te avisa con el motivo y qué puedes hacer.'
-          : 'Jornada, grupos y criterios quedaron guardados. Nexus interpreta la jornada y avisa solo cuando algo necesita atención.'}
+          : 'Nexus interpreta la jornada y avisa solo cuando algo necesita atención.'}
       </p>
-      <Button size="lg" onClick={done}>{isTeacher ? 'Entrar a Inicio' : 'Entrar a mi jornada'}</Button>
+      <Button size="lg" onClick={done}>{isUpdate ? 'Volver a Configuración' : isTeacher ? 'Entrar a Inicio' : 'Entrar a mi jornada'}</Button>
     </div>
   );
 
@@ -659,7 +701,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       {/* Topbar: solo el paso, centrado — nada más del sistema */}
       <header className="sticky top-0 z-20 flex h-[64px] items-center justify-center border-b border-[var(--nx-border)] bg-[var(--nx-surface)]">
         <span className="text-[15px] font-[650] tabular-nums text-[var(--nx-text)]">
-          {step === 'welcome' ? 'Configuración inicial' : step === 'done' ? 'Listo' : `Paso ${realIdx} de ${totalReal}`}
+          {step === 'welcome' ? (isUpdate ? 'Actualizar configuración' : 'Configuración inicial') : step === 'done' ? 'Listo' : `Paso ${realIdx} de ${totalReal}`}
         </span>
       </header>
 

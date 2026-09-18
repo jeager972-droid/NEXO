@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
+import { NexusInsights } from '../components/patterns/NexusInsights';
 import { trackingApi } from '../api/tracking';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
@@ -23,7 +24,7 @@ import { Drawer } from '../components/ui/Overlay';
 import { Badge } from '../components/ui/Badge';
 import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
-import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
+import { NexoChatBubble } from '../components/patterns/NexoChat';
 import { ScheduleTask, isTaskActive, isTaskDoneToday } from '../components/patterns/ScheduleTask';
 import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
@@ -68,78 +69,6 @@ const BIOMETRIC_EVENT_LABELS = {
   EVASION_INTERNA: 'Evasión interna',
   SPAM_BIOMETRIC: 'Spam biométrico',
   BIOMETRIC_FAILURE: 'Falla de biometría',
-};
-
-const eventToMessage = (ev, currentUserName) => {
-  // Limpiar el label de cualquier "group: null" o pares clave-valor crudos del backend
-  let label = ev.label || '';
-  // Si el label contiene pares crudos como "group: null", limpiarlos
-  label = label.replace(/\s*\b\w+:\s*null\b,?/gi, '').replace(/\s*\b\w+:\s*undefined\b,?/gi, '').trim();
-  // Si después de limpiar quedó vacío o solo punctuation, usar el tipo de evento humanizado
-  if (!label || label === '.' || label === ',') {
-    const evType = ev.type || ev.event_type || ev.event_result;
-    label = BIOMETRIC_EVENT_LABELS[evType] || BIOMETRIC_EVENT_LABELS[String(evType)?.toUpperCase()] || evType || 'Novedad';
-  }
-  // Construir grupo: si es null/undefined, omitir o usar "Sin grupo asignado"
-  const group = ev.group || ev.group_name;
-  const groupText = group ? ` del grupo ${formatGroupName(String(group))}` : '';
-  const student = ev.student_name || ev.student;
-  const studentText = student ? ` de ${student}` : '';
-  // Omitir "por X" si el issuer es el propio usuario
-  const issuerRaw = ev.issuer || '';
-  const isSelf = currentUserName && issuerRaw && issuerRaw.toLowerCase().includes(currentUserName.toLowerCase());
-  const issuer = issuerRaw && !isSelf ? ` · por ${issuerRaw}` : '';
-  const time = ev.time ? ` a las ${ev.time}` : '';
-  return `${label}${studentText}${groupText}${time}${issuer}.`;
-};
-
-const StreamList = ({ events, loading, showIssuer, onItemClick, currentUserName }) => {
-  return (
-    <div className="space-y-4">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Novedades</p>
-        </div>
-      </div>
-      {loading ? (
-        <Surface className="p-6">
-          <NexoChatSkeleton />
-        </Surface>
-      ) : !events.length ? (
-        <Surface className="p-6">
-          <NexoChatBubble message="No hay novedades para mostrar." />
-        </Surface>
-      ) : (
-        <div className="space-y-3">
-          {events.map((ev, i) => (
-            <Surface key={i} className="p-4">
-              {onItemClick ? (
-                <button onClick={() => onItemClick(ev)} className="w-full text-left">
-                  <NexoChatBubble
-                    message={eventToMessage(ev, currentUserName)}
-                    timestamp={ev.time || 'Ahora'}
-                  />
-                </button>
-              ) : (
-                <NexoChatBubble
-                  message={eventToMessage(ev, currentUserName)}
-                  timestamp={ev.time || 'Ahora'}
-                />
-              )}
-              {onItemClick && (
-                <button
-                  onClick={() => onItemClick(ev)}
-                  className="mt-2 ml-13 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
-                >
-                  Ver detalles <ChevronRight size={12} />
-                </button>
-              )}
-            </Surface>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 };
 
 const Dashboard = () => {
@@ -203,17 +132,10 @@ const getGreeting = () => {
 
 const AdminDashboard = ({ stats, loading }) => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showScheduleTask, setShowScheduleTask] = useState(false);
-
-  const handleEventClick = (ev) => {
-    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
-  };
 
   useEffect(() => {
     if (user?.role === ROLES.COORDINADOR && isTaskActive(user) && !isTaskDoneToday(user)) {
@@ -253,23 +175,6 @@ const AdminDashboard = ({ stats, loading }) => {
     // Bloque 3: Rojo (alertas + evasiones fusionadas)
     { key: 'alert',    label: 'Alertas',        value: stats.alertsCount,  icon: <AlertTriangle size={18} strokeWidth={1.75} />, tone: 'danger', statusText: stats.alertsCount === 0 ? 'Sin alertas' : 'Requieren atención' },
   ];
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        setEvents(res?.status === 'ok' ? res.data || [] : []);
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
-
-  const stream = events.slice(0, 8).map((ev, i) => ({ ...ev, index: i }));
 
   return (
     <div className="space-y-8">
@@ -334,7 +239,7 @@ const AdminDashboard = ({ stats, loading }) => {
         </div>
       )}
 
-      <StreamList events={stream} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
+      <NexusInsights />
 
       <AnimatePresence>
         {activeCategory && (
@@ -358,26 +263,6 @@ const AdminDashboard = ({ stats, loading }) => {
 const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const handleEventClick = (ev) => {
-    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
-  };
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        setEvents(res?.status === 'ok' ? res.data || [] : []);
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
 
   return (
     <div className="space-y-8">
@@ -387,7 +272,7 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
+      <NexusInsights />
     </div>
   );
 };
@@ -397,26 +282,6 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 const CounselorDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const handleEventClick = (ev) => {
-    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
-  };
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        setEvents(res?.status === 'ok' ? res.data || [] : []);
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
 
   return (
     <div className="space-y-8">
@@ -435,7 +300,7 @@ const CounselorDashboard = ({ stats, loading: parentLoading }) => {
           <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Seguimientos" value={0} tone="warning" />
         </div>
       )}
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
+      <NexusInsights />
     </div>
   );
 };
@@ -463,9 +328,6 @@ const GROUP_KEY = 'nexo:teacher:selected-group';
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const handleEventClick = (ev) => {
-    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
-  };
   const [selectedGroup, setSelectedGroup] = useState(() => {
     try { return localStorage.getItem(GROUP_KEY) || ''; } catch { return ''; }
   });
@@ -475,9 +337,6 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData]         = useState([]);
   const [detailLoading, setDetailLoading]   = useState(false);
-
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
 
   // Group search dropdown state
   const [groupOpen, setGroupOpen]   = useState(false);
@@ -525,26 +384,6 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
       .catch(err => console.error('Error fetching group stats', err))
       .finally(() => setGroupLoading(false));
   }, [selectedGroup]);
-
-  // Load events
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        if (res?.status === 'ok') {
-          setEvents(res.data || []);
-        } else {
-          setEvents([]);
-        }
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
 
   const openDetail = async (category) => {
     if (!selectedGroup) return;
@@ -717,7 +556,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             )
           )}
 
-          <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
+          <NexusInsights />
 
           <AnimatePresence>
             {activeCategory && (
@@ -1154,26 +993,6 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 const StaffDashboard = ({ stats, loading: parentLoading }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const handleEventClick = (ev) => {
-    if (ev.id) navigate(`/notificaciones?notif_id=${ev.id}`);
-  };
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const res = await dashboardApi.getEvents();
-        setEvents(res?.status === 'ok' ? res.data || [] : []);
-      } catch (e) {
-        console.error(e);
-        setEvents([]);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    loadEvents();
-  }, []);
 
   return (
     <div className="space-y-8">
@@ -1183,7 +1002,7 @@ const StaffDashboard = ({ stats, loading: parentLoading }) => {
         </div>
       </div>
       <TasksEmptyState loading={parentLoading} />
-      <StreamList events={events.slice(0, 8)} loading={eventsLoading} showIssuer currentUserName={user?.nombre} onItemClick={handleEventClick} />
+      <NexusInsights />
     </div>
   );
 };

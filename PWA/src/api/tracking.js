@@ -35,5 +35,16 @@ export const trackingApi = {
       params: { tracking_id: trackingId }
     });
     return response.data;
+  },
+
+  // Derivación manual: alerta o incidente → student_tracking
+  derive: async ({ studentId, alertId, incidentId, dependency, assignedToUserId, reason }) => {
+    const payload = { student_id: studentId, dependency };
+    if (alertId) payload.alert_id = alertId;
+    if (incidentId) payload.incident_id = incidentId;
+    if (assignedToUserId) payload.assigned_to_user_id = assignedToUserId;
+    if (reason) payload.reason = reason;
+    const response = await apiClient.post('/tracking/derive', payload);
+    return response.data;
   }
 };

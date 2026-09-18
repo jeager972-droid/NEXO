@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NEXO — Prototipo de cambios frontend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════ TOKENS — mismos que la PWA ══════════════ */
+:root{
+  --canvas:      oklch(98% 0.006 245);
+  --surface:     oklch(99.3% 0.004 245);
+  --surface-sub: oklch(96% 0.009 245);
+  --text:        oklch(23% 0.018 245);
+  --text-muted:  oklch(48% 0.018 245);
+  --border:      oklch(88% 0.010 245);
+  --accent:      oklch(48% 0.115 245);
+  --accent-soft: oklch(48% 0.115 245 / .08);
+  --accent-line: oklch(48% 0.115 245 / .18);
+  --success:     oklch(52% 0.125 155);
+  --success-soft:oklch(52% 0.125 155 / .10);
+  --warning:     oklch(62% 0.135 70);
+  --warning-soft:oklch(62% 0.135 70 / .10);
+  --danger:      oklch(52% 0.175 25);
+  --danger-soft: oklch(52% 0.175 25 / .09);
+  --ease-out:    cubic-bezier(.22,1,.36,1);
+  --r-ctl:8px; --r-surf:12px; --r-panel:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;font-size:16px;line-height:1.5;background:var(--canvas);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ══════════════ SHELL ══════════════ */
+.shell{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.sidebar{border-right:1px solid var(--border);background:var(--surface);padding:20px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 16px;font-weight:700;font-size:17px}
+.brand img{width:34px;height:34px;border-radius:50%}
+.nav-i{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:var(--r-ctl);font-size:13.5px;font-weight:550;color:var(--text-muted);border:0;background:none;text-align:left;width:100%;transition:all .15s var(--ease-out)}
+.nav-i:hover{background:var(--surface-sub);color:var(--text)}
+.nav-i.on{background:var(--accent-soft);color:var(--accent);font-weight:620}
+.nav-i .ic{width:18px;text-align:center;font-size:14px}
+.nav-i .bub{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--danger);color:#fff;font-size:11px;font-weight:650;display:grid;place-items:center}
+.nav-sec{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding:14px 12px 4px}
+.role-sw{margin-top:auto;padding:12px 10px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted)}
+.role-sw select{width:100%;margin-top:6px;height:38px;border:1.5px solid var(--border);border-radius:var(--r-ctl);background:var(--canvas);font-size:13px;padding:0 8px}
+
+.main{min-width:0}
+.topbar{height:60px;display:flex;align-items:center;gap:14px;padding:0 26px;border-bottom:1px solid var(--border);background:oklch(99.3% .004 245/.85);backdrop-filter:blur(6px);position:sticky;top:0;z-index:10}
+.topbar h1{font-size:17px;font-weight:650}
+.topbar .ctx{font-size:13px;color:var(--text-muted)}
+.page{display:none;padding:28px;max-width:1060px;animation:pgIn .2s var(--ease-out)}
+.page.on{display:block}
+@keyframes pgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ══════════════ COMPONENTES ══════════════ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:22px}
+.card+.card{margin-top:16px}
+.kicker{font-size:12.5px;font-weight:600;letter-spacing:.03em;color:var(--accent);text-transform:uppercase}
+.h2{font-size:19px;font-weight:650;letter-spacing:-.01em}
+.h3{font-size:15.5px;font-weight:620}
+.sub{font-size:13.5px;color:var(--text-muted)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:860px){.g3,.g4{grid-template-columns:repeat(2,1fr)}.g2{grid-template-columns:1fr}.shell{grid-template-columns:1fr}.sidebar{display:none}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 20px;border-radius:var(--r-ctl);border:1.5px solid transparent;font-size:14px;font-weight:600;transition:all .15s var(--ease-out)}
+.btn-pri{background:var(--accent);color:#fff}.btn-pri:hover{filter:brightness(1.08)}
+.btn-sec{border-color:var(--border);background:var(--surface);color:var(--text)}.btn-sec:hover{border-color:var(--accent-line);color:var(--accent)}
+.btn-ghost{color:var(--accent);background:none;min-height:38px}.btn-ghost:hover{background:var(--accent-soft)}
+.btn-sm{min-height:36px;padding:0 14px;font-size:13px}
+.btn-dan{border-color:oklch(52% .175 25/.3);color:var(--danger);background:var(--surface)}.btn-dan:hover{background:var(--danger-soft)}
+
+.tag{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.tag-acc{background:var(--accent-soft);color:var(--accent)}
+.tag-suc{background:var(--success-soft);color:var(--success)}
+.tag-war{background:var(--warning-soft);color:oklch(48% .14 70)}
+.tag-dan{background:var(--danger-soft);color:var(--danger)}
+.tag-mut{background:var(--surface-sub);color:var(--text-muted);border:1px solid var(--border)}
+.tag-new{background:var(--accent);color:#fff;font-size:10.5px;padding:2px 8px;letter-spacing:.04em}
+
+.field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.field .help{font-size:12px;color:var(--text-muted);margin-top:5px}
+.field input,.field select,.field textarea{width:100%;height:44px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--surface);padding:0 12px;font:inherit;font-size:14px;color:var(--text)}
+.field textarea{height:auto;padding:10px 12px;resize:vertical}
+.field input:focus,.field select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.field input:disabled{background:var(--surface-sub);color:var(--text-muted)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11.5px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);padding:10px 12px;border-bottom:1px solid var(--border)}
+td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr:hover td{background:var(--surface-sub)}
+
+.kpi{padding:16px 18px}
+.kpi .v{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;color:var(--text-muted);margin-top:2px}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.stack>*+*{margin-top:14px}
+.mono{font-family:ui-monospace,monospace;font-size:12.5px}
+
+/* ── Nexus: todo redondo ── */
+@keyframes nx-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes nx-pulse{0%{transform:scale(.92);opacity:.9}70%{transform:scale(1.14);opacity:0}100%{opacity:0}}
+@keyframes nx-blink{50%{opacity:0}}
+.nx-botwrap{position:fixed;bottom:22px;right:22px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.nx-bubble{width:min(340px,calc(100vw - 130px));background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 4px 16px;padding:14px 16px 10px;box-shadow:0 6px 18px -6px oklch(30% .08 245/.2);position:relative}
+.nx-bubble::after{content:'';position:absolute;bottom:-7px;right:22px;width:12px;height:12px;background:var(--surface);border-right:1px solid var(--border);border-bottom:1px solid var(--border);transform:rotate(45deg)}
+.nx-bubble .who{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--accent)}
+.nx-bubble .msg{font-size:14px;line-height:1.5;margin-top:4px;min-height:40px}
+.nx-bubble .caret{display:inline-block;width:7px;height:14px;background:var(--accent);border-radius:2px;margin-left:2px;vertical-align:-2px;animation:nx-blink 1s steps(1) infinite}
+.nx-bubble .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:11px;color:var(--text-muted)}
+.nx-bubble .next,.nx-bubble .chip{font-size:12.5px;font-weight:650;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:5px 13px;border:0}
+.nx-bubble .chip{border:1px solid var(--accent-line);background:var(--surface)}
+.nx-botbtn{position:relative;width:84px;height:84px;border:0;background:none;border-radius:50%;animation:nx-float 3.2s ease-in-out infinite}
+.nx-botbtn img{width:100%;height:100%;object-fit:cover;border-radius:50%;filter:drop-shadow(0 8px 14px oklch(30% .08 245/.25))}
+.nx-botbtn .ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--accent-line);animation:nx-pulse 2.4s var(--ease-out) infinite}
+.nx-botbtn .dot{position:absolute;top:2px;right:2px;width:15px;height:15px;border-radius:50%;background:var(--accent);border:3px solid var(--surface)}
+
+/* avatar inline redondo — reemplaza el logo viejo */
+.nx-inline{display:flex;gap:14px;align-items:flex-start}
+.nx-av{position:relative;width:52px;height:52px;flex-shrink:0;border-radius:50%}
+.nx-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;animation:nx-float 3.6s ease-in-out infinite}
+.nx-av .ring{position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--accent-line);animation:nx-pulse 3s var(--ease-out) infinite}
+
+/* ── insight card (reemplaza Novedades) ── */
+.insight{border-left:3px solid var(--border);padding:10px 0 10px 16px;margin-top:12px}
+.insight.s-high{border-color:var(--danger)}
+.insight.s-med{border-color:var(--warning)}
+.insight .it-t{font-size:14px;font-weight:620}
+.insight .it-b{font-size:13px;color:var(--text-muted);margin-top:2px}
+.insight .it-a{margin-top:8px}
+.insight+.insight{border-top:1px solid var(--border)}
+
+/* ── notificaciones: cuadros, colores del sistema ── */
+.notif{display:grid;grid-template-columns:10px 1fr auto;gap:16px;align-items:start;padding:16px 18px;border:1px solid var(--border);border-radius:var(--r-surf);background:var(--surface);transition:border-color .15s}
+.notif:hover{border-color:var(--accent-line)}
+.notif.unread{background:oklch(48% .115 245/.025);border-color:var(--accent-line)}
+.notif .sev{width:8px;height:8px;border-radius:50%;margin-top:8px}
+.sev-crit{background:var(--danger)}.sev-alta{background:var(--warning)}.sev-info{background:var(--accent)}
+.notif .ttl{font-size:14.5px;font-weight:620}
+.notif .txt{font-size:13.5px;color:var(--text-muted);margin-top:2px}
+.notif .meta{display:flex;gap:10px;align-items:center;margin-top:8px;font-size:12px;color:var(--text-muted);flex-wrap:wrap}
+.notif .acts{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.notif .acts .row{display:flex;gap:8px}
+
+/* ── drawer ── */
+.veil{position:fixed;inset:0;background:oklch(20% .02 245/.4);z-index:70;display:none}.veil.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);z-index:71;background:var(--surface);border-left:1px solid var(--border);transform:translateX(105%);transition:transform .25s var(--ease-out);display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dhead{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.drawer .dbody{padding:24px;overflow-y:auto;flex:1}
+.drawer .dfoot{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+.x-btn{border:0;background:var(--surface-sub);width:34px;height:34px;border-radius:var(--r-ctl);font-size:16px;color:var(--text-muted)}
+
+/* timeline — incluye texto real de la respuesta */
+.tl{position:relative;padding-left:22px}
+.tl::before{content:'';position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--border)}
+.tl .it{position:relative;padding-bottom:16px}
+.tl .it::before{content:'';position:absolute;left:-20px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2.5px solid var(--accent)}
+.tl .it.mut::before{border-color:var(--border)}
+.tl .it.resp::before{border-color:var(--success)}
+.tl .when{font-size:11.5px;color:var(--text-muted)}
+.tl .what{font-size:13.5px;font-weight:550}
+.tl .quote{font-size:13px;color:var(--text-muted);background:var(--surface-sub);border-left:3px solid var(--success);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:5px;font-style:italic}
+
+/* operación: estilo nuevo, sin emojis */
+.cmd{display:flex;flex-direction:column;gap:8px;align-items:flex-start;text-align:left;padding:18px;border:1.5px solid var(--border);border-radius:var(--r-surf);background:var(--surface);transition:all .15s var(--ease-out);min-height:92px}
+.cmd:hover{border-color:var(--accent-line);transform:translateY(-1px)}
+.cmd .ic{width:38px;height:38px;border-radius:var(--r-ctl);display:grid;place-items:center;background:var(--surface-sub);color:var(--text-muted);font-size:16px}
+.cmd .t{font-size:14px;font-weight:620}
+.cmd .d{font-size:12px;color:var(--text-muted)}
+.cmd.new{border-color:var(--accent-line);background:var(--accent-soft)}
+.cmd.new .ic{background:var(--surface);color:var(--accent)}
+
+/* consulta: filtros sobrios + tabla */
+.fbar{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:14px;align-items:end}
+@media(max-width:860px){.fbar{grid-template-columns:repeat(2,1fr)}}
+
+/* reglas docente: todos los casos con toggle */
+.rule{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r-surf);background:var(--canvas);transition:opacity .15s}
+.rule.off{opacity:.5;background:var(--surface-sub)}
+.rule .rn{min-width:180px;flex:1}
+.rule .rn b{font-size:14.5px}
+.rule .rn span{display:block;font-size:12px;color:var(--text-muted)}
+.stepper{display:inline-flex;align-items:center;gap:10px}
+.stepper button{width:34px;height:34px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--canvas);font-size:16px;font-weight:600;color:var(--text-muted)}
+.stepper button:hover{border-color:var(--accent);color:var(--accent)}
+.stepper .n{min-width:28px;text-align:center;font-weight:650;font-variant-numeric:tabular-nums}
+.sw{position:relative;width:46px;height:26px;flex-shrink:0}
+.sw input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.sw i{position:absolute;inset:0;border-radius:999px;background:var(--border);transition:background .15s}
+.sw i::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s var(--ease-out)}
+.sw input:checked+i{background:var(--accent)}
+.sw input:checked+i::after{transform:translateX(20px)}
+
+/* onboarding preview */
+.ob-hero{display:flex;flex-direction:column;align-items:center;gap:26px;text-align:center;padding:20px 0}
+.ob-bot{position:relative;width:120px;height:120px}
+.ob-bot img{width:100%;height:100%;object-fit:cover;border-radius:50%;animation:nx-float 3.2s ease-in-out infinite;filter:drop-shadow(0 10px 18px oklch(30% .08 245/.22))}
+.ob-bot .ring{position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--accent-line);animation:nx-pulse 2.6s var(--ease-out) infinite}
+.ob-agenda{display:flex;flex-direction:column;gap:10px;width:min(480px,100%)}
+.ob-agenda .it{display:flex;align-items:center;gap:14px;padding:14px 18px;border:1px solid var(--border);border-radius:var(--r-panel);background:var(--surface);text-align:left}
+.ob-agenda .ic{width:38px;height:38px;border-radius:var(--r-ctl);background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.ob-agenda .n{font-size:12px;font-weight:600;color:var(--text-muted);font-variant-numeric:tabular-nums}
+
+.legend{position:fixed;bottom:22px;left:22px;z-index:60;font-size:11.5px;color:var(--text-muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);padding:8px 12px}
+.legend .tag-new{margin-right:4px}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="sidebar">
+    <div class="brand"><img src="imagenbot.png" alt="">NEXO</div>
+    <div id="nav"></div>
+    <div class="nav-sec">Cambios nuevos</div>
+    <button class="nav-i" onclick="go('ob')"><span class="ic">◉</span>Onboarding nuevo</button>
+    <button class="nav-i" onclick="go('ob-docente')"><span class="ic">◉</span>Onboarding docente</button>
+    <div class="role-sw">
+      Vista de rol (prototipo)
+      <select id="roleSel" onchange="setRole(this.value)">
+        <option value="rector">Rector</option>
+        <option value="coordinador">Coordinador</option>
+        <option value="docente">Docente</option>
+      </select>
+    </div>
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <h1 id="pageTitle">Inicio</h1>
+      <span class="ctx" id="pageCtx"></span>
+      <span style="margin-left:auto" class="tag tag-mut">PROTOTIPO — solo componentes que cambian</span>
+    </header>
+
+    <!-- ══════════ INICIO ══════════ -->
+    <section class="page on" id="pg-inicio">
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="card kpi"><div class="v">412</div><div class="l">Presentes hoy</div></div>
+        <div class="card kpi"><div class="v" style="color:var(--warning)">18</div><div class="l">Llegadas tarde</div></div>
+        <div class="card kpi"><div class="v" style="color:var(--danger)">7</div><div class="l">Ausencias sin justificar</div></div>
+        <div class="card kpi"><div class="v">3</div><div class="l">Casos en seguimiento</div></div>
+      </div>
+
+      <!-- ══ REEMPLAZA "Novedades" → Lectura de la jornada de Nexus ══ -->
+      <div class="card">
+        <div class="nx-inline">
+          <div class="nx-av"><img src="imagenbot.png" alt="Nexus"><span class="ring"></span></div>
+          <div style="flex:1">
+            <div class="row-between">
+              <span class="kicker">Nexus · lectura de la jornada</span>
+              <span class="tag tag-new">REEMPLAZA «Novedades»</span>
+            </div>
+            <!-- cada insight sale del motor matemático /dashboard/insights -->
+            <div class="insight s-high">
+              <p class="it-t">3 ausencias sin respuesta del acudiente</p>
+              <p class="it-b">En 3 días siguen sin justificación — 1 ya escaló. Detecté y escalé; el siguiente paso es decisión institucional.</p>
+              <div class="it-a"><button class="btn btn-pri btn-sm" onclick="go('casos')">Derivar a seguimiento</button></div>
+            </div>
+            <div class="insight s-med">
+              <p class="it-t">Llegadas tarde concentradas — 9-A</p>
+              <p class="it-b">5 de 6 tardes de 9-A esta semana cayeron entre 7:02 y 7:09 — sugiere cuello de botella en el acceso norte, no dispersión.</p>
+              <div class="it-a"><button class="btn btn-sec btn-sm" onclick="go('consulta')">Ver grupo 9-A</button></div>
+            </div>
+            <div class="insight s-med">
+              <p class="it-t">Tendencia al alza en salidas sin retorno</p>
+              <p class="it-b">Suben ~0.6 por día desde hace 8 días (r²=0.71). No es ruido: es un patrón sostenido.</p>
+              <div class="it-a"><button class="btn btn-sec btn-sm" onclick="go('consulta')">Ver evolución</button></div>
+            </div>
+            <p class="sub" style="margin-top:14px;font-size:12px">Generado por <span class="mono">GET /dashboard/insights</span> — z-score, ventana modal y mínimos cuadrados sobre datos reales.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <span class="kicker">Acciones rápidas</span>
+        <div class="grid g4" style="margin-top:14px">
+          <button class="btn btn-sec">Registrar llegada manual</button>
+          <button class="btn btn-sec">Citar acudiente</button>
+          <button class="btn btn-sec">Generar permiso</button>
+          <button class="btn btn-sec">Reportar incidente</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ NOTIFICACIONES ══════════ -->
+    <section class="page" id="pg-notifs">
+      <div class="row-between" style="margin-bottom:16px">
+        <div><h2 class="h2">Notificaciones</h2><p class="sub">Mismos colores del sistema — formato de cuadros con acciones, ya no chat.</p></div>
+        <button class="btn btn-ghost btn-sm">Marcar todas como leídas</button>
+      </div>
+      <div class="stack">
+        <article class="notif unread">
+          <span class="sev sev-crit"></span>
+          <div>
+            <p class="ttl">Ausencia sin respuesta — Valentina Ríos (7-B)</p>
+            <p class="txt">El acudiente no respondió en 45 min. Segunda ausencia en 15 días.</p>
+            <div class="meta"><span>hace 12 min</span><span class="tag tag-dan">Alta</span><span class="tag tag-mut">Escalado ×1</span></div>
+          </div>
+          <div class="acts">
+            <div class="row">
+              <button class="btn btn-pri btn-sm" onclick="openDrawer('derive')">Derivar a seguimiento</button>
+              <button class="btn btn-sec btn-sm" onclick="openDrawer('notif')">Detalle</button>
+            </div>
+            <button class="btn btn-ghost btn-sm">Marcar leída</button>
+          </div>
+        </article>
+        <article class="notif unread">
+          <span class="sev sev-alta"></span>
+          <div>
+            <p class="ttl">Umbral alcanzado — Juan Pablo Mora (9-A)</p>
+            <p class="txt">3 llegadas tarde en 30 días. Criterio de aviso de tu institución.</p>
+            <div class="meta"><span>hace 1 h</span><span class="tag tag-war">Moderada</span><span class="tag tag-mut">Motor de riesgo</span></div>
+          </div>
+          <div class="acts">
+            <div class="row">
+              <button class="btn btn-pri btn-sm" onclick="openDrawer('derive')">Derivar a seguimiento</button>
+              <button class="btn btn-sec btn-sm" onclick="openDrawer('notif')">Detalle</button>
+            </div>
+            <button class="btn btn-ghost btn-sm">Marcar leída</button>
+          </div>
+        </article>
+        <article class="notif">
+          <span class="sev sev-info"></span>
+          <div>
+            <p class="ttl">Respuesta del acudiente — Tomás Gil (5-A)</p>
+            <p class="txt">«Cita médica, adjunta incapacidad» — justificó la ausencia de ayer.</p>
+            <div class="meta"><span>hace 3 h</span><span class="tag tag-suc">Respondió</span></div>
+          </div>
+          <div class="acts"><div class="row"><button class="btn btn-sec btn-sm" onclick="openDrawer('resp')">Detalle</button></div></div>
+        </article>
+        <article class="notif">
+          <span class="sev sev-crit"></span>
+          <div>
+            <p class="ttl">Nodo N-03 sin conexión</p>
+            <p class="txt">Puerta sur lleva 2 h sin reportar. Sus grupos marcados «sin datos de nodo».</p>
+            <div class="meta"><span>ayer</span><span class="tag tag-dan">Crítica</span></div>
+          </div>
+          <div class="acts"><div class="row">
+            <button class="btn btn-sec btn-sm" onclick="go('dispositivos')">Ver dispositivos</button>
+            <button class="btn btn-sec btn-sm" onclick="openDrawer('notif')">Detalle</button>
+          </div></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ══════════ OPERACIÓN ══════════ -->
+    <section class="page" id="pg-operacion">
+      <h2 class="h2" style="margin-bottom:4px">Operación del día</h2>
+      <p class="sub" style="margin-bottom:18px">Mismos comandos de siempre — solo cambia el estilo de las tarjetas.</p>
+      <div class="grid g3">
+        <button class="cmd"><span class="ic">◷</span><span class="t">Registrar llegada manual</span><span class="d">Marcar entrada sin huella</span></button>
+        <button class="cmd"><span class="ic">▣</span><span class="t">Generar permiso</span><span class="d">Salida del salón con tiempo límite</span></button>
+        <button class="cmd"><span class="ic">☎</span><span class="t">Citar acudiente</span><span class="d">Agenda llamada o visita</span></button>
+        <button class="cmd"><span class="ic">⚑</span><span class="t">Reportar incidente</span><span class="d">Novedad disciplinaria o de salud</span></button>
+        <button class="cmd"><span class="ic">↗</span><span class="t">Autorizar salida</span><span class="d">Salida anticipada del estudiante</span></button>
+        <button class="cmd"><span class="ic">⚌</span><span class="t">Extender bloque</span><span class="d">Prolongar la clase en curso</span></button>
+        <button class="cmd new"><span class="ic">⏸</span><span class="t">Registro manual pendiente <span class="tag tag-new">NUEVO</span></span><span class="d">Suspende detectores hasta N min — filas de enrolamiento o nodo caído</span></button>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <span class="kicker">Permisos activos</span>
+        <table style="margin-top:12px">
+          <thead><tr><th>Estudiante</th><th>Motivo</th><th>Salió</th><th>Límite</th><th>Estado</th></tr></thead>
+          <tbody>
+            <tr><td>Sara Peña · 8-B</td><td>Baño</td><td>9:41</td><td>9:56</td><td><span class="tag tag-suc">En tiempo</span></td></tr>
+            <tr><td>Diego Lara · 9-A</td><td>Enfermería</td><td>9:20</td><td>9:50</td><td><span class="tag tag-war">Vencido</span></td></tr>
+            <tr><td>Ana Ruiz · 7-A</td><td>Coordinación</td><td>9:35</td><td>10:05</td><td><span class="tag tag-war">Retornó en aula distinta</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════ CONSULTA ══════════ -->
+    <section class="page" id="pg-consulta">
+      <h2 class="h2" style="margin-bottom:4px">Consulta</h2>
+      <p class="sub" style="margin-bottom:18px">Tu consulta de siempre + barra de filtros arriba. Colores sobrios.</p>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="fbar">
+          <div class="field"><label>Módulo</label><select id="modSel" onchange="modFilters()"><option value="aus">Inasistencias</option><option value="tar">Llegadas tarde</option><option value="per">Permisos</option><option value="inc">Incidentes</option></select></div>
+          <div class="field"><label>Grado / grupo</label><select><option>Todos</option><option>7-A</option><option>7-B</option><option>8-B</option><option>9-A</option></select></div>
+          <div class="field"><label id="lblExtra">Estudiante</label><input id="inpExtra" placeholder="Nombre o documento…"></div>
+          <div class="field"><label>Rango</label><select><option>Últimos 7 días</option><option>Este mes</option><option>Personalizado</option></select></div>
+          <button class="btn btn-pri" style="height:44px">Consultar</button>
+        </div>
+        <p class="sub" style="margin-top:10px;font-size:12px">El tercer filtro cambia según el módulo: estudiante, docente, estado de respuesta, tipo de incidente…</p>
+      </div>
+
+      <div class="card">
+        <div class="row-between">
+          <span class="kicker">Inasistencias — últimos 7 días</span>
+          <button class="btn btn-sec btn-sm">Exportar</button>
+        </div>
+        <table style="margin-top:12px">
+          <thead><tr><th>Fecha</th><th>Estudiante</th><th>Grupo</th><th>Tipo</th><th>Respuesta acudiente</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>18 sep</td><td>Valentina Ríos</td><td>7-B</td><td>Ausencia</td>
+              <td><span class="tag tag-dan">Sin respuesta · escaló</span></td>
+              <td><button class="btn btn-ghost btn-sm" onclick="openDrawer('derive')">Derivar</button></td></tr>
+            <tr><td>17 sep</td><td>Tomás Gil</td><td>5-A</td><td>Ausencia</td>
+              <td><span class="tag tag-suc">Justificada</span></td>
+              <td><button class="btn btn-ghost btn-sm" onclick="openDrawer('resp')">Detalle</button></td></tr>
+            <tr><td>17 sep</td><td>Mateo Díaz</td><td>9-A</td><td><span class="tag tag-war">Reaparición tardía</span></td>
+              <td><span class="tag tag-mut">Reconciliado a 9-A</span></td>
+              <td><button class="btn btn-ghost btn-sm">Detalle</button></td></tr>
+            <tr><td>16 sep</td><td>Lucía Sanz</td><td>8-B</td><td>Ausencia</td>
+              <td><span class="tag tag-mut">Sin respuesta · 2 recordatorios</span></td>
+              <td><button class="btn btn-ghost btn-sm" onclick="openDrawer('derive')">Derivar</button></td></tr>
+          </tbody>
+        </table>
+        <div class="row-between" style="margin-top:14px">
+          <span class="sub">4 de 38</span>
+          <div style="display:flex;gap:8px"><button class="btn btn-sec btn-sm">←</button><button class="btn btn-sec btn-sm">→</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ SEGUIMIENTO ══════════ -->
+    <section class="page" id="pg-casos">
+      <div class="row-between" style="margin-bottom:16px">
+        <div><h2 class="h2">Seguimiento de casos</h2><p class="sub">Tu vista de siempre — fichas con origen y responsable.</p></div>
+        <button class="btn btn-pri" onclick="openDrawer('derive')">Derivar manualmente</button>
+      </div>
+      <div class="grid g3">
+        <div class="card" style="border-left:4px solid var(--danger)">
+          <div class="row-between"><span class="h3">Valentina Ríos · 7-B</span><span class="tag tag-dan">Abierto</span></div>
+          <p class="sub" style="margin-top:6px">Ausencias repetidas — 4 en 20 días, 1 sin justificar.</p>
+          <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+            <div style="display:flex;justify-content:space-between"><span>Origen</span><b>Alerta · riesgo ALTA</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Dependencia</span><b>Coordinación</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Responsable</span><b>M. Gómez</b></div>
+          </div>
+          <div style="margin-top:12px"><button class="btn btn-sec btn-sm" onclick="openDrawer('tracking')">Abrir ficha</button></div>
+        </div>
+        <div class="card" style="border-left:4px solid var(--warning)">
+          <div class="row-between"><span class="h3">Juan P. Mora · 9-A</span><span class="tag tag-war">En proceso</span></div>
+          <p class="sub" style="margin-top:6px">Llegadas tarde recurrentes — citado acudiente.</p>
+          <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+            <div style="display:flex;justify-content:space-between"><span>Origen</span><b>Umbral docente</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Dependencia</span><b>Docencia</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Responsable</span><b>A. Pérez</b></div>
+          </div>
+          <div style="margin-top:12px"><button class="btn btn-sec btn-sm" onclick="openDrawer('tracking')">Abrir ficha</button></div>
+        </div>
+        <div class="card" style="border-left:4px solid var(--success)">
+          <div class="row-between"><span class="h3">Sara Peña · 8-B</span><span class="tag tag-suc">Cerrado</span></div>
+          <p class="sub" style="margin-top:6px">Salidas sin retorno — acuerdo con acudiente firmado.</p>
+          <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+            <div style="display:flex;justify-content:space-between"><span>Origen</span><b>Incidente EVASION</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Cierre</span><b>15 sep · formal</b></div>
+          </div>
+          <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="openDrawer('tracking')">Ver ficha</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ DISPOSITIVOS ══════════ -->
+    <section class="page" id="pg-dispositivos">
+      <h2 class="h2" style="margin-bottom:4px">Dispositivos</h2>
+      <p class="sub" style="margin-bottom:18px">Tu tabla de siempre — solo se agregan las acciones de contingencia. Las llaves NO se muestran (seguridad).</p>
+      <div class="card">
+        <table>
+          <thead><tr><th>Nodo</th><th>Ubicación</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>
+            <tr><td><b>N-01</b></td><td>Acceso norte</td><td><span class="tag tag-suc">En línea</span></td>
+              <td><div style="display:flex;gap:6px">
+                <button class="btn btn-sec btn-sm" onclick="openDrawer('reassign')">Reasignar</button>
+                <button class="btn btn-dan btn-sm" onclick="openDrawer('reprovision')">Reprovisionar</button>
+              </div></td></tr>
+            <tr><td><b>N-02</b></td><td>Aula 204 · 9-A</td><td><span class="tag tag-suc">En línea</span></td>
+              <td><div style="display:flex;gap:6px">
+                <button class="btn btn-sec btn-sm" onclick="openDrawer('reassign')">Reasignar</button>
+                <button class="btn btn-dan btn-sm" onclick="openDrawer('reprovision')">Reprovisionar</button>
+              </div></td></tr>
+            <tr><td><b>N-03</b></td><td>Acceso sur</td><td><span class="tag tag-dan">Sin conexión · 2 h</span></td>
+              <td><div style="display:flex;gap:6px">
+                <button class="btn btn-sec btn-sm" onclick="openDrawer('reassign')">Reasignar</button>
+                <button class="btn btn-dan btn-sm" onclick="openDrawer('reprovision')">Reprovisionar</button>
+              </div></td></tr>
+          </tbody>
+        </table>
+        <p class="sub" style="margin-top:12px;font-size:12px">Reasignar mueve el nodo de punto sin tocar llaves. Reprovisionar rota token + OTA key — las anteriores mueren al instante.</p>
+      </div>
+    </section>
+
+    <!-- ══════════ CONFIGURACIÓN ══════════ -->
+    <section class="page" id="pg-config">
+      <h2 class="h2" style="margin-bottom:18px">Configuración</h2>
+      <p class="sub" style="margin-bottom:16px">Tu sección de siempre — solo se agrega el acceso a re-configurar la institución con el onboarding nuevo.</p>
+
+      <div class="card">
+        <div class="row-between">
+          <div><span class="kicker">Perfil</span><h3 class="h3" style="margin-top:4px">Mi cuenta</h3></div>
+          <button class="btn btn-sec btn-sm">Editar perfil</button>
+        </div>
+        <div class="grid g2" style="margin-top:14px">
+          <div class="field"><label>Nombre</label><input value="María Fernanda Ruiz" disabled></div>
+          <div class="field"><label>Correo</label><input value="rectora@colegio.edu.co" disabled></div>
+        </div>
+      </div>
+
+      <!-- entrada al onboarding en modo actualización -->
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <span class="kicker">Institución</span>
+            <h3 class="h3" style="margin-top:4px">Configuración institucional</h3>
+            <p class="sub" style="margin-top:4px">Jornadas, grupos, docentes y umbrales — los mismos pasos del onboarding, ahora para actualizar.</p>
+          </div>
+          <span class="tag tag-new">NUEVO</span>
+        </div>
+        <div style="margin-top:14px"><button class="btn btn-pri" onclick="go('ob-update')">Editar configuración institucional</button></div>
+      </div>
+    </section>
+
+    <!-- ══════════ ONBOARDING — welcome nuevo ══════════ -->
+    <section class="page" id="pg-ob">
+      <div class="card">
+        <div class="ob-hero">
+          <div class="ob-bot"><img src="imagenbot.png" alt="Nexus"><span class="ring"></span></div>
+          <div>
+            <span class="kicker">Configuración inicial</span>
+            <h2 class="h2" style="font-size:28px;margin-top:6px">Bienvenid@</h2>
+            <p class="sub" style="max-width:46ch;margin:8px auto 0">Tu institución aún no está configurada. Nexus — la voz del sistema — te acompaña paso a paso.</p>
+          </div>
+          <div class="ob-agenda">
+            <div class="it"><span class="ic">◷</span><div style="flex:1"><b style="font-size:14.5px">Jornadas y horarios</b><p class="sub" style="font-size:12.5px">Entrada, salida, descanso y bloques por jornada</p></div><span class="n">1</span></div>
+            <div class="it"><span class="ic">▦</span><div style="flex:1"><b style="font-size:14.5px">Grados, grupos y docentes</b><p class="sub" style="font-size:12.5px">La estructura del año con su docente asignado</p></div><span class="n">2</span></div>
+            <div class="it"><span class="ic">◔</span><div style="flex:1"><b style="font-size:14.5px">Umbrales de aviso</b><p class="sub" style="font-size:12.5px">A partir de cuántas repeticiones Nexus alerta</p></div><span class="n">3</span></div>
+          </div>
+          <button class="btn btn-pri" style="min-height:52px;padding:0 32px;font-size:15px">Comenzar →</button>
+        </div>
+      </div>
+      <p class="sub" style="margin-top:12px;font-size:12px">El bot habla desde la esquina solo después de «Comenzar». Esta pantalla es silenciosa.</p>
+    </section>
+
+    <!-- ══════════ ONBOARDING — modo actualización ══════════ -->
+    <section class="page" id="pg-ob-update">
+      <div class="card">
+        <div class="ob-hero">
+          <div class="ob-bot"><img src="imagenbot.png" alt="Nexus"><span class="ring"></span></div>
+          <div>
+            <span class="kicker">Configuración</span>
+            <h2 class="h2" style="font-size:28px;margin-top:6px">Vas a actualizar los detalles de tu institución</h2>
+            <p class="sub" style="max-width:46ch;margin:8px auto 0">Nexus te acompaña paso a paso — igual que la primera vez. La pantalla se bloquea hasta que guardes o canceles.</p>
+          </div>
+          <div class="ob-agenda">
+            <div class="it"><span class="ic">◷</span><div style="flex:1"><b style="font-size:14.5px">Jornadas y horarios</b><p class="sub" style="font-size:12.5px">Valores actuales pre-cargados — cambia lo que necesites</p></div><span class="n">1</span></div>
+            <div class="it"><span class="ic">▦</span><div style="flex:1"><b style="font-size:14.5px">Grados, grupos y docentes</b><p class="sub" style="font-size:12.5px">Estructura actual editable</p></div><span class="n">2</span></div>
+            <div class="it"><span class="ic">◔</span><div style="flex:1"><b style="font-size:14.5px">Umbrales de aviso</b><p class="sub" style="font-size:12.5px">Ajusta la política vigente</p></div><span class="n">3</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;align-items:center">
+            <button class="btn btn-pri" style="min-height:52px;padding:0 32px;font-size:15px">Actualizar configuración →</button>
+            <button class="btn btn-ghost btn-sm">Volver sin cambios</button>
+          </div>
+        </div>
+      </div>
+      <p class="sub" style="margin-top:12px;font-size:12px">La misma pantalla de siempre, otra entrada: desde Configuración, no desde el bloqueo inicial.</p>
+    </section>
+
+    <!-- ══════════ ONBOARDING DOCENTE — todas las reglas ══════════ -->
+    <section class="page" id="pg-ob-docente">
+      <div class="card">
+        <div class="row-between">
+          <div><span class="kicker">Onboarding docente · paso único</span><h2 class="h2" style="margin-top:4px">Tus criterios de aviso</h2>
+          <p class="sub" style="margin-top:4px">Todos los casos vienen listos — ajusta números y desactiva lo que no quieras en tus clases.</p></div>
+          <span class="tag tag-new">REDISEÑADO</span>
+        </div>
+        <div class="stack" style="margin-top:18px">
+          <div class="rule"><div class="rn"><b>Llegadas tarde</b><span>en mis clases</span></div>
+            <div class="stepper"><button>−</button><span class="n">3</span><button>+</button></div><span class="sub">veces en</span>
+            <div class="stepper"><button>−</button><span class="n">30</span><button>+</button></div><span class="sub">días</span>
+            <label class="sw"><input type="checkbox" checked><i></i></label></div>
+          <div class="rule"><div class="rn"><b>Inasistencias</b><span>en mis clases</span></div>
+            <div class="stepper"><button>−</button><span class="n">3</span><button>+</button></div><span class="sub">veces en</span>
+            <div class="stepper"><button>−</button><span class="n">30</span><button>+</button></div><span class="sub">días</span>
+            <label class="sw"><input type="checkbox" checked><i></i></label></div>
+          <div class="rule"><div class="rn"><b>Salidas sin retorno</b><span>en mis clases</span></div>
+            <div class="stepper"><button>−</button><span class="n">1</span><button>+</button></div><span class="sub">vez en</span>
+            <div class="stepper"><button>−</button><span class="n">30</span><button>+</button></div><span class="sub">días</span>
+            <label class="sw"><input type="checkbox" checked><i></i></label></div>
+          <div class="rule off"><div class="rn"><b>Salidas del salón</b><span>en mis clases</span></div>
+            <div class="stepper"><button>−</button><span class="n">2</span><button>+</button></div><span class="sub">veces en</span>
+            <div class="stepper"><button>−</button><span class="n">15</span><button>+</button></div><span class="sub">días</span>
+            <label class="sw"><input type="checkbox"><i></i></label></div>
+          <div class="rule off"><div class="rn"><b>Permisos vencidos</b><span>en mis clases</span></div>
+            <div class="stepper"><button>−</button><span class="n">1</span><button>+</button></div><span class="sub">vez en</span>
+            <div class="stepper"><button>−</button><span class="n">7</span><button>+</button></div><span class="sub">días</span>
+            <label class="sw"><input type="checkbox"><i></i></label></div>
+        </div>
+        <p class="sub" style="margin-top:12px;font-size:12.5px">Las desactivadas no se guardan — puedes activarlas después desde tu panel.</p>
+        <div class="row-between" style="margin-top:18px">
+          <button class="btn btn-ghost">Omitir por ahora</button>
+          <button class="btn btn-pri" style="min-height:52px;padding:0 28px">Guardar y entrar</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ══════════ NEXUS — todo redondo, proactivo ══════════ -->
+<div class="nx-botwrap" id="nxWrap">
+  <div class="nx-bubble" id="nxBubble">
+    <p class="who">NEXUS</p>
+    <p class="msg"><span id="nxText"></span><span class="caret"></span></p>
+    <div class="foot"><span id="nxCount">1 / 2</span>
+      <div style="display:flex;gap:6px">
+        <button class="chip" id="nxChip" onclick="nxChipGo()" style="display:none">Revisar</button>
+        <button class="next" onclick="nxNext()">Siguiente</button>
+      </div>
+    </div>
+  </div>
+  <button class="nx-botbtn" onclick="nxReplay()" aria-label="Nexus, tu asistente">
+    <img src="imagenbot.png" alt="Nexus"><span class="ring"></span><span class="dot" id="nxDot"></span>
+  </button>
+</div>
+
+<div class="legend"><span class="tag tag-new">NUEVO</span> = cambio vs frontend actual</div>
+
+<!-- ══════════ DRAWER ══════════ -->
+<div class="veil" id="veil" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="dhead">
+    <div><span class="kicker" id="dKicker">Detalle</span><h2 class="h3" id="dTitle" style="margin-top:4px">—</h2></div>
+    <button class="x-btn" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="dbody" id="dBody"></div>
+  <div class="dfoot" id="dFoot"></div>
+</aside>
+
+<script>
+const PAGES = {
+  inicio:{t:'Inicio',ctx:'Jornada mañana · hoy'}, notifs:{t:'Notificaciones',ctx:'4 nuevas'},
+  operacion:{t:'Operación',ctx:'Bloque 3 en curso'}, consulta:{t:'Consulta',ctx:'Historial verificable'},
+  casos:{t:'Seguimiento',ctx:'3 casos abiertos'}, dispositivos:{t:'Dispositivos',ctx:'3 nodos · 1 offline'},
+  config:{t:'Configuración',ctx:'Mi cuenta e institución'},
+  ob:{t:'Onboarding — bienvenida',ctx:'primera vez'}, 'ob-update':{t:'Onboarding — actualizar',ctx:'desde Configuración'},
+  'ob-docente':{t:'Onboarding docente',ctx:'criterios de aviso'},
+};
+const NAV = {
+  rector:[['inicio','⌂','Inicio'],['notifs','✉','Notificaciones',4],['operacion','▶','Operación'],['consulta','⌕','Consulta'],['casos','◈','Seguimiento'],['dispositivos','⬡','Dispositivos'],['config','⚙','Configuración']],
+  coordinador:[['inicio','⌂','Inicio'],['notifs','✉','Notificaciones',4],['operacion','▶','Operación'],['consulta','⌕','Consulta'],['casos','◈','Seguimiento'],['dispositivos','⬡','Dispositivos']],
+  docente:[['inicio','⌂','Inicio'],['notifs','✉','Notificaciones',2],['consulta','⌕','Consulta'],['config','⚙','Configuración']],
+};
+let cur='inicio';
+function renderNav(r){
+  document.getElementById('nav').innerHTML = NAV[r].map(([id,ic,l,b])=>
+    `<button class="nav-i ${id===cur?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${l}${b?`<span class="bub">${b}</span>`:''}</button>`).join('');
+}
+function go(id){
+  cur=id;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById('pg-'+id).classList.add('on');
+  document.getElementById('pageTitle').textContent=PAGES[id].t;
+  document.getElementById('pageCtx').textContent=PAGES[id].ctx;
+  renderNav(document.getElementById('roleSel').value);
+  nxIdx=0; document.getElementById('nxBubble').style.display='block';
+  document.getElementById('nxChip').style.display = id==='inicio' ? 'inline-block' : 'none';
+  nxType(); window.scrollTo(0,0);
+}
+function setRole(r){cur='inicio';go(cur);}
+renderNav('rector');
+
+/* ── Nexus: guion por página + proactivo de notificaciones ── */
+const NX={
+  inicio:['Llegaron <b>4 notificaciones</b> nuevas — 2 necesitan decisión tuya.','Lectura de hoy: 3 ausencias sin respuesta y un cluster de tardes en 9-A. Arriba tienes el detalle.'],
+  notifs:['Cada aviso trae <b>qué pasó y qué puedes hacer</b> — Derivar crea el caso sin salir de aquí.'],
+  operacion:['«Registro manual pendiente» pausa los detectores mientras resuelves una fila o un nodo caído.'],
+  consulta:['Filtra por módulo y la barra cambia: grado, estudiante, estado de respuesta… lo que aplique.'],
+  casos:['Cada ficha muestra su origen y quién la atiende — el acudiente y su respuesta quedan en el historial.'],
+  dispositivos:['Reasignar mueve el nodo sin tocar llaves. Reprovisionar rota token + OTA key al instante.'],
+  config:['«Editar configuración institucional» abre el mismo onboarding — pero para actualizar, no para estrenar.'],
+  ob:['Esta pantalla es silenciosa. Aparezco en la esquina solo después de «Comenzar».'],
+  'ob-update':['Actualizar no es empezar de cero: tus valores actuales vienen pre-cargados.'],
+  'ob-docente':['Todos los casos vienen listos. Apaga lo que no quieras en tus clases — no se borra, solo no aplica.'],
+};
+let nxIdx=0,nxTimer=null;
+function nxType(){
+  const list=NX[cur]||[''];const html=list[Math.min(nxIdx,list.length-1)];
+  const t=document.createElement('div');t.innerHTML=html;const full=t.textContent;let i=0;
+  clearInterval(nxTimer);
+  nxTimer=setInterval(()=>{i+=2;document.getElementById('nxText').textContent=full.slice(0,i);if(i>=full.length)clearInterval(nxTimer);},18);
+  document.getElementById('nxCount').textContent=`${Math.min(nxIdx+1,list.length)} / ${list.length}`;
+}
+function nxNext(){nxIdx++;const l=NX[cur]||[];if(nxIdx>=l.length){document.getElementById('nxBubble').style.display='none';document.getElementById('nxDot').style.display='none';return;}nxType();}
+function nxReplay(){nxIdx=0;document.getElementById('nxBubble').style.display='block';nxType();}
+function nxChipGo(){go('notifs');}
+nxType();
+
+/* ── consulta: filtro contextual ── */
+function modFilters(){
+  const m=document.getElementById('modSel').value;
+  const lbl=document.getElementById('lblExtra'), inp=document.getElementById('inpExtra');
+  const map={aus:['Estado respuesta','Sin respuesta · respondió · escaló'],tar:['Estudiante','Nombre o documento…'],per:['Motivo','Baño · enfermería · coordinación…'],inc:['Tipo','Daño · SOS · riesgo…']};
+  lbl.textContent=map[m][0];inp.placeholder=map[m][1];
+}
+
+/* ── drawer ── */
+const D={
+  notif:{k:'Notificación',t:'Ausencia sin respuesta — Valentina Ríos',b:`
+    <div class="tl">
+      <div class="it"><p class="when">7:14 am</p><p class="what">No se registró entrada — jornada mañana</p></div>
+      <div class="it"><p class="when">7:30 am</p><p class="what">Aviso al acudiente (WhatsApp)</p></div>
+      <div class="it"><p class="when">8:15 am</p><p class="what">Sin respuesta — recordatorio 1</p></div>
+      <div class="it"><p class="when">8:45 am</p><p class="what">Escalado a coordinación</p></div>
+      <div class="it mut"><p class="when">Ahora</p><p class="what">Pendiente de decisión institucional</p></div>
+    </div>
+    <p class="sub" style="margin-top:14px">Segunda ausencia en 15 días. La anterior quedó justificada.</p>`,
+    f:`<button class="btn btn-sec" onclick="closeDrawer()">Cerrar</button><button class="btn btn-pri" onclick="openDrawer('derive')">Derivar a seguimiento</button>`},
+  resp:{k:'Notificación',t:'Respuesta del acudiente — Tomás Gil',b:`
+    <div class="tl">
+      <div class="it"><p class="when">Ayer 7:20 am</p><p class="what">Ausencia detectada — aviso al acudiente</p></div>
+      <div class="it resp"><p class="when">Ayer 8:02 am</p><p class="what">El acudiente respondió</p>
+        <p class="quote">«Buenos días, Tomás tenía cita médica en la mañana. Adjunto la incapacidad. — Luz Gil (mamá)»</p></div>
+      <div class="it"><p class="when">Ayer 8:02 am</p><p class="what">Ausencia marcada como justificada</p></div>
+    </div>
+    <p class="sub" style="margin-top:14px">La respuesta queda registrada en el historial — no solo el estado.</p>`,
+    f:`<button class="btn btn-pri" onclick="closeDrawer()">Cerrar</button>`},
+  derive:{k:'Derivar a seguimiento',t:'Nuevo caso — Valentina Ríos · 7-B',b:`
+    <div class="stack">
+      <div class="field"><label>Origen</label><input value="Alerta · ausencia sin respuesta (18 sep 7:14)" disabled></div>
+      <div class="field"><label>Dependencia responsable</label><select><option>Coordinación</option><option>Psicoorientación</option><option>Rectoría</option><option>Docencia</option></select></div>
+      <div class="field"><label>Asignar a</label><select><option>María Gómez — Coordinación</option><option>Luis Vera — Psicoorientación</option></select></div>
+      <div class="field"><label>Motivo / nota inicial</label><textarea rows="3">Cuarta ausencia en 20 días; acudiente no responde en dos intentos.</textarea></div>
+      <p class="sub">El sistema detectó y escaló — la derivación y la decisión son tuyas.</p>
+    </div>`,
+    f:`<button class="btn btn-sec" onclick="closeDrawer()">Cancelar</button><button class="btn btn-pri" onclick="closeDrawer()">Crear caso</button>`},
+  tracking:{k:'Ficha de seguimiento',t:'Valentina Ríos · 7-B',b:`
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="field"><label>Origen</label><input value="Alerta de riesgo ALTA" disabled></div>
+      <div class="field"><label>Dependencia</label><input value="Coordinación" disabled></div>
+      <div class="field"><label>Responsable</label><input value="María Gómez" disabled></div>
+      <div class="field"><label>Estado</label><input value="Abierto" disabled></div>
+    </div>
+    <span class="kicker">Historial</span>
+    <div class="tl" style="margin-top:12px">
+      <div class="it"><p class="when">18 sep</p><p class="what">Caso creado desde alerta de riesgo</p></div>
+      <div class="it resp"><p class="when">17 sep</p><p class="what">Respuesta del acudiente (ausencia anterior)</p>
+        <p class="quote">«Estuvo con cita médica — Luz Gil»</p></div>
+      <div class="it"><p class="when">18 sep</p><p class="what">Asignado a María Gómez (Coordinación)</p></div>
+      <div class="it mut"><p class="when">Pendiente</p><p class="what">Contacto directo con acudiente</p></div>
+    </div>`,
+    f:`<button class="btn btn-sec">Agregar nota</button><button class="btn btn-pri">Cierre formal</button>`},
+  reassign:{k:'Contingencia de nodo',t:'Reasignar N-03',b:`
+    <div class="stack">
+      <div class="field"><label>Grupo (opcional)</label><select><option>Sin grupo</option><option>9-A</option><option>7-B</option></select></div>
+      <div class="field"><label>Aula / ubicación</label><select><option>Acceso sur</option><option>Aula 105</option><option>Bloque C</option></select></div>
+      <p class="sub">Cuando un nodo cae o se mueve de punto — las llaves no se tocan.</p>
+    </div>`,
+    f:`<button class="btn btn-sec" onclick="closeDrawer()">Cancelar</button><button class="btn btn-pri" onclick="closeDrawer()">Reasignar</button>`},
+  reprovision:{k:'Contingencia de nodo',t:'Reprovisionar N-03',b:`
+    <p class="sub">Rota el <b>token</b> y la <b>OTA key</b>. Las llaves anteriores mueren al instante y el nodo vuelve a pedir provisionamiento. La nueva llave se muestra UNA vez en el punto físico — nunca en esta lista.</p>
+    <p class="sub" style="margin-top:10px;padding:10px 14px;background:var(--danger-soft);border-radius:8px;color:var(--danger)">Solo si las llaves se comprometieron o el nodo se reemplaza.</p>`,
+    f:`<button class="btn btn-sec" onclick="closeDrawer()">Cancelar</button><button class="btn btn-dan" onclick="closeDrawer()">Reprovisionar</button>`},
+};
+function openDrawer(k){const d=D[k];
+  document.getElementById('dKicker').textContent=d.k;document.getElementById('dTitle').textContent=d.t;
+  document.getElementById('dBody').innerHTML=d.b;document.getElementById('dFoot').innerHTML=d.f;
+  document.getElementById('veil').classList.add('on');document.getElementById('drawer').classList.add('on');}
+function closeDrawer(){document.getElementById('veil').classList.remove('on');document.getElementById('drawer').classList.remove('on');}
+</script>
+</body>
+</html>

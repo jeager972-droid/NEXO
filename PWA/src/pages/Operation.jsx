@@ -10,7 +10,7 @@ import {
   AlertOctagon, ShieldCheck, ShieldAlert,
   Clock, Bus, Calendar, Wrench, Send, UserCheck,
   ChevronRight, Loader2, FileText, Siren,
-  GitMerge, Maximize2, PenLine
+  GitMerge, Maximize2, PenLine, Hourglass
 } from 'lucide-react';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
@@ -33,21 +33,22 @@ import { NexoChatBubble } from '../components/patterns/NexoChat';
 
 const COMMANDS_CATALOG = [
   // ── Azul (accent) — acciones informativas/neutrales ──
-  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent' },
-  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent' },
-  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'accent' },
-  { id: 'fusionar_bloque', title: 'Fusionar bloque', icon: GitMerge,   roles: [ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'accent' },
+  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent', desc: 'Agenda llamada o visita del acudiente' },
+  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent', desc: 'Envía una solicitud a otro rol' },
+  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'accent', desc: 'Abre un caso de seguimiento' },
+  { id: 'fusionar_bloque', title: 'Fusionar bloque', icon: GitMerge,   roles: [ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'accent', desc: 'Une dos bloques consecutivos' },
   // ── Naranja (warning) — acciones de advertencia/precaución ──
-  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning' },
-  { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['location', 'description'], tone: 'warning' },
-  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason'], tone: 'warning' },
-  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning' },
-  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'warning' },
-  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'warning' },
-  { id: 'registro_manual', title: 'Registro manual', icon: PenLine,    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning' },
+  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning', desc: 'Salida anticipada del estudiante' },
+  { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['location', 'description'], tone: 'warning', desc: 'Novedad en infraestructura' },
+  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason'], tone: 'warning', desc: 'Autoriza la salida de todo el grupo' },
+  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning', desc: 'Avisa el nuevo horario a los padres' },
+  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'warning', desc: 'Salida del salón con tiempo límite' },
+  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'warning', desc: 'Prolonga la clase en curso' },
+  { id: 'registro_manual', title: 'Registro manual', icon: PenLine,    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning', desc: 'Marcar entrada sin huella' },
+  { id: 'registro_manual_pendiente', title: 'Registro manual pendiente', icon: Hourglass, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'minutes', 'reason'], tone: 'warning', desc: 'Suspende detectores por N minutos' },
   // ── Rojo (danger) — acciones críticas/emergencias ──
-  { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger' },
-  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger' },
+  { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger', desc: 'Emergencia — aviso inmediato' },
+  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger', desc: 'Novedad disciplinaria o de salud' },
 ];
 
 const CMD_TONE_STYLES = {
@@ -60,7 +61,7 @@ const FIELD_LABELS = {
   group: 'Grupo', student: 'Estudiante', grade: 'Grado', date: 'Fecha', time: 'Hora',
   timeStart: 'Hora de salida', timeEnd: 'Hora de retorno',
   message: 'Mensaje', reason: 'Motivo', location: 'Ubicación', description: 'Descripción',
-  targetRole: 'Rol destinatario', targets: 'Destinatario'
+  targetRole: 'Rol destinatario', targets: 'Destinatario', minutes: 'Minutos'
 };
 
 const Operation = () => {
@@ -157,6 +158,7 @@ const Operation = () => {
                       <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
                     </div>
                     <p className="mt-4 text-h3 text-[var(--nx-text)]">{cmd.title}</p>
+                    {cmd.desc && <p className="mt-1 text-caption text-[var(--nx-text-muted)]">{cmd.desc}</p>}
                   </button>
                 );
               })}
@@ -247,6 +249,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
       if (command.fields.includes('targets') && command.id !== 'solicitud') payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
       if (command.fields.includes('timeStart')) payload.timeStart = form.timeStart || null;
       if (command.fields.includes('timeEnd')) payload.timeEnd = form.timeEnd || null;
+      if (command.fields.includes('minutes')) payload.minutes = parseInt(form.minutes, 10) || 60;
 
       if (command.id === 'solicitud') {
         if (!form.message || !form.message.trim()) {
@@ -277,6 +280,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
         case 'fusionar_bloque': result = await operationsApi.execute('fusionar_bloque', payload, '/operations/fusionar_bloque'); break;
         case 'extender_bloque': result = await operationsApi.execute('extender_bloque', payload, '/operations/extender_bloque'); break;
         case 'registro_manual': result = await operationsApi.execute('registro_manual', payload, '/operations/registro_manual'); break;
+        case 'registro_manual_pendiente': result = await operationsApi.execute('registro_manual_pendiente', payload, '/operations/registro_manual_pendiente'); break;
         default: throw new Error('Comando no soportado');
       }
 
@@ -374,6 +378,9 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
     }
     if (field === 'date') {
       return <Input key={field} type="date" label={FIELD_LABELS[field]} value={form[field] || ''} onChange={(e) => updateField(field, e.target.value)} />;
+    }
+    if (field === 'minutes') {
+      return <Input key={field} type="number" min={5} max={480} step={5} label={FIELD_LABELS[field]} value={form[field] || 60} onChange={(e) => updateField(field, e.target.value)} help="Entre 5 y 480 minutos" />;
     }
     if (field === 'time' || field === 'timeStart' || field === 'timeEnd') {
       return <Input key={field} type="time" label={FIELD_LABELS[field]} value={form[field] || ''} onChange={(e) => updateField(field, e.target.value)} required />;

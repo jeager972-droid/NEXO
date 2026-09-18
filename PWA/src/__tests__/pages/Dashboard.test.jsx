@@ -27,6 +27,7 @@ vi.mock('@/api/dashboard', () => ({
       groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, late: 0, outside: 0 },
     }),
     getEvents: vi.fn().mockResolvedValue({ status: 'ok', data: [] }),
+    getInsights: vi.fn().mockResolvedValue({ status: 'ok', data: { insights: [] } }),
     getTeacherGroupDetail: vi.fn().mockResolvedValue({ status: 'ok', data: [] }),
   },
 }));
@@ -57,8 +58,10 @@ describe('Dashboard page (RECTOR)', () => {
 
   it('renders without crashing', async () => {
     renderDashboard();
-    // "Novedades" stream label is always present
-    expect(screen.getByText('Novedades')).toBeInTheDocument();
+    // La lectura de la jornada de Nexus reemplaza a "Novedades"
+    await waitFor(() => {
+      expect(screen.getByText(/lectura de la jornada/i)).toBeInTheDocument();
+    });
   });
 
   it('renders KPI stat cards after data loads', async () => {

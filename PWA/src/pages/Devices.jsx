@@ -15,7 +15,7 @@ import { studentsApi } from '../api/students';
 import {
   Fingerprint, Plus, Search, MapPin, Wifi, WifiOff,
   Cpu, Trash2, Check, X, RefreshCw, ShieldCheck, AlertCircle,
-  Clock, Settings2,
+  Clock, Settings2, ArrowLeftRight, KeyRound,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface, PageHeader } from '../components/ui/Surface';
@@ -30,6 +30,7 @@ import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { humanizeError } from '../utils/messages';
 import { ROLES, getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
+import { useAuth } from '../hooks/useAuth';
 import { formatGroupName } from '../utils/groupFormat';
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -98,6 +99,8 @@ const DynamicSkeleton = ({ count }) => {
 // ── Página principal ──
 
 const Devices = () => {
+  const { user } = useAuth();
+  const canContingency = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
   const [devices, setDevices] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +112,8 @@ const Devices = () => {
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [newToken, setNewToken] = useState(null);
   const [pendingRevocations, setPendingRevocations] = useState([]);
+  const [reassignTarget, setReassignTarget] = useState(null);
+  const [reprovisionTarget, setReprovisionTarget] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -327,6 +332,8 @@ const Devices = () => {
                     isPendingRevocation={pendingRevocationIds.has(device.device_id)}
                     onConfigure={() => setConfigureTarget(device)}
                     onRevoke={() => setRevokeTarget({ ...device, cancelMode: false })}
+                    onReassign={canContingency ? () => setReassignTarget(device) : undefined}
+                    onReprovision={canContingency ? () => setReprovisionTarget(device) : undefined}
                   />
                 </motion.div>
               );
@@ -364,6 +371,27 @@ const Devices = () => {
       {/* Drawer: Mostrar token tras registro */}
       <TokenDrawer info={newToken} onClose={() => setNewToken(null)} />
 
+      {/* Contingencia: reasignar nodo de punto */}
+      <ReassignDrawer
+        device={reassignTarget}
+        groups={groups}
+        onClose={() => setReassignTarget(null)}
+        onDone={() => { setReassignTarget(null); fetchData(); }}
+      />
+
+      {/* Contingencia: reprovisionar (rota llaves — el token se muestra UNA vez) */}
+      <ReprovisionConfirm
+        device={reprovisionTarget}
+        onClose={() => setReprovisionTarget(null)}
+        onDone={(res) => {
+          setReprovisionTarget(null);
+          if (res?.device_token) {
+            setNewToken({ token: res.device_token, device_id: res.device_id, name: reprovisionTarget?.device_name });
+          }
+          fetchData();
+        }}
+      />
+
       {/* Confirmación: Revocar sensor */}
       <AnimatePresence>
         {revokeTarget && (
@@ -383,7 +411,7 @@ const Devices = () => {
 
 // ── Tarjeta de dispositivo ──
 
-const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke, isPendingRevocation }) => {
+const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke, isPendingRevocation, onReassign, onReprovision }) => {
   return (
     <Card tone={status.scheme} edge className="h-full">
       <div className="flex items-start justify-between gap-3">
@@ -439,6 +467,21 @@ const DeviceCard = ({ device, status, StatusIcon, onConfigure, onRevoke, isPendi
           )}
         </div>
       </div>
+      {(onReassign || onReprovision) && !isPendingRevocation && (
+        <div className="mt-2 flex items-center gap-2 border-t border-[var(--nx-border)] pt-2.5">
+          {onReassign && (
+            <Button variant="quiet" size="sm" leftIcon={<ArrowLeftRight size={13} />} onClick={onReassign}>
+              Reasignar
+            </Button>
+          )}
+          {onReprovision && (
+            <Button variant="quiet" size="sm" leftIcon={<KeyRound size={13} />} onClick={onReprovision}
+              className="text-[var(--nx-danger)]">
+              Reprovisionar
+            </Button>
+          )}
+        </div>
+      )}
     </Card>
   );
 };
@@ -889,6 +932,136 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
         </form>
       </motion.div>
     </>
+  );
+};
+
+// ── Contingencia: Reasignar nodo de punto ──
+
+const ReassignDrawer = ({ device, groups, onClose, onDone }) => {
+  const [groupId, setGroupId] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setGroupId(device?.group_id || '');
+    setReason('');
+    setError('');
+  }, [device]);
+
+  if (!device) return null;
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await devicesApi.reassign(device.device_id, {
+        groupId: groupId || null,
+        classroomId: device.classroom_id || null, // se conserva el aula actual
+        reason: reason || 'Reubicación de nodo',
+      });
+      onDone();
+    } catch (e) {
+      setError(humanizeError(e, 'No se pudo reasignar el nodo'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Drawer
+      title={`Reasignar ${device.device_name || 'sensor'}`}
+      context={getDeviceLocation(device)}
+      onClose={onClose}
+      size="sm"
+      footer={
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button className="flex-1" loading={saving} onClick={handleSubmit} leftIcon={<Check size={16} />}>
+            Reasignar
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-5 p-6">
+        <p className="text-body-sm text-[var(--nx-text-muted)]">
+          Mueve el nodo a otro grupo sin tocar sus llaves. Útil cuando un sensor se traslada de punto o un aula queda sin cobertura.
+        </p>
+        <SearchableSelect
+          label="Grupo"
+          options={[{ value: '', label: 'Sin grupo (desasignar)' }, ...groups.map((g) => {
+            const id = g.group_id || g.id;
+            const name = g.name || g.group_name || String(g);
+            return { value: id, label: formatGroupName(name) };
+          })]}
+          value={groupId}
+          onChange={(v) => setGroupId(v)}
+          placeholder="— Seleccionar grupo —"
+          searchPlaceholder="Buscar grupo…"
+          clearable={false}
+        />
+        <div>
+          <label className="text-label text-[var(--nx-text)]" htmlFor="reassign-reason">Motivo</label>
+          <textarea
+            id="reassign-reason"
+            rows={2}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reubicación de nodo"
+            className="mt-1.5 w-full rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3 py-2.5 text-body-sm text-[var(--nx-text)] focus:outline-none focus:ring-2 focus:ring-[var(--nx-ring)]"
+          />
+        </div>
+        {error && <p role="alert" className="text-body-sm text-[var(--nx-danger)]">{error}</p>}
+      </div>
+    </Drawer>
+  );
+};
+
+// ── Contingencia: Reprovisionar (rota token + OTA key) ──
+
+const ReprovisionConfirm = ({ device, onClose, onDone }) => {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { setError(''); }, [device]);
+  if (!device) return null;
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const res = await devicesApi.reprovision(device.device_id, 'Reprovisión desde el panel');
+      onDone(res);
+    } catch (e) {
+      setError(humanizeError(e, 'No se pudo reprovisionar el nodo'));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Drawer
+      title={`Reprovisionar ${device.device_name || 'sensor'}`}
+      context="Solo si las llaves se comprometieron o el nodo se reemplaza"
+      onClose={onClose}
+      size="sm"
+      footer={
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="danger" className="flex-1" loading={saving} onClick={handleSubmit} leftIcon={<KeyRound size={16} />}>
+            Rotar llaves
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4 p-6">
+        <p className="text-body-sm text-[var(--nx-text)]">
+          Rota el <b>token</b> y la <b>OTA key</b> del nodo. Las llaves anteriores mueren al instante y el sensor vuelve a pedir provisionamiento.
+        </p>
+        <div className="rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
+          La nueva llave se muestra UNA sola vez después de rotar — instálala en el nodo físico. Nunca aparece en listas ni queda guardada visible.
+        </div>
+        {error && <p role="alert" className="text-body-sm text-[var(--nx-danger)]">{error}</p>}
+      </div>
+    </Drawer>
   );
 };
 

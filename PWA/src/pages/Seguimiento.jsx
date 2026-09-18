@@ -65,7 +65,7 @@ export default function Casos() {
     <div className="space-y-6">
       <div className="border-b border-[var(--nx-border)] pb-3">
         <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Casos activos</p>
+          <p className="text-label text-[var(--nx-text)]">Seguimientos</p>
         </div>
       </div>
 

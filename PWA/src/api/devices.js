@@ -53,4 +53,14 @@ export const devicesApi = {
     const response = await client.post(`/devices/${deviceId}/reconfigure`, { master_key: masterKey, device_id: deviceId, token });
     return response.data;
   },
+  // Reubicación de nodo: cambia grupo/aula sin tocar llaves
+  reassign: async (deviceId, { groupId = null, classroomId = null, reason } = {}) => {
+    const response = await client.post('/devices/reassign', { device_id: deviceId, group_id: groupId, classroom_id: classroomId, reason });
+    return response.data;
+  },
+  // Reprovisionar: rota token + OTA key; el nuevo token se devuelve UNA vez
+  reprovision: async (deviceId, reason) => {
+    const response = await client.post('/devices/reprovision', { device_id: deviceId, reason });
+    return response.data;
+  },
 };

@@ -65,7 +65,7 @@ export const SIDEBAR_ITEMS = [
     roles: ALL_ROLES,
   },
   {
-    title: 'Casos Activos',
+    title: 'Seguimientos',
     path: '/casos',
     icon: FolderHeart,
     roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR],

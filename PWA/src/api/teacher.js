@@ -11,8 +11,8 @@ export const teacherApi = {
     const response = await client.get('/teacher/onboarding');
     return response.data;
   },
-  completeOnboarding: async () => {
-    const response = await client.post('/teacher/onboarding');
+  completeOnboarding: async ({ skipped = false } = {}) => {
+    const response = await client.post('/teacher/onboarding', skipped ? { skipped: true } : { completed: true });
     return response.data;
   },
   getAlertRules: async () => {

@@ -4,17 +4,21 @@
  * Moodboard: mensajes llegados de NEXO — formato chat unificado para todos los roles.
  */
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Trash2, ChevronRight, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Trash2, ChevronRight, Loader2, CheckCircle2, XCircle, Check } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
+import { clsx } from 'clsx';
 import { useAuth } from '../hooks/useAuth';
 import { notificationsApi } from '../api/notifications';
 import { riskApi } from '../api/risk';
+import { trackingApi } from '../api/tracking';
 import { ROLES, getRoleDisplay } from '../config/roles';
 import { Surface } from '../components/ui/Surface';
 import { Drawer } from '../components/ui/Overlay';
 import { Button } from '../components/ui/Button';
+import { Select } from '../components/ui/Select';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
+import { humanizeError } from '../utils/messages';
 
 const LAST_COUNT_KEY = 'nexo:last-notif-count';
 const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
@@ -125,10 +129,43 @@ const ACTIONS_WITH_DETAILS = [
   'sensor_configurado', 'sensor_eliminado', 'sensor_revocacion_iniciada',
 ];
 
-const NotifItem = ({ notif, hasDetails, onClick, onAction }) => {
+// Severidad por tipo de aviso — colores del sistema (punto lateral)
+const severityOf = (notif) => {
+  const meta = parseMeta(notif.metadata_json);
+  const action = meta?.action || '';
+  const type = String(notif.type || '').toUpperCase();
+  if (['sos', 'situacion_critica', 'daño', 'evasion_interna', 'salida_no_autorizada'].includes(action)
+      || type.includes('CRIT') || type.includes('MUY_ALTA')) return 'crit';
+  if (['iniciar_seguimiento', 'incidente', 'reagendar_motivo', 'late_arrival'].includes(action)
+      || type.includes('RISK') || type.includes('ALTA') || type.includes('ALERT')) return 'alta';
+  return 'info';
+};
+const SEV_DOT = {
+  crit: 'bg-[var(--nx-danger)]',
+  alta: 'bg-[var(--nx-warning)]',
+  info: 'bg-[var(--nx-accent)]',
+};
+const SEV_TAG = {
+  crit: { label: 'Alta', cls: 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' },
+  alta: { label: 'Moderada', cls: 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]' },
+  info: { label: 'Informativa', cls: 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]' },
+};
+
+const DEPENDENCIES = [
+  { value: 'coordinacion', label: 'Coordinación' },
+  { value: 'psicoorientacion', label: 'Psicoorientación' },
+  { value: 'rectoria', label: 'Rectoría' },
+  { value: 'docencia', label: 'Docencia' },
+];
+
+const NotifItem = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead, canDerive }) => {
   const meta = parseMeta(notif.metadata_json);
   const actions = meta?.actions;
   const [actionLoading, setActionLoading] = useState(false);
+  const sev = severityOf(notif);
+  const sevTag = SEV_TAG[sev];
+  const studentName = meta?.student_name;
+  const canDeriveThis = canDerive && !!meta?.student_id;
 
   const handleAction = async (e, actionId) => {
     e.stopPropagation();
@@ -145,51 +182,66 @@ const NotifItem = ({ notif, hasDetails, onClick, onAction }) => {
     }
   };
 
-  const content = (
-    <NexoChatBubble
-      message={humanizeMessage(notif)}
-      timestamp={formatChatTime(notif.time || notif.created_at)}
-    />
-  );
-
   return (
-    <Surface className="p-4">
-      {hasDetails ? (
-        <button onClick={onClick} className="w-full text-left">
-          {content}
-        </button>
-      ) : (
-        content
-      )}
-      {hasDetails && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onClick(); }}
-          className="mt-2 flex items-center gap-1 text-caption text-[var(--nx-accent)] font-semibold hover:underline"
-          style={{ marginLeft: '56px' }}
-        >
-          Ver detalles <ChevronRight size={12} />
-        </button>
-      )}
-      {actions && Array.isArray(actions) && actions.length > 0 && (
-        <div className="mt-3 flex items-center gap-2">
-          {actions.map((act) => {
-            const styleClasses = act.style === 'success'
-              ? 'bg-[var(--nx-surface-success)] text-[color-mix(in_oklch,var(--nx-success)_80%,var(--nx-text))] border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_15%,var(--nx-surface-success))]'
-              : 'bg-[var(--nx-surface-danger)] text-[color-mix(in_oklch,var(--nx-danger)_80%,var(--nx-text))] border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_15%,var(--nx-surface-danger))]';
-            return (
-              <button
-                key={act.id}
-                onClick={(e) => handleAction(e, act.id)}
-                disabled={actionLoading}
-                className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption font-semibold transition-all disabled:opacity-45 ${styleClasses}`}
-              >
-                {actionLoading && <Loader2 size={12} className="animate-spin" />}
-                {act.label}
-              </button>
-            );
-          })}
+    <Surface className={clsx(
+      'grid grid-cols-[10px_1fr_auto] items-start gap-4 p-4 transition-colors',
+      !notif.read && 'bg-[var(--nx-subtle-bg-accent)] border-[var(--nx-border-accent)]'
+    )}>
+      <span className={clsx('mt-2 h-2 w-2 rounded-full', SEV_DOT[sev])} aria-hidden />
+
+      <div className="min-w-0">
+        <p className="text-[14.5px] font-[620] text-[var(--nx-text)]">
+          {notif.title || 'Novedad'}{studentName ? ` — ${studentName}` : ''}
+        </p>
+        <p className="mt-0.5 text-[13.5px] text-[var(--nx-text-muted)]">{humanizeMessage(notif)}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[12px] text-[var(--nx-text-muted)]">
+          <span>{formatChatTime(notif.time || notif.created_at)}</span>
+          <span className={clsx('rounded-full px-2.5 py-0.5 font-semibold', sevTag.cls)}>{sevTag.label}</span>
+          {notif.read && <span className="rounded-full border border-[var(--nx-border)] px-2.5 py-0.5">Leída</span>}
         </div>
-      )}
+        {actions && Array.isArray(actions) && actions.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            {actions.map((act) => {
+              const styleClasses = act.style === 'success'
+                ? 'bg-[var(--nx-surface-success)] text-[color-mix(in_oklch,var(--nx-success)_80%,var(--nx-text))] border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_15%,var(--nx-surface-success))]'
+                : 'bg-[var(--nx-surface-danger)] text-[color-mix(in_oklch,var(--nx-danger)_80%,var(--nx-text))] border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_15%,var(--nx-surface-danger))]';
+              return (
+                <button
+                  key={act.id}
+                  onClick={(e) => handleAction(e, act.id)}
+                  disabled={actionLoading}
+                  className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption font-semibold transition-all disabled:opacity-45 ${styleClasses}`}
+                >
+                  {actionLoading && <Loader2 size={12} className="animate-spin" />}
+                  {act.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col items-end gap-2">
+        <div className="flex gap-2">
+          {canDeriveThis && (
+            <Button size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
+          )}
+          {hasDetails && (
+            <Button variant="secondary" size="sm" onClick={onClick}>
+              Detalle <ChevronRight size={13} />
+            </Button>
+          )}
+        </div>
+        {!notif.read && (
+          <button
+            type="button"
+            onClick={onMarkRead}
+            className="flex items-center gap-1 text-[12px] font-semibold text-[var(--nx-accent)] hover:underline"
+          >
+            <Check size={12} /> Marcar leída
+          </button>
+        )}
+      </div>
     </Surface>
   );
 };
@@ -203,8 +255,13 @@ const Notifications = () => {
   const [detail, setDetail] = useState(null);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState('');
-  const isStaff = user?.role === ROLES.PORTERO || user?.role === ROLES.AUXILIAR;
+  const [deriveTarget, setDeriveTarget] = useState(null); // {notif, meta}
+  const [deriveForm, setDeriveForm] = useState({ dependency: 'coordinacion', assigned_to_user_id: '', reason: '' });
+  const [deriveSaving, setDeriveSaving] = useState(false);
+  const [deriveError, setDeriveError] = useState('');
+  const navigate = useNavigate();
   const canResolveEvasion = user?.role === ROLES.COORDINADOR || user?.role === ROLES.RECTOR;
+  const canDerive = canResolveEvasion || user?.role === ROLES.PSICORIENTADOR;
 
   useEffect(() => {
     const fetch = async () => {
@@ -254,6 +311,41 @@ const Notifications = () => {
 
   const markRead = (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id || n.notification_id === id ? { ...n, read: true } : n)));
+  };
+
+  const openDerive = (notif, meta) => {
+    setDeriveTarget({ notif, meta });
+    setDeriveForm({ dependency: 'coordinacion', assigned_to_user_id: '', reason: '' });
+    setDeriveError('');
+    if (!notif.read) markRead(notif.id ?? notif.notification_id);
+  };
+
+  const submitDerive = async () => {
+    const meta = deriveTarget?.meta || {};
+    setDeriveSaving(true);
+    setDeriveError('');
+    try {
+      const alertId = meta.alert_id || meta.risk_alert_id || null;
+      const incidentId = meta.incident_id || null;
+      if (alertId || incidentId) {
+        await trackingApi.derive({
+          studentId: meta.student_id,
+          alertId, incidentId,
+          dependency: deriveForm.dependency,
+          assignedToUserId: deriveForm.assigned_to_user_id || null,
+          reason: deriveForm.reason || null,
+        });
+      } else {
+        // Sin origen estructurado: seguimiento directo del estudiante
+        await trackingApi.startTracking(meta.student_id, deriveForm.reason || null);
+      }
+      setDeriveTarget(null);
+      navigate('/casos');
+    } catch (e) {
+      setDeriveError(humanizeError(e, 'No se pudo crear el caso de seguimiento.'));
+    } finally {
+      setDeriveSaving(false);
+    }
   };
 
   const handleResolveEvasion = async (incidentId, resolution) => {
@@ -350,6 +442,9 @@ const Notifications = () => {
                 hasDetails={hasDetails}
                 onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
                 onAction={refreshNotifications}
+                onDerive={openDerive}
+                onMarkRead={() => markRead(notif.id ?? notif.notification_id)}
+                canDerive={canDerive}
               />
             );
           })}
@@ -434,6 +529,60 @@ const Notifications = () => {
                 }
                 return null;
               })()}
+            </div>
+          </Drawer>
+        )}
+      </AnimatePresence>
+
+      {/* Drawer: derivar a seguimiento */}
+      <AnimatePresence>
+        {deriveTarget && (
+          <Drawer
+            title={`Derivar a seguimiento — ${deriveTarget.meta?.student_name || 'Estudiante'}`}
+            context="El sistema detectó; la decisión es tuya"
+            onClose={() => setDeriveTarget(null)}
+            size="sm"
+          >
+            <div className="p-5 space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-label text-[var(--nx-text-muted)]">Origen</p>
+                  <p className="mt-1 text-body-sm text-[var(--nx-text)]">
+                    {deriveTarget.notif?.title || 'Notificación'} · {humanizeMessage(deriveTarget.notif)}
+                  </p>
+                </div>
+                <Select
+                  label="Dependencia responsable"
+                  value={deriveForm.dependency}
+                  onChange={(e) => setDeriveForm((f) => ({ ...f, dependency: e.target.value }))}
+                  options={DEPENDENCIES}
+                />
+                <div>
+                  <p className="text-label text-[var(--nx-text-muted)]">Asignar a (opcional)</p>
+                  <p className="mt-1 text-caption text-[var(--nx-text-muted)]">
+                    La asignación a una persona específica se completa desde la ficha del caso.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-label text-[var(--nx-text-muted)]" htmlFor="derive-reason">Motivo / nota inicial</label>
+                  <textarea
+                    id="derive-reason"
+                    rows={3}
+                    value={deriveForm.reason}
+                    onChange={(e) => setDeriveForm((f) => ({ ...f, reason: e.target.value }))}
+                    placeholder="Contexto para quien recibe el caso…"
+                    className="mt-1.5 w-full rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3 py-2.5 text-body-sm text-[var(--nx-text)] focus:outline-none focus:ring-2 focus:ring-[var(--nx-ring)]"
+                  />
+                </div>
+                <p className="text-caption text-[var(--nx-text-muted)]">
+                  El sistema detectó y escaló — la derivación y la decisión son tuyas.
+                </p>
+                {deriveError && <p role="alert" className="text-body-sm text-[var(--nx-danger)]">{deriveError}</p>}
+              </div>
+              <div className="flex justify-end gap-3 border-t border-[var(--nx-border)] pt-4">
+                <Button variant="secondary" size="sm" onClick={() => setDeriveTarget(null)}>Cancelar</Button>
+                <Button size="sm" loading={deriveSaving} onClick={submitDerive}>Crear caso</Button>
+              </div>
             </div>
           </Drawer>
         )}

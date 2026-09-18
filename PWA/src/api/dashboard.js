@@ -24,4 +24,8 @@ export const dashboardApi = {
     const response = await client.get('/dashboard/events');
     return response.data;
   },
+  getInsights: async () => {
+    const response = await client.get('/dashboard/insights');
+    return response.data;
+  },
 };

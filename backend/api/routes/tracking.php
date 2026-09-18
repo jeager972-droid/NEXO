@@ -341,7 +341,38 @@ if (strpos($cleanPath, '/tracking') === 0) {
             $notesStmt->execute([$trackingId]);
             $notes = $notesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            echo json_encode(['status' => 'ok', 'tracking' => $tracking, 'notes' => $notes]);
+            // Nombre del responsable asignado (si hay)
+            $assignedName = null;
+            if (!empty($tracking['assigned_to_user_id'])) {
+                $uStmt = $conn->prepare("SELECT TRIM(first_name || ' ' || COALESCE(last_name,'')) FROM users WHERE user_id = ?");
+                $uStmt->execute([$tracking['assigned_to_user_id']]);
+                $assignedName = $uStmt->fetchColumn() ?: null;
+            }
+
+            // Respuestas del acudiente del mismo estudiante (últimos 30 días).
+            // Viven en attendance_incidents.metadata_json->guardian_response —
+            // no en las notas del seguimiento. Se muestran como cita real.
+            $respStmt = $conn->prepare("
+                SELECT ai.incident_type,
+                       ai.detected_at,
+                       ai.metadata_json->>'guardian_response'      AS guardian_response,
+                       ai.metadata_json->>'guardian_response_at'   AS responded_at,
+                       ai.metadata_json->>'guardian_name'          AS guardian_name
+                FROM attendance_incidents ai
+                WHERE ai.school_id = ? AND ai.student_id = ?
+                  AND COALESCE(ai.metadata_json->>'guardian_response','') <> ''
+                  AND ai.detected_at >= NOW() - INTERVAL '30 days'
+                ORDER BY ai.detected_at DESC LIMIT 10
+            ");
+            $respStmt->execute([$schoolId, $tracking['student_id']]);
+            $guardianResponses = $respStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'status' => 'ok',
+                'tracking' => array_merge($tracking, ['assigned_name' => $assignedName]),
+                'notes' => $notes,
+                'guardian_responses' => $guardianResponses,
+            ]);
         } catch (Throwable $e) {
             http_response_code(500);
             echo json_encode(['status' => 'error', 'message' => 'Error al obtener detalles', 'detail' => $e->getMessage()]);

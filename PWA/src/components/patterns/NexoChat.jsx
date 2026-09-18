@@ -15,8 +15,8 @@ const NexoAvatar = ({ size = 40 }) => {
   }
   return (
     <img
-      src={`${import.meta.env.BASE_URL}logo/logo_nexo_app.png`}
-      alt="NEXO"
+      src="/imagenbot.png"
+      alt="Nexus"
       className="shrink-0 rounded-full object-cover"
       style={{ width: size, height: size }}
       onError={() => setFailed(true)}

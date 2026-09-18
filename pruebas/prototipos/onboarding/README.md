@@ -19,6 +19,8 @@ Nada de esto es producción y **debe borrarse** una vez validado el flujo real.
 | `pruebas/prototipos/onboarding/imagenbot.png` | Asset del mock. |
 | `PWA/onboarding-preview.html` | Página standalone que monta `OnboardingFlow` aislado (sin auth/providers/API). Solo dev. |
 | `PWA/src/preview/onboarding-preview.jsx` | Entry del preview. Monta el componente con `simulate`. |
+| `pruebas/prototipos/frontend/index.html` | Mock de TODO el frontend pendiente (notificaciones con acciones, operación, dispositivos/OTA, config, docente). Revisión visual únicamente. |
+| `pruebas/prototipos/frontend/imagenbot.png` | Asset del mock anterior. |
 
 ## Cómo ver el preview (dev server de la PWA corriendo)
 
