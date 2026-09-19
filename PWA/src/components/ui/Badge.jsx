@@ -7,9 +7,9 @@ import { cn } from '../../utils/cn';
 const schemes = {
   neutral:  'bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)] border-[var(--nx-border)]',
   accent:   'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] border-[var(--nx-border-accent)]',
-  success:  'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)] border-[var(--nx-border-success)]',
-  warning:  'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)] border-[var(--nx-border-warning)]',
-  danger:   'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border-[var(--nx-border-danger)]',
+  success:  'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)] border-[var(--nx-success)]',
+  warning:  'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)] border-[var(--nx-warning)]',
+  danger:   'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border-[var(--nx-danger)]',
 };
 
 const dots = {

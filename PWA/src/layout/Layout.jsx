@@ -309,7 +309,7 @@ const writeDismissed = (set) => {
 };
 
 const NexusBotAnnouncer = () => {
-  const { notifCount } = useNotifications();
+  const { notifCount, notifications } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [insights, setInsights] = useState(null);
@@ -365,34 +365,42 @@ const NexusBotAnnouncer = () => {
 
   const script = useMemo(() => {
     let msgs = [];
-    // Prioridad 1: notificaciones nuevas
+    // Prioridad 1: notificaciones nuevas.
+    // La llave es el id de la no-leída más reciente: si llegan notificaciones
+    // nuevas, el evento cambia → el bot vuelve a avisar aunque el anterior
+    // se haya descartado. Mismo evento descartado → no se repite.
     if (notifCount > 0 && !onNotifPage) {
+      const latestUnread = (notifications || []).filter((n) => !n.read)
+        .map((n) => n.id ?? n.notification_id).sort((a, b) => Number(b) - Number(a))[0];
       const text = `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`;
+      const key = `notif:${latestUnread ?? notifCount}`;
       msgs = [{
         text,
+        dismissKey: key,
         chips: [
           { label: 'Revisar', action: () => navigate('/notificaciones') },
-          { label: 'Ignorar', action: () => dismissMsgs([text]) },
+          { label: 'Ignorar', action: () => dismissMsgs([key]) },
         ],
       }];
     }
     // Prioridad 2: guía contextual (primeras N visitas a la sección)
     else if (showHint) {
-      msgs = [{ text: PAGE_HINTS[path] }];
+      msgs = [{ text: PAGE_HINTS[path], dismissKey: `hint:${path}` }];
     }
     // Prioridad 3: lectura inteligente de la jornada
     else if (proactiveInsight) {
       msgs = [{
         text: `<b>${proactiveInsight.title}</b> — ${proactiveInsight.body}`,
+        dismissKey: `insight:${proactiveInsight.kind}`,
         chips: proactiveInsight.action ? [{
           label: proactiveInsight.action.label,
           action: () => navigate(proactiveInsight.action.target === 'consulta' ? '/consulta' : `/${proactiveInsight.action.target}`),
         }] : undefined,
       }];
     }
-    // Un texto descartado no reaparece en esta sesión
-    return msgs.filter((m) => !dismissedMsgs.has(m.text));
-  }, [notifCount, onNotifPage, showHint, proactiveInsight, path, navigate, dismissedMsgs]);
+    // Un evento descartado no reaparece en esta sesión
+    return msgs.filter((m) => !dismissedMsgs.has(m.dismissKey || m.text));
+  }, [notifCount, notifications, onNotifPage, showHint, proactiveInsight, path, navigate, dismissedMsgs]);
 
   return <NexusGuide script={script} active={script.length > 0} onDismiss={dismissMsgs} />;
 };

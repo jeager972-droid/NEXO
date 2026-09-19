@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
+import { NexoAvatar } from '../../components/patterns/NexoChat';
 import { Clock, Layers, BellRing } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -398,7 +399,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
           <span className="text-[12.5px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
             {isUpdate ? 'Configuración' : 'Configuración inicial'}
           </span>
-          <h1 className="text-[24px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
+          <h1 className="text-[22px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
           <p className="mx-auto max-w-[46ch] text-[14.5px] leading-relaxed text-[var(--nx-text-muted)]">
             {isUpdate
               ? 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.'
@@ -445,7 +446,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       <>
         <StepHead kicker={`Paso ${realIdx} de ${totalReal}`} title="¿Qué jornadas tiene el colegio?" lede="Marca todas las que apliquen." />
         <Work spotlight>
-          <h2 className="text-[17px] font-[620]">Jornadas</h2>
+          <h2 className="text-[15px] font-[620]">Jornadas</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {SHIFTS.map((s) => (
               <PickChip key={s} on={pickedShifts.includes(s)} onClick={() => {
@@ -530,7 +531,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
         <StepHead kicker={`Paso ${realIdx} de ${totalReal}`} title="Grados y grupos del año"
           lede="Qué grados hay, cuántos grupos por grado, su jornada y su docente." />
         <Work spotlight>
-          <h2 className="text-[17px] font-[620]">Grados</h2>
+          <h2 className="text-[15px] font-[620]">Grados</h2>
           <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
             {GRADES.map((g) => (
               <PickChip key={g} on={grades.includes(g)} onClick={() => {
@@ -542,7 +543,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
           {grades.length > 0 && (
             <>
-              <h2 className="text-[17px] font-[620]">Grupos por grado</h2>
+              <h2 className="text-[15px] font-[620]">Grupos por grado</h2>
               <div className="flex flex-col gap-4">
                 {grades.map((g) => (
                   <div key={g} className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-canvas)] px-4 py-3.5">
@@ -560,7 +561,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
             </>
           )}
 
-          <h2 className="text-[17px] font-[620]">Nomenclatura</h2>
+          <h2 className="text-[15px] font-[620]">Nomenclatura</h2>
           <div className="grid gap-3 sm:grid-cols-3">
             <PickChip on={nomenclature === 'alphabetic'} onClick={() => setNomenclature('alphabetic')}>7A · 7B</PickChip>
             <PickChip on={nomenclature === 'numeric'} onClick={() => setNomenclature('numeric')}>7-1 · 7-2</PickChip>
@@ -572,7 +573,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
           {names.length > 0 && (
             <>
-              <h2 className="text-[17px] font-[620]">Docente por grupo</h2>
+              <h2 className="text-[15px] font-[620]">Docente por grupo</h2>
               <div className="flex flex-col gap-4">
                 {names.map((n) => (
                   <div key={n} className="grid items-center gap-3 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-canvas)] px-4 py-3.5 sm:grid-cols-[70px_1fr]">
@@ -585,7 +586,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
                 ))}
               </div>
               <div>
-                <h2 className="mb-3 text-[17px] font-[620]">Vista previa</h2>
+                <h2 className="mb-3 text-[15px] font-[620]">Vista previa</h2>
                 <div className="flex flex-wrap gap-2">
                   {names.map((n) => (
                     <span key={n} className={clsx('rounded-full border px-3 py-1.5 text-[13px] font-semibold',
@@ -625,7 +626,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       <StepHead kicker={`Paso ${realIdx} de ${totalReal}`} title="Cuándo quieres que te avise"
         lede="Umbrales del motor de riesgo: a partir de cuántas repeticiones Nexus genera una alerta." />
       <Work spotlight>
-        <h2 className="text-[17px] font-[620]">Niveles de alerta</h2>
+        <h2 className="text-[15px] font-[620]">Niveles de alerta</h2>
         <div className="flex flex-col gap-5">
           {LEVELS.map((lvl) => (
             <div key={lvl} className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-canvas)] px-5 py-4">
@@ -661,7 +662,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       <StepHead kicker="Configuración opcional" title="Tus criterios de aviso"
         lede="Todos los casos vienen listos — ajusta los números y desactiva lo que no quieras en tus clases." />
       <Work spotlight>
-        <h2 className="text-[17px] font-[620]">Tus reglas</h2>
+        <h2 className="text-[15px] font-[620]">Tus reglas</h2>
         <div className="flex flex-col gap-4">
           {rules.map((r, i) => (
             <div key={r.kind} className={clsx(
@@ -726,11 +727,29 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)] text-[var(--nx-text)]">
-      {/* Topbar: solo el paso, centrado — nada más del sistema */}
-      <header className="sticky top-0 z-20 flex h-[64px] items-center justify-center border-b border-[var(--nx-border)] bg-[var(--nx-surface)]">
-        <span className="text-[15px] font-[650] tabular-nums text-[var(--nx-text)]">
-          {step === 'welcome' ? (isUpdate ? 'Actualizar configuración' : 'Configuración inicial') : step === 'done' ? 'Listo' : `Paso ${realIdx} de ${totalReal}`}
-        </span>
+      {/* Topbar: marca Nexus + paso actual con dots de progreso */}
+      <header className="sticky top-0 z-20 border-b border-[var(--nx-border)] bg-[var(--nx-surface)]/85 backdrop-blur">
+        <div className="mx-auto flex h-[56px] max-w-[680px] items-center justify-between px-5 sm:px-6">
+          <span className="flex items-center gap-2 text-[14px] font-[650] text-[var(--nx-text)]">
+            <NexoAvatar size={26} />
+            Nexus
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-[12.5px] font-[600] tabular-nums text-[var(--nx-text-muted)]">
+              {step === 'welcome' ? (isUpdate ? 'Actualizar' : 'Configuración inicial') : step === 'done' ? 'Listo' : `Paso ${realIdx} de ${totalReal}`}
+            </span>
+            <span className="flex gap-1.5" aria-hidden>
+              {steps.map((_, i) => (
+                <span key={i} className={clsx(
+                  'h-[7px] rounded-full transition-all duration-200',
+                  i === stepIdx ? 'w-[18px] bg-[var(--nx-accent)]'
+                    : i < stepIdx ? 'w-[7px] bg-[var(--nx-accent)]/40'
+                    : 'w-[7px] bg-[var(--nx-border)]'
+                )} />
+              ))}
+            </span>
+          </span>
+        </div>
       </header>
 
       <main className="mx-auto flex max-w-[680px] flex-col gap-7 px-5 pb-56 pt-10 sm:px-6">

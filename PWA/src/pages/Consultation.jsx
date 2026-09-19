@@ -480,11 +480,14 @@ const Consultation = () => {
           <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
             Volver
           </Button>
-          <h1 className="text-heading font-semibold text-[var(--nx-text)]">{activeModule}</h1>
         </div>
 
-        {itemOptions.length > 1 && (
-          <Surface className="p-4">
+        <Surface className="p-4 space-y-4">
+          {/* el nombre del módulo vive aquí, como encabezado de la cuadrícula */}
+          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
+            <h1 className="text-h3 text-[var(--nx-text)]">{activeModule}</h1>
+          </div>
+          {itemOptions.length > 1 && (
             <SearchableSelect
               label="Tipo de consulta"
               placeholder="Elegir consulta…"
@@ -492,8 +495,8 @@ const Consultation = () => {
               value={activeItem}
               onChange={(v) => v && openSubmodule(v)}
             />
-          </Surface>
-        )}
+          )}
+        </Surface>
 
         <ConsultationDrawer
           item={activeItem}

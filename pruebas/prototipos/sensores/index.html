@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexus — Lectores de huella</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..750&display=swap" rel="stylesheet">
+<style>
+/* ══ NEXO Quiet Operations — tokens (03_DESIGN_SYSTEM) ══ */
+:root{
+  --canvas:      oklch(98% 0.006 245);
+  --surface:     oklch(99.3% 0.004 245);
+  --surface-sub: oklch(96% 0.009 245);
+  --text:        oklch(23% 0.018 245);
+  --text-muted:  oklch(48% 0.018 245);
+  --border:      oklch(88% 0.010 245);
+  --accent:      oklch(48% 0.115 245);
+  --accent-soft: oklch(48% 0.115 245 / .08);
+  --accent-line: oklch(48% 0.115 245 / .18);
+  --success:     oklch(52% 0.125 155);
+  --success-soft:oklch(52% 0.125 155 / .09);
+  --warning:     oklch(62% 0.135 70);
+  --warning-soft:oklch(62% 0.135 70 / .10);
+  --danger:      oklch(52% 0.175 25);
+  --danger-soft: oklch(52% 0.175 25 / .08);
+  --ease-out:    cubic-bezier(.22,1,.36,1);
+  --shadow-card: 0 1px 2px rgb(23 26 32 / .05), 0 8px 24px -12px rgb(30 40 60 / .10);
+  --r-ctl:8px; --r-surf:12px; --r-panel:16px;
+}
+*{box-sizing:border-box; margin:0}
+body{
+  font-family:'Inter',system-ui,sans-serif; font-size:14px; line-height:1.5;
+  background:
+    radial-gradient(1200px 520px at 85% -10%, oklch(94% .025 245 / .55), transparent 62%),
+    var(--canvas);
+  color:var(--text); min-height:100vh; -webkit-font-smoothing:antialiased;
+}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+main{max-width:960px; margin:0 auto; padding:28px 20px 80px; display:flex; flex-direction:column; gap:18px}
+@media(max-width:640px){main{padding:20px 14px 80px}}
+
+/* ══ Header premium — identidad + stats que filtran ══ */
+.hero{
+  position:relative; overflow:hidden;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-panel);
+  box-shadow:var(--shadow-card);
+}
+.hero::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, var(--accent), oklch(52% .125 245), var(--accent));
+}
+.hero .top{display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:20px 22px 0}
+@media(max-width:640px){.hero .top{flex-direction:column}}
+.eyebrow{display:flex; align-items:center; gap:6px; font-size:11px; font-weight:650; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted)}
+.eyebrow::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--accent)}
+.hero h1{font-size:21px; font-weight:660; letter-spacing:-.01em; margin-top:5px}
+.hero .sub{font-size:13px; color:var(--text-muted); margin-top:4px}
+.btn-primary{
+  height:40px; padding:0 18px; border:none; border-radius:var(--r-ctl);
+  background:var(--accent); color:#fff; font-weight:600; font-size:13.5px;
+  display:inline-flex; align-items:center; gap:7px; flex-shrink:0;
+  transition:background .15s var(--ease-out), transform .1s var(--ease-out);
+}
+.btn-primary:hover{background:oklch(42% .12 245)}
+.btn-primary:active{transform:scale(.98)}
+
+/* stats clicables */
+.stats{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:16px 22px 20px; border-top:1px solid var(--border); margin-top:16px}
+@media(max-width:640px){.stats{gap:7px; padding:14px 16px 16px}}
+.stat{
+  display:flex; align-items:center; gap:11px; padding:11px 13px; text-align:left;
+  border:1px solid transparent; border-radius:var(--r-ctl); background:var(--surface-sub);
+  transition:all .15s var(--ease-out);
+}
+.stat:hover{border-color:var(--accent-line)}
+.stat.on{border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent-line) inset}
+.stat .ic{width:36px; height:36px; flex-shrink:0; display:grid; place-items:center; border-radius:var(--r-ctl); font-size:16px}
+.stat .ic.accent{background:var(--accent-soft); color:var(--accent)}
+.stat .ic.success{background:var(--success-soft); color:var(--success)}
+.stat .ic.warning{background:var(--warning-soft); color:var(--warning)}
+.stat b{font-size:18px; font-weight:660; line-height:1; font-variant-numeric:tabular-nums; display:block}
+.stat span{font-size:11.5px; color:var(--text-muted); display:block; margin-top:3px}
+@media(max-width:560px){.stat{flex-direction:column; align-items:flex-start; gap:7px}}
+
+/* filtros */
+.filters{display:flex; gap:10px; align-items:center}
+.filters input,.filters select{
+  height:42px; padding:0 13px; font-size:13.5px;
+  border:1px solid var(--border); border-radius:var(--r-ctl);
+  background:var(--surface); color:var(--text);
+}
+.filters input{flex:1}
+.filters select{width:200px}
+@media(max-width:560px){.filters{flex-direction:column; align-items:stretch}.filters select{width:100%}}
+
+/* ══ Grid de sensores — estado con color sólido ══ */
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:14px}
+.sensor{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-surf);
+  border-left:3px solid var(--st); padding:16px 18px;
+  box-shadow:var(--shadow-card);
+  animation:rise .3s var(--ease-out) both;
+}
+@keyframes rise{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+.sensor .head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
+.sensor .id{display:flex; gap:11px; min-width:0}
+.sensor .fp{
+  width:40px; height:40px; flex-shrink:0; display:grid; place-items:center;
+  border-radius:var(--r-ctl); font-size:18px;
+}
+.sensor.success .fp{background:var(--success-soft); color:var(--success)}
+.sensor.warning .fp{background:var(--warning-soft); color:var(--warning)}
+.sensor.danger .fp{background:var(--danger-soft); color:var(--danger)}
+.sensor.neutral .fp{background:var(--surface-sub); color:var(--text-muted)}
+.sensor h3{font-size:14.5px; font-weight:630; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.sensor .loc{display:flex; align-items:center; gap:4px; font-size:12.5px; color:var(--text-muted); margin-top:2px}
+.pill{
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  border:1px solid var(--st); border-radius:999px; padding:3px 10px;
+  font-size:11.5px; font-weight:650;
+}
+.pill::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--st)}
+.sensor.success .pill{color:var(--success); background:var(--success-soft)}
+.sensor.warning .pill{color:var(--warning); background:var(--warning-soft)}
+.sensor.danger .pill{color:var(--danger); background:var(--danger-soft)}
+.sensor.neutral .pill{color:var(--text-muted); background:var(--surface-sub)}
+.sensor .foot{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:13px; padding-top:11px; border-top:1px solid var(--border)}
+.sensor .ping{display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-muted)}
+.sensor .acts{display:flex; gap:6px}
+.btn-quiet{border:none; background:none; font-size:12.5px; font-weight:600; color:var(--accent); padding:5px 9px; border-radius:6px}
+.btn-quiet:hover{background:var(--accent-soft)}
+.btn-danger{border:none; background:none; font-size:12.5px; font-weight:600; color:var(--text-muted); padding:5px 9px; border-radius:6px}
+.btn-danger:hover{color:var(--danger); background:var(--danger-soft)}
+
+/* banner de revocación */
+.banner{
+  display:flex; gap:12px; padding:13px 16px; align-items:flex-start;
+  border:1px solid var(--warning); border-radius:var(--r-surf); background:var(--warning-soft);
+}
+.banner .ic{width:36px; height:36px; flex-shrink:0; display:grid; place-items:center; border-radius:var(--r-ctl); background:var(--warning-soft); color:var(--warning); font-size:17px}
+.banner b{font-size:13px; font-weight:620}
+.banner .row{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12.5px; color:var(--text-muted); margin-top:5px}
+.badge-w{border:1px solid var(--warning); color:var(--warning); background:var(--warning-soft); border-radius:999px; font-size:11px; font-weight:650; padding:2px 9px}
+
+.empty{
+  text-align:center; padding:44px 20px; border:1px dashed var(--border); border-radius:var(--r-panel);
+  color:var(--text-muted); font-size:13.5px; display:none;
+}
+</style>
+</head>
+<body>
+
+<main>
+  <!-- Header: identidad + métricas que filtran -->
+  <section class="hero">
+    <div class="top">
+      <div>
+        <p class="eyebrow">Sensores</p>
+        <h1>Lectores de huella</h1>
+        <p class="sub">Revisa el estado de tus sensores y configura nuevos lectores</p>
+      </div>
+      <button class="btn-primary">＋ Nuevo sensor</button>
+    </div>
+    <div class="stats" id="stats">
+      <button class="stat" data-f="all"><span class="ic accent">◉</span><span><b id="c-all">0</b><span>Total sensores</span></span></button>
+      <button class="stat" data-f="configured"><span class="ic success">✓</span><span><b id="c-cfg">0</b><span>Configurados</span></span></button>
+      <button class="stat" data-f="operative"><span class="ic success">≋</span><span><b id="c-op">0</b><span>Operativos ahora</span></span></button>
+    </div>
+  </section>
+
+  <!-- Banner: revocación pendiente -->
+  <section class="banner" id="banner">
+    <span class="ic">◷</span>
+    <div style="flex:1; min-width:0">
+      <b>1 sensor en proceso de eliminación</b>
+      <div class="row">
+        <span>Lector 7B — Salón 7B</span>
+        <span style="display:flex; gap:8px; align-items:center">
+          <span class="badge-w">En 42 min</span>
+          <button class="btn-quiet" style="color:var(--text)">Cancelar</button>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filtros -->
+  <div class="filters">
+    <input type="search" placeholder="Buscar sensor por nombre o ubicación…" oninput="render()">
+    <select><option>Todos los grupos</option><option>7A</option><option>7B</option><option>8A</option></select>
+  </div>
+
+  <!-- Grid -->
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty">Sin sensores en esta vista — ajusta el filtro o la búsqueda.</div>
+</main>
+
+<script>
+/* mock de sensores — mismo esquema de estado que la app */
+const DEVICES = [
+  {name:'Lector 6A',  loc:'Salón 6A',  scheme:'success', label:'Operativo',     ping:'Hace un momento', configured:true},
+  {name:'Lector 7A',  loc:'Salón 7A',  scheme:'success', label:'Operativo',     ping:'Hace 2 min',      configured:true},
+  {name:'Lector 7B',  loc:'Salón 7B',  scheme:'warning', label:'En eliminación',ping:'Hace 4 min',      configured:true},
+  {name:'Lector 8A',  loc:'Salón 8A',  scheme:'warning', label:'Conectando',    ping:'Hace 12 min',     configured:true},
+  {name:'Lector 9A',  loc:'Salón 9A',  scheme:'danger',  label:'Desconectado',  ping:'Hace 3 d',        configured:true},
+  {name:'Lector 10A', loc:'Salón 10A', scheme:'success', label:'Operativo',     ping:'Hace 1 min',      configured:true},
+  {name:'Secretaría', loc:'Oficina',   scheme:'success', label:'Operativo',     ping:'Hace un momento', configured:true},
+  {name:'Lector 11A', loc:'Salón 11A', scheme:'neutral', label:'No configurado',ping:'Nunca',           configured:false},
+];
+const SCHEME_BORDER = {success:'var(--success)', warning:'var(--warning)', danger:'var(--danger)', neutral:'var(--border)'};
+let filter = null; // 'all' | 'configured' | 'operative'
+
+document.getElementById('stats').addEventListener('click', (e) => {
+  const b = e.target.closest('.stat'); if(!b) return;
+  filter = (filter === b.dataset.f) ? null : b.dataset.f;
+  document.querySelectorAll('.stat').forEach(s => s.classList.toggle('on', s.dataset.f === filter));
+  render();
+});
+
+function render(){
+  const q = (document.querySelector('.filters input').value || '').toLowerCase();
+  const list = DEVICES.filter(d => {
+    if (q && !(d.name + ' ' + d.loc).toLowerCase().includes(q)) return false;
+    if (filter === 'configured') return d.configured;
+    if (filter === 'operative')  return d.scheme === 'success';
+    return true;
+  });
+  document.getElementById('grid').innerHTML = list.map(d => `
+    <article class="sensor ${d.scheme}" style="--st:${SCHEME_BORDER[d.scheme]}">
+      <div class="head">
+        <div class="id">
+          <span class="fp">▣</span>
+          <div style="min-width:0">
+            <h3>${d.name}</h3>
+            <p class="loc">⌖ ${d.loc}</p>
+          </div>
+        </div>
+        <span class="pill">${d.label}</span>
+      </div>
+      <div class="foot">
+        <span class="ping">↻ ${d.ping}</span>
+        <span class="acts">
+          ${!d.configured ? '<button class="btn-quiet">Configurar</button>' : '<button class="btn-quiet">Reasignar</button>'}
+          <button class="btn-danger">Eliminar</button>
+        </span>
+      </div>
+    </article>`).join('');
+  document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+}
+
+document.getElementById('c-all').textContent = DEVICES.length;
+document.getElementById('c-cfg').textContent = DEVICES.filter(d=>d.configured).length;
+document.getElementById('c-op').textContent  = DEVICES.filter(d=>d.scheme==='success').length;
+render();
+</script>
+</body>
+</html>

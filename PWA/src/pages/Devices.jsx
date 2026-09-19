@@ -18,7 +18,7 @@ import {
   Clock, Settings2, ArrowLeftRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Surface, PageHeader } from '../components/ui/Surface';
+import { Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -113,6 +113,7 @@ const Devices = () => {
   const [newToken, setNewToken] = useState(null);
   const [pendingRevocations, setPendingRevocations] = useState([]);
   const [reassignTarget, setReassignTarget] = useState(null);
+  const [statFilter, setStatFilter] = useState(null); // 'all' | 'configured' | 'operative'
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -146,6 +147,9 @@ const Devices = () => {
     return () => clearInterval(t);
   }, []);
 
+  // Sensores con revocación pendiente: marcar visualmente como "En eliminación"
+  const pendingRevocationIds = useMemo(() => new Set(pendingRevocations.map((r) => r.device_id)), [pendingRevocations]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return devices.filter((d) => {
@@ -155,12 +159,13 @@ const Devices = () => {
       const matchesGrade = !gradeFilter ||
         (d.location || '').toLowerCase().includes(gradeFilter.toLowerCase()) ||
         (d.group_name || '').toLowerCase().includes(gradeFilter.toLowerCase());
-      return matchesSearch && matchesGrade;
+      if (!matchesSearch || !matchesGrade) return false;
+      // statFilter: click en una métrica muestra solo ese subconjunto
+      if (statFilter === 'configured') return !!d.configured;
+      if (statFilter === 'operative') return getDeviceStatus(d, pendingRevocationIds).scheme === 'success';
+      return true;
     });
-  }, [devices, search, gradeFilter]);
-
-  // Sensores con revocación pendiente: marcar visualmente como "En eliminación"
-  const pendingRevocationIds = useMemo(() => new Set(pendingRevocations.map((r) => r.device_id)), [pendingRevocations]);
+  }, [devices, search, gradeFilter, statFilter, pendingRevocationIds]);
 
   const configuredCount = devices.filter((d) => d.configured).length;
   const operativeCount = devices.filter((d) => {
@@ -170,56 +175,60 @@ const Devices = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Sensores"
-        title="Lectores de huella"
-        subtitle="Revisa el estado de tus sensores y configura nuevos lectores"
-        meta={`${devices.length} sensor${devices.length !== 1 ? 'es' : ''} · ${operativeCount} operativo${operativeCount !== 1 ? 's' : ''}`}
-        actions={
-          <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)}>
-            Nuevo sensor
-          </Button>
-        }
-      />
+      {/* Header premium: identidad + stats clicables que filtran la cuadrícula */}
+      <Surface className="relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[var(--nx-accent)] via-[oklch(52%_0.125_245)] to-[var(--nx-accent)]" />
+        <div className="flex flex-col gap-5 p-5 md:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="mb-2 flex items-center gap-1.5 text-eyebrow uppercase text-[var(--nx-text-muted)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--nx-accent)]" />
+                Sensores
+              </p>
+              <h1 className="text-h1 tracking-[-0.02em] text-[var(--nx-text)]">Lectores de huella</h1>
+              <p className="mt-1.5 text-body-sm text-[var(--nx-text-muted)]">
+                Revisa el estado de tus sensores y configura nuevos lectores
+              </p>
+            </div>
+            <Button leftIcon={<Plus size={16} />} onClick={() => setShowRegister(true)} className="shrink-0">
+              Nuevo sensor
+            </Button>
+          </div>
 
-      {/* StatCards: Total + Configurados arriba (2 cols), Operativos abajo (ancho completo) */}
-      {!loading && !error && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <Card tone="accent" edge>
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-icon-bg-accent)] text-[var(--nx-accent)]">
-                <Fingerprint size={20} />
-              </span>
-              <div>
-                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{devices.length}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">Total sensores</p>
-              </div>
+          {!loading && !error && (
+            <div className="grid grid-cols-3 gap-3 border-t border-[var(--nx-border)] pt-4">
+              {[
+                { key: 'all',        label: 'Total sensores',   value: devices.length,  icon: Fingerprint, scheme: 'accent' },
+                { key: 'configured', label: 'Configurados',     value: configuredCount, icon: ShieldCheck, scheme: configuredCount === devices.length ? 'success' : 'warning' },
+                { key: 'operative',  label: 'Operativos ahora', value: operativeCount,  icon: Wifi,        scheme: 'success' },
+              ].map(({ key, label, value, icon: Icon, scheme }) => {
+                const active = statFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setStatFilter(active ? null : key)}
+                    aria-pressed={active}
+                    className={`flex items-center gap-3 rounded-control border p-3 text-left transition-all duration-fast ${
+                      active
+                        ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] shadow-low'
+                        : 'border-transparent bg-[var(--nx-surface-subtle)] hover:border-[var(--nx-border-accent)]'
+                    }`}
+                  >
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-control bg-[var(--nx-icon-bg-${scheme})] text-[var(--nx-${scheme === 'accent' ? 'accent' : scheme})]`}>
+                      <Icon size={17} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-h3 leading-none tabular-nums text-[var(--nx-text)]">{value}</span>
+                      <span className="mt-1 block truncate text-caption text-[var(--nx-text-muted)]">{label}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          </Card>
-          <Card tone={configuredCount === devices.length ? 'success' : 'warning'} edge>
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]">
-                <ShieldCheck size={20} />
-              </span>
-              <div>
-                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{configuredCount}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">Configurados</p>
-              </div>
-            </div>
-          </Card>
-          <Card tone="success" edge className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-control bg-[var(--nx-icon-bg-success)] text-[var(--nx-success)]">
-                <Wifi size={20} />
-              </span>
-              <div>
-                <p className="text-h2 text-[var(--nx-text)] tabular-nums">{operativeCount}</p>
-                <p className="text-caption text-[var(--nx-text-muted)]">Operativos ahora</p>
-              </div>
-            </div>
-          </Card>
+          )}
         </div>
-      )}
+      </Surface>
 
       {/* Revocaciones pendientes */}
       {pendingRevocations.length > 0 && (

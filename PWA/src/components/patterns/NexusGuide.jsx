@@ -64,9 +64,9 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
 
   const dismiss = () => {
     setDismissed(true);
-    // El avisado decide qué significa descartar (p.ej. no repetir este
-    // mensaje en la sesión) — NexusGuide solo reporta el texto mostrado.
-    onDismiss?.(script.map((m) => m?.text).filter(Boolean));
+    // Se reporta la llave del evento (dismissKey si la hay, si no el texto)
+    // para que el emisor decida cuándo un evento nuevo sí reaparece.
+    onDismiss?.(script.map((m) => m?.dismissKey || m?.text).filter(Boolean));
   };
 
   const onDragEnd = (_, info) => {
