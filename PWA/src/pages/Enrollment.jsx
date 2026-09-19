@@ -194,7 +194,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             {step === 1 && (
               <>
                 <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
-                  <p className="text-label text-[var(--nx-text)]">Datos del alumno</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Datos del alumno</p></div>
                 </div>
                 <Input label="Nombres" value={form.nombres} onChange={set('nombres')} placeholder="Ej. Juan Carlos" />
                 <Input label="Apellidos" value={form.apellidos} onChange={set('apellidos')} placeholder="Ej. Pérez Torres" />
@@ -237,7 +237,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             {step === 2 && (
               <>
                 <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
-                  <p className="text-label text-[var(--nx-text)]">Datos del acudiente</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Datos del acudiente</p></div>
                 </div>
                 <Input label="Nombres" value={form.acudienteNombre} onChange={set('acudienteNombre')} placeholder="Ej. María" />
                 <Input label="Apellidos" value={form.acudienteApellidos} onChange={set('acudienteApellidos')} placeholder="Ej. Gómez Ruiz" />
@@ -277,7 +277,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
                   <Check size={18} /> Alumno guardado correctamente.
                 </div>
                 <div className="space-y-2">
-                  <p className="text-label text-[var(--nx-text)]">Lector biométrico</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Lector biométrico</p></div>
                   {biometricStatus === 'checking' ? <Skeleton className="h-12" /> : (
                     <div className={`rounded-control p-4 text-body ${biometricStatus === 'connected' ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : biometricStatus === 'offline' ? 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]' : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'}`}>
                       {biometricStatus === 'connected'
@@ -445,7 +445,7 @@ const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
     >
       <div className="p-6 space-y-6">
         <div className="border-b border-[var(--nx-border)] pb-3">
-          <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
+          <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Datos del estudiante</p></div>
         </div>
         <div className="flex items-center gap-4">
           <StudentAvatar student={student} size="lg" />

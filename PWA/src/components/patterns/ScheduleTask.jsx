@@ -168,7 +168,7 @@ const ScheduleTask = ({ onDismiss }) => {
   if (loading) {
     return (
       <Surface className="p-5 space-y-4">
-        <p className="text-label font-semibold text-[var(--nx-warning)]">Tarea pendiente</p>
+        <div className="border-l-2 border-[var(--nx-warning)] pl-3"><p className="text-label font-semibold text-[var(--nx-warning)]">Tarea pendiente</p></div>
         <Skeleton className="h-6 w-64" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-12 w-full" />
@@ -181,7 +181,7 @@ const ScheduleTask = ({ onDismiss }) => {
   return (
     <Surface className="p-5 space-y-4 border-[var(--nx-border-warning)]">
       <div>
-        <p className="text-label font-semibold text-[var(--nx-warning)]">Tarea obligatoria</p>
+        <div className="border-l-2 border-[var(--nx-warning)] pl-3"><p className="text-label font-semibold text-[var(--nx-warning)]">Tarea obligatoria</p></div>
         <p className="text-h3 text-[var(--nx-text)] mt-1">Asignar cambios de horario del día</p>
         <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
           Marca los grupos que tienen horario distinto hoy. Las casillas vacías significan horario regular.

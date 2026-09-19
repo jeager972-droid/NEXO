@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../../api/dashboard';
 import { Button } from '../ui/Button';
+import { Surface } from '../ui/Surface';
 import { NexoChatBubble, NexoChatSkeleton } from './NexoChat';
 
 const TARGET_ROUTES = {
@@ -32,10 +33,10 @@ export const NexusInsights = () => {
     return () => { alive = false; };
   }, []);
 
-  if (loading) return <NexoChatSkeleton />;
+  if (loading) return <Surface className="p-5"><NexoChatSkeleton /></Surface>;
 
   return (
-    <section aria-label="Lectura de la jornada de Nexus" className="space-y-4">
+    <Surface className="space-y-5 p-5" role="region" aria-label="Lectura de la jornada de Nexus">
       {!insights?.length ? (
         <NexoChatBubble message="Todo dentro de lo normal — la jornada sigue su patrón habitual. Te aviso si algo cambia." />
       ) : (
@@ -56,7 +57,7 @@ export const NexusInsights = () => {
           />
         ))
       )}
-    </section>
+    </Surface>
   );
 };
 

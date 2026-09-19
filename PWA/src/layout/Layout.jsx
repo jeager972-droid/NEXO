@@ -298,11 +298,31 @@ const PAGE_HINTS = {
 const HINT_LIMIT = 3;
 const hintKey = (path) => `nx:hint:${path}`;
 
+// Mensajes descartados en esta sesión — si el usuario quita la burbuja,
+// el mismo texto no vuelve a aparecer al cambiar de sección.
+const readDismissed = () => {
+  try { return new Set(JSON.parse(sessionStorage.getItem('nx:bot-dismissed') || '[]')); }
+  catch { return new Set(); }
+};
+const writeDismissed = (set) => {
+  try { sessionStorage.setItem('nx:bot-dismissed', JSON.stringify([...set])); } catch { /* sin storage */ }
+};
+
 const NexusBotAnnouncer = () => {
   const { notifCount } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [insights, setInsights] = useState(null);
+  const [dismissedMsgs, setDismissedMsgs] = useState(readDismissed);
+
+  const dismissMsgs = (texts) => {
+    setDismissedMsgs((prev) => {
+      const next = new Set(prev);
+      (texts || []).forEach((t) => next.add(t));
+      writeDismissed(next);
+      return next;
+    });
+  };
 
   const path = location.pathname;
   const onNotifPage = path === '/notificaciones';
@@ -344,20 +364,25 @@ const NexusBotAnnouncer = () => {
   }, [proactiveInsight]);
 
   const script = useMemo(() => {
+    let msgs = [];
     // Prioridad 1: notificaciones nuevas
     if (notifCount > 0 && !onNotifPage) {
-      return [{
-        text: `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`,
-        chips: [{ label: 'Revisar', action: () => navigate('/notificaciones') }],
+      const text = `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`;
+      msgs = [{
+        text,
+        chips: [
+          { label: 'Revisar', action: () => navigate('/notificaciones') },
+          { label: 'Ignorar', action: () => dismissMsgs([text]) },
+        ],
       }];
     }
     // Prioridad 2: guía contextual (primeras N visitas a la sección)
-    if (showHint) {
-      return [{ text: PAGE_HINTS[path] }];
+    else if (showHint) {
+      msgs = [{ text: PAGE_HINTS[path] }];
     }
     // Prioridad 3: lectura inteligente de la jornada
-    if (proactiveInsight) {
-      return [{
+    else if (proactiveInsight) {
+      msgs = [{
         text: `<b>${proactiveInsight.title}</b> — ${proactiveInsight.body}`,
         chips: proactiveInsight.action ? [{
           label: proactiveInsight.action.label,
@@ -365,10 +390,11 @@ const NexusBotAnnouncer = () => {
         }] : undefined,
       }];
     }
-    return [];
-  }, [notifCount, onNotifPage, showHint, proactiveInsight, path, navigate]);
+    // Un texto descartado no reaparece en esta sesión
+    return msgs.filter((m) => !dismissedMsgs.has(m.text));
+  }, [notifCount, onNotifPage, showHint, proactiveInsight, path, navigate, dismissedMsgs]);
 
-  return <NexusGuide script={script} active={script.length > 0} />;
+  return <NexusGuide script={script} active={script.length > 0} onDismiss={dismissMsgs} />;
 };
 
 export default Layout;

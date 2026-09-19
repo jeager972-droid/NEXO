@@ -7,13 +7,16 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 
-/** Tonos cerrados: el color acompaña al texto, nunca lo sustituye. */
+/** Tonos cerrados: el color acompaña al texto, nunca lo sustituye.
+ *  Los bordes de estado usan el color semántico puro — el mismo de las
+ *  tarjetas de Operaciones y las métricas del tablero (nunca el token
+ *  mezclado, que diluye el tono hacia el neutro azulado). */
 const tones = {
   neutral: 'border-[var(--nx-border)]',
   accent:  'border-[var(--nx-border-accent)]',
-  success: 'border-[var(--nx-border-success)]',
-  warning: 'border-[var(--nx-border-warning)]',
-  danger:  'border-[var(--nx-border-danger)]',
+  success: 'border-[var(--nx-success)]',
+  warning: 'border-[var(--nx-warning)]',
+  danger:  'border-[var(--nx-danger)]',
 };
 
 /** Franja de 3 px a la izquierda: patrón de riesgo del moodboard (.nx-risk). */

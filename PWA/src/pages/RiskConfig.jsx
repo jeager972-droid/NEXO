@@ -332,7 +332,7 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 1 && (
                 <div className="space-y-5">
-                  <p className="text-label text-[var(--nx-text)]">¿Cómo funciona?</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">¿Cómo funciona?</p></div>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Lee esto antes de continuar</p>
 
                   <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4 space-y-3">
@@ -370,7 +370,7 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 2 && (
                 <div className="space-y-5">
-                  <p className="text-label text-[var(--nx-text)]">Define los umbrales de activación</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Define los umbrales de activación</p></div>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
                       Cuántas reincidencias y en cuántos días activan una alerta para cada nivel.
                     </p>
@@ -463,7 +463,7 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 3 && (
                 <div className="space-y-4">
-                  <p className="text-label text-[var(--nx-text)]">Clasifica cada evento por nivel de gravedad</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Clasifica cada evento por nivel de gravedad</p></div>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
                       Valores sugeridos asignados. Ajusta según el contexto de tu institución.
                     </p>
@@ -543,7 +543,7 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 4 && (
                 <div className="space-y-5">
-                  <p className="text-label text-[var(--nx-text)]">Revisión final</p>
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Revisión final</p></div>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
                       Verifica la configuración antes de guardar. Se creará una nueva versión de la política.
                     </p>

@@ -5,9 +5,8 @@
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Trash2, Loader2, CheckCircle2, XCircle, Check } from 'lucide-react';
+import { Trash2, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
-import { clsx } from 'clsx';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../context/NotificationContext';
 import { notificationsApi } from '../api/notifications';
@@ -127,23 +126,6 @@ const ACTIONS_WITH_DETAILS = [
   'sensor_configurado', 'sensor_eliminado', 'sensor_revocacion_iniciada',
 ];
 
-// Severidad por tipo de aviso — colores del sistema (punto lateral)
-const severityOf = (notif) => {
-  const meta = parseMeta(notif.metadata_json);
-  const action = meta?.action || '';
-  const type = String(notif.type || '').toUpperCase();
-  if (['sos', 'situacion_critica', 'daño', 'evasion_interna', 'salida_no_autorizada'].includes(action)
-      || type.includes('CRIT') || type.includes('MUY_ALTA')) return 'crit';
-  if (['iniciar_seguimiento', 'incidente', 'reagendar_motivo', 'late_arrival'].includes(action)
-      || type.includes('RISK') || type.includes('ALTA') || type.includes('ALERT')) return 'alta';
-  return 'info';
-};
-const SEV_DOT = {
-  crit: 'bg-[var(--nx-danger)]',
-  alta: 'bg-[var(--nx-warning)]',
-  info: 'bg-[var(--nx-accent)]',
-};
-
 const DEPENDENCIES = [
   { value: 'coordinacion', label: 'Coordinación' },
   { value: 'psicoorientacion', label: 'Psicoorientación' },
@@ -151,16 +133,19 @@ const DEPENDENCIES = [
   { value: 'docencia', label: 'Docencia' },
 ];
 
-const NotifItem = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead, canDerive }) => {
+/**
+ * Cada notificación es una burbuja de Nexus — el mismo NexoChatBubble del
+ * estado vacío del docente. Las decisiones se toman aquí mismo:
+ * acciones del backend, Revisar (detalle), Derivar o Ignorar (= leída).
+ */
+const NotifBubble = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead, canDerive }) => {
   const meta = parseMeta(notif.metadata_json);
   const actions = meta?.actions;
   const [actionLoading, setActionLoading] = useState(false);
-  const sev = severityOf(notif);
   const studentName = meta?.student_name;
   const canDeriveThis = canDerive && !!meta?.student_id;
 
-  const handleAction = async (e, actionId) => {
-    e.stopPropagation();
+  const handleAction = async (actionId) => {
     const notifId = notif.id ?? notif.notification_id;
     if (!notifId) return;
     setActionLoading(true);
@@ -175,69 +160,38 @@ const NotifItem = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead,
   };
 
   return (
-    <Surface className={clsx(
-      'p-4 transition-colors',
-      !notif.read && 'bg-[var(--nx-subtle-bg-accent)] border-[var(--nx-border-accent)]'
-    )}>
-      <div className="flex items-start gap-3">
-        <span className={clsx('mt-2 h-2 w-2 shrink-0 rounded-full', SEV_DOT[sev])} aria-hidden />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-[14.5px] font-[620] text-[var(--nx-text)]">
-              {notif.title || 'Novedad'}{studentName ? ` — ${studentName}` : ''}
-            </p>
-            <span className="shrink-0 text-[12px] tabular-nums text-[var(--nx-text-muted)]">
-              {formatChatTime(notif.time || notif.created_at)}
-            </span>
-          </div>
-          <p className="mt-0.5 text-[13.5px] text-[var(--nx-text-muted)]">{humanizeMessage(notif)}</p>
-
-          {actions && Array.isArray(actions) && actions.length > 0 && (
-            <div className="mt-3 flex items-center gap-2">
-              {actions.map((act) => {
-                const styleClasses = act.style === 'success'
-                  ? 'bg-[var(--nx-surface-success)] text-[color-mix(in_oklch,var(--nx-success)_80%,var(--nx-text))] border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_15%,var(--nx-surface-success))]'
-                  : 'bg-[var(--nx-surface-danger)] text-[color-mix(in_oklch,var(--nx-danger)_80%,var(--nx-text))] border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_15%,var(--nx-surface-danger))]';
-                return (
-                  <button
-                    key={act.id}
-                    onClick={(e) => handleAction(e, act.id)}
-                    disabled={actionLoading}
-                    className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption font-semibold transition-all disabled:opacity-45 ${styleClasses}`}
-                  >
-                    {actionLoading && <Loader2 size={12} className="animate-spin" />}
-                    {act.label}
-                  </button>
-                );
-              })}
-            </div>
+    <NexoChatBubble
+      unread={!notif.read}
+      timestamp={formatChatTime(notif.time || notif.created_at)}
+      message={<>
+        <b className="font-[620]">{notif.title || 'Novedad'}{studentName ? ` — ${studentName}` : ''}.</b>{' '}
+        {humanizeMessage(notif)}
+      </>}
+      action={
+        <>
+          {Array.isArray(actions) && actions.map((act) => (
+            <Button
+              key={act.id}
+              size="sm"
+              variant={act.style === 'success' ? 'primary' : 'secondary'}
+              loading={actionLoading}
+              onClick={() => handleAction(act.id)}
+            >
+              {act.label}
+            </Button>
+          ))}
+          {hasDetails && (
+            <Button variant="secondary" size="sm" onClick={onClick}>Revisar</Button>
           )}
-
-          {(hasDetails || canDeriveThis || !notif.read) && (
-            <div className="mt-3 flex items-center gap-2">
-              {hasDetails && (
-                <Button variant="secondary" size="sm" onClick={onClick}>Detalle</Button>
-              )}
-              {canDeriveThis && (
-                <Button size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
-              )}
-              {!notif.read && (
-                <button
-                  type="button"
-                  title="Marcar como leída"
-                  aria-label="Marcar como leída"
-                  onClick={onMarkRead}
-                  className="ml-auto grid h-7 w-7 place-items-center rounded-full text-[var(--nx-text-muted)] transition-colors hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-accent)]"
-                >
-                  <Check size={15} />
-                </button>
-              )}
-            </div>
+          {canDeriveThis && (
+            <Button variant="secondary" size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
           )}
-        </div>
-      </div>
-    </Surface>
+          {!notif.read && (
+            <Button variant="ghost" size="sm" onClick={onMarkRead}>Ignorar</Button>
+          )}
+        </>
+      }
+    />
   );
 };
 
@@ -370,41 +324,38 @@ const Notifications = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-heading font-semibold text-[var(--nx-text)]">Notificaciones</h1>
-        {notifications.length > 0 && (
-          <div className="flex items-center gap-4">
-            <button
-              onClick={markAllRead}
-              className="text-[13px] font-medium text-[var(--nx-accent)] hover:underline"
-            >
-              Marcar todo leído
-            </button>
-            <button
-              onClick={handleClear}
-              disabled={clearing}
-              className="flex items-center gap-1 text-[13px] font-medium text-[var(--nx-danger)] hover:underline disabled:opacity-45"
-            >
-              <Trash2 size={14} />
-              Vaciar
-            </button>
-          </div>
-        )}
-      </div>
+      {notifications.length > 0 && (
+        <div className="flex items-center justify-end gap-4">
+          <button
+            onClick={markAllRead}
+            className="text-[13px] font-medium text-[var(--nx-accent)] hover:underline"
+          >
+            Marcar todo leído
+          </button>
+          <button
+            onClick={handleClear}
+            disabled={clearing}
+            className="flex items-center gap-1 text-[13px] font-medium text-[var(--nx-danger)] hover:underline disabled:opacity-45"
+          >
+            <Trash2 size={14} />
+            Vaciar
+          </button>
+        </div>
+      )}
 
       {notifications.length === 0 ? (
         <Surface className="p-6">
           <NexoChatBubble message="¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí." />
         </Surface>
       ) : (
-        <div className="space-y-3">
+        <Surface className="space-y-6 p-5">
           {notifications.map((notif, i) => {
             const meta = parseMeta(notif.metadata_json);
             const action = meta?.action;
             const detailMessage = getDetailMessage(notif, meta);
             const hasDetails = !!detailMessage || ACTIONS_WITH_DETAILS.includes(action);
             return (
-              <NotifItem
+              <NotifBubble
                 key={notif.id ?? notif.notification_id ?? i}
                 notif={notif}
                 hasDetails={hasDetails}
@@ -416,7 +367,7 @@ const Notifications = () => {
               />
             );
           })}
-        </div>
+        </Surface>
       )}
 
       <AnimatePresence>

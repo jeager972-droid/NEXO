@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Settings } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Settings, Clock, GraduationCap, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -408,8 +408,8 @@ const Profile = () => {
     return saved ? parseFloat(saved) : 1;
   });
 
-  // Onboarding en modo actualización (full-screen con Nexus)
-  const [onboardingUpdate, setOnboardingUpdate] = useState(false);
+  // Onboarding en modo actualización — scope: 'schedule'|'groups'|'risk'
+  const [onboardingScope, setOnboardingScope] = useState(null);
 
   useEffect(() => {
     usersApi.getExtendedProfile().then((res) => {
@@ -638,28 +638,57 @@ const Profile = () => {
                 Los casos que Nexus vigila en tus clases — ajusta umbrales o desactiva los que no quieras.
               </p>
             </div>
-            <Button size="sm" onClick={() => setOnboardingUpdate(true)} leftIcon={<Settings size={15} />}>
+            <Button size="sm" onClick={() => setOnboardingScope('rules')} leftIcon={<Settings size={15} />}>
               Editar con Nexus
             </Button>
           </div>
         </Card>
       )}
 
-      {/* ── Configuración institucional — onboarding en modo actualización ── */}
+      {/* ── Configuración institucional — cada bloque abre el flujo
+             Nexus en modo actualización, acotado a su sección ── */}
       {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && (
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-h3 text-[var(--nx-text)]">Configuración institucional</p>
-              <p className="mt-0.5 text-caption text-[var(--nx-text-muted)]">
-                Jornadas, grupos, docentes y umbrales — el mismo flujo del inicio, ahora para actualizar.
-              </p>
-            </div>
-            <Button size="sm" onClick={() => setOnboardingUpdate(true)} leftIcon={<Settings size={15} />}>
-              Editar con Nexus
-            </Button>
-          </div>
-        </Card>
+        <>
+          {[
+            {
+              scope: 'schedule',
+              icon: Clock,
+              title: 'Jornadas y horarios',
+              desc: 'Entrada, salida, descanso y bloques por jornada.',
+            },
+            {
+              scope: 'groups',
+              icon: GraduationCap,
+              title: 'Grados y grupos',
+              desc: user?.role === ROLES.RECTOR
+                ? 'La estructura del año con su docente asignado.'
+                : 'La estructura del año — la edición completa es de rectoría.',
+            },
+            {
+              scope: 'risk',
+              icon: Shield,
+              title: 'Umbrales de riesgo',
+              desc: 'A partir de cuántas repeticiones Nexus alerta cada nivel.',
+            },
+          ].map(({ scope, icon: Icon, title, desc }) => (
+            <Card key={scope} className="p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
+                    <Icon size={18} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-h3 text-[var(--nx-text)]">{title}</p>
+                    <p className="mt-0.5 text-caption text-[var(--nx-text-muted)]">{desc}</p>
+                  </div>
+                </div>
+                <Button size="sm" onClick={() => setOnboardingScope(scope)} leftIcon={<Settings size={15} />}>
+                  Editar con Nexus
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </>
       )}
 
       {/* ── Tamaño de fuente ── */}
@@ -767,15 +796,19 @@ const Profile = () => {
       </AnimatePresence>
 
       {/* Onboarding en modo actualización — pantalla completa bloqueante */}
-      {onboardingUpdate && (
+      {onboardingScope && (
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-[var(--nx-canvas)]">
           <OnboardingFlow
             role={user?.role}
-            missing={{ schedule: true, groups: true, risk: true }}
+            missing={{
+              schedule: onboardingScope === 'schedule',
+              groups: onboardingScope === 'groups',
+              risk: onboardingScope === 'risk',
+            }}
             mode="update"
-            onCancel={() => setOnboardingUpdate(false)}
+            onCancel={() => setOnboardingScope(null)}
             onAllDone={() => {
-              setOnboardingUpdate(false);
+              setOnboardingScope(null);
               window.location.reload();
             }}
           />

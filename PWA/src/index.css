@@ -37,7 +37,7 @@
   --nx-icon-mix-w:    20%;
   --nx-subtle-mix:    10%;
   --nx-subtle-mix-w:  13%;
-  --nx-border-mix:    55%;
+  --nx-border-mix:    35%;
 
   /* Per-tone surfaces — color-mix in light, solid oklch in dark */
   --nx-surface-accent:  color-mix(in oklch, var(--nx-accent) var(--nx-state-mix), var(--nx-tone-mix));
@@ -129,7 +129,7 @@
   --nx-icon-mix-w:    32%;
   --nx-subtle-mix:    22%;
   --nx-subtle-mix-w:  24%;
-  --nx-border-mix:    55%;
+  --nx-border-mix:    35%;
 
   /* Muted dark pastel surfaces — low chroma, matte, premium (Linear/GitHub Dark vibe) */
   --nx-surface-accent:  oklch(26% 0.020 245);

@@ -10,12 +10,13 @@ import { behaviorApi } from '../api/behavior';
 import { consultationsApi } from '../api/consultations';
 import { auditApi } from '../api/audit';
 import { studentsApi } from '../api/students';
-import { Search, ChevronRight, ChevronLeft, Activity, Database, Users, UserCheck, MessageSquare, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, BarChart2, FileBarChart, GraduationCap, ContactRound, ClipboardList, Mail, History, DoorOpen, Siren, Wrench, FolderHeart } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, Activity, Users, ShieldAlert, FileText, Clock, UserX, UserMinus, CalendarDays, Send, ShieldCheck, AlertTriangle, GraduationCap, ContactRound, ClipboardList, DoorOpen, Siren, Wrench, FolderHeart } from 'lucide-react';
 import { ROLES } from '../config/roles';
 import { ConsultationDrawer } from './ConsultationDrawer';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Select';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { Surface } from '../components/ui/Surface';
 import { humanizeError } from '../utils/messages';
 
 const TEACHER_MODULES = ['Llegadas Tarde', 'Inasistencias', 'Inasistencias Justificadas', 'Estudiantes Ausentes', 'Estudiantes fuera del salón', 'Estudiantes con Permiso', 'Citaciones'];
@@ -469,29 +470,31 @@ const Consultation = () => {
     setActiveItem(null);
   };
 
-  // ── Nivel 2/3 unificado: dentro del módulo, selector de tipo + consulta ──
+  // ── Dentro del módulo: encabezado con retorno → cuadrícula "Tipo de
+  //    consulta" (despliegue inline como los filtros) → filtros + tabla ──
   if (activeItem && currentModule) {
     const itemOptions = currentModule.items.map((it) => ({ value: it.label, label: it.label }));
     return (
       <div className="space-y-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
-              Volver
-            </Button>
-            <h1 className="text-heading font-semibold text-[var(--nx-text)]">{activeModule}</h1>
-          </div>
-          {itemOptions.length > 1 && (
-            <div className="w-56">
-              <Select
-                label="Tipo de consulta"
-                value={activeItem}
-                onChange={(e) => openSubmodule(e.target.value)}
-                options={itemOptions}
-              />
-            </div>
-          )}
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
+            Volver
+          </Button>
+          <h1 className="text-heading font-semibold text-[var(--nx-text)]">{activeModule}</h1>
         </div>
+
+        {itemOptions.length > 1 && (
+          <Surface className="p-4">
+            <SearchableSelect
+              label="Tipo de consulta"
+              placeholder="Elegir consulta…"
+              options={itemOptions}
+              value={activeItem}
+              onChange={(v) => v && openSubmodule(v)}
+            />
+          </Surface>
+        )}
+
         <ConsultationDrawer
           item={activeItem}
           riskStudents={riskStudents}
@@ -522,8 +525,6 @@ const Consultation = () => {
   // ── Nivel 1: Grid de módulos ──
   return (
     <div className="space-y-5">
-      <h1 className="text-heading font-semibold text-[var(--nx-text)]">Consultas</h1>
-
       <Input
         placeholder="Filtrar módulos…"
         value={searchTerm}

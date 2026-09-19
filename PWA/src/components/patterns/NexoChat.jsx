@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { clsx } from 'clsx';
 import { Skeleton } from '../ui/Skeleton';
 
 const NexoAvatar = ({ size = 40 }) => {
@@ -25,13 +26,18 @@ const NexoAvatar = ({ size = 40 }) => {
 };
 
 export { NexoAvatar };
-export const NexoChatBubble = ({ message, timestamp = 'Ahora', action }) => (
+export const NexoChatBubble = ({ message, timestamp = 'Ahora', action, unread }) => (
   <div className="flex items-start gap-3">
     <NexoAvatar size={40} />
-    <div className="flex-1">
-      <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+    <div className="flex-1 min-w-0">
+      <div className={clsx(
+        'rounded-surface rounded-bl-xs border px-4 py-3',
+        unread
+          ? 'border-[var(--nx-border-accent)] bg-[var(--nx-subtle-bg-accent)]'
+          : 'border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]'
+      )}>
         <p className="text-body text-[var(--nx-text)] leading-relaxed">{message}</p>
-        {action && <div className="mt-2.5">{action}</div>}
+        {action && <div className="mt-2.5 flex flex-wrap items-center gap-2">{action}</div>}
       </div>
       <p className="text-caption text-[var(--nx-text-muted)] mt-1 px-1">NEXO · {timestamp}</p>
     </div>

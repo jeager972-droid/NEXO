@@ -21,7 +21,7 @@ import { clsx } from 'clsx';
 const EASE = [0.22, 1, 0.36, 1];
 const DISMISS_DIST = 90; // px arrastrados hacia el centro para descartar
 
-export const NexusGuide = ({ script = [], active = true, celebrate = false, onStepChange }) => {
+export const NexusGuide = ({ script = [], active = true, celebrate = false, onStepChange, onDismiss }) => {
   const [idx, setIdx] = useState(-1);
   const [shown, setShown] = useState('');
   const [dismissed, setDismissed] = useState(false);
@@ -62,7 +62,12 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
   const botVisible = active && !dismissed && !finished;
   const bubbleVisible = botVisible && !!msg;
 
-  const dismiss = () => setDismissed(true);
+  const dismiss = () => {
+    setDismissed(true);
+    // El avisado decide qué significa descartar (p.ej. no repetir este
+    // mensaje en la sesión) — NexusGuide solo reporta el texto mostrado.
+    onDismiss?.(script.map((m) => m?.text).filter(Boolean));
+  };
 
   const onDragEnd = (_, info) => {
     setDragging(false);

@@ -63,8 +63,6 @@ export default function Casos() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-heading font-semibold text-[var(--nx-text)]">Seguimientos</h1>
-
       <Input
         placeholder="Buscar estudiante…"
         value={searchQuery}
