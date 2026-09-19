@@ -179,7 +179,7 @@ const ScheduleTask = ({ onDismiss }) => {
   const selectedCount = Object.keys(selections).length;
 
   return (
-    <Surface className="p-5 space-y-4 border-[var(--nx-border-warning)]">
+    <Surface className="p-5 space-y-4 border-[var(--nx-warning)]">
       <div>
         <div className="border-l-2 border-[var(--nx-warning)] pl-3"><p className="text-label font-semibold text-[var(--nx-warning)]">Tarea obligatoria</p></div>
         <p className="text-h3 text-[var(--nx-text)] mt-1">Asignar cambios de horario del día</p>

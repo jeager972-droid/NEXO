@@ -71,9 +71,12 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
 
   const onDragEnd = (_, info) => {
     setDragging(false);
-    // arrastrar hacia el centro (izquierda/arriba) descarta al bot
-    const dist = Math.hypot(Math.max(0, -info.offset.x), Math.max(0, -info.offset.y));
-    if (dist > DISMISS_DIST) dismiss();
+    // descartar exige soltar el bot SOBRE la X centrada abajo — no basta
+    // con arrastrar un poco hacia el centro (evita descartes accidentales)
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight - 96 - 32; // bottom-24 + mitad del círculo
+    const d = Math.hypot(info.point.x - cx, info.point.y - cy);
+    if (d < DISMISS_DIST + 24) dismiss();
   };
 
   return (
@@ -85,9 +88,9 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.7 }}
-            className="pointer-events-none fixed left-1/2 bottom-24 z-[60] -translate-x-1/2"
+            className="pointer-events-none fixed left-1/2 bottom-24 z-[60] flex -translate-x-1/2 flex-col items-center"
           >
-            <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-dashed border-[var(--nx-danger)] bg-[var(--nx-subtle-bg-danger)]">
+            <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-dashed border-[var(--nx-danger)] bg-[var(--nx-subtle-bg-danger)] shadow-[0_8px_24px_-8px_oklch(52%_.175_25/.35)]">
               <X size={26} className="text-[var(--nx-danger)]" />
             </div>
             <p className="mt-1 text-center text-[11px] font-semibold text-[var(--nx-danger)]">Soltar para quitar</p>
@@ -126,9 +129,17 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
                   <X size={13} />
                 </button>
               </div>
-              <p className="mt-1 min-h-[42px] text-[14.5px] leading-[1.5] text-[var(--nx-text)]">
-                {shown}
-                {!typingDone && <span className="ml-0.5 inline-block h-[15px] w-[7px] animate-pulse rounded-[2px] bg-[var(--nx-accent)] align-[-2px]" />}
+              <p className="mt-1 min-h-[42px] text-[13.5px] leading-[1.5] text-[var(--nx-text)]">
+                {typingDone ? (
+                  // al terminar se renderiza el HTML del mensaje (negrillas y
+                  // demás), igual que en el prototipo
+                  <span dangerouslySetInnerHTML={{ __html: msg.text }} />
+                ) : (
+                  <>
+                    {shown}
+                    <span className="ml-0.5 inline-block h-[14px] w-[7px] animate-pulse rounded-[2px] bg-[var(--nx-accent)] align-[-2px]" aria-hidden />
+                  </>
+                )}
               </p>
               {msg.chips && typingDone && (
                 <div className="mt-3 flex flex-wrap gap-2">

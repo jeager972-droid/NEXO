@@ -306,7 +306,7 @@ export default function RiskConfig() {
 
         {/* ── Error ──────────────────────────────────────────────────── */}
         {error && (
-          <div className="mx-6 mb-4 rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3" role="alert">
+          <div className="mx-6 mb-4 rounded-control border border-[var(--nx-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3" role="alert">
             <div className="flex items-start gap-2">
               <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-[var(--nx-danger)]" />
               <div className="flex-1 min-w-0">

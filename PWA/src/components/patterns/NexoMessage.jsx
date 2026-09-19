@@ -7,7 +7,7 @@ import { Button } from '../ui/Button';
 import { NexoAvatar } from './NexoChat';
 
 export const NexoMessage = ({ time, text, evidence, action, onAction, urgent, className }) => (
-  <div className={clsx('rounded-surface border p-4 transition-all duration-fast', urgent ? 'border-[var(--nx-border-warning)] bg-[var(--nx-subtle-bg-warning)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface)]', className)}>
+  <div className={clsx('rounded-surface border p-4 transition-all duration-fast', urgent ? 'border-[var(--nx-warning)] bg-[var(--nx-subtle-bg-warning)]' : 'border-[var(--nx-border)] bg-[var(--nx-surface)]', className)}>
     <div className="flex items-start gap-3">
       <NexoAvatar size={32} />
       <div className="flex-1 min-w-0">

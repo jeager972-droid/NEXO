@@ -561,13 +561,13 @@ const ExportActions = ({ rows, columns, item, fromDate, toDate, canExport }) => 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--nx-border)] pb-3 mb-3">
       <span className="text-caption text-[var(--nx-text-muted)]">Descargar:</span>
-      <button onClick={() => exportExcel(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)] border border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)]`}>
+      <button onClick={() => exportExcel(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)] border border-[var(--nx-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_12%,transparent)]`}>
         <FileSpreadsheet size={14} /> Excel
       </button>
       <button onClick={() => exportWord(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] hover:bg-[color-mix(in_oklch,var(--nx-accent)_12%,transparent)]`}>
         <FileText size={14} /> Word
       </button>
-      <button onClick={() => exportPdf(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)]`}>
+      <button onClick={() => exportPdf(spec)} className={`${btnBase} bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)] border border-[var(--nx-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_12%,transparent)]`}>
         <FileDown size={14} /> PDF
       </button>
     </div>

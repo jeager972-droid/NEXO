@@ -159,7 +159,7 @@ const AdminDashboard = ({ stats, loading }) => {
         <ScheduleTask onDismiss={() => setShowScheduleTask(false)} />
       )}
       {loading ? (
-        <SkeletonMetrics count={5} />
+        <SkeletonKpis5 />
       ) : (
         <div className="space-y-4">          {/* PC: todas en una fila */}
           <div className="hidden md:grid md:grid-cols-5 gap-4">
@@ -228,6 +228,35 @@ const AdminDashboard = ({ stats, loading }) => {
     </div>
   );
 };
+
+/** Esqueleto del bloque de 5 KPIs: en móvil la última (Alertas) es barra larga,
+ *  no una tarjeta más — reproduce el layout final para no desplazar contenido. */
+const SkeletonKpiCard = () => (
+  <div className="rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5">
+    <Skeleton className="h-9 w-9 rounded-control" />
+    <Skeleton className="mt-4 h-7 w-14" />
+    <Skeleton className="mt-2.5 h-3 w-20" />
+    <Skeleton className="mt-2 h-3 w-16" />
+  </div>
+);
+const SkeletonKpis5 = () => (
+  <div className="space-y-4" aria-hidden>
+    <div className="hidden md:grid md:grid-cols-5 gap-4">
+      {Array.from({ length: 5 }).map((_, i) => <SkeletonKpiCard key={i} />)}
+    </div>
+    <div className="md:hidden space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => <SkeletonKpiCard key={i} />)}
+      </div>
+      {/* la barra larga de Alertas */}
+      <div className="flex w-full items-center gap-2.5 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3 py-2">
+        <Skeleton className="h-7 w-7 shrink-0 rounded-control" />
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+    </div>
+  </div>
+);
 
 // ── Secretaria ────────────────────────────────────────────────────────────────
 
@@ -387,7 +416,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               onClick={() => setGroupOpen((v) => !v)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
-              <div>
+              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
                 <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
                 <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup ? formatGroupName(selectedGroup) : 'Elegir grupo'}</p>
               </div>
@@ -450,7 +479,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
 
           {selectedGroup && (
             groupLoading ? (
-              <SkeletonMetrics count={5} />
+              <SkeletonKpis5 />
             ) : (
               <div className="space-y-4">                {/* PC: todas en una fila */}
                 <div className="hidden md:grid md:grid-cols-5 gap-4">
@@ -753,7 +782,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                   style={{
                     borderLeftWidth: '3px',
                     borderLeftColor: `var(--nx-${CATEGORY_SCHEMES[category]})`,
-                    borderColor: `var(--nx-border-${CATEGORY_SCHEMES[category]})`,
+                    borderColor: `var(--nx-${CATEGORY_SCHEMES[category]})`,
                   }}
                 >
                   {/* Avatar circular con iniciales */}

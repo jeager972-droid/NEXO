@@ -405,7 +405,7 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
           </div>
 
           {fetchError && (
-            <div className="mb-4 flex items-center gap-3 rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3" role="alert">
+            <div className="mb-4 flex items-center gap-3 rounded-control border border-[var(--nx-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3" role="alert">
               <AlertOctagon size={18} className="shrink-0 text-[var(--nx-danger)]" />
               <p className="text-body-sm text-[var(--nx-danger)]">{fetchError}</p>
             </div>

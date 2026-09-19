@@ -17,7 +17,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import { NexoAvatar } from '../../components/patterns/NexoChat';
-import { Clock, Layers, BellRing } from 'lucide-react';
+import { Clock, Layers, BellRing, X } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -111,9 +112,9 @@ const makeBlocks = (entry, exit, count, recessStart, recessEnd) => {
 /* ── piezas UI del flujo ── */
 const StepHead = ({ kicker, title, lede }) => (
   <>
-    {kicker && <span className="text-[12.5px] font-semibold tracking-wide text-[var(--nx-accent)]">{kicker}</span>}
-    <h1 className="text-[21px] sm:text-[22px] leading-snug font-[650] tracking-[-.01em] text-[var(--nx-text)]">{title}</h1>
-    {lede && <p className="text-[14.5px] text-[var(--nx-text-muted)] max-w-[56ch]">{lede}</p>}
+    {kicker && <span className="text-[12px] font-[650] uppercase tracking-[.04em] text-[var(--nx-accent)]">{kicker}</span>}
+    <h1 className="text-[19px] sm:text-[20px] leading-snug font-[650] tracking-[-.01em] text-[var(--nx-text)]">{title}</h1>
+    {lede && <p className="text-[13.5px] text-[var(--nx-text-muted)] max-w-[56ch]">{lede}</p>}
   </>
 );
 
@@ -130,7 +131,7 @@ const Stepper = ({ value, onChange, min = 0, max = 26, step = 1, label }) => (
   <div className="flex items-center gap-3">
     <button type="button" aria-label={`Disminuir ${label || ''}`} onClick={() => onChange(Math.max(min, value - step))}
       className="h-10 w-10 rounded-control border border-[var(--nx-border)] bg-[var(--nx-canvas)] text-lg font-semibold text-[var(--nx-text-muted)] transition-colors hover:border-[var(--nx-accent)] hover:text-[var(--nx-accent)]">−</button>
-    <span className="min-w-[40px] text-center text-[17px] font-[650] tabular-nums">{value}</span>
+    <span className="min-w-[40px] text-center text-[15px] font-[650] tabular-nums">{value}</span>
     <button type="button" aria-label={`Aumentar ${label || ''}`} onClick={() => onChange(Math.min(max, value + step))}
       className="h-10 w-10 rounded-control border border-[var(--nx-border)] bg-[var(--nx-canvas)] text-lg font-semibold text-[var(--nx-text-muted)] transition-colors hover:border-[var(--nx-accent)] hover:text-[var(--nx-accent)]">+</button>
   </div>
@@ -138,7 +139,7 @@ const Stepper = ({ value, onChange, min = 0, max = 26, step = 1, label }) => (
 
 const PickChip = ({ on, children, ...props }) => (
   <button type="button" {...props} className={clsx(
-    'h-[52px] rounded-control border-[1.5px] font-semibold text-[15px] transition-all duration-150',
+    'h-[46px] rounded-control border-[1.5px] font-semibold text-[14px] transition-all duration-150',
     on
       ? 'border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
       : 'border-[var(--nx-border)] bg-[var(--nx-canvas)] text-[var(--nx-text)] hover:border-[var(--nx-border-accent)]'
@@ -149,14 +150,15 @@ const Switch = ({ checked, onChange, title, help }) => (
   <label className="flex items-center gap-4 py-1 cursor-pointer">
     <input type="checkbox" className="sr-only peer" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     <span className="h-[26px] w-[46px] shrink-0 rounded-full bg-[var(--nx-border)] relative transition-colors duration-150 peer-checked:bg-[var(--nx-accent)] peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--nx-accent)] peer-focus-visible:outline-offset-2 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-5" />
-    <span className="text-[14.5px] font-[550] text-[var(--nx-text)]">{title}
-      {help && <span className="block text-[12.5px] font-normal text-[var(--nx-text-muted)]">{help}</span>}
+    <span className="text-[13.5px] font-[550] text-[var(--nx-text)]">{title}
+      {help && <span className="block text-[12px] font-normal text-[var(--nx-text-muted)]">{help}</span>}
     </span>
   </label>
 );
 
 /* ══════════════════════════ flujo ══════════════════════════ */
 export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate = false, mode = 'initial', onCancel }) {
+  const { logout } = useAuth();
   const isUpdate = mode === 'update'; // re-configuración desde Configuración
   const isTeacher = role === ROLES.DOCENTE;
   const isRector = role === ROLES.RECTOR;
@@ -399,7 +401,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
           <span className="text-[12.5px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
             {isUpdate ? 'Configuración' : 'Configuración inicial'}
           </span>
-          <h1 className="text-[22px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
+          <h1 className="text-[20px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
           <p className="mx-auto max-w-[46ch] text-[14.5px] leading-relaxed text-[var(--nx-text-muted)]">
             {isUpdate
               ? 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.'
@@ -591,7 +593,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
                   {names.map((n) => (
                     <span key={n} className={clsx('rounded-full border px-3 py-1.5 text-[13px] font-semibold',
                       (assignments[n] || []).length
-                        ? 'border-[var(--nx-border-success)] bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
+                        ? 'border-[var(--nx-success)] bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
                         : 'border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] text-[var(--nx-text)]')}>{n}</span>
                   ))}
                 </div>
@@ -612,8 +614,8 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       <StepHead kicker={`Paso ${realIdx} de ${totalReal} · rectoría`} title="Grados y grupos"
         lede="La estructura de grupos la define rectoría. El sistema se activa cuando ambos terminen su parte." />
       <Work>
-        <div className="rounded-surface border border-[var(--nx-border-warning)] bg-[var(--nx-subtle-bg-warning)] px-5 py-4">
-          <p className="text-[14.5px] font-[550] text-[var(--nx-text)]">Pendiente de rectoría</p>
+        <div className="rounded-surface border border-[var(--nx-warning)] bg-[var(--nx-subtle-bg-warning)] px-5 py-4">
+          <p className="text-[13.5px] font-[550] text-[var(--nx-text)]">Pendiente de rectoría</p>
           <p className="mt-1 text-[13.5px] text-[var(--nx-text-muted)]">Cuando rectoría complete los grupos y docentes, el sistema quedará listo. Tu parte no se bloquea.</p>
         </div>
       </Work>
@@ -708,7 +710,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       <span className="text-[13px] font-semibold tracking-wide text-[var(--nx-accent)]">
         {isUpdate ? 'Cambios guardados' : isTeacher ? 'Listo' : 'Configuración completa'}
       </span>
-      <h1 className="max-w-[18ch] text-[22px] font-[650] leading-snug tracking-[-.01em] text-[var(--nx-text)]">
+      <h1 className="max-w-[18ch] text-[20px] font-[650] leading-snug tracking-[-.01em] text-[var(--nx-text)]">
         {isUpdate ? 'Tu institución quedó actualizada' : isTeacher ? 'Tu panel ya te espera' : 'Tu institución ya está operando con Nexus'}
       </h1>
       <p className="max-w-[46ch] text-[15px] text-[var(--nx-text-muted)]">
@@ -748,6 +750,15 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
                 )} />
               ))}
             </span>
+            {/* X de salida: en edición cancela; en primer uso cierra sesión */}
+            <button
+              type="button"
+              aria-label={onCancel ? 'Salir sin cambios' : 'Salir'}
+              onClick={() => (onCancel ? onCancel() : logout())}
+              className="grid h-8 w-8 place-items-center rounded-full text-[var(--nx-text-muted)] transition-colors hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]"
+            >
+              <X size={17} />
+            </button>
           </span>
         </div>
       </header>

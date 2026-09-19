@@ -487,7 +487,7 @@ const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
           <button
             onClick={handleChangeFingerprint}
             disabled={biometricStatus !== 'connected' || enrollCmd.state === 'sending'}
-            className="flex items-center gap-3 rounded-panel border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4 text-left transition-all duration-fast hover:shadow-medium disabled:opacity-45"
+            className="flex items-center gap-3 rounded-panel border border-[var(--nx-success)] bg-[var(--nx-surface-success)] p-4 text-left transition-all duration-fast hover:shadow-medium disabled:opacity-45"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">
               <Fingerprint size={20} />
@@ -527,7 +527,7 @@ const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
               Eliminar estudiante del sistema
             </button>
           ) : deleteState === 'confirm' ? (
-            <div className="rounded-panel border border-[var(--nx-border-danger)] bg-[var(--nx-surface-danger)] p-4 space-y-3">
+            <div className="rounded-panel border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] p-4 space-y-3">
               <div className="flex items-start gap-2">
                 <AlertCircle size={16} className="shrink-0 text-[var(--nx-danger)] mt-0.5" />
                 <div>
@@ -564,7 +564,7 @@ const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
               </div>
             </div>
           ) : deleteState === 'error' ? (
-            <div className="rounded-panel border border-[var(--nx-border-danger)] bg-[var(--nx-surface-danger)] p-3">
+            <div className="rounded-panel border border-[var(--nx-danger)] bg-[var(--nx-surface-danger)] p-3">
               <p className="text-body-sm text-[var(--nx-danger)]">Error al eliminar. Intenta de nuevo.</p>
               <button onClick={() => setDeleteState('confirm')} className="text-caption text-[var(--nx-text-muted)] hover:text-[var(--nx-text)] mt-1">
                 Volver
@@ -666,7 +666,7 @@ const Enrollment = () => {
 
           <button
             onClick={() => { setView('search'); }}
-            className="flex flex-col p-5 rounded-panel border bg-[var(--nx-surface-success)] border-[var(--nx-border-success)] hover:shadow-medium transition-all duration-fast text-left"
+            className="flex flex-col p-5 rounded-panel border bg-[var(--nx-surface-success)] border-[var(--nx-success)] hover:shadow-medium transition-all duration-fast text-left"
           >
             <div className="flex items-start justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">

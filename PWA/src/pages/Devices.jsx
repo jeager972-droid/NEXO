@@ -23,7 +23,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
-import { Drawer } from '../components/ui/Overlay';
+import { Drawer, Dialog } from '../components/ui/Overlay';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton } from '../components/ui/Skeleton';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -232,7 +232,7 @@ const Devices = () => {
 
       {/* Revocaciones pendientes */}
       {pendingRevocations.length > 0 && (
-        <Surface className="p-4 border-[var(--nx-border-warning)]">
+        <Surface className="p-4 border-[var(--nx-warning)]">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]">
               <Clock size={18} />
@@ -707,7 +707,7 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
           </p>
         </div>
         {device.group_name && (
-          <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4">
+          <div className="rounded-control border border-[var(--nx-success)] bg-[var(--nx-surface-success)] p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[var(--nx-success)]">🎯</span>
               <p className="text-body-sm font-semibold text-[var(--nx-text)]">Asignación automática</p>
@@ -719,7 +719,7 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
           </div>
         )}
         {device.assigned_user_name && (
-          <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4">
+          <div className="rounded-control border border-[var(--nx-success)] bg-[var(--nx-surface-success)] p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[var(--nx-success)]">👤</span>
               <p className="text-body-sm font-semibold text-[var(--nx-text)]">Usuario asignado</p>
@@ -730,7 +730,7 @@ const ConfigureDrawer = ({ device, onClose, onConfigured }) => {
             </p>
           </div>
         )}
-        <div className="rounded-control border border-[var(--nx-border-warning)] bg-[var(--nx-surface-subtle)] p-4">
+        <div className="rounded-control border border-[var(--nx-warning)] bg-[var(--nx-surface-subtle)] p-4">
           <p className="text-body-sm text-[var(--nx-text-muted)] leading-relaxed">
             <strong className="text-[var(--nx-text)]">Importante:</strong> El código de activación solo se muestra una vez.
             Guárdalo en un lugar seguro. Si lo pierdes, necesitarás la llave maestra para reconfigurar el sensor.
@@ -774,7 +774,7 @@ const TokenDrawer = ({ info, onClose }) => {
       }
     >
       <div className="space-y-5 p-6">
-        <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] p-4">
+        <div className="rounded-control border border-[var(--nx-success)] bg-[var(--nx-surface-success)] p-4">
           <div className="flex items-center gap-2 text-[var(--nx-success)]">
             <ShieldCheck size={18} />
             <p className="text-body-sm font-semibold">Sensor listo para usar</p>
@@ -843,84 +843,66 @@ const RevokeConfirm = ({ device, onCancel, onDone }) => {
   };
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        onClick={onCancel}
-        className="fixed inset-0 z-40 backdrop-blur-[2px] bg-[color-mix(in_oklch,var(--nx-text)_42%,transparent)]"
-      />
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-label={isCancelMode ? 'Cancelar eliminación' : 'Eliminar sensor'}
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.2, ease: EASE }}
-        className="fixed left-1/2 top-1/2 z-50 w-[min(440px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-surface border border-[var(--nx-border-danger)] bg-[var(--nx-surface)] p-6 shadow-large"
-      >
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4 flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]">
-              {isCancelMode ? <ShieldCheck size={22} /> : <AlertCircle size={22} />}
-            </span>
-            <div>
-              <h3 className="text-h3 text-[var(--nx-text)]">
-                {isCancelMode ? '¿Cancelar la eliminación?' : '¿Eliminar este sensor?'}
-              </h3>
-              <p className="mt-1 text-body-sm text-[var(--nx-text-muted)]">
-                <strong className="text-[var(--nx-text)]">{device.device_name}</strong>
-                {device.location ? ` · ${device.location}` : ''}
-              </p>
-            </div>
-          </div>
-
-          <p className="mb-4 text-body-sm leading-relaxed text-[var(--nx-text-muted)]">
-            {isCancelMode ? (
-              'Si cancelas, el sensor seguirá activo y funcionando normalmente.'
-            ) : (
-              'El sensor se eliminará en 1 hora. Durante ese tiempo, puedes cancelar si fue un error. ' +
-              'Tras la eliminación, el sensor desaparece permanentemente. Para volver a usarlo, necesitarás registrarlo de nuevo.'
+    <Dialog
+      title={isCancelMode ? '¿Cancelar la eliminación?' : '¿Eliminar este sensor?'}
+      onClose={onCancel}
+      size="sm"
+    >
+      <form onSubmit={handleSubmit} className="mt-5">
+        <div className="mb-4 flex items-start gap-3">
+          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-control ${isCancelMode ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]' : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'}`}>
+            {isCancelMode ? <ShieldCheck size={22} /> : <AlertCircle size={22} />}
+          </span>
+          <div>
+            <p className="text-body font-semibold text-[var(--nx-text)]">{device.device_name}</p>
+            {device.location && (
+              <p className="mt-0.5 text-body-sm text-[var(--nx-text-muted)]">{device.location}</p>
             )}
-          </p>
-
-          {err && (
-            <div className="mb-4 rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
-              {err}
-            </div>
-          )}
-
-          <Input
-            label="Confirma con tu contraseña"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Tu contraseña de acceso"
-            required
-            autoFocus
-          />
-
-          <div className="mt-6 flex gap-3">
-            <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={submitting}>
-              No, cancelar
-            </Button>
-            <Button
-              type="submit"
-              variant={isCancelMode ? 'primary' : 'danger'}
-              className="flex-1"
-              loading={submitting}
-              disabled={!password}
-              leftIcon={isCancelMode ? <Check size={16} /> : <Trash2 size={16} />}
-            >
-              {isCancelMode ? 'Sí, cancelar eliminación' : 'Sí, eliminar sensor'}
-            </Button>
           </div>
-        </form>
-      </motion.div>
-    </>
+        </div>
+
+        <p className="mb-4 text-body-sm leading-relaxed text-[var(--nx-text-muted)]">
+          {isCancelMode ? (
+            'Si cancelas, el sensor seguirá activo y funcionando normalmente.'
+          ) : (
+            'El sensor se eliminará en 1 hora. Durante ese tiempo, puedes cancelar si fue un error. ' +
+            'Tras la eliminación, el sensor desaparece permanentemente. Para volver a usarlo, necesitarás registrarlo de nuevo.'
+          )}
+        </p>
+
+        {err && (
+          <div className="mb-4 rounded-control bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]" role="alert">
+            {err}
+          </div>
+        )}
+
+        <Input
+          label="Confirma con tu contraseña"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Tu contraseña de acceso"
+          required
+          autoFocus
+        />
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
+          <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={submitting}>
+            No, cancelar
+          </Button>
+          <Button
+            type="submit"
+            variant={isCancelMode ? 'primary' : 'danger'}
+            className="flex-1"
+            loading={submitting}
+            disabled={!password}
+            leftIcon={isCancelMode ? <Check size={16} /> : <Trash2 size={16} />}
+          >
+            {isCancelMode ? 'Sí, cancelar eliminación' : 'Sí, eliminar sensor'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 };
 
