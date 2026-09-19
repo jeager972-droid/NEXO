@@ -36,6 +36,8 @@ const SHIFT_LABEL = { 'mañana': 'Mañana', 'tarde': 'Tarde', 'noche': 'Noche', 
 const GRADES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
 const LEVELS = ['LEVE', 'MODERADA', 'ALTA', 'MUY_ALTA'];
 const LEVEL_LABEL = { LEVE: 'Leve', MODERADA: 'Moderada', ALTA: 'Alta', MUY_ALTA: 'Muy alta' };
+// barra lateral por nivel — la misma semántica de color del sistema
+const LEVEL_EDGE = { LEVE: 'var(--nx-accent)', MODERADA: 'var(--nx-warning)', ALTA: 'var(--nx-danger)', MUY_ALTA: 'var(--nx-danger)' };
 const RULE_KINDS = [
   { v: 'LATE', l: 'Llegadas tarde' },
   { v: 'ABSENCE', l: 'Inasistencias' },
@@ -121,7 +123,7 @@ const StepHead = ({ kicker, title, lede }) => (
 const Work = ({ children, spotlight }) => (
   <section className={clsx(
     'rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5 sm:p-6',
-    'flex flex-col gap-6', spotlight && 'nx-spotlight'
+    'flex flex-col gap-6 shadow-[var(--nx-shadow-medium)]', spotlight && 'nx-spotlight'
   )}>
     {children}
   </section>
@@ -380,49 +382,69 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   /* ══════════ pasos ══════════ */
   const renderWelcome = () => {
+    // En actualización la agenda solo muestra la sección que se abrió —
+    // no las tres, si el usuario solo vino a tocar una.
+    const SECTION_META = {
+      schedule: { icon: Clock,    t: 'Jornadas y horarios',       d: 'Entrada, salida, descanso y bloques por jornada', action: 'Actualizar jornadas',  lede: 'Vas a actualizar las jornadas y horarios de tu institución. Todo lo que cambies se puede volver a ajustar.' },
+      groups:   { icon: Layers,   t: 'Grados, grupos y docentes', d: isRector ? 'La estructura del año con su docente asignado' : 'Lo completa rectoría — aquí revisas el avance', action: 'Actualizar grupos', lede: isRector ? 'Vas a actualizar la estructura académica del año: grados, grupos y sus docentes.' : 'Vas a revisar la estructura académica — su edición completa corresponde a rectoría.' },
+      risk:     { icon: BellRing, t: 'Umbrales de aviso',         d: 'A partir de cuántas repeticiones Nexus alerta',  action: 'Actualizar umbrales',  lede: 'Vas a ajustar desde cuándo Nexus te alerta de repeticiones.' },
+    };
     const agenda = isTeacher
       ? [{ icon: BellRing, t: 'Tus criterios de aviso', d: 'Desde cuándo te aviso de repeticiones en tus clases' }]
-      : [
-          { icon: Clock, t: 'Jornadas y horarios', d: 'Entrada, salida, descanso y bloques por jornada' },
-          { icon: Layers, t: 'Grados, grupos y docentes', d: 'La estructura del año con su docente asignado' },
-          { icon: BellRing, t: 'Umbrales de aviso', d: 'A partir de cuántas repeticiones Nexus alerta' },
-        ];
+      : ['schedule', 'groups', 'risk']
+          .filter((k) => missing[k])
+          .map((k) => SECTION_META[k]);
+
+    const singleScope = isUpdate && agenda.length === 1 ? agenda[0] : null;
+    const welcomeTitle = isUpdate
+      ? (singleScope ? `Actualizar ${singleScope.t.toLowerCase()}` : 'Actualizar configuración')
+      : 'Bienvenid@';
+    const welcomeLede = isUpdate
+      ? (singleScope?.lede || 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.')
+      : 'Tu institución aún no está configurada. Nexus — la voz del sistema — te acompaña paso a paso.';
+    const actionLabel = isUpdate
+      ? (singleScope?.action || 'Actualizar configuración')
+      : 'Comenzar';
+
     return (
-      <div className="flex flex-col items-center gap-8 pt-4 text-center">
-        {/* hero: bot centrado, silencioso hasta Comenzar */}
+      <div className="flex flex-col items-center gap-7 pt-4 text-center">
+        {/* hero: bot sobre halo suave — la marca habla sola */}
         <div className="relative">
-          <img src="/imagenbot.png" alt="Nexus" className="h-32 w-32 rounded-full object-contain"
+          <span
+            aria-hidden
+            className="absolute -inset-6 rounded-full"
+            style={{ background: 'radial-gradient(closest-side, var(--nx-subtle-bg-accent), transparent 72%)' }}
+          />
+          <img src="/imagenbot.png" alt="Nexus" className="relative h-28 w-28 rounded-full object-contain drop-shadow-[0_10px_20px_oklch(30%_.08_245/.25)]"
             style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
           <span className="absolute -inset-2 rounded-full border-2 border-[var(--nx-border-accent)]"
             style={{ animation: 'nx-pulse 2.6s var(--nx-ease-out, ease-out) infinite' }} aria-hidden />
         </div>
 
-        <div className="space-y-3">
-          <span className="text-[12.5px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
+        <div className="space-y-2.5">
+          <span className="text-[12px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
             {isUpdate ? 'Configuración' : 'Configuración inicial'}
           </span>
-          <h1 className="text-[20px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
-          <p className="mx-auto max-w-[46ch] text-[14.5px] leading-relaxed text-[var(--nx-text-muted)]">
-            {isUpdate
-              ? 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.'
-              : 'Tu institución aún no está configurada. Nexus — la voz del sistema — te acompaña paso a paso.'}
+          <h1 className="text-[20px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">{welcomeTitle}</h1>
+          <p className="mx-auto max-w-[46ch] text-[14px] leading-relaxed text-[var(--nx-text-muted)]">
+            {welcomeLede}
           </p>
         </div>
 
-        {/* agenda del flujo */}
-        <div className="flex w-full max-w-[520px] flex-col gap-3">
+        {/* agenda: solo lo que este flujo va a tocar */}
+        <div className="flex w-full max-w-[520px] flex-col gap-2.5">
           {agenda.map((a, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.15 + i * 0.08, ease: EASE }}
-              className="flex items-center gap-4 rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] px-5 py-4 text-left"
+              className="flex items-center gap-4 rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] px-5 py-4 text-left shadow-[var(--nx-shadow-low,0_1px_2px_rgb(23_26_32/.04))]"
             >
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
                 <a.icon size={18} />
               </span>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-[620]">{a.t}</p>
                 <p className="text-[12.5px] text-[var(--nx-text-muted)]">{a.d}</p>
               </div>
@@ -431,9 +453,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
         </div>
 
         <div className="flex flex-col items-center gap-3">
-          <Button size="lg" onClick={next}>
-            {isUpdate ? 'Actualizar configuración' : 'Comenzar'}
-          </Button>
+          <Button size="lg" onClick={next}>{actionLabel}</Button>
           {isUpdate && onCancel && (
             <Button variant="ghost" size="sm" onClick={onCancel}>Volver sin cambios</Button>
           )}
@@ -631,7 +651,8 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
         <h2 className="text-[15px] font-[620]">Niveles de alerta</h2>
         <div className="flex flex-col gap-5">
           {LEVELS.map((lvl) => (
-            <div key={lvl} className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-canvas)] px-5 py-4">
+            <div key={lvl} className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-surface border border-[var(--nx-border)] border-l-[3px] bg-[var(--nx-canvas)] px-5 py-4"
+              style={{ borderLeftColor: LEVEL_EDGE[lvl] }}>
               <div className="min-w-[110px]">
                 <p className="text-[14.5px] font-[620]">{LEVEL_LABEL[lvl]}</p>
                 <p className="text-[12.5px] text-[var(--nx-text-muted)]">
