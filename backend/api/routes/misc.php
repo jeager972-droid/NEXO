@@ -210,6 +210,7 @@ if ($cleanPath === '/notifications') {
                        n.title,
                        n.message AS desc,
                        n.metadata_json,
+                       (n.read_at IS NOT NULL) AS read,
                        TO_CHAR(n.created_at, 'DD/MM HH24:MI') AS time,
                        n.created_at AS occurred_at
                 FROM notifications n
@@ -225,6 +226,7 @@ if ($cleanPath === '/notifications') {
                        n.type,
                        n.title,
                        n.message AS desc,
+                       false AS read,
                        TO_CHAR(n.created_at, 'DD/MM HH24:MI') AS time,
                        n.created_at AS occurred_at
                 FROM notifications n
@@ -238,12 +240,43 @@ if ($cleanPath === '/notifications') {
 
         foreach ($notifications as &$notification) {
             unset($notification['occurred_at']);
+            $notification['read'] = filter_var($notification['read'] ?? false, FILTER_VALIDATE_BOOLEAN);
         }
         echo json_encode(['status' => 'ok', 'data' => $notifications]);
     } catch (Throwable $e) {
         securityLog('NOTIFICATIONS_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al obtener notificaciones']);
+    }
+    exit;
+}
+
+// POST /notifications/{id}/read — Marca una notificación como leída (persistente).
+if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/read$#', $cleanPath, $readMatches) && $method === 'POST') {
+    $authUser = requireAuth();
+    try {
+        $stmt = $conn->prepare("UPDATE notifications SET read_at = NOW() WHERE notification_id = ? AND user_id = ? AND read_at IS NULL");
+        $stmt->execute([$readMatches[1], $authUser['id']]);
+        echo json_encode(['status' => 'ok']);
+    } catch (Throwable $e) {
+        securityLog('NOTIFICATIONS_READ_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al marcar notificación']);
+    }
+    exit;
+}
+
+// POST /notifications/read-all — Marca todas las notificaciones del usuario como leídas.
+if ($cleanPath === '/notifications/read-all' && $method === 'POST') {
+    $authUser = requireAuth();
+    try {
+        $stmt = $conn->prepare("UPDATE notifications SET read_at = NOW() WHERE user_id = ? AND read_at IS NULL");
+        $stmt->execute([$authUser['id']]);
+        echo json_encode(['status' => 'ok']);
+    } catch (Throwable $e) {
+        securityLog('NOTIFICATIONS_READ_ALL_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al marcar notificaciones']);
     }
     exit;
 }

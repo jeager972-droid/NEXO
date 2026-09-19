@@ -1,13 +1,12 @@
 /**
  * NotificationContext / NEXO
  * Fuente única de polling de notificaciones (cada 60s).
- * Mantiene notifCount y notifications, expone refresh/clear.
+ * notifCount = no leídas según el servidor (read_at), no un diff
+ * de localStorage — el estado sobrevive sesiones y dispositivos.
  */
 import { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { notificationsApi } from '../api/notifications';
 import { useAuth } from '../hooks/useAuth';
-
-const LAST_COUNT_KEY = 'nexo:last-notif-count';
 
 const NotificationContext = createContext(null);
 
@@ -17,10 +16,7 @@ export const NotificationProvider = ({ children }) => {
   const [notifCount, setNotifCount] = useState(0);
   const mountedRef = useRef(true);
 
-  const computeCount = useCallback((arr) => {
-    const lastSeen = parseInt(sessionStorage.getItem(LAST_COUNT_KEY) || '0', 10);
-    return Math.max(0, arr.length - lastSeen);
-  }, []);
+  const computeCount = useCallback((arr) => arr.filter((n) => !n.read).length, []);
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -40,7 +36,29 @@ export const NotificationProvider = ({ children }) => {
       if (!mountedRef.current) return;
       setNotifications([]);
       setNotifCount(0);
-      sessionStorage.setItem(LAST_COUNT_KEY, '0');
+    } catch {
+      /* silencioso */
+    }
+  }, []);
+
+  const markRead = useCallback(async (id) => {
+    setNotifications((prev) => {
+      const next = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
+      setNotifCount(next.filter((n) => !n.read).length);
+      return next;
+    });
+    try {
+      await notificationsApi.markRead(id);
+    } catch {
+      /* silencioso — el estado local ya refleja la lectura */
+    }
+  }, []);
+
+  const markAllRead = useCallback(async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifCount(0);
+    try {
+      await notificationsApi.markAllRead();
     } catch {
       /* silencioso */
     }
@@ -54,16 +72,7 @@ export const NotificationProvider = ({ children }) => {
     return () => { mountedRef.current = false; clearInterval(id); };
   }, [refreshNotifications, isAuthenticated]);
 
-  useEffect(() => {
-    const handler = (e) => {
-      const count = e.detail?.count ?? 0;
-      setNotifCount(count > 0 ? count : 0);
-    };
-    window.addEventListener('nexo:notif-count', handler);
-    return () => window.removeEventListener('nexo:notif-count', handler);
-  }, []);
-
-  const value = { notifCount, notifications, refreshNotifications, clearNotifications };
+  const value = { notifCount, notifications, refreshNotifications, clearNotifications, markRead, markAllRead };
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };
 

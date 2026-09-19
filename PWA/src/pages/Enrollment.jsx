@@ -194,9 +194,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             {step === 1 && (
               <>
                 <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Datos del alumno</p>
-                  </div>
+                  <p className="text-label text-[var(--nx-text)]">Datos del alumno</p>
                 </div>
                 <Input label="Nombres" value={form.nombres} onChange={set('nombres')} placeholder="Ej. Juan Carlos" />
                 <Input label="Apellidos" value={form.apellidos} onChange={set('apellidos')} placeholder="Ej. Pérez Torres" />
@@ -239,9 +237,7 @@ const EnrollmentDrawer = ({ onClose, onRefresh }) => {
             {step === 2 && (
               <>
                 <div className="border-b border-[var(--nx-border)] pb-3 mb-1">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Datos del acudiente</p>
-                  </div>
+                  <p className="text-label text-[var(--nx-text)]">Datos del acudiente</p>
                 </div>
                 <Input label="Nombres" value={form.acudienteNombre} onChange={set('acudienteNombre')} placeholder="Ej. María" />
                 <Input label="Apellidos" value={form.acudienteApellidos} onChange={set('acudienteApellidos')} placeholder="Ej. Gómez Ruiz" />
@@ -449,9 +445,7 @@ const StudentProfileDrawer = ({ student, onClose, onDeleted }) => {
     >
       <div className="p-6 space-y-6">
         <div className="border-b border-[var(--nx-border)] pb-3">
-          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-            <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
-          </div>
+          <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
         </div>
         <div className="flex items-center gap-4">
           <StudentAvatar student={student} size="lg" />

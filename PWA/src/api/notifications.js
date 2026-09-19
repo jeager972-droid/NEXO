@@ -19,6 +19,14 @@ export const notificationsApi = {
     const response = await client.post('/notifications/clear');
     return response.data;
   },
+  markRead: async (notificationId) => {
+    const response = await client.post(`/notifications/${notificationId}/read`);
+    return response.data;
+  },
+  markAllRead: async () => {
+    const response = await client.post('/notifications/read-all');
+    return response.data;
+  },
   executeAction: async (notificationId, action) => {
     const response = await client.post(`/notifications/${notificationId}/action`, { action });
     return response.data;

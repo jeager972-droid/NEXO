@@ -62,12 +62,8 @@ export default function Casos() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Seguimientos</p>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <h1 className="text-heading font-semibold text-[var(--nx-text)]">Seguimientos</h1>
 
       <Input
         placeholder="Buscar estudiante…"
@@ -88,10 +84,7 @@ export default function Casos() {
         </Surface>
       ) : (
         <>
-          <p className="text-body-sm text-[var(--nx-text-muted)]">
-            Se encontraron {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--nx-surface-warning)]/30 p-4 rounded-surface border border-[var(--nx-warning)]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filtered.map((row) => (
               <Card key={row.tracking_id || row.student_id} asAction tone="warning" className="border-[var(--nx-warning)] bg-[var(--nx-surface-warning)]" onClick={() => openTracking(row.tracking_id, `${row.last_name} ${row.first_name}`, row.student_id)}>
                 <div className="flex items-center justify-between">

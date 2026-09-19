@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CalendarDays, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock
+  Search, X, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -17,7 +17,7 @@ import { trackingApi } from '../api/tracking';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Surface } from '../components/ui/Surface';
+import { Surface, BlockTitle } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Drawer } from '../components/ui/Overlay';
@@ -58,19 +58,6 @@ const TasksEmptyState = ({ loading }) => {
   );
 };
 
-const BIOMETRIC_EVENT_LABELS = {
-  INGRESO_NORMAL: 'Ingreso normal',
-  INGRESO_TARDE: 'Ingreso tarde',
-  CHECK_IN: 'Entrada',
-  CHECK_OUT: 'Salida',
-  LATE_ARRIVAL: 'Llegada tarde',
-  EARLY_EXIT: 'Salida anticipada',
-  WRONG_CLASSROOM: 'Salón incorrecto',
-  EVASION_INTERNA: 'Evasión interna',
-  SPAM_BIOMETRIC: 'Spam biométrico',
-  BIOMETRIC_FAILURE: 'Falla de biometría',
-};
-
 const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState(EMPTY_STATS);
@@ -102,7 +89,7 @@ const Dashboard = () => {
     case ROLES.SECRETARIA:
       return <SecretaryDashboard stats={stats} loading={loading} />;
     case ROLES.PSICORIENTADOR:
-      return <SecretaryDashboard stats={stats} loading={loading} />;
+      return <CounselorDashboard stats={stats} loading={loading} />;
     case ROLES.DOCENTE:
       return <TeacherDashboard stats={stats} loading={loading} />;
     case ROLES.PORTERO:
@@ -119,16 +106,6 @@ const Dashboard = () => {
 };
 
 // ── Command Center — Admin / Rector / Coordinador ─────────────────────────────
-
-const todayLabel = () =>
-  new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Buenos días';
-  if (h < 18) return 'Buenas tardes';
-  return 'Buenas noches';
-};
 
 const AdminDashboard = ({ stats, loading }) => {
   const { user } = useAuth();
@@ -254,17 +231,10 @@ const AdminDashboard = ({ stats, loading }) => {
 
 // ── Secretaria ────────────────────────────────────────────────────────────────
 
-const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-
+const SecretaryDashboard = ({ loading: parentLoading }) => {
   return (
     <div className="space-y-8">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
-        </div>
-      </div>
+      <BlockTitle>Tareas pendientes</BlockTitle>
       <TasksEmptyState loading={parentLoading} />
       <NexusInsights />
     </div>
@@ -274,8 +244,6 @@ const SecretaryDashboard = ({ stats, loading: parentLoading }) => {
 // ── Psicorientador ────────────────────────────────────────────────────────────
 
 const CounselorDashboard = ({ stats, loading: parentLoading }) => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
 
   return (
     <div className="space-y-8">      {parentLoading ? (
@@ -314,8 +282,6 @@ const localDateStr = (date = new Date()) => {
 const GROUP_KEY = 'nexo:teacher:selected-group';
 
 const TeacherDashboard = ({ stats, loading: parentLoading }) => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [selectedGroup, setSelectedGroup] = useState(() => {
     try { return localStorage.getItem(GROUP_KEY) || ''; } catch { return ''; }
   });
@@ -421,11 +387,9 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
               onClick={() => setGroupOpen((v) => !v)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
-              <div className="flex items-center gap-3 border-l-2 border-[var(--nx-accent)] pl-3">
-                <div>
-                  <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
-                  <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup ? formatGroupName(selectedGroup) : 'Elegir grupo'}</p>
-                </div>
+              <div>
+                <p className="text-label text-[var(--nx-text)]">Asistencia diaria</p>
+                <p className="text-body-sm text-[var(--nx-text-muted)] mt-0.5">{selectedGroup ? formatGroupName(selectedGroup) : 'Elegir grupo'}</p>
               </div>
               <Search size={18} className="text-[var(--nx-text-muted)]" />
             </button>
@@ -768,11 +732,6 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
         size="md"
       >
         <div className="p-6">
-          <div className="mb-5 border-b border-[var(--nx-border)] pb-3">
-            <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-              <p className="text-label text-[var(--nx-text)]">{groupName}</p>
-            </div>
-          </div>
           <div className="mb-4">
             <Input
               placeholder="Buscar estudiante…"
@@ -861,11 +820,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
           size="md"
         >
           <div className="p-6 space-y-6">
-            <div className="border-b border-[var(--nx-border)] pb-3">
-              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                <p className="text-label text-[var(--nx-text)]">Datos del estudiante</p>
-              </div>
-            </div>
+            <BlockTitle>Datos del estudiante</BlockTitle>
             <div className="flex items-center gap-4">
               <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--nx-subtle-bg-accent)] flex items-center justify-center text-h2 font-semibold text-[var(--nx-accent)]">
                 {getInitials(profileStudent.first_name, profileStudent.last_name)}
@@ -900,11 +855,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 
             {/* Información específica según categoría */}
             <div className="space-y-3">
-              <div className="border-b border-[var(--nx-border)] pb-3">
-                <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                  <p className="text-label text-[var(--nx-text)]">Información de la métrica</p>
-                </div>
-              </div>
+              <BlockTitle>Información de la métrica</BlockTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {renderProfileFields(category, profileStudent)}
               </div>
@@ -972,17 +923,10 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
-const StaffDashboard = ({ stats, loading: parentLoading }) => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-
+const StaffDashboard = ({ loading: parentLoading }) => {
   return (
     <div className="space-y-8">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Tareas pendientes</p>
-        </div>
-      </div>
+      <BlockTitle>Tareas pendientes</BlockTitle>
       <TasksEmptyState loading={parentLoading} />
       <NexusInsights />
     </div>

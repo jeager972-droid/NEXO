@@ -332,10 +332,8 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 1 && (
                 <div className="space-y-5">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">¿Cómo funciona?</p>
+                  <p className="text-label text-[var(--nx-text)]">¿Cómo funciona?</p>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">Lee esto antes de continuar</p>
-                  </div>
 
                   <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4 space-y-3">
                     <p className="text-body-sm text-[var(--nx-text)] leading-relaxed">
@@ -372,12 +370,10 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 2 && (
                 <div className="space-y-5">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Define los umbrales de activación</p>
+                  <p className="text-label text-[var(--nx-text)]">Define los umbrales de activación</p>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
                       Cuántas reincidencias y en cuántos días activan una alerta para cada nivel.
                     </p>
-                  </div>
 
                   <div className="rounded-control bg-[var(--nx-subtle-bg-accent)] px-4 py-3 text-body-sm text-[var(--nx-accent)] flex items-start gap-2">
                     <Info size={16} className="shrink-0 mt-0.5" />
@@ -467,12 +463,10 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 3 && (
                 <div className="space-y-4">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Clasifica cada evento por nivel de gravedad</p>
+                  <p className="text-label text-[var(--nx-text)]">Clasifica cada evento por nivel de gravedad</p>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
                       Valores sugeridos asignados. Ajusta según el contexto de tu institución.
                     </p>
-                  </div>
 
                   {Object.entries(eventsByCategory).map(([catKey, events]) => {
                     const cat = CATEGORIES[catKey] || { label: catKey, icon: Info };
@@ -549,12 +543,10 @@ export default function RiskConfig() {
                   ════════════════════════════════════════════════════════════ */}
               {step === 4 && (
                 <div className="space-y-5">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Revisión final</p>
+                  <p className="text-label text-[var(--nx-text)]">Revisión final</p>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
                       Verifica la configuración antes de guardar. Se creará una nueva versión de la política.
                     </p>
-                  </div>
 
                   {/* Umbrales configurados */}
                   <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">

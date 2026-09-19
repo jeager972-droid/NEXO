@@ -1,10 +1,10 @@
 /**
  * ConsultationDrawer / NEXO Institucional — B-13 Drawer unificado
- * Drawer detallado de consulta por módulo: filtros, tabla dinámica y seguimiento.
- * Usa Drawer de Overlay.jsx, RiskBadge pattern, SkeletonRows, humanizeError.
+ * Vista de consulta por módulo (inline, no drawer): filtros, tabla dinámica y seguimiento.
+ * Usa RiskBadge pattern, SkeletonRows, humanizeError.
  */
-import { useState, useEffect, useRef } from 'react';
-import { Search, Eye, AlertTriangle, Sparkles, FileSpreadsheet, FileText, FileDown } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Eye, AlertTriangle, FileSpreadsheet, FileText, FileDown } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { studentsApi } from '../api/students';
 import { TrackingModal } from './TrackingModal';
@@ -16,7 +16,6 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
-import { Drawer } from '../components/ui/Overlay';
 import { RiskBadge } from '../components/patterns/RiskBadge';
 import { SearchableSelect as GlobalSearchableSelect } from '../components/ui/SearchableSelect';
 import { exportExcel, exportWord, exportPdf } from '../utils/exporters';
@@ -610,7 +609,7 @@ const TeacherQueryPanel = ({
 
   return (
     <div className="flex flex-col">
-      <Surface className="border-b border-[var(--nx-border)] p-6 space-y-5 rounded-none">
+      <Surface className="p-6 space-y-5">
         <div className="space-y-3">
           <SearchableSelect label="Grado" placeholder="Seleccionar grado…" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedGroup(''); setSelectedStudent(''); }} />
           <SearchableSelect label="Grupo" placeholder="Seleccionar grupo…" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
@@ -634,9 +633,6 @@ const TeacherQueryPanel = ({
           <EmptyState icon={<Search size={32} className="text-[var(--nx-text-muted)]" />} title="Sin registros" description={`No se encontraron registros para ${item} en el grupo y período seleccionado.`} />
         ) : (
           <div className="space-y-3">
-            <p className="text-body-sm text-[var(--nx-text-muted)]">
-              Se encontraron {rows.length} resultado{rows.length !== 1 ? 's' : ''}
-            </p>
             <ExportActions rows={rows} columns={visibleKeys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
             <Surface className="overflow-hidden">
               <div className="overflow-x-auto">
@@ -703,7 +699,7 @@ const AdminFilterPanel = ({
   const studentOptions = [...students].sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '', 'es')).map((s) => ({ value: String(s.id || s.student_id), label: `${s.last_name || ''} ${s.first_name || ''}`.trim() }));
 
   return (
-    <Surface className="border-b border-[var(--nx-border)] p-6 space-y-5 rounded-none">
+    <Surface className="p-6 space-y-5">
       <div className="space-y-3">
         <SearchableSelect label="Grado" placeholder="Todos los grados" options={GRADO_OPTIONS} value={selectedGrade} onChange={(v) => { setSelectedGrade(v); setSelectedGroup(''); setSelectedStudent(''); }} />
         <SearchableSelect label="Grupo" placeholder="Todos los grupos" options={groupOptions} value={selectedGroup} onChange={(v) => { setSelectedGroup(v); setSelectedStudent(''); }} />
@@ -723,7 +719,7 @@ export const ConsultationDrawer = ({
   isTeacherModule, hasQueried, groups, selectedGroup, setSelectedGroup,
   selectedGrade, setSelectedGrade,
   selectedStudent, setSelectedStudent, fromDate, setFromDate, toDate, setToDate,
-  onQuery, onClose, error, executeQuery
+  onQuery, error, executeQuery
 }) => {
   const { user } = useAuth();
   const keys = Object.keys(dynamicColumns);
@@ -732,21 +728,16 @@ export const ConsultationDrawer = ({
 
   const isAdminRole = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR || user?.role === ROLES.SECRETARIA;
   const canExport = user?.role === ROLES.RECTOR;
-  const showFilters = isTeacherModule || isAdminRole;
 
   const openTracking = (studentId, studentName, trackingId = null, metadata = null) => {
     setSelectedTrackingTarget({ studentId, studentName, trackingId, metadata });
     setTrackingModalOpen(true);
   };
 
+  // Vista de página (no Drawer): los filtros y la tabla viven dentro del módulo.
   return (
     <>
-      <Drawer
-        title={item}
-        context={undefined}
-        onClose={onClose}
-        size="lg"
-      >
+      <div>
         {isTeacherModule ? (
           <TeacherQueryPanel
             item={item} groups={groups} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup}
@@ -773,9 +764,6 @@ export const ConsultationDrawer = ({
                 <EmptyState icon={<Search size={32} className="text-[var(--nx-text-muted)]" />} title="Sin resultados aún" description="Selecciona un grupo y un rango de fechas, luego presiona Consultar." />
               ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <div className="space-y-3">
-                <p className="text-body-sm text-[var(--nx-text-muted)]">
-                  Se encontraron {riskStudents.length} resultado{riskStudents.length !== 1 ? 's' : ''}
-                </p>
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -804,9 +792,6 @@ export const ConsultationDrawer = ({
               </div>
             ) : dynamicData.length > 0 ? (
               <div className="space-y-3">
-                <p className="text-body-sm text-[var(--nx-text-muted)]">
-                  Se encontraron {dynamicData.length} resultado{dynamicData.length !== 1 ? 's' : ''}
-                </p>
                 <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -846,9 +831,6 @@ export const ConsultationDrawer = ({
               <SkeletonRows count={4} />
             ) : item === 'Análisis de Riesgo' && riskStudents.length > 0 ? (
               <div className="space-y-3">
-                <p className="text-body-sm text-[var(--nx-text-muted)]">
-                  Se encontraron {riskStudents.length} resultado{riskStudents.length !== 1 ? 's' : ''}
-                </p>
                 <ExportActions rows={riskStudents} columns={['last_name', 'first_name', 'group_name', 'risk_score', 'risk_level']} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -877,9 +859,6 @@ export const ConsultationDrawer = ({
               </div>
             ) : item !== 'Análisis de Riesgo' && dynamicData.length > 0 ? (
               <div className="space-y-3">
-                <p className="text-body-sm text-[var(--nx-text-muted)]">
-                  Se encontraron {dynamicData.length} resultado{dynamicData.length !== 1 ? 's' : ''}
-                </p>
                 <ExportActions rows={dynamicData} columns={keys} item={item} fromDate={fromDate} toDate={toDate} canExport={canExport} />
                 <Surface className="overflow-hidden">
                   <div className="overflow-x-auto">
@@ -911,7 +890,7 @@ export const ConsultationDrawer = ({
             )}
           </div>
         )}
-      </Drawer>
+      </div>
 
       <AnimatePresence>
         {trackingModalOpen && selectedTrackingTarget && (

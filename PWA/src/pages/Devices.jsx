@@ -100,7 +100,7 @@ const DynamicSkeleton = ({ count }) => {
 
 const Devices = () => {
   const { user } = useAuth();
-  const canContingency = user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR;
+  const canContingency = user?.role === ROLES.RECTOR;
   const [devices, setDevices] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);

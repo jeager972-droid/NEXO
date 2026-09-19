@@ -570,6 +570,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     -- los orígenes viven en tablas heterogéneas, no admite FK única)
     origin_type     VARCHAR(40),
     origin_id       UUID,
+    read_at         TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);

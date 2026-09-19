@@ -12,6 +12,8 @@ vi.mock('@/api/notifications', () => ({
   notificationsApi: {
     getAll: vi.fn(),
     clearAll: vi.fn(),
+    markRead: vi.fn(),
+    markAllRead: vi.fn(),
   },
 }));
 
@@ -44,6 +46,12 @@ const Probe = ({ onValue }) => {
       </button>
       <button data-testid="clear-btn" onClick={ctx.clearNotifications}>
         Clear
+      </button>
+      <button data-testid="read-btn" onClick={() => ctx.markRead(1)}>
+        Read1
+      </button>
+      <button data-testid="readall-btn" onClick={ctx.markAllRead}>
+        ReadAll
       </button>
     </div>
   );
@@ -108,16 +116,48 @@ describe('NotificationProvider', () => {
     expect(getByTestId('notif-count').textContent).toBe('3');
   });
 
-  it('computes count relative to last-seen stored in sessionStorage', async () => {
-    sessionStorage.setItem('nexo:last-notif-count', '2');
-    notificationsApi.getAll.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+  it('computes unread count from the read flag returned by the server', async () => {
+    // El estado de lectura vive en el servidor (read_at), no en sessionStorage:
+    // persistirlo ahí hacía que las leídas volvieran a contar al reingresar.
+    notificationsApi.getAll.mockResolvedValue([
+      { id: 1, read: true }, { id: 2, read: false }, { id: 3, read: false },
+    ]);
     const { getByTestId } = renderWithProvider(<Probe />, {
       auth: { isAuthenticated: true },
     });
 
     await waitFor(() => expect(getByTestId('notif-length').textContent).toBe('3'));
-    // 3 total - 2 lastSeen = 1
+    expect(getByTestId('notif-count').textContent).toBe('2');
+  });
+
+  it('markRead marca una notificación en servidor y estado local', async () => {
+    notificationsApi.getAll.mockResolvedValue([
+      { id: 1, read: false }, { id: 2, read: false },
+    ]);
+    notificationsApi.markRead.mockResolvedValue({ status: 'ok' });
+    const { getByTestId } = renderWithProvider(<Probe />, {
+      auth: { isAuthenticated: true },
+    });
+
+    await waitFor(() => expect(getByTestId('notif-count').textContent).toBe('2'));
+    await act(async () => { getByTestId('read-btn').click(); });
+    expect(notificationsApi.markRead).toHaveBeenCalledWith(1);
     expect(getByTestId('notif-count').textContent).toBe('1');
+  });
+
+  it('markAllRead marca todas y deja el contador en 0', async () => {
+    notificationsApi.getAll.mockResolvedValue([
+      { id: 1, read: false }, { id: 2, read: false },
+    ]);
+    notificationsApi.markAllRead.mockResolvedValue({ status: 'ok' });
+    const { getByTestId } = renderWithProvider(<Probe />, {
+      auth: { isAuthenticated: true },
+    });
+
+    await waitFor(() => expect(getByTestId('notif-count').textContent).toBe('2'));
+    await act(async () => { getByTestId('readall-btn').click(); });
+    expect(notificationsApi.markAllRead).toHaveBeenCalled();
+    expect(getByTestId('notif-count').textContent).toBe('0');
   });
 
   it('handles non-array response gracefully', async () => {
@@ -173,7 +213,6 @@ describe('NotificationProvider', () => {
     await waitFor(() => expect(notificationsApi.clearAll).toHaveBeenCalledTimes(1));
     expect(getByTestId('notif-length').textContent).toBe('0');
     expect(getByTestId('notif-count').textContent).toBe('0');
-    expect(sessionStorage.getItem('nexo:last-notif-count')).toBe('0');
   });
 
   it('handles clearAll rejection silently', async () => {
@@ -194,33 +233,4 @@ describe('NotificationProvider', () => {
     expect(getByTestId('notif-length').textContent).toBe('1');
   });
 
-  it('responds to nexo:notif-count custom events', async () => {
-    notificationsApi.getAll.mockResolvedValue([]);
-    const { getByTestId } = renderWithProvider(<Probe />, {
-      auth: { isAuthenticated: true },
-    });
-
-    await waitFor(() => expect(getByTestId('notif-count').textContent).toBe('0'));
-
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count: 5 } }));
-    });
-
-    await waitFor(() => expect(getByTestId('notif-count').textContent).toBe('5'));
-  });
-
-  it('ignores nexo:notif-count event with no detail (defaults to 0)', async () => {
-    notificationsApi.getAll.mockResolvedValue([{ id: 1 }]);
-    const { getByTestId } = renderWithProvider(<Probe />, {
-      auth: { isAuthenticated: true },
-    });
-
-    await waitFor(() => expect(getByTestId('notif-count').textContent).toBe('1'));
-
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('nexo:notif-count'));
-    });
-
-    await waitFor(() => expect(getByTestId('notif-count').textContent).toBe('0'));
-  });
 });

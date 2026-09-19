@@ -1,15 +1,15 @@
 /**
  * NexusInsights — "lectura de la jornada" como conversación con Nexus.
  * Reemplaza la sección Novedades: los insights de GET /dashboard/insights
- * (z-score, ventana modal, mínimos cuadrados) se muestran como burbujas
- * de chat del bot — no como texto suelto.
+ * (z-score, ventana modal, mínimos cuadrados) se muestran con el mismo
+ * componente NexoChatBubble que usa el estado vacío del docente —
+ * una sola voz de Nexus en toda la app.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../../api/dashboard';
 import { Button } from '../ui/Button';
-import { Skeleton } from '../ui/Skeleton';
-import { NexoAvatar } from './NexoChat';
+import { NexoChatBubble, NexoChatSkeleton } from './NexoChat';
 
 const TARGET_ROUTES = {
   consulta: '/consulta',
@@ -17,20 +17,6 @@ const TARGET_ROUTES = {
   dispositivos: '/dispositivos',
   notificaciones: '/notificaciones',
 };
-
-const InsightBubble = ({ insight, onGo }) => (
-  <div className="rounded-[16px_16px_16px_4px] border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3">
-    <p className="text-[14px] font-[620] text-[var(--nx-text)]">{insight.title}</p>
-    <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--nx-text-muted)]">{insight.body}</p>
-    {insight.action?.label && TARGET_ROUTES[insight.action.target] && (
-      <div className="mt-2.5">
-        <Button variant="secondary" size="sm" onClick={() => onGo(insight.action.target)}>
-          {insight.action.label}
-        </Button>
-      </div>
-    )}
-  </div>
-);
 
 export const NexusInsights = () => {
   const navigate = useNavigate();
@@ -46,36 +32,30 @@ export const NexusInsights = () => {
     return () => { alive = false; };
   }, []);
 
-  const go = (target) => navigate(TARGET_ROUTES[target] || '/');
-
-  if (loading) {
-    return (
-      <div className="flex items-start gap-4">
-        <NexoAvatar size={48} />
-        <div className="min-w-0 flex-1 space-y-3">
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-4 w-3/5" />
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <NexoChatSkeleton />;
 
   return (
-    <section aria-label="Lectura de la jornada de Nexus" className="flex items-start gap-4">
-      <NexoAvatar size={48} />
-      <div className="min-w-0 flex-1 space-y-3">
-        <p className="text-caption font-semibold tracking-wide text-[var(--nx-accent)]">NEXUS</p>
-        {!insights?.length ? (
-          <div className="rounded-[16px_16px_16px_4px] border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3">
-            <p className="text-[14px] leading-relaxed text-[var(--nx-text)]">
-              Todo dentro de lo normal — la jornada sigue su patrón habitual. Te aviso si algo cambia.
-            </p>
-          </div>
-        ) : (
-          insights.map((ins) => <InsightBubble key={ins.kind} insight={ins} onGo={go} />)
-        )}
-      </div>
+    <section aria-label="Lectura de la jornada de Nexus" className="space-y-4">
+      {!insights?.length ? (
+        <NexoChatBubble message="Todo dentro de lo normal — la jornada sigue su patrón habitual. Te aviso si algo cambia." />
+      ) : (
+        insights.map((ins) => (
+          <NexoChatBubble
+            key={ins.kind}
+            timestamp="Ahora"
+            message={<><b className="font-[620]">{ins.title}.</b> {ins.body}</>}
+            action={ins.action?.label && TARGET_ROUTES[ins.action.target] ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate(TARGET_ROUTES[ins.action.target])}
+              >
+                {ins.action.label}
+              </Button>
+            ) : null}
+          />
+        ))
+      )}
     </section>
   );
 };

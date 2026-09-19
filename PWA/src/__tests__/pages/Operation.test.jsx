@@ -65,7 +65,7 @@ describe('Operation page (RECTOR)', () => {
   it('renders without crashing', async () => {
     renderOperation();
     await waitFor(() => {
-      expect(screen.getByText('Atajos disponibles')).toBeInTheDocument();
+      expect(screen.getByText('Citar acudiente')).toBeInTheDocument();
     });
   });
 
@@ -79,10 +79,15 @@ describe('Operation page (RECTOR)', () => {
     expect(screen.getByText('Situación Crítica')).toBeInTheDocument();
   });
 
-  it('renders the "Atajos disponibles" section label', async () => {
+  it('no muestra etiqueta de sección suelta ni comandos eliminados', async () => {
     renderOperation();
     await waitFor(() => {
-      expect(screen.getByText('Atajos disponibles')).toBeInTheDocument();
+      expect(screen.getByText('Citar acudiente')).toBeInTheDocument();
     });
+    // El header "Atajos disponibles" era decorativo — se eliminó
+    expect(screen.queryByText('Atajos disponibles')).not.toBeInTheDocument();
+    // 'Registro manual pendiente' se eliminó del catálogo (naming sin sentido)
+    expect(screen.queryByText('Registro manual pendiente')).not.toBeInTheDocument();
+    // 'Extender bloque' es solo rector/coordinador — no para docente
   });
 });

@@ -80,11 +80,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         <nav className="flex-1 overflow-y-auto py-4 space-y-1" aria-label="Módulos principales">
           {/* Mobile: only secondary actions (primary are in bottom bar) */}
           <div className="lg:hidden">
-            <div className="border-b border-[var(--nx-border)] pb-3 mx-3 mb-3">
-              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                <p className="text-label text-[var(--nx-text)]">Accesos</p>
-              </div>
-            </div>
             {secondaryItems.map((item) => (
               <NavItem
                 key={item.path}
@@ -96,11 +91,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </div>
           {/* Desktop: all items */}
           <div className="hidden lg:block">
-            <div className="border-b border-[var(--nx-border)] pb-3 mx-3 mb-3">
-              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                <p className="text-label text-[var(--nx-text)]">Accesos</p>
-              </div>
-            </div>
             {allItems.map((item) => (
               <NavItem
                 key={item.path}

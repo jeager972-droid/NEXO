@@ -55,7 +55,7 @@ export const Section = ({ title, subtitle, children, action, className }) => (
   <section className={cn('space-y-4', className)}>
     {(title || subtitle || action) && (
       <div className="flex items-end justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
-        <div className="min-w-0 border-l-2 border-[var(--nx-accent)] pl-3">
+        <div className="min-w-0">
           {title && <h2 className="text-h2 tracking-[-0.02em] text-[var(--nx-text)]">{title}</h2>}
           {subtitle && <p className="mt-1 text-body-sm text-[var(--nx-text-muted)]">{subtitle}</p>}
         </div>

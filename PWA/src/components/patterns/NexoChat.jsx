@@ -25,12 +25,13 @@ const NexoAvatar = ({ size = 40 }) => {
 };
 
 export { NexoAvatar };
-export const NexoChatBubble = ({ message, timestamp = 'Ahora' }) => (
+export const NexoChatBubble = ({ message, timestamp = 'Ahora', action }) => (
   <div className="flex items-start gap-3">
     <NexoAvatar size={40} />
     <div className="flex-1">
       <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
         <p className="text-body text-[var(--nx-text)] leading-relaxed">{message}</p>
+        {action && <div className="mt-2.5">{action}</div>}
       </div>
       <p className="text-caption text-[var(--nx-text-muted)] mt-1 px-1">NEXO · {timestamp}</p>
     </div>

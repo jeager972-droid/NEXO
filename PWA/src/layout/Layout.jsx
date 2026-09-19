@@ -30,7 +30,6 @@ const getGreeting = () => {
 const Layout = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const [scheduleOnboardingRequired, setScheduleOnboardingRequired] = useState(false);
   const [groupsOnboardingRequired, setGroupsOnboardingRequired] = useState(false);
   const [riskOnboardingRequired, setRiskOnboardingRequired] = useState(false);
@@ -43,11 +42,6 @@ const Layout = () => {
   const location = useLocation();
   const profileRef = useRef(null);
 
-  useEffect(() => {
-    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   useEffect(() => {
     const onClick = (e) => { if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false); };
@@ -118,7 +112,8 @@ const Layout = () => {
   const greeting = useMemo(() => getGreeting(), []);
   const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
-  const noSidebar = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR].includes(user?.role);
+  // Todos los roles tienen drawer lateral (allí vive Chat con Nexus);
+  // en móvil la barra inferior sigue siendo la navegación principal.
 
   // Onboarding unificado — pantalla completa guiada por Nexus.
   // Nada del sistema se muestra hasta completar (o quedar pendiente
@@ -165,24 +160,20 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)]">
-      {/* Sidebar: hidden on mobile for teacher, portero and auxiliar, always visible on desktop */}
-      {(!noSidebar || isDesktop) && (
-        <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
-      )}
+      {/* Sidebar / drawer vertical — disponible para todos los roles */}
+      <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
 
       <div className="flex flex-col min-w-0 lg:pl-[220px]">
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 lg:px-8" style={{ height: '72px' }}>
           <div className="flex items-center gap-3 min-w-0">
-            {(!noSidebar) && (
-              <button
-                onClick={() => setSidebarOpen((v) => !v)}
-                className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
-                aria-label="Abrir menú"
-              >
-                <Menu size={20} />
-              </button>
-            )}
+            <button
+              onClick={() => setSidebarOpen((v) => !v)}
+              className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
+              aria-label="Abrir menú"
+            >
+              <Menu size={20} />
+            </button>
             <div className="min-w-0">
               <h1 className="text-body text-[var(--nx-text)] truncate" style={{ fontWeight: '650', fontSize: '0.9rem' }}>{greeting}, {firstName}</h1>
               <p className="text-caption text-[var(--nx-text-muted)] truncate">{roleDisplay} · {user?.school_name ?? 'NEXO'}</p>

@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
-import { ArrowRight, Clock, Layers, BellRing } from 'lucide-react';
+import { Clock, Layers, BellRing } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -110,9 +110,9 @@ const makeBlocks = (entry, exit, count, recessStart, recessEnd) => {
 /* ── piezas UI del flujo ── */
 const StepHead = ({ kicker, title, lede }) => (
   <>
-    {kicker && <span className="text-[13px] font-semibold tracking-wide text-[var(--nx-accent)]">{kicker}</span>}
-    <h1 className="text-[26px] sm:text-[28px] leading-tight font-[650] tracking-[-.01em] text-[var(--nx-text)]">{title}</h1>
-    {lede && <p className="text-[15.5px] text-[var(--nx-text-muted)] max-w-[56ch]">{lede}</p>}
+    {kicker && <span className="text-[12.5px] font-semibold tracking-wide text-[var(--nx-accent)]">{kicker}</span>}
+    <h1 className="text-[21px] sm:text-[22px] leading-snug font-[650] tracking-[-.01em] text-[var(--nx-text)]">{title}</h1>
+    {lede && <p className="text-[14.5px] text-[var(--nx-text-muted)] max-w-[56ch]">{lede}</p>}
   </>
 );
 
@@ -398,8 +398,8 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
           <span className="text-[12.5px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
             {isUpdate ? 'Configuración' : 'Configuración inicial'}
           </span>
-          <h1 className="text-[30px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
-          <p className="mx-auto max-w-[46ch] text-[15.5px] leading-relaxed text-[var(--nx-text-muted)]">
+          <h1 className="text-[24px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">Bienvenid@</h1>
+          <p className="mx-auto max-w-[46ch] text-[14.5px] leading-relaxed text-[var(--nx-text-muted)]">
             {isUpdate
               ? 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.'
               : 'Tu institución aún no está configurada. Nexus — la voz del sistema — te acompaña paso a paso.'}
@@ -409,22 +409,27 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
         {/* agenda del flujo */}
         <div className="flex w-full max-w-[520px] flex-col gap-3">
           {agenda.map((a, i) => (
-            <div key={i} className="flex items-center gap-4 rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] px-5 py-4 text-left">
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.15 + i * 0.08, ease: EASE }}
+              className="flex items-center gap-4 rounded-panel border border-[var(--nx-border)] bg-[var(--nx-surface)] px-5 py-4 text-left"
+            >
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]">
                 <a.icon size={18} />
               </span>
               <div className="flex-1">
-                <p className="text-[14.5px] font-[620]">{a.t}</p>
+                <p className="text-[14px] font-[620]">{a.t}</p>
                 <p className="text-[12.5px] text-[var(--nx-text-muted)]">{a.d}</p>
               </div>
-              <span className="text-[12px] font-semibold tabular-nums text-[var(--nx-text-muted)]">{i + 1}</span>
-            </div>
+            </motion.div>
           ))}
         </div>
 
         <div className="flex flex-col items-center gap-3">
           <Button size="lg" onClick={next}>
-            {isUpdate ? 'Actualizar configuración' : 'Comenzar'} <ArrowRight size={17} className="ml-1" />
+            {isUpdate ? 'Actualizar configuración' : 'Comenzar'}
           </Button>
           {isUpdate && onCancel && (
             <Button variant="ghost" size="sm" onClick={onCancel}>Volver sin cambios</Button>
@@ -702,7 +707,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       <span className="text-[13px] font-semibold tracking-wide text-[var(--nx-accent)]">
         {isUpdate ? 'Cambios guardados' : isTeacher ? 'Listo' : 'Configuración completa'}
       </span>
-      <h1 className="max-w-[18ch] text-[26px] font-[650] leading-tight tracking-[-.01em] text-[var(--nx-text)]">
+      <h1 className="max-w-[18ch] text-[22px] font-[650] leading-snug tracking-[-.01em] text-[var(--nx-text)]">
         {isUpdate ? 'Tu institución quedó actualizada' : isTeacher ? 'Tu panel ya te espera' : 'Tu institución ya está operando con Nexus'}
       </h1>
       <p className="max-w-[46ch] text-[15px] text-[var(--nx-text-muted)]">

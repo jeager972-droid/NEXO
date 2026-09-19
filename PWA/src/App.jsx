@@ -26,6 +26,7 @@ const Downloads = lazy(() => import('./pages/Downloads'));
 const InstallPage = lazy(() => import('./pages/InstallPage'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Devices = lazy(() => import('./pages/Devices'));
+const Chat = lazy(() => import('./pages/Chat'));
 
 function App() {
   const { user } = useAuth();
@@ -83,6 +84,7 @@ function App() {
                   <Route path="/operacion" element={<ErrorBoundary><Operation /></ErrorBoundary>} />
                   <Route path="/notificaciones" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
                   <Route path="/perfil" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+                  <Route path="/chat" element={<ErrorBoundary><Chat /></ErrorBoundary>} />
 
                   <Route path="/consulta" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}>
                     <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
@@ -93,7 +95,7 @@ function App() {
                   <Route path="/enrolamiento" element={<ProtectedRoute allowedRoles={[ROLES.SECRETARIA]} />}>
                     <Route index element={<ErrorBoundary><Enrollment /></ErrorBoundary>} />
                   </Route>
-                  <Route path="/dispositivos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR]} />}>
+                  <Route path="/dispositivos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR]} />}>
                     <Route index element={<ErrorBoundary><Devices /></ErrorBoundary>} />
                   </Route>
                 </Route>

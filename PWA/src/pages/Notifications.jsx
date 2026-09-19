@@ -5,10 +5,11 @@
  */
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Trash2, ChevronRight, Loader2, CheckCircle2, XCircle, Check } from 'lucide-react';
+import { Trash2, Loader2, CheckCircle2, XCircle, Check } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import { useAuth } from '../hooks/useAuth';
+import { useNotifications } from '../context/NotificationContext';
 import { notificationsApi } from '../api/notifications';
 import { riskApi } from '../api/risk';
 import { trackingApi } from '../api/tracking';
@@ -19,9 +20,6 @@ import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { NexoChatBubble, NexoChatSkeleton } from '../components/patterns/NexoChat';
 import { humanizeError } from '../utils/messages';
-
-const LAST_COUNT_KEY = 'nexo:last-notif-count';
-const emitCount = (count) => window.dispatchEvent(new CustomEvent('nexo:notif-count', { detail: { count } }));
 
 const parseMeta = (json) => {
   try { return json ? JSON.parse(json) : null; } catch { return null; }
@@ -145,11 +143,6 @@ const SEV_DOT = {
   alta: 'bg-[var(--nx-warning)]',
   info: 'bg-[var(--nx-accent)]',
 };
-const SEV_TAG = {
-  crit: { label: 'Alta', cls: 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]' },
-  alta: { label: 'Moderada', cls: 'bg-[var(--nx-subtle-bg-warning)] text-[var(--nx-warning)]' },
-  info: { label: 'Informativa', cls: 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]' },
-};
 
 const DEPENDENCIES = [
   { value: 'coordinacion', label: 'Coordinación' },
@@ -163,7 +156,6 @@ const NotifItem = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead,
   const actions = meta?.actions;
   const [actionLoading, setActionLoading] = useState(false);
   const sev = severityOf(notif);
-  const sevTag = SEV_TAG[sev];
   const studentName = meta?.student_name;
   const canDeriveThis = canDerive && !!meta?.student_id;
 
@@ -184,63 +176,66 @@ const NotifItem = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead,
 
   return (
     <Surface className={clsx(
-      'grid grid-cols-[10px_1fr_auto] items-start gap-4 p-4 transition-colors',
+      'p-4 transition-colors',
       !notif.read && 'bg-[var(--nx-subtle-bg-accent)] border-[var(--nx-border-accent)]'
     )}>
-      <span className={clsx('mt-2 h-2 w-2 rounded-full', SEV_DOT[sev])} aria-hidden />
+      <div className="flex items-start gap-3">
+        <span className={clsx('mt-2 h-2 w-2 shrink-0 rounded-full', SEV_DOT[sev])} aria-hidden />
 
-      <div className="min-w-0">
-        <p className="text-[14.5px] font-[620] text-[var(--nx-text)]">
-          {notif.title || 'Novedad'}{studentName ? ` — ${studentName}` : ''}
-        </p>
-        <p className="mt-0.5 text-[13.5px] text-[var(--nx-text-muted)]">{humanizeMessage(notif)}</p>
-        <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[12px] text-[var(--nx-text-muted)]">
-          <span>{formatChatTime(notif.time || notif.created_at)}</span>
-          <span className={clsx('rounded-full px-2.5 py-0.5 font-semibold', sevTag.cls)}>{sevTag.label}</span>
-          {notif.read && <span className="rounded-full border border-[var(--nx-border)] px-2.5 py-0.5">Leída</span>}
-        </div>
-        {actions && Array.isArray(actions) && actions.length > 0 && (
-          <div className="mt-3 flex items-center gap-2">
-            {actions.map((act) => {
-              const styleClasses = act.style === 'success'
-                ? 'bg-[var(--nx-surface-success)] text-[color-mix(in_oklch,var(--nx-success)_80%,var(--nx-text))] border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_15%,var(--nx-surface-success))]'
-                : 'bg-[var(--nx-surface-danger)] text-[color-mix(in_oklch,var(--nx-danger)_80%,var(--nx-text))] border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_15%,var(--nx-surface-danger))]';
-              return (
-                <button
-                  key={act.id}
-                  onClick={(e) => handleAction(e, act.id)}
-                  disabled={actionLoading}
-                  className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption font-semibold transition-all disabled:opacity-45 ${styleClasses}`}
-                >
-                  {actionLoading && <Loader2 size={12} className="animate-spin" />}
-                  {act.label}
-                </button>
-              );
-            })}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[14.5px] font-[620] text-[var(--nx-text)]">
+              {notif.title || 'Novedad'}{studentName ? ` — ${studentName}` : ''}
+            </p>
+            <span className="shrink-0 text-[12px] tabular-nums text-[var(--nx-text-muted)]">
+              {formatChatTime(notif.time || notif.created_at)}
+            </span>
           </div>
-        )}
-      </div>
+          <p className="mt-0.5 text-[13.5px] text-[var(--nx-text-muted)]">{humanizeMessage(notif)}</p>
 
-      <div className="flex flex-col items-end gap-2">
-        <div className="flex gap-2">
-          {canDeriveThis && (
-            <Button size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
+          {actions && Array.isArray(actions) && actions.length > 0 && (
+            <div className="mt-3 flex items-center gap-2">
+              {actions.map((act) => {
+                const styleClasses = act.style === 'success'
+                  ? 'bg-[var(--nx-surface-success)] text-[color-mix(in_oklch,var(--nx-success)_80%,var(--nx-text))] border-[var(--nx-border-success)] hover:bg-[color-mix(in_oklch,var(--nx-success)_15%,var(--nx-surface-success))]'
+                  : 'bg-[var(--nx-surface-danger)] text-[color-mix(in_oklch,var(--nx-danger)_80%,var(--nx-text))] border-[var(--nx-border-danger)] hover:bg-[color-mix(in_oklch,var(--nx-danger)_15%,var(--nx-surface-danger))]';
+                return (
+                  <button
+                    key={act.id}
+                    onClick={(e) => handleAction(e, act.id)}
+                    disabled={actionLoading}
+                    className={`flex items-center gap-1.5 rounded-control border px-3 py-1.5 text-caption font-semibold transition-all disabled:opacity-45 ${styleClasses}`}
+                  >
+                    {actionLoading && <Loader2 size={12} className="animate-spin" />}
+                    {act.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
-          {hasDetails && (
-            <Button variant="secondary" size="sm" onClick={onClick}>
-              Detalle <ChevronRight size={13} />
-            </Button>
+
+          {(hasDetails || canDeriveThis || !notif.read) && (
+            <div className="mt-3 flex items-center gap-2">
+              {hasDetails && (
+                <Button variant="secondary" size="sm" onClick={onClick}>Detalle</Button>
+              )}
+              {canDeriveThis && (
+                <Button size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
+              )}
+              {!notif.read && (
+                <button
+                  type="button"
+                  title="Marcar como leída"
+                  aria-label="Marcar como leída"
+                  onClick={onMarkRead}
+                  className="ml-auto grid h-7 w-7 place-items-center rounded-full text-[var(--nx-text-muted)] transition-colors hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-accent)]"
+                >
+                  <Check size={15} />
+                </button>
+              )}
+            </div>
           )}
         </div>
-        {!notif.read && (
-          <button
-            type="button"
-            onClick={onMarkRead}
-            className="flex items-center gap-1 text-[12px] font-semibold text-[var(--nx-accent)] hover:underline"
-          >
-            <Check size={12} /> Marcar leída
-          </button>
-        )}
       </div>
     </Surface>
   );
@@ -248,8 +243,8 @@ const NotifItem = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead,
 
 const Notifications = () => {
   const { user } = useAuth();
+  const { notifications, markRead, markAllRead, refreshNotifications, clearNotifications } = useNotifications();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -264,21 +259,8 @@ const Notifications = () => {
   const canDerive = canResolveEvasion || user?.role === ROLES.PSICORIENTADOR;
 
   useEffect(() => {
-    const fetch = async () => {
-      try {
-        const data = await notificationsApi.getAll();
-        const arr = Array.isArray(data) ? data : [];
-        setNotifications(arr);
-        sessionStorage.setItem(LAST_COUNT_KEY, String(arr.length));
-        emitCount(0);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, []);
+    refreshNotifications().finally(() => setLoading(false));
+  }, [refreshNotifications, markRead]);
 
   // Auto-abrir detalle si viene notif_id en query params
   useEffect(() => {
@@ -292,26 +274,18 @@ const Notifications = () => {
       // Limpiar el query param
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, loading, notifications, detail, setSearchParams]);
+  }, [searchParams, loading, notifications, detail, setSearchParams, markRead]);
 
   const handleClear = async () => {
     if (!notifications.length) return;
     setClearing(true);
     try {
-      await notificationsApi.clearAll();
-      setNotifications([]);
-      sessionStorage.setItem(LAST_COUNT_KEY, '0');
-      emitCount(0);
-    } catch (e) {
-      console.error(e);
+      await clearNotifications();
     } finally {
       setClearing(false);
     }
   };
 
-  const markRead = (id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id || n.notification_id === id ? { ...n, read: true } : n)));
-  };
 
   const openDerive = (notif, meta) => {
     setDeriveTarget({ notif, meta });
@@ -362,18 +336,6 @@ const Notifications = () => {
     }
   };
 
-  const refreshNotifications = async () => {
-    try {
-      const data = await notificationsApi.getAll();
-      const arr = Array.isArray(data) ? data : [];
-      setNotifications(arr);
-      sessionStorage.setItem(LAST_COUNT_KEY, String(arr.length));
-      emitCount(0);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const getDetailMessage = (notif, meta) => {
     const raw = notif?.message || '';
     const cleanRaw = raw.replace(/\.?\s*Ver detalles\.?$/i, '').trim();
@@ -407,20 +369,26 @@ const Notifications = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Notificaciones</p>
-        </div>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-heading font-semibold text-[var(--nx-text)]">Notificaciones</h1>
         {notifications.length > 0 && (
-          <button
-            onClick={handleClear}
-            disabled={clearing}
-            className="flex items-center gap-1 text-label text-[var(--nx-danger)] font-medium hover:underline disabled:opacity-45"
-          >
-            <Trash2 size={14} />
-            Vaciar
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={markAllRead}
+              className="text-[13px] font-medium text-[var(--nx-accent)] hover:underline"
+            >
+              Marcar todo leído
+            </button>
+            <button
+              onClick={handleClear}
+              disabled={clearing}
+              className="flex items-center gap-1 text-[13px] font-medium text-[var(--nx-danger)] hover:underline disabled:opacity-45"
+            >
+              <Trash2 size={14} />
+              Vaciar
+            </button>
+          </div>
         )}
       </div>
 
@@ -459,39 +427,57 @@ const Notifications = () => {
             onClose={() => setDetail(null)}
             size="sm"
           >
-            <div className="p-5 space-y-4">
-              <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                <p className="text-label text-[var(--nx-text-muted)]">Detalles</p>
-              </div>
-              <div className="space-y-3">
-                {(() => {
-                  const meta = parseMeta(detail.metadata_json);
-                  const detailMessage = getDetailMessage(detail, meta);
-                  if (!detailMessage) {
-                    return (
-                      <NexoChatBubble
-                        message="No se agregaron detalles extra."
-                        timestamp={formatChatTime(detail.time || detail.created_at)}
-                      />
-                    );
-                  }
-                  return (
-                    <NexoChatBubble
-                      message={detailMessage}
-                      timestamp={formatChatTime(detail.time || detail.created_at)}
-                    />
-                  );
-                })()}
-              </div>
+            <div className="p-5 space-y-5">
+              {(() => {
+                const meta = parseMeta(detail.metadata_json) || {};
+                const detailMessage = getDetailMessage(detail, meta);
+                const rows = [
+                  meta.student_name && ['Estudiante', meta.student_name],
+                  meta.group_name && ['Grupo', meta.group_name],
+                  meta.location && meta.location !== 'No especificada' && ['Ubicación', meta.location],
+                  meta.device_name && ['Sensor', meta.device_name],
+                  (meta.teacher_name || meta.sender_name || meta.reporter_name) && [
+                    'Registrado por',
+                    meta.teacher_name || meta.sender_name || meta.reporter_name,
+                  ],
+                  (meta.configured_by_name || meta.deleted_by_name || meta.requested_by_name) && [
+                    'Realizado por',
+                    meta.configured_by_name || meta.deleted_by_name || meta.requested_by_name,
+                  ],
+                  meta.reason && meta.reason !== detailMessage && ['Motivo', meta.reason],
+                  meta.motivo && meta.motivo !== detailMessage && ['Motivo', meta.motivo],
+                ].filter(Boolean);
+
+                return (
+                  <>
+                    <p className="text-body-sm leading-relaxed text-[var(--nx-text)]">
+                      {humanizeMessage(detail)}
+                    </p>
+                    {detailMessage && (
+                      <p className="text-body-sm leading-relaxed text-[var(--nx-text-muted)]">
+                        {detailMessage}
+                      </p>
+                    )}
+                    {rows.length > 0 && (
+                      <dl className="divide-y divide-[var(--nx-border)] rounded-surface border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)]">
+                        {rows.map(([k, v]) => (
+                          <div key={k} className="grid grid-cols-[110px_1fr] gap-3 px-4 py-2.5">
+                            <dt className="text-caption font-medium text-[var(--nx-text-muted)]">{k}</dt>
+                            <dd className="text-body-sm text-[var(--nx-text)]">{String(v)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </>
+                );
+              })()}
 
               {(() => {
                 const meta = parseMeta(detail.metadata_json);
                 if (canResolveEvasion && meta?.action === 'evasion_interna' && meta?.incident_id) {
                   return (
                     <div className="space-y-3 border-t border-[var(--nx-border)] pt-4">
-                      <div className="border-l-2 border-[var(--nx-danger)] pl-3">
-                        <p className="text-label text-[var(--nx-text)]">Resolver evasión</p>
-                      </div>
+                      <p className="text-label font-semibold text-[var(--nx-text)]">Resolver evasión</p>
                       <p className="text-body-sm text-[var(--nx-text-muted)]">
                         Marca este incidente como resuelto. Si es justificada, no se guardará para análisis de riesgo. Si es injustificada, se registrará para el análisis y será consultable.
                       </p>

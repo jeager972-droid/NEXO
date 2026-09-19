@@ -473,23 +473,25 @@ const Consultation = () => {
   if (activeItem && currentModule) {
     const itemOptions = currentModule.items.map((it) => ({ value: it.label, label: it.label }));
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4 border-b border-[var(--nx-border)] pb-3">
-          <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-            <p className="text-label text-[var(--nx-text)]">{activeModule || 'Consulta'}</p>
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
+              Volver
+            </Button>
+            <h1 className="text-heading font-semibold text-[var(--nx-text)]">{activeModule}</h1>
           </div>
-          <Button variant="secondary" size="sm" onClick={goBackToModules} leftIcon={<ChevronLeft size={16} />}>
-            Volver
-          </Button>
+          {itemOptions.length > 1 && (
+            <div className="w-56">
+              <Select
+                label="Tipo de consulta"
+                value={activeItem}
+                onChange={(e) => openSubmodule(e.target.value)}
+                options={itemOptions}
+              />
+            </div>
+          )}
         </div>
-        {itemOptions.length > 1 && (
-          <Select
-            label="Tipo de consulta"
-            value={activeItem}
-            onChange={(e) => openSubmodule(e.target.value)}
-            options={itemOptions}
-          />
-        )}
         <ConsultationDrawer
           item={activeItem}
           riskStudents={riskStudents}
@@ -510,7 +512,6 @@ const Consultation = () => {
           toDate={toDate}
           setToDate={setToDate}
           onQuery={executeQuery}
-          onClose={goBackToModules}
           error={queryError}
           executeQuery={executeQuery}
         />
@@ -520,12 +521,8 @@ const Consultation = () => {
 
   // ── Nivel 1: Grid de módulos ──
   return (
-    <div className="space-y-6">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Consultas</p>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <h1 className="text-heading font-semibold text-[var(--nx-text)]">Consultas</h1>
 
       <Input
         placeholder="Filtrar módulos…"

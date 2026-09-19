@@ -4,9 +4,9 @@
  * El coordinador marca qué grupos tienen horario distinto, optionally "sin clases",
  * y define horas de entrada/salida modificadas. Si deja vacío, se entiende horario normal.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Check, AlertCircle, X, ChevronRight } from 'lucide-react';
+import { Check, AlertCircle, X } from 'lucide-react';
 import { studentsApi } from '../../api/students';
 import { operationsApi } from '../../api/operations';
 import { useAuth } from '../../hooks/useAuth';
@@ -168,11 +168,7 @@ const ScheduleTask = ({ onDismiss }) => {
   if (loading) {
     return (
       <Surface className="p-5 space-y-4">
-        <div className="border-b border-[var(--nx-border)] pb-3">
-          <div className="border-l-2 border-[var(--nx-warning)] pl-3">
-            <p className="text-label text-[var(--nx-text)]">Tarea pendiente</p>
-          </div>
-        </div>
+        <p className="text-label font-semibold text-[var(--nx-warning)]">Tarea pendiente</p>
         <Skeleton className="h-6 w-64" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-12 w-full" />
@@ -184,15 +180,13 @@ const ScheduleTask = ({ onDismiss }) => {
 
   return (
     <Surface className="p-5 space-y-4 border-[var(--nx-border-warning)]">
-      <div className="border-b border-[var(--nx-border)] pb-3">
-        <div className="border-l-2 border-[var(--nx-warning)] pl-3">
-          <p className="text-label text-[var(--nx-text)]">Tarea obligatoria</p>
-          <p className="text-h3 text-[var(--nx-text)] mt-1">Asignar cambios de horario del día</p>
-          <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
-            Marca los grupos que tienen horario distinto hoy. Las casillas vacías significan horario regular.
-            Esta tarea se activa a partir de las {activationTime} para el día siguiente.
-          </p>
-        </div>
+      <div>
+        <p className="text-label font-semibold text-[var(--nx-warning)]">Tarea obligatoria</p>
+        <p className="text-h3 text-[var(--nx-text)] mt-1">Asignar cambios de horario del día</p>
+        <p className="text-body-sm text-[var(--nx-text-muted)] mt-1">
+          Marca los grupos que tienen horario distinto hoy. Las casillas vacías significan horario regular.
+          Esta tarea se activa a partir de las {activationTime} para el día siguiente.
+        </p>
       </div>
 
       <div className="space-y-3">

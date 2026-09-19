@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Send, UserCheck, CalendarDays } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
-import { Surface } from '../components/ui/Surface';
+import { Surface, BlockTitle } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Input, Textarea } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -183,11 +183,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
 
               {guardianResponses.length > 0 && (
                 <div className="space-y-3">
-                  <div className="border-b border-[var(--nx-border)] pb-2">
-                    <div className="border-l-2 border-[var(--nx-success)] pl-3">
-                      <p className="text-label text-[var(--nx-text)]">Respuestas del acudiente</p>
-                    </div>
-                  </div>
+                  <BlockTitle>Respuestas del acudiente</BlockTitle>
                   <div className="space-y-2">
                     {guardianResponses.map((g, i) => (
                       <Surface key={i} className="border-l-[3px] border-l-[var(--nx-success)] p-3">
@@ -206,11 +202,7 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
               )}
 
               <div className="space-y-3">
-                <div className="border-b border-[var(--nx-border)] pb-2">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3">
-                    <p className="text-label text-[var(--nx-text)]">Notas</p>
-                  </div>
-                </div>
+                <BlockTitle>Notas</BlockTitle>
                 {notes.length === 0 ? (
                   <p className="text-body-sm text-[var(--nx-text-muted)]">Aún no hay notas.</p>
                 ) : (

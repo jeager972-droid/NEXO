@@ -37,6 +37,7 @@ import {
   UserCheck,
   FileText,
   Siren,
+  MessageCircle,
 } from 'lucide-react';
 
 const ALL_ROLES = Object.values(ROLES);
@@ -86,7 +87,15 @@ export const SIDEBAR_ITEMS = [
     title: 'Sensores',
     path: '/dispositivos',
     icon: Cpu,
-    roles: [ROLES.RECTOR, ROLES.COORDINADOR],
+    roles: [ROLES.RECTOR],
+  },
+  // Chat con Nexus — va en la barra vertical (drawer), nunca en la
+  // barra principal inferior (PRIMARY_ACTIONS no lo incluye).
+  {
+    title: 'Chat',
+    path: '/chat',
+    icon: MessageCircle,
+    roles: ALL_ROLES,
   },
   {
     title: 'Perfil',

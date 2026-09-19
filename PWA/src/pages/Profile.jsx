@@ -7,27 +7,17 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Clock, Calendar, Coffee, Settings, ChevronDown, ChevronRight, GraduationCap, Shield } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Select';
 import { Skeleton } from '../components/ui/Skeleton';
-import { Dialog, Drawer } from '../components/ui/Overlay';
-import { schoolApi } from '../api/school';
+import { Dialog } from '../components/ui/Overlay';
 import { ROLES } from '../config/roles';
 import { humanizeError } from '../utils/messages';
-import { OnboardingScheduleModal } from '../components/patterns/OnboardingScheduleModal';
-import { OnboardingGroupsModal } from '../components/patterns/OnboardingGroupsModal';
-import { OnboardingRiskModal } from '../components/patterns/OnboardingRiskModal';
 import OnboardingFlow from './onboarding/OnboardingFlow';
 
-const ALL_GRADES_LABELS = {
-  '1': 'Primero', '2': 'Segundo', '3': 'Tercero', '4': 'Cuarto', '5': 'Quinto',
-  '6': 'Sexto', '7': 'Séptimo', '8': 'Octavo', '9': 'Noveno', '10': 'Décimo', '11': 'Once',
-};
-const SHIFT_LABELS = { 'mañana': 'Mañana', 'tarde': 'Tarde', 'noche': 'Noche', 'completa': 'Completa' };
 
 const compressImage = (file, maxWidth = 800, quality = 0.85) =>
   new Promise((resolve, reject) => {
@@ -401,9 +391,7 @@ const Profile = () => {
 
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [backupEmail, setBackupEmail] = useState('');
 
-  const [verified, setVerified] = useState({ email: false, phone: false, backup: false });
   const [actionToast, setActionToast] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -420,29 +408,6 @@ const Profile = () => {
     return saved ? parseFloat(saved) : 1;
   });
 
-  // Configuración de horarios institucionales (multi-jornada)
-  const [schoolConfig, setSchoolConfig] = useState(null);
-  const [schoolConfigLoading, setSchoolConfigLoading] = useState(true);
-  const [schoolConfigEditing, setSchoolConfigEditing] = useState(false);
-  const [schoolConfigSaving, setSchoolConfigSaving] = useState(false);
-  const [schoolConfigToast, setSchoolConfigToast] = useState(null);
-  const [editJornadas, setEditJornadas] = useState([]);
-  const [expandedJornada, setExpandedJornada] = useState(null);
-  const [timeBlocksData, setTimeBlocksData] = useState(null);
-  const [timeBlocksLoading, setTimeBlocksLoading] = useState(false);
-  const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
-  const [scheduleEditOpen, setScheduleEditOpen] = useState(false);
-
-  // Configuración de grupos académicos
-  const [groupsConfig, setGroupsConfig] = useState(null);
-  const [groupsDrawerOpen, setGroupsDrawerOpen] = useState(false);
-  const [groupsEditOpen, setGroupsEditOpen] = useState(false);
-
-  // Configuración de riesgo pedagógico
-  const [riskConfig, setRiskConfig] = useState(null);
-  const [riskDrawerOpen, setRiskDrawerOpen] = useState(false);
-  const [riskEditOpen, setRiskEditOpen] = useState(false);
-
   // Onboarding en modo actualización (full-screen con Nexus)
   const [onboardingUpdate, setOnboardingUpdate] = useState(false);
 
@@ -452,106 +417,11 @@ const Profile = () => {
         setProfile(res.data);
         setEmail(res.data.email || '');
         setPhone(res.data.phone || '');
-        setBackupEmail(res.data.backup_email || '');
-        setVerified({
-          email: !!res.data.email_verified,
-          phone: !!res.data.phone_verified,
-          backup: !!res.data.backup_email_verified,
-        });
       }
       setLoadingProfile(false);
     }).catch(() => setLoadingProfile(false));
 
-    // Cargar configuración de horarios si es RECTOR o COORDINADOR
-    if (user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) {
-      schoolApi.getConfig().then((res) => {
-        if (res.status === 'ok') {
-          setSchoolConfig(res);
-          // Mapear configs (array multi-jornada) al estado de edición
-          const configs = res.configs || (res.config ? [res.config] : []);
-          setEditJornadas(configs.map(c => ({
-            work_shift: c.work_shift || 'mañana',
-            rotates_classrooms: c.rotates_classrooms || false,
-            entry_time: c.entry_time || '',
-            exit_time: c.exit_time || '',
-            recess_start_time: c.recess_start_time || '',
-            recess_end_time: c.recess_end_time || '',
-            time_blocks: c.time_blocks || [],
-          })));
-        }
-      }).catch(() => {}).finally(() => setSchoolConfigLoading(false));
-
-      // Cargar estado de onboarding de grupos
-      schoolApi.getGroupsOnboarding().then((res) => {
-        if (res?.status === 'ok') setGroupsConfig(res);
-      }).catch(() => {});
-
-      // Cargar estado de configuración de riesgo
-      schoolApi.getRiskConfig().then((res) => {
-        if (res?.status === 'ok') setRiskConfig(res);
-      }).catch(() => {});
-    } else {
-      setSchoolConfigLoading(false);
-    }
   }, [user]);
-
-  const handleSaveSchoolConfig = async () => {
-    setSchoolConfigSaving(true);
-    setSchoolConfigToast(null);
-    try {
-      const res = await schoolApi.updateConfig({ jornadas: editJornadas });
-      if (res.status === 'ok') {
-        setSchoolConfigToast({ type: 'success', message: 'Configuración actualizada' });
-        setSchoolConfigEditing(false);
-        // Recargar
-        const fresh = await schoolApi.getConfig();
-        if (fresh.status === 'ok') {
-          setSchoolConfig(fresh);
-          const configs = fresh.configs || (fresh.config ? [fresh.config] : []);
-          setEditJornadas(configs.map(c => ({
-            work_shift: c.work_shift || 'mañana',
-            rotates_classrooms: c.rotates_classrooms || false,
-            entry_time: c.entry_time || '',
-            exit_time: c.exit_time || '',
-            recess_start_time: c.recess_start_time || '',
-            recess_end_time: c.recess_end_time || '',
-            time_blocks: c.time_blocks || [],
-          })));
-        }
-      } else {
-        setSchoolConfigToast({ type: 'error', message: res.message || 'Error al guardar' });
-      }
-    } catch (e) {
-      setSchoolConfigToast({ type: 'error', message: humanizeError(e, 'Error al guardar configuración') });
-    } finally {
-      setSchoolConfigSaving(false);
-    }
-  };
-
-  const updateEditJornada = (idx, field, value) => {
-    setEditJornadas(prev => prev.map((j, i) => i === idx ? { ...j, [field]: value } : j));
-  };
-
-  const toggleJornadaBlocks = async (workShift) => {
-    if (expandedJornada === workShift) {
-      setExpandedJornada(null);
-      return;
-    }
-    setExpandedJornada(workShift);
-    if (!timeBlocksData) {
-      setTimeBlocksLoading(true);
-      try {
-        const res = await schoolApi.getTimeBlocks();
-        if (res.status === 'ok') {
-          setTimeBlocksData(res.time_blocks || []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setTimeBlocksLoading(false);
-      }
-    }
-  };
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -621,13 +491,8 @@ const Profile = () => {
   const handleChangedSaved = (newValue) => {
     if (changeDialog === 'email') {
       setEmail(newValue);
-      setVerified((v) => ({ ...v, email: false }));
     } else if (changeDialog === 'phone') {
       setPhone(newValue);
-      setVerified((v) => ({ ...v, phone: false }));
-    } else if (changeDialog === 'backup_email') {
-      setBackupEmail(newValue);
-      setVerified((v) => ({ ...v, backup: false }));
     }
     setChangeDialog(null);
   };
@@ -781,7 +646,7 @@ const Profile = () => {
       )}
 
       {/* ── Configuración institucional — onboarding en modo actualización ── */}
-      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && schoolConfig?.config && (
+      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && (
         <Card className="p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -795,431 +660,6 @@ const Profile = () => {
             </Button>
           </div>
         </Card>
-      )}
-
-      {/* ── Calendario escolar (horarios) ── */}
-      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && !schoolConfigLoading && (
-        <Card className="p-5">
-          {schoolConfigToast && (
-            <div className={`mb-4 flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
-              schoolConfigToast.type === 'success'
-                ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
-                : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
-            }`}>
-              {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-              {schoolConfigToast.message}
-            </div>
-          )}
-
-          <button
-            onClick={() => setScheduleDrawerOpen(true)}
-            className="flex w-full items-center gap-3 text-left"
-          >
-            <Settings size={18} className="text-[var(--nx-accent)] shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-h3 text-[var(--nx-text)]">Calendario escolar</p>
-              <p className="text-caption text-[var(--nx-text-muted)]">Jornadas, horarios y bloques</p>
-            </div>
-            <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
-          </button>
-        </Card>
-      )}
-
-      {/* ── Grupos académicos (RECTOR y COORDINADOR) ── */}
-      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINATOR) && (
-        <Card className="p-5">
-          <button
-            onClick={() => setGroupsDrawerOpen(true)}
-            className="flex w-full items-center gap-3 text-left"
-          >
-            <GraduationCap size={18} className="text-[var(--nx-accent)] shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-h3 text-[var(--nx-text)]">Grupos académicos</p>
-              <p className="text-caption text-[var(--nx-text-muted)]">
-                {groupsConfig?.onboarding_completed
-                  ? `Configurado para ${groupsConfig.onboarding_year ?? new Date().getFullYear()}`
-                  : 'Pendiente de configuración'}
-              </p>
-            </div>
-            <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
-          </button>
-        </Card>
-      )}
-
-      {/* ── Análisis de riesgo pedagógico (RECTOR y COORDINADOR) ── */}
-      {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && (
-        <Card className="p-5">
-          <button
-            onClick={() => setRiskDrawerOpen(true)}
-            className="flex w-full items-center gap-3 text-left"
-          >
-            <Shield size={18} className="text-[var(--nx-accent)] shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-h3 text-[var(--nx-text)]">Análisis de riesgo pedagógico</p>
-              <p className="text-caption text-[var(--nx-text-muted)]">
-                {riskConfig?.risk_config_completed
-                  ? 'Motor configurado y activo'
-                  : 'Pendiente de configuración'}
-              </p>
-            </div>
-            <ChevronRight size={18} className="text-[var(--nx-text-muted)] ml-auto" />
-          </button>
-        </Card>
-      )}
-
-      {/* Drawer con info de horarios */}
-      <AnimatePresence>
-        {scheduleDrawerOpen && (
-          <Drawer
-            title="Calendario escolar"
-            onClose={() => { setScheduleDrawerOpen(false); setExpandedJornada(null); }}
-            size="md"
-            footer={
-              <div className="flex justify-end gap-3">
-                <Button variant="secondary" onClick={() => { setScheduleDrawerOpen(false); setExpandedJornada(null); }}>Cerrar</Button>
-                {user?.role === ROLES.RECTOR && (
-                  <Button variant="primary" onClick={() => setScheduleEditOpen(true)}>Editar calendario</Button>
-                )}
-              </div>
-            }
-          >
-            <div className="p-6 space-y-4">
-              {schoolConfigToast && (
-                <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
-                  schoolConfigToast.type === 'success'
-                    ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
-                    : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
-                }`}>
-                  {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                  {schoolConfigToast.message}
-                </div>
-              )}
-              {(schoolConfig?.configs || (schoolConfig?.config ? [schoolConfig.config] : [])).map((cfg, idx) => {
-                const isClickable = !!cfg.rotates_classrooms;
-                const isExpanded = expandedJornada === (cfg.work_shift || '—');
-                const blocksForShift = timeBlocksData?.filter(
-                  (b) => b.work_shift === cfg.work_shift
-                ) || [];
-                return (
-                  <div key={idx}>
-                    <div
-                      className={`rounded-control border bg-[var(--nx-surface-subtle)] px-4 py-3 space-y-3 ${
-                        isClickable
-                          ? 'border-[var(--nx-accent)] cursor-pointer hover:bg-[var(--nx-subtle-bg-accent)] transition-colors'
-                          : 'border-[var(--nx-border)]'
-                      }`}
-                      onClick={isClickable ? () => toggleJornadaBlocks(cfg.work_shift || '—') : undefined}
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-label text-[var(--nx-accent)] font-semibold capitalize">
-                          Jornada: {cfg.work_shift || '—'}
-                        </p>
-                        {isClickable && (
-                          <div className="flex items-center gap-1.5 text-caption text-[var(--nx-accent)]">
-                            <span>Ver bloques</span>
-                            <ChevronDown
-                              size={14}
-                              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
-                            <Clock size={12} /> Entrada
-                          </p>
-                          <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.entry_time || '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
-                            <Clock size={12} /> Salida
-                          </p>
-                          <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.exit_time || '—'}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-caption text-[var(--nx-text-muted)]">Rota salones</p>
-                          <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.rotates_classrooms ? 'Sí' : 'No'}</p>
-                        </div>
-                        {cfg.recess_start_time && (
-                          <div>
-                            <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1.5">
-                              <Coffee size={12} /> Receso
-                            </p>
-                            <p className="text-body text-[var(--nx-text)] mt-0.5">{cfg.recess_start_time} — {cfg.recess_end_time}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {isClickable && isExpanded && (
-                      <div className="mt-2 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-4 py-3 space-y-2">
-                        <p className="text-label text-[var(--nx-text)] font-semibold flex items-center gap-1.5">
-                          <Clock size={14} className="text-[var(--nx-accent)]" />
-                          Bloques horarios — {cfg.work_shift}
-                        </p>
-                        {timeBlocksLoading ? (
-                          <div className="flex items-center gap-2 text-body-sm text-[var(--nx-text-muted)]">
-                            <Loader2 size={14} className="animate-spin" /> Cargando bloques…
-                          </div>
-                        ) : blocksForShift.length > 0 ? (
-                          <div className="space-y-1.5">
-                            {blocksForShift.map((b, bIdx) => (
-                              <div key={bIdx} className="flex items-center justify-between rounded-control bg-[var(--nx-surface-subtle)] px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-control bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] border border-[var(--nx-border-accent)] text-caption font-semibold">
-                                    {b.block_number}
-                                  </span>
-                                  <span className="text-body-sm text-[var(--nx-text)]">{b.block_name || `Bloque ${b.block_number}`}</span>
-                                </div>
-                                <span className="text-caption text-[var(--nx-text-muted)]">
-                                  {b.start_time} — {b.end_time}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-body-sm text-[var(--nx-text-muted)]">
-                            No hay bloques horarios configurados para esta jornada.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Drawer>
-        )}
-      </AnimatePresence>
-
-      {/* Drawer de grupos académicos */}
-      <AnimatePresence>
-        {groupsDrawerOpen && (
-          <Drawer
-            title="Grupos académicos"
-            context={`Año ${groupsConfig?.onboarding_year ?? new Date().getFullYear()}`}
-            onClose={() => setGroupsDrawerOpen(false)}
-            size="md"
-            footer={
-              <div className="flex justify-end gap-3">
-                <Button variant="secondary" onClick={() => setGroupsDrawerOpen(false)}>Cerrar</Button>
-                {user?.role === ROLES.RECTOR && (
-                  <Button variant="primary" onClick={() => setGroupsEditOpen(true)}>Editar grupos</Button>
-                )}
-              </div>
-            }
-          >
-            <div className="p-6 space-y-4">
-              {schoolConfigToast && (
-                <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
-                  schoolConfigToast.type === 'success'
-                    ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
-                    : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
-                }`}>
-                  {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                  {schoolConfigToast.message}
-                </div>
-              )}
-              {groupsConfig?.onboarding_completed ? (
-                <>
-                  <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] px-4 py-3 text-body-sm text-[var(--nx-success)] flex items-center gap-2">
-                    <CheckCircle2 size={14} />
-                    Configurado para {groupsConfig.onboarding_year ?? new Date().getFullYear()}
-                  </div>
-                  {(groupsConfig?.groups || []).length > 0 ? (
-                    <div className="space-y-4">
-                      {/* Agrupar por grado */}
-                      {Object.entries(
-                        (groupsConfig?.groups || []).reduce((acc, g) => {
-                          const grade = g.grade_level || '—';
-                          if (!acc[grade]) acc[grade] = [];
-                          acc[grade].push(g);
-                          return acc;
-                        }, {})
-                      ).sort(([a], [b]) => Number(a) - Number(b)).map(([grade, groups]) => (
-                        <div key={grade}>
-                          <p className="text-label font-semibold text-[var(--nx-text)] mb-2">
-                            {ALL_GRADES_LABELS[grade] || `Grado ${grade}`}
-                          </p>
-                          <div className="space-y-2">
-                            {groups.map((g) => (
-                              <div key={g.group_id} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="text-body-sm text-[var(--nx-text)] font-medium">{g.group_name}</p>
-                                    <p className="text-caption text-[var(--nx-text-muted)] flex items-center gap-1">
-                                      {g.work_shift === 'mañana' && <Sun size={11} />}
-                                      {g.work_shift === 'tarde' && <Moon size={11} />}
-                                      {g.work_shift === 'noche' && <Clock size={11} />}
-                                      {g.work_shift === 'completa' && <GraduationCap size={11} />}
-                                      {SHIFT_LABELS[g.work_shift] || g.work_shift}
-                                    </p>
-                                  </div>
-                                  <span className="text-caption text-[var(--nx-text-muted)] shrink-0">
-                                    {(g.teachers || []).length} docente(s)
-                                  </span>
-                                </div>
-                                {(g.teachers || []).length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-1.5">
-                                    {g.teachers.map((t) => (
-                                      <span key={t.user_id} className="rounded-control bg-[var(--nx-surface-subtle)] px-2 py-1 text-caption text-[var(--nx-text-muted)]">
-                                        {t.name}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {(g.teachers || []).length === 0 && (
-                                  <p className="mt-2 text-caption text-[var(--nx-danger)]">Sin docentes asignados</p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-body-sm text-[var(--nx-text-muted)]">
-                      No hay grupos configurados para este año.
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div className="rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
-                  Pendiente de configuración. {user?.role === ROLES.RECTOR ? 'Usa "Editar grupos" para configurar.' : 'El rector debe completar la configuración.'}
-                </div>
-              )}
-            </div>
-          </Drawer>
-        )}
-      </AnimatePresence>
-
-      {/* Modal de edición de horarios (reutiliza OnboardingScheduleModal) */}
-      {scheduleEditOpen && (
-        <OnboardingScheduleModal
-          schoolId={user?.school_id}
-          userId={user?.id}
-          role={user?.role}
-          mode="edit"
-          onCompleted={async () => {
-            setScheduleEditOpen(false);
-            setSchoolConfigToast({ type: 'success', message: 'Horarios actualizados correctamente' });
-            // Recargar config
-            try {
-              const fresh = await schoolApi.getConfig();
-              if (fresh.status === 'ok') {
-                setSchoolConfig(fresh);
-                const configs = fresh.configs || (fresh.config ? [fresh.config] : []);
-                setEditJornadas(configs.map(c => ({
-                  work_shift: c.work_shift || 'mañana',
-                  rotates_classrooms: c.rotates_classrooms || false,
-                  entry_time: c.entry_time || '',
-                  exit_time: c.exit_time || '',
-                  recess_start_time: c.recess_start_time || '',
-                  recess_end_time: c.recess_end_time || '',
-                  time_blocks: c.time_blocks || [],
-                })));
-              }
-            } catch { /* ignore reload error */ }
-            setTimeout(() => setSchoolConfigToast(null), 4000);
-          }}
-          onCancel={() => setScheduleEditOpen(false)}
-        />
-      )}
-
-      {/* Modal de edición de grupos académicos (reutiliza OnboardingGroupsModal) */}
-      {groupsEditOpen && (
-        <OnboardingGroupsModal
-          isEdit={groupsConfig?.onboarding_completed}
-          onCancel={() => setGroupsEditOpen(false)}
-          onCompleted={async () => {
-            setGroupsEditOpen(false);
-            setGroupsDrawerOpen(false);
-            setSchoolConfigToast({ type: 'success', message: 'Grupos académicos actualizados correctamente' });
-            // Recargar estado de grupos
-            try {
-              const fresh = await schoolApi.getGroupsOnboarding();
-              if (fresh?.status === 'ok') setGroupsConfig(fresh);
-            } catch { /* ignore reload error */ }
-            setTimeout(() => setSchoolConfigToast(null), 4000);
-          }}
-        />
-      )}
-
-      {/* Drawer con info de riesgo pedagógico */}
-      <AnimatePresence>
-        {riskDrawerOpen && (
-          <Drawer
-            title="Análisis de riesgo pedagógico"
-            onClose={() => setRiskDrawerOpen(false)}
-            size="md"
-            footer={
-              <div className="flex justify-end gap-3">
-                <Button variant="secondary" onClick={() => setRiskDrawerOpen(false)}>Cerrar</Button>
-                {user?.role === ROLES.RECTOR && (
-                  <Button variant="primary" onClick={() => setRiskEditOpen(true)}>
-                    {riskConfig?.risk_config_completed ? 'Editar configuración' : 'Configurar ahora'}
-                  </Button>
-                )}
-              </div>
-            }
-          >
-            <div className="p-6 space-y-4">
-              {schoolConfigToast && (
-                <div className={`flex items-center gap-2 rounded-control px-4 py-2 text-body-sm ${
-                  schoolConfigToast.type === 'success'
-                    ? 'bg-[var(--nx-subtle-bg-success)] text-[var(--nx-success)]'
-                    : 'bg-[var(--nx-subtle-bg-danger)] text-[var(--nx-danger)]'
-                }`}>
-                  {schoolConfigToast.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                  {schoolConfigToast.message}
-                </div>
-              )}
-              {riskConfig?.risk_config_completed ? (
-                <div className="rounded-control border border-[var(--nx-border-success)] bg-[var(--nx-surface-success)] px-4 py-3 text-body-sm text-[var(--nx-success)] flex items-center gap-2">
-                  <CheckCircle2 size={14} />
-                  Motor configurado y activo
-                </div>
-              ) : (
-                <div className="rounded-control border border-[var(--nx-border-danger)] bg-[var(--nx-subtle-bg-danger)] px-4 py-3 text-body-sm text-[var(--nx-danger)]">
-                  Pendiente de configuración. {user?.role === ROLES.RECTOR ? 'Usa "Configurar ahora" para completar el onboarding.' : 'El rector debe completar la configuración.'}
-                </div>
-              )}
-              <div className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] p-4 space-y-2">
-                <p className="text-body-sm text-[var(--nx-text)] leading-relaxed">
-                  El <strong>Motor de Análisis de Riesgo Pedagógico</strong> evalúa los eventos
-                  de cada estudiante y calcula su nivel de riesgo usando decaimiento exponencial
-                  y detección de patrones.
-                </p>
-                <p className="text-caption text-[var(--nx-text-muted)]">
-                  La configuración define qué gravedad tiene cada tipo de evento para tu institución.
-                  Sin esta configuración, el sistema no puede operar.
-                </p>
-              </div>
-            </div>
-          </Drawer>
-        )}
-      </AnimatePresence>
-
-      {/* Modal de edición de riesgo (reutiliza OnboardingRiskModal) */}
-      {riskEditOpen && (
-        <OnboardingRiskModal
-          isEdit={riskConfig?.policy?.version > 1}
-          onCancel={() => setRiskEditOpen(false)}
-          onCompleted={async () => {
-            setRiskEditOpen(false);
-            setRiskDrawerOpen(false);
-            setSchoolConfigToast({ type: 'success', message: 'Configuración de riesgo guardada correctamente' });
-            // Recargar estado de riesgo
-            try {
-              const fresh = await schoolApi.getRiskConfig();
-              if (fresh?.status === 'ok') setRiskConfig(fresh);
-            } catch { /* ignore reload error */ }
-            setTimeout(() => setSchoolConfigToast(null), 4000);
-          }}
-        />
       )}
 
       {/* ── Tamaño de fuente ── */}
