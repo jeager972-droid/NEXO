@@ -84,11 +84,6 @@ def intent(name):
 @intent('greeting')
 def _():
     return _augment([
-        "sorprendeme", "impresioname", "asombrame", "maravillame", "admirame",
-        "sorprendeme con algo", "cuentame algo que no sepa", "dime algo que no sepa",
-        "dato que no conozca", "enseñame algo nuevo", "algo que me vuele la cabeza",
-        "algo curioso", "algo interesante", "cuentame algo", "dime algo",
-        "sabes algo curioso", "tienes algun dato", "sabes algun dato curioso",
         "hola", "hola nexus", "buenos dias", "buenas tardes", "buenas noches",
         "hey", "buenas", "saludos", "que mas", "que hubo", "hola como estas",
         "hola buen dia", "hola buenas", "holi", "hello", "hi", "buen dia",
@@ -154,6 +149,12 @@ def _():
         "dime algo que no sepa", "sorprendeme con algo",
         "cuentame algo nuevo", "un hecho curioso", "dime algo cool",
         "cuentame algo interesante", "algo sorprendente",
+        "sorprendeme", "impresioname", "asombrame", "maravillame", "admirame",
+        "sorprendeme con algo", "cuentame algo que no sepa",
+        "dato que no conozca", "enseñame algo nuevo", "algo que me vuele la cabeza",
+        "algo curioso", "algo interesante", "cuentame algo", "dime algo",
+        "sabes algo curioso", "tienes algun dato", "sabes algun dato curioso",
+        "un dato poco conocido", "cuentame algo de cultura", "dime un fact",
     ])
 
 

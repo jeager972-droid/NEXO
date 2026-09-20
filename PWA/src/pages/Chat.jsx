@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { Send, Sparkles, ArrowRight, RotateCcw, MessageSquare, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { chatApi } from '../api/chat';
-import { saveCtx, readCtx, injectCtx } from '../lib/chatContext';
+import { saveCtx, injectCtx } from '../lib/chatContext';
 import { NexoAvatar } from '../components/patterns/NexoChat';
 import { Surface } from '../components/ui/Surface';
 

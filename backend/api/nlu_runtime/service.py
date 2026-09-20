@@ -40,8 +40,23 @@ _MULTI_SPLIT = re.compile(r'\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*|\
                           re.IGNORECASE)
 
 
+# Verbos de charla de una sola palabra — determinísticos, el modelo los diluye
+_WORD_INTENT = {
+    'sorprendeme': 'fun_fact', 'impresioname': 'fun_fact', 'asombrame': 'fun_fact',
+    'maravillame': 'fun_fact', 'admirame': 'fun_fact', 'emocioname': 'fun_fact',
+    'cantame': 'sing', 'baila': 'dance', 'cuentame': 'story', 'recitame': 'story',
+    'animame': 'motivation', 'motivame': 'motivation', 'consuelame': 'motivation',
+    'despiertame': 'greeting', 'entreteme': 'joke', 'rieme': 'joke',
+}
+
+
 def _classify_one(masked, entities):
-    """Nivel 1 (router con sesgo formal) + nivel 2 (submodelo)."""
+    """Nivel 0 (lookup de una palabra) → router + submodelo."""
+    if not entities and ' ' not in masked.strip():
+        hit = _WORD_INTENT.get(masked.strip())
+        if hit:
+            return 'informal', 0.0, hit, 0.97, [[hit, 0.97]]
+    # Nivel 1 (router con sesgo formal) + nivel 2 (submodelo).
     r_vec = ROUTER['vec'].transform([masked])
     r_p = ROUTER['clf'].predict_proba(r_vec)[0]
     r_classes = list(ROUTER['classes'])
