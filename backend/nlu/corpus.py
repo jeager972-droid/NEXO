@@ -208,6 +208,84 @@ def _():
     ])
 
 
+@intent('random_student')
+def _():
+    return _augment(_expand([
+        "dame un estudiante aleatorio", "un estudiante al azar",
+        "dime un estudiante cualquiera", "un estudiante de {group}",
+        "dame un estudiante aleatorio del {group}", "un pelado al azar",
+        "un chino cualquiera del {group}", "el primer estudiante del {group}",
+        "el primer estudiante de la lista del {group}", "mencioname un estudiante del {group}",
+        "un alumno cualquiera del {group}", "dame un estudiante de mis grupos",
+        "un estudiante de la institucion", "elige un estudiante del {group}",
+        "escoge un alumno del {group}", "nombre de un estudiante del {group}",
+        "un estudiante random del {group}", "saca un estudiante del {group}",
+        "dame un nombre del {group}", "un estudiante cualquiera de mis grupos",
+    ], group=GROUPS))
+
+
+@intent('staff_lookup')
+def _():
+    return _augment([
+        "quien es el rector", "quien es la rectora", "nombre del rector",
+        "como se llama el rector", "quien dirige el colegio", "quien es el director",
+        "quien es el coordinador", "nombre del coordinador", "como se llama el coordinador",
+        "quien es el psicologo", "quien es la psicologa", "quien es la orientadora",
+        "quien es el psicoorientador", "quien es la secretaria", "quien es el portero",
+        "quien es el auxiliar", "quien esta a cargo", "quien es la rectora del colegio",
+        "quien es el jefe aqui", "quien manda en el colegio", "nombre de la rectora",
+        "el rector quien es", "la coordinadora quien es", "quien es la consejera",
+    ])
+
+
+@intent('start_operation')
+def _():
+    return _augment([
+        "quiero citar un acudiente", "quiero citar a un padre", "quiero hacer una citacion",
+        "necesito citar a los papas", "quiero llamar al acudiente", "citar padre de familia",
+        "quiero mandar una solicitud", "quiero hacer una solicitud", "quiero enviar una solicitud",
+        "necesito una solicitud", "quiero pedir algo a coordinacion", "hacer un tramite",
+        "quiero reportar un incidente", "quiero reportar algo", "quiero registrar un incidente",
+        "paso algo en clase", "hubo un problema", "quiero reportar una pelea",
+        "quiero reportar un daño", "se rompio algo", "hay algo dañado", "registrar un daño",
+        "quiero generar un permiso", "quiero hacer un permiso", "permiso de salida",
+        "quiero autorizar una salida", "permiso para que salga un estudiante",
+        "quiero pedir una salida pedagogica", "salida pedagogica", "quiero organizar una salida",
+        "quiero cambiar el horario", "cambio de horario", "modificar el horario",
+        "quiero abrir un seguimiento", "iniciar un seguimiento", "quiero reportar a un estudiante",
+        "quiero hacer un reporte", "quiero generar un reporte", "quiero exportar datos",
+        "quiero derivar un estudiante", "quiero pasar un caso a psicologia",
+        "quiero sacar a un estudiante con permiso", "autorizar salida de un alumno",
+    ])
+
+
+@intent('count_present')
+def _():
+    return _augment(_expand([
+        "cuantos estudiantes ingresaron hoy", "cuantos vinieron hoy",
+        "cuantos entraron hoy",
+        "cuantos estudiantes hay presentes", "cuantos estan hoy", "asistencia de hoy",
+        "cuantos presentes hoy", "cuantos entraron al colegio",
+        "cuantos estudiantes entraron", "cuantos hay en el colegio ahora",
+        "cuantos vinieron del {group}", "cuantos entraron del {group}",
+        "cuantos vinieron del {group} hoy", "cuantos presentes en {group}",
+        "cuantos alumnos hay hoy", "cuantos pelados vinieron", "cuantos chinos llegaron",
+    ], group=GROUPS))
+
+
+@intent('count_trackings')
+def _():
+    return _augment([
+        "cuantos estudiantes hay en seguimiento", "cuantos seguimientos hay",
+        "cuantos casos abiertos", "cuantos casos activos", "cuantos en seguimiento",
+        "cuantos seguimientos activos", "cuantos casos hay en proceso",
+        "cuantos casos se resolvieron", "cuantos casos resueltos", "cuantos cerrados",
+        "cuantos seguimientos se cerraron", "cuantos casos terminados",
+        "cuantos casos ya se resolvieron en mis grupos", "cuantos seguimientos resueltos",
+        "cuantos casos pendientes", "cuantos casos en mis grupos",
+    ])
+
+
 @intent('help')
 def _():
     return _augment([
@@ -553,6 +631,14 @@ def _():
         "cuantas salidas pedagogicas hubo", "cuantos salieron al baño hoy",
         # agregados
         "cuantas llegadas tarde hubo esta semana", "cuantas inasistencias hubo ayer",
+        "cuantos llegaron tarde hoy", "cuantos estudiantes llegaron tarde",
+        "llegaron tarde hoy", "cuantos inasistieron", "cuantos inasistieron hoy",
+        "cuantos no vinieron", "cuantos faltaron", "cuantos ausentes",
+        "cuantos han evadido", "cuantos han evadido clases", "cuantos evadieron",
+        "cuantos estudiantes han evadido clases hoy", "se han volado hoy",
+        "han capado clase", "cuantas veces han evadido", "que evasiones hay hoy",
+        "cuantas inasistencias hay hoy", "cuantas faltas hay hoy",
+        "cuantas tardanzas hay hoy", "cuantos llegaron tarde del {group}",
         "cuantas evasiones hubo esta semana", "cuantos incidentes del {group}",
         "total de tardanzas de la semana", "cuantas alertas hay",
     ]

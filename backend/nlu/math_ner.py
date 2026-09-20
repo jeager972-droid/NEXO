@@ -27,7 +27,8 @@ _NUM_WORDS = {
     'ochocientos':800,'novecientos':900,'mil':1000,'millon':1000000,
 }
 
-_NUM = r'(?:-?\d+(?:[.,]\d+)?|infinito)'
+_NUMW = '|'.join(_NUM_WORDS)
+_NUM = r'(?:-?\d+(?:[.,]\d+)?|' + _NUMW + r'|infinito)'
 _NUM_RE = r'(' + _NUM + ')'
 _EXPR_RE = r'[\d\s+\-*/^().,%]+'
 

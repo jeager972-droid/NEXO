@@ -133,6 +133,7 @@ function nxMask(string $q): string {
         $masked = preg_replace('/\b' . preg_quote(mb_strtolower($s['group'])) . '\b/u', ' grupo_ent ', $masked);
     }
     $masked = preg_replace('/\b\d+\b/', ' num_ent ', $masked);
+    $masked = preg_replace('/\b(un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|mil|millon|millones)\b/u', ' num_ent ', $masked);
     return trim(preg_replace('/\s+/', ' ', $masked));
 }
 
@@ -210,11 +211,29 @@ function nxClassifyLocal(string $text): ?array {
  * Clasificación final
  * ------------------------------------------------------------------------- */
 function nxClassify(string $text): array {
+    // multi-intención local — el servicio Python ya devuelve 'parts'
+    $norm = nxNorm($text);
+    $segments = array_values(array_filter(preg_split('/\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*/u', $norm), fn($s)=>mb_strlen(trim($s))>2));
+    if (count($segments) > 1) {
+        $parts = [];
+        foreach (array_slice($segments,0,4) as $seg) {
+            $p = nxClassifyService($seg) ?? nxClassifyLocal($seg);
+            if (!$p) continue;
+            if (($p['confidence'] ?? 0) >= 0.55 && !in_array($p['intent'], array_column($parts,'intent'), true))
+                $parts[] = $p;
+        }
+        if (count($parts) > 1) {
+            usort($parts, fn($a,$b)=> (($a['domain']??'informal')!=='formal') <=> (($b['domain']??'informal')!=='formal') ?: $b['confidence'] <=> $a['confidence']);
+            return ['domain'=>'multi','intent'=>$parts[0]['intent'],'confidence'=>$parts[0]['confidence'],
+                    'top3'=>$parts[0]['top3']??[],'entities'=>$parts[0]['entities']??[],'parts'=>$parts,'source'=>'multi'];
+        }
+    }
     $r = nxClassifyService($text) ?? nxClassifyLocal($text)
         ?? ['intent' => 'out_of_scope', 'confidence' => 0.0,
             'entities' => nxSlots(nxNorm($text)), 'top3' => [], 'source' => 'none'];
-    // entidades: el servicio ya las trae; el modelo local también. Unifico.
-    if (empty($r['entities'])) $r['entities'] = nxSlots(nxNorm($text));
+    // entidades: siempre fusionar con nxSlots — el servicio no extrae
+    // module/field/from/to/range_label (eso lo completa PHP)
+    $r['entities'] = array_merge(nxSlots($norm), $r['entities'] ?? []);
     if ($r['confidence'] < NX_NLU_THRESHOLD) {
         $r['intent'] = 'out_of_scope';
         $r['fallback'] = true;
@@ -239,6 +258,12 @@ function nxSlots(string $q): array {
         $s['days'] = 7;
     } elseif (preg_match('/este mes|del mes|en el mes|ultimo mes/u', $q)) {
         $s['days'] = 30;
+    } elseif (preg_match('/mes pasado/u', $q)) {
+        $s['days'] = 60;
+    } elseif (preg_match('/semana pasada|semana anterior/u', $q)) {
+        $s['days'] = 14;
+    } elseif (preg_match('/este ano|del ano|en el ano/u', $q)) {
+        $s['days'] = 365;
     }
     if (isset($s['days'])) {
         $s['from'] = gmdate('Y-m-d', time() - $s['days'] * 86400);
@@ -246,9 +271,19 @@ function nxSlots(string $q): array {
         $s['range_label'] = $s['days'] === 0 ? 'hoy' : ($s['days'] === 1 ? 'ayer' : "últimos {$s['days']} días");
     }
 
-    if (preg_match('/\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
-        || preg_match('/\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2})\b/u', $q, $m)) {
-        $s['group'] = strtoupper(str_replace(' ', '', $m[1]));
+    if (preg_match('/\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
+        || preg_match('/\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|\d{1,2} \d{1,2})\b/u', $q, $m)) {
+        $s['group'] = strtoupper(str_replace([' ', '.'], ['-', '-'], $m[1]));
+    }
+    // ordinales: «octavo a», «onceavo b», «grado noveno»
+    if (empty($s['group'])) {
+        $ord = ['primero'=>'1','segundo'=>'2','tercero'=>'3','cuarto'=>'4','quinto'=>'5',
+                'sexto'=>'6','septimo'=>'7','octavo'=>'8','noveno'=>'9','decimo'=>'10',
+                'once'=>'11','onceavo'=>'11','undecimo'=>'11'];
+        if (preg_match('/\b(' . implode('|', array_keys($ord)) . ')\s*([a-j])\b/u', $q, $mo)
+            || preg_match('/\b(?:grado|grupo|salon)\s+(' . implode('|', array_keys($ord)) . ')\b/u', $q, $mo)) {
+            $s['group'] = $ord[$mo[1]] . (isset($mo[2]) ? strtoupper($mo[2]) : '');
+        }
     }
 
     // módulo por sinónimos
@@ -321,7 +356,10 @@ function nxExtractStudent(string $q): ?string {
         'capitales','presidente','presidentes','departamento','departamentos',
         'region','regiones','municipio','formacion','consejeria','coordinacion',
         'salida','papas','ultimos','timbre','cancha','tienda','cobija','pinta',
-        'pintas','puente','materia','clase','leccion','recreo','descanso'];
+        'pintas','puente','materia','clase','leccion','recreo','descanso',
+        'primero','segundo','tercero','cuarto','quinto','sexto','septimo',
+        'octavo','noveno','decimo','once','onceavo','undecimo',
+        'aleatorio','aleatoria','cualquiera','azar','random'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
@@ -577,6 +615,11 @@ function nxIntentRoles(): array {
         'schedule_info' => $STAFF,
         'export_data' => $STAFF,
         'derive_action' => ['RECTOR','COORDINATOR','TEACHER','COUNSELOR'],
+        'random_student' => $STAFF,
+        'staff_lookup' => $ALL,
+        'start_operation' => $ALL,
+        'count_present' => $STAFF,
+        'count_trackings' => ['RECTOR','COORDINATOR','COUNSELOR','SECRETARY','TEACHER'],
         'about_me' => $ALL,
         'time' => $ALL, 'date' => $ALL,
         // smalltalk y meta: todos

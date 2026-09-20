@@ -7,9 +7,10 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Sparkles, ArrowRight, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, ArrowRight, RotateCcw, MessageSquare, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { chatApi } from '../api/chat';
+import { saveCtx, readCtx, injectCtx } from '../lib/chatContext';
 import { NexoAvatar } from '../components/patterns/NexoChat';
 import { Surface } from '../components/ui/Surface';
 
@@ -125,20 +126,44 @@ const WELCOME = {
   text: 'Hola — soy Nexus, el sistema de tu institución. Puedo contarte la jornada, buscar estudiantes, darte conteos por grupo o por días, avisarte de riesgos… o simplemente charlar. ¿Qué necesitas?',
 };
 
+const newSession = () => crypto.randomUUID();
+
 const Chat = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([WELCOME]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [sessionId, setSessionId] = useState(newSession);
+  const [sessions, setSessions] = useState([]);
+  const [drawer, setDrawer] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    chatApi.history()
+    // la sesión más reciente reanuda el hilo; el resto vive en la barra lateral
+    chatApi.sessions()
+      .then((rows) => {
+        setSessions(rows);
+        if (rows.length) {
+          setSessionId(rows[0].session_id);
+          return chatApi.history(rows[0].session_id);
+        }
+        return [];
+      })
       .then((rows) => { if (rows.length) setMessages(rows.map((r) => ({ from: r.from, text: r.text, cards: r.cards, actions: r.actions }))); })
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
+
+  const openSession = (sid) => {
+    setDrawer(false);
+    if (sid === sessionId) return;
+    setSessionId(sid);
+    setMessages([WELCOME]);
+    chatApi.history(sid)
+      .then((rows) => { if (rows.length) setMessages(rows.map((r) => ({ from: r.from, text: r.text, cards: r.cards, actions: r.actions }))); })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -151,14 +176,17 @@ const Chat = () => {
     setMessages((m) => [...m, { from: 'user', text: t }]);
     setThinking(true);
     try {
-      const res = await chatApi.send(t);
+      const res = await chatApi.send(t, sessionId, injectCtx(t));
+      saveCtx(res);
+      if (res.session_id && res.session_id !== sessionId) setSessionId(res.session_id);
       setMessages((m) => [...m, { from: 'bot', text: res.reply, cards: res.cards, actions: res.actions, denied: res.denied }]);
+      chatApi.sessions().then(setSessions).catch(() => {});
     } catch {
       setMessages((m) => [...m, { from: 'bot', text: 'No pude procesar eso ahora — intenta de nuevo en un momento.' }]);
     } finally {
       setThinking(false);
     }
-  }, [input, thinking]);
+  }, [input, thinking, sessionId]);
 
   const onAction = (a) => {
     if (a.kind === 'nav' && a.to) navigate(a.to);
@@ -174,15 +202,24 @@ const Chat = () => {
             <p className="text-caption text-[var(--nx-text-muted)]">Lenguaje natural · datos reales · nada inventado</p>
           </div>
         </div>
-        {loaded && messages.length > 1 && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setMessages([WELCOME])}
+            onClick={() => setDrawer(true)}
             className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border)] px-3 py-1.5 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)]"
           >
-            <RotateCcw size={12} /> Nueva conversación
+            <MessageSquare size={12} /> Conversaciones
           </button>
-        )}
+          {loaded && messages.length > 1 && (
+            <button
+              type="button"
+              onClick={() => { setMessages([WELCOME]); setSessionId(newSession()); }}
+              className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border)] px-3 py-1.5 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)]"
+            >
+              <RotateCcw size={12} /> Nueva
+            </button>
+          )}
+        </div>
       </div>
 
       <Surface className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -232,6 +269,43 @@ const Chat = () => {
           </form>
         </div>
       </Surface>
+
+      {/* Barra de conversaciones */}
+      <AnimatePresence>
+        {drawer && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/30" onClick={() => setDrawer(false)} />
+            <motion.aside
+              initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 z-50 w-72 border-r border-[var(--nx-border)] bg-[var(--nx-surface)] p-4"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-body-sm font-semibold text-[var(--nx-text)]">Conversaciones</h2>
+                <button onClick={() => setDrawer(false)} className="p-1 text-[var(--nx-text-muted)]" aria-label="Cerrar"><X size={16} /></button>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setDrawer(false); setMessages([WELCOME]); setSessionId(newSession()); }}
+                className="mb-3 flex w-full items-center gap-2 rounded-control border border-dashed border-[var(--nx-border-accent)] px-3 py-2 text-caption font-medium text-[var(--nx-accent)]"
+              >
+                <RotateCcw size={12} /> Nueva conversación
+              </button>
+              <div className="space-y-1 overflow-y-auto">
+                {sessions.map((s) => (
+                  <button key={s.session_id} type="button" onClick={() => openSession(s.session_id)}
+                    className={`block w-full truncate rounded-control px-3 py-2 text-left text-[13px] transition-colors ${s.session_id === sessionId ? 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] font-medium' : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]'}`}
+                  >
+                    {s.first_msg?.slice(0, 48) || 'Conversación'}
+                    <span className="block text-[11px] opacity-60">{new Date(s.last_at).toLocaleDateString()} · {s.n} mensajes</span>
+                  </button>
+                ))}
+                {!sessions.length && <p className="px-3 py-2 text-caption text-[var(--nx-text-muted)]">Sin conversaciones anteriores.</p>}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

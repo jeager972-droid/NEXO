@@ -100,6 +100,9 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'papas','banio','banos','ultimos','ultimo','timbre','cancha','tienda',
          'cobija','fuga','pinta','pintas','puente','libro','materia','clase',
          'clases','leccion','lecciones','recreo','descanso','alonso',
+         'primero','segundo','tercero','cuarto','quinto','sexto','septimo',
+         'octavo','noveno','decimo','once','onceavo','undecimo',
+         'aleatorio','aleatoria','cualquiera','azar','random',
          'grados','grado','jornadas','turno','bano','banos','permiso','permisos',
          'faltas','falta','ausencias','ausencia','fugas','fuga','casos','emergencia',
          'emergencias','panico','sos','seguimiento','datos','informacion','ficha',
@@ -130,10 +133,31 @@ def extract_entities(q: str) -> dict:
     elif re.search(r'este mes|del mes|en el mes|ultimo mes', q):
         e['days'] = 30
 
-    m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
-        or re.search(r'\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2})\b', q)
+    m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
+        or re.search(r'\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2})\b', q) \
+        or re.search(r'\b(\d{1,2}\s\d{1,2})\b', q)   # «11.2» → normalizado «11 2»
     if m:
-        e['group'] = m.group(1).upper().replace(' ', '')
+        e['group'] = m.group(1).upper().replace(' ', '-').replace('.', '-')
+    # ordinales: «octavo a», «onceavo b», «grado noveno», «11.2» ya cubierto
+    _ORD = {'primero':'1','segundo':'2','tercero':'3','cuarto':'4','quinto':'5',
+            'sexto':'6','septimo':'7','octavo':'8','noveno':'9','decimo':'10',
+            'once':'11','onceavo':'11','undecimo':'11','onceavo':'11'}
+    if 'group' not in e:
+        mo = re.search(r'\b(' + '|'.join(_ORD) + r')\s*([a-j])\b', q) \
+             or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q)
+        if mo:
+            num = _ORD[mo.group(1)]
+            letter = mo.group(2).upper() if mo.lastindex >= 2 and mo.group(2) else ''
+            e['group'] = num + letter
+            e['_group_src'] = mo.group(0)   # para enmascarar la forma ordinal
+    # períodos nombrados que no son "días"
+    if 'days' not in e:
+        if re.search(r'mes pasado', q):
+            e['days'] = 60  # el handler lo usa como rango amplio
+        elif re.search(r'semana pasada|semana anterior', q):
+            e['days'] = 14
+        elif re.search(r'este ano|del ano|en el ano', q):
+            e['days'] = 365
 
     cands = []
     for pat in _STUDENT_PATS:
@@ -162,8 +186,13 @@ def mask_entities(q: str, e: dict = None) -> str:
     if e.get('student'):
         masked = masked.replace(e['student'], ' estudiante_ent ')
     if e.get('group'):
-        masked = re.sub(r'\b' + re.escape(e['group'].lower()) + r'\b', ' grupo_ent ', masked)
+        src = e.get('_group_src') or e['group'].lower()
+        masked = re.sub(r'\b' + re.escape(src) + r'\b', ' grupo_ent ', masked)
     masked = re.sub(r'\b\d+\b', ' num_ent ', masked)
+    _numw = ('un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|'
+             'once|doce|trece|catorce|quince|veinte|treinta|cuarenta|cincuenta|'
+             'sesenta|setenta|ochenta|noventa|cien|ciento|mil|millon|millones')
+    masked = re.sub(r'\b(' + _numw + r')\b', ' num_ent ', masked)
     return re.sub(r'\s+', ' ', masked).strip()
 
 

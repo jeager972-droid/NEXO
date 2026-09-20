@@ -6,13 +6,17 @@
 import client from './client';
 
 export const chatApi = {
-  send: async (text) => {
-    const { data } = await client.post('/chat/message', { text });
+  send: async (text, sessionId, ctx) => {
+    const { data } = await client.post('/chat/message', { text, session_id: sessionId, ctx });
     if (data.status === 'error') throw new Error(data.message);
     return data.data; // {reply, intent, confidence, cards?, actions?, denied?}
   },
-  history: async () => {
-    const { data } = await client.get('/chat/history');
+  history: async (sessionId) => {
+    const { data } = await client.get('/chat/history', { params: sessionId ? { session_id: sessionId } : {} });
+    return data?.data ?? [];
+  },
+  sessions: async () => {
+    const { data } = await client.get('/chat/sessions');
     return data?.data ?? [];
   },
   policies: async () => {

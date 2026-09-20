@@ -10,6 +10,7 @@ POST /classify  {"text": "..."}
 """
 
 import json
+import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -35,29 +36,58 @@ def _predict(model, masked):
         [[model['classes'][i], round(float(p[i]), 4)] for i in order[:3]]
 
 
+_MULTI_SPLIT = re.compile(r'\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*|\s+y\s+tambien\s+',
+                          re.IGNORECASE)
+
+
+def _classify_one(masked, entities):
+    """Nivel 1 (router con sesgo formal) + nivel 2 (submodelo)."""
+    r_vec = ROUTER['vec'].transform([masked])
+    r_p = ROUTER['clf'].predict_proba(r_vec)[0]
+    r_classes = list(ROUTER['classes'])
+    p_formal = float(r_p[r_classes.index('formal')])
+    critical = bool(entities.get('student') or entities.get('group'))
+    domain = 'formal' if critical or p_formal >= FORMAL_BIAS else 'informal'
+    model = FORMAL if domain == 'formal' else INFORMAL
+    intent, conf, top3 = _predict(model, masked)
+    return domain, p_formal, intent, conf, top3
+
+
 def classify(text: str) -> dict:
+    norm = normalize(text)
+    # ── multi-intención: segmentos separados por conjunciones/comas ──
+    segments = [s.strip() for s in _MULTI_SPLIT.split(norm) if len(s.strip()) > 2]
+    parts = []
+    if len(segments) > 1:
+        seen = set()
+        for seg in segments[:4]:
+            m, ent = preprocess(seg)
+            if not m:
+                continue
+            dom, pf, intent, conf, top3 = _classify_one(m, ent)
+            if conf >= 0.55 and intent not in seen:
+                if intent == 'math_operation':
+                    math = extract_math(seg)
+                    if math:
+                        ent['math'] = math
+                seen.add(intent)
+                parts.append({'intent': intent, 'confidence': round(conf, 4),
+                              'entities': ent, 'domain': dom, 'top3': top3})
+        if len(parts) > 1:
+            # la parte formal va primero — misión crítica tiene prioridad
+            parts.sort(key=lambda p: (p['domain'] != 'formal', -p['confidence']))
+            return {'domain': 'multi', 'intent': parts[0]['intent'],
+                    'confidence': parts[0]['confidence'], 'top3': parts[0]['top3'],
+                    'entities': parts[0]['entities'], 'parts': parts,
+                    'fallback': False}
+
     masked, entities = preprocess(text)
     if not masked:
         return {'domain': 'informal', 'intent': 'out_of_scope', 'confidence': 0.0,
                 'top3': [], 'entities': {}, 'fallback': True}
 
-    # ── Nivel 1: router ──
-    r_vec = ROUTER['vec'].transform([masked])
-    r_p = ROUTER['clf'].predict_proba(r_vec)[0]
-    r_classes = list(ROUTER['classes'])
-    p_formal = float(r_p[r_classes.index('formal')])
-
-    # Sesgo: cualquier entidad institucional (estudiante, grupo, rango de días)
-    # o P(formal) ≥ 0.30 → dominio formal. La cortesía nunca gana a los datos.
-    # critical: solo entidades institucionales fuertes (estudiante/grupo).
-    # 'días' o 'módulo' solos no bastan — «horóscopo de hoy» tiene 'hoy'
-    # pero no es misión crítica.
-    critical = bool(entities.get('student') or entities.get('group'))
-    domain = 'formal' if critical or p_formal >= FORMAL_BIAS else 'informal'
-
-    # ── Nivel 2: submodelo del dominio ──
-    model = FORMAL if domain == 'formal' else INFORMAL
-    intent, conf, top3 = _predict(model, masked)
+    # ── Nivel 1+2 (sesgo formal: la cortesía nunca gana a los datos) ──
+    domain, p_formal, intent, conf, top3 = _classify_one(masked, entities)
 
     # math NER — la operación detectada se estructura para la calculadora PHP
     math = None

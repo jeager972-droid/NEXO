@@ -13,6 +13,8 @@ FORMAL = {
     'notifications_unread','audit_query','students_count','groups_list',
     'teachers_list','schedule_info','export_data','derive_action',
     'about_me','help','capabilities','security_probe',
+    'random_student','staff_lookup','start_operation','count_present',
+    'count_trackings',
 }
 
 INFORMAL = {

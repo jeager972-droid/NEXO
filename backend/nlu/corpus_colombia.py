@@ -183,6 +183,30 @@ def _():
     ])
 
 
+@intent('random_department')
+def _():
+    return _augment([
+        "dame un departamento al azar", "un departamento aleatorio",
+        "dime un departamento cualquiera", "un departamento de colombia cualquiera",
+        "elige un departamento", "departamento aleatorio de colombia",
+        "sorprendeme con un departamento", "dime una ciudad al azar",
+        "una ciudad cualquiera de colombia", "dame una ciudad aleatoria",
+        "mencioname un departamento", "un municipio al azar",
+        "un lugar de colombia", "dime un sitio colombiano", "cualquier departamento",
+    ])
+
+
+@intent('random_number')
+def _():
+    return _augment([
+        "dame un numero aleatorio", "un numero al azar", "numero aleatorio",
+        "dime un numero cualquiera", "un numero del 1 al 100", "numero entre 1 y 10",
+        "lanza un dado", "tira un dado", "dado", "cara o sello", "lanza una moneda",
+        "un numero random", "generame un numero", "dame un numero del 1 al 6",
+        "un numero entre 1 y 1000", "azar", "numero de la suerte", "rifa",
+    ])
+
+
 # ══ Matemáticas → calculadora (el modelo detecta; la API calcula) ════════════
 @intent('math_operation')
 def _():
@@ -198,6 +222,8 @@ def _():
         "{a} al cubo", "raiz cuadrada de {a}", "raiz de {a}",
         "raiz cubica de {a}", "raiz {b} de {a}", "{a} por ciento de {b}",
         "el {a}% de {b}", "{a} porciento de {b}", "factorial de {a}", "{a}!",
+        "cuanto es {a}% de {b}", "cuanto es {a} % de {b}", "cuanto es el {a}% de {b}",
+        "sacame el {a}% de {b}", "el {a} por ciento de {b}",
         # trigonometría y logaritmos
         "seno de {a}", "coseno de {a}", "tangente de {a}", "seno de {a} grados",
         "logaritmo de {a}", "logaritmo base {b} de {a}", "log de {a}",

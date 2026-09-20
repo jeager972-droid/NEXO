@@ -3196,6 +3196,64 @@ SELECT assign_permission_to_role('AUXILIARY', 'operations.situacion_critica');
 DROP FUNCTION IF EXISTS assign_permission_to_role(VARCHAR, VARCHAR);
 
 -- =============================================================================
+-- CHAT — «Pregúntale a Nexus» (asistente NLU)
+-- =============================================================================
+-- Historial de conversación por usuario + políticas institucionales del
+-- asistente (rector/coordinador deciden capacidades por rol).
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    message_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id    UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    user_id      UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    role         VARCHAR(20) NOT NULL CHECK (role IN ('user','assistant')),
+    content      TEXT NOT NULL,
+    session_id   UUID,           -- agrupa conversaciones; NULL = sesión legacy
+    payload_json JSONB,          -- {intent, confidence, cards, actions}
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user_ts
+    ON chat_messages(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+    ON chat_messages(session_id) WHERE session_id IS NOT NULL;
+
+-- Interruptores del asistente por escuela: qué puede pedir cada rol
+-- (riesgo, campos de estudiante, agregados, acciones derivadas, smalltalk).
+-- Sin fila = política por defecto (matriz segura en backend).
+CREATE TABLE IF NOT EXISTS school_chat_policies (
+    policy_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id   UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    policy_key  VARCHAR(80) NOT NULL,
+    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_by  UUID REFERENCES users(user_id),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(school_id, policy_key)
+);
+
+-- chat_messages: solo el dueño y administradores de su escuela ven el historial
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cm_select ON chat_messages;
+DROP POLICY IF EXISTS cm_insert ON chat_messages;
+CREATE POLICY cm_select ON chat_messages FOR SELECT
+    USING(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','SUPER_ADMIN'));
+CREATE POLICY cm_insert ON chat_messages FOR INSERT
+    WITH CHECK(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','EDGE_NODE'));
+
+-- school_chat_policies: lectura a la escuela; escritura igual (backend filtra rol)
+ALTER TABLE school_chat_policies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS scp_select ON school_chat_policies;
+DROP POLICY IF EXISTS scp_insert ON school_chat_policies;
+DROP POLICY IF EXISTS scp_update ON school_chat_policies;
+CREATE POLICY scp_select ON school_chat_policies FOR SELECT
+    USING(school_id = get_current_school_id() OR get_current_role() IN ('SYSTEM_WORKER','SUPER_ADMIN'));
+CREATE POLICY scp_insert ON school_chat_policies FOR INSERT
+    WITH CHECK(school_id = get_current_school_id() OR get_current_role() IN ('SUPER_ADMIN'));
+CREATE POLICY scp_update ON school_chat_policies FOR UPDATE
+    USING(school_id = get_current_school_id() OR get_current_role() IN ('SUPER_ADMIN'));
+
+COMMENT ON TABLE chat_messages IS 'Historial «Pregúntale a Nexus» — intent, confianza y payload por mensaje. Retención sugerida 90 días (worker de purga).';
+COMMENT ON TABLE school_chat_policies IS 'Interruptores del asistente Nexus por escuela — qué puede pedir cada rol (riesgo, campos de estudiante, agregados, acciones derivadas, smalltalk).';
+
+-- =============================================================================
 -- COMMENTS (al final, después de crear todas las tablas)
 -- =============================================================================
 COMMENT ON TABLE users IS 'Core user accounts with authentication credentials. Multi-tenant by school_id.';
