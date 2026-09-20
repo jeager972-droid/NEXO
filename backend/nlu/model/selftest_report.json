@@ -1,16 +1,16 @@
 {
-  "n": 13880,
-  "acc_effective": 0.9345821325648415,
-  "false_fallback": 102,
-  "wrong_intent": 806,
-  "adv_leaks": 5,
+  "n": 18880,
+  "acc_effective": 0.934375,
+  "false_fallback": 275,
+  "wrong_intent": 964,
+  "adv_leaks": 0,
   "per_intent": {
     "greeting": {
-      "ok": 295,
+      "ok": 296,
       "n": 300
     },
     "wellbeing": {
-      "ok": 272,
+      "ok": 292,
       "n": 300
     },
     "joke": {
@@ -18,7 +18,7 @@
       "n": 300
     },
     "fun_fact": {
-      "ok": 80,
+      "ok": 125,
       "n": 200
     },
     "about_nexus": {
@@ -30,7 +30,7 @@
       "n": 300
     },
     "thanks": {
-      "ok": 184,
+      "ok": 167,
       "n": 200
     },
     "goodbye": {
@@ -38,15 +38,15 @@
       "n": 200
     },
     "yes": {
-      "ok": 195,
+      "ok": 188,
       "n": 200
     },
     "no": {
-      "ok": 149,
+      "ok": 144,
       "n": 150
     },
     "apology": {
-      "ok": 149,
+      "ok": 144,
       "n": 150
     },
     "compliment": {
@@ -82,23 +82,23 @@
       "n": 150
     },
     "date": {
-      "ok": 116,
+      "ok": 146,
       "n": 150
     },
     "weather": {
-      "ok": 154,
+      "ok": 195,
       "n": 200
     },
     "news_sports": {
-      "ok": 104,
+      "ok": 123,
       "n": 200
     },
     "food_music": {
-      "ok": 167,
+      "ok": 169,
       "n": 200
     },
     "meaning_life": {
-      "ok": 0,
+      "ok": 85,
       "n": 100
     },
     "confused": {
@@ -106,7 +106,7 @@
       "n": 150
     },
     "sing": {
-      "ok": 86,
+      "ok": 88,
       "n": 100
     },
     "dance": {
@@ -114,7 +114,7 @@
       "n": 100
     },
     "story": {
-      "ok": 150,
+      "ok": 127,
       "n": 150
     },
     "motivation": {
@@ -130,7 +130,7 @@
       "n": 100
     },
     "creator": {
-      "ok": 94,
+      "ok": 95,
       "n": 100
     },
     "name_meaning": {
@@ -142,7 +142,7 @@
       "n": 150
     },
     "day_summary": {
-      "ok": 400,
+      "ok": 399,
       "n": 400
     },
     "attendance_today": {
@@ -154,23 +154,23 @@
       "n": 400
     },
     "count_events": {
-      "ok": 702,
-      "n": 800
+      "ok": 995,
+      "n": 1200
     },
     "list_events": {
-      "ok": 548,
+      "ok": 529,
       "n": 600
     },
     "student_field": {
-      "ok": 800,
+      "ok": 775,
       "n": 800
     },
     "student_summary": {
-      "ok": 642,
+      "ok": 566,
       "n": 800
     },
     "group_summary": {
-      "ok": 500,
+      "ok": 417,
       "n": 500
     },
     "risk_students": {
@@ -178,11 +178,11 @@
       "n": 300
     },
     "trackings": {
-      "ok": 238,
+      "ok": 273,
       "n": 300
     },
     "permissions": {
-      "ok": 283,
+      "ok": 247,
       "n": 300
     },
     "citations": {
@@ -214,7 +214,7 @@
       "n": 150
     },
     "schedule_info": {
-      "ok": 196,
+      "ok": 199,
       "n": 200
     },
     "export_data": {
@@ -224,6 +224,102 @@
     "derive_action": {
       "ok": 400,
       "n": 400
+    },
+    "random_student": {
+      "ok": 300,
+      "n": 300
+    },
+    "staff_lookup": {
+      "ok": 250,
+      "n": 250
+    },
+    "start_operation": {
+      "ok": 358,
+      "n": 400
+    },
+    "count_present": {
+      "ok": 243,
+      "n": 300
+    },
+    "count_trackings": {
+      "ok": 250,
+      "n": 250
+    },
+    "top_offenders": {
+      "ok": 250,
+      "n": 250
+    },
+    "pending_returns": {
+      "ok": 200,
+      "n": 200
+    },
+    "sos_alerts": {
+      "ok": 150,
+      "n": 150
+    },
+    "biometric_spam": {
+      "ok": 150,
+      "n": 150
+    },
+    "group_student_count": {
+      "ok": 200,
+      "n": 200
+    },
+    "birthdays_today": {
+      "ok": 120,
+      "n": 120
+    },
+    "my_activity": {
+      "ok": 120,
+      "n": 120
+    },
+    "failed_messages": {
+      "ok": 120,
+      "n": 120
+    },
+    "risk_config": {
+      "ok": 120,
+      "n": 120
+    },
+    "attendance_ranking": {
+      "ok": 150,
+      "n": 150
+    },
+    "session_summary": {
+      "ok": 71,
+      "n": 100
+    },
+    "pending_tasks": {
+      "ok": 150,
+      "n": 150
+    },
+    "whatsapp_status": {
+      "ok": 100,
+      "n": 100
+    },
+    "math_operation": {
+      "ok": 248,
+      "n": 300
+    },
+    "colombia_capital": {
+      "ok": 174,
+      "n": 200
+    },
+    "colombia_president": {
+      "ok": 200,
+      "n": 200
+    },
+    "colombia_history": {
+      "ok": 245,
+      "n": 250
+    },
+    "random_department": {
+      "ok": 100,
+      "n": 100
+    },
+    "random_number": {
+      "ok": 120,
+      "n": 120
     }
   }
 }

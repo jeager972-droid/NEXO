@@ -102,6 +102,23 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'clases','leccion','lecciones','recreo','descanso','alonso',
          'primero','segundo','tercero','cuarto','quinto','sexto','septimo',
          'octavo','noveno','decimo','once','onceavo','undecimo',
+         'aleatorio','aleatoria','cualquiera','azar','random',
+         'un','uno','una','dos','tres','cuatro','cinco','seis','siete','ocho',
+         'nueve','diez','doce','trece','catorce','quince','veinte','treinta',
+         'cuarenta','cincuenta','sesenta','setenta','ochenta','noventa','cien',
+         'ciento','mil','millon','partido','resultado','noticias','mitad',
+         'doble','triple','porciento','porcentaje','raiz','seno','coseno',
+         'tangente','logaritmo','factorial','regla','area','volumen','base',
+         'altura','lado','radio','catetos','hipotenusa','pitagoras','grado',
+         'llover','llueve','llovio','nevando','truena','graniza','soleado',
+         'nublado','lluvioso','caluroso','fresco','templado',
+         'tarde','temprano','presente','justificado','puntual','ausente',
+         'dorado','leyenda','leyendas','mito','mitos','leyendario',
+         'existimos','vivimos','nacimos','estamos','somos','fueron','somos',
+         'siento','sientes','siente','tengo','tienes','quiero','quieres',
+         'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
+         'voy','vas','van','digo','dices','dicen','era','eran','sera','seran',
+         'fui','fueron','hubo','habia','habran','hay','eres','sois','ser',
          'grados','grado','jornadas','turno','bano','banos','permiso','permisos',
          'faltas','falta','ausencias','ausencia','fugas','fuga','casos','emergencia',
          'emergencias','panico','sos','seguimiento','datos','informacion','ficha',
@@ -112,7 +129,7 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
 _BOUNDARY = r'(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)'
 _STUDENT_PATS = [
     r'(?=(?:estudiante|alumno|alumna|niño|niña)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
-    r'(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    r'(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
 ]
 
 
@@ -188,7 +205,7 @@ def mask_entities(q: str, e: dict = None) -> str:
         src = e.get('_group_src') or e['group'].lower()
         masked = re.sub(r'\b' + re.escape(src) + r'\b', ' grupo_ent ', masked)
     masked = re.sub(r'\b\d+\b', ' num_ent ', masked)
-    _numw = ('un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|'
+    _numw = ('uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|'
              'once|doce|trece|catorce|quince|veinte|treinta|cuarenta|cincuenta|'
              'sesenta|setenta|ochenta|noventa|cien|ciento|mil|millon|millones')
     masked = re.sub(r'\b(' + _numw + r')\b', ' num_ent ', masked)

@@ -18,6 +18,7 @@ export function saveCtx(res) {
     for (const k of KEEP) if (res.entities?.[k]) entities[k] = res.entities[k];
     const ctx = {
       last_intent: res.intent,
+      last_reply: res.reply,
       last_cmd: res.actions?.[0]?.to?.match(/cmd=([a-z_]+)/)?.[1] ?? null,
       entities,
       ts: Date.now(),

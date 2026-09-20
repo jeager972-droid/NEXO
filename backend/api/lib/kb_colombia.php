@@ -46,7 +46,6 @@ const NX_KB_PRESIDENTS = [
     'alvaro uribe' => 'Álvaro Uribe Vélez — 2002-10, seguridad democrática.',
     'juan manuel santos' => 'Juan Manuel Santos — 2010-18, acuerdo de paz, Nobel de Paz 2016.',
     'ivan duque' => 'Iván Duque — 2018-22.',
-    'gustavo petro' => 'Gustavo Petro — presidente desde 2022, primer presidente de izquierda.',
     'laureano gomez' => 'Laureano Gómez — 1950-53.',
     'mariano ospina perez' => 'Ospina Pérez — 1946-50, presidente durante el Bogotazo.',
     'enrique olaya herrera' => 'Olaya Herrera — 1930-34.',
@@ -75,12 +74,18 @@ const NX_KB_HISTORY = [
     'separacion de panama' => 'Panamá se separó de Colombia el 3 de noviembre de 1903.',
     'bogotazo' => '9 de abril de 1948 — el asesinato de Gaitán incendió Bogotá.',
     'frente nacional' => '1958-1974: alternancia Liberal-Conservadora tras la dictadura.',
-    'constitucion 1991' => 'La Constitución de 1991 declaró a Colombia Estado Social de Derecho.',
+    'constitucion 1991' => 'La Constitución de 1991 declaró a Colombia Estado Social de Derecho — es la vigente, promulgada por la Asamblea Constituyente que lideró César Gaviria.',
+    'ultima constitucion' => 'La Constitución vigente es la de 1991 — Estado Social de Derecho, tutela y derechos fundamentales.',
+    'constitucion politica' => 'La Constitución Política vigente es la de 1991 — reemplazó la de 1886.',
+    'constitucion actual' => 'La Constitución actual de Colombia es la de 1991.',
+    'constitucion de 1886' => 'La Constitución de 1886 rigió el país por más de un siglo hasta la de 1991.',
     'acuerdo de paz' => 'El acuerdo de 2016 con las FARC cerró 50+ años de conflicto.',
     'la violencia' => 'La Violencia (1948-1958) — la guerra civil bipartidista.',
     'guerra de los mil dias' => 'La Guerra de los Mil Días (1899-1902).',
     'colonizacion' => 'Santa Marta (1525) — primera ciudad fundada por españoles en territorio continental.',
     'el dorado' => 'El Dorado — el ritual muisca del cacique bañado en oro en la laguna de Guatavita.',
+    'leyenda del dorado' => 'La leyenda de El Dorado: el cacique muisca se cubría de polvo de oro y se sumergía en la laguna de Guatavita ofrendando tesoros. Los conquistadores la buscaron por décadas — era un hombre, no una ciudad.',
+    'dorado' => 'El Dorado — el ritual muisca del cacique cubierto de oro en Guatavita; la leyenda que volvió locos a los conquistadores.',
 ];
 
 const NX_KB_CULTURE = [

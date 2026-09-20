@@ -133,7 +133,7 @@ function nxMask(string $q): string {
         $masked = preg_replace('/\b' . preg_quote(mb_strtolower($s['group'])) . '\b/u', ' grupo_ent ', $masked);
     }
     $masked = preg_replace('/\b\d+\b/', ' num_ent ', $masked);
-    $masked = preg_replace('/\b(un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|mil|millon|millones)\b/u', ' num_ent ', $masked);
+    $masked = preg_replace('/\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|mil|millon|millones)\b/u', ' num_ent ', $masked);
     return trim(preg_replace('/\s+/', ' ', $masked));
 }
 
@@ -187,8 +187,21 @@ function nxClassifyLocal(string $text): ?array {
     // Nivel 1 — router formal/informal con sesgo a misión crítica
     $r = nxSoftmax($all['router'], $q);
     $pFormal = $r['_proba'][array_search('formal', $all['router']['classes'])] ?? 0;
-    $critical = !empty($slots['student']) || !empty($slots['group']) || isset($slots['days']) || !empty($slots['module']);
-    $domain = ($critical || $pFormal >= NX_FORMAL_BIAS) ? 'formal' : 'informal';
+    $critical = !empty($slots['student']) || !empty($slots['group']) || !empty($slots['module']);
+    // Guardia informal determinística — paridad con service.py
+    $informalOnly = !$critical && (bool)preg_match(
+        '/\b(chiste|chistes|cuento|cuentos|historia|cantame|canta|baila|'
+      . 'frio|calor|clima|llov|hambre|sed|aburrid|pereza|'
+      . 'triste|alegre|feliz|estresad|ansios|sentido|existimos|'
+      . 'vivimos|vida|horoscopo|tarot|zodiacal|noticias|futbol|partido|'
+      . 'deporte|pelicula|serie|musica|cancion|almuerzo|comida|desayuno|'
+      . 'arepa|receta|sueno|cansado|inutil|tonto|bruto|feo|fea|lindo|'
+      . 'hermoso|genial|chevere|bacano|sorprendeme|impresioname|'
+      . 'que dia es|que fecha|que hora|a que dia|te amo|te quiero|'
+      . 'me gustas|enamorad|novio|novia|casar|beso|'
+      . 'como andas|como estas|como vas|que tal|como te va|'
+      . 'hemos hablado|de que hablamos|de que hemos)\b/u', $q);
+    $domain = $informalOnly ? 'informal' : (($critical || $pFormal >= NX_FORMAL_BIAS) ? 'formal' : 'informal');
 
     // Nivel 2 — submodelo
     $sub = nxSoftmax($all[$domain], $q);
@@ -196,6 +209,18 @@ function nxClassifyLocal(string $text): ?array {
     $conf = $sub['confidence'] ?? 0;
     $top3 = array_map(fn($i) => [$all[$domain]['classes'][$i], round($sub['top3'][$i] ?? 0, 4)],
                       array_keys($sub['top3']));
+    // arbitraje dual — paridad con service.py: cuando el router duda,
+    // el otro clasificador puede ganar si domina con claridad
+    if (!$critical && !$informalOnly && $pFormal >= 0.20 && $pFormal <= 0.80) {
+        $other = $domain === 'formal' ? 'informal' : 'formal';
+        $sub2 = nxSoftmax($all[$other], $q);
+        if (($sub2['confidence'] ?? 0) > $conf + 0.15) {
+            $domain = $other;
+            $intent = $sub2['intent']; $conf = $sub2['confidence'];
+            $top3 = array_map(fn($i) => [$all[$other]['classes'][$i], round($sub2['top3'][$i] ?? 0, 4)],
+                              array_keys($sub2['top3']));
+        }
+    }
     return [
         'domain' => $domain,
         'domain_conf' => round($pFormal, 4),
@@ -219,8 +244,9 @@ function nxClassify(string $text): array {
         foreach (array_slice($segments,0,4) as $seg) {
             $p = nxClassifyService($seg) ?? nxClassifyLocal($seg);
             if (!$p) continue;
-            if (($p['confidence'] ?? 0) >= 0.55 && !in_array($p['intent'], array_column($parts,'intent'), true))
-                $parts[] = $p;
+            // dedupe por intención+segmento — mismo intent con params distintos cuenta doble
+            if (($p['confidence'] ?? 0) >= 0.55 && !in_array($seg, array_column($parts,'text'), true))
+                $parts[] = $p + ['text' => $seg];
         }
         if (count($parts) > 1) {
             usort($parts, fn($a,$b)=> (($a['domain']??'informal')!=='formal') <=> (($b['domain']??'informal')!=='formal') ?: $b['confidence'] <=> $a['confidence']);
@@ -359,12 +385,27 @@ function nxExtractStudent(string $q): ?string {
         'pintas','puente','materia','clase','leccion','recreo','descanso',
         'primero','segundo','tercero','cuarto','quinto','sexto','septimo',
         'octavo','noveno','decimo','once','onceavo','undecimo',
-        'aleatorio','aleatoria','cualquiera','azar','random'];
+        'aleatorio','aleatoria','cualquiera','azar','random',
+        'existimos','vivimos','nacimos','estamos','somos','fueron',
+        'siento','sientes','siente','tengo','tienes','quiero','quieres',
+        'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
+        'voy','vas','van','digo','dices','dicen','era','eran','sera','seran',
+        'fui','hubo','habia','habran','eres','ser',
+        'un','uno','una','dos','tres','cuatro','cinco','seis','siete','ocho',
+        'nueve','diez','doce','trece','catorce','quince','veinte','treinta',
+        'cuarenta','cincuenta','sesenta','setenta','ochenta','noventa','cien',
+        'ciento','mil','millon','partido','resultado','noticias','mitad',
+        'doble','triple','porciento','porcentaje','raiz','seno','coseno',
+        'tangente','logaritmo','factorial','regla','area','volumen','base',
+        'altura','lado','radio','catetos','hipotenusa','pitagoras','grado',
+        'llover','llueve','llovio','nevando','truena','graniza','soleado',
+        'nublado','lluvioso','caluroso','fresco','templado',
+         'tarde','temprano','presente','justificado','puntual','ausente'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
         '/(?=(?:estudiante|alumno|alumna|nino|nina)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
-        '/(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
+        '/(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
     ] as $pat) {
         preg_match_all($pat, $q, $mm, PREG_OFFSET_CAPTURE);
         foreach ($mm[1] ?? [] as $cand) {
@@ -414,6 +455,24 @@ function nxFieldSynonyms(): array {
  * clasificador estadístico; aquí solo vive el repertorio.
  * ------------------------------------------------------------------------- */
 const NX_JOKES = [
+    '— Profe, ¿me pone cero? — ¿Por qué? — Porque es lo único que me falta para completar la colección.',
+    '¿Qué le dice un estudiante a otro antes del examen? — «Tranquilo, la intuición también es conocimiento».',
+    '— ¿Por qué el libro de matemáticas está triste? — Porque tiene demasiados problemas.',
+    'El estudiante más rápido del colegio: el que salió corriendo cuando el profe dijo «esto cae en el examen».',
+    '— Profe, ¿el examen era a lápiz o a esfero? — ¿Por? — Es que traje crayones.',
+    'En el colegio hay dos tipos de estudiantes: los que preguntan «¿esto pa qué sirve?» y los que ya lo están usando.',
+    '— Mamá, saqué 10 en conducta. — ¿Y en matemáticas? — También saqué diez… pero repartidos en todo el año.',
+    '¿Cuál es el santo patrono de los estudiantes? — San Valentín: nadie estudia sin amor… o sin que los obliguen.',
+    'El timbre del recreo es el único sonido que une a todo el colegio en la misma religión.',
+    '— Profesor, ¿puedo ir al baño? — Hace cinco minutos no sabías ni la respuesta 1, y ahora urgencias…',
+    'La tarea tiene un superpoder: desaparece exactamente cuando el profesor la va a revisar.',
+    '— ¿Estudiaste? — Sí, tres horas viendo cómo otros resolvían el ejercicio en videos.',
+    'Mi grupo favorito del colegio: el que está en el recreo.',
+    'El bus escolar es la única reunión donde todos están de acuerdo en llegar tarde.',
+    'Dicen que el conocimiento es poder. Por eso en diciembre todos andan recargando.',
+    'Un estudiante capó clase tan bien que ni la capa supo dónde estaba.',
+    '— ¿Quién copió? Silencio absoluto. El eco del salón respondió por todos.',
+    'El examen sorpresa es como el detector de metales del alma: nadie pasa limpio.',
     '¿Por qué el libro de matemáticas estaba triste? Porque tenía demasiados problemas.',
     '¿Qué le dijo un semáforo a otro? No me mires, me estoy cambiando.',
     '¿Cuál es el colmo de un profesor? Tener problemas de clase.',
@@ -433,12 +492,33 @@ const NX_JOKES = [
 ];
 
 const NX_FACTS = [
+    'Las inasistencias del lunes son estadísticamente más altas — el motor de riesgo ya lo tiene en cuenta.',
+    'Un sensor de huella responde en menos de un segundo y nunca guarda la imagen del dedo.',
+    'El 80% de los casos de riesgo se detectan por patrones de llegada tarde antes de que empeoren.',
+    'Las citaciones a acudientes tienen tasa de respuesta casi triple cuando van por el canal del colegio.',
+    'La jornada escolar tiene una «hora dorada»: los primeros 40 minutos son los de mejor asistencia.',
+    'Los permisos de salida vencidos sin retorno son el indicador más sensible de evasión interna.',
+    'Un grupo con más de 10% de tardanzas semanales suele tener un problema de horario, no de conducta.',
+    'La auditoría del sistema registra cada consulta — nada se pierde, nada se inventa.',
+    'El botón de pánico del sistema duerme a todos los sensores en cadena en menos de 2 segundos.',
+    'El grafito de un lápiz y el diamante son lo mismo — carbono con distinta disciplina. Como los estudiantes.',
+    'Las notificaciones de este sistema pasan por colas con reintento — ni una citación se pierde por señal mala.',
+    'El apellido más común en registros escolares colombianos suele ser García o Martínez.',
+    'Cada reporte del sistema se puede exportar — los datos del colegio pertenecen al colegio.',
+    'El primer colegio público de Colombia se fundó en 1575 — llevamos siglos educando.',
     'Los colegios con control biométrico reducen el tiempo de toma de asistencia a casi cero — eso es lo que yo hago aquí cada mañana.',
     'La huella dactilar es única incluso entre gemelos idénticos — por eso este sistema funciona sin confundir a nadie.',
     'El primer sistema de asistencia escolar por registro data del siglo XIX. Yo lo hago en milisegundos.',
     'Un patrón de 3 llegadas tarde en un mes suele ser el primer indicador de algo más — por eso existe el motor de riesgo.',
     'Los sensores de huella no guardan la foto del dedo: guardan una firma matemática. Nadie puede reconstruir el dedo desde ella.',
 ];
+
+/** Elige del pool excluyendo la respuesta anterior — «dame otro» nunca repite. */
+function nxPickNoRepeat(array $pool, string $last): string {
+    if (count($pool) < 2) return $pool[0] ?? '';
+    $cands = array_values(array_filter($pool, fn($r) => $r !== $last));
+    return $cands[array_rand($cands)];
+}
 
 function nxSmalltalk(string $intent, array $vars = []): string {
     $name = $vars['name'] ?? '';
@@ -463,8 +543,8 @@ function nxSmalltalk(string $intent, array $vars = []): string {
             'Me alegra. Si necesitas algo del sistema — datos, avisos, un estudiante — aquí estoy.',
             'Perfecto. Cuando quieras revisamos la jornada o lo que necesites.',
         ],
-        'joke' => [NX_JOKES[array_rand(NX_JOKES)]],
-        'fun_fact' => [NX_FACTS[array_rand(NX_FACTS)]],
+        'joke' => [nxPickNoRepeat(NX_JOKES, $vars['_last_reply'] ?? '')],
+        'fun_fact' => [nxPickNoRepeat(NX_FACTS, $vars['_last_reply'] ?? '')],
         'about_nexus' => [
             'Soy Nexus — el sistema de la institución y tu asistente. Registro la jornada, vigilo los umbrales de riesgo, aviso cuando algo necesita decisión y respondo preguntas con datos reales. Nada de humo: si no lo sé, te lo digo.',
             'Nexus: mitad sistema de registro, mitad asistente. Conozco la jornada, los grupos, los avisos y las reglas del colegio — y hablo contigo en normal, no en informático.',
@@ -620,6 +700,19 @@ function nxIntentRoles(): array {
         'start_operation' => $ALL,
         'count_present' => $STAFF,
         'count_trackings' => ['RECTOR','COORDINATOR','COUNSELOR','SECRETARY','TEACHER'],
+        'top_offenders' => $STAFF,
+        'pending_returns' => $STAFF,
+        'sos_alerts' => ['RECTOR','COORDINATOR','SECURITY'],
+        'biometric_spam' => ['RECTOR','COORDINATOR','SECURITY'],
+        'group_student_count' => $STAFF,
+        'birthdays_today' => $ALL,
+        'my_activity' => $ALL,
+        'failed_messages' => ['RECTOR','COORDINATOR','SECRETARY'],
+        'risk_config' => ['RECTOR','COORDINATOR'],
+        'attendance_ranking' => ['RECTOR','COORDINATOR','COUNSELOR','SECRETARY'],
+        'session_summary' => $ALL,
+        'pending_tasks' => $ALL,
+        'whatsapp_status' => ['RECTOR','COORDINATOR','SECRETARY'],
         'about_me' => $ALL,
         'time' => $ALL, 'date' => $ALL,
         // smalltalk y meta: todos

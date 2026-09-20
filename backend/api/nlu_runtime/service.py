@@ -47,9 +47,30 @@ def _classify_one(masked, entities):
     r_classes = list(ROUTER['classes'])
     p_formal = float(r_p[r_classes.index('formal')])
     critical = bool(entities.get('student') or entities.get('group'))
-    domain = 'formal' if critical or p_formal >= FORMAL_BIAS else 'informal'
+    # Guardia informal determinística: léxico que solo existe en charla —
+    # salta al informal directo salvo que haya entidad crítica.
+    informal_only = not critical and bool(re.search(
+        r'\b(chiste|chistes|cuento|cuentos|historia|cantame|canta|baila|'
+        r'frio|calor|clima|llov|hambre|sed|aburrid|pereza|'
+        r'triste|alegre|feliz|estresad|ansios|sentido|existimos|existimos|'
+        r'vivimos|vida|horoscopo|tarot|zodiacal|noticias|futbol|partido|'
+        r'deporte|pelicula|serie|musica|cancion|almuerzo|comida|desayuno|'
+        r'arepa|receta|sueno|cansado|inutil|tonto|bruto|feo|fea|lindo|'
+        r'hermoso|genial|chevere|bacano|sorprendeme|impresioname|'
+        r'que dia es|que fecha|que hora|a que dia|te amo|te quiero|'
+        r'me gustas|enamorad|novio|novia|casar|beso|'
+        r'como andas|como estas|como vas|que tal|como te va|'
+        r'hemos hablado|de que hablamos|de que hemos)\b', masked))
+    domain = 'informal' if informal_only else ('formal' if critical or p_formal >= FORMAL_BIAS else 'informal')
     model = FORMAL if domain == 'formal' else INFORMAL
     intent, conf, top3 = _predict(model, masked)
+    # arbitraje dual simétrico: el otro clasificador gana si domina con claridad
+    if not critical and not informal_only and 0.20 <= p_formal <= 0.80:
+        other = INFORMAL if domain == 'formal' else FORMAL
+        i2, c2, t2 = _predict(other, masked)
+        if c2 > conf + 0.15:
+            domain = 'informal' if domain == 'formal' else 'formal'
+            intent, conf, top3 = i2, c2, t2
     return domain, p_formal, intent, conf, top3
 
 
@@ -65,14 +86,18 @@ def classify(text: str) -> dict:
             if not m:
                 continue
             dom, pf, intent, conf, top3 = _classify_one(m, ent)
-            if conf >= 0.55 and intent not in seen:
+            # dedupe por intent+parámetros — «acudiente de X y su documento»
+            # son DOS peticiones del mismo intent con 'field' distinto
+            sig = (intent, seg)
+            if conf >= 0.55 and sig not in seen:
                 if intent == 'math_operation':
                     math = extract_math(seg)
                     if math:
                         ent['math'] = math
-                seen.add(intent)
+                seen.add(sig)
                 parts.append({'intent': intent, 'confidence': round(conf, 4),
-                              'entities': ent, 'domain': dom, 'top3': top3})
+                              'entities': ent, 'domain': dom, 'top3': top3,
+                              'text': seg})
         if len(parts) > 1:
             # la parte formal va primero — misión crítica tiene prioridad
             parts.sort(key=lambda p: (p['domain'] != 'formal', -p['confidence']))

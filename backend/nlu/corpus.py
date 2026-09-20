@@ -84,6 +84,11 @@ def intent(name):
 @intent('greeting')
 def _():
     return _augment([
+        "sorprendeme", "impresioname", "asombrame", "maravillame", "admirame",
+        "sorprendeme con algo", "cuentame algo que no sepa", "dime algo que no sepa",
+        "dato que no conozca", "enseñame algo nuevo", "algo que me vuele la cabeza",
+        "algo curioso", "algo interesante", "cuentame algo", "dime algo",
+        "sabes algo curioso", "tienes algun dato", "sabes algun dato curioso",
         "hola", "hola nexus", "buenos dias", "buenas tardes", "buenas noches",
         "hey", "buenas", "saludos", "que mas", "que hubo", "hola como estas",
         "hola buen dia", "hola buenas", "holi", "hello", "hi", "buen dia",
@@ -474,9 +479,11 @@ def _():
     return _augment([
         "que noticias hay", "dime las noticias", "como va el partido",
         "quien gano el partido", "resultado del futbol", "la seleccion",
-        "noticias de politica", "quien es el presidente", "elecciones",
+        "noticias de politica", "elecciones",
         "que paso en el mundo", "dime algo de deportes", "futbol",
         "como va colombia en el mundial", "noticias de hoy",
+        "horoscopo de hoy", "mi horoscopo", "horoscopo", "signo zodiacal",
+        "que dice el horoscopo", "tarot", "quiosco", "aries hoy",
     ])
 
 
@@ -1008,3 +1015,146 @@ if __name__ == '__main__':
     print(f'Total ejemplos: {len(data)}')
     for k, v in dist.most_common():
         print(f'  {k:28s} {v}')
+
+# ══════════════ INTENTS DE SEGUNDA OLA — capacidades reales del sistema ══════
+
+@intent('top_offenders')
+def _():
+    return _augment(_expand([
+        "quien tiene mas evasiones", "quienes tienen mas tardanzas",
+        "estudiantes con mas faltas", "ranking de inasistencias",
+        "los mas problematicos", "quien falta mas", "quien llega mas tarde",
+        "top de evasiones", "quien tiene mas reportes", "estudiantes con mas incidentes",
+        "quien acumula mas tardanzas", "los peores del {group}", "quien falta mas del {group}",
+        "ranking de tardanzas del {group}", "quien tiene mas salidas", "mas fugas tiene",
+        "estudiantes con mas casos", "quien encabeza las faltas", "los que mas fallan",
+        "quien tiene mas inasistencias este mes", "top 5 de tardanzas",
+    ], group=GROUPS))
+
+
+@intent('pending_returns')
+def _():
+    return _augment([
+        "permisos sin retorno", "quien no ha vuelto", "permisos vencidos",
+        "quien salio y no regreso", "salidas sin retorno", "permisos que vencieron",
+        "quien esta por fuera todavia", "estudiantes fuera del salon sin volver",
+        "permisos activos vencidos", "quien se fue al bano y no volvio",
+        "quien no ha regresado de permiso", "salidas pendientes de retorno",
+        "quienes no han vuelto", "permisos expirados", "quien debe haber vuelto",
+    ])
+
+
+@intent('sos_alerts')
+def _():
+    return _augment([
+        "alertas sos", "hubo panico hoy", "cuantas emergencias hubo",
+        "alertas de panico", "sos del dia", "emergencias de hoy",
+        "cuantas alertas sos esta semana", "historial de panico", "ultima alerta sos",
+        "cuando fue la ultima emergencia", "alertas criticas", "sos recientes",
+        "hubo boton de panico", "emergencias registradas", "alertas rojas",
+    ])
+
+
+@intent('biometric_spam')
+def _():
+    return _augment([
+        "intentos fallidos de huella", "spam biometrico", "huellas rechazadas",
+        "intentos de acceso fallidos", "rechazos del sensor", "huellas no reconocidas",
+        "cuantos intentos fallidos hubo", "accesos denegados", "lecturas fallidas",
+        "intentos sospechosos de huella", "rechazos biometricos hoy",
+        "el sensor rechazo a alguien", "marcaciones fallidas",
+    ])
+
+
+@intent('group_student_count')
+def _():
+    return _augment(_expand([
+        "cuantos estudiantes hay en el {group}", "cuantos alumnos tiene el {group}",
+        "cuantos estudiantes tiene el {group}", "cuantos hay en {group}",
+        "numero de estudiantes del {group}", "total de estudiantes del {group}",
+        "cuantos pelados hay en el {group}", "cuantos chinos tiene el {group}",
+        "cuantos van en el {group}", "cuantos matriculados en {group}",
+        "cuantos estan en el {group}", "cuantos estudiantes del {group} hay",
+    ], group=GROUPS))
+
+
+@intent('birthdays_today')
+def _():
+    return _augment([
+        "quien cumple años hoy", "cumpleaños de hoy", "cumpleañeros de hoy",
+        "quien esta de cumpleaños", "cumpleaños de esta semana", "cumpleaños del mes",
+        "quienes cumplen años", "hay cumpleaños hoy", "cumpleaños de estudiantes",
+        "quien cumple años esta semana", "cumpleañeros del mes",
+    ])
+
+
+@intent('my_activity')
+def _():
+    return _augment([
+        "que hice hoy", "mi actividad de hoy", "que consulte hoy",
+        "mi actividad en el sistema", "que he hecho yo hoy", "mi actividad",
+        "que he consultado", "mis acciones de hoy", "mi historial de actividad",
+        "que hice esta semana", "mi registro de actividad",
+    ])
+
+
+@intent('failed_messages')
+def _():
+    return _augment([
+        "mensajes fallidos", "citaciones que no llegaron", "mensajes que no se enviaron",
+        "notificaciones fallidas", "whatsapp que no llegaron", "mensajes con error",
+        "cuantas citaciones fallaron", "mensajes sin entregar", "envios fallidos",
+        "que mensajes no llegaron", "fallas de mensajeria",
+    ])
+
+
+@intent('risk_config')
+def _():
+    return _augment([
+        "umbrales de riesgo", "configuracion de alertas", "como se calcula el riesgo",
+        "cual es el umbral de riesgo", "parametros de riesgo", "reglas de riesgo",
+        "que define el riesgo alto", "configuracion del motor de riesgo",
+        "como funciona el riesgo", "que umbrales hay", "niveles de riesgo",
+    ])
+
+
+@intent('attendance_ranking')
+def _():
+    return _augment([
+        "que grupo tiene mas faltas", "grupo con mas tardanzas",
+        "ranking de grupos por asistencia", "que grupo falta mas",
+        "grupo con mas evasiones", "comparar grupos por faltas",
+        "que grupo llega mas tarde", "grupos con mas incidentes",
+        "cual es el peor grupo", "que grupo tiene mas problemas",
+        "ranking de asistencia por grupo", "grupo con mas ausencias",
+    ])
+
+
+@intent('session_summary')
+def _():
+    return _augment([
+        "de que hemos hablado", "resumen de la conversacion", "que te he preguntado",
+        "recapitula", "resumen de lo que hablamos", "que hemos visto",
+        "recuerdame lo que pregunte", "de que hablamos", "que consulte contigo",
+        "resumen de mi chat", "que hemos hablado",
+    ])
+
+
+@intent('pending_tasks')
+def _():
+    return _augment([
+        "que tengo pendiente", "tareas pendientes", "que me falta por hacer",
+        "pendientes de hoy", "que tengo que revisar", "hay algo pendiente",
+        "que me toca hacer", "pendientes del dia", "cosas pendientes",
+        "que tengo sin resolver", "hay algo que me falte",
+    ])
+
+
+@intent('whatsapp_status')
+def _():
+    return _augment([
+        "funciona whatsapp", "estado de mensajeria", "cola de mensajes",
+        "cuantos mensajes en cola", "mensajes pendientes de envio",
+        "estado del servicio de mensajes", "cuantos whatsapp se enviaron hoy",
+        "mensajeria del dia", "cola de envios", "mensajes en espera",
+    ])

@@ -37,6 +37,9 @@ def _():
 @intent('colombia_department')
 def _():
     base = [
+        "capital de colombia", "cual es la capital de colombia", "capital del pais",
+        "capital de bogota", "cual es la capital de bogota", "bogota es capital de que",
+        "cual es la capital", "la capital de colombia es",
         "cuantos departamentos tiene colombia", "departamentos de colombia",
         "lista de departamentos", "que departamentos hay", "dime los departamentos",
         "en que departamento queda {city}", "a que departamento pertenece {city}",
@@ -60,6 +63,15 @@ def _():
         "lista de presidentes", "presidentes de colombia",
         "primer presidente de colombia", "presidentes que ha tenido colombia",
         "mejor presidente de colombia", "presidente que hizo la constitucion",
+        "quien fue simon bolivar", "que hizo simon bolivar", "hablame de bolivar",
+        "quien fue santander", "que hizo santander", "quien fue narino",
+        "quien fue uribe", "que hizo uribe", "hablame de uribe",
+        "quien fue santos", "que hizo santos", "quien fue duque",
+        "quien fue gaviria", "quien fue pastrana", "quien fue samper",
+        "quien fue lleras camargo", "quien fue rojas pinilla", "quien fue betancur",
+        "quien fue barco", "quien fue turbay", "quien fue valencia",
+        "quien fue lleras restrepo", "quien fue ospina", "quien fue laureano gomez",
+        "cuantos presidentes ha tenido colombia", "presidentes colombianos",
     ]
     return _augment(_expand(base, prez=_PREZ))
 
@@ -67,6 +79,13 @@ def _():
 @intent('colombia_history')
 def _():
     return _augment([
+        "que es la leyenda del dorado", "leyenda del dorado", "que es el dorado",
+        "cual es la ultima constitucion", "cual es la constitucion politica",
+        "ultima constitucion politica de colombia", "constitucion de colombia",
+        "constitucion de 1991", "constitucion actual", "constitucion vigente",
+        "cuando fue la constitucion de 1991", "que dice la constitucion",
+        "quien escribio la constitucion", "asamblea constituyente",
+
         "cuando fue la independencia de colombia", "independencia de colombia",
         "batalla de boyaca", "que paso el 20 de julio de 1810",
         "que fue la gran colombia", "cuando se separo panama",
@@ -230,6 +249,8 @@ def _():
         "ln de {a}", "logaritmo natural de {a}",
         # operaciones compuestas / expresiones
         "resuelve {expr}", "cuanto es {expr}", "calcula {expr}",
+        "la mitad de {a}", "el doble de {a}", "el triple de {a}",
+        "la tercera parte de {a}", "la cuarta parte de {a}", "el cuadruple de {a}",
         "operacion {expr}", "resultado de {expr}", "evalua {expr}",
         # mcm/mcd/regla de tres/áreas/pitágoras/cuadrática
         "mcm de {a} y {b}", "mcd de {a} y {b}", "minimo comun multiplo de {a} y {b}",

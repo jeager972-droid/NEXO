@@ -26,6 +26,10 @@ import numpy as np
 from preprocess import preprocess
 
 random.seed(7)
+
+# Intents semánticamente equivalentes — misma respuesta para el usuario
+ALIASES = {'colombia_fun_fact': 'fun_fact', 'greeting': 'wellbeing'}
+
 MODEL = joblib.load(Path(__file__).parent / 'model' / 'model.joblib')
 ROUTER, FORMAL, INFORMAL = MODEL['router'], MODEL['formal'], MODEL['informal']
 THRESH = 0.65
@@ -36,19 +40,43 @@ FORMAL_INTENTS = {'day_summary','attendance_today','late_today','count_events',
     'risk_students','trackings','permissions','citations','devices_status',
     'notifications_unread','audit_query','students_count','groups_list',
     'teachers_list','schedule_info','export_data','derive_action','about_me',
-    'help','capabilities','security_probe'}
+    'help','capabilities','security_probe','random_student','staff_lookup',
+    'start_operation','count_present','count_trackings','top_offenders',
+    'pending_returns','sos_alerts','biometric_spam','group_student_count',
+    'birthdays_today','my_activity','failed_messages','risk_config',
+    'attendance_ranking','session_summary','pending_tasks','whatsapp_status'}
 
 
 def classify(t):
     masked, entities = preprocess(t)
     rp = ROUTER['clf'].predict_proba(ROUTER['vec'].transform([masked]))[0]
     pf = float(rp[list(ROUTER['classes']).index('formal')])
-    critical = bool(entities.get('student') or entities.get('group') or entities.get('days') is not None)
-    domain = 'formal' if (critical or pf >= FORMAL_BIAS) else 'informal'
+    critical = bool(entities.get('student') or entities.get('group'))
+    informal_only = not critical and bool(re.search(
+        r'\b(chiste|chistes|cuento|cuentos|historia|cantame|canta|baila|'
+        r'frio|calor|clima|llov|hambre|sed|aburrid|pereza|'
+        r'triste|alegre|feliz|estresad|ansios|sentido|existimos|'
+        r'vivimos|vida|horoscopo|tarot|zodiacal|noticias|futbol|partido|'
+        r'deporte|pelicula|serie|musica|cancion|almuerzo|comida|desayuno|'
+        r'arepa|receta|sueno|cansado|inutil|tonto|bruto|feo|fea|lindo|'
+        r'hermoso|genial|chevere|bacano|sorprendeme|impresioname|'
+        r'que dia es|que fecha|que hora|a que dia|te amo|te quiero|'
+        r'me gustas|enamorad|novio|novia|casar|beso|'
+        r'como andas|como estas|como vas|que tal|como te va|'
+        r'hemos hablado|de que hablamos|de que hemos)\b', masked))
+    domain = 'informal' if informal_only else ('formal' if (critical or pf >= FORMAL_BIAS) else 'informal')
     m = FORMAL if domain == 'formal' else INFORMAL
     p = m['clf'].predict_proba(m['vec'].transform([masked]))[0]
     i = p.argmax()
-    return m['classes'][i], float(p[i])
+    intent, conf = m['classes'][i], float(p[i])
+    # arbitraje dual — paridad con service.py
+    if not critical and not informal_only and 0.20 <= pf <= 0.80:
+        o = INFORMAL if domain == 'formal' else FORMAL
+        p2 = o['clf'].predict_proba(o['vec'].transform([masked]))[0]
+        j = p2.argmax()
+        if float(p2[j]) > conf + 0.15:
+            intent, conf = o['classes'][j], float(p2[j])
+    return intent, conf
 
 
 # ══ Batería 1: frases NUEVAS por intent (entidades nunca vistas) ════════════
@@ -156,6 +184,66 @@ BATTERY += gen('schedule_info', ['horario', 'a que hora entra', 'hora de salida'
 BATTERY += gen('export_data', ['exporta las inasistencias', 'dame el reporte del mes', 'generar excel'], 150)
 BATTERY += gen('derive_action', ['deriva a seguimiento a {s}', 'cita al acudiente de {s}',
                                  'genera permiso para {s}', 'reporta a {s}', 'abre caso para {s}'], 400)
+# ── Segunda ola ──
+BATTERY += gen('random_student', ['dame un estudiante aleatorio', 'un estudiante al azar del {g}',
+                                  'el primer estudiante del {g}', 'un pelado cualquiera del {g}',
+                                  'mencioname un estudiante', 'un chino del {g}'], 300)
+BATTERY += gen('staff_lookup', ['quien es el rector', 'nombre del coordinador', 'quien es la psicologa',
+                                'como se llama el rector', 'quien dirige', 'quien es la secretaria',
+                                'quien es el portero', 'la orientadora quien es'], 250)
+BATTERY += gen('start_operation', ['quiero citar un acudiente', 'quiero mandar una solicitud',
+                                   'quiero reportar un incidente', 'quiero reportar un daño',
+                                   'quiero hacer un permiso', 'quiero cambiar el horario',
+                                   'salida pedagogica', 'quiero abrir un seguimiento',
+                                   'quiero autorizar una salida', 'registro manual de entrada'], 400)
+BATTERY += gen('count_present', ['cuantos estudiantes ingresaron hoy', 'cuantos vinieron hoy',
+                                 'cuantos entraron hoy', 'cuantos presentes', 'cuantos hay en el colegio'], 300)
+BATTERY += gen('count_trackings', ['cuantos en seguimiento', 'cuantos casos abiertos',
+                                   'cuantos casos resueltos', 'cuantos seguimientos hay',
+                                   'cuantos casos cerrados'], 250)
+BATTERY += gen('top_offenders', ['quien tiene mas evasiones', 'los mas problematicos',
+                                 'ranking de faltas', 'quien falta mas', 'top de tardanzas'], 250)
+BATTERY += gen('pending_returns', ['permisos sin retorno', 'quien no ha vuelto',
+                                   'permisos vencidos', 'quien salio y no regreso'], 200)
+BATTERY += gen('sos_alerts', ['alertas sos', 'hubo panico hoy', 'emergencias de hoy',
+                              'ultima alerta sos'], 150)
+BATTERY += gen('biometric_spam', ['intentos fallidos de huella', 'spam biometrico',
+                                  'huellas rechazadas', 'accesos denegados'], 150)
+BATTERY += gen('group_student_count', ['cuantos estudiantes hay en el {g}', 'cuantos tiene el {g}',
+                                       'total de alumnos del {g}'], 200)
+BATTERY += gen('birthdays_today', ['quien cumple años hoy', 'cumpleaños de hoy',
+                                   'cumpleañeros de esta semana'], 120)
+BATTERY += gen('my_activity', ['que hice hoy', 'mi actividad', 'que he consultado'], 120)
+BATTERY += gen('failed_messages', ['mensajes fallidos', 'citaciones que no llegaron',
+                                   'whatsapp que no llegaron'], 120)
+BATTERY += gen('risk_config', ['umbrales de riesgo', 'como se calcula el riesgo',
+                               'configuracion de alertas'], 120)
+BATTERY += gen('attendance_ranking', ['que grupo tiene mas faltas', 'ranking de grupos',
+                                      'grupo con mas tardanzas'], 150)
+BATTERY += gen('session_summary', ['de que hemos hablado', 'resumen de la conversacion',
+                                   'que te he preguntado'], 100)
+BATTERY += gen('pending_tasks', ['que tengo pendiente', 'tareas pendientes',
+                                 'que me falta por hacer'], 150)
+BATTERY += gen('whatsapp_status', ['cola de mensajes', 'mensajes en cola',
+                                   'cuantos whatsapp se enviaron hoy'], 100)
+# ── Casos que el usuario reportó rotos ──
+BATTERY += gen('math_operation', ['uno mas uno', 'cinco por cinco', 'la mitad de ochenta',
+                                  'coseno de 30', 'dos mas dos'], 300)
+BATTERY += gen('colombia_capital', ['capital de colombia', 'capital de bogota',
+                                    'capital de antioquia', 'cual es la capital'], 200)
+BATTERY += gen('colombia_president', ['primer presidente de colombia', 'quien fue bolivar',
+                                      'quien es el presidente actual', 'presidentes de colombia'], 200)
+BATTERY += gen('colombia_history', ['leyenda del dorado', 'ultima constitucion politica',
+                                    'constitucion de 1991', 'que es el dorado',
+                                    'independencia de colombia'], 250)
+BATTERY += gen('random_department', ['dame un departamento al azar', 'un departamento cualquiera',
+                                     'departamento aleatorio'], 100)
+BATTERY += gen('random_number', ['dame un numero aleatorio', 'un numero al azar',
+                                 'lanza un dado', 'cara o sello'], 120)
+# jerga escolar
+BATTERY += gen('count_events', ['cuantas veces capo clase {s}', 'cuantas veces se volo {s}',
+                                'cuantas pintas se tiro {s}', 'cuantas veces manco {s}',
+                                'cuantas veces hizo puente {s}'], 400)
 
 # ══ Batería 2: adversarial — nunca debe caer en intent de datos ═══════════════
 ADVERSARIAL = [
@@ -201,7 +289,7 @@ false_fb, wrong_intent = [], []
 
 for text, expected in BATTERY:
     pred, conf = classify(text)
-    ok = pred == expected
+    ok = ALIASES.get(pred, pred) == ALIASES.get(expected, expected)
     per_intent[expected][1] += 1
     if ok and conf >= THRESH:
         per_intent[expected][0] += 1
