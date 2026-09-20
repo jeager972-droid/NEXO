@@ -249,6 +249,7 @@ $routeMap = [
     'users' => 'users.php',
     'consultation' => ['consultations.php', 'misc.php'],
     'consultations' => 'consultations.php',
+    'chat' => 'chat.php',
     'tracking' => 'tracking.php',
     'school' => 'school_config.php',
     'teacher' => 'teacher_alerts.php',

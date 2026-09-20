@@ -9,3 +9,8 @@
 
 # Purgar notificaciones con más de 30 días de antigüedad - Todos los días a las 4 AM UTC
 0 4 * * * php /var/www/html/workers/worker_notification_purge.php >> /var/www/html/infra/logs/notification_purge.log 2>&1
+
+# Keep-alive — Render suspende servicios free tras ~15 min sin tráfico.
+# Un GET al health público cada 4 min mantiene API+NLU despiertos.
+# RENDER_EXTERNAL_URL lo inyecta Render automáticamente en el servicio.
+*/4 * * * * sh -c 'curl -sf -m 10 "${RENDER_EXTERNAL_URL:-http://localhost:8080}/health" > /dev/null 2>&1; curl -sf -m 5 http://localhost:8090/health > /dev/null 2>&1 || true'

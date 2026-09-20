@@ -23,7 +23,6 @@ import {
   Activity,
   Bell,
   FolderHeart,
-  Search,
   UserPlus,
   ShieldCheck,
   Cpu,
@@ -71,12 +70,9 @@ export const SIDEBAR_ITEMS = [
     icon: FolderHeart,
     roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR],
   },
-  {
-    title: 'Consultas',
-    path: '/consulta',
-    icon: Search,
-    roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR],
-  },
+  // Consultas fue reemplazada por «Pregúntale a Nexus» (chat NLU) —
+  // /consulta sigue existiendo como redirect a /chat.
+
   {
     title: 'Enrolamiento',
     path: '/enrolamiento',
@@ -89,10 +85,8 @@ export const SIDEBAR_ITEMS = [
     icon: Cpu,
     roles: [ROLES.RECTOR],
   },
-  // Chat con Nexus — va en la barra vertical (drawer), nunca en la
-  // barra principal inferior (PRIMARY_ACTIONS no lo incluye).
   {
-    title: 'Chat',
+    title: 'Pregúntale a Nexus',
     path: '/chat',
     icon: MessageCircle,
     roles: ALL_ROLES,
@@ -159,11 +153,11 @@ export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
 export const PRIMARY_ACTIONS = {
   [ROLES.RECTOR]:         ['/', '/operacion', '/casos', '/notificaciones'],
   [ROLES.COORDINADOR]:    ['/', '/operacion', '/casos', '/notificaciones'],
-  [ROLES.DOCENTE]:        ['/', '/operacion', '/consulta', '/notificaciones'],
-  [ROLES.SECRETARIA]:     ['/', '/consulta', '/enrolamiento', '/notificaciones'],
+  [ROLES.DOCENTE]:        ['/', '/operacion', '/chat', '/notificaciones'],
+  [ROLES.SECRETARIA]:     ['/', '/chat', '/enrolamiento', '/notificaciones'],
   [ROLES.PORTERO]:        ['/', '/operacion', '/notificaciones', '/perfil'],
   [ROLES.AUXILIAR]:       ['/', '/operacion', '/notificaciones', '/perfil'],
-  [ROLES.PSICORIENTADOR]: ['/', '/consulta', '/casos', '/notificaciones'],
+  [ROLES.PSICORIENTADOR]: ['/', '/chat', '/casos', '/notificaciones'],
 };
 
 export const getPrimaryActions = (role) => {

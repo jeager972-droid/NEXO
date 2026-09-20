@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import { NexoAvatar } from '../../components/patterns/NexoChat';
-import { Clock, Layers, BellRing, X } from 'lucide-react';
+import { Clock, Layers, BellRing, X, MessageCircle } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -27,6 +27,7 @@ import { NexusGuide } from '../../components/patterns/NexusGuide';
 import { schoolApi } from '../../api/school';
 import { riskApi } from '../../api/risk';
 import { teacherApi } from '../../api/teacher';
+import { chatApi } from '../../api/chat';
 import { ROLES } from '../../config/roles';
 import { humanizeError } from '../../utils/messages';
 
@@ -172,9 +173,10 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     if (missing.schedule) s.push('schedule');
     if (missing.groups) s.push(isRector ? 'groups' : 'groupsPending');
     if (missing.risk) s.push('risk');
+    if (missing.chat) s.push('chatpol');
     s.push('done');
     return s;
-  }, [isTeacher, isRector, missing.schedule, missing.groups, missing.risk]);
+  }, [isTeacher, isRector, missing.schedule, missing.groups, missing.risk, missing.chat]);
 
   const [stepIdx, setStepIdx] = useState(0);
   const step = steps[stepIdx];
@@ -205,6 +207,14 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   // riesgo
   const [riskCfg, setRiskCfg] = useState(null);
+  // políticas del asistente Nexus
+  const [chatPol, setChatPol] = useState({
+    'chat.teacher.risk_students': true,
+    'chat.teacher.student_fields': true,
+    'chat.teacher.aggregates': true,
+    'chat.teacher.derive_actions': true,
+    'chat.smalltalk.enabled': true,
+  });
   const [thresholds, setThresholds] = useState({
     LEVE: { n: 2, d: 30 }, MODERADA: { n: 3, d: 30 }, ALTA: { n: 2, d: 15 }, MUY_ALTA: { n: 1, d: 1 },
   });
@@ -230,6 +240,12 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       })
       .catch(() => { /* mantener defaults */ });
   }, [isTeacher, isUpdate, simulate]);
+
+  /* políticas actuales del asistente (modo actualización) */
+  useEffect(() => {
+    if (step !== 'chatpol' || simulate) return;
+    chatApi.policies().then((p) => setChatPol((prev) => ({ ...prev, ...p }))).catch(() => {});
+  }, [step, simulate]);
 
   /* cargar docentes para asignación de grupos */
   useEffect(() => {
@@ -388,10 +404,11 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       schedule: { icon: Clock,    t: 'Jornadas y horarios',       d: 'Entrada, salida, descanso y bloques por jornada', action: 'Actualizar jornadas',  lede: 'Vas a actualizar las jornadas y horarios de tu institución. Todo lo que cambies se puede volver a ajustar.' },
       groups:   { icon: Layers,   t: 'Grados, grupos y docentes', d: isRector ? 'La estructura del año con su docente asignado' : 'Lo completa rectoría — aquí revisas el avance', action: 'Actualizar grupos', lede: isRector ? 'Vas a actualizar la estructura académica del año: grados, grupos y sus docentes.' : 'Vas a revisar la estructura académica — su edición completa corresponde a rectoría.' },
       risk:     { icon: BellRing, t: 'Umbrales de aviso',         d: 'A partir de cuántas repeticiones Nexus alerta',  action: 'Actualizar umbrales',  lede: 'Vas a ajustar desde cuándo Nexus te alerta de repeticiones.' },
+      chat:     { icon: MessageCircle, t: 'Asistente Nexus',      d: 'Qué puede consultar cada rol con el chatbot',   action: 'Actualizar asistente', lede: 'Vas a decidir qué capacidades del chatbot están activas para cada rol — se pueden apagar y encender cuando quieras.' },
     };
     const agenda = isTeacher
       ? [{ icon: BellRing, t: 'Tus criterios de aviso', d: 'Desde cuándo te aviso de repeticiones en tus clases' }]
-      : ['schedule', 'groups', 'risk']
+      : ['schedule', 'groups', 'risk', 'chat']
           .filter((k) => missing[k])
           .map((k) => SECTION_META[k]);
 
@@ -680,6 +697,52 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     </>
   );
 
+  const saveChatPol = async () => {
+    setError(''); setSaving(true);
+    try { await chatApi.savePolicies(chatPol); next(); }
+    catch (e) { setError(humanizeError(e, 'No se pudieron guardar las políticas.')); }
+    finally { setSaving(false); }
+  };
+
+  const CHAT_POLICIES_UI = [
+    { key: 'chat.teacher.risk_students',   t: 'Docentes ven estudiantes en riesgo',        d: 'Siempre acotado a sus propios grupos — nunca los de otros docentes' },
+    { key: 'chat.teacher.student_fields',  t: 'Docentes consultan datos de estudiante',    d: 'Documento, contacto del acudiente, edad — solo de sus grupos' },
+    { key: 'chat.teacher.aggregates',      t: 'Docentes ven resúmenes y agregados',        d: 'Resumen de jornada, faltas del día, seguimientos — con su scope' },
+    { key: 'chat.teacher.derive_actions',  t: 'Docentes reciben acciones derivadas',       d: 'Chips «Derivar a seguimiento» / «Citar acudiente» cuando un dato cruza umbral' },
+    { key: 'chat.smalltalk.enabled',       t: 'Conversación cotidiana habilitada',         d: 'Chistes, saludos, charla — si se apaga, el bot solo responde datos' },
+  ];
+
+  const renderChatPol = () => (
+    <>
+      <StepHead kicker={`Paso ${realIdx} de ${totalReal}`} title="Qué puede hacer el asistente"
+        lede="Interruptores del chatbot por rol. El docente siempre queda acotado a sus grupos — estos controles deciden qué capacidades ve." />
+      <Work spotlight>
+        <h2 className="text-[15px] font-[620]">Permisos del asistente</h2>
+        <div className="flex flex-col divide-y divide-[var(--nx-border)]">
+          {CHAT_POLICIES_UI.map((p) => (
+            <div key={p.key} className="py-3.5 first:pt-0 last:pb-0">
+              <Switch
+                checked={!!chatPol[p.key]}
+                onChange={(v) => setChatPol((prev) => ({ ...prev, [p.key]: v }))}
+                title={p.t}
+                help={p.d}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="rounded-control border border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] px-4 py-3">
+          <p className="text-[12.5px] leading-relaxed text-[var(--nx-text-muted)]">
+            La seguridad base no se toca: cada rol solo ve lo que su alcance permite y el bot nunca ejecuta operaciones sin confirmación. Estos controles ajustan qué capacidades se ofrecen.
+          </p>
+        </div>
+      </Work>
+      {error && <p role="alert" className="text-[14px] text-[var(--nx-danger)]">{error}</p>}
+      <div className="flex justify-end">
+        <Button size="lg" loading={saving} onClick={saveChatPol}>Guardar políticas</Button>
+      </div>
+    </>
+  );
+
   const renderRules = () => (
     <>
       <StepHead kicker="Configuración opcional" title="Tus criterios de aviso"
@@ -745,7 +808,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   const RENDER = {
     welcome: renderWelcome, schedule: renderSchedule, groups: renderGroups,
-    groupsPending: renderGroupsPending, risk: renderRisk, rules: renderRules, done: renderDone,
+    groupsPending: renderGroupsPending, risk: renderRisk, rules: renderRules, chatpol: renderChatPol, done: renderDone,
   };
 
   return (

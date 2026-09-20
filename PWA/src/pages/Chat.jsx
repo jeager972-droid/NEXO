@@ -1,16 +1,15 @@
 /**
- * SCR-CHAT-01 Chat con Nexus
- * Conversación directa con Nexus: responde con datos reales del sistema
- * (insights del motor, métricas de la jornada, notificaciones, casos).
- * No es un LLM — cada respuesta cita datos verificables del backend.
+ * SCR-CHAT-01 Pregúntale a Nexus
+ * Chatbot intent-based con NLU estadístico (TF-IDF + regresión logística en
+ * backend). Cada respuesta viene del backend con intent + confianza + cards +
+ * actions — el texto libre nunca ejecuta operaciones; las acciones navegan a
+ * /operacion con el formulario precargado y su confirmación propia.
  */
-import { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Send, Sparkles, ArrowRight, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { clsx } from 'clsx';
-import { dashboardApi } from '../api/dashboard';
-import { trackingApi } from '../api/tracking';
-import { useNotifications } from '../context/NotificationContext';
+import { chatApi } from '../api/chat';
 import { NexoAvatar } from '../components/patterns/NexoChat';
 import { Surface } from '../components/ui/Surface';
 
@@ -18,172 +17,208 @@ const EASE = [0.22, 1, 0.36, 1];
 
 const SUGGESTIONS = [
   '¿Cómo va la jornada?',
-  'Resumen de la semana',
-  '¿Hay casos abiertos?',
-  '¿Qué notificaciones tengo?',
+  '¿Quiénes llegaron tarde hoy?',
+  '¿Hay estudiantes en riesgo?',
+  'Cuéntame un chiste',
 ];
 
-const norm = (s) => String(s || '').toLowerCase()
-  .normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-/** Responde usando datos reales — cada respuesta trae cifras del backend. */
-const answer = async (text, notifCount) => {
-  const q = norm(text);
-
-  const [insightsRes, statsRes, trackRes] = await Promise.allSettled([
-    dashboardApi.getInsights(),
-    dashboardApi.getStats(),
-    trackingApi.getActive(),
-  ]);
-  const insights = insightsRes.status === 'fulfilled' ? (insightsRes.value?.data?.insights || insightsRes.value?.insights || []) : [];
-  const stats = statsRes.status === 'fulfilled' ? (statsRes.value?.data || statsRes.value || {}) : {};
-  const trackings = trackRes.status === 'fulfilled' ? (trackRes.value?.trackings || []) : [];
-
-  if (/semana|resumen|digest|tendencia/.test(q)) {
-    const weekly = insights.find((i) => i.kind === 'WEEKLY_DIGEST');
-    if (weekly) return `La semana pasada: ${weekly.body}`;
-    return 'Todavía no hay suficiente historial para comparar semanas — en cuanto lo haya, te traigo el resumen aquí.';
-  }
-
-  if (/notificaci|pendiente|avisos?|alertas? nuevas/.test(q)) {
-    if (!notifCount) return 'No tienes notificaciones pendientes — todo está al día.';
-    return `Tienes ${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'} sin leer. Las ves todas en la sección Notificaciones.`;
-  }
-
-  if (/caso|seguimiento|derivad/.test(q)) {
-    if (!trackings.length) return 'No hay casos de seguimiento abiertos en este momento.';
-    return `Hay ${trackings.length} caso${trackings.length === 1 ? '' : 's'} de seguimiento activo${trackings.length === 1 ? '' : 's'}. En «Seguimientos» ves cada ficha con origen, responsable y respuestas del acudiente.`;
-  }
-
-  if (/jornada|hoy|asistencia|tarde|ausente|inasisten|presente/.test(q)) {
-    const parts = [];
-    if (stats.presentCount != null) parts.push(`${stats.presentCount} presentes`);
-    if (stats.lateCount) parts.push(`${stats.lateCount} llegadas tarde`);
-    if (stats.absentCount) parts.push(`${stats.absentCount} ausentes`);
-    if (stats.alertsCount) parts.push(`${stats.alertsCount} alertas`);
-    const top = insights[0];
-    const headline = parts.length ? `Hoy llevas ${parts.join(', ')}.` : 'Aún no hay registros de hoy.';
-    return top ? `${headline} Y mi lectura del motor: ${top.title} — ${top.body}` : `${headline} La jornada sigue su patrón habitual.`;
-  }
-
-  if (/sensor|dispositivo|lector|nodo|offline|desconect/.test(q)) {
-    const dev = insights.find((i) => i.kind === 'OFFLINE_DEVICES' || /dispositivo|sensor|nodo/i.test(i.title));
-    if (dev) return `Ojo con esto: ${dev.title} — ${dev.body}`;
-    return 'Todos los sensores reportan normalidad. Si alguno se desconecta te aviso aquí y en Notificaciones.';
-  }
-
-  if (/riesgo|riesg/.test(q)) {
-    const risk = insights.find((i) => /riesgo|alerta/i.test(i.title));
-    if (risk) return `${risk.title} — ${risk.body}`;
-    return 'El motor de riesgo no tiene alertas activas ahora — ningún patrón supera los umbrales configurados.';
-  }
-
-  return 'Puedo contarte cómo va la jornada, el resumen de la semana, los casos abiertos, tus notificaciones o el estado de los sensores — todo con datos reales del sistema. ¿Qué quieres saber?';
-};
+/** Render markdown-lite del bot: **negrilla**, saltos de línea, • listas. */
+const RichText = ({ text }) => (
+  <>
+    {String(text).split('\n').map((line, i) => {
+      const parts = line.split(/(\*[^*]+\*)/g).map((p, j) =>
+        p.startsWith('*') && p.endsWith('*')
+          ? <strong key={j} className="font-semibold text-[var(--nx-text)]">{p.slice(1, -1)}</strong>
+          : p
+      );
+      const isList = line.trim().startsWith('•');
+      return (
+        <span key={i} className={isList ? 'block pl-1' : undefined}>
+          {parts}{i < text.split('\n').length - 1 && <br />}
+        </span>
+      );
+    })}
+  </>
+);
 
 const UserBubble = ({ children }) => (
   <div className="flex justify-end">
-    <div className="max-w-[80%] rounded-surface rounded-br-xs bg-[var(--nx-accent)] px-4 py-3 text-body-sm text-[var(--nx-on-solid,white)]">
+    <div className="max-w-[82%] rounded-surface rounded-br-xs bg-[var(--nx-accent)] px-4 py-3 text-body-sm text-[var(--nx-on-solid,white)] shadow-[var(--nx-shadow-low)]">
       {children}
     </div>
   </div>
 );
 
-const BotBubble = ({ children }) => (
-  <div className="flex items-start gap-3">
-    <NexoAvatar size={36} />
-    <div className="flex-1">
-      <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-        <p className="text-body-sm text-[var(--nx-text)] leading-relaxed">{children}</p>
-      </div>
-      <p className="text-caption text-[var(--nx-text-muted)] mt-1 px-1">NEXUS</p>
+const DataCard = ({ card }) => (
+  <div className="mt-3 overflow-hidden rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)]">
+    {card.title && (
+      <p className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-3 py-1.5 text-caption font-semibold uppercase tracking-wide text-[var(--nx-text-muted)]">
+        {card.title}
+      </p>
+    )}
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-[12.5px]">
+        <thead>
+          <tr className="border-b border-[var(--nx-border)]">
+            {card.columns.map((c, i) => (
+              <th key={i} className="px-3 py-1.5 font-semibold text-[var(--nx-text-muted)]">{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {card.rows.map((r, i) => (
+            <tr key={i} className="border-b border-[var(--nx-border)] last:border-0">
+              {r.map((cell, j) => (
+                <td key={j} className="px-3 py-1.5 text-[var(--nx-text)]">{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   </div>
 );
 
+const BotBubble = ({ msg, onAction }) => (
+  <div className="flex items-start gap-3">
+    <NexoAvatar size={36} />
+    <div className="min-w-0 flex-1">
+      <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3 shadow-[var(--nx-shadow-low)]">
+        <p className="text-body-sm leading-relaxed text-[var(--nx-text)]"><RichText text={msg.text} /></p>
+        {msg.cards?.map((c, i) => <DataCard key={i} card={c} />)}
+        {msg.actions?.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {msg.actions.map((a, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onAction(a)}
+                className="flex items-center gap-1.5 rounded-full border border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--nx-accent)] transition-colors hover:bg-[var(--nx-surface-accent)]"
+              >
+                {a.label} <ArrowRight size={12} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="mt-1 px-1 text-caption text-[var(--nx-text-muted)]">NEXUS</p>
+    </div>
+  </div>
+);
+
+const Typing = () => (
+  <div className="flex items-start gap-3">
+    <NexoAvatar size={36} />
+    <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
+      <span className="flex items-center gap-1">
+        {[0, 1, 2].map((d) => (
+          <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--nx-accent)]" style={{ animationDelay: `${d * 0.15}s` }} />
+        ))}
+        <span className="ml-1 inline-block h-[13px] w-[6px] animate-pulse rounded-[2px] bg-[var(--nx-accent)]" />
+      </span>
+    </div>
+  </div>
+);
+
+const WELCOME = {
+  from: 'bot',
+  text: 'Hola — soy Nexus, el sistema de tu institución. Puedo contarte la jornada, buscar estudiantes, darte conteos por grupo o por días, avisarte de riesgos… o simplemente charlar. ¿Qué necesitas?',
+};
+
 const Chat = () => {
-  const { notifCount } = useNotifications();
-  const [messages, setMessages] = useState([
-    { from: 'bot', text: 'Hola — soy Nexus. Te cuento cómo va la jornada, la semana, los casos y las alertas, siempre con datos reales del sistema. ¿Qué quieres saber?' },
-  ]);
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState([WELCOME]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    chatApi.history()
+      .then((rows) => { if (rows.length) setMessages(rows.map((r) => ({ from: r.from, text: r.text, cards: r.cards, actions: r.actions }))); })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, thinking]);
 
-  const send = async (text) => {
+  const send = useCallback(async (text) => {
     const t = (text ?? input).trim();
     if (!t || thinking) return;
     setInput('');
     setMessages((m) => [...m, { from: 'user', text: t }]);
     setThinking(true);
     try {
-      const reply = await answer(t, notifCount);
-      setMessages((m) => [...m, { from: 'bot', text: reply }]);
+      const res = await chatApi.send(t);
+      setMessages((m) => [...m, { from: 'bot', text: res.reply, cards: res.cards, actions: res.actions, denied: res.denied }]);
     } catch {
-      setMessages((m) => [...m, { from: 'bot', text: 'No pude consultar los datos ahora — intenta de nuevo en un momento.' }]);
+      setMessages((m) => [...m, { from: 'bot', text: 'No pude procesar eso ahora — intenta de nuevo en un momento.' }]);
     } finally {
       setThinking(false);
     }
+  }, [input, thinking]);
+
+  const onAction = (a) => {
+    if (a.kind === 'nav' && a.to) navigate(a.to);
   };
 
   return (
     <div className="flex h-[calc(100dvh-180px)] flex-col">
-      <div className="mb-4 flex items-center gap-3">
-        <NexoAvatar size={40} />
-        <div>
-          <h1 className="text-heading font-semibold text-[var(--nx-text)]">Nexus</h1>
-          <p className="text-caption text-[var(--nx-text-muted)]">Respuestas con datos reales — nada inventado</p>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <NexoAvatar size={40} />
+          <div>
+            <h1 className="text-heading font-semibold text-[var(--nx-text)]">Pregúntale a Nexus</h1>
+            <p className="text-caption text-[var(--nx-text-muted)]">Lenguaje natural · datos reales · nada inventado</p>
+          </div>
         </div>
+        {loaded && messages.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setMessages([WELCOME])}
+            className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border)] px-3 py-1.5 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)]"
+          >
+            <RotateCcw size={12} /> Nueva conversación
+          </button>
+        )}
       </div>
 
       <Surface className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+        <div ref={scrollRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           <AnimatePresence initial={false}>
             {messages.map((m, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: EASE }}>
-                {m.from === 'bot' ? <BotBubble>{m.text}</BotBubble> : <UserBubble>{m.text}</UserBubble>}
+                {m.from === 'bot' ? <BotBubble msg={m} onAction={onAction} /> : <UserBubble>{m.text}</UserBubble>}
               </motion.div>
             ))}
           </AnimatePresence>
-          {thinking && (
-            <div className="flex items-start gap-3">
-              <NexoAvatar size={36} />
-              <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-                <span className="flex gap-1">
-                  {[0, 1, 2].map((d) => (
-                    <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--nx-text-muted)]" style={{ animationDelay: `${d * 0.15}s` }} />
-                  ))}
-                </span>
-              </div>
-            </div>
-          )}
+          {thinking && <Typing />}
         </div>
 
         <div className="shrink-0 border-t border-[var(--nx-border)] p-4">
-          <div className="mb-3 flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => send(s)}
-                className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border-accent)] bg-[var(--nx-subtle-bg-accent)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--nx-accent)] transition-colors hover:bg-[var(--nx-surface-accent)]"
-              >
-                <Sparkles size={12} /> {s}
-              </button>
-            ))}
-          </div>
-          <form
-            onSubmit={(e) => { e.preventDefault(); send(); }}
-            className={clsx('flex items-center gap-3')}
-          >
+          {messages.length <= 2 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => send(s)}
+                  className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border-accent)] bg-[var(--nx-subtle-bg-accent)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--nx-accent)] transition-colors hover:bg-[var(--nx-surface-accent)]"
+                >
+                  <Sparkles size={12} /> {s}
+                </button>
+              ))}
+            </div>
+          )}
+          <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-3">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Pregúntale a Nexus…"
+              maxLength={500}
+              aria-label="Mensaje para Nexus"
               className="flex-1 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-2.5 text-body-sm text-[var(--nx-text)] placeholder:text-[var(--nx-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--nx-ring)]"
             />
             <button

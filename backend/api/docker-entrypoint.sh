@@ -238,6 +238,14 @@ echo "[nexo] Mosquitto MQTT broker iniciado en puerto 1883"
 echo "[nexo] Arrancando nginx en puerto 8080 (en background)..."
 nginx
 
+# NLU local — clasificador jerárquico en localhost:8090 (mismo contenedor)
+if [ -d /var/www/html/nlu_runtime ] && [ -x /opt/nlu-venv/bin/python ]; then
+    echo "[nexo] Iniciando NLU local en :8090..."
+    mkdir -p /var/www/html/infra/logs
+    cd /var/www/html/nlu_runtime && /opt/nlu-venv/bin/python service.py >> /var/www/html/infra/logs/nlu.log 2>&1 &
+    cd /var/www/html
+fi
+
 echo "[nexo] Configurando supercronic para tareas periódicas..."
 mkdir -p /var/www/html/infra/logs
 chmod +x /var/www/html/infra/scripts/recalc_risk.sh

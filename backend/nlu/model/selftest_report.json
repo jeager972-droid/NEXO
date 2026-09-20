@@ -1,0 +1,229 @@
+{
+  "n": 13880,
+  "acc_effective": 0.9345821325648415,
+  "false_fallback": 102,
+  "wrong_intent": 806,
+  "adv_leaks": 5,
+  "per_intent": {
+    "greeting": {
+      "ok": 295,
+      "n": 300
+    },
+    "wellbeing": {
+      "ok": 272,
+      "n": 300
+    },
+    "joke": {
+      "ok": 300,
+      "n": 300
+    },
+    "fun_fact": {
+      "ok": 80,
+      "n": 200
+    },
+    "about_nexus": {
+      "ok": 288,
+      "n": 300
+    },
+    "about_me": {
+      "ok": 300,
+      "n": 300
+    },
+    "thanks": {
+      "ok": 184,
+      "n": 200
+    },
+    "goodbye": {
+      "ok": 200,
+      "n": 200
+    },
+    "yes": {
+      "ok": 195,
+      "n": 200
+    },
+    "no": {
+      "ok": 149,
+      "n": 150
+    },
+    "apology": {
+      "ok": 149,
+      "n": 150
+    },
+    "compliment": {
+      "ok": 200,
+      "n": 200
+    },
+    "insult": {
+      "ok": 200,
+      "n": 200
+    },
+    "bored": {
+      "ok": 150,
+      "n": 150
+    },
+    "love": {
+      "ok": 150,
+      "n": 150
+    },
+    "human_check": {
+      "ok": 200,
+      "n": 200
+    },
+    "do_for_me": {
+      "ok": 200,
+      "n": 200
+    },
+    "emotion_sad": {
+      "ok": 250,
+      "n": 250
+    },
+    "time": {
+      "ok": 150,
+      "n": 150
+    },
+    "date": {
+      "ok": 116,
+      "n": 150
+    },
+    "weather": {
+      "ok": 154,
+      "n": 200
+    },
+    "news_sports": {
+      "ok": 104,
+      "n": 200
+    },
+    "food_music": {
+      "ok": 167,
+      "n": 200
+    },
+    "meaning_life": {
+      "ok": 0,
+      "n": 100
+    },
+    "confused": {
+      "ok": 150,
+      "n": 150
+    },
+    "sing": {
+      "ok": 86,
+      "n": 100
+    },
+    "dance": {
+      "ok": 100,
+      "n": 100
+    },
+    "story": {
+      "ok": 150,
+      "n": 150
+    },
+    "motivation": {
+      "ok": 150,
+      "n": 150
+    },
+    "help": {
+      "ok": 300,
+      "n": 300
+    },
+    "age": {
+      "ok": 100,
+      "n": 100
+    },
+    "creator": {
+      "ok": 94,
+      "n": 100
+    },
+    "name_meaning": {
+      "ok": 80,
+      "n": 80
+    },
+    "wellbeing_reply": {
+      "ok": 150,
+      "n": 150
+    },
+    "day_summary": {
+      "ok": 400,
+      "n": 400
+    },
+    "attendance_today": {
+      "ok": 400,
+      "n": 400
+    },
+    "late_today": {
+      "ok": 400,
+      "n": 400
+    },
+    "count_events": {
+      "ok": 702,
+      "n": 800
+    },
+    "list_events": {
+      "ok": 548,
+      "n": 600
+    },
+    "student_field": {
+      "ok": 800,
+      "n": 800
+    },
+    "student_summary": {
+      "ok": 642,
+      "n": 800
+    },
+    "group_summary": {
+      "ok": 500,
+      "n": 500
+    },
+    "risk_students": {
+      "ok": 300,
+      "n": 300
+    },
+    "trackings": {
+      "ok": 238,
+      "n": 300
+    },
+    "permissions": {
+      "ok": 283,
+      "n": 300
+    },
+    "citations": {
+      "ok": 200,
+      "n": 200
+    },
+    "devices_status": {
+      "ok": 200,
+      "n": 200
+    },
+    "notifications_unread": {
+      "ok": 200,
+      "n": 200
+    },
+    "audit_query": {
+      "ok": 150,
+      "n": 150
+    },
+    "students_count": {
+      "ok": 150,
+      "n": 150
+    },
+    "groups_list": {
+      "ok": 150,
+      "n": 150
+    },
+    "teachers_list": {
+      "ok": 150,
+      "n": 150
+    },
+    "schedule_info": {
+      "ok": 196,
+      "n": 200
+    },
+    "export_data": {
+      "ok": 150,
+      "n": 150
+    },
+    "derive_action": {
+      "ok": 400,
+      "n": 400
+    }
+  }
+}

@@ -3,7 +3,7 @@
  * Enrutador SPA: lazy loading, protección por rol, PWA y deep links.
  */
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { NotificationProvider } from './context/NotificationContext';
 import { initTelemetry } from './api/telemetry';
@@ -18,7 +18,6 @@ const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Operation = lazy(() => import('./pages/Operation'));
 const Notifications = lazy(() => import('./pages/Notifications'));
-const Consultation = lazy(() => import('./pages/Consultation'));
 const Enrollment = lazy(() => import('./pages/Enrollment'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
 const Casos = lazy(() => import('./pages/Seguimiento'));
@@ -30,7 +29,6 @@ const Chat = lazy(() => import('./pages/Chat'));
 
 function App() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const isInstallRoute = location.pathname.includes('/instalar/');
 
@@ -86,9 +84,8 @@ function App() {
                   <Route path="/perfil" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                   <Route path="/chat" element={<ErrorBoundary><Chat /></ErrorBoundary>} />
 
-                  <Route path="/consulta" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.DOCENTE, ROLES.PSICORIENTADOR]} />}>
-                    <Route index element={<ErrorBoundary><Consultation /></ErrorBoundary>} />
-                  </Route>
+                  {/* Consultas fue absorbido por «Pregúntale a Nexus» */}
+                  <Route path="/consulta" element={<Navigate to="/chat" replace />} />
                   <Route path="/casos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR]} />}>
                     <Route index element={<ErrorBoundary><Casos /></ErrorBoundary>} />
                   </Route>

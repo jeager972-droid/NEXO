@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getRoleDisplay } from '../config/roles';
 import { usersApi } from '../api/users';
-import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Settings, Clock, GraduationCap, Shield } from 'lucide-react';
+import { Camera, Mail, Phone, Key, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, LogOut, Type, Sun, Moon, Settings, Clock, GraduationCap, Shield, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -670,6 +670,12 @@ const Profile = () => {
               title: 'Umbrales de riesgo',
               desc: 'A partir de cuántas repeticiones Nexus alerta cada nivel.',
             },
+            {
+              scope: 'chat',
+              icon: MessageCircle,
+              title: 'Asistente Nexus',
+              desc: 'Qué puede consultar y hacer cada rol con el chatbot.',
+            },
           ].map(({ scope, icon: Icon, title, desc }) => (
             <Card key={scope} className="p-5">
               <div className="flex items-center justify-between gap-4">
@@ -804,6 +810,7 @@ const Profile = () => {
               schedule: onboardingScope === 'schedule',
               groups: onboardingScope === 'groups',
               risk: onboardingScope === 'risk',
+              chat: onboardingScope === 'chat',
             }}
             mode="update"
             onCancel={() => setOnboardingScope(null)}

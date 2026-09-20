@@ -108,6 +108,10 @@ const Layout = () => {
   }, [user?.id, user?.role]);
 
   const roleDisplay = getRoleDisplay(user?.role);
+  // Roles operativos (docente, portero, auxiliar): solo barra inferior —
+  // no necesitan drawer lateral; toda su navegación cabe en 4 acciones.
+  const BOTTOM_ONLY = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR];
+  const bottomOnly = BOTTOM_ONLY.includes(user?.role);
   const initial = user?.nombre?.charAt(0)?.toUpperCase() ?? '?';
   const greeting = useMemo(() => getGreeting(), []);
   const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
@@ -160,20 +164,22 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)]">
-      {/* Sidebar / drawer vertical — disponible para todos los roles */}
-      <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />
+      {/* Sidebar / drawer — solo roles con superficies de administración */}
+      {!bottomOnly && <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setSidebarOpen((v) => !v)} />}
 
-      <div className="flex flex-col min-w-0 lg:pl-[220px]">
+      <div className={`flex flex-col min-w-0 ${bottomOnly ? '' : 'lg:pl-[220px]'}`}>
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 lg:px-8" style={{ height: '72px' }}>
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => setSidebarOpen((v) => !v)}
-              className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
-              aria-label="Abrir menú"
-            >
-              <Menu size={20} />
-            </button>
+            {!bottomOnly && (
+              <button
+                onClick={() => setSidebarOpen((v) => !v)}
+                className="lg:hidden p-2 rounded-control text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] transition-colors"
+                aria-label="Abrir menú"
+              >
+                <Menu size={20} />
+              </button>
+            )}
             <div className="min-w-0">
               <h1 className="text-body text-[var(--nx-text)] truncate" style={{ fontWeight: '650', fontSize: '0.9rem' }}>{greeting}, {firstName}</h1>
               <p className="text-caption text-[var(--nx-text-muted)] truncate">{roleDisplay} · {user?.school_name ?? 'NEXO'}</p>
@@ -246,7 +252,7 @@ const Layout = () => {
         </main>
 
         {/* Bottom action bar — mobile only */}
-        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--nx-border)] bg-[var(--nx-surface)] lg:hidden" aria-label="Acciones principales">
+        <nav className={`fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--nx-border)] bg-[var(--nx-surface)] ${bottomOnly ? '' : 'lg:hidden'}`} aria-label="Acciones principales">
           <div className="flex items-center justify-around px-2 py-2 max-w-content mx-auto">
             {primaryActions.map((item) => {
               const Icon = item.icon;
