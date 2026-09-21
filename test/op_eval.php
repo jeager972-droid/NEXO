@@ -26,7 +26,7 @@ function checkExpect(array $exp, string $intent, array $slots, ?string $op, floa
         if (isset($exp[$k])) {
             $got = mb_strtolower((string)($slots[$k] ?? ''));
             $want = mb_strtolower($exp[$k]);
-            if ($got !== $want && !($want === '*' && $got !== ''))
+            if (mb_strtolower($got) !== $want && !($want === '*' && $got !== ''))
                 $fails[] = "$k=$got ≠ $want";
         }
     }

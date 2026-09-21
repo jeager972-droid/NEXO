@@ -46,48 +46,55 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     $tr['fallback_nlu'] = $cls['fallback'] ?? false;
     $tr['fuente_clasif'] = $cls['source'] ?? 'service';
 
-    $intent = $cls['intent'];
-    $slots = $cls['entities'] ?? [];
-
-    /* ── herencia de ctx — chat.php (paridad exacta) ── */
-    $inherited = []; $replaced = []; $nuevos = [];
-    if (is_array($ctx) && is_array($ctx['entities'] ?? null)) {
-        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
-            if (empty($slots[$k]) && !empty($ctx['entities'][$k])) {
-                $slots[$k] = $ctx['entities'][$k];
-                $inherited[] = $k;
-            } elseif (!empty($slots[$k])) {
-                $nuevos[] = $k;
-            }
-        }
-        $queryIntents = ['list_events','count_events','trackings','permissions','citations',
-            'student_field','student_summary','group_summary','top_offenders','pending_returns',
-            'attendance_ranking','group_student_count','students_count','devices_status',
-            'notifications_unread','audit_query','sos_alerts','biometric_spam','birthdays_today',
-            'failed_messages','whatsapp_status','my_activity','pending_tasks','schedule_info',
-            'risk_students','export_data'];
-        $inheritable = !empty($ctx['last_intent'])
-            && in_array($ctx['last_intent'], $queryIntents, true);
-        $followupMark = preg_match('/^(y|ahora|pero|tambien|ademas|solo|solamente|entonces|o sea|'
-            . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|del|de la|de lo)\b/u', $q0);
-        if (($intent === 'out_of_scope' || ($cls['confidence'] ?? 0) < NX_NLU_THRESHOLD)
-            && $inheritable && $followupMark) {
-            $intent = $ctx['last_intent'];
-            $inherited[] = 'intent';
-        }
-        // modificación contextual — paridad con chat.php
-        $genericIntents = ['day_summary','attendance_today','late_today','count_present'];
-        $explicitAction = preg_match('/\b(quiero|deseo|necesito|puedes|podrias|citar|generar|'
-            . 'enviar|mandar|reportar|autorizar|crear|abrir|registrar|derivar|exportar|'
-            . 'descargar|hacer|empezar|iniciar|lanzar)\b/u', $q0);
-        if ($inheritable && $intent !== $ctx['last_intent']
-            && in_array($intent, $genericIntents, true)
-            && $followupMark && !$explicitAction
-            && str_word_count($q0, 0, 'áéíóúñü') <= 8) {
-            $intent = $ctx['last_intent'];
-            $inherited[] = 'intent_ctx_generic';
-        }
+    /* ── Dialogue State Manager — fuente única nxDialogueResolve (paridad
+       con chat.php por construcción: mismo código) ── */
+    $interp = nxDialogueResolve($cls, $ctx, $q0);
+    $intent = $interp['resolved']['intent'];
+    $slots  = $interp['resolved']['slots'];
+    $inherited = $interp['resolved']['inherited'];
+    $nuevos    = $interp['resolved']['new_slots'];
+    $tr['turn_type'] = $interp['turn_type'];
+    $tr['requires_clarification'] = $interp['requires_clarification'];
+    if ($interp['requires_clarification']) {
+        $tr['5_intent_final'] = 'clarify';
+        $tr['17_handler'] = 'nxClarify';
+        $ctx = $interp['ctx'];
+        $TRACES[] = $tr;
+        return ['intent' => 'clarify', 'trace' => $tr, 'operation' => null];
     }
+    /* ── confirmación/cancelación de operación pendiente — paridad chat.php ── */
+    $pendingOp = $ctx['entities']['_op'] ?? ($slots['_op'] ?? null);
+    if ($interp['turn_type'] === 'confirmation' && $pendingOp) {
+        $tr['5_intent_final'] = 'confirm_op';
+        $tr['16_operacion'] = $pendingOp;
+        $tr['17_handler'] = 'confirm_op(chip)';
+        $tr['9_slots_finales'] = $slots;
+        $ctx = $interp['ctx'];
+        $TRACES[] = $tr;
+        return ['intent'=>'confirm_op','trace'=>$tr,'operation'=>$pendingOp,'slots'=>$slots];
+    }
+    if ($interp['turn_type'] === 'cancel') {
+        $tr['5_intent_final'] = 'cancel';
+        $tr['17_handler'] = 'cancel';
+        $ctx = $interp['ctx'];
+        unset($ctx['entities']['_op']);
+        $TRACES[] = $tr;
+        return ['intent'=>'cancel','trace'=>$tr,'operation'=>null];
+    }
+    if ($interp['turn_type'] === 'op_repeat' && $pendingOp) {
+        $tr['5_intent_final'] = 'repeat_op';
+        $tr['16_operacion'] = $pendingOp;
+        $tr['17_handler'] = 'repeat_op(chip)';
+        $tr['9_slots_finales'] = $slots;
+        $ctx = $interp['ctx'];
+        if (is_array($ctx['entities'] ?? null)) $ctx['entities']['_op'] = $pendingOp;
+        $TRACES[] = $tr;
+        return ['intent'=>'repeat_op','trace'=>$tr,'operation'=>$pendingOp,'slots'=>$slots];
+    }
+    // operación resuelta → pending_op al ctx (paridad: el front lo guarda)
+    if (in_array($intent, ['start_operation','derive_action'], true))
+        $slots['_op'] = $slots['_op'] ?? chatOperationCmd($q0);
+
     $tr['12_heredados'] = $inherited;
     $tr['13_slots_nuevos'] = $nuevos;
     $tr['9_slots_finales'] = $slots;
@@ -114,15 +121,11 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     elseif (function_exists('chat_' . $intent)) $tr['17_handler'] = 'chat_' . $intent;
     else $tr['17_handler'] = 'nxSmalltalk(out_of_scope) [sin handler]';
 
-    /* ── ctx resultante (saveCtx del front) ── */
-    if ($intent !== 'out_of_scope') {
-        $ctx = [
-            'last_intent' => $intent,
-            'entities' => array_intersect_key($slots, array_flip(
-                ['student','group','module','days','from','to','range_label','field'])),
-            'ts' => time(),
-        ];
-    }
+    /* ── ctx resultante (saveCtx del front) — lo entrega el DSM;
+       si el turno resolvió operación, el _op persistido también viaja ── */
+    $ctx = $interp['ctx'];
+    if (isset($slots['_op']) && is_array($ctx['entities'] ?? null))
+        $ctx['entities']['_op'] = $slots['_op'];
     $tr['15_ctx_resultante'] = $ctx;
 
     $TRACES[] = $tr;

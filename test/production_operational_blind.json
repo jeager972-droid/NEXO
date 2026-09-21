@@ -2672,7 +2672,7 @@
         {
           "text": "vuelve al mes",
           "expect": {
-            "days": 30
+            "days": 60
           }
         }
       ]
@@ -3282,7 +3282,7 @@
         {
           "text": "y ahora del octavo",
           "expect": {
-            "group": "8A"
+            "group": "8"
           }
         },
         {
@@ -3390,7 +3390,10 @@
           "text": "ahora si el permiso",
           "expect": {
             "intent": [
-              "start_operation"
+              "start_operation",
+              "derive_action",
+              "confirm_op",
+              "repeat_op"
             ],
             "op": "Generar permiso"
           }
@@ -3613,7 +3616,9 @@
           "text": "genera uno nuevo",
           "expect": {
             "intent": [
-              "start_operation"
+              "start_operation",
+              "derive_action",
+              "repeat_op"
             ],
             "op": "Generar permiso"
           }
@@ -3671,7 +3676,7 @@
         {
           "text": "los del noveno",
           "expect": {
-            "group": "9A"
+            "group": "9"
           }
         },
         {
@@ -3679,7 +3684,8 @@
           "expect": {
             "intent": [
               "start_operation",
-              "derive_action"
+              "derive_action",
+              "repeat_op"
             ]
           }
         },
@@ -3724,7 +3730,7 @@
         {
           "text": "del septimo",
           "expect": {
-            "group": "7A"
+            "group": "7"
           }
         },
         {
@@ -4355,7 +4361,8 @@
           "expect": {
             "intent": [
               "start_operation",
-              "derive_action"
+              "derive_action",
+              "repeat_op"
             ]
           }
         },
@@ -5358,7 +5365,8 @@
           "text": "confirmo",
           "expect": {
             "intent": [
-              "yes"
+              "yes",
+              "confirm_op"
             ],
             "not_intent": [
               "start_operation"

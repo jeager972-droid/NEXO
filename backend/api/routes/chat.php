@@ -193,8 +193,8 @@ function chatOperationCmd(string $q): string {
         preg_match('/\bautoriz\w*\b[^.]*\bsalid\w*\b|\bsalida anticipada\b|\bse retira temprano\b|\bretiro anticipado\b/u', $q) === 1 => 'Autorizar salida',
         // solicitud/petición ANTES de citación — «solicitud» contiene «cit»
         preg_match('/\b(solicitud|solicitudes|solicitar|solicito|solicite|peticion|peticiones|tramite|tramites|requerimiento|requerimientos)\b/u', $q) === 1 => 'Mandar solicitud',
-        // citación con boundary — solo formas reales de «citar»
-        preg_match('/\b(citar|citamos|citemos|cite|cito|citas|citacion|citaciones|convoque?|convocar)\b/u', $q) === 1 => 'Citar acudiente',
+        // citación con boundary — formas reales incluido el imperativo «cita»
+        preg_match('/\b(citar|cita|citalo|citala|cite|cito|citas|citamos|citemos|citacion|citaciones|convoque?|convocar|convoca|convoco|agenda(r|mos)? cita|llamar a citacion)\b/u', $q) === 1 => 'Citar acudiente',
         preg_match('/\b(permiso|permisos|salida de clase|salio al bano|salio del salon|permiso de salida)\b/u', $q) === 1 => 'Generar permiso',
         preg_match('/\b(dano|danos|danado|rompio|rompieron|roto|averiado|averia|destrozado|vandalismo)\b/u', $q) === 1 => 'Reportar daño',
         preg_match('/\b(cambio de horario|cambiar (la |el |mi )?hor(a|ario)|horario|jornada|reprogramar|reagendar)\b/u', $q) === 1 => 'Cambio de horario',
@@ -321,58 +321,76 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $slots   = $cls['entities'] ?? [];
     $conf    = $cls['confidence'] ?? 0;
 
-    // ── Herencia de contexto (sessionStorage del navegador) ──
+    // ── Dialogue State Manager (fuente única: nxDialogueResolve en
+    // nexus_nlu.php — misma lógica que consume el harness de regresión).
     // El front manda ctx.entities = {student, group, module, days…} del último
-    // intent exitoso. Los slots ausentes en el mensaje se completan marcados.
+    // intent exitoso; el DSM clasifica el turno (A–F) y resuelve intent+slots.
     $ctx = $input['ctx'] ?? null;
-    if (is_array($ctx)) {
-        if (!empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
+    if (is_array($ctx) && !empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
+    $interp = nxDialogueResolve($cls, is_array($ctx) ? $ctx : null, $q0);
+    $intent = $interp['resolved']['intent'];
+    $slots  = $interp['resolved']['slots'];
+    if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
+    $out['_interpretation'] = [
+        'turn_type' => $interp['turn_type'],
+        'nlu_intent' => $cls['intent'],
+        'inherited' => $interp['resolved']['inherited'],
+    ];
+    if ($interp['requires_clarification']) {
+        $out = ['reply'=>$interp['clarify'],'intent'=>'clarify','confidence'=>$conf,
+                'session_id'=>$sessionId,'entities'=>$slots,
+                '_interpretation'=>$out['_interpretation']];
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
     }
-    if (is_array($ctx) && is_array($ctx['entities'] ?? null)) {
-        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
-            if (empty($slots[$k]) && !empty($ctx['entities'][$k])) {
-                $slots[$k] = $ctx['entities'][$k];
-                $slots['_inherited'][] = $k;
+
+    // ── Confirmación / cancelación de operación pendiente ────────────────
+    // «confirmo la solicitud» confirma la pendiente; «cancela eso» la descarta.
+    // El ctx guarda _op cuando se resolvió una operación el turno anterior.
+    $pendingOp = is_array($ctx['entities'] ?? null)
+        ? ($ctx['entities']['_op'] ?? ($slots['_op'] ?? null))
+        : ($slots['_op'] ?? null);
+    if ($interp['turn_type'] === 'confirmation' && $pendingOp) {
+        if (chatCanAction($pendingOp, $role)) {
+            $out = ['reply'=>"Confirmado — te abro *{$pendingOp}* para terminarla ahí.",
+                    'actions'=>[chatActionChip($pendingOp,'Continuar → '.$pendingOp,null)],
+                    'intent'=>'confirm_op','confidence'=>$conf,'session_id'=>$sessionId,
+                    'entities'=>['_op'=>$pendingOp],'_interpretation'=>$out['_interpretation']];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+    }
+    if ($interp['turn_type'] === 'cancel') {
+        $out = ['reply'=>'Cancelado — no quedó registrada ninguna operación.',
+                'intent'=>'cancel','confidence'=>$conf,'session_id'=>$sessionId,
+                'entities'=>[], '_interpretation'=>$out['_interpretation']];
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
+    }
+    // repetición de la operación pendiente con parámetros nuevos
+    // («otro para camila», «uno mas para pedro», «genera uno nuevo»)
+    if ($interp['turn_type'] === 'op_repeat' && $pendingOp) {
+        if (chatCanAction($pendingOp, $role)) {
+            $student = null;
+            if (!empty($slots['student'])) {
+                $found = chatResolveStudent($conn, $authUser, $slots['student']);
+                if ($found && count($found) === 1) $student = $found[0];
+                elseif ($found) { $out = chatAmbiguous($found); $out['session_id']=$sessionId;
+                    chatLog($conn,$schoolId,$userId,$text,$out,$sessionId);
+                    exit(json_encode(['status'=>'ok','data'=>$out])); }
             }
+            $nm = $student ? " para {$student['first_name']} {$student['last_name']}" : '';
+            $out = ['reply'=>"Otra «{$pendingOp}»{$nm} — te abro el formulario.",
+                    'actions'=>[chatActionChip($pendingOp,'Continuar → '.$pendingOp,$student)],
+                    'intent'=>'repeat_op','confidence'=>$conf,'session_id'=>$sessionId,
+                    'entities'=>['_op'=>$pendingOp],'_interpretation'=>$out['_interpretation']];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
         }
-        // Intenciones heredables: solo consultas de datos (nunca acciones
-        // ni smalltalk — una operación previa no «contamina» un turno nuevo).
-        $queryIntents = ['list_events','count_events','trackings','permissions','citations',
-            'student_field','student_summary','group_summary','top_offenders','pending_returns',
-            'attendance_ranking','group_student_count','students_count','devices_status',
-            'notifications_unread','audit_query','sos_alerts','biometric_spam','birthdays_today',
-            'failed_messages','whatsapp_status','my_activity','pending_tasks','schedule_info',
-            'risk_students','export_data'];
-        $inheritable = !empty($ctx['last_intent'])
-            && in_array($ctx['last_intent'], $queryIntents, true);
-        $followupMark = preg_match('/^(y|ahora|pero|tambien|ademas|solo|solamente|entonces|o sea|'
-            . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|del|de la|de lo)\b/u', $q0);
-        // frase puramente dependiente («y las de hoy», «ahora del 8A»):
-        // si la clasificación quedó bajo umbral, heredamos también la
-        // intención — pero SOLO con marcador de seguimiento. Una consulta
-        // autónoma («cuántas tardanzas hubo hoy») sin marcador debe caer a
-        // abstención honesta, no heredar el intent previo (etapa 0).
-        if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD) && $inheritable && $followupMark) {
-            $intent = $ctx['last_intent'];
-            $slots['_inherited'][] = 'intent';
-        }
-        // ── Modificación contextual (caso forense F) ──────────────────────
-        // «¿Y las de hoy?» clasifica day_summary 0.93 — intent nuevo con
-        // confianza alta, pero semánticamente solo cambia un slot del query
-        // previo. Regla: intent genérico de resumen + marcador de seguimiento
-        // + sin verbo de acción explícito + frase corta → mismo intent, nuevos
-        // slots. Una operación explícita (quiero/citar/generar…) jamás hereda.
-        $genericIntents = ['day_summary','attendance_today','late_today','count_present'];
-        $explicitAction = preg_match('/\b(quiero|deseo|necesito|puedes|podrias|citar|generar|'
-            . 'enviar|mandar|reportar|autorizar|crear|abrir|registrar|derivar|exportar|'
-            . 'descargar|hacer|empezar|iniciar|lanzar)\b/u', $q0);
-        if ($inheritable && $intent !== $ctx['last_intent']
-            && in_array($intent, $genericIntents, true)
-            && $followupMark && !$explicitAction
-            && str_word_count($q0, 0, 'áéíóúñü') <= 8) {
-            $intent = $ctx['last_intent'];
-            $slots['_inherited'][] = 'intent_ctx_generic';
-        }
+    }
+    // operación resuelta → persistir pending_op en el ctx para el próximo turno
+    if (in_array($intent, ['start_operation','derive_action'], true)) {
+        $slots['_op'] = $slots['_op'] ?? chatOperationCmd($q0);
     }
 
     // ── RBAC + políticas institucionales ──

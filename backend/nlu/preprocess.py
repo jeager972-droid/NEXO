@@ -119,6 +119,24 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'proximo','proxima','proximos','proximas','siguiente','siguientes',
          'actual','actuales','reciente','recientes','vigente','venidero',
          'venidera','entrante','corriente',
+         # conectores/demostrativos/temporales sueltos — paridad PHP
+         'del','de','manana','mismo','misma','mismos','mismas',
+         'ese','esa','esos','esas','otro','otra','propio','propia',
+         'aquel','aquella','aquellos','aquellas','tambien',
+         'aula','aulas','veces','vez',
+         'ella','ellos','ellas','usted','ustedes',
+         'ahora','ahorita','y','e','ni','o','u','pero','sino','ademas',
+         'luego','entonces','asi','aun','ya','muy','mas','menos','tan',
+         'tanto','cada','todo','toda','todos','todas','varios','varias',
+         'algunos','algunas','ningun','ninguna','cualquier','apenas',
+         'info','para','con','sobre','hacia','segun','entre','sin','ante',
+         'bajo','desde','hasta','tras','via','pro','suyo',
+         'suya','tuyo','tuya','nuestro','nuestra','propio','propia','solicitud','solicitudes',
+         'solo','solamente','unicamente','especificamente','concretamente',
+         'abierto','abierta','abiertos','cerrado','cerrada','pendiente','pendientes',
+         'activo','activa','activos','vigente','vigentes','anterior','anteriores',
+         'reciente','recientes','nuevo','nueva',
+         'exactamente','precisamente','respectivamente','personalmente',
          'existimos','vivimos','nacimos','estamos','somos','fueron','somos',
          'siento','sientes','siente','tengo','tienes','quiero','quieres',
          'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
@@ -134,7 +152,9 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
 _BOUNDARY = r'(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)'
 _STUDENT_PATS = [
     r'(?=(?:estudiante|alumno|alumna|niño|niña)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
-    r'(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    r'(?=\b(?:de|del|sobre|para|a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    # «camila del septimo», «juan del 8a» — nombre + conector + grado
+    r'\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)',
 ]
 
 
@@ -157,7 +177,7 @@ def extract_entities(q: str) -> dict:
         e['days'] = 1
     elif re.search(r'esta semana|de la semana|en la semana', q):
         e['days'] = 7
-    elif re.search(r'este mes|del mes|en el mes|ultimo mes', q):
+    elif re.search(r'este mes|del mes|en el mes|ultimo mes|al mes|de este mes', q):
         e['days'] = 30
 
     m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
@@ -171,7 +191,8 @@ def extract_entities(q: str) -> dict:
             'once':'11','onceavo':'11','undecimo':'11','onceavo':'11'}
     if 'group' not in e:
         mo = re.search(r'\b(' + '|'.join(_ORD) + r')\s*([a-j])\b', q) \
-             or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q)
+             or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q) \
+             or re.search(r'\b(?:del|de|los|las|el|al)\s+(' + '|'.join(_ORD) + r')\b', q)
         if mo:
             num = _ORD[mo.group(1)]
             letter = mo.group(2).upper() if mo.lastindex >= 2 and mo.group(2) else ''
@@ -189,7 +210,7 @@ def extract_entities(q: str) -> dict:
     cands = []
     for pat in _STUDENT_PATS:
         for m in re.finditer(pat, q):
-            words = [w for w in m.group(1).split() if w not in _STOP and len(w) > 1]
+            words = [w for w in m.group(1).split() if w not in _STOP and len(w) > 1 and not re.search(r'\d', w)]
             if words:
                 cands.append(' '.join(words))
     if cands:

@@ -289,7 +289,7 @@ function nxSlots(string $q): array {
         $s['days'] = 1;
     } elseif (preg_match('/esta semana|de la semana|en la semana/u', $q)) {
         $s['days'] = 7;
-    } elseif (preg_match('/este mes|del mes|en el mes|ultimo mes/u', $q)) {
+    } elseif (preg_match('/este mes|del mes|en el mes|ultimo mes|al mes|de este mes/u', $q)) {
         $s['days'] = 30;
     } elseif (preg_match('/mes pasado/u', $q)) {
         $s['days'] = 60;
@@ -314,7 +314,9 @@ function nxSlots(string $q): array {
                 'sexto'=>'6','septimo'=>'7','octavo'=>'8','noveno'=>'9','decimo'=>'10',
                 'once'=>'11','onceavo'=>'11','undecimo'=>'11'];
         if (preg_match('/\b(' . implode('|', array_keys($ord)) . ')\s*([a-j])\b/u', $q, $mo)
-            || preg_match('/\b(?:grado|grupo|salon)\s+(' . implode('|', array_keys($ord)) . ')\b/u', $q, $mo)) {
+            || preg_match('/\b(?:grado|grupo|salon)\s+(' . implode('|', array_keys($ord)) . ')\b/u', $q, $mo)
+            // ordinal desnudo tras preposición: «del octavo», «los del noveno»
+            || preg_match('/\b(?:del|de|los|las|el|al)\s+(' . implode('|', array_keys($ord)) . ')\b/u', $q, $mo)) {
             $s['group'] = $ord[$mo[1]] . (isset($mo[2]) ? strtoupper($mo[2]) : '');
         }
     }
@@ -412,18 +414,44 @@ function nxExtractStudent(string $q): ?string {
         'pasado','pasada','pasados','pasadas','anterior','anteriores',
         'proximo','proxima','proximos','proximas','siguiente','siguientes',
         'actual','actuales','reciente','recientes','vigente','venidero',
-        'venidera','entrante','corriente'];
+        'venidera','entrante','corriente',
+        // conectores/demostrativos/temporales sueltos — Fase 13: limpieza de
+        // candidatos «camila del», «maria manana», «mismo juan»
+        'del','de','manana','mismo','misma','mismos','mismas',
+        'ese','esa','esos','esas','otro','otra','propio','propia',
+        'aquel','aquella','aquellos','aquellas','tambien',
+        'aula','aulas','veces','vez',
+        // pronombres personales — nunca nombres; el DSM los resuelve al ctx
+        'ella','ellos','ellas','usted','ustedes','el','ella',
+        // conectores/adverbios de encuadre — «ahora del 8a» no es persona
+        'ahora','ahorita','y','e','ni','o','u','pero','sino','ademas',
+        'luego','entonces','asi','aun','ya','muy','mas','menos','tan',
+        'tanto','cada','todo','toda','todos','todas','varios','varias',
+        'algunos','algunas','ningun','ninguna','cualquier','apenas',
+        // preposiciones y muletillas que preceden nombres sin ser parte
+        'info','para','con','sobre','hacia','segun','entre','sin','ante',
+        'bajo','desde','hasta','tras','via','pro','segun','mismo','suyo',
+        'suya','tuyo','tuya','nuestro','nuestra','propio','propia','solicitud','solicitudes',
+        'solo','solamente','unicamente','especificamente','concretamente',
+        'abierto','abierta','abiertos','cerrado','cerrada','pendiente','pendientes',
+        'activo','activa','activos','vigente','vigentes','anterior','anteriores',
+        'reciente','recientes','nuevo','nueva',
+        'exactamente','precisamente','respectivamente','personalmente'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
         '/(?=(?:estudiante|alumno|alumna|nino|nina)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
-        '/(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
+        '/(?=\b(?:de|del|sobre|para|a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
+        // «camila del septimo», «juan del 8a», «pedro del jardin» —
+        // nombre + «del/de» + grado: el nombre precede al conector
+        '/\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)/u',
     ] as $pat) {
         preg_match_all($pat, $q, $mm, PREG_OFFSET_CAPTURE);
         foreach ($mm[1] ?? [] as $cand) {
             $words = array_values(array_filter(
                 explode(' ', trim($cand[0])),
-                fn($w) => !in_array($w, $stop) && mb_strlen($w) > 1));
+                fn($w) => !in_array($w, $stop) && mb_strlen($w) > 1
+                    && !preg_match('/\d/', $w)));
             if ($words) $cands[] = implode(' ', $words);
         }
     }
@@ -436,7 +464,7 @@ function nxModuleSynonyms(): array {
         'INASISTENCIA'      => ['inasistencias','inasistencia','faltas','falta','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente'],
         'INASISTENCIA_JUSTIFICADA'    => ['inasistencias justificadas','justificadas','faltas justificadas'],
         'INASISTENCIA_NO_JUSTIFICADA' => ['inasistencias no justificadas','sin justificar','injustificadas'],
-        'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase'],
+        'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono'],
         'PERMISO'           => ['permisos','permiso','salidas autorizadas'],
         'SALIDA_BAÑO'       => ['salidas al bano','bano','banos','salidas de bano'],
         'SALIDA_COLEGIO'    => ['salidas del colegio','salida del colegio','salidas anticipadas','salio del colegio'],
@@ -736,4 +764,341 @@ function nxAllowed(string $intent, string $role): bool {
     $roles = nxIntentRoles()[$intent] ?? null;
     // intents smalltalk no listados → permitidos a todos
     return $roles === null || in_array($role, $roles, true);
+}
+
+/* ============================================================================
+ * DIALOGUE STATE MANAGER — interpretación estructurada + turn-type explícito.
+ * Única fuente de verdad para herencia contextual: consumida por
+ * routes/chat.php (producción) y test/harness_turn.php (paridad garantizada).
+ *
+ * Contrato de interpretación:
+ *   said      → lo que el usuario dijo literalmente
+ *   inferred  → lo que el NLU infirió (intent/conf/top3/entities)
+ *   resolved  → la decisión contextual final (intent + slots + turn_type)
+ *   ctx       → nuevo estado conversacional
+ * ========================================================================== */
+
+const NX_QUERY_INTENTS = ['list_events','count_events','trackings','permissions','citations',
+    'student_field','student_summary','group_summary','top_offenders','pending_returns',
+    'attendance_ranking','group_student_count','students_count','devices_status',
+    'notifications_unread','audit_query','sos_alerts','biometric_spam','birthdays_today',
+    'failed_messages','whatsapp_status','my_activity','pending_tasks','schedule_info',
+    'risk_students','export_data',
+    // consultas de datos adicionales — también pueden ser tema activo
+    'attendance_today','late_today','count_present','day_summary'];
+
+const NX_GENERIC_INTENTS = ['day_summary','attendance_today','late_today','count_present'];
+
+/** Smalltalk/meta — un turno de cortesía no cambia el tema conversacional. */
+const NX_SMALLTALK_INTENTS = ['greeting','greeting_time','wellbeing','wellbeing_reply','joke',
+    'fun_fact','about_nexus','name_meaning','creator','age','thanks','goodbye',
+    'yes','no','apology','compliment','insult','bored','love','human_check',
+    'do_for_me','emotion_sad','weather','news_sports','food_music',
+    'meaning_life','confused','repeat','insult_back','sing','dance','story',
+    'motivation','foreign_culture','help','capabilities'];
+
+function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
+    $intent = $cls['intent'];
+    $conf   = $cls['confidence'] ?? 0;
+    $slots  = $cls['entities'] ?? [];
+    $inherited = []; $newSlots = [];
+    $turnType = 'new_request';
+    $clarify = null;
+
+    $followupMark = (bool)preg_match('/^(y|ahora|pero|tambien|ademas|solo|solamente|entonces|o sea|'
+        . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|de|del|de la|de lo)\b/u', $q0);
+    $explicitAction = (bool)preg_match('/\b(quiero|deseo|necesito|puedes|podrias|citar|cita|generar|'
+        . 'enviar|mandar|reportar|autorizar|crear|abrir|registrar|derivar|exportar|'
+        . 'descargar|hacer|empezar|iniciar|lanzar)\b/u', $q0);
+    // marcador de corrección explícita — fuerte: «digo», «me refería», «corrijo»;
+    // débil: «no»/«perdón» solo cuentan si además hay un slot nuevo que reemplazar
+    $correctionStrong = (bool)preg_match('/\b(digo|quiero decir|me referia|'
+        . 'me equivoque|corrijo|en realidad|mas bien|o sea no)\b/u', $q0);
+    $correctionWeak = (bool)preg_match('/\b(no|perdon|perdona)\b/u', $q0);
+    // confirmación/cancelación explícita — empieza por verbo de confirmación/
+    // cancelación («confirmo la solicitud» confirma, no inicia otra operación)
+    $confirmMark = (bool)preg_match('/^(ahora |pero |y |entonces )?(si|sí|confirmo|confirma|'
+        . 'confirmar|dale|hazlo|adelante|correcto|de acuerdo|perfecto|vale|ok|bueno si|listo si)\b/u', $q0);
+    $cancelMark = (bool)preg_match('/^(ahora |pero |y |espera |entonces )?(cancela|cancelar|'
+        . 'cancelo|dejalo|deja|olvida|olvídalo|mejor no|ya no|detente|parale|no eso)\b/u', $q0)
+        || preg_match('/^(no|nel|nop)\b[.! ]*$/u', $q0);
+
+    $ctxEntities = is_array($ctx['entities'] ?? null) ? $ctx['entities'] : [];
+    $lastIntent  = $ctx['last_intent'] ?? null;
+    $inheritable = $lastIntent && in_array($lastIntent, NX_QUERY_INTENTS, true);
+
+    $hasNewEntity = false;
+    foreach (['student','group','module','days','field'] as $k)
+        if (!empty($slots[$k])) { $hasNewEntity = true; break; }
+    $correctionMark = $correctionStrong || ($correctionWeak && $hasNewEntity);
+
+    // ── 1. Corrección explícita: «no, de María» → solo reemplaza el slot nuevo ──
+    if ($correctionMark && $inheritable && ($hasNewEntity || $correctionStrong)) {
+        $turnType = 'correction';
+        // el intent previo se mantiene; el slot nuevo (student/group/days/field)
+        // REEMPLAZA al heredado — no se acumula.
+        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+            if (!empty($slots[$k])) { $newSlots[] = $k; }
+            elseif (!empty($ctxEntities[$k])) { $slots[$k] = $ctxEntities[$k]; $inherited[] = $k; }
+        }
+        $intent = $lastIntent;
+        $inherited[] = 'intent';
+    } else {
+        // ── 2. Herencia de slots — SOLO en turnos dependientes (regla F:
+        // una consulta autónoma no hereda entidades arbitrariamente).
+        // También cuentan como dependencia: verbos en 3ª persona que
+        // presuponen sujeto («acumula», «tiene», «lleva», «sigue») ──
+        $deicticVerb = (bool)preg_match('/\b(acumula|tiene|lleva|sigue|mantiene|hizo|hace|hicieron|fue|estuvo|anda|va|viene|quedo|quedaron|resulto)\b/u', $q0);
+        // interrogativo sin sustantivo de tema («cuales fueron justificadas»)
+        // — depende del tema anterior; con tema propio es autónoma
+        $interrogDep = (bool)(preg_match('/^(cuales?|quien|quienes|cuant[oa]s?|que)\b/u', $q0)
+            && !preg_match('/\b(tardanza|inasist|falt|evasion|permiso|citacion|cita|evento|incident|seguim|notif|salid|estudiant|mensaje|alerta|ausen|presente|ingres|cumpl|tarea|pendient|docent|acudient|llamad|horario|nota|grado|grupo|salon|jornada|correo|cumpleano|caso|casos|alumno|reporte)/u', $q0));
+        // sustantivo desnudo de campo («documento», «acudiente», «el teléfono»)
+        // — ≤3 palabras con un sustantivo de ficha: presupone el sujeto activo
+        $bareNoun = (bool)(str_word_count($q0, 0, 'áéíóúñü') <= 4
+            && preg_match('/\b(documento|telefono|celular|acudiente|contacto|direccion|correo|ficha|datos|perfil|resumen|horario|grupo|salon|papa|mama|padre|madre|familiar|edad|cumpleanos|numero|whatsapp|cedula|identificacion)\b/u', $q0));
+        $dependent = $followupMark || $correctionWeak || $deicticVerb || $interrogDep || $bareNoun;
+        if ($ctxEntities && $dependent) {
+            foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+                // days=0 («hoy») es un valor válido — isset, no empty
+                $absent = $k === 'days' ? !isset($slots[$k]) : empty($slots[$k]);
+                $ctxHas = array_key_exists($k, $ctxEntities) && $ctxEntities[$k] !== null;
+                if ($absent && $ctxHas) {
+                    $slots[$k] = $ctxEntities[$k];
+                    $inherited[] = $k;
+                } elseif (!$absent) {
+                    $newSlots[] = $k;
+                }
+            }
+        }
+        // deíctico «el mismo X»: «las tardanzas del mismo grupo» → el slot
+        // referido se toma SIEMPRE del contexto aunque el mensaje lo nombre
+        if ($followupMark && $ctxEntities) {
+            if (preg_match('/mism[oa]s?\s+(grupo|salon)/u', $q0) && !empty($ctxEntities['group'])) {
+                $slots['group'] = $ctxEntities['group']; $inherited[] = 'group';
+            }
+            if (preg_match('/mism[oa]s?\s+(estudiante|alumn[oa]|niñ[oa]|pelad[oa]|muchach[oa])/u', $q0) && !empty($ctxEntities['student'])) {
+                $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+            }
+        }
+        // «vuelve/regreso a …» — retorno deíctico al tema u operación anterior
+        if (preg_match('/\b(vuelve|volver|regreso|regresa|retorna|volvemos)\b/u', $q0)) {
+            if (!empty($ctxEntities['_op'])) { $turnType = 'confirmation'; }
+            // «vuelve al mes» = restaurar el rango ANTERIOR (swap con
+            // prev_days — «hoy» tras «mes pasado» conserva el 60 como
+            // prev y «vuelve» lo recupera, no el 0 actual)
+            elseif (preg_match('/\b(al|a la|a el|a los|a las|al mes|a ese|a esa|a aquel)\s*(mes|semana|rango|periodo|fecha|ano|año)?\b/u', $q0)
+                && !preg_match('/\b(hoy|ayer|anteayer|ahora mismo|recien|ultimo dia|ultimos|\d+)\b/u', $q0)
+                && array_key_exists('days', $ctxEntities) && $ctxEntities['days'] !== null) {
+                $prev = $ctxEntities['prev_days'] ?? null;
+                $slots['days'] = $prev !== null ? $prev : $ctxEntities['days'];
+                $slots['prev_days'] = $ctxEntities['days'];
+                $slots['from'] = $ctxEntities['from'] ?? null;
+                $slots['to'] = $ctxEntities['to'] ?? null;
+                $slots['range_label'] = $ctxEntities['range_label'] ?? null;
+                $inherited[] = 'days';
+                if ($inheritable && $intent !== $lastIntent
+                    && ($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD
+                        || in_array($intent, NX_GENERIC_INTENTS, true))) {
+                    $intent = $lastIntent; $inherited[] = 'intent';
+                }
+                $turnType = 'context_modify';
+            }
+            elseif ($inheritable && $intent !== $lastIntent
+                && ($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD
+                    || in_array($intent, NX_GENERIC_INTENTS, true))) {
+                $intent = $lastIntent; $inherited[] = 'intent';
+                $turnType = 'context_modify';
+            }
+        }
+
+        // ── 2b. Posesivos / pronombres → entidad del contexto ────────────
+        // «su ficha», «sus datos», «para ella», «el teléfono de su papá»
+        if (empty($slots['student']) && !empty($ctxEntities['student'])
+            && (preg_match('/\bsu[s]?\s+\w*\s*(ficha|documento|telefono|celular|datos|direccion|papa|mama|acudiente|padre|madre|familiar|info|contacto|correo|caso|historial|permiso|permisos|inasistencia|falta|faltas|evasion|evasiones|tardanza|tardanzas|seguimiento|citacion|resumen|perfil|grupo|salon)\b/u', $q0)
+                || preg_match('/\b(para|de|del|a|con|sobre)\s+(el|ella|ello|ese|esa|aquella?)\b/u', $q0))) {
+            $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+        }
+
+        // ── 2c. Repetición de operación pendiente ─────────────────────────
+        // «otro para camila», «uno mas para pedro», «genera uno nuevo» —
+        // mismo comando, parámetros nuevos. Sin _op explícito, se infiere
+        // del tema consultado (permisos→Generar permiso, citas→Citar…).
+        // Excepción: un mensaje puramente temporal+repeat («otro dia») es
+        // modificación de rango, no de operación.
+        $opByIntent = ['permissions'=>'Generar permiso','pending_returns'=>'Generar permiso',
+            'citations'=>'Citar acudiente','trackings'=>'Solicitar seguimiento'];
+        $pendingGuess = $ctxEntities['_op'] ?? ($opByIntent[$lastIntent] ?? null);
+        $repeatMark = (bool)(preg_match('/\b(otro|otra|uno mas|una mas|otro mas|nuevo|nueva|igual|de nuevo)\b/u', $q0)
+            || preg_match('/\b(uno?|una)\s+(para|de|del)\b/u', $q0));
+        $pureTemporal = (bool)preg_match('/^(otro|otra|de|del|para|a|el|la|los|las|hoy|ayer|manana|dia|dias|semana|mes|fecha|tarde|temprano|esta|este|estos|estas|proximo|proxima|siguiente|anterior|pasado|pasada|y|ahora|\s|\d)+$/u', $q0);
+        if (!empty($pendingGuess) && $repeatMark && !$pureTemporal
+            && (preg_match('/\b(para|de|del|a)\s+[a-z]+/u', $q0)
+                || $hasNewEntity
+                || preg_match('/\b(uno?|una)\b/u', $q0))) {
+            $intent = 'repeat_op';
+            $turnType = 'op_repeat';
+            $slots['_op'] = $pendingGuess;
+        }
+
+        // ── 2d. Verbo de operación explícito domina sobre intent-consulta ─
+        // «citala a citación», «ahora cita al acudiente», «genera uno» —
+        // el NLU puede clasificar por el sustantivo; un verbo de acción
+        // real rerutea a la operación. «borra/elimina» NO crea operaciones.
+        // Regla de preservación: un turno de operación SIN sustantivo/verbo
+        // de operación («no, para María») NO recalcula el comando — conserva
+        // el _op pendiente en lugar de caer al default.
+        $opVerb = (bool)preg_match('/\b(citar|cita|citalo|citala|cite|citamos|convocar|convoca|'
+            . 'generar|genera|autorizar|autoriza|mandar|manda|enviar|envia|'
+            . 'reportar|reporta|registrar|registra|crear|crea|expedir|expide|'
+            . 'derivar|deriva|tramitar|tramita)\b/u', $q0);
+        // «no, mejor una citación» — corrección DE operación: cambia el
+        // comando, conserva la entidad y el flujo
+        if ($correctionWeak && preg_match('/\b(solicitud|citacion|cita|permiso|autorizacion|salida|seguimiento|incidente|reporte)\b/u', $q0)
+            && !empty($ctxEntities['_op'])) {
+            $intent = 'derive_action';
+            $turnType = 'correction';
+        } elseif (in_array($intent, ['start_operation','derive_action'], true)
+            && !$opVerb && !preg_match('/\b(solicitud|citacion|permiso|autorizacion|seguimiento|incidente|salida|reporte|registro|emergencia|sos|paseo|horario|bloque|dano|manual)\b/u', $q0)
+            && !empty($ctxEntities['_op'])) {
+            $slots['_op'] = $ctxEntities['_op'];
+        }
+        if ($opVerb && in_array($intent, ['out_of_scope','permissions','citations',
+                'trackings','list_events','pending_returns','security_probe'], true)) {
+            $intent = 'derive_action';
+            $turnType = 'intent_switch';
+        }
+        // sustantivo de operación en forma de solicitud («una autorización
+        // de salida», «un permiso médico») — sin marcadores de consulta
+        if (!$opVerb
+            && preg_match('/\b(autorizacion|autorizaciones|permiso|citacion|solicitud|excusa)\b/u', $q0)
+            && preg_match('/\b(una?|de|para|medica?|medico|salida|anticipada|temprana)\b/u', $q0)
+            && !preg_match('/\b(cuant|ver|muestra|dame|list|cuales|hay|vigent|activ|pendient|anterior|esta semana|del mes|de hoy|ayer|expedid|emitid|vencid)\b/u', $q0)
+            && in_array($intent, ['out_of_scope','permissions','citations','security_probe'], true)) {
+            $intent = 'derive_action';
+            $turnType = 'intent_switch';
+        }
+        // verbo destructivo + datos → security_probe (no existe operación
+        // de borrado — el rechazo explícito es el comportamiento correcto)
+        if (preg_match('/\b(borra|borrar|borre|elimina|eliminar|elimine|vacia|'
+            . 'anula|anular|suprime|suprimir|destruye|destruir|limpia)\b/u', $q0)
+            && preg_match('/\b(las|los|la|el|datos|registros|tabla|faltas|evasiones|'
+                . 'tardanzas|estudiantes|permisos|citaciones|todo|mensajes|notificaciones|base)\b/u', $q0)
+            && in_array($intent, ['list_events','count_events','attendance_today','late_today',
+                'permissions','citations','trackings','out_of_scope','notifications_unread',
+                'export_data','pending_returns','day_summary'], true)) {
+            $intent = 'security_probe';
+            $turnType = 'intent_switch';
+        }
+
+        // ── 3. Intent heredable bajo umbral con marcador (regla etapa-0) ──
+        // Guardia: un sustantivo de operación con verbo/artículo («una
+        // solicitud aparte», «el permiso») NO se degrada a la consulta previa.
+        $hasOpNoun = (bool)preg_match('/\b(una?|el|la|esa|ese|otra?|hacer|haz|mandar|enviar|generar|crear|quiero|necesito)\s+\w*\s*(solicitud|citacion|cita|permiso|autorizacion|salida|seguimiento|incidente|reporte|registro|excusa)\b/u', $q0);
+        if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD)
+            && $inheritable && $dependent && !$hasOpNoun) {
+            $intent = $lastIntent;
+            $inherited[] = 'intent';
+            $turnType = 'context_modify';
+        }
+        // ── 4. Modificación contextual (genéricos) — «¿y las de hoy?» ──
+        if ($inheritable && $intent !== $lastIntent
+            && in_array($intent, NX_GENERIC_INTENTS, true)
+            && $followupMark && !$explicitAction
+            && str_word_count($q0, 0, 'áéíóúñü') <= 8) {
+            $intent = $lastIntent;
+            $inherited[] = 'intent_ctx_generic';
+            $turnType = 'context_modify';
+        }
+        // prev_days: si el turno trae un rango distinto al del ctx, el valor
+        // anterior queda recuperable por «vuelve al mes»
+        if (isset($slots['days']) && array_key_exists('days', $ctxEntities)
+            && $ctxEntities['days'] !== null && $slots['days'] !== $ctxEntities['days']) {
+            $slots['prev_days'] = $ctxEntities['days'];
+        } elseif (!isset($slots['prev_days']) && isset($ctxEntities['prev_days'])) {
+            $slots['prev_days'] = $ctxEntities['prev_days'];
+        }
+
+        // ── 5. Cambio explícito de intención (D) — solo si aún no se
+        // clasificó el turno (corrección/op_repeat/contexto ganan) ──
+        if ($turnType === 'new_request' || $turnType === 'autonomous') {
+            if ($explicitAction || (in_array($intent, ['start_operation','derive_action','repeat_op'], true) && $conf >= NX_NLU_THRESHOLD)) {
+                $turnType = $intent === $lastIntent ? 'context_modify' : 'intent_switch';
+            } elseif ($inheritable && $followupMark && empty($newSlots) && empty($inherited)
+                && in_array($intent, ['out_of_scope','confused','repeat'], true)) {
+                // ── 6. Deíctico sin información nueva (E) → aclarar, no adivinar ──
+                $turnType = 'deictic';
+                $clarify = '¿Sobre qué tema? Puedo mostrarte faltas, tardanzas, evasiones, permisos o seguimientos.';
+            } elseif (!$followupMark && !$correctionMark) {
+                $turnType = 'autonomous';
+            }
+        }
+        if ($intent === 'repeat_op') $turnType = 'op_repeat';
+        // ── 7. Pregunta cuantitativa sin métrica («¿cuántas hubo hoy?») →
+        // aclarar, no adivinar — con contexto heredable aplica el intent previo;
+        // sin contexto, debe preguntar la métrica (spec §8).
+        if ($turnType === 'autonomous' && !$inheritable
+            && empty($slots['student']) && empty($slots['group']) && empty($slots['module'])
+            && preg_match('/^cuant(as|os)\b.{0,45}\b(hubo|hay|fueron|salieron|registraron|se marcaron|van)\b/u', $q0)
+            && !preg_match('/tardanza|inasist|ausen|falt|evasion|permiso|citacion|cita|evento|incident|seguim|notif|salida|estudiant|mensaje|alerta|cumple|tarea|pendient|docent|acudient|correo|llamad/u', $q0)) {
+            $turnType = 'deictic';
+            $clarify = '¿Te refieres a tardanzas, inasistencias, evasiones, permisos o eventos en general?';
+        }
+    }
+    if ($confirmMark && $lastIntent) { $turnType = 'confirmation'; }
+    elseif ($cancelMark) { $turnType = 'cancel'; }
+
+    // ── ctx resultante ──
+    $newCtx = $ctx;
+    if (in_array($intent, NX_SMALLTALK_INTENTS, true) && $turnType !== 'op_repeat') {
+        // smalltalk («gracias», «ok», «sí», «adiós») no cambia el tema —
+        // conserva el ctx completo para que «el mismo grupo» siga resolviendo
+        $newCtx = $ctx;
+    } elseif ($intent !== 'out_of_scope') {
+        $newCtx = [
+            'last_intent' => $intent,
+            'entities' => array_intersect_key($slots, array_flip(
+                ['student','group','module','days','prev_days','from','to','range_label','field','_op'])),
+            'ts' => time(),
+        ];
+    } else {
+        // paridad front: aun con out_of_scope las entidades del mensaje se
+        // conservan («camila del septimo» sin intent → «su documento» la
+        // recupera). last_intent NO cambia — no hay tema activo.
+        $ents = array_intersect_key($slots, array_flip(
+            ['student','group','module','days','prev_days','from','to','range_label','field','_op']));
+        if ($ents) {
+            $newCtx = $newCtx ?? [];
+            $newCtx['entities'] = array_merge($newCtx['entities'] ?? [], $ents);
+            $newCtx['ts'] = time();
+        }
+    }
+    // pending_op: se preserva del turno anterior salvo cancelación —
+    // una consulta intermedia no debe olvidar la operación pendiente.
+    // En confirmación el ctx conserva las entidades del tema («confirmo»
+    // no tiene entidades propias — sin esto se pierde el sujeto).
+    if (is_array($newCtx['entities'] ?? null)) {
+        if ($turnType === 'cancel') unset($newCtx['entities']['_op']);
+        elseif (empty($newCtx['entities']['_op']) && !empty($ctxEntities['_op']))
+            $newCtx['entities']['_op'] = $ctxEntities['_op'];
+    }
+    if ($turnType === 'confirmation' && empty($newCtx['entities']) && $ctxEntities)
+        $newCtx['entities'] = $ctxEntities;
+
+    return [
+        'said'      => ['normalized' => $q0],
+        'inferred'  => ['domain' => $cls['domain'] ?? null, 'intent' => $cls['intent'],
+                        'confidence' => $conf, 'top3' => $cls['top3'] ?? [],
+                        'entities' => $cls['entities'] ?? []],
+        'resolved'  => ['intent' => $intent, 'slots' => $slots,
+                        'confidence' => $conf, 'inherited' => $inherited,
+                        'new_slots' => $newSlots],
+        'turn_type' => $turnType,
+        'explicit_action' => $explicitAction,
+        'followup_mark'   => $followupMark,
+        'correction_mark' => $correctionMark,
+        'requires_clarification' => $clarify !== null,
+        'clarify' => $clarify,
+        'ctx' => $newCtx,
+    ];
 }
