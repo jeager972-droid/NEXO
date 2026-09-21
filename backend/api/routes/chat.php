@@ -483,6 +483,21 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     exit;
 }
 
+/** §13 variación lingüística controlada — los hechos nunca cambian,
+ *  solo la forma. Determinista por (usuario, intent, slot-hash) para
+ *  que repeticiones consecutivas no suenen idénticas. */
+function nxVary(array $variants, string $seed): string {
+    return $variants[crc32($seed) % count($variants)];
+}
+function nxVaryClean(string $what, string $where, string $seed): string {
+    return nxVary([
+        "No hay {$what} {$where} — todo limpio.",
+        "Sin {$what} {$where} — todo en orden.",
+        "No registra {$what} {$where} — tranquilo.",
+        "Cero {$what} {$where} — buena noticia.",
+    ], $seed);
+}
+
 /** Estado conversacional persistido — leído del último payload del asistente. */
 function chatLoadDs(PDO $conn, string $userId, string $sessionId): ?array {
     static $ok = null;
@@ -507,10 +522,26 @@ function chatLoadDs(PDO $conn, string $userId, string $sessionId): ?array {
 function chatBuildDs(array $interp, array $out, ?array $prev): array {
     $slots = $interp['resolved']['slots'] ?? [];
     $ent   = $out['entities'] ?? [];
+    // turnos de navegación/deícticos traen slots casi vacíos — el tema
+    // se hereda SOLO en continuaciones; un tema nuevo («háblame del
+    // sistema») no arrastra entidades ajenas (§26)
+    $merged = array_filter(array_merge($slots, $ent), fn($v) => $v !== null && $v !== []);
+    $tt = $interp['turn_type'] ?? '';
+    $isCont = $tt === 'context_modify' || !empty($slots['_nav']) || !empty($out['_result_nav'])
+        || in_array($tt, ['op_repeat','correction','confirmation','deictic','followup'], true);
+    if ($isCont) {
+        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+            if (empty($merged[$k]) && !empty($prev['entities'][$k])) $merged[$k] = $prev['entities'][$k];
+        }
+    }
     $ds = [
-        'intent'      => $interp['resolved']['intent'] ?? ($out['intent'] ?? null),
+        // turnos de navegación no cambian el tema: el intent queda del
+        // último query real — «la última» no convierte el tema en sos_alerts
+        'intent'      => !empty($slots['_nav']) || !empty($out['_result_nav'])
+            ? ($prev['intent'] ?? ($interp['resolved']['intent'] ?? null))
+            : ($interp['resolved']['intent'] ?? ($out['intent'] ?? null)),
         'prev_intent' => $prev['intent'] ?? null,
-        'entities'    => array_filter(array_merge($slots, $ent), fn($v) => $v !== null && $v !== []),
+        'entities'    => $merged,
         'goal'        => $slots['field'] ?? $slots['goal'] ?? ($prev['goal'] ?? null),
         'last_result' => $out['_result_set'] ?? ($prev['last_result'] ?? null),
         'cursor'      => $out['_result_set'] ? 0
@@ -842,7 +873,7 @@ function chatListIncidents(PDO $conn, array $u, array $s, string $type, string $
         ORDER BY ai.detected_at DESC LIMIT 25");
     $st->execute($params);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-    if (!$rows) return ['reply'=>"Sin {$label} en el rango — todo limpio."];
+    if (!$rows) return ['reply'=>nxVaryClean($label, 'en el rango', ($v['_q']??'').$label)];
     $n = count($rows);
     return ['reply'=>"{$n} " . ($n===1?'registro':'registros') . " de {$label}:", 'cards'=>[['title'=>ucfirst($label),'columns'=>['Estudiante','Grupo','Hora'],'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',substr($r['t'],0,5)],$rows)]]];
 }
@@ -876,7 +907,10 @@ function chat_count_events(PDO $conn, array $u, array $s, array $v): array {
     if ($n === 0)
         return ['reply'=>($student
             ? "Profe, excelente noticia — {$student['first_name']} {$student['last_name']} no registra {$mlabel} en ese periodo{$inh}."
-            : "Excelente noticia — no hay {$mlabel} registradas{$grp} en ese periodo{$inh}.")];
+            : nxVary(["Excelente noticia — no hay {$mlabel} registradas{$grp} en ese periodo{$inh}.",
+                      "No hay {$mlabel} registradas{$grp} en ese periodo{$inh} — buena noticia.",
+                      "Sin {$mlabel}{$grp} en ese periodo{$inh} — tranquilo.",
+                      "{$who} no tiene {$mlabel} registradas{$grp} en ese periodo{$inh}."], ($v['_q']??'').$mlabel))];
     $reply = "{$n} {$mlabel}{$who}{$grp} ({$rl}){$inh}.";
     $actions = [];
     $entOut = array_filter(['student'=>$student?mb_strtolower($student['first_name'].' '.$student['last_name']):null,'group'=>$s['group']??null]);
@@ -905,7 +939,7 @@ function chat_list_events(PDO $conn, array $u, array $s, array $v): array {
         ORDER BY ai.detected_at DESC LIMIT 30");
     $st->execute($params); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel=NX_MODULE_LABEL[$module]??strtolower($module);
-    if(!$rows) return ['reply'=>"No hay {$mlabel} en ese rango — todo limpio."];
+    if(!$rows) return ['reply'=>nxVaryClean($mlabel, 'en ese rango', ($v['_q']??'').$mlabel)];
     $items = array_map(fn($r)=>['id'=>null,'label'=>$r['name'],
         'sub'=>($r['group_name']??'—').' · '.$r['d'].' '.substr($r['t'],0,5)],$rows);
     return ['reply'=>count($rows)." ".(count($rows)===1?'registro':'registros')." de {$mlabel} (" . ($s['range_label']??'hoy') . "):",
@@ -1413,7 +1447,7 @@ function chat_top_offenders(PDO $conn, array $u, array $s, array $v): array {
         GROUP BY s.student_id, s.first_name, s.last_name, ag.group_name ORDER BY c DESC LIMIT 8");
     $st->execute($params); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel = $module ? strtolower(NX_MODULE_LABEL[$module]??$module) : 'incidentes';
-    if(!$rows) return ['reply'=>"Nadie acumula {$mlabel} en ese periodo — todo limpio."];
+    if(!$rows) return ['reply'=>nxVaryClean($mlabel, 'en ese periodo', ($v['_q']??'').$mlabel)];
     return ['reply'=>"Top de {$mlabel} (" . ($s['range_label']??'hoy') . "):",
         'cards'=>[['title'=>'Ranking','columns'=>['Estudiante','Grupo','#'],
         'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['c']],$rows)]]];

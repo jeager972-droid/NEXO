@@ -215,6 +215,17 @@ preg_match('/(\d+) PASS · (\d+) FAIL/', $rz, $m4);
 gate('G14', 'resiliencia: fallos de infraestructura degradan seguro',
      isset($m4[2]) && $m4[2] == 0, $m4[0] ?? 'salida ilegible');
 
+/* ── G17: benchmark de conversación real (103 convos multi-turno) ── */
+$rc = run('php ' . __DIR__ . '/real_conversation_v1.php');
+preg_match('/Conversaciones: (\d+)\/(\d+) completas/', $rc, $m5);
+gate('G17', 'conversaciones reales ≥95% (estado server-side, nav, refs)',
+     isset($m5[2]) && (int)$m5[2] >= 100 && (int)$m5[1] / max(1, (int)$m5[2]) >= 0.95,
+     $m5[0] ?? 'sin salida');
+preg_match('/nav\s+(\d+)\/(\d+)/', $rc, $m6);
+gate('G17b', 'navegación de result-set (otro/los demás/ordinales) 100%',
+     isset($m6[2]) && (int)$m6[2] > 0 && (int)$m6[1] === (int)$m6[2],
+     $m6[0] ?? 'sin salida');
+
 /* ── veredicto ── */
 $fail = array_filter($gates, fn($g) => !$g[2]);
 echo "\n";
