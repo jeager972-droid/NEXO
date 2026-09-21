@@ -282,7 +282,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
 
     // ── Seguimiento contextual: «dame otro», «otra», «más», «siguiente» ──
     $q0 = nxNorm($text);
-    if (preg_match('/^(dame |dime )?(otro|otra|uno mas|una mas|mas|siguiente|otra vez|y otro|y otra|de nuevo|dame mas|dime mas|continua|sigue|y eso|y ese|y esa)[.! ]*$/u', $q0)) {
+    $dsPre = chatLoadDs($conn, $userId, $sessionId);
+    $hasNavableSet = !empty($dsPre['last_result']['items']);
+    if (!$hasNavableSet
+        && preg_match('/^(dame |dime )?(otro|otra|uno mas|una mas|mas|siguiente|otra vez|y otro|y otra|de nuevo|dame mas|dime mas|continua|sigue|y eso|y ese|y esa)[.! ]*$/u', $q0)) {
         $last = chatLastPayload($conn, $userId, $sessionId);
         if ($last && !empty($last['intent'])) {
             $vars['_last_reply'] = $last['reply'] ?? '';
@@ -329,11 +332,12 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $slots   = $cls['entities'] ?? [];
     $conf    = $cls['confidence'] ?? 0;
 
-    // ── Dialogue State Manager (fuente única: nxDialogueResolve en
-    // nexus_nlu.php — misma lógica que consume el harness de regresión).
-    // El front manda ctx.entities = {student, group, module, days…} del último
-    // intent exitoso; el DSM clasifica el turno (A–F) y resuelve intent+slots.
-    $ctx = $input['ctx'] ?? null;
+    // ── Dialogue State Manager — el estado real lo guarda el SERVIDOR en
+    // payload_json._ds (result_set, entidad activa, cursor). El ctx del front
+    // es solo respaldo/compatibilidad, nunca la fuente de verdad.
+    $ds = chatLoadDs($conn, $userId, $sessionId);
+    $ctx = $ds ? ['entities' => $ds['entities'] ?? [], 'last_intent' => $ds['intent'] ?? null, '_ds' => $ds]
+               : ($input['ctx'] ?? null);
     if (is_array($ctx) && !empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
     $tDsm = microtime(true);
     $interp = nxDialogueResolve($cls, is_array($ctx) ? $ctx : null, $q0);
@@ -404,6 +408,17 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $slots['_op'] = $slots['_op'] ?? chatOperationCmd($q0);
     }
 
+    // ── navegación sobre el result-set guardado («dame otro», «el primero»,
+    // «los demás», «su nombre») — consulta informativa sobre contexto,
+    // no requiere nuevo intent ni clasificador
+    if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items'])) {
+        $out = chatResultNav($ds, $slots['_nav'], $vars);
+        $out['session_id'] = $sessionId;
+        $out['_ds'] = chatBuildDs($interp, $out, $ds);
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
+    }
+
     // ── referencia «su grupo» → resolución determinista estudiante→grupo ──
     // La BD conoce la relación (student_group_assignments + scope del rol);
     // el NLU solo marcó la referencia (_ref). Casos:
@@ -459,12 +474,102 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $out['confidence'] = $conf;
     $out['session_id'] = $sessionId;
     $out['entities'] = array_merge($slots, $out['entities'] ?? []); // el handler resuelve nombres reales
+    $out['_ds'] = chatBuildDs($interp, $out, $ds);
     if (isset($out['_interpretation']['timing_ms']))
         $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
 
     chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
     echo json_encode(['status'=>'ok','data'=>$out], JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+/** Estado conversacional persistido — leído del último payload del asistente. */
+function chatLoadDs(PDO $conn, string $userId, string $sessionId): ?array {
+    static $ok = null;
+    if ($ok === false) return null;
+    try {
+        $st = $conn->prepare("SELECT payload_json FROM chat_messages
+            WHERE user_id=? AND session_id=? AND role='assistant' AND jsonb_exists(payload_json, '_ds')
+            ORDER BY created_at DESC LIMIT 1");
+        $st->execute([$userId,$sessionId]);
+        $r = $st->fetchColumn();
+    } catch (Throwable $e) { $ok = false; return null; }
+    $ok = true;
+    if (!$r) return null;
+    $p = json_decode($r, true);
+    return $p['_ds'] ?? null;
+}
+
+/**
+ * Construye el _ds para el próximo turno — §3 estado conversacional real.
+ * Guarda entidades activas, campo pedido, result-set y cursor, pendientes.
+ */
+function chatBuildDs(array $interp, array $out, ?array $prev): array {
+    $slots = $interp['resolved']['slots'] ?? [];
+    $ent   = $out['entities'] ?? [];
+    $ds = [
+        'intent'      => $interp['resolved']['intent'] ?? ($out['intent'] ?? null),
+        'prev_intent' => $prev['intent'] ?? null,
+        'entities'    => array_filter(array_merge($slots, $ent), fn($v) => $v !== null && $v !== []),
+        'goal'        => $slots['field'] ?? $slots['goal'] ?? ($prev['goal'] ?? null),
+        'last_result' => $out['_result_set'] ?? ($prev['last_result'] ?? null),
+        'cursor'      => $out['_result_set'] ? 0
+                        : ($out['_result_cursor'] ?? ($prev['cursor'] ?? 0)),
+        'pending_op'  => $slots['_op'] ?? ($prev['pending_op'] ?? null),
+    ];
+    // persona referenciada (acudiente/docente) — el handler la declara
+    if (!empty($ent['_person'])) $ds['person'] = $ent['_person'];
+    elseif (!empty($prev['person'])) $ds['person'] = $prev['person'];
+    return $ds;
+}
+
+/**
+ * Navegación informativa sobre el último result-set — §9/§10.
+ * next|prev|first|nth|rest|all|count|name — siempre read-only.
+ */
+function chatResultNav(array $ds, string $nav, array $vars): array {
+    $rs   = $ds['last_result'];
+    $items = $rs['items'] ?? [];
+    $n    = count($items);
+    $cur  = (int)($ds['cursor'] ?? 0);
+    $lbl  = $rs['label'] ?? 'resultados';
+    $one  = fn($i) => $items[$i]['label'] . (!empty($items[$i]['sub']) ? ' — ' . $items[$i]['sub'] : '');
+
+    if ($nav === 'count')
+        return ['reply'=>"En esa consulta hay {$n} {$lbl}." . ($n === 1 ? " Es {$items[0]['label']}." : ''),
+                'intent'=>'result_nav', '_result_nav'=>'count'];
+    if ($nav === 'name') {
+        if ($n === 1)
+            return ['reply'=>"Se llama {$items[0]['label']}" . (!empty($items[0]['sub']) ? " ({$items[0]['sub']})" : '') . ".",
+                    'intent'=>'result_nav', '_result_nav'=>'name'];
+        $names = array_map(fn($it)=>$it['label'], $items);
+        return ['reply'=>"Son " . count($names) . ": " . implode(', ', $names) . ".",
+                'intent'=>'result_nav', '_result_nav'=>'name'];
+    }
+    if ($nav === 'first' || $nav === 'prev' && $cur === 0) {
+        if ($nav === 'first' || $cur === 0)
+            return ['reply'=>"El primero es {$one(0)}.", 'intent'=>'result_nav', '_result_nav'=>'first', '_result_cursor'=>0];
+    }
+    if ($nav === 'prev') { $nav = 'nth'; $idx = max(0, $cur - 1); }
+    if (preg_match('/^nth:(\d+)$/', $nav, $m)) $idx = max(0, (int)$m[1] - 1);
+    if ($nav === 'next') $idx = $cur + 1;
+    if ($nav === 'rest' || $nav === 'all') {
+        if ($n <= $cur + 1)
+            return ['reply'=>"Ya te mostré todos los {$lbl} — no quedan más.", 'intent'=>'result_nav','_result_nav'=>'rest'];
+        $rest = array_slice($items, $cur + 1);
+        $lines = array_map(fn($it) => '• ' . $it['label'] . (!empty($it['sub']) ? ' — ' . $it['sub'] : ''), $rest);
+        return ['reply'=>"Los demás (" . count($rest) . "):
+" . implode("
+", $lines),
+                'intent'=>'result_nav','_result_nav'=>'rest','_result_cursor'=>$n - 1];
+    }
+    // next / nth
+    $idx = $idx ?? ($cur + 1);
+    if ($idx >= $n)
+        return ['reply'=>"No hay más {$lbl} — ya te mostré los {$n} que encontré.",
+                'intent'=>'result_nav','_result_nav'=>'next','_result_cursor'=>$cur];
+    return ['reply'=>$one($idx) . ($idx < $n - 1 ? ". ¿El siguiente?" : '. Era el último de la lista.'),
+            'intent'=>'result_nav','_result_nav'=>'next','_result_cursor'=>$idx];
 }
 
 /** Último payload del asistente en esta sesión — seguimiento contextual («dame otro»). */
@@ -691,13 +796,22 @@ function chat_day_summary(PDO $conn, array $u, array $s, array $v): array {
         $st->execute([$u['school_id'],$type,$today]);
         return (int)$st->fetchColumn();
     };
-    $late = $q('LATE_ARRIVAL'); $abs = $q('INASISTENCIA'); $eva = $q('EVASION_INTERNA');
-    $st = $conn->prepare("SELECT COUNT(DISTINCT be.student_id) FROM biometric_events be
-        JOIN students s ON s.student_id=be.student_id
-        WHERE be.school_id=? AND be.event_timestamp::date=? AND be.event_type LIKE 'INGRESO%' {$scope['sql']}");
-    $st->execute([$u['school_id'],$today]); $present = (int)$st->fetchColumn();
-    $st = $conn->prepare("SELECT COUNT(*) FROM class_exit_authorizations c JOIN students s ON s.student_id=c.student_id WHERE c.school_id=? AND c.status='ACTIVE' {$scope['sql']}"); $st->execute([$u['school_id']]); $perm = (int)$st->fetchColumn();
-    $st = $conn->prepare("SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL"); $st->execute([$u['id']]); $notif = (int)$st->fetchColumn();
+    $safe = function(callable $f): int { try { return (int)$f(); } catch (Throwable $e) { return 0; } };
+    $late = $safe(fn() => $q('LATE_ARRIVAL'));
+    $abs  = $safe(fn() => $q('INASISTENCIA'));
+    $eva  = $safe(fn() => $q('EVASION_INTERNA'));
+    $present = $safe(function() use ($conn,$u,$today,$scope) {
+        $st = $conn->prepare("SELECT COUNT(DISTINCT be.student_id) FROM biometric_events be
+            JOIN students s ON s.student_id=be.student_id
+            WHERE be.school_id=? AND be.event_timestamp::date=? AND be.event_type LIKE 'INGRESO%' {$scope['sql']}");
+        $st->execute([$u['school_id'],$today]); return (int)$st->fetchColumn();
+    });
+    $perm = $safe(function() use ($conn,$u,$scope) {
+        $st = $conn->prepare("SELECT COUNT(*) FROM class_exit_authorizations c JOIN students s ON s.student_id=c.student_id WHERE c.school_id=? AND c.status='ACTIVE' {$scope['sql']}"); $st->execute([$u['school_id']]); return (int)$st->fetchColumn();
+    });
+    $notif = $safe(function() use ($conn,$u) {
+        $st = $conn->prepare("SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL"); $st->execute([$u['id']]); return (int)$st->fetchColumn();
+    });
 
     $parts = ["{$present} presentes", "{$abs} inasistencias", "{$late} tardanzas", "{$eva} evasiones", "{$perm} permisos activos"];
     $reply = "La jornada de hoy: " . implode(' · ', $parts) . ".";
@@ -792,9 +906,12 @@ function chat_list_events(PDO $conn, array $u, array $s, array $v): array {
     $st->execute($params); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel=NX_MODULE_LABEL[$module]??strtolower($module);
     if(!$rows) return ['reply'=>"No hay {$mlabel} en ese rango — todo limpio."];
+    $items = array_map(fn($r)=>['id'=>null,'label'=>$r['name'],
+        'sub'=>($r['group_name']??'—').' · '.$r['d'].' '.substr($r['t'],0,5)],$rows);
     return ['reply'=>count($rows)." ".(count($rows)===1?'registro':'registros')." de {$mlabel} (" . ($s['range_label']??'hoy') . "):",
         'cards'=>[['title'=>ucfirst($mlabel),'columns'=>['Estudiante','Grupo','Fecha','Hora'],
-        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['d'],substr($r['t'],0,5)],$rows)]]];
+        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['d'],substr($r['t'],0,5)],$rows)]],
+        '_result_set'=>['type'=>'events','label'=>"registros de {$mlabel}",'items'=>$items,'count'=>count($items)]];
 }
 
 function chat_student_field(PDO $conn, array $u, array $s, array $v): array {
@@ -805,19 +922,28 @@ function chat_student_field(PDO $conn, array $u, array $s, array $v): array {
     $field = $s['field'] ?? 'datos';
     $name = "{$st['first_name']} {$st['last_name']}";
 
-    // acudiente
-    if ($field === 'acudiente' || $field === 'celular') {
-        $g = $conn->prepare("SELECT u.first_name||' '||u.last_name AS name, g.whatsapp_phone, u.phone
+    // acudiente — también cuando el campo pide datos DEL acudiente
+    $isGuardField = str_contains($field, 'acudiente') || $field === 'celular';
+    if ($isGuardField) {
+        $g = $conn->prepare("SELECT u.first_name||' '||u.last_name AS name, u.document_number AS doc, u.phone, g.whatsapp_phone
             FROM guardian_student_relationships r JOIN guardians g ON g.guardian_id=r.guardian_id
             JOIN users u ON u.user_id=g.user_id
             WHERE r.student_id=? ORDER BY r.primary_guardian DESC LIMIT 1");
         $g->execute([$st['student_id']]); $guard=$g->fetch(PDO::FETCH_ASSOC);
     }
     $ent = ['student'=>mb_strtolower($name),'group'=>$st['group_name']];
+    // el acudiente queda como persona referenciada — «su número» siguiente
+    // se refiere a él, no al estudiante
+    if (!empty($guard['name'])) $ent['_person'] = ['type'=>'guardian','name'=>$guard['name'],'student'=>$st['student_id']];
     return match($field) {
         'documento' => ['reply'=>"{$name}: documento *{$st['document_number']}* — grupo {$st['group_name']}, grado {$st['grade_level']}.",'entities'=>$ent],
         'acudiente' => ['reply'=>$guard ? "Acudiente de {$name}: *{$guard['name']}* — WhatsApp {$guard['whatsapp_phone']}" . ($guard['phone']&&$guard['phone']!==$guard['whatsapp_phone']?" · tel {$guard['phone']}":'') . "." : "{$name} no tiene acudiente registrado — te tocaría registrarlo primero.",'entities'=>$ent],
         'celular'   => ['reply'=>$guard ? "Contacto de {$name}: acudiente {$guard['name']}, WhatsApp *{$guard['whatsapp_phone']}*." : "{$name}: sin acudiente registrado — no tengo número de contacto.",'entities'=>$ent],
+        // campos sobre el ACUDIENTE — la entidad objetivo cambió (§7)
+        'documento_acudiente' => ['reply'=>$guard ? ($guard['doc'] ? "El documento del acudiente ({$guard['name']}) es *{$guard['doc']}*." : "El acudiente {$guard['name']} no tiene documento registrado.") : "{$name} no tiene acudiente registrado.",'entities'=>$ent],
+        'celular_acudiente'   => ['reply'=>$guard ? "El número del acudiente {$guard['name']} es *{$guard['whatsapp_phone']}*" . ($guard['phone']&&$guard['phone']!==$guard['whatsapp_phone']?" · también {$guard['phone']}":'') . "." : "{$name} no tiene acudiente registrado — no tengo número.",'entities'=>$ent],
+        'nombre_acudiente'    => ['reply'=>$guard ? "El acudiente de {$name} es {$guard['name']}." : "{$name} no tiene acudiente registrado.",'entities'=>$ent],
+        'nombre'   => ['reply'=>"Se llama {$name}." . ($st['group_name'] ? " Va en {$st['group_name']}." : ''),'entities'=>$ent],
         'grupo'     => ['reply'=>"{$name} está en {$st['group_name']} (grado {$st['grade_level']}, jornada {$st['work_shift']}).",'entities'=>$ent],
         'jornada'   => ['reply'=>"{$name} va en jornada {$st['work_shift']} — grupo {$st['group_name']}.",'entities'=>$ent],
         'nacimiento'=> ['reply'=>$st['birth_date'] ? "{$name} nació el {$st['birth_date']}." : "{$name}: no tengo fecha de nacimiento registrada.",'entities'=>$ent],
@@ -1340,6 +1466,41 @@ function chat_biometric_spam(PDO $conn, array $u, array $s, array $v): array {
 }
 
 /** Cuántos estudiantes hay en un grupo puntual. */
+/** «qué estudiantes hay en el 6-A» — lista real + result-set navegable. */
+function chat_students_in_group(PDO $conn, array $u, array $s, array $v): array {
+    $scope = chatScope($conn, $u);
+    $g = !empty($s['group']) ? chatResolveGroup($conn, $u, $s['group']) : null;
+    if (!$g) return ['reply'=>"¿De qué grupo hablas? Por ejemplo: «estudiantes del 8A»."];
+    $st = $conn->prepare("SELECT s.student_id, s.first_name, s.last_name, s.document_number
+        FROM students s
+        JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
+        WHERE s.school_id=? AND sga.group_id=? AND s.deleted_at IS NULL {$scope['sql']}
+        ORDER BY s.last_name, s.first_name LIMIT 60");
+    $st->execute([$u['school_id'],$g['group_id']]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply'=>"No encontré estudiantes en {$g['group_name']} dentro de tu alcance.",
+                        'entities'=>['group'=>$g['group_name']]];
+    $items = array_map(fn($r)=>['id'=>$r['student_id'],
+        'label'=>trim($r['first_name'].' '.$r['last_name']),
+        'sub'=>'doc '.$r['document_number']], $rows);
+    $n = count($items);
+    $show = array_slice($items, 0, 5);
+    $reply = "{$g['group_name']} tiene {$n} estudiante" . ($n === 1 ? '' : 's') . ":";
+    if ($n === 1) {
+        $it = $items[0];
+        $reply .= " {$it['label']} ({$it['sub']}).";
+    } else {
+        $reply .= "
+" . implode("
+", array_map(fn($i)=>'• '.$i['label'], $show))
+                . ($n > 5 ? "
+… y " . ($n - 5) . " más — dime «los demás» para verlos." : '');
+    }
+    return ['reply'=>$reply,
+            'entities'=>['group'=>$g['group_name']],
+            '_result_set'=>['type'=>'students','label'=>'estudiantes','items'=>$items,'count'=>$n]];
+}
+
 function chat_group_student_count(PDO $conn, array $u, array $s, array $v): array {
     $g=chatResolveGroup($conn,$u,$s['group']??'');
     if(!$g) return ['reply'=>'¿Qué grupo? Dime algo como «8A» u «octavo B».'];

@@ -27,6 +27,17 @@ function nxNorm(string $t): string {
     $t = strtr($t, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n',
                     'à'=>'a','è'=>'e','ì'=>'i','ò'=>'o','ù'=>'u']);
     $t = preg_replace('/[¿?¡!.,;:\(\)"\'«»]/u', ' ', $t);
+    // §27 tolerancia ortográfica — transposiciones típicas, conservadoras
+    // (nunca corrige nombres propios: solo vocabulario del dominio)
+    static $fix = ['presnetes'=>'presentes','presntes'=>'presentes','precentes'=>'presentes',
+        'asistensia'=>'asistencia','asisitencia'=>'asistencia','inasitencia'=>'inasistencia',
+        'inasistensia'=>'inasistencia','inasistencais'=>'inasistencias','estudaintes'=>'estudiantes',
+        'alumons'=>'alumnos','tardansas'=>'tardanzas','evacione'=>'evasion','evasioness'=>'evasiones',
+        'permisso'=>'permiso','documneto'=>'documento','docuemnto'=>'documento','ceduala'=>'cedula',
+        'acudinte'=>'acudiente','acudietne'=>'acudiente','citasion'=>'citacion','segumiento'=>'seguimiento'];
+    $t = strtr(' ' . $t . ' ', array_combine(
+        array_map(fn($k) => ' ' . $k . ' ', array_keys($fix)),
+        array_map(fn($v) => ' ' . $v . ' ', $fix)));
     return trim(preg_replace('/\s+/', ' ', $t));
 }
 
@@ -308,8 +319,8 @@ function nxSlots(string $q): array {
         $s['range_label'] = $s['days'] === 0 ? 'hoy' : ($s['days'] === 1 ? 'ayer' : "últimos {$s['days']} días");
     }
 
-    if (preg_match('/\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
-        || preg_match('/\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|\d{1,2} \d{1,2})\b/u', $q, $m)) {
+    if (preg_match('/\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
+        || preg_match('/\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|\d{1,2} \d{1,2})\b/u', $q, $m)) {
         $s['group'] = strtoupper(str_replace([' ', '.'], ['-', '-'], $m[1]));
     }
     // ordinales: «octavo a», «onceavo b», «grado noveno»
@@ -786,6 +797,7 @@ function nxIntentRoles(): array {
         'sos_alerts' => ['RECTOR','COORDINATOR','SECURITY'],
         'biometric_spam' => ['RECTOR','COORDINATOR','SECURITY'],
         'group_student_count' => $STAFF,
+        'students_in_group'   => $STAFF,
         'birthdays_today' => $ALL,
         'my_activity' => $ALL,
         'failed_messages' => ['RECTOR','COORDINATOR','SECRETARY'],
@@ -1114,6 +1126,13 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         return 'teachers_list';
     if ($staffWrong && preg_match('/\b(de|del|de la|del area de)\s+(matematicas|ingles|espanol|ciencias|sociales|fisica|quimica|biologia|historia|geografia|arte|musica|educacion fisica|religion|etica|informatica|lectura|escritura)\b/u', $q0))
         return 'staff_lookup';
+    // «cuántos presentes / cuántos vinieron / cuántos hay» — asistencia
+    // real del día, no conteo de incidentes ni clarificación genérica
+    if (preg_match('/\b(cuant[oa]s?|que numero|total de)\s+(estan |estuvo |van |hay |llegaron |vinieron |entraron |asistieron )?(presentes|asistiendo|matriculados|en el colegio|en la institucion|en el plantel|personas en|vinieron|llegaron|asistieron|entraron)\b/u', $q0)
+        || preg_match('/^(cuantos|cuantas) (presentes|vinieron|llegaron|asistieron|entraron|hay|estan|son)\b/u', $q0)) {
+        if (!in_array($intent, ['security_probe','export_data','start_operation','derive_action','confirm_op'], true))
+            return 'count_present';
+    }
     // «cuantas tardanzas/faltas/evasiones» — boundary count vs métrica;
     // student_field sin estudiante también corrige
     $countWrong = in_array($intent, ['out_of_scope','students_count','count_present','day_summary'], true)
@@ -1130,6 +1149,20 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         && !preg_match('/\b(genera|autoriza|expide|emite|tramita|reporta|registra|crea|manda|envia|cita|citar|convoca|dar|da)\b/u', $q0)
         && preg_match('/\b(permiso|permisos|autorizacion|autorizad[oa]s?|excusa|salida|retiro|salir)\b/u', $q0))
         return 'permissions';
+    // «qué estudiantes hay en el 6-A / estudiantes del 8A» — lista real
+    if (!empty($slots['group']) && preg_match('/\b(estudiantes|alumnos|chicos|muchachos|pelados|ninos|niños)\b/u', $q0)
+        && in_array($intent, ['out_of_scope','students_count','group_student_count','list_events','groups_list','count_present','count_events'], true))
+        return 'students_in_group';
+    // «qué pasó con él/ese/ese estudiante» — ficha del referente, no auditoría
+    if (preg_match('/\b(que paso|como va|como esta|como le fue|que tiene|que hay de)\s+(el|ella|ese|esa|este|esta|el estudiante|ese estudiante|con el|con ella)\b/u', $q0)
+        && !empty($slots['student'])
+        && in_array($intent, ['audit_query','out_of_scope','my_activity','student_field'], true))
+        return 'student_summary';
+    // navegación/contexto nunca es security_probe — «muéstrame otro»,
+    // «y ayer», «los demás» son continuación conversacional legítima
+    if ($intent === 'security_probe'
+        && preg_match('/^(y |dame |dime |muestra(?:me)? |trae(?:me)? |ver |y )?(otro|otra|uno mas|una mas|el siguiente|los demas|el resto|el primero|el ultimo|el anterior|ayer|anteayer|la semana pasada|el mes pasado|todos|mas)[.!? ]*$/u', $q0))
+        return 'clarify';
     // «mis permisos / mi rol» = meta-pregunta del usuario, NO permisos de salida
     if (preg_match('/\b(mis permisos|mi rol|mis privilegios|mi perfil|quien soy|mis funciones|mi rol aqui)\b/u', $q0)
         && in_array($intent, ['about_me','permissions','out_of_scope','my_activity'], true))
@@ -1202,7 +1235,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $strongNoToday = (bool)preg_match('/\b(acumulad|consolidad|reincidencia|reincidente|reinciden|promedio|record|del periodo|del bimestre|anterior)\b/u', $q0);
     if (in_array($intent, ['attendance_today','late_today','count_present'], true)
         && ($strongNoToday
-            || (!preg_match('/\b(hoy|ahora|ahorita|esta manana|esta mañana|esta tarde|de la manana|de la mañana|en la manana|en la mañana|en la tarde|de hoy|del dia|del día|actual|en este momento|al momento|impuntual|tardanza|tarde)\b/u', $q0)
+            || (!preg_match('/\b(hoy|ahora|ahorita|esta manana|esta mañana|esta tarde|de la manana|de la mañana|en la manana|en la mañana|en la tarde|de hoy|del dia|del día|actual|en este momento|al momento|impuntual|tardanza|tarde|presentes|asistiendo|vinieron|llegaron|entraron|matriculados|en el colegio|en la institucion|en el plantel|personas)\b/u', $q0)
                 && ($slots['days'] ?? null) === null && empty($slots['from'])
                 && (preg_match('/\b(cuant[oa]s?|que numero|total)\b/u', $q0)
                     || !empty($slots['group']))))) {
@@ -1285,6 +1318,81 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 }
             }
         }
+        // ── referencias conversacionales §5 — «su X», «de su acudiente»,
+        // navegación de resultados. El _ds del servidor trae la entidad
+        // activa y el result-set; el NLU solo detecta la referencia.
+        $dsState = $ctx['_ds'] ?? null;
+        $hasResult = !empty($dsState['last_result']['items']);
+        // «dame otro / el siguiente / el primero / los demás / su nombre»
+        // sobre el result-set anterior — consulta informativa, nunca op
+        if ($hasResult) {
+            $nav = null;
+            if (preg_match('/^(dame |dime |muestra(?:me)? |trae(?:me)? )?(otro|otra|uno mas|una mas|mas|siguiente|el siguiente|y otro|y otra|de nuevo|el proximo|la proxima|continua|sigue)[.! ]*$/u', $q0)) $nav = 'next';
+            elseif (preg_match('/\b(el|la|los|las)? ?(primer[oa]s?|segund[oa]s?|tercer[oa]s?|ultim[oa]s?|penultim[oa]s?|anterior|siguiente|proxim[oa])\b/u', $q0, $mnav)
+                && !preg_match('/\b(primer|primero|ultimo) (dia|día|mes|lunes|martes|miercoles|jueves|viernes|sabado|domingo|periodo|bimestre|ano|año|semestre|trimestre|corte|semana)\b/u', $q0)) {
+                $w = trim($mnav[2]);
+                $ord = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,'tercero'=>3,'tercera'=>3,'ultimo'=>$rsCount??0,'ultima'=>$rsCount??0,'anterior'=>0,'siguiente'=>0,'proximo'=>0,'proxima'=>0,'penultimo'=>-1,'penultima'=>-1];
+                $n2 = count($dsState['last_result']['items']);
+                if ($w === 'anterior') $nav = 'prev';
+                elseif (in_array($w, ['siguiente','proximo','proxima'], true)) $nav = 'next';
+                elseif (in_array($w, ['ultimo','ultima'], true)) $nav = "nth:{$n2}";
+                elseif (in_array($w, ['penultimo','penultima'], true)) $nav = 'nth:' . max(1, $n2 - 1);
+                else $nav = 'nth:' . ($ord[$w] ?? 1);
+            }
+            elseif (preg_match('/^(y |dame |dime |muestra(?:me)? )?(los demas|las demas|los otros|las otras|el resto|todos ellos|todos|los que faltan)[.! ]*$/u', $q0)) $nav = 'rest';
+            elseif (preg_match('/\b(cuantos|cuantas|cuanto|cuanta)( son| hay| eran| son en total)?\b[?¡! ]*$/u', $q0)) $nav = 'count';
+            elseif (preg_match('/\b(cual|como|quien) (es|fue|se llama)? ?(su|el) (nombre|como se llama)\b[?¡! ]*$/u', $q0)
+                || preg_match('/^(y )?(su nombre|el nombre|como se llama|quien es|quien era)[.!? ]*$/u', $q0)) $nav = 'name';
+            if ($nav) { $slots['_nav'] = $nav; $turnType = 'context_modify'; }
+        }
+        // «su <campo>» sobre la entidad activa (estudiante/acudiente)
+        // — NO es número de lotería ni dato del asistente
+        if (!isset($slots['_nav'])) {
+            $refField = [
+                'numero|telefono|celular|whatsapp|contacto' => 'celular',
+                'documento|cedula|identificacion'           => 'documento',
+                'acudiente|tutor|responsable|papa|mama'     => 'acudiente',
+                'grupo|salon|curso|seccion'                 => 'grupo',
+                'jornada|turno|horario'                     => 'jornada',
+                'nacimiento|fecha de nacimiento|cumpleanos' => 'nacimiento',
+                'nombre'                                    => 'nombre',
+            ];
+            foreach ($refField as $pat => $f) {
+                if (preg_match('/\b(su|sus|suyo|suya|de el|de ella|del estudiante|del alumno|del nino|del muchacho|de ese|de esa|de este|de esta)\s+(' . $pat . ')\b/u', $q0)) {
+                    $slots['field'] = $f;
+                    if (empty($slots['student']) && !empty($ctxEntities['student'])) {
+                        $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+                    }
+                    if ($f === 'acudiente') $slots['_ref'] = 'guardian';
+                    if ($intent !== 'student_field' && $intent !== 'student_summary') $intent = 'student_field';
+                    $turnType = 'context_modify';
+                    break;
+                }
+            }
+            // «el documento DE SU ACUDIENTE» — campo sobre el acudiente,
+            // no sobre el estudiante: entidad objetivo = guardian
+            if (preg_match('/\b(documento|cedula|numero|telefono|celular|whatsapp|nombre|contacto)\s+de\s+(su|el|la)\s+(acudiente|tutor|responsable|papa|mama|padre|madre)\b/u', $q0, $mg)) {
+                $slots['_ref'] = 'guardian';
+                $slots['field'] = preg_match('/documento|cedula/', $mg[1]) ? 'documento_acudiente'
+                                : (preg_match('/nombre/', $mg[1]) ? 'nombre_acudiente' : 'celular_acudiente');
+                if (empty($slots['student']) && !empty($ctxEntities['student'])) {
+                    $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+                }
+                $intent = 'student_field';
+                $turnType = 'context_modify';
+            }
+            // «su número» a secas — si el person activo es el acudiente,
+            // se refiere a SU número, no al del estudiante
+            elseif (preg_match('/\b(su numero|su telefono|su celular|su whatsapp|el numero de (el|ella)|el celular de (el|ella))\b/u', $q0)
+                && !empty($dsState['person']['type']) && $dsState['person']['type'] === 'guardian') {
+                $slots['field'] = 'celular_acudiente';
+                if (empty($slots['student']) && !empty($ctxEntities['student'])) {
+                    $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+                }
+                $intent = 'student_field';
+                $turnType = 'context_modify';
+            }
+        }
         // deíctico «el mismo X»: «las tardanzas del mismo grupo» → el slot
         // referido se toma SIEMPRE del contexto aunque el mensaje lo nombre
         if ($followupMark && $ctxEntities) {
@@ -1293,6 +1401,30 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             }
             if (preg_match('/mism[oa]s?\s+(estudiante|alumn[oa]|niñ[oa]|pelad[oa]|muchach[oa])/u', $q0) && !empty($ctxEntities['student'])) {
                 $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+            }
+        }
+        // §21/§23 — turno de CONTEXTO que el modelo desvió a smalltalk/
+        // probe/audit: si solo modifica tiempo/referencia y hay tema activo,
+        // la conversación manda, no la clasificación aislada
+        if ($inheritable && !$coverageHit && !isset($slots['_nav'])) {
+            // «y ayer / y la semana pasada / y hoy» — solo cambia el tiempo
+            if (preg_match('/^(y |pero |ahora |entonces |y |o sea )?(ayer|anteayer|hoy|esta semana|la semana pasada|este mes|el mes pasado|la semana|del mes|de hoy|de ayer|el otro dia|ese dia|esa semana|ese mes|ultimos? \d+ dias?|\d+ dias?)\b[.!? ]*$/u', $q0)
+                && in_array($intent, ['foreign_culture','out_of_scope','smalltalk','greeting','yes','no','audit_query','about_nexus','deictic'], true)) {
+                $intent = $lastIntent; $inherited[] = 'intent';
+                $turnType = 'context_modify';
+            }
+            // «qué pasó con él/ese» — ficha del referente activo, no audit
+            elseif (preg_match('/\b(que paso|como va|como esta|como le fue|que tiene)\s+(el|ella|ese|esa|este|esta|el estudiante|ese estudiante|con el|con ella)\b/u', $q0)
+                || preg_match('/^(y )?(que paso|como va|como esta|como le fue|que tiene)\b[.!? ]*$/u', $q0)) {
+                if (!empty($ctxEntities['student'])) {
+                    if (empty($slots['student'])) { $slots['student'] = $ctxEntities['student']; $inherited[] = 'student'; }
+                    $intent = 'student_summary';
+                    $turnType = 'context_modify';
+                } elseif (!empty($ctxEntities['group']) && in_array($intent, ['out_of_scope','audit_query','foreign_culture'], true)) {
+                    $slots['group'] = $ctxEntities['group']; $inherited[] = 'group';
+                    $intent = 'group_summary';
+                    $turnType = 'context_modify';
+                }
             }
         }
         // «vuelve/regreso a …» — retorno deíctico al tema u operación anterior
@@ -1488,7 +1620,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         if ($turnType === 'autonomous' && !$inheritable
             && empty($slots['student']) && empty($slots['group']) && empty($slots['module'])
             && preg_match('/^cuant(as|os)\b.{0,45}\b(hubo|hay|fueron|salieron|registraron|se marcaron|van)\b/u', $q0)
-            && !preg_match('/tardanza|inasist|ausen|falt|evasion|permiso|citacion|cita|evento|incident|seguim|notif|salida|estudiant|mensaje|alerta|cumple|tarea|pendient|docent|acudient|correo|llamad/u', $q0)) {
+            && !preg_match('/tardanza|inasist|ausen|falt|evasion|permiso|citacion|cita|evento|incident|seguim|notif|salida|estudiant|mensaje|alerta|cumple|tarea|pendient|docent|acudient|correo|llamad|presente|asistiendo|vinieron|llegaron|entraron|matriculad|persona|colegio|institucion|plantel|asistieron/u', $q0)) {
             $turnType = 'deictic';
             $clarify = '¿Te refieres a tardanzas, inasistencias, evasiones, permisos o eventos en general?';
         }

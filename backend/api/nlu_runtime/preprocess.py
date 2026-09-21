@@ -59,6 +59,15 @@ def normalize(t: str) -> str:
     t = unicodedata.normalize('NFD', t)
     t = ''.join(c for c in t if unicodedata.category(c) != 'Mn')
     t = re.sub(r'[¿?¡!.,;:\(\)"\'«»]', ' ', t)
+    _fix = {'presnetes':'presentes','presntes':'presentes','precentes':'presentes',
+        'asistensia':'asistencia','asisitencia':'asistencia','inasitencia':'inasistencia',
+        'inasistensia':'inasistencia','inasistencais':'inasistencias','estudaintes':'estudiantes',
+        'alumons':'alumnos','tardansas':'tardanzas','evacione':'evasion','evasioness':'evasiones',
+        'permisso':'permiso','documneto':'documento','docuemnto':'documento','ceduala':'cedula',
+        'acudinte':'acudiente','acudietne':'acudiente','citasion':'citacion','segumiento':'seguimiento'}
+    t = ' ' + t + ' '
+    for _k, _v in _fix.items():
+        t = t.replace(' ' + _k + ' ', ' ' + _v + ' ')
     return re.sub(r'\s+', ' ', t).strip()
 
 
@@ -189,8 +198,8 @@ def extract_entities(q: str) -> dict:
     elif re.search(r'este mes|del mes|en el mes|ultimo mes|al mes|de este mes', q):
         e['days'] = 30
 
-    m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
-        or re.search(r'\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2})\b', q) \
+    m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
+        or re.search(r'\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2})\b', q) \
         or re.search(r'\b(\d{1,2}\s\d{1,2})\b', q)   # «11.2» → normalizado «11 2»
     if m:
         e['group'] = m.group(1).upper().replace(' ', '-').replace('.', '-')
