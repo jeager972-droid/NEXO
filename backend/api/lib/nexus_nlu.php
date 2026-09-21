@@ -140,6 +140,20 @@ function nxMask(string $q): string {
     if (!empty($s['student'])) {
         $masked = str_replace($s['student'], ' estudiante_ent ', $masked);
     }
+    // paridad con preprocess.py: deícticos de estudiante → mismo token
+    $masked = preg_replace('/\b(?:ese|esa|este|esta|el|la|los|las|un|una|otro|otra|mismo|misma|del|de la|de los|de las|de un|de una|al)\s+(?:estudiante|alumno|alumna|niño|niña|muchacho|muchacha|pelado|pelada|chino|china|menor)\b/u', ' estudiante_ent ', $masked);
+    // nombres de rol → token semántico (paridad con _ROLE_MASK)
+    static $ROLE = [
+        'acudiente_ent' => ['padre de familia','padres de familia','quien responde por el','quien responde por ella','quien lo representa','quien la representa','persona a cargo','adulto responsable','tutor legal','tutor','familiar registrado','contacto familiar','encargado del niño','encargada del niño','encargado del estudiante','acudientes','acudiente','representante','responsable','papas','papa','mamas','mama','padre','madre','abuelo','abuela','tio','tia','hermano mayor','hermana mayor'],
+        'personal_ent'  => ['psicoorientadora','psicoorientador','orientadora','orientador','coordinadora','coordinador','rectora','rector','docentes','docente','profesora','profesor','profe','secretaria','secretario','portera','portero','vigilante','auxiliar','personal','maestra','maestro'],
+        'colegio_ent'   => ['institucion educativa','institucion','colegio','plantel','escuela','sede'],
+    ];
+    foreach ($ROLE as $tok => $words) {
+        usort($words, fn($a,$b) => strlen($b) <=> strlen($a));
+        foreach ($words as $w) {
+            $masked = preg_replace('/\b' . preg_quote($w, '/') . '\b/u', ' ' . $tok . ' ', $masked);
+        }
+    }
     if (!empty($s['group'])) {
         $masked = preg_replace('/\b' . preg_quote(mb_strtolower($s['group'])) . '\b/u', ' grupo_ent ', $masked);
     }
@@ -336,10 +350,19 @@ function nxSlots(string $q): array {
         }
     }
 
-    // módulo por sinónimos
+    // módulo por sinónimos — «tarde/tardes» no es tardanza si es saludo
+    // o franja horaria («buenas tardes», «en la tarde», «por la tarde»)
+    $greetTime = (bool)preg_match('/\b(buenas tardes|buenas noches|por la tarde|en la tarde|de la tarde|la tarde de|tarde de)\b/u', $q);
     foreach (nxModuleSynonyms() as $canon => $syns) {
         foreach ($syns as $syn) {
-            if (str_contains($q, $syn)) { $s['module'] = $canon; break 2; }
+            if (str_contains($q, $syn)) {
+                if ($greetTime && $canon === 'LATE_ARRIVAL'
+                    && in_array($syn, ['tarde','tardes'], true)
+                    && !preg_match('/\b(tardanza|tardanzas|llego tarde|llegaron tarde|llegada tarde|llegadas tarde)\b/u', $q)) {
+                    continue;   // saludo vespertino — no es módulo
+                }
+                $s['module'] = $canon; break 2;
+            }
         }
     }
     // campo de estudiante
@@ -410,7 +433,10 @@ function nxExtractStudent(string $q): ?string {
         'ninos','ninas','docentes','docente','profesores','profesor','profesora',
         // pronombres y cortesía — nunca nombres
         'ti','mi','vos','usted','ustedes','ellos','ellas','nosotros','gracias',
+        'muchas','muchisimas','mil','bendiciones','amable','senor','senora',
         'puedes','puedo','por','si','ok','vale','dale',
+        'quien','quienes','responde','cargo','figura','registrada','registrado',
+        'aparece','responsable','responsabilidad','volvamos','vuelve','volver',
         // vocabulario del dominio — sustantivos del sistema, no personas
         'sensores','sensor','dispositivos','dispositivo','nodos','nodo',
         'institucion','sistema','app','aplicacion','huella','lectores','lector',
@@ -1292,6 +1318,13 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $followupMark = (bool)preg_match('/^(y|ahora|pero|tambien|ademas|solo|solamente|entonces|o sea|'
         . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|de|del|de la|de lo)\b/u', $q0)
         || (bool)preg_match('/^(y )?(ahora|ahora que|y ahora|y despues|y luego)\b[?]*$/u', $q0);
+    // «ahora cuéntame/dime cuántos X» es consulta NUEVA — no continuación.
+    // Solo «ahora» con anáfora («ahora su número», «ahora él») marca retorno.
+    if ($followupMark && preg_match('/^ahora\b/u', $q0)
+        && preg_match('/\b(cuantos|cuantas|cuantos|cuales|quienes|quien|que|donde|cuando|como|a que)\b/u', $q0)
+        && !preg_match('/\b(su|sus|ese|esa|este|esta|el mismo|la misma|del mismo|ahi|alli|otro|otra|el|ella|de el|de ella)\b/u', $q0)) {
+        $followupMark = false;
+    }
     $explicitAction = (bool)preg_match('/\b(quiero|deseo|necesito|puedes|podrias|citar|cita|generar|'
         . 'enviar|mandar|reportar|autorizar|crear|abrir|registrar|derivar|exportar|'
         . 'descargar|hacer|empezar|iniciar|lanzar)\b/u', $q0);
@@ -1432,7 +1465,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             }
             // «el documento DE SU ACUDIENTE» — campo sobre el acudiente,
             // no sobre el estudiante: entidad objetivo = guardian
-            if (preg_match('/\b(documento|cedula|numero|telefono|celular|whatsapp|nombre|contacto)\s+de\s+(su|el|la)\s+(acudiente|tutor|responsable|papa|mama|padre|madre)\b/u', $q0, $mg)) {
+            if (preg_match('/\b(documento|cedula|numero|telefono|celular|whatsapp|nombre|contacto)\s+(?:de\s+(?:su|el|la)|del|de la)\s+(acudiente|acudientes|tutor|tutora|responsable|representante|papa|mama|padre|madre|encargad[oa]|familiar)\b/u', $q0, $mg)) {
                 $slots['_ref'] = 'guardian';
                 $slots['field'] = preg_match('/documento|cedula/', $mg[1]) ? 'documento_acudiente'
                                 : (preg_match('/nombre/', $mg[1]) ? 'nombre_acudiente'
@@ -1476,6 +1509,36 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                     $slots['module'] = $ctxEntities['module']; $inherited[] = 'module';
                 }
                 $turnType = 'context_modify';
+            }
+        }
+        // «quién responde por él / quién está a cargo de / quién figura como
+        // responsable de X» — identidad del acudiente (target=guardian)
+        if (in_array($intent, ['student_field','student_summary','staff_lookup','out_of_scope','audit_query','random_student'], true)
+            && preg_match('/\b(quien|quienes)\b.{0,30}\b(responde por|a cargo de|figura como|esta registrado como|aparece como|representa a|lo representa|la representa|lo cuida|la cuida|lo atiende|la atiende|responde por el|responde por ella|a nombre de quien|responsable de|encargado de)\b/u', $q0)) {
+            $slots['field'] = 'acudiente';
+            $slots['_ref'] = 'guardian';
+            $intent = 'student_field';
+            $turnType = 'context_modify';
+        }
+        // «ese/este/del estudiante|alumno|niño|muchacho» — referente deíctico
+        // al estudiante activo del contexto (§7: pronombres/deícticos)
+        if (empty($slots['student']) && !empty($ctxEntities['student'])
+            && preg_match('/\b(ese|esa|este|esta|del|de ese|de esa|el|la)\s+(estudiante|alumn[oa]|niñ[oa]|muchach[oa]|pelad[oa]|chin[oa]|menor)\b/u', $q0)
+            && in_array($intent, ['student_field','student_summary','staff_lookup','audit_query','random_student','out_of_scope'], true)) {
+            $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+            if ($intent === 'out_of_scope' || $intent === 'random_student' || $intent === 'audit_query') {
+                $intent = 'student_field'; $turnType = 'context_modify';
+            }
+        }
+        // «volvamos a X / vuelve a X» — retorno explícito al tema.
+        // El nombre termina en ':', '?' o la primera palabra interrogativa.
+        if (preg_match('/\b(vol(?:vamos|ve|ver|vamos) a|retomemos|de nuevo con|regresemos a|pasemos a)\s+([a-záéíóú]+(?:\s+[a-záéíóú]+){0,3})/u', $q0, $mv)) {
+            $raw = preg_split('/[:?¿!.,]/u', $mv[2])[0];
+            $name = preg_replace('/\b(quien|quienes|que|cual|cuales|cuanto|cuanta|cuantos|cuantas|donde|cuando|como|por que|para que|el|la|los|las|al|del|tema|caso)\b.*$/u', '', $raw);
+            $name = preg_replace('/\b(el|la|los|las|al|del|tema|caso)\b/u', '', $name);
+            $name = trim(preg_replace('/\s+/', ' ', $name));
+            if (strlen($name) > 2 && empty($slots['student'])) {
+                $slots['student'] = $name;
             }
         }
         // §21/§23 — turno de CONTEXTO que el modelo desvió a smalltalk/
@@ -1675,6 +1738,14 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 'list_events','count_events'], true)) {
             $intent = 'derive_action';
             $turnType = 'intent_switch';
+        }
+        // operación sobre referente de rol («que venga el papá del
+        // estudiante», «hacer venir al responsable del niño») sin nombre
+        // propio → la entidad activa del contexto es el objetivo del chip
+        if (in_array($intent, ['derive_action','start_operation'], true)
+            && empty($slots['student']) && !empty($ctxEntities['student'])
+            && preg_match('/\b(acudiente|acudientes|tutor|responsable|representante|papa|mama|padre|madre|familiar|encargad[oa]|estudiante|alumn[oa]|niñ[oa]|muchach[oa]|pelad[oa]|menor)\b/u', $q0)) {
+            $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
         }
         // verbo destructivo + datos → security_probe (no existe operación
         // de borrado — el rechazo explícito es el comportamiento correcto)

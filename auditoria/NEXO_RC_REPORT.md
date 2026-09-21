@@ -286,3 +286,140 @@ Evidencia: 103/103 convos simuladas (6 dimensiones), 18/18 puertas,
 conversación viva de 25 turnos con referencias, navegación, cambios de
 objetivo, correcciones, typos y aclaraciones honestas; read-only
 garantizado; RBAC intacto; p99 <8ms.
+
+---
+
+# ANEXO S — REORIENTACIÓN SEMÁNTICA DEL NLU (post-§1-§40)
+
+## S.1 Diagnóstico medido
+
+El modelo anterior (TF-IDF+LogReg sobre plantillas × pools + augmentación
+mecánica PRE/SUF/typos) memorizaba vocabulario: **50% en el blind set de
+paráfrasis** (72 frases escritas a mano, nunca en entrenamiento). Fallos
+típicos: «necesito que el papá del estudiante se acerque» → colombia_history;
+«hay que hacer venir al responsable» → bored.
+
+Bugs estructurales encontrados en auditoría:
+
+- **`students_in_group` no estaba en `domains.FORMAL`** — entrenaba al
+  submodelo informal; toda consulta de grupo competía contra smalltalk.
+- **Masking solo cubría nombres propios/grupos** — «el papá», «el
+  responsable», «ese alumno», «del plantel» quedaban como tokens libres:
+  el clasificador no veía la RELACIÓN semántica, solo vocabulario.
+- **Extracción tragaba cortesía**: «…de ana estudiante? muchas gracias»
+  → student=`ana muchas`; «volvamos a ana: quién responde…» →
+  student=`ana quien responde`.
+- **«buenas tardes» activaba módulo LATE_ARRIVAL** (stem `tarde`).
+- **Vocabularios mezclaban sustantivos y frases-verbales** →
+  «los los que se volaron» (1214 ejemplos corruptos).
+- **`a cargo de`** tenía etiquetas contradictorias (staff en corpus base,
+  acudiente en frames) — colisión léxica.
+
+## S.2 Arquitectura resultante
+
+```
+texto → normalize → extract_entities → mask_entities
+         │                                │
+         │   NOMBRES DE ROL → tokens semánticos:
+         │   acudiente_ent  (acudiente|papá|responsable|quien responde por…)
+         │   personal_ent   (docente|coordinador|rector|portero…)
+         │   colegio_ent    (colegio|institución|plantel|sede)
+         │   estudiante_ent (nombre propio O «ese alumno»/«del niño»…)
+         │   grupo_ent · num_ent · region_ent · extranjero_ent
+         ▼                                ▼
+   CANAL SEMÁNTICO (clasificador)   CANAL SEGURIDAD (texto completo +
+   estructura, no vocabulario       lexicon probes + verbos destructivos)
+```
+
+- `backend/nlu/intent_semantics.py` — especificación formal §5 por intent:
+  goal, action, source/target entity, fields, entidades requeridas,
+  reglas de desambiguación, near-miss, vocabularios de conceptos (§13:
+  C_GUARDIAN tiene 24 formas de referirse al acudiente; C_OP_CITE 22
+  formas de pedir citación — incluidas las que no dicen «citar»).
+- `backend/nlu/corpus_semantic.py` — generador por composición:
+  **frames estructurales** (pregunta directa/indirecta/declarativa/
+  elíptica/imperativa/envuelta en justificación/con corrección) ×
+  **conceptos** × **entidades** × **envolturas de cortesía/escenario**.
+  37.8K ejemplos, 22 intents cubiertos; cada «forma» es una estructura
+  distinta, no una mutación de string.
+- `test/blind_semantic.json` — 72 paráfrasis manuscritas fuera del
+  corpus (§23-24); `test/generalization_eval.py` — métricas §37.
+
+## S.3 Resultados medidos
+
+| Métrica | Antes | Ahora |
+|---|---|---|
+| **semantic_generalization (argmax)** | 50.0% | **94.4%** |
+| semantic_generalization (umbral prod.) | — | 81.9% |
+| courtesy_robustness | — | **100%** (8/8) |
+| near_miss_rejection (op vs consulta vs probe) | — | 90% |
+| ood_abstention | — | 87.5% |
+| typo_robustness | — | 83.3% |
+| Semantic singles (suite existente) | 978 | **979** (97.9%) |
+| Convos / adversariales | 100% / 533 | 100% / **533 (0 escapes)** |
+| Forense / DSM / paridad / readonly / resilience | ✓ | **sin regresión** |
+| **Release gate** | 18/18 | **18/18 PASS** |
+
+## S.4 Cadena §32-§35 verificada en vivo (stack docker, teach@test.nexo)
+
+```
+dame el documento de Ana      → doc 8001, 6-A
+¿cuál es su acudiente?        → Acudiente Prueba
+¿y su número?                 → +573000000001
+¿cuál es el documento de su acudiente?  → 9003
+¿y el nombre del acudiente?   → Acudiente Prueba
+¿cuál es el teléfono del acudiente?     → +573000000001
+necesito que el papá del estudiante se acerque
+                              → chip «Solicitar seguimiento» para Ana ★
+hay que hacer venir al responsable del niño
+                              → chip para Ana ★
+quién aparece como responsable de ese alumno
+                              → Acudiente Prueba ★
+con quién está registrada la responsabilidad de este estudiante
+                              → ficha de Ana ★
+ahora cuéntame cuántos faltaron hoy
+                              → 0 inasistencias hoy (alcance docente) ★
+háblame del sistema           → límite honesto (OOD no forzado)
+volvamos a ana: ¿quién responde por ella ante el colegio?
+                              → Acudiente Prueba ★ (retorno de tema)
+«buenas tardes, por favor, si es tan amable, ¿me dice cuál es el
+ teléfono del acudiente de ana estudiante? muchas gracias»
+                              → +573000000001 ★ (cortesía intacta)
+```
+
+★ = capacidad que no existía antes: paráfrasis profunda, deíctico de
+rol, retorno explícito de tema, cortesía pesada.
+
+## S.5 Qué cambió conceptualmente
+
+- **De vocabulario a estructura**: el clasificador ya no necesita ver la
+  palabra «citar» — «hacer venir al responsable del niño» aprende la
+  relación `acudiente_ent ← estudiante_ent + verbo-operativo`.
+- **De augmentación a composición**: los ejemplos nacen de frames
+  estructurales distintos (§10 A-F), no de mutar una oración.
+- **Señal ≠ seguridad**: el canal semántico enmascara ruido; la capa de
+  seguridad sigue viendo el texto completo («borra el historial» →
+  security_probe aunque la cortesía lo envuelva).
+- **Entidad objetivo explícita**: «documento del estudiante» vs
+  «documento del acudiente» — el slot `_ref=guardian` decide el target;
+  la palabra «documento» no decide sola.
+- **Herencia disciplinada**: «ahora cuéntame cuántos X» es consulta
+  nueva (sin anáfora → no hereda); «ahora su número» sí (anáfora «su»).
+
+## S.6 Residuales conocidos
+
+- 4 fallos blind: «a cargo de» (ambigüedad staff/acudiente legítima),
+  «el listado del octavo», «cuéntame sobre física cuántica».
+- Confianza <0.65 en paráfrasis largas → fallback + cobertura PHP
+  rescata en la mayoría; el umbral es deliberado.
+- El chip de «hacer venir al responsable» propone «Solicitar
+  seguimiento» (no existe operación «citación directa» como comando
+  separado — el deep-link es autorizado y read-only).
+
+## S.7 Veredicto
+
+```
+SEMANTIC NLU REORIENTED — READY
+  blind paraphrases: 50% → 94.4% (argmax) · 81.9% (producción)
+  regresión: 0 · gate: 18/18 · §32-35: verificado en vivo
+```

@@ -33,6 +33,7 @@ from domains import FORMAL, domain_of
 import corpus
 import corpus_colombia   # noqa: F401 — registra colombia_*, math_operation
 import corpus_extra      # noqa: F401 — inyecta jerga escolar en CORPUS
+import corpus_semantic   # diversidad estructural (frames × conceptos)
 
 MODEL_DIR = Path(__file__).parent / 'model'
 MODEL_DIR.mkdir(exist_ok=True)
@@ -99,8 +100,14 @@ def big_variants(text, k=3):
 
 
 def get_all():
-    """Corpus completo: base + colombia + jerga + augmentación masiva."""
+    """Corpus completo: base + colombia + jerga + SEMÁNTICO + augmentación."""
     data = []
+    # corpus semántico: diversidad estructural real (§8-§12) — sin
+    # augmentación mecánica extra (los frames ya son diversos)
+    sem = corpus_semantic.generate()
+    for intent_id, phrases in sem.items():
+        for p in phrases:
+            data.append((p, intent_id))
     for intent_id, phrases in corpus.CORPUS.items():
         for p in phrases:
             data.append((p, intent_id))

@@ -14,7 +14,7 @@ FORMAL = {
     'teachers_list','schedule_info','export_data','derive_action',
     'about_me','help','capabilities','security_probe',
     'random_student','staff_lookup','start_operation','count_present',
-    'count_trackings',
+    'count_trackings','students_in_group',
     'top_offenders','pending_returns','sos_alerts','biometric_spam',
     'group_student_count','birthdays_today','my_activity','failed_messages',
     'risk_config','attendance_ranking','session_summary','pending_tasks',

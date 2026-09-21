@@ -154,7 +154,7 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          'docente','docentes','profesor','profesores','maestro','maestros',
          'personal','rector','rectores','secretaria','secretarias','directivo',
          'exactamente','precisamente','respectivamente','personalmente',
-         'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo',
+         'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','bloque','bloques','materia','materias','asignatura','asignaturas','area','areas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo',
          'existimos','vivimos','nacimos','estamos','somos','fueron','somos',
          'siento','sientes','siente','tengo','tienes','quiero','quieres',
          'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
@@ -240,6 +240,44 @@ def extract_entities(q: str) -> dict:
     return e
 
 
+# Nombres de rol → tokens semánticos. El clasificador aprende la RELACIÓN
+# («acudiente_ent de estudiante_ent») no el vocabulario — así «el papá»,
+# «el responsable», «quien figura como acudiente» convergen a la misma
+# estructura y la generalización no depende de la palabra exacta (§13).
+_ROLE_MASK = [
+    ('acudiente_ent', [
+        'padre de familia', 'padres de familia', 'quien responde por el',
+        'quien responde por ella', 'quien lo representa', 'quien la representa',
+        'persona a cargo', 'adulto responsable', 'tutor legal', 'tutor',
+        'familiar registrado', 'contacto familiar', 'encargado del niño',
+        'encargada del niño', 'encargado del estudiante', 'acudientes',
+        'acudiente', 'representante', 'responsable', 'papas', 'papa',
+        'mamas', 'mama', 'padre', 'madre', 'abuelo', 'abuela', 'tio', 'tia',
+        'hermano mayor', 'hermana mayor',
+    ]),
+    ('personal_ent', [
+        'psicoorientadora', 'psicoorientador', 'orientadora', 'orientador',
+        'coordinadora', 'coordinador', 'rectora', 'rector', 'docentes',
+        'docente', 'profesora', 'profesor', 'profe', 'secretaria',
+        'secretario', 'portera', 'portero', 'vigilante', 'auxiliar',
+        'personal', 'maestra', 'maestro',
+    ]),
+    ('colegio_ent', [
+        'institucion educativa', 'institucion', 'colegio', 'plantel',
+        'escuela', 'sede',
+    ]),
+]
+
+# Referentes deícticos de estudiante → mismo token que un nombre propio.
+# «ese alumno», «el muchacho», «la niña del caso» = estudiante_ent —
+# el modelo ve el MISMO rol semántico con y sin nombre.
+_DEICTIC_STUDENT = (
+    r'\b(?:ese|esa|este|esta|el|la|los|las|un|una|otro|otra|mismo|misma|'
+    r'del|de la|de los|de las|de un|de una|al)\s+'
+    r'(?:estudiante|alumno|alumna|niño|niña|muchacho|muchacha|pelado|pelada|'
+    r'chino|china|menor|estudiante ese|estudiante esa)\b')
+
+
 def mask_entities(q: str, e: dict = None) -> str:
     """Reemplaza entidades por tokens fijos — el modelo aprende estructura."""
     if e is None:
@@ -251,6 +289,13 @@ def mask_entities(q: str, e: dict = None) -> str:
         masked = re.sub(r'\b' + re.escape(r) + r'\b', ' ' + token + ' ', masked)
     if e.get('student'):
         masked = masked.replace(e['student'], ' estudiante_ent ')
+    # deícticos de estudiante → mismo token que el nombre
+    masked = re.sub(_DEICTIC_STUDENT, ' estudiante_ent ', masked)
+    # nombres de rol → token semántico (§13 sinónimos contextuales)
+    for token, words in _ROLE_MASK:
+        for w in sorted(words, key=len, reverse=True):
+            masked = re.sub(r'\b' + re.escape(w) + r'\b', ' ' + token + ' ',
+                            masked)
     if e.get('group'):
         src = e.get('_group_src') or e['group'].lower()
         masked = re.sub(r'\b' + re.escape(src) + r'\b', ' grupo_ent ', masked)

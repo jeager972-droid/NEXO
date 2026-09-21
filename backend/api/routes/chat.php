@@ -910,7 +910,7 @@ function chat_count_events(PDO $conn, array $u, array $s, array $v): array {
             : nxVary(["Excelente noticia — no hay {$mlabel} registradas{$grp} en ese periodo{$inh}.",
                       "No hay {$mlabel} registradas{$grp} en ese periodo{$inh} — buena noticia.",
                       "Sin {$mlabel}{$grp} en ese periodo{$inh} — tranquilo.",
-                      "{$who} no tiene {$mlabel} registradas{$grp} en ese periodo{$inh}."], ($v['_q']??'').$mlabel))];
+                      "Cero {$mlabel}{$grp} en ese periodo{$inh} — todo limpio."], ($v['_q']??'').$mlabel))];
     $reply = "{$n} {$mlabel}{$who}{$grp} ({$rl}){$inh}.";
     $actions = [];
     $entOut = array_filter(['student'=>$student?mb_strtolower($student['first_name'].' '.$student['last_name']):null,'group'=>$s['group']??null]);
