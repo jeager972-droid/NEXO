@@ -51,6 +51,13 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     $interp = nxDialogueResolve($cls, $ctx, $q0);
     $intent = $interp['resolved']['intent'];
     $slots  = $interp['resolved']['slots'];
+    /* paridad chat.php: «su grupo» → resolución estudiante→grupo.
+       En producción es chatResolveStudent (BD+scope); aquí, fixture
+       determinista documentada (el blind asume juan→8A en T2). */
+    if (($slots['_ref'] ?? null) === 'group_of_student' && !empty($slots['student'])) {
+        $fixture = ['juan' => '8A', 'maria' => '7B', 'pedro' => '10A'];
+        if (isset($fixture[$slots['student']])) $slots['group'] = $fixture[$slots['student']];
+    }
     $inherited = $interp['resolved']['inherited'];
     $nuevos    = $interp['resolved']['new_slots'];
     $tr['turn_type'] = $interp['turn_type'];

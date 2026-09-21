@@ -404,6 +404,43 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $slots['_op'] = $slots['_op'] ?? chatOperationCmd($q0);
     }
 
+    // ── referencia «su grupo» → resolución determinista estudiante→grupo ──
+    // La BD conoce la relación (student_group_assignments + scope del rol);
+    // el NLU solo marcó la referencia (_ref). Casos:
+    //   encontrado      → group = grupo real del estudiante
+    //   ambiguo         → aclarar con nombres, nunca adivinar
+    //   sin grupo       → fallo explícito (dato real, no silencio)
+    //   no encontrado   → fallo explícito
+    if (($slots['_ref'] ?? null) === 'group_of_student' && !empty($slots['student'])) {
+        $found = chatResolveStudent($conn, $authUser, $slots['student']);
+        if ($found === null) {
+            $out = ['reply'=>"No encontré a «{$slots['student']}» entre tus estudiantes. "
+                    . "¿Puedes darme el nombre completo o el documento?",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        if (count($found) > 1) {
+            $opts = implode(', ', array_map(
+                fn($r) => trim($r['first_name'] . ' ' . $r['last_name']) . ' (' . ($r['group_name'] ?? 'sin grupo') . ')',
+                array_slice($found, 0, 3)));
+            $out = ['reply'=>"Hay varios estudiantes llamados {$slots['student']}: $opts. ¿A cuál te refieres?",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        $grp = $found[0]['group_name'] ?? null;
+        if (!$grp) {
+            $out = ['reply'=>"{$found[0]['first_name']} {$found[0]['last_name']} no tiene grupo asignado actualmente.",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        $slots['group'] = $grp;
+        $slots['student'] = trim($found[0]['first_name'] . ' ' . $found[0]['last_name']);
+        $slots['_ref_resolved'] = 'student→group: ' . $grp;
+    }
+
     // ── RBAC + políticas institucionales ──
     if (!chatAllowed($conn, $authUser, $intent, $role)) {
         $reply = nxSmalltalk('denied', $vars);

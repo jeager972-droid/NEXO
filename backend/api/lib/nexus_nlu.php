@@ -1450,7 +1450,23 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             }
         }
         if ($intent === 'repeat_op') $turnType = 'op_repeat';
-        // ── 6b. «¿y ahora?» / «vuelve atrás» sin tema heredable → aclarar ──
+        // ── 6a. «su grupo / de todo su grupo / su salón» — referencia al
+    // grupo DEL ESTUDIANTE activo: no se inventa, se marca _ref y el
+    // dispatcher la resuelve vía BD (student→group, determinista+RBAC)
+    if (preg_match('/\b(su grupo|su salon|su curso|su seccion|todo su grupo|toda su seccion|el grupo de (el|ella)|los de su grupo|mismo grupo|esa clase|su clase)\b/u', $q0)
+        && !empty($ctxEntities['student'] ?? $slots['student'] ?? null)) {
+        $slots['_ref'] = 'group_of_student';
+        if (empty($slots['student']) && !empty($ctxEntities['student'])) {
+            $slots['student'] = $ctxEntities['student'];
+            $inherited[] = 'student';
+        }
+        unset($slots['field']);
+        if (!in_array($intent, ['group_summary','group_student_count','list_events','count_events',
+                'attendance_today','late_today','top_offenders','trackings','groups_list'], true))
+            $intent = 'group_summary';
+        $turnType = 'context_modify';
+    }
+    // ── 6b. «¿y ahora?» / «vuelve atrás» sin tema heredable → aclarar ──
         if (preg_match('/^(y )?(ahora|ahora que|y ahora|y despues|y luego|vuelve atras|regresa|devuelvete|devuelve)\b[?!. ]*$/u', $q0)
             && !$inheritable) {
             $turnType = 'deictic';
