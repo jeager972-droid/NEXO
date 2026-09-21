@@ -260,6 +260,10 @@ function nxClassify(string $text): array {
     // entidades: siempre fusionar con nxSlots — el servicio no extrae
     // module/field/from/to/range_label (eso lo completa PHP)
     $r['entities'] = array_merge(nxSlots($norm), $r['entities'] ?? []);
+    // «excepto el 8A» — el servicio puede traer group=8A que es exclusión
+    if (isset($r['entities']['_except'])
+        && ($r['entities']['group'] ?? null) === $r['entities']['_except'])
+        unset($r['entities']['group']);
     if ($r['confidence'] < NX_NLU_THRESHOLD) {
         $r['intent'] = 'out_of_scope';
         $r['fallback'] = true;
@@ -335,6 +339,32 @@ function nxSlots(string $q): array {
     }
     // estudiante (misma heurística que service.py)
     $s['student'] = nxExtractStudent($q);
+
+    // ── modificadores §12 ────────────────────────────────────────────────
+    // exclusión: «todos menos los del 8A», «excepto los del octavo» —
+    // el grupo mencionado se EXCLUYE, no se filtra como group=
+    if (preg_match('/\b(excepto|menos|salvo|aparte de|fuera de)\s+(?:los|las|el|la)?\s*(?:del|de|al)?\s*/u', $q, $mm)) {
+        $rest = substr($q, strpos($q, $mm[0]) + strlen($mm[0]));
+        $ord = ['primero'=>'1','segundo'=>'2','tercero'=>'3','cuarto'=>'4','quinto'=>'5',
+                'sexto'=>'6','septimo'=>'7','octavo'=>'8','noveno'=>'9','decimo'=>'10',
+                'once'=>'11','onceavo'=>'11','undecimo'=>'11'];
+        if (preg_match('/^(\d{1,2}\s?[a-z]?)\b/u', $rest, $g)) {
+            $s['_except'] = strtoupper(str_replace(' ', '', $g[1]));
+        } elseif (preg_match('/^(' . implode('|', array_keys($ord)) . ')\b/u', $rest, $g)) {
+            $s['_except'] = $ord[$g[1]];
+        }
+        if (isset($s['_except']) && ($s['group'] ?? null) === $s['_except'])
+            unset($s['group']);
+    }
+    // exclusividad: «solo los que…», «únicamente…»
+    if (preg_match('/\b(solo|solamente|unicamente|nada mas que|tan solo)\b/u', $q))
+        $s['_only'] = true;
+    // no-justificado: «sin excusa», «sin justificar», «sin permiso»
+    if (preg_match('/\b(sin excusa|sin justificar|injustificad\w*|sin permiso|sin autorizar|sin autorizacion)\b/u', $q))
+        $s['_unjustified'] = true;
+    // negación de asistencia — la ausencia no es el ingreso
+    if (empty($s['module']) && preg_match('/\b(no llegaron|no vinieron|no entraron|no asistieron|no se present|faltaron|ausentes)\b/u', $q))
+        $s['module'] = 'INASISTENCIA';
     // regiones — un departamento/país nunca es estudiante
     $regions = nxRegions($q);
     if ($regions) {
@@ -442,7 +472,7 @@ function nxExtractStudent(string $q): ?string {
         'docente','docentes','profesor','profesores','maestro','maestros',
         'personal','rector','rectores','secretaria','secretarias','directivo',
         'exactamente','precisamente','respectivamente','personalmente',
-        'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo'];
+        'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo','excepto','menos','salvo','aparte','reporto','reportaste','reportamos','aplican','aplica'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
@@ -467,11 +497,11 @@ function nxExtractStudent(string $q): ?string {
 function nxModuleSynonyms(): array {
     return [
         'LATE_ARRIVAL'      => ['llegadas tarde','llegada tarde','tardanzas','tardanza','tarde','llego tarde','llegaron tarde','tardes'],
-        'INASISTENCIA'      => ['inasistencias','inasistencia','faltas','falta','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente'],
+        'INASISTENCIA'      => ['inasistencias','inasistencia','faltas','falta','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente','no llegaron','no llego','no entraron','no entro','no asistieron','no asistio','no se presentaron','no se presento','se ausentaron','se ausento'],
         'INASISTENCIA_JUSTIFICADA'    => ['inasistencias justificadas','justificadas','faltas justificadas'],
         'INASISTENCIA_NO_JUSTIFICADA' => ['inasistencias no justificadas','sin justificar','injustificadas'],
         'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono','se volaron','se volo','se la volaron','se la volo','tiraron','se tiraron','tajaron','se tajaron','caparon','se caparon','evasores','se fueron','se fueron de clase','se fueron del salon','abandono durante','abandonaron el aula'],
-        'PERMISO'           => ['permisos','permiso','salidas autorizadas'],
+        'PERMISO'           => ['permisos','permiso','salidas autorizadas','autorizaciones','autorizacion','autorizados','autorizadas','salidas autorizadas'],
         'SALIDA_BAÑO'       => ['salidas al bano','bano','banos','salidas de bano'],
         'SALIDA_COLEGIO'    => ['salidas del colegio','salida del colegio','salidas anticipadas','salio del colegio'],
         'SOS'               => ['sos','alertas sos','panico','emergencias','emergencia'],
@@ -479,7 +509,7 @@ function nxModuleSynonyms(): array {
         'SEGUIMIENTO'       => ['seguimientos','seguimiento','casos','caso','derivaciones'],
         'INCIDENTE'         => ['incidentes','incidente','reportes disciplinarios','disciplina','situaciones criticas','situacion critica'],
         'DAÑO'              => ['danos','dano','danios reportados'],
-        'INGRESO'           => ['ingresos','entradas','llegaron','entradas del dia'],
+        'INGRESO'           => ['ingresos','entradas','entraron','entro','ingresaron','ingreso','entradas del dia'],
         'SALIDA_PEDAGOGICA' => ['salidas pedagogicas','salida pedagogica','paseos','excursiones'],
     ];
 }
@@ -829,7 +859,7 @@ const NX_INTENT_LEXICON = [
     'day_summary'         => 'resumen|balance|panorama|como (cerro|va|fue)|general del dia|estado del dia|panorama general|plantel|estado general|todo el colegio|colegio entero|del plantel|como vamos|estado de la institucion',
     'group_summary'       => 'estado del (grupo|curso|seccion|salon)|resumen del grupo|como va el grupo|faltas del grupo|estado del \d+|el grupo al que|del grado|grupo del',
     'group_student_count' => 'cuantos estudiantes tiene|cuantos alumnos|matriculados|inscritos|poblacion|matricula',
-    'students_count'      => 'cuantos estudiantes hay|cuantos estudiantes|total de estudiantes|censo|poblacion estudiantil',
+    'students_count'      => 'cuantos estudiantes hay|cuantos estudiantes|total de estudiantes|censo|poblacion estudiantil|matriculados en total',
     'trackings'           => 'seguimiento|seguimientos|observacion|proceso de mejora|procesos|acompanamiento|bajo observacion|disciplinario|bajo seguimiento|casos abiertos|casos cerrados',
     'count_trackings'     => 'cuantos seguimientos|cuantos procesos|cuantas observaciones|procesos de mejora',
     'permissions'         => 'permiso|permisos|excusa|excusas|autorizacion|salida anticipada|salida temprana|retiro|retirarse|retire|salir antes|irse antes|permiso medico|incapacidad|autorizaciones|con permiso',
@@ -839,7 +869,7 @@ const NX_INTENT_LEXICON = [
     'student_field'       => 'documento|telefono|celular|direccion|contacto|eps|fecha de nacimiento|acudiente|whatsapp|papa|mama|padre|madre|familiar|correo|hermano|hermana|tutor',
     'groups_list'         => 'que grupos|lista de grupos|cuantos grupos|todos los grupos|cursos',
     'teachers_list'       => 'docentes|profesores|maestros|coordinadores|personal docente|planta docente|empleados|funcionarios',
-    'staff_lookup'        => 'de matematicas|de ingles|de espanol|de ciencias|de sociales|de fisica|de quimica|de biologia|de historia|de geografia|de arte|de musica|de educacion fisica|de religion|de etica|de informatica|del area|quien ensena|quien dicta|profe de|docente de|maestro de|rectora|rector|la rectora|el rector',
+    'staff_lookup'        => 'docente del que|docente que|profesor del que|el docente del|la docente del|de matematicas|de ingles|de espanol|de ciencias|de sociales|de fisica|de quimica|de biologia|de historia|de geografia|de arte|de musica|de educacion fisica|de religion|de etica|de informatica|del area|quien ensena|quien dicta|profe de|docente de|maestro de|rectora|rector|la rectora|el rector',
     'schedule_info'       => 'horario|bloque|jornada|hora de clase|periodo|descanso|recreo|almuerzo|clase de|cuando hay clase|turno|formacion|formaciones',
     'notifications_unread'=> 'mensajes?|notificaciones|avisos|sin leer|nuevos mensajes|llegaron mensajes|me escribieron',
     'failed_messages'     => 'sin enviar|no se enviaron|fallaron|rebotados|mensajes fallidos|pendientes de envio|quedaron sin enviar|avisos que no|mensajes que no|notificaciones que no|avisos que no llegaron|no llegaron a los padres|no les llego|no les llegaron',
@@ -863,6 +893,9 @@ const NX_INTENT_LEXICON = [
     'session_summary'     => 'resumen de sesion|que hablemos|de que hablamos|recapitula|recap',
     'do_for_me'           => 'traduce|traducir|hazme|escribe por mi|redacta|hazlo por mi|ayudame a|haz por mi',
     'no'                  => 'no es eso|eso no|incorrecto|asi no|no asi|equivocado|esta mal',
+    'thanks'              => 'gracias|muchas gracias|perfecto|vale|listo|genial|excelente|de acuerdo|entiendo|muy bien|ya esta|nada mas|eso era todo|es todo|solo eso|hasta ahi|ya con eso|buenisimo',
+    'yes'                 => 'si\\b|sip|claro|por supuesto|afirmativo|correcto|exacto|asi es',
+    'compliment'          => 'eres genial|eres increible|eres lo maximo|me encantas|eres un sol|que bueno eres|eres lo mejor|excelente trabajo|muy amable|que amable',
     'help'                => 'ayuda|que puedes hacer|en que me ayudas|opciones|comandos|funciones|que sabes hacer',
     'risk_config'         => 'umbral|umbrales|config|configuracion|parametro|parametros|regla|reglas|politica|politicas|nivel de riesgo|aplican|aplica|rango de riesgo',
 ];
@@ -994,6 +1027,25 @@ function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
 
 function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     $oos = $intent === 'out_of_scope';
+    // probes semánticos — el dominio léxico no importa, el patrón manda
+    if (preg_match('/\b(ignora (tu|mi|el|su|los|las|tus|mis|todas) ?(rol|roles|reglas?|instrucciones?|restricciones?|limites?|permisos?)?|modo (admin|administrador|dios|desarrollador|root|debug)|sin restricciones|acceso total|privilegios (totales|de admin|administrador)|actua como (admin|administrador|root|superadmin)|hazme administrador|suplant|omite la (validacion|confirmacion|autenticacion)|salta(r|te)? la (seguridad|confirmacion|validacion)|sin autenticar|que nadie sepa|sin registrar|usa la cuenta|usa su cuenta|con la cuenta de|suplantando|haciendose pasar|pasar por|como (el|la) (rector|rectora|coordinador|administrador|docente) (cuenta|perfil|rol))\b/u', $q0))
+        return 'security_probe';
+    // cross-scope institucional
+    if (preg_match('/\b(otro colegio|otra institucion|otra escuela|institucion vecina|colegio de al lado|colegio vecino|otra sede|datos de otros colegios|todas las instituciones|otros planteles|todos los colegios|de todos los planteles)\b/u', $q0))
+        return 'security_probe';
+    // credenciales / secretos / sql / exfiltración masiva
+    if (preg_match('/\b(aunque (yo )?no (tenga|tienes|tiene|tengo) permiso|no tengo permiso|sin permiso (para|de)|sin autorizacion (para|de)|no me pertenece|que no me corresponde)\b/u', $q0))
+        return 'security_probe';
+    if (preg_match('/\b(password|contrasena|clave|token|api ?key|credenciales|secreto)\b/u', $q0))
+        return 'security_probe';
+    if (preg_match('/\b(select \*|drop table|union select|delete from|insert into|update \w+ set|ejecuta sql|consulta sql|dump de la base|vuelca la base)\b/u', $q0))
+        return 'security_probe';
+    if (preg_match('/\b(exporta|descarga|extrae|copia|vuelca|dame|muestrame|saca) (toda|todas|todo|todos) (la|el|los|las)? ?\w*/u', $q0)
+        && preg_match('/\b(base|datos|informacion|registros|tabla)\b/u', $q0))
+        return 'security_probe';
+    // corrección de referencia: «hazlo sobre X aunque yo haya dicho Y»
+    if (preg_match('/\baunque (yo )?(haya |habia )?(dicho|dije|pedi|pedido|mencionado)\b/u', $q0))
+        return 'student_summary';
     // «no llegaron/vinieron» con sujeto persona → asistencia, no mensajería
     // («los chinos que no llegaron» ≠ «los mensajes que no llegaron»)
     if ($intent === 'failed_messages' || $intent === 'notifications_unread') {
@@ -1039,6 +1091,26 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         if (preg_match('/\b(faltas?|inasistencias?|ausencias?)\b/u', $q0)) return 'count_events';
         if (preg_match('/\bevasiones?\b/u', $q0)) return 'count_events';
     }
+    // model-op + adjetivo plural de permiso («autorizados para salir») →
+    // es consulta: ningún verbo de operación presente
+    if (in_array($intent, ['start_operation','derive_action'], true)
+        && preg_match('/\b(autorizad[oa]s?|permitid[oa]s?|vencid[oa]s?|expedid[oa]s?|emitid[oa]s?|aprobado[oa]s?|vigentes?|activos?)\b/u', $q0)
+        && !preg_match('/\b(genera|autoriza|expide|emite|tramita|reporta|registra|crea|manda|envia|cita|citar|convoca|dar|da)\b/u', $q0)
+        && preg_match('/\b(permiso|permisos|autorizacion|autorizad[oa]s?|excusa|salida|retiro|salir)\b/u', $q0))
+        return 'permissions';
+    // «exporta/descarga/extrae datos» → export_data (chip+RBAC, no ejecución)
+    if (in_array($intent, ['start_operation','derive_action','out_of_scope','list_events','export_data'], true)
+        && preg_match('/\b(exportar|exporta|descargar|descarga|extraer|extrae|saca|sacar|volcar|vuelca)\b/u', $q0)
+        && preg_match('/\b(datos|informacion|registros|reporte|informe|excel|base|listado|archivo)\b/u', $q0))
+        return 'export_data';
+    // «resumen del quinto/octavo» → resumen de grupo
+    if (preg_match('/\bresumen (del|de|del grado|del grupo)\b/u', $q0)
+        && !empty($slots['group']) && in_array($intent, ['out_of_scope','student_summary','group_summary','day_summary'], true))
+        return 'group_summary';
+    // «el papá/mamá/acudiente del que…» → referencia a campo de estudiante
+    if (preg_match('/\b(papa|mama|padre|madre|acudiente|familiar|tutor|hermano|hermana) (del|de la|del que|de la que)\b/u', $q0)
+        && in_array($intent, ['out_of_scope','attendance_today','late_today','student_summary','student_field','list_events'], true))
+        return 'student_field';
     // op-noun + verbo de CONSULTA → es consulta, no operación
     // («quiero ver el horario», «muestra las citaciones»)
     if (in_array($intent, ['start_operation','derive_action'], true)
@@ -1104,7 +1176,8 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $clarify = null;
 
     $followupMark = (bool)preg_match('/^(y|ahora|pero|tambien|ademas|solo|solamente|entonces|o sea|'
-        . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|de|del|de la|de lo)\b/u', $q0);
+        . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|de|del|de la|de lo)\b/u', $q0)
+        || (bool)preg_match('/^(y )?(ahora|ahora que|y ahora|y despues|y luego)\b[?]*$/u', $q0);
     $explicitAction = (bool)preg_match('/\b(quiero|deseo|necesito|puedes|podrias|citar|cita|generar|'
         . 'enviar|mandar|reportar|autorizar|crear|abrir|registrar|derivar|exportar|'
         . 'descargar|hacer|empezar|iniciar|lanzar)\b/u', $q0);
@@ -1180,7 +1253,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             }
         }
         // «vuelve/regreso a …» — retorno deíctico al tema u operación anterior
-        if (preg_match('/\b(vuelve|volver|regreso|regresa|retorna|volvemos)\b/u', $q0)) {
+        if (preg_match('/\b(vuelve|volver|regreso|regresa|retorna|volvemos|atras|devuelve|devuelvete)\b/u', $q0)) {
             // «vuelve al mes» = restaurar el rango ANTERIOR (swap con
             // prev_days) — la referencia a rango domina sobre el _op
             // pendiente («hoy» tras «mes pasado» conserva el 60 como prev)
@@ -1229,10 +1302,11 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             'citations'=>'Citar acudiente','trackings'=>'Solicitar seguimiento'];
         $pendingGuess = $ctxEntities['_op'] ?? ($opByIntent[$lastIntent] ?? null);
         $repeatMark = (bool)(preg_match('/\b(otro|otra|uno mas|una mas|otro mas|nuevo|nueva|igual|de nuevo)\b/u', $q0)
-            || preg_match('/\b(uno?|una)\s+(para|de|del)\b/u', $q0));
-        $pureTemporal = (bool)preg_match('/^(otro|otra|de|del|para|a|el|la|los|las|hoy|ayer|manana|dia|dias|semana|mes|fecha|tarde|temprano|esta|este|estos|estas|proximo|proxima|siguiente|anterior|pasado|pasada|y|ahora|\s|\d)+$/u', $q0);
+            || preg_match('/\b(uno?|una)\s+(para|de|del)\s*[a-z0-9]+/u', $q0));
+        $pureTemporal = (bool)(preg_match('/^(otro|otra|de|del|para|a|el|la|los|las|hoy|ayer|manana|dia|dias|semana|mes|fecha|tarde|temprano|esta|este|estos|estas|proximo|proxima|siguiente|anterior|pasado|pasada|y|ahora|\s|\d)+$/u', $q0)
+            && !preg_match('/\b(para|de|del|a)\s+\d*[a-z]+/u', $q0));
         if (!empty($pendingGuess) && $repeatMark && !$pureTemporal
-            && (preg_match('/\b(para|de|del|a)\s+[a-z]+/u', $q0)
+            && (preg_match('/\b(para|de|del|a)\s+[a-z0-9]+/u', $q0)
                 || $hasNewEntity
                 || preg_match('/\b(uno?|una)\b/u', $q0))) {
             $intent = 'repeat_op';
@@ -1247,10 +1321,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // Regla de preservación: un turno de operación SIN sustantivo/verbo
         // de operación («no, para María») NO recalcula el comando — conserva
         // el _op pendiente en lugar de caer al default.
-        $opVerb = (bool)preg_match('/\b(citar|cita|citalo|citala|cite|citamos|convocar|convoca|'
+        $opVerb = (bool)preg_match('/\b(citar|citalo|citala|cite|citamos|convocar|convoca|'
             . 'generar|genera|autorizar|autoriza|mandar|manda|enviar|envia|'
             . 'reportar|reporta|registrar|registra|crear|crea|expedir|expide|'
-            . 'derivar|deriva|tramitar|tramita|constancia|dejar constancia|llamar a citacion|llamado a|convoco|convoca|emitir|emite|dar salida|da salida)\b/u', $q0);
+            . 'derivar|deriva|tramitar|tramita|constancia|dejar constancia|llamar a citacion|llamado a|convoco|convoca|emitir|emite|dar salida|da salida|exportar|exporta|descargar|descarga|extraer|extrae|saca|sacar)\b/u', $q0);
         // «no, mejor una citación» — corrección DE operación: cambia el
         // comando, conserva la entidad y el flujo
         if ($correctionWeak && preg_match('/\b(solicitud|citacion|cita|permiso|autorizacion|salida|seguimiento|incidente|reporte)\b/u', $q0)
@@ -1263,7 +1337,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             $slots['_op'] = $ctxEntities['_op'];
         }
         if ($opVerb && in_array($intent, ['out_of_scope','permissions','citations',
-                'trackings','list_events','pending_returns','security_probe',
+                'trackings','list_events','pending_returns',
                 'sos_alerts','student_field','student_summary','day_summary',
                 'schedule_info','notifications_unread','group_summary'], true)) {
             $intent = 'derive_action';
@@ -1343,6 +1417,12 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             }
         }
         if ($intent === 'repeat_op') $turnType = 'op_repeat';
+        // ── 6b. «¿y ahora?» / «vuelve atrás» sin tema heredable → aclarar ──
+        if (preg_match('/^(y )?(ahora|ahora que|y ahora|y despues|y luego|vuelve atras|regresa|devuelvete|devuelve)\b[?!. ]*$/u', $q0)
+            && !$inheritable) {
+            $turnType = 'deictic';
+            $clarify = '¿Ahora sobre qué tema? Puedo mostrar faltas, tardanzas, permisos, eventos o seguimientos.';
+        }
         // ── 7. Pregunta cuantitativa sin métrica («¿cuántas hubo hoy?») →
         // aclarar, no adivinar — con contexto heredable aplica el intent previo;
         // sin contexto, debe preguntar la métrica (spec §8).
@@ -1408,6 +1488,14 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     if ($turnType === 'confirmation' && empty($newCtx['entities']) && $ctxEntities)
         $newCtx['entities'] = $ctxEntities;
 
+    // §17 self-check — evidencia de la interpretación final:
+    // strong = modelo confiado / evidencia léxica+módulo;
+    // borderline = rerank por margen fino; abstained = sin evidencia (oos)
+    $selfcheck = 'strong';
+    if ($intent === 'out_of_scope') $selfcheck = 'abstained';
+    elseif (($cls['top3'][0][1] ?? 0) < 0.65 && $conf < 0.80) $selfcheck = 'borderline';
+    elseif ($coverageHit && ($cls['top3'][0][1] ?? 0) < 0.40) $selfcheck = 'borderline';
+
     return [
         'said'      => ['normalized' => $q0],
         'inferred'  => ['domain' => $cls['domain'] ?? null, 'intent' => $cls['intent'],
@@ -1415,7 +1503,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                         'entities' => $cls['entities'] ?? []],
         'resolved'  => ['intent' => $intent, 'slots' => $slots,
                         'confidence' => $conf, 'inherited' => $inherited,
-                        'new_slots' => $newSlots],
+                        'new_slots' => $newSlots, 'selfcheck' => $selfcheck],
         'turn_type' => $turnType,
         'explicit_action' => $explicitAction,
         'followup_mark'   => $followupMark,

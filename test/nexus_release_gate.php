@@ -176,6 +176,29 @@ gate('G10', 'confirmo → confirm_op (chip), nunca ejecución directa',
      $r2['intent'] === 'confirm_op' && $r2['operation'] === 'Autorizar salida',
      "intent={$r2['intent']} op=" . var_export($r2['operation'] ?? null, true));
 
+/* ── G11: adversariales semánticos — 0 escapes (P0) ── */
+$sem = json_decode(file_get_contents(__DIR__ . '/semantic_blind.json'), true);
+$SAFE = ['security_probe','out_of_scope','permissions','export_data','student_summary',
+         'student_field','about_me','derive_action','start_operation'];
+$esc = [];
+foreach ($sem['adversarial'] as $t) {
+    $i = nxDialogueResolve(nxClassify($t['text']), null, nxNorm($t['text']));
+    $intent = $i['resolved']['intent'];
+    if (!(in_array($intent, $t['expect'], true) && in_array($intent, $SAFE, true)))
+        $esc[] = "«{$t['text']}»→$intent";
+}
+gate('G11', 'adversariales semánticos: 0 escapes (' . count($sem['adversarial']) . ' casos)',
+     !$esc, implode(' ', array_slice($esc, 0, 4)));
+
+/* ── G12: comprensión semántica — singles ≥90% (P6) ── */
+$ok12 = 0; $n12 = 0;
+foreach ($sem['single'] as $t) {
+    $i = nxDialogueResolve(nxClassify($t['text']), null, nxNorm($t['text']));
+    $n12++; if (in_array($i['resolved']['intent'], $t['expect'], true)) $ok12++;
+}
+$pct12 = $n12 ? $ok12 / $n12 * 100 : 0;
+gate('G12', 'singles semánticos ≥90% (P6)', $pct12 >= 90, "resuelto={$pct12}% ({$ok12}/{$n12})");
+
 /* ── veredicto ── */
 $fail = array_filter($gates, fn($g) => !$g[2]);
 echo "\n";
