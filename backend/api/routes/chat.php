@@ -130,10 +130,15 @@ const NX_CHAT_POLICY_MAP = [
 function chatPolicyEnabled(PDO $conn, string $schoolId, string $key): bool {
     static $cache = [];
     if (array_key_exists($key, $cache)) return $cache[$key];
-    $st = $conn->prepare("SELECT enabled FROM school_chat_policies WHERE school_id=? AND policy_key=?");
-    $st->execute([$schoolId, $key]);
-    $v = $st->fetchColumn();
-    return $cache[$key] = ($v === false) ? true : (bool)$v;
+    try {
+        $st = $conn->prepare("SELECT enabled FROM school_chat_policies WHERE school_id=? AND policy_key=?");
+        $st->execute([$schoolId, $key]);
+        $v = $st->fetchColumn();
+        return $cache[$key] = ($v === false) ? true : (bool)$v;
+    } catch (Throwable $e) {
+        // tabla ausente en despliegues antiguos → política por defecto (TRUE)
+        return $cache[$key] = true;
+    }
 }
 
 /** Gate completo: matriz de rol + política institucional. */
@@ -291,7 +296,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         }
     }
 
+    // ── telemetría por capa (NLU → DSM → auth → dispatch) ─────────────
+    $tNlu = microtime(true);
     $cls = nxClassify($text);
+    $tNlu = microtime(true) - $tNlu;
 
     // ── Multi-intención: «hola quién eres y quién soy yo», «tardanzas y evasiones del 8A» ──
     if (!empty($cls['parts']) && count($cls['parts']) > 1) {
@@ -327,7 +335,9 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // intent exitoso; el DSM clasifica el turno (A–F) y resuelve intent+slots.
     $ctx = $input['ctx'] ?? null;
     if (is_array($ctx) && !empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
+    $tDsm = microtime(true);
     $interp = nxDialogueResolve($cls, is_array($ctx) ? $ctx : null, $q0);
+    $tDsm = microtime(true) - $tDsm;
     $intent = $interp['resolved']['intent'];
     $slots  = $interp['resolved']['slots'];
     if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
@@ -335,6 +345,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         'turn_type' => $interp['turn_type'],
         'nlu_intent' => $cls['intent'],
         'inherited' => $interp['resolved']['inherited'],
+        'timing_ms' => ['nlu' => round($tNlu * 1000, 2), 'dsm' => round($tDsm * 1000, 2)],
     ];
     if ($interp['requires_clarification']) {
         $out = ['reply'=>$interp['clarify'],'intent'=>'clarify','confidence'=>$conf,
@@ -401,11 +412,18 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         exit(json_encode(['status'=>'ok','data'=>$out]));
     }
 
+    $tDisp = microtime(true);
     $out = chatDispatch($conn, $authUser, $intent, $slots, $vars, $role);
+    $tDisp = microtime(true) - $tDisp;
+    // response planner: el handler es la fuente de verdad — reply vacío
+    // → fallo explícito, nunca datos inventados; sello de procedencia.
+    $out = nxPlanResponse($out, $intent, 'chat_' . $intent);
     $out['intent'] = $intent;
     $out['confidence'] = $conf;
     $out['session_id'] = $sessionId;
     $out['entities'] = array_merge($slots, $out['entities'] ?? []); // el handler resuelve nombres reales
+    if (isset($out['_interpretation']['timing_ms']))
+        $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
 
     chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
     echo json_encode(['status'=>'ok','data'=>$out], JSON_UNESCAPED_UNICODE);

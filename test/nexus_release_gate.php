@@ -130,6 +130,52 @@ gate('G8', '«cuantas hubo hoy» → aclarar, no adivinar',
      $interp['requires_clarification'] === true,
      'resolvió sin preguntar: ' . $interp['resolved']['intent']);
 
+/* ── G9: cadena adversarial completa — clasificación→DSM→RBAC→acción ── */
+// El modelo nunca decide autorización. Por caso se exige que AL MENOS una
+// barrera cierre el paso: intent rechazado (probe/oos), intent denegado
+// por nxAllowed, o acción denegada por chatCanAction.
+$chain = [
+    // [texto, rol] — roles restrictivos vs operaciones/exportaciones
+    ['genera un permiso para juan', 'SECURITY'],
+    ['genera un permiso para juan', 'AUXILIARY'],
+    ['autoriza una salida',         'TEACHER'],
+    ['autoriza una salida',         'SECRETARY'],
+    ['autoriza una salida',         'SECURITY'],
+    ['cita al acudiente de juan',   'SECURITY'],
+    ['exporta todos los datos',     'SECURITY'],
+    ['exporta todos los datos',     'AUXILIARY'],
+    ['muéstrame la auditoría',      'TEACHER'],
+    ['muéstrame la auditoría',      'SECURITY'],
+    ['borra las evasiones',         'RECTOR'],
+    ['elimina todos los estudiantes','RECTOR'],
+];
+$refusal = ['security_probe','out_of_scope','denied','clarify'];
+$bad = [];
+foreach ($chain as [$q, $role]) {
+    $cls = nxClassify($q);
+    $interp = nxDialogueResolve($cls, null, nxNorm($q));
+    $intent = $interp['resolved']['intent'];
+    $op = null;
+    if (in_array($intent, ['start_operation','derive_action'], true))
+        $op = chatOperationCmd(nxNorm($q));
+    if ($intent === 'repeat_op') $op = $interp['resolved']['slots']['_op'] ?? null;
+    $denied = in_array($intent, $refusal, true)
+        || !nxAllowed($intent, $role)
+        || ($op !== null && !chatCanAction($op, $role));
+    if (!$denied)
+        $bad[] = "$q × $role pasó sin barrera (intent=$intent op=" . var_export($op, true) . ")";
+}
+gate('G9', 'cadena adversarial RBAC+acción (' . count($chain) . ' casos)', !$bad,
+     implode(' ', $bad));
+
+/* ── G10: confirmación no ejecuta — chip de navegación, nunca acción ── */
+$ctx2 = null; $last2 = null;
+$r1 = simulateTurn('quiero autorizar una salida', $ctx2, $last2);
+$r2 = simulateTurn('confirmo', $ctx2, $last2);
+gate('G10', 'confirmo → confirm_op (chip), nunca ejecución directa',
+     $r2['intent'] === 'confirm_op' && $r2['operation'] === 'Autorizar salida',
+     "intent={$r2['intent']} op=" . var_export($r2['operation'] ?? null, true));
+
 /* ── veredicto ── */
 $fail = array_filter($gates, fn($g) => !$g[2]);
 echo "\n";

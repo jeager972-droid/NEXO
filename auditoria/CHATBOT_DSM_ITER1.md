@@ -131,3 +131,63 @@ Todos capa-NLU/corpus, no DSM:
 - Tests de integración Docker (api:18080) — el stack no estaba levantado.
 - PHPUnit: `vendor/bin/phpunit` no existe en raíz — comando por ubicar.
 - Matriz de taxonomía + informe final A–R + veredicto de release.
+
+## 6. Iter-2 — cobertura, planner, telemetría, adversarial, integración
+
+### 6.1 Nuevo en código
+
+- `nxCoverageOverride()` — reglas determinísticas para frases que el
+  clasificador deja fuera de alcance o mal etiquetadas (mensajes,
+  hora, cierres compuestos, «datos de <student>», personal/materias,
+  boundary conteo/métrica, op-noun + verbo de consulta). Solo actúan
+  cuando el modelo no resolvió; nunca tocan autorización.
+- `nxPlanResponse()` — planner de respuesta: reply vacío → fallo
+  explícito; sello `source` (handler) en cada respuesta.
+- Telemetría por capa en `_interpretation.timing_ms`
+  (nlu / dsm / dispatch) — medido: NLU+DSM p50=3.6ms, p95=8.4ms.
+- `chatPolicyEnabled` resiliente: tabla `school_chat_policies` ausente
+  → default TRUE (antes 500 en despliegues antiguos).
+- `vuelve` reordenado: referencia a rango domina sobre `_op`; «vuelve a
+  la solicitud» mantiene confirmación (periodo requerido en el patrón).
+- Confirmación/cancel/repeat preservan ctx (slots se fusionan, no
+  reemplazan) — «confirmo» ya no borra `days`.
+- generic-inherit: cuantificador+métrica propia («y cuántas tardanzas»)
+  no se degrada al intent previo; métrica sin cuantificador sí
+  («ahora las tardanzas» modifica la cadena).
+
+### 6.2 Release gate extendido (11 puertas)
+
+- G9: cadena adversarial clasificación→DSM→RBAC→acción (12 casos:
+  SECURITY/AUXILIARY/TEACHER vs permisos/salidas/citaciones/export/
+  auditoría/borrado — cada uno debe caer en probe, deny o action-deny).
+- G10: confirmación nunca ejecuta — solo chip de navegación.
+
+### 6.3 Integración Docker (nexo-test :18080) — verificado
+
+```
+genera un permiso        → start_operation + chip «Generar permiso»
+confirmo                 → confirm_op, turn=confirmation, ms={nlu,dsm}
+otro para camila         → repeat_op + «Otra Generar permiso»
+borra las evasiones      → security_probe + rechazo
+gracias                  → thanks (ctx conservado)
+los permisos del 8a      → permissions + reply fundamentado en BD
+```
+
+Hallazgo: la tabla `school_chat_policies` faltaba en el seed del stack
+→ creada + parche de resiliencia (ver 6.1).
+
+### 6.4 Métricas finales iter-2
+
+| Métrica | Prod | V3 | V3.1 |
+|---|---|---|---|
+| Singles | 52.8% | 55.2% | 57.4% |
+| Turnos convo | 98.8% | 98.3% | **99.7%** |
+| Convos completas | 49/53 | 48/53 | **52/53** |
+| Críticos | 6 | 5 | **4** |
+| Release gate | — | — | **11/11 READY** |
+
+Único fallo convo residual: `y de todo su grupo` (resolución
+estudiante→grupo requiere DB del handler — limitación documentada).
+
+Forense 36/36 · DSM 50/50 · paridad 0 conflictos · PHPUnit
+integración 42/42 (:18080).

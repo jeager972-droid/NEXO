@@ -436,6 +436,11 @@ function nxExtractStudent(string $q): ?string {
         'abierto','abierta','abiertos','cerrado','cerrada','pendiente','pendientes',
         'activo','activa','activos','vigente','vigentes','anterior','anteriores',
         'reciente','recientes','nuevo','nueva',
+        'matematicas','ingles','espanol','ciencias','sociales','fisica','quimica',
+        'biologia','historia','geografia','arte','musica','religion','etica',
+        'informatica','lectura','escritura','coordinador','coordinadores',
+        'docente','docentes','profesor','profesores','maestro','maestros',
+        'personal','rector','rectores','secretaria','secretarias','directivo',
         'exactamente','precisamente','respectivamente','personalmente'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
@@ -797,10 +802,87 @@ const NX_SMALLTALK_INTENTS = ['greeting','greeting_time','wellbeing','wellbeing_
     'meaning_life','confused','repeat','insult_back','sing','dance','story',
     'motivation','foreign_culture','help','capabilities'];
 
+/**
+ * nxCoverageOverride — reglas determinísticas para frases de dominio que el
+ * clasificador no cubre. SOLO actúa cuando el modelo no resolvió
+ * (out_of_scope) o asignó smalltalk inequívocamente erróneo a una frase
+ * con señal de dominio clara. NUNCA toca autorización — el intent
+ * resultante pasa por nxAllowed/chatPolicy igual que cualquier otro.
+ */
+function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
+    $oos = $intent === 'out_of_scope';
+    // mensajes/notificaciones — «tengo mensajes», «hay mensajes nuevos»
+    if ($oos && preg_match('/\b(mensajes?|notificaciones?|avisos?)\b/u', $q0)
+        && preg_match('/\b(tengo|tienes|hay|nuevos?|sin leer|pendientes?|llego|llegaron|entro|mandaron|enviaron)\b/u', $q0))
+        return 'notifications_unread';
+    // hora — «que hora es», «la hora actual» (incluso si NLU dijo
+    // schedule_info: la pregunta directa por la hora domina)
+    if (($oos || $intent === 'schedule_info')
+        && preg_match('/\b(que hora|la hora|hora actual|a que horas|son las)\b/u', $q0))
+        return 'time';
+    // cierre compuesto — «listo, gracias»/«eso era todo» son despedida
+    if (in_array($intent, ['yes','no','greeting','greeting_time'], true)
+        && preg_match('/\bgracias\b/u', $q0)) return 'thanks';
+    if (in_array($intent, ['out_of_scope','yes','no','greeting','greeting_time','smalltalk'], true) && preg_match('/\b(eso era todo|eso es todo|nada mas|ya esta|ya estuvo|es todo|solo eso|hasta ahi|listo gracias|ya con eso)\b/u', $q0))
+        return 'thanks';
+    // «datos/info de <estudiante>» — ficha con entidad explícita
+    if ($oos && !empty($slots['student'])
+        && preg_match('/\b(datos|info|ficha|perfil|resumen|contacto|telefono|documento|direccion)\b/u', $q0))
+        return 'student_summary';
+    // personal del colegio — «los coordinadores», «el de matemáticas»;
+    // student_field sin estudiante también aplica (NLU desvió la consulta)
+    $staffWrong = $oos || ($intent === 'student_field' && empty($slots['student']));
+    if ($staffWrong && preg_match('/\b(coordinadores?|docentes?|profesores?|maestros?|personal|directivos?|rectores?|secretarias?)\b/u', $q0))
+        return 'teachers_list';
+    if ($staffWrong && preg_match('/\b(de|del|de la|del area de)\s+(matematicas|ingles|espanol|ciencias|sociales|fisica|quimica|biologia|historia|geografia|arte|musica|educacion fisica|religion|etica|informatica|lectura|escritura)\b/u', $q0))
+        return 'staff_lookup';
+    // «cuantas tardanzas/faltas/evasiones» — boundary count vs métrica;
+    // student_field sin estudiante también corrige
+    $countWrong = in_array($intent, ['out_of_scope','students_count','count_present','day_summary'], true)
+        || ($intent === 'student_field' && empty($slots['student']));
+    if ($countWrong) {
+        if (preg_match('/\btardanzas?\b/u', $q0)) return 'late_today';
+        if (preg_match('/\b(faltas?|inasistencias?|ausencias?)\b/u', $q0)) return 'count_events';
+        if (preg_match('/\bevasiones?\b/u', $q0)) return 'count_events';
+    }
+    // op-noun + verbo de CONSULTA → es consulta, no operación
+    // («quiero ver el horario», «muestra las citaciones»)
+    if (in_array($intent, ['start_operation','derive_action'], true)
+        && preg_match('/\b(ver|mirar|muestra|mostrar|dame|consultar|revisar|listar|cuales|cuando|como|dime)\b/u', $q0)
+        && !preg_match('/\b(citar|cita|generar|genera|autorizar|mandar|enviar|reportar|registrar|crear|abrir|convocar|expedir|derivar|tramitar)\b/u', $q0)) {
+        if (preg_match('/\bhorario|bloque|jornada\b/u', $q0)) return 'schedule_info';
+        if (preg_match('/\bcitacion|citaciones\b/u', $q0)) return 'citations';
+        if (preg_match('/\bpermiso|permisos|excusa|excusas\b/u', $q0)) return 'permissions';
+        if (preg_match('/\bseguimiento|seguimientos\b/u', $q0)) return 'trackings';
+        if (preg_match('/\bsolicitud|solicitudes\b/u', $q0)) return 'trackings';
+    }
+    return null;
+}
+
+/**
+ * nxPlanResponse — planificador de respuesta fundamentado.
+ * El handler es la fuente de verdad: si no produjo contenido, el plan
+ * devuelve un fallo explícito (nunca inventa datos). Sella la
+ * procedencia (qué intent/handler respondió) para auditoría.
+ */
+function nxPlanResponse(array $out, string $intent, string $handlerUsed): array {
+    if (empty($out['reply']) && empty($out['cards'])) {
+        $out['reply'] = 'No pude obtener datos para eso — '
+            . 'no hay información disponible en tu alcance.';
+    }
+    $out['source'] = $handlerUsed;
+    $out['intent'] = $out['intent'] ?? $intent;
+    return $out;
+}
+
 function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $intent = $cls['intent'];
     $conf   = $cls['confidence'] ?? 0;
     $slots  = $cls['entities'] ?? [];
+    // cobertura: frases de dominio que el modelo deja fuera de alcance
+    // — reglas determinísticas y auditables (ver nxCoverageOverride)
+    $coverageHit = false;
+    if ($ovr = nxCoverageOverride($q0, $intent, $slots)) { $intent = $ovr; $coverageHit = true; }
     $inherited = []; $newSlots = [];
     $turnType = 'new_request';
     $clarify = null;
@@ -883,11 +965,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         }
         // «vuelve/regreso a …» — retorno deíctico al tema u operación anterior
         if (preg_match('/\b(vuelve|volver|regreso|regresa|retorna|volvemos)\b/u', $q0)) {
-            if (!empty($ctxEntities['_op'])) { $turnType = 'confirmation'; }
             // «vuelve al mes» = restaurar el rango ANTERIOR (swap con
-            // prev_days — «hoy» tras «mes pasado» conserva el 60 como
-            // prev y «vuelve» lo recupera, no el 0 actual)
-            elseif (preg_match('/\b(al|a la|a el|a los|a las|al mes|a ese|a esa|a aquel)\s*(mes|semana|rango|periodo|fecha|ano|año)?\b/u', $q0)
+            // prev_days) — la referencia a rango domina sobre el _op
+            // pendiente («hoy» tras «mes pasado» conserva el 60 como prev)
+            if (preg_match('/\b(al|a la|a el|a los|a las|a ese|a esa|a aquel|a aquella)\s+(mes|semana|rango|periodo|fecha|ano|año)\b/u', $q0)
                 && !preg_match('/\b(hoy|ayer|anteayer|ahora mismo|recien|ultimo dia|ultimos|\d+)\b/u', $q0)
                 && array_key_exists('days', $ctxEntities) && $ctxEntities['days'] !== null) {
                 $prev = $ctxEntities['prev_days'] ?? null;
@@ -904,6 +985,8 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 }
                 $turnType = 'context_modify';
             }
+            // «vuelve a la solicitud» — retorno a la operación pendiente
+            elseif (!empty($ctxEntities['_op'])) { $turnType = 'confirmation'; }
             elseif ($inheritable && $intent !== $lastIntent
                 && ($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD
                     || in_array($intent, NX_GENERIC_INTENTS, true))) {
@@ -996,13 +1079,19 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // solicitud aparte», «el permiso») NO se degrada a la consulta previa.
         $hasOpNoun = (bool)preg_match('/\b(una?|el|la|esa|ese|otra?|hacer|haz|mandar|enviar|generar|crear|quiero|necesito)\s+\w*\s*(solicitud|citacion|cita|permiso|autorizacion|salida|seguimiento|incidente|reporte|registro|excusa)\b/u', $q0);
         if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD)
-            && $inheritable && $dependent && !$hasOpNoun) {
+            && $inheritable && $dependent && !$hasOpNoun && !$coverageHit) {
             $intent = $lastIntent;
             $inherited[] = 'intent';
             $turnType = 'context_modify';
         }
         // ── 4. Modificación contextual (genéricos) — «¿y las de hoy?» ──
-        if ($inheritable && $intent !== $lastIntent
+        // Guardias: coverage override exento; y un mensaje con
+        // cuantificador+métrica propia («y cuántas tardanzas») NO es
+        // modificación deíctica — el intent propio es el correcto.
+        // «ahora las tardanzas» (sin cuantificador) SÍ modifica la cadena.
+        $ownCount = (bool)(preg_match('/\b(cuant[oa]s?|que numero|cuanto)\b/u', $q0)
+            && preg_match('/\b(tardanza|inasist|falt|evasion|permiso|citacion|seguim|evento|incident|notif|salid|ingres|ausen|presente|estudiant|alumn)/u', $q0));
+        if ($inheritable && $intent !== $lastIntent && !$coverageHit && !$ownCount
             && in_array($intent, NX_GENERIC_INTENTS, true)
             && $followupMark && !$explicitAction
             && str_word_count($q0, 0, 'áéíóúñü') <= 8) {
@@ -1054,6 +1143,20 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // smalltalk («gracias», «ok», «sí», «adiós») no cambia el tema —
         // conserva el ctx completo para que «el mismo grupo» siga resolviendo
         $newCtx = $ctx;
+    } elseif (in_array($turnType, ['confirmation','cancel','op_repeat'], true)) {
+        // confirm/cancel/repetición: el tema conversacional continúa — los
+        // slots nuevos se fusionan sobre el ctx, no lo reemplazan («confirmo»
+        // tras «tardanzas del mes» no borra el rango)
+        $newCtx = [
+            'last_intent' => $turnType === 'op_repeat' ? $intent : ($ctx['last_intent'] ?? $intent),
+            'entities' => $ctx['entities'] ?? [],
+            'ts' => time(),
+        ];
+        foreach (array_intersect_key($slots, array_flip(
+                ['student','group','module','days','prev_days','from','to','range_label','field','_op']))
+            as $k => $v) {
+            if ($v !== null && $v !== '') $newCtx['entities'][$k] = $v;
+        }
     } elseif ($intent !== 'out_of_scope') {
         $newCtx = [
             'last_intent' => $intent,
