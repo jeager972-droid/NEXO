@@ -199,6 +199,22 @@ foreach ($sem['single'] as $t) {
 $pct12 = $n12 ? $ok12 / $n12 * 100 : 0;
 gate('G12', 'singles semánticos ≥90% (P6)', $pct12 >= 90, "resuelto={$pct12}% ({$ok12}/{$n12})");
 
+/* ── G13: read-only — ningún handler chat_* contiene SQL mutativo ── */
+$ro = run('php ' . __DIR__ . '/readonly_guard.php');
+gate('G13', 'canal conversacional read-only (52 handlers auditados)',
+     str_contains($ro, 'READ-ONLY GARANTIZADO'), trim($ro) !== '' ? 'violación detectada' : 'sin salida');
+
+/* ── G12b: blind operativo — umbral honesto del dataset real ── */
+preg_match('/SINGLES: (\d+)\/(\d+) = ([\d.]+)%/', $out ?? '', $m3);
+gate('G12b', 'singles operativos ≥80% (referencia real)', isset($m3[3]) && $m3[3] >= 80,
+     'op-blind=' . ($m3[3] ?? '?') . '%');
+
+/* ── G14: resiliencia — degradación segura ante fallos ── */
+$rz = run('php ' . __DIR__ . '/resilience.php');
+preg_match('/(\d+) PASS · (\d+) FAIL/', $rz, $m4);
+gate('G14', 'resiliencia: fallos de infraestructura degradan seguro',
+     isset($m4[2]) && $m4[2] == 0, $m4[0] ?? 'salida ilegible');
+
 /* ── veredicto ── */
 $fail = array_filter($gates, fn($g) => !$g[2]);
 echo "\n";

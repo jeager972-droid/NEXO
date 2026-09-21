@@ -1066,6 +1066,15 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     if (preg_match('/\b(exporta|descarga|extrae|copia|vuelca|dame|muestrame|saca) (toda|todas|todo|todos) (la|el|los|las)? ?\w*/u', $q0)
         && preg_match('/\b(base|datos|informacion|registros|tabla)\b/u', $q0))
         return 'security_probe';
+    // «háblame/cuéntame/explícame de <tema>» fuera de dominio — no adivinar
+    // un intent cercano: el smalltalk de Colombia solo cubre su tema
+    if (str_starts_with($intent, 'colombia_')
+        && preg_match('/\b(hablame|cuentame|explicame|ensename|informame)\s+(de|sobre|acerca de)\s+([a-z ]+)/u', $q0, $mm)) {
+        $topic = preg_replace('/^(el|la|los|las|un|una|lo|mi|tu|su|del|de)\s+/u', '', trim($mm[3] ?? ''));
+        $col = 'colombia|bogota|medellin|cali|barranquilla|cartagena|cucuta|bucaramanga|pereira|ibague|manizales|pasto|villavicencio|monteria|neiva|armenia|valledupar|antioquia|cundinamarca|santander|norte de santander|valle|cauca|atlantico|bolivar|narino|huila|tolima|boyaca|meta|casanare|amazonas|guainia|guaviare|vaupes|vichada|arauca|putumayo|choco|cordoba|sucre|magdalena|cesar|guajira|san andres|providencia|risaralda|quindio|caldas|caqueta|catatumbo|pacifico|orinoquia|caribe|andina|insular';
+        if ($topic !== '' && !preg_match('/^(' . $col . '|historia|geografia|cultura|presidente|presidentes|capital|capitales|departamento|departamentos|region|regiones|pais|nacion)/u', $topic))
+            return 'do_for_me';
+    }
     // corrección de referencia: «hazlo sobre X aunque yo haya dicho Y»
     if (preg_match('/\baunque (yo )?(haya |habia )?(dicho|dije|pedi|pedido|mencionado)\b/u', $q0))
         return 'student_summary';
@@ -1227,8 +1236,9 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         . 'cancelo|dejalo|deja|olvida|olvídalo|mejor no|ya no|detente|parale|no eso)\b/u', $q0)
         || preg_match('/^(no|nel|nop)\b[.! ]*$/u', $q0);
 
+    // §15 ctx corrupto: tipos incorrectos se invalidan, nunca propagan
     $ctxEntities = is_array($ctx['entities'] ?? null) ? $ctx['entities'] : [];
-    $lastIntent  = $ctx['last_intent'] ?? null;
+    $lastIntent  = is_string($ctx['last_intent'] ?? null) ? $ctx['last_intent'] : null;
     $inheritable = $lastIntent && in_array($lastIntent, NX_QUERY_INTENTS, true);
 
     $hasNewEntity = false;
