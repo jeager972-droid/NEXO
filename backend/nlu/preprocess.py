@@ -62,7 +62,10 @@ def normalize(t: str) -> str:
     return re.sub(r'\s+', ' ', t).strip()
 
 
-_STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
+_STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
+    'biologia','astronomia','religion','matematicas','espanol','aleman','etica',
+    'fisica','sena','resultado','resultados','partido','clima','tiempo',
+    'temperatura','pronostico','chiste','chistes','reporto','reportaste','reportamos','aplican','aplica','excepto','salvo','grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'mes','ano','dias','dia','el','la','los','las','un','una','este','esta',
          'esto','eso','mi','tu','su','mis','tus','sus','que','cual','cuales',
          'cuanto','cuanta','cuantos','cuantas','dime','dame','muestrame',

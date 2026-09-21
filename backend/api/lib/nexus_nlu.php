@@ -426,6 +426,11 @@ function nxExtractStudent(string $q): ?string {
         'octavo','noveno','decimo','once','onceavo','undecimo',
         'aleatorio','aleatoria','cualquiera','azar','random',
         'existimos','vivimos','nacimos','estamos','somos','fueron',
+        // materias académicas y cultura general — nunca nombres de estudiante
+        'filosofia','literatura','politica','geografia','historia','quimica',
+        'biologia','astronomia','religion','matematicas','espanol','aleman',
+        'etica','fisica','sena','senas','resultado','resultados','partido',
+        'clima','tiempo','temperatura','pronostico','chiste','chistes',
         'siento','sientes','siente','tengo','tienes','quiero','quieres',
         'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
         'voy','vas','van','digo','dices','dicen','era','eran','sera','seran',
@@ -472,7 +477,7 @@ function nxExtractStudent(string $q): ?string {
         'docente','docentes','profesor','profesores','maestro','maestros',
         'personal','rector','rectores','secretaria','secretarias','directivo',
         'exactamente','precisamente','respectivamente','personalmente',
-        'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo','excepto','menos','salvo','aparte','reporto','reportaste','reportamos','aplican','aplica'];
+        'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','filosofia','literatura','politica','geografia','historia','quimica','biologia','astronomia','religion','matematicas','espanol','ingles','frances','aleman','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo','excepto','menos','salvo','aparte','reporto','reportaste','reportamos','aplican','aplica'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
@@ -509,7 +514,7 @@ function nxModuleSynonyms(): array {
         'SEGUIMIENTO'       => ['seguimientos','seguimiento','casos','caso','derivaciones'],
         'INCIDENTE'         => ['incidentes','incidente','reportes disciplinarios','disciplina','situaciones criticas','situacion critica'],
         'DAÑO'              => ['danos','dano','danios reportados'],
-        'INGRESO'           => ['ingresos','entradas','entraron','entro','ingresaron','ingreso','entradas del dia'],
+        'INGRESO'           => ['ingresos','entradas','entraron','entro','ingresaron','ingreso','entradas del dia','vinieron','llegaron','asistieron','vino','llego','asistio'],
         'SALIDA_PEDAGOGICA' => ['salidas pedagogicas','salida pedagogica','paseos','excursiones'],
     ];
 }
@@ -853,7 +858,7 @@ const NX_SMALLTALK_INTENTS = ['greeting','greeting_time','wellbeing','wellbeing_
 const NX_INTENT_LEXICON = [
     'late_today'          => 'tardanza|tardanzas|tarde|tardias|tardio|impuntual|impuntuales|llegaron tarde|entrada tardia|pasada la hora|pasado el horario|despues de la hora|despues de las|a destiempo|atraso|atrasados|demora|demorados|llegada tarde|llegadas tarde|entradas tardias',
     'attendance_today'    => 'asistencia|asistieron|asisten|asistio|presente|presentes|presento|presentaron|vinieron|llegaron|entaron|entraron|ausente|ausentes|faltaron|inasistencia|no vinieron|no llegaron|no entraron|no asistieron|no se present|ausencia|se ausent|faltan|faltan hoy|no entraron',
-    'count_present'       => 'cuantos asistieron|cuantos presentes|presentes hoy|asistieron hoy|cuantos vinieron|cuantos llegaron|cuantos entraron|cuantos hay hoy',
+    'count_present'       => 'cuantos asistieron|cuantos presentes|presentes hoy|asistieron hoy|cuantos vinieron|cuantos llegaron|cuantos entraron|cuantos hay hoy|cuantos estudiantes vinieron|cuantos estudiantes llegaron|cuantos estudiantes asistieron|cuantos estudiantes entraron|cuantos alumnos vinieron|cuantos chicos vinieron',
     'count_events'        => 'eventos|casos|incidencias|incidentes|registros|disciplinarios|ocurrencias|hechos|sucesos|reportes|denuncias|faltas|inasistencias|evasiones|salidas|permisos|cuantos hubo|cuantas hubo|acumuladas|acumulados|consolidado|totales|fugas|escapadas|reincidencia',
     'list_events'         => 'muestra|muestrame|lista|listado|quienes|cuales|los que|dame|ver|revisar|registrados|registradas|detectados|detectadas|marcados|marcadas|traeme|pasame|reportados por|reportadas por|detectados por|detectadas por|los del|las del|las que',
     'day_summary'         => 'resumen|balance|panorama|como (cerro|va|fue)|general del dia|estado del dia|panorama general|plantel|estado general|todo el colegio|colegio entero|del plantel|como vamos|estado de la institucion',
@@ -916,6 +921,24 @@ const NX_MODULE_INTENT = [
     'PRESENTE'        => ['attendance_today','count_present','count_events'],
 ];
 
+/* nxLexGuarded — hit léxico con guardias contextuales:
+ * «por el lector»=agente, «clase de X»=contexto-persona, «jornada anterior»=
+ * pasado, «a qué hora es el recreo»=horario (no hora), ranking veta listas,
+ * grupo presente veta day_summary. */
+function nxLexGuarded(string $li, string $q0, array $g): int {
+    $hit = (int)(isset(NX_INTENT_LEXICON[$li])
+        && preg_match('/\b(' . NX_INTENT_LEXICON[$li] . ')/u', $q0));
+    if (!$hit) return 0;
+    if ($li === 'devices_status' && ($g['agentRef'] ?? false)) return 0;
+    if ($li === 'staff_lookup' && !($g['personRef'] ?? false)) return 0;
+    if ($li === 'schedule_info' && ($g['pastRef'] ?? false)) return 0;
+    if ($li === 'time' && preg_match('/\b(recreo|descanso|jornada|bloque|periodo|horario|clase|entrada|salida|timbre|almuerzo|salen|entran|empieza|termina|comienza|acaba)\b/u', $q0)) return 0;
+    if ($li === 'day_summary' && !empty($g['group'])) return 0;
+    if (in_array($li, ['late_today','attendance_today','list_events','count_events','group_summary'], true)
+        && preg_match('/\b(ranking|mas |peores|record|reincidencia|reincidentes|promedio|comparativa|top |mayor numero|frecuencia)\b/u', $q0)) return 0;
+    return $hit;
+}
+
 function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
     $top3 = $cls['top3'] ?? [];
     $conf = $cls['confidence'] ?? 0;
@@ -931,12 +954,15 @@ function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
     $margin = count($top3) >= 2 ? $top3[0][1] - $top3[1][1] : 1;
     if ($conf >= 0.80 && $margin >= 0.20) {
         $i1 = $top3[0][0] ?? null;
-        $i1Hit = $i1 && isset(NX_INTENT_LEXICON[$i1])
-            && preg_match('/\b(' . NX_INTENT_LEXICON[$i1] . ')/u', $q0);
+        $g = ['group' => $slots['group'] ?? null,
+              'agentRef' => (bool)preg_match('/\b(por|mediante|con|desde|en) (el|la|los|las)? ?(lector|biometrico|sensor|dispositivo|huella|registrador)\b/u', $q0),
+              'personRef' => (bool)preg_match('/\b(clase|curso|materia|asignatura|grado|jornada|periodo) de [a-z]+|\b(del|de la|al) que |\bque (report|ensena|dicta|tuvo|registro|vio|dijo)|docente (del|de la|que)|profesor (del|de la|que)|maestro (del|de la|que)/u', $q0),
+              'pastRef' => (bool)preg_match('/\b(anterior|pasada|pasado|ayer|del mes|de la semana|de hace|acumulad|la manana|la mañana|del dia)\b/u', $q0)];
+        $i1Hit = $i1 && nxLexGuarded($i1, $q0, $g);
         $otherHit = false;
         foreach (NX_INTENT_LEXICON as $li => $lx) {
             if ($li === $i1) continue;
-            if (preg_match('/\b(' . $lx . ')/u', $q0)) { $otherHit = true; break; }
+            if (nxLexGuarded($li, $q0, $g)) { $otherHit = true; break; }
         }
         if ($i1Hit || !$otherHit) return null;
     }
@@ -955,20 +981,15 @@ function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
 
     // guardias contextuales del léxico — evitan hits por contexto ajeno
     $agentRef = (bool)preg_match('/\bpor (el|la|los|las)\s+(lector|dispositivo|biometrico|sensor|camara|sistema)\b/u', $q0);
-    $personRef = (bool)preg_match('/\b(el|la|los|las|quien|quienes|profe|docente|maestro|rector|coordinador)\b[^.]{0,30}\b(de|del)\s+(matematicas|ingles|espanol|ciencias|sociales|fisica|quimica|biologia|historia|geografia|arte|musica|educacion fisica|religion|etica|informatica)/u', $q0);
+    $personRef = (bool)(preg_match('/\b(el|la|los|las|quien|quienes|profe|docente|maestro|rector|coordinador)\b[^.]{0,30}\b(de|del)\s+(matematicas|ingles|espanol|ciencias|sociales|fisica|quimica|biologia|historia|geografia|arte|musica|educacion fisica|religion|etica|informatica)/u', $q0)
+        || preg_match('/\b(del|de la|al) que |\bque (report|ensena|dicta|tuvo|registro|vio|dijo)|docente (del|de la|que)|profesor (del|de la|que)|maestro (del|de la|que)/u', $q0));
     $pastRef  = (bool)preg_match('/\b(anterior|pasada|pasado|de ayer|del mes|de la semana|de hace|acumulad)/u', $q0);
 
     // hits del léxico con guardias (stems: boundary solo a la izquierda —
     // «citasiones» debe matchear el stem «citasion»)
-    $lexHitOf = function(string $li) use ($q0, $agentRef, $personRef, $pastRef, $slots): int {
-        $lex = NX_INTENT_LEXICON[$li] ?? null;
-        $hit = $lex && preg_match('/\b(' . $lex . ')/u', $q0) ? 1 : 0;
-        if ($hit && $li === 'devices_status' && $agentRef) $hit = 0;
-        if ($hit && $li === 'staff_lookup' && !$personRef) $hit = 0;
-        if ($hit && $li === 'schedule_info' && $pastRef) $hit = 0;
-        if ($hit && $li === 'day_summary' && !empty($slots['group'])) $hit = 0;
-        return $hit;
-    };
+    $lexHitOf = fn(string $li): int => nxLexGuarded($li, $q0,
+        ['agentRef'=>$agentRef,'personRef'=>$personRef,'pastRef'=>$pastRef,
+         'group'=>$slots['group'] ?? null]);
 
     // candidatos = top-k ∪ hits de léxico (el correcto puede faltar en top-k)
     foreach (NX_INTENT_LEXICON as $li => $_)
@@ -983,6 +1004,7 @@ function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
         $score = 0.60 * $lexHit + 0.10 * $mw + $p2 * 0.5;
         // alineación de módulo — el módulo es evidencia fuerte
         // («se tajaron»→EVASION veta a schedule por «jornada»)
+        if ($i2 === 'group_student_count' && empty($slots['group'])) $score -= 0.40;
         if ($module && isset(NX_MODULE_INTENT[$module])
             && in_array($i2, NX_MODULE_INTENT[$module], true)) {
             $score += 0.30;
@@ -1000,6 +1022,7 @@ function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
     $rest = array_slice($scored, 1, null, true);
     $second = $rest ? $rest[array_key_first($rest)][0] : 0;
 
+    if (getenv('NXDBG')) { $tmp=$scored; usort($tmp,fn($a,$b)=>$b[0]<=>$a[0]); fwrite(STDERR, json_encode(array_combine(array_keys($scored),$tmp),JSON_UNESCAPED_UNICODE)."\n"); }
     // EXECUTE: el ganador con evidencia domina por margen — si no, ABSTAIN.
     // Dos top-2 ALINEADOS al mismo módulo no son contradictorios (familia
     // hermana) → también se resuelve; la discrepancia real exige margen.
@@ -1098,6 +1121,10 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         && !preg_match('/\b(genera|autoriza|expide|emite|tramita|reporta|registra|crea|manda|envia|cita|citar|convoca|dar|da)\b/u', $q0)
         && preg_match('/\b(permiso|permisos|autorizacion|autorizad[oa]s?|excusa|salida|retiro|salir)\b/u', $q0))
         return 'permissions';
+    // «mis permisos / mi rol» = meta-pregunta del usuario, NO permisos de salida
+    if (preg_match('/\b(mis permisos|mi rol|mis privilegios|mi perfil|quien soy|mis funciones|mi rol aqui)\b/u', $q0)
+        && in_array($intent, ['about_me','permissions','out_of_scope','my_activity'], true))
+        return 'about_me';
     // «exporta/descarga/extrae datos» → export_data (chip+RBAC, no ejecución)
     if (in_array($intent, ['start_operation','derive_action','out_of_scope','list_events','export_data'], true)
         && preg_match('/\b(exportar|exporta|descargar|descarga|extraer|extrae|saca|sacar|volcar|vuelca)\b/u', $q0)
@@ -1111,10 +1138,16 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     if (preg_match('/\b(papa|mama|padre|madre|acudiente|familiar|tutor|hermano|hermana) (del|de la|del que|de la que)\b/u', $q0)
         && in_array($intent, ['out_of_scope','attendance_today','late_today','student_summary','student_field','list_events'], true))
         return 'student_field';
+    // «dame/quiero/haz UN permiso PARA <nombre>» = operación (beneficiario)
+    if (preg_match('/\b(un|una|el|los|las)\s+(permiso|excusa|solicitud|autorizacion|salida|cita|citacion)\s+para\s+[a-z]+/u', $q0)
+        && in_array($intent, ['permissions','citations','trackings','list_events','out_of_scope'], true))
+        return 'derive_action';
     // op-noun + verbo de CONSULTA → es consulta, no operación
-    // («quiero ver el horario», «muestra las citaciones»)
+    // («quiero ver el horario», «muestra las citaciones») — pero
+    // «dame un permiso PARA <nombre>» sigue siendo operación (beneficiario)
     if (in_array($intent, ['start_operation','derive_action'], true)
         && preg_match('/\b(ver|mirar|muestra|mostrar|dame|consultar|revisar|listar|cuales|cuando|como|dime)\b/u', $q0)
+        && !preg_match('/\b(un|una|el|los|las)\s+(permiso|excusa|solicitud|autorizacion|salida|cita|citacion)\s+para\s+[a-z]+/u', $q0)
         && !preg_match('/\b(citar|cita|generar|genera|autorizar|mandar|enviar|reportar|registrar|crear|abrir|convocar|expedir|derivar|tramitar)\b/u', $q0)) {
         if (preg_match('/\bhorario|bloque|jornada\b/u', $q0)) return 'schedule_info';
         if (preg_match('/\bcitacion|citaciones\b/u', $q0)) return 'citations';

@@ -182,7 +182,7 @@ foreach (['cuantas tarsansas','citasiones pendientes','permisoss activos','quien
 
 /* ── fuera de dominio / abstención honesta ──────────────────────────── */
 foreach (['como esta el clima','quien gano el partido','traduce esto al frances','cuentame un chiste','la capital de francia','receta de arepas','el resultado del sena','pronostico del tiempo','como hacer una tortilla','el significado de la vida','recomiendame una pelicula','cuanto es 5 por 3','hablame de filosofia','el ultimo presidente','noticias del dia'] as $t)
-    $add($t,['out_of_scope','foreign_culture','do_for_me','fun_fact','math_operation','colombia_fun_fact','help'],'oos');
+    $add($t,['out_of_scope','foreign_culture','do_for_me','fun_fact','math_operation','colombia_fun_fact','help','weather','news_sports','joke','food_music','colombia_capital','about_nexus'],'oos');
 
 /* ── smalltalk ──────────────────────────────────────────────────────── */
 foreach (['gracias','ok vale','listo','eso era todo','perfecto','de acuerdo','ya esta','nada mas','muy bien','entiendo'] as $t)
