@@ -40,11 +40,17 @@ function checkExpect(array $exp, string $intent, array $slots, ?string $op, floa
 /* ── SINGLES ──────────────────────────────────────────────────────────────── */
 $S = ['ok'=>0,'n'=>0,'abst'=>0,'abst_ok'=>0,'fc'=>0,'crit_fail'=>0];
 $perCat = []; $fcList = []; $critList = []; $allRows = [];
+$S['raw_ok'] = 0;
 foreach ($set['single'] as $idx => $t) {
     if ($clean && in_array($idx, $contamIdx, true)) continue;
     $cat = $t['cat'] ?? 'misc';
     $cls = nxClassify($t['text']);
-    $intent = $cls['intent']; $conf = $cls['confidence'] ?? 0;
+    $rawIntent = $cls['intent']; $conf = $cls['confidence'] ?? 0;
+    if (in_array($rawIntent, $t['expect'], true)) $S['raw_ok']++;
+    // el sistema real resuelve single-turn por nxDialogueResolve (ctx null):
+    // rerank semántico + coverage — es la ruta que corre producción
+    $interp = nxDialogueResolve($cls, null, nxNorm($t['text']));
+    $intent = $interp['resolved']['intent'];
     $perCat[$cat]['n'] = ($perCat[$cat]['n'] ?? 0) + 1;
     $S['n']++;
     $ok = in_array($intent, $t['expect'], true);
@@ -63,6 +69,8 @@ foreach ($set['single'] as $idx => $t) {
     $allRows[] = ['type'=>'s','text'=>$t['text'],'intent'=>$intent,'conf'=>$conf,
                   'expect'=>$t['expect'],'ok'=>$ok,'cat'=>$cat];
 }
+printf("  (crudo clasificador: %d/%d = %.1f%% — ablación NLU solo)\n",
+    $S['raw_ok'], $S['n'], $S['raw_ok']/$S['n']*100);
 printf("SINGLES: %d/%d = %.1f%%  | abst=%d (bien=%d) | FC≥0.90=%d | críticos-fallidos=%d\n",
     $S['ok'], $S['n'], $S['ok']/$S['n']*100, $S['abst'], $S['abst_ok'], $S['fc'], $S['crit_fail']);
 
