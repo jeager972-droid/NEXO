@@ -114,6 +114,11 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'nublado','lluvioso','caluroso','fresco','templado',
          'tarde','temprano','presente','justificado','puntual','ausente',
          'dorado','leyenda','leyendas','mito','mitos','leyendario',
+         # referencias temporales/posicionales — nunca nombres de estudiante
+         'pasado','pasada','pasados','pasadas','anterior','anteriores',
+         'proximo','proxima','proximos','proximas','siguiente','siguientes',
+         'actual','actuales','reciente','recientes','vigente','venidero',
+         'venidera','entrante','corriente',
          'existimos','vivimos','nacimos','estamos','somos','fueron','somos',
          'siento','sientes','siente','tengo','tienes','quiero','quieres',
          'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
@@ -135,8 +140,14 @@ _STUDENT_PATS = [
 
 def extract_entities(q: str) -> dict:
     e = {}
-    m = re.search(r'ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras', q)
-    if m:
+    # Períodos pasados específicos PRIMERO — «del mes pasado» no es «del mes»
+    if re.search(r'mes pasado|mes anterior', q):
+        e['days'] = 60
+    elif re.search(r'semana pasada|semana anterior', q):
+        e['days'] = 14
+    elif re.search(r'ano pasado|ano anterior', q):
+        e['days'] = 365
+    elif (m := re.search(r'ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras', q)):
         e['days'] = int(next(g for g in m.groups() if g))
     elif re.search(r'(\d+) semanas?', q):
         e['days'] = int(re.search(r'(\d+) semanas?', q).group(1)) * 7

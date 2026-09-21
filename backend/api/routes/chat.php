@@ -172,21 +172,36 @@ function chatCanAction(string $action, string $role): bool {
     };
 }
 
-/** Palabra clave → título exacto del comando en Operation.jsx (?cmd= coincide con title). */
+/**
+ * Palabra clave → título exacto del comando en Operation.jsx (?cmd= coincide con title).
+ *
+ * Reglas:
+ *  - Se evalúan con límite de palabra (\b) — una subcadena jamás dispara una
+ *    operación distinta (caso forense: «solicitud» contiene «cit»).
+ *  - Las operaciones más específicas se evalúan antes que las genéricas:
+ *    «solicitud» antes que «citar»; «autorizar … salida» antes que «salida».
+ *  - Las formulaciones naturales admiten palabras intermedias:
+ *    «autorizar una salida», «unir los bloques», «extender el bloque».
+ */
 function chatOperationCmd(string $q): string {
     return match(true) {
-        str_contains($q,'situacion'), str_contains($q,'emergencia'), str_contains($q,'panico'), str_contains($q,'sos') => 'Situación Crítica',
-        str_contains($q,'cit') => 'Citar acudiente',
-        str_contains($q,'permiso'), str_contains($q,'salida de clase'), str_contains($q,'salio al bano') => 'Generar permiso',
-        str_contains($q,'solicitud'), str_contains($q,'tramite'), str_contains($q,'pedir algo'), str_contains($q,'peticion') => 'Mandar solicitud',
-        str_contains($q,'dano'), str_contains($q,'rompio'), str_contains($q,'danado'), str_contains($q,'roto') => 'Reportar daño',
-        str_contains($q,'salida pedagogica'), str_contains($q,'paseo'), str_contains($q,'excursion') => 'Salida pedagógica',
-        str_contains($q,'horario'), str_contains($q,'cambiar la hora'), str_contains($q,'jornada') => 'Cambio de horario',
-        str_contains($q,'autorizar salida'), str_contains($q,'salida anticipada'), str_contains($q,'se retira temprano') => 'Autorizar salida',
-        str_contains($q,'fusionar'), str_contains($q,'unir bloques'), str_contains($q,'juntar bloques') => 'Fusionar bloque',
-        str_contains($q,'extender'), str_contains($q,'alargar'), str_contains($q,'prolongar') => 'Extender bloque',
-        str_contains($q,'registro manual'), str_contains($q,'marcar entrada'), str_contains($q,'sin huella') => 'Registro manual',
-        str_contains($q,'incidente'), str_contains($q,'report'), str_contains($q,'pelea'), str_contains($q,'problema') => 'Reportar incidente',
+        // crítico primero — nada puede competir con una emergencia
+        preg_match('/\b(sos|panico|emergencia|emergencias|situacion|situaciones|critica|critico)\b/u', $q) === 1 => 'Situación Crítica',
+        // salidas de largo alcance antes que permisos/salidas simples
+        preg_match('/\b(salidas? pedagogicas?|paseo|paseos|excursion|excursiones)\b/u', $q) === 1 => 'Salida pedagógica',
+        // autorizar salida — admite artículos entre medio
+        preg_match('/\bautoriz\w*\b[^.]*\bsalid\w*\b|\bsalida anticipada\b|\bse retira temprano\b|\bretiro anticipado\b/u', $q) === 1 => 'Autorizar salida',
+        // solicitud/petición ANTES de citación — «solicitud» contiene «cit»
+        preg_match('/\b(solicitud|solicitudes|solicitar|solicito|solicite|peticion|peticiones|tramite|tramites|requerimiento|requerimientos)\b/u', $q) === 1 => 'Mandar solicitud',
+        // citación con boundary — solo formas reales de «citar»
+        preg_match('/\b(citar|citamos|citemos|cite|cito|citas|citacion|citaciones|convoque?|convocar)\b/u', $q) === 1 => 'Citar acudiente',
+        preg_match('/\b(permiso|permisos|salida de clase|salio al bano|salio del salon|permiso de salida)\b/u', $q) === 1 => 'Generar permiso',
+        preg_match('/\b(dano|danos|danado|rompio|rompieron|roto|averiado|averia|destrozado|vandalismo)\b/u', $q) === 1 => 'Reportar daño',
+        preg_match('/\b(cambio de horario|cambiar (la |el |mi )?hor(a|ario)|horario|jornada|reprogramar|reagendar)\b/u', $q) === 1 => 'Cambio de horario',
+        preg_match('/\b(fusionar|unir|juntar|combinar)\w*\s+\w*\s*bloques?\b|\bfusionar bloque\b|\bunir bloques\b/u', $q) === 1 => 'Fusionar bloque',
+        preg_match('/\b(extender|alargar|prolongar)\w*\s+\w*\s*bloques?\b|\bextender bloque\b|\balargar bloque\b/u', $q) === 1 => 'Extender bloque',
+        preg_match('/\b(registro manual|marcar entrada|marca manual|sin huella|registrar llegada)\b/u', $q) === 1 => 'Registro manual',
+        preg_match('/\b(incidente|incidentes|report(ar|e|o|amos)|pelea|peleas|problema|problemas|rina|agresion|agresiones|conflicto)\b/u', $q) === 1 => 'Reportar incidente',
         default => 'Solicitar seguimiento',
     };
 }
@@ -320,11 +335,43 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 $slots['_inherited'][] = $k;
             }
         }
-        // frase puramente dependiente («su grupo», «cuántas evasiones tiene»):
-        // si la clasificación quedó bajo umbral, heredamos también la intención
-        if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD) && !empty($ctx['last_intent'])) {
+        // Intenciones heredables: solo consultas de datos (nunca acciones
+        // ni smalltalk — una operación previa no «contamina» un turno nuevo).
+        $queryIntents = ['list_events','count_events','trackings','permissions','citations',
+            'student_field','student_summary','group_summary','top_offenders','pending_returns',
+            'attendance_ranking','group_student_count','students_count','devices_status',
+            'notifications_unread','audit_query','sos_alerts','biometric_spam','birthdays_today',
+            'failed_messages','whatsapp_status','my_activity','pending_tasks','schedule_info',
+            'risk_students','export_data'];
+        $inheritable = !empty($ctx['last_intent'])
+            && in_array($ctx['last_intent'], $queryIntents, true);
+        $followupMark = preg_match('/^(y|ahora|pero|tambien|ademas|solo|solamente|entonces|o sea|'
+            . 'las|los|esas|esos|estas|estos|esa|ese|este|sus?|del|de la|de lo)\b/u', $q0);
+        // frase puramente dependiente («y las de hoy», «ahora del 8A»):
+        // si la clasificación quedó bajo umbral, heredamos también la
+        // intención — pero SOLO con marcador de seguimiento. Una consulta
+        // autónoma («cuántas tardanzas hubo hoy») sin marcador debe caer a
+        // abstención honesta, no heredar el intent previo (etapa 0).
+        if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD) && $inheritable && $followupMark) {
             $intent = $ctx['last_intent'];
             $slots['_inherited'][] = 'intent';
+        }
+        // ── Modificación contextual (caso forense F) ──────────────────────
+        // «¿Y las de hoy?» clasifica day_summary 0.93 — intent nuevo con
+        // confianza alta, pero semánticamente solo cambia un slot del query
+        // previo. Regla: intent genérico de resumen + marcador de seguimiento
+        // + sin verbo de acción explícito + frase corta → mismo intent, nuevos
+        // slots. Una operación explícita (quiero/citar/generar…) jamás hereda.
+        $genericIntents = ['day_summary','attendance_today','late_today','count_present'];
+        $explicitAction = preg_match('/\b(quiero|deseo|necesito|puedes|podrias|citar|generar|'
+            . 'enviar|mandar|reportar|autorizar|crear|abrir|registrar|derivar|exportar|'
+            . 'descargar|hacer|empezar|iniciar|lanzar)\b/u', $q0);
+        if ($inheritable && $intent !== $ctx['last_intent']
+            && in_array($intent, $genericIntents, true)
+            && $followupMark && !$explicitAction
+            && str_word_count($q0, 0, 'áéíóúñü') <= 8) {
+            $intent = $ctx['last_intent'];
+            $slots['_inherited'][] = 'intent_ctx_generic';
         }
     }
 

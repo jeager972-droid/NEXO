@@ -272,7 +272,14 @@ function nxClassify(string $text): array {
  * ------------------------------------------------------------------------- */
 function nxSlots(string $q): array {
     $s = [];
-    if (preg_match('/ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras/u', $q, $m)) {
+    // Períodos pasados específicos PRIMERO — «del mes pasado» no es «del mes»
+    if (preg_match('/mes pasado|mes anterior/u', $q)) {
+        $s['days'] = 60;
+    } elseif (preg_match('/semana pasada|semana anterior/u', $q)) {
+        $s['days'] = 14;
+    } elseif (preg_match('/ano pasado|ano anterior/u', $q)) {
+        $s['days'] = 365;
+    } elseif (preg_match('/ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras/u', $q, $m)) {
         $s['days'] = (int)($m[1] ?: $m[2] ?: $m[3]);
     } elseif (preg_match('/(\d+) semanas?/u', $q, $m)) {
         $s['days'] = (int)$m[1] * 7;
@@ -400,7 +407,12 @@ function nxExtractStudent(string $q): ?string {
         'altura','lado','radio','catetos','hipotenusa','pitagoras','grado',
         'llover','llueve','llovio','nevando','truena','graniza','soleado',
         'nublado','lluvioso','caluroso','fresco','templado',
-         'tarde','temprano','presente','justificado','puntual','ausente'];
+         'tarde','temprano','presente','justificado','puntual','ausente',
+        // referencias temporales/posicionales — nunca nombres de estudiante
+        'pasado','pasada','pasados','pasadas','anterior','anteriores',
+        'proximo','proxima','proximos','proximas','siguiente','siguientes',
+        'actual','actuales','reciente','recientes','vigente','venidero',
+        'venidera','entrante','corriente'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
