@@ -62,7 +62,10 @@ def normalize(t: str) -> str:
     return re.sub(r'\s+', ' ', t).strip()
 
 
-_STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
+_STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
+    'biologia','astronomia','religion','matematicas','espanol','aleman','etica',
+    'fisica','sena','resultado','resultados','partido','clima','tiempo',
+    'temperatura','pronostico','chiste','chistes','reporto','reportaste','reportamos','aplican','aplica','excepto','salvo','grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'mes','ano','dias','dia','el','la','los','las','un','una','este','esta',
          'esto','eso','mi','tu','su','mis','tus','sus','que','cual','cuales',
          'cuanto','cuanta','cuantos','cuantas','dime','dame','muestrame',
@@ -114,6 +117,35 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
          'nublado','lluvioso','caluroso','fresco','templado',
          'tarde','temprano','presente','justificado','puntual','ausente',
          'dorado','leyenda','leyendas','mito','mitos','leyendario',
+         # referencias temporales/posicionales — nunca nombres de estudiante
+         'pasado','pasada','pasados','pasadas','anterior','anteriores',
+         'proximo','proxima','proximos','proximas','siguiente','siguientes',
+         'actual','actuales','reciente','recientes','vigente','venidero',
+         'venidera','entrante','corriente',
+         # conectores/demostrativos/temporales sueltos — paridad PHP
+         'del','de','manana','mismo','misma','mismos','mismas',
+         'ese','esa','esos','esas','otro','otra','propio','propia',
+         'aquel','aquella','aquellos','aquellas','tambien',
+         'aula','aulas','veces','vez',
+         'ella','ellos','ellas','usted','ustedes',
+         'ahora','ahorita','y','e','ni','o','u','pero','sino','ademas',
+         'luego','entonces','asi','aun','ya','muy','mas','menos','tan',
+         'tanto','cada','todo','toda','todos','todas','varios','varias',
+         'algunos','algunas','ningun','ninguna','cualquier','apenas',
+         'info','para','con','sobre','hacia','segun','entre','sin','ante',
+         'bajo','desde','hasta','tras','via','pro','suyo',
+         'suya','tuyo','tuya','nuestro','nuestra','propio','propia','solicitud','solicitudes',
+         'solo','solamente','unicamente','especificamente','concretamente',
+         'abierto','abierta','abiertos','cerrado','cerrada','pendiente','pendientes',
+         'activo','activa','activos','vigente','vigentes','anterior','anteriores',
+         'reciente','recientes','nuevo','nueva',
+         'matematicas','ingles','espanol','ciencias','sociales','fisica','quimica',
+         'biologia','historia','geografia','arte','musica','religion','etica',
+         'informatica','lectura','escritura','coordinador','coordinadores',
+         'docente','docentes','profesor','profesores','maestro','maestros',
+         'personal','rector','rectores','secretaria','secretarias','directivo',
+         'exactamente','precisamente','respectivamente','personalmente',
+         'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo',
          'existimos','vivimos','nacimos','estamos','somos','fueron','somos',
          'siento','sientes','siente','tengo','tienes','quiero','quieres',
          'puedo','puedes','pueden','haces','hago','hacen','estoy','andan',
@@ -129,14 +161,22 @@ _STOP = {'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
 _BOUNDARY = r'(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)'
 _STUDENT_PATS = [
     r'(?=(?:estudiante|alumno|alumna|niño|niña)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
-    r'(?=\b(?:de|del|sobre|para|a|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    r'(?=\b(?:de|del|sobre|para|a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    # «camila del septimo», «juan del 8a» — nombre + conector + grado
+    r'\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)',
 ]
 
 
 def extract_entities(q: str) -> dict:
     e = {}
-    m = re.search(r'ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras', q)
-    if m:
+    # Períodos pasados específicos PRIMERO — «del mes pasado» no es «del mes»
+    if re.search(r'mes pasado|mes anterior', q):
+        e['days'] = 60
+    elif re.search(r'semana pasada|semana anterior', q):
+        e['days'] = 14
+    elif re.search(r'ano pasado|ano anterior', q):
+        e['days'] = 365
+    elif (m := re.search(r'ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras', q)):
         e['days'] = int(next(g for g in m.groups() if g))
     elif re.search(r'(\d+) semanas?', q):
         e['days'] = int(re.search(r'(\d+) semanas?', q).group(1)) * 7
@@ -146,7 +186,7 @@ def extract_entities(q: str) -> dict:
         e['days'] = 1
     elif re.search(r'esta semana|de la semana|en la semana', q):
         e['days'] = 7
-    elif re.search(r'este mes|del mes|en el mes|ultimo mes', q):
+    elif re.search(r'este mes|del mes|en el mes|ultimo mes|al mes|de este mes', q):
         e['days'] = 30
 
     m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
@@ -160,7 +200,8 @@ def extract_entities(q: str) -> dict:
             'once':'11','onceavo':'11','undecimo':'11','onceavo':'11'}
     if 'group' not in e:
         mo = re.search(r'\b(' + '|'.join(_ORD) + r')\s*([a-j])\b', q) \
-             or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q)
+             or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q) \
+             or re.search(r'\b(?:del|de|los|las|el|al)\s+(' + '|'.join(_ORD) + r')\b', q)
         if mo:
             num = _ORD[mo.group(1)]
             letter = mo.group(2).upper() if mo.lastindex >= 2 and mo.group(2) else ''
@@ -178,7 +219,7 @@ def extract_entities(q: str) -> dict:
     cands = []
     for pat in _STUDENT_PATS:
         for m in re.finditer(pat, q):
-            words = [w for w in m.group(1).split() if w not in _STOP and len(w) > 1]
+            words = [w for w in m.group(1).split() if w not in _STOP and len(w) > 1 and not re.search(r'\d', w)]
             if words:
                 cands.append(' '.join(words))
     if cands:

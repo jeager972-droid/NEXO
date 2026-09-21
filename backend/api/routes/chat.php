@@ -130,10 +130,15 @@ const NX_CHAT_POLICY_MAP = [
 function chatPolicyEnabled(PDO $conn, string $schoolId, string $key): bool {
     static $cache = [];
     if (array_key_exists($key, $cache)) return $cache[$key];
-    $st = $conn->prepare("SELECT enabled FROM school_chat_policies WHERE school_id=? AND policy_key=?");
-    $st->execute([$schoolId, $key]);
-    $v = $st->fetchColumn();
-    return $cache[$key] = ($v === false) ? true : (bool)$v;
+    try {
+        $st = $conn->prepare("SELECT enabled FROM school_chat_policies WHERE school_id=? AND policy_key=?");
+        $st->execute([$schoolId, $key]);
+        $v = $st->fetchColumn();
+        return $cache[$key] = ($v === false) ? true : (bool)$v;
+    } catch (Throwable $e) {
+        // tabla ausente en despliegues antiguos → política por defecto (TRUE)
+        return $cache[$key] = true;
+    }
 }
 
 /** Gate completo: matriz de rol + política institucional. */
@@ -172,21 +177,36 @@ function chatCanAction(string $action, string $role): bool {
     };
 }
 
-/** Palabra clave → título exacto del comando en Operation.jsx (?cmd= coincide con title). */
+/**
+ * Palabra clave → título exacto del comando en Operation.jsx (?cmd= coincide con title).
+ *
+ * Reglas:
+ *  - Se evalúan con límite de palabra (\b) — una subcadena jamás dispara una
+ *    operación distinta (caso forense: «solicitud» contiene «cit»).
+ *  - Las operaciones más específicas se evalúan antes que las genéricas:
+ *    «solicitud» antes que «citar»; «autorizar … salida» antes que «salida».
+ *  - Las formulaciones naturales admiten palabras intermedias:
+ *    «autorizar una salida», «unir los bloques», «extender el bloque».
+ */
 function chatOperationCmd(string $q): string {
     return match(true) {
-        str_contains($q,'situacion'), str_contains($q,'emergencia'), str_contains($q,'panico'), str_contains($q,'sos') => 'Situación Crítica',
-        str_contains($q,'cit') => 'Citar acudiente',
-        str_contains($q,'permiso'), str_contains($q,'salida de clase'), str_contains($q,'salio al bano') => 'Generar permiso',
-        str_contains($q,'solicitud'), str_contains($q,'tramite'), str_contains($q,'pedir algo'), str_contains($q,'peticion') => 'Mandar solicitud',
-        str_contains($q,'dano'), str_contains($q,'rompio'), str_contains($q,'danado'), str_contains($q,'roto') => 'Reportar daño',
-        str_contains($q,'salida pedagogica'), str_contains($q,'paseo'), str_contains($q,'excursion') => 'Salida pedagógica',
-        str_contains($q,'horario'), str_contains($q,'cambiar la hora'), str_contains($q,'jornada') => 'Cambio de horario',
-        str_contains($q,'autorizar salida'), str_contains($q,'salida anticipada'), str_contains($q,'se retira temprano') => 'Autorizar salida',
-        str_contains($q,'fusionar'), str_contains($q,'unir bloques'), str_contains($q,'juntar bloques') => 'Fusionar bloque',
-        str_contains($q,'extender'), str_contains($q,'alargar'), str_contains($q,'prolongar') => 'Extender bloque',
-        str_contains($q,'registro manual'), str_contains($q,'marcar entrada'), str_contains($q,'sin huella') => 'Registro manual',
-        str_contains($q,'incidente'), str_contains($q,'report'), str_contains($q,'pelea'), str_contains($q,'problema') => 'Reportar incidente',
+        // crítico primero — nada puede competir con una emergencia
+        preg_match('/\b(sos|panico|emergencia|emergencias|situacion|situaciones|critica|critico)\b/u', $q) === 1 => 'Situación Crítica',
+        // salidas de largo alcance antes que permisos/salidas simples
+        preg_match('/\b(salidas? pedagogicas?|paseo|paseos|excursion|excursiones)\b/u', $q) === 1 => 'Salida pedagógica',
+        // autorizar salida — admite artículos entre medio
+        preg_match('/\bautoriz\w*\b[^.]*\bsalid\w*\b|\bsalida anticipada\b|\bse retira temprano\b|\bretiro anticipado\b/u', $q) === 1 => 'Autorizar salida',
+        // solicitud/petición ANTES de citación — «solicitud» contiene «cit»
+        preg_match('/\b(solicitud|solicitudes|solicitar|solicito|solicite|peticion|peticiones|tramite|tramites|requerimiento|requerimientos)\b/u', $q) === 1 => 'Mandar solicitud',
+        // citación con boundary — formas reales incluido el imperativo «cita»
+        preg_match('/\b(citar|cita|citalo|citala|cite|cito|citas|citamos|citemos|citacion|citaciones|convoque?|convocar|convoca|convoco|agenda(r|mos)? cita|llamar a citacion)\b/u', $q) === 1 => 'Citar acudiente',
+        preg_match('/\b(permiso|permisos|salida de clase|salio al bano|salio del salon|permiso de salida)\b/u', $q) === 1 => 'Generar permiso',
+        preg_match('/\b(dano|danos|danado|rompio|rompieron|roto|averiado|averia|destrozado|vandalismo)\b/u', $q) === 1 => 'Reportar daño',
+        preg_match('/\b(cambio de horario|cambiar (la |el |mi )?hor(a|ario)|horario|jornada|reprogramar|reagendar)\b/u', $q) === 1 => 'Cambio de horario',
+        preg_match('/\b(fusionar|unir|juntar|combinar)\w*\s+\w*\s*bloques?\b|\bfusionar bloque\b|\bunir bloques\b/u', $q) === 1 => 'Fusionar bloque',
+        preg_match('/\b(extender|alargar|prolongar)\w*\s+\w*\s*bloques?\b|\bextender bloque\b|\balargar bloque\b/u', $q) === 1 => 'Extender bloque',
+        preg_match('/\b(registro manual|marcar entrada|marca manual|sin huella|registrar llegada)\b/u', $q) === 1 => 'Registro manual',
+        preg_match('/\b(incidente|incidentes|report(ar|e|o|amos)|pelea|peleas|problema|problemas|rina|agresion|agresiones|conflicto)\b/u', $q) === 1 => 'Reportar incidente',
         default => 'Solicitar seguimiento',
     };
 }
@@ -276,7 +296,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         }
     }
 
+    // ── telemetría por capa (NLU → DSM → auth → dispatch) ─────────────
+    $tNlu = microtime(true);
     $cls = nxClassify($text);
+    $tNlu = microtime(true) - $tNlu;
 
     // ── Multi-intención: «hola quién eres y quién soy yo», «tardanzas y evasiones del 8A» ──
     if (!empty($cls['parts']) && count($cls['parts']) > 1) {
@@ -306,26 +329,116 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $slots   = $cls['entities'] ?? [];
     $conf    = $cls['confidence'] ?? 0;
 
-    // ── Herencia de contexto (sessionStorage del navegador) ──
+    // ── Dialogue State Manager (fuente única: nxDialogueResolve en
+    // nexus_nlu.php — misma lógica que consume el harness de regresión).
     // El front manda ctx.entities = {student, group, module, days…} del último
-    // intent exitoso. Los slots ausentes en el mensaje se completan marcados.
+    // intent exitoso; el DSM clasifica el turno (A–F) y resuelve intent+slots.
     $ctx = $input['ctx'] ?? null;
-    if (is_array($ctx)) {
-        if (!empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
+    if (is_array($ctx) && !empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
+    $tDsm = microtime(true);
+    $interp = nxDialogueResolve($cls, is_array($ctx) ? $ctx : null, $q0);
+    $tDsm = microtime(true) - $tDsm;
+    $intent = $interp['resolved']['intent'];
+    $slots  = $interp['resolved']['slots'];
+    if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
+    $out['_interpretation'] = [
+        'turn_type' => $interp['turn_type'],
+        'nlu_intent' => $cls['intent'],
+        'inherited' => $interp['resolved']['inherited'],
+        'timing_ms' => ['nlu' => round($tNlu * 1000, 2), 'dsm' => round($tDsm * 1000, 2)],
+    ];
+    if ($interp['requires_clarification']) {
+        $out = ['reply'=>$interp['clarify'],'intent'=>'clarify','confidence'=>$conf,
+                'session_id'=>$sessionId,'entities'=>$slots,
+                '_interpretation'=>$out['_interpretation']];
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
     }
-    if (is_array($ctx) && is_array($ctx['entities'] ?? null)) {
-        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
-            if (empty($slots[$k]) && !empty($ctx['entities'][$k])) {
-                $slots[$k] = $ctx['entities'][$k];
-                $slots['_inherited'][] = $k;
+
+    // ── Confirmación / cancelación de operación pendiente ────────────────
+    // «confirmo la solicitud» confirma la pendiente; «cancela eso» la descarta.
+    // El ctx guarda _op cuando se resolvió una operación el turno anterior.
+    $pendingOp = is_array($ctx['entities'] ?? null)
+        ? ($ctx['entities']['_op'] ?? ($slots['_op'] ?? null))
+        : ($slots['_op'] ?? null);
+    if ($interp['turn_type'] === 'confirmation' && $pendingOp) {
+        if (chatCanAction($pendingOp, $role)) {
+            $out = ['reply'=>"Confirmado — te abro *{$pendingOp}* para terminarla ahí.",
+                    'actions'=>[chatActionChip($pendingOp,'Continuar → '.$pendingOp,null)],
+                    'intent'=>'confirm_op','confidence'=>$conf,'session_id'=>$sessionId,
+                    'entities'=>['_op'=>$pendingOp],'_interpretation'=>$out['_interpretation']];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+    }
+    if ($interp['turn_type'] === 'cancel') {
+        $out = ['reply'=>'Cancelado — no quedó registrada ninguna operación.',
+                'intent'=>'cancel','confidence'=>$conf,'session_id'=>$sessionId,
+                'entities'=>[], '_interpretation'=>$out['_interpretation']];
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
+    }
+    // repetición de la operación pendiente con parámetros nuevos
+    // («otro para camila», «uno mas para pedro», «genera uno nuevo»)
+    if ($interp['turn_type'] === 'op_repeat' && $pendingOp) {
+        if (chatCanAction($pendingOp, $role)) {
+            $student = null;
+            if (!empty($slots['student'])) {
+                $found = chatResolveStudent($conn, $authUser, $slots['student']);
+                if ($found && count($found) === 1) $student = $found[0];
+                elseif ($found) { $out = chatAmbiguous($found); $out['session_id']=$sessionId;
+                    chatLog($conn,$schoolId,$userId,$text,$out,$sessionId);
+                    exit(json_encode(['status'=>'ok','data'=>$out])); }
             }
+            $nm = $student ? " para {$student['first_name']} {$student['last_name']}" : '';
+            $out = ['reply'=>"Otra «{$pendingOp}»{$nm} — te abro el formulario.",
+                    'actions'=>[chatActionChip($pendingOp,'Continuar → '.$pendingOp,$student)],
+                    'intent'=>'repeat_op','confidence'=>$conf,'session_id'=>$sessionId,
+                    'entities'=>['_op'=>$pendingOp],'_interpretation'=>$out['_interpretation']];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
         }
-        // frase puramente dependiente («su grupo», «cuántas evasiones tiene»):
-        // si la clasificación quedó bajo umbral, heredamos también la intención
-        if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD) && !empty($ctx['last_intent'])) {
-            $intent = $ctx['last_intent'];
-            $slots['_inherited'][] = 'intent';
+    }
+    // operación resuelta → persistir pending_op en el ctx para el próximo turno
+    if (in_array($intent, ['start_operation','derive_action'], true)) {
+        $slots['_op'] = $slots['_op'] ?? chatOperationCmd($q0);
+    }
+
+    // ── referencia «su grupo» → resolución determinista estudiante→grupo ──
+    // La BD conoce la relación (student_group_assignments + scope del rol);
+    // el NLU solo marcó la referencia (_ref). Casos:
+    //   encontrado      → group = grupo real del estudiante
+    //   ambiguo         → aclarar con nombres, nunca adivinar
+    //   sin grupo       → fallo explícito (dato real, no silencio)
+    //   no encontrado   → fallo explícito
+    if (($slots['_ref'] ?? null) === 'group_of_student' && !empty($slots['student'])) {
+        $found = chatResolveStudent($conn, $authUser, $slots['student']);
+        if ($found === null) {
+            $out = ['reply'=>"No encontré a «{$slots['student']}» entre tus estudiantes. "
+                    . "¿Puedes darme el nombre completo o el documento?",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
         }
+        if (count($found) > 1) {
+            $opts = implode(', ', array_map(
+                fn($r) => trim($r['first_name'] . ' ' . $r['last_name']) . ' (' . ($r['group_name'] ?? 'sin grupo') . ')',
+                array_slice($found, 0, 3)));
+            $out = ['reply'=>"Hay varios estudiantes llamados {$slots['student']}: $opts. ¿A cuál te refieres?",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        $grp = $found[0]['group_name'] ?? null;
+        if (!$grp) {
+            $out = ['reply'=>"{$found[0]['first_name']} {$found[0]['last_name']} no tiene grupo asignado actualmente.",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        $slots['group'] = $grp;
+        $slots['student'] = trim($found[0]['first_name'] . ' ' . $found[0]['last_name']);
+        $slots['_ref_resolved'] = 'student→group: ' . $grp;
     }
 
     // ── RBAC + políticas institucionales ──
@@ -336,11 +449,18 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         exit(json_encode(['status'=>'ok','data'=>$out]));
     }
 
+    $tDisp = microtime(true);
     $out = chatDispatch($conn, $authUser, $intent, $slots, $vars, $role);
+    $tDisp = microtime(true) - $tDisp;
+    // response planner: el handler es la fuente de verdad — reply vacío
+    // → fallo explícito, nunca datos inventados; sello de procedencia.
+    $out = nxPlanResponse($out, $intent, 'chat_' . $intent);
     $out['intent'] = $intent;
     $out['confidence'] = $conf;
     $out['session_id'] = $sessionId;
     $out['entities'] = array_merge($slots, $out['entities'] ?? []); // el handler resuelve nombres reales
+    if (isset($out['_interpretation']['timing_ms']))
+        $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
 
     chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
     echo json_encode(['status'=>'ok','data'=>$out], JSON_UNESCAPED_UNICODE);
