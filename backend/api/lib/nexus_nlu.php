@@ -364,8 +364,15 @@ function nxSlots(string $q): array {
             || preg_match('/\b(?:en|el|al)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo)\b(?!\s+(?:de|del|en|a|por|para|lugar|puesto|posicion|dia|mes|semana|ano)\b)/u', $q, $mo)) {
             $s['group'] = ($ord[$mo[1]] ?? $ord[preg_replace('/a$/u','o',$mo[1])] ?? '1')
                 . (isset($mo[2]) && $mo[2] !== '' ? strtoupper($mo[2]) : '');
+            $s['_group_src'] = $mo[0];   // paridad Python — distingue ordinal de dígito
         }
     }
+    // «mi(s) grupo(s)/curso(s)/estudiantes» — scope RBAC del usuario, no
+    // un grupo textual: el ejecutor lo resuelve contra teacher_group_access
+    if (empty($s['group']) && preg_match('/\b(mi grupo|mi curso|el grupo que tengo|mi salon)\b/u', $q))
+        $s['group'] = '*mine*';
+    if (preg_match('/\b(mis grupos|mis cursos|los grupos que tengo|los cursos que tengo|los grupos a mi cargo|a mi cargo|que tengo asignados|mis estudiantes|los estudiantes que tengo|mis pelados|mis muchachos)\b/u', $q))
+        $s['_my_scope'] = true;
 
     // módulo por sinónimos — «tarde/tardes» no es tardanza si es saludo
     // o franja horaria («buenas tardes», «en la tarde», «por la tarde»)
@@ -557,6 +564,12 @@ function nxExtractStudent(string $q): ?string {
         'se','me','te','nos','lo','le','les','coordi','rectoria',
         // adverbios deícticos — «quiénes faltaron ahí» no nombra a nadie
         'ahi','alli','aca','alla',
+        // ordinales y unidades temporales — «del último mes» no nombra
+        // a nadie; «primero/segundo» es posición, nunca apellido
+        'ultimo','ultima','ultimos','ultimas','primero','primera',
+        'segundo','segunda','tercero','tercera','mes','meses','semana',
+        'semanas','ano','anos','dia','dias','quincena','bimestre',
+        'siguiente','anterior','proximo','proxima',
         // copulativos sueltos — «cuál es el primero» no nombra a nadie
         'es','sea','sean','fuese','estando','siendo',
         // colección como objeto — «el primero de la lista» no es persona
@@ -1306,6 +1319,26 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     if (preg_match('/\b(permiso de salida|permiso para|un permiso|autoriza|autorizame|genera|generame|expide|dame un permiso|saca un permiso|haz un permiso)\b/u', $q0)
         && !empty($slots['student']) && !in_array($intent, ['derive_action','start_operation','confirm_op','security_probe'], true))
         return 'derive_action';
+    // «asistencias (de/en…)» — eventos de ingreso reales (biometric
+    // INGRESO), no inasistencias ni clarify genérico. «las asistencias
+    // de mis grupos en total» = conteo de presentes sobre el scope.
+    if (preg_match('/\basistencias?\b/u', $q0) && !preg_match('/inasistenc/u', $q0)
+        && empty($slots['module'])
+        && in_array($intent, ['out_of_scope','list_events','count_events','attendance_today','day_summary','groups_list'], true))
+        return 'count_present';
+    // «los grupos / mis grupos / tabla con los grupos» — listado de grupos
+    // del usuario (scope RBAC en el ejecutor), no una consulta de eventos
+    if (preg_match('/\b(los grupos|mis grupos|los cursos|mis cursos|que grupos|cuantos grupos|lista de grupos|tabla (de|con) (los )?(grupos|cursos))\b/u', $q0)
+        && !preg_match('/\b(estudiantes|alumnos|tardanzas|faltas|evasiones|inasistencias|del|de)\s+\d/u', $q0)
+        && in_array($intent, ['out_of_scope','list_events','count_events','students_in_group','day_summary','group_summary','groups_list','about_nexus'], true))
+        return 'groups_list';
+    // «estudiantes de grado 9» — el modelo lo confunde con math_operation;
+    // el grado académico filtra el roster (la capa semántica ya extrae
+    // filters.grade), no es aritmética
+    if (preg_match('/\bgrado\s*\d{1,2}\b/u', $q0)
+        && preg_match('/\b(estudiantes|alumnos|pelados|chicos|ninos|niños|muchachos|lista|listame|muestra|dame|quienes|cuales)\b/u', $q0)
+        && in_array($intent, ['math_operation','out_of_scope','list_events','students_count','group_summary','day_summary','count_present','count_events','groups_list'], true))
+        return 'students.list';
     // «qué estudiantes hay en el 6-A / estudiantes del 8A» — lista real.
     // Con «cuántos» es conteo (group_student_count), no listado.
     // group_summary también corrige: el sustantivo explícito «estudiantes»
@@ -1427,6 +1460,9 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     // cuantificador/demostrativo/grupo
     $strongNoToday = (bool)preg_match('/\b(acumulad|consolidad|reincidencia|reincidente|reinciden|promedio|record|del periodo|del bimestre|anterior)\b/u', $q0);
     if (in_array($intent, ['attendance_today','late_today','count_present'], true)
+        // «asistencias de X en total» ya resolvió a count_present — los
+        // ingresos biométricos no son un módulo de incidentes (count_events)
+        && !preg_match('/\basistencias?\b/u', $q0)
         && ($strongNoToday
             || (!preg_match('/\b(hoy|ahora|ahorita|esta manana|esta mañana|esta tarde|de la manana|de la mañana|en la manana|en la mañana|en la tarde|de hoy|del dia|del día|actual|en este momento|al momento|impuntual|tardanza|tarde|presentes|asistiendo|vinieron|llegaron|entraron|matriculados|en el colegio|en la institucion|en el plantel|personas)\b/u', $q0)
                 && ($slots['days'] ?? null) === null && empty($slots['from'])
@@ -1527,7 +1563,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // navegación de resultados. El _ds del servidor trae la entidad
         // activa y el result-set; el NLU solo detecta la referencia.
         $dsState = $ctx['_ds'] ?? null;
-        $hasResult = !empty($dsState['last_result']['items']);
+        // el set existe aunque traiga 0 ítems — «los demás/el primero»
+        // sobre un resultado vacío es nav honesta («no hay nada»), no
+        // una consulta nueva; el handler decide la respuesta
+        $hasResult = isset($dsState['last_result']);
         // «dame otro / el siguiente / el primero / los demás / su nombre»
         // sobre el result-set anterior — consulta informativa, nunca op
         if ($hasResult) {
@@ -1544,10 +1583,17 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                               : (preg_match('/\b(nombre|alfabetic|de la a)\b/u',$q0) ? 'first_name'
                               : (preg_match('/\b(documento|cedula)\b/u',$q0) ? 'document' : 'group')));
             elseif (preg_match('/\b(?:los|las)\s+(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]?s?|ultim[oa]s?)\b/u', $q0, $ms)
-                    && !preg_match('/\b(de|del|en|grupo|salon)\s+[\da-z]/u', $q0)) {
+                    || preg_match('/\b(?:los|las)\s+(primer[oa]s?|ultim[oa]s?)\s+(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/u', $q0, $msr)
+                    || preg_match('/\b(?:los|las)\s+(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:de arriba|iniciales)\b/u', $q0, $ms2)
+                    || preg_match('/\bsolo\s+(?:los|las)\s+(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/u', $q0, $ms3)) {
+                // «los N primeros» y «los primeros N» — slice del set activo
                 $nums = ['un'=>1,'una'=>1,'dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5,'seis'=>6,'siete'=>7,'ocho'=>8,'nueve'=>9,'diez'=>10];
-                $k = $nums[$ms[1]] ?? (int)$ms[1];
-                $nav = 'slice:' . $k . ':' . (str_starts_with($ms[2],'ultim') ? 'end' : 'start');
+                if (isset($msr[1]))        { $k = $nums[$msr[2]] ?? (int)$msr[2]; $from = str_starts_with($msr[1],'ultim') ? 'end' : 'start'; }
+                elseif (isset($ms2[1]))    { $k = $nums[$ms2[1]] ?? (int)$ms2[1]; $from = 'start'; }
+                elseif (isset($ms3[1]))    { $k = $nums[$ms3[1]] ?? (int)$ms3[1]; $from = 'start'; }
+                else                       { $k = $nums[$ms[1]] ?? (int)$ms[1]; $from = str_starts_with($ms[2],'ultim') ? 'end' : 'start'; }
+                if (!preg_match('/\b(de|del|en|grupo|salon)\s+[\da-z]/u', $q0))
+                    $nav = 'slice:' . $k . ':' . $from;
             }
             elseif (preg_match('/\b(vuelve|vuelveme|regresa|devuelvete|volvamos|vamos de nuevo|regresemos)\s+(al|a la|a los|a las)\s+(primer[oa]?s?|segund[oa]?s?|tercer[oa]?s?|ultim[oa]s?|estudiante|resultado|inicio|principio)\b/u', $q0, $mg)) {
                 $w2 = trim($mg[3]);
@@ -1572,6 +1618,24 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             elseif (preg_match('/\b(cual|como|quien) (es|fue|se llama)? ?(su|el) (nombre|como se llama)\b[?¡! ]*$/u', $q0)
                 || preg_match('/^(y )?(su nombre|el nombre|como se llama|quien es|quien era)[.!? ]*$/u', $q0)) $nav = 'name';
             if ($nav) { $slots['_nav'] = $nav; $turnType = 'context_modify'; }
+        }
+        // «del primero / del segundo / del último» — el extractor ordinal
+        // produjo group='1'/'2'/…; con referente activo (set, tema de grupo
+        // o campo relacional) es POSICIÓN sobre el tema, nunca grado N.
+        if (!empty($slots['group']) && !preg_match('/\d/', $q0)
+            && preg_match('/\b(?:del|de|los|las)\s+(primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|primer|tercer|ultimo|ultima)\b(?!\s+(?:de|del|en|a|por|para|dia|mes|semana|ano|lugar|puesto)\b)/u', $q0, $mog)
+            && !preg_match('/\b(grado|grupo|salon|curso)\b/u', $q0)
+            && (!empty($dsState['last_result']['items']) || !empty($ctxEntities['group']) || !empty($slots['field']))) {
+            $posOrd = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,
+                       'tercero'=>3,'tercera'=>3,'cuarto'=>4,'cuarta'=>4,'quinto'=>5,'quinta'=>5];
+            $p = in_array($mog[1],['ultimo','ultima'],true) ? 'last' : ($posOrd[$mog[1]] ?? 1);
+            unset($slots['group']);
+            $slots['position'] = $p;
+            if (!empty($dsState['last_result']['items']) && empty($slots['_nav'])) {
+                $n2 = count($dsState['last_result']['items']);
+                $slots['_nav'] = 'nth:' . ($p === 'last' ? $n2 : $p);
+                $turnType = 'context_modify';
+            }
         }
         // «su <campo>» sobre la entidad activa (estudiante/acudiente)
         // — NO es número de lotería ni dato del asistente
@@ -1698,9 +1762,11 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // probe/audit: si solo modifica tiempo/referencia y hay tema activo,
         // la conversación manda, no la clasificación aislada
         if ($inheritable && !$coverageHit && !isset($slots['_nav'])) {
-            // «y ayer / y la semana pasada / y hoy» — solo cambia el tiempo
-            if (preg_match('/^(y |pero |ahora |entonces |y |o sea )?(ayer|anteayer|hoy|esta semana|la semana pasada|este mes|el mes pasado|la semana|del mes|de hoy|de ayer|el otro dia|ese dia|esa semana|ese mes|ultimos? \d+ dias?|\d+ dias?)\b[.!? ]*$/u', $q0)
-                && in_array($intent, ['foreign_culture','out_of_scope','smalltalk','greeting','yes','no','audit_query','about_nexus','deictic'], true)) {
+            // «y ayer / y la semana pasada / y del último mes» — solo
+            // cambia el tiempo. Un turno 100% temporal no puede ser
+            // «posición»: «último mes» es rango, no ordinal de la lista.
+            if (preg_match('/^(y |pero |ahora |entonces |o sea )?(del |de la |de |en |sobre )?(ayer|anteayer|hoy|esta semana|la semana pasada|este mes|el mes pasado|mes pasado|la semana|del mes|de hoy|de ayer|el otro dia|ese dia|esa semana|ese mes|semana pasada|semana anterior|mes anterior|ano pasado|ultimos? \d+ dias?|\d+ dias?|ultimo mes|ultima semana|ultimo ano|la quincena|el bimestre pasado|bimestre pasado|lo que va del mes|lo que va de la semana|lo corrido del mes)\b[.!? ]*$/u', $q0)
+                && in_array($intent, ['foreign_culture','out_of_scope','smalltalk','greeting','yes','no','audit_query','about_nexus','deictic','students.position','incidents.position','students_in_group','list_events','count_events','birthdays_today','random_student','student_summary','group_summary','attendance_today','count_present','late_today','permissions','day_summary','trackings'], true)) {
                 $intent = $lastIntent; $inherited[] = 'intent';
                 $turnType = 'context_modify';
             }

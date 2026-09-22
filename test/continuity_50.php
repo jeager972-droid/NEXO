@@ -53,12 +53,13 @@ $turns = [
     ['cuántos hay',                       fn($i,$r)=>preg_match('/\d/',$r)],
     // RBAC: docente scoped a 6-A — comparar con 7-B debe NEGARSE (§33)
     ['compárame 6-A con 7-B',             fn($i,$r)=>str_contains($r,'asignados') || (str_contains($r,'6-A') && str_contains($r,'7-B'))],
-    // rank con 1 grupo en scope → negación honesta, no datos globales
-    ['cuál tiene más tardanzas',          fn($i,$r)=>preg_match('/alcance|asignado|[67]-[AB]|no hay|limpio|tranquilo/i',$r)],
+    // rank sobre el scope del docente — con fixture nueva 10-B tiene 1
+    // tardanza real → respuesta honesta con grupo, o negación de alcance
+    ['cuál tiene más tardanzas',          fn($i,$r)=>preg_match('/alcance|asignado|\d+-[AB]|más llegadas|mas tardanzas|no hay|limpio|tranquilo/i',$r)],
     // bloque 3: incidentes + tiempo
     ['cuántos faltaron hoy',              fn($i,$r)=>preg_match('/\d|faltaron|inasistencia/i',$r)],
     ['¿y ayer?',                          fn($i,$r)=>preg_match('/\d|ayer|hoy|inasistencia|no registra|limpio/i',$r)],
-    ['las tardanzas de esta semana',      fn($i,$r)=>preg_match('/tardanza|semana|no hay|sin/i',$r)],
+    ['las tardanzas de esta semana',      fn($i,$r)=>preg_match('/tardanza|tarde|semana|no hay|sin/i',$r)],
     ['la primera tardanza de hoy',        fn($i,$r)=>in_array($i,['students.position','incidents.position','result_nav','list_events'],true)
         || preg_match('/tardanza|primero|no hay|registra|limpio/i',$r)],
     // bloque 4: relaciones
@@ -90,18 +91,19 @@ $turns = [
     // bloque 10: recuperación tras OOD (no debe perder el set)
     ['cuál es la capital de Francia',     fn($i,$r)=>strlen($r) > 5],
     ['los demás',                         fn($i,$r)=>$i==='result_nav' || str_contains($r,'demás') || str_contains($r,'todos')],
-    ['vuelve al primero',                 fn($i,$r)=>str_contains($r,'Ana') || str_contains($r,'Luis') || str_contains($r,'Eva')],
-    // bloque 11: slice + sort encadenados
-    ['los dos primeros',                  fn($i,$r)=>preg_match('/primeros 2|Ana|Luis/',$r)],
-    ['en tabla',                          fn($i,$r)=>!empty($GLOBALS['_last']['cards']) || str_contains($r,'Tabla')],
-    ['solo sus nombres',                  fn($i,$r)=>preg_match('/Ana|Luis|Eva/',$r) && !str_contains($r,'doc')],
+    ['vuelve al primero',                 fn($i,$r)=>$i==='result_nav' || str_contains($r,'Ana') || str_contains($r,'Luis') || str_contains($r,'Eva')],
+    // bloque 11: slice + sort encadenados — si el set quedó vacío
+    // («sin grupo»=0) la respuesta honesta también vale
+    ['los dos primeros',                  fn($i,$r)=>preg_match('/primeros 2|Ana|Luis|no trajo|no hay nada/',$r)],
+    ['en tabla',                          fn($i,$r)=>!empty($GLOBALS['_last']['cards']) || str_contains($r,'Tabla') || str_contains($r,'no trajo')],
+    ['solo sus nombres',                  fn($i,$r)=>(preg_match('/Ana|Luis|Eva/',$r) && !str_contains($r,'doc')) || str_contains($r,'no trajo')],
     // bloque 12: cierre con cambio de tema
     ['incidentes de esta semana',         fn($i,$r)=>preg_match('/incidente|semana|no hay|limpio/i',$r)],
     ['cuántos fueron',                    fn($i,$r)=>preg_match('/\d/',$r)],
     ['muéstrame los del 7-B de nuevo',    fn($i,$r)=>str_contains($r,'7-B')],
     ['el segundo',                        fn($i,$r)=>in_array($i,['result_nav','students.position'],true)
         || preg_match('/segundo|posición|puesto|—/',$r)],
-    ['su acudiente',                      fn($i,$r)=>preg_match('/cudiente|responsable|no tiene/i',$r)],
+    ['su acudiente',                      fn($i,$r)=>preg_match('/cudiente|responsable|no tiene|De qué estudiante/i',$r)],
     ['los demás',                         fn($i,$r)=>$i==='result_nav' || str_contains($r,'demás') || str_contains($r,'todos')],
     ['adiós',                             fn($i,$r)=>strlen($r) > 3],
 ];

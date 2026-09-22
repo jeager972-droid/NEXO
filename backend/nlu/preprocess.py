@@ -193,6 +193,11 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          'nomina','nominas','nombre','nombres','listado','listados','posicion','posiciones',
          'se','me','te','nos','lo','le','les','coordi','rectoria',
          'ahi','alli','aca','alla',
+         # ordinales y unidades temporales — «del último mes» no es persona
+         'ultimo','ultima','ultimos','ultimas','primero','primera',
+         'segundo','segunda','tercero','tercera','mes','meses','semana',
+         'semanas','ano','anos','dia','dias','quincena','bimestre',
+         'siguiente','anterior','proximo','proxima',
          'puesto','puestos','lugar','lugares','ranking','top','completo',
          'completa','completos','completas','ordenado','ordenada','ordenados',
          'ordenadas','orden','alfabeticamente','alfabetico','alfabetica',
@@ -255,6 +260,11 @@ def extract_entities(q: str) -> dict:
             letter = mo.group(2).upper() if mo.lastindex >= 2 and mo.group(2) else ''
             e['group'] = num + letter
             e['_group_src'] = mo.group(0)   # para enmascarar la forma ordinal
+    # «mi(s) grupo(s)» — scope RBAC del usuario (paridad PHP nxSlots)
+    if 'group' not in e and re.search(r'\b(mi grupo|mi curso|el grupo que tengo|mi salon)\b', q):
+        e['group'] = '*mine*'
+    if re.search(r'\b(mis grupos|mis cursos|los grupos que tengo|los cursos que tengo|los grupos a mi cargo|a mi cargo|que tengo asignados|mis estudiantes|los estudiantes que tengo|mis pelados|mis muchachos)\b', q):
+        e['_my_scope'] = True
     # períodos nombrados que no son "días"
     if 'days' not in e:
         if re.search(r'mes pasado', q):

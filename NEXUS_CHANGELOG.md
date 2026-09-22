@@ -96,3 +96,21 @@ Resultados finales: gate 18/18 (G7b=0), real_conversation 103/103, capability 15
 
 ARCHITECTURE, SEMANTIC CORE, CAPABILITY GRAPH, PLANNER ✔, CONTEXT ✔, GENERALIZATION (87.5% blind — gap de corpus acudiente documentado), PRESENTATION ✔, SECURITY ✔, RESILIENCE ✔, FINAL VALIDATION.
 Cada checkpoint registrará hash, alcance real y resultados; no se marcará completado por compilación solamente.
+
+## 2026-09-22 — LIVE CLOSURE: §1 verbatim 14/14 + continuity_50 53/53 contra API real
+
+Stack nexo-test reconstruido con código actual (api/nlu rebuild + recreate, DB/Redis conservados). Fixture extendido (`pruebas/seed_chat_fixture.sql`): 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos. Probe forense nuevo `test/live_probe.php` — 14 turnos verbatim, captura `_ds` before/after, intent/conf/source por turno → `/tmp/live_probe_last.json`.
+
+Fallos encontrados SOLO en live (las suites simuladas los tenían verdes) y corregidos:
+
+- **Acentos/ñ en resolución de estudiante** (capa executor+semántica): `chatResolveStudent` traducía `áéíóú` en columna pero el parámetro seguía acentuado y faltaba `ü/ñ` — «Tomás Castaño Gutiérrez» nunca matcheaba → «su acudiente» clarificaba con el estudiante activo. Fix: translate `'áéíóúüñ'→'aeiouun'` + `strtr` del parámetro, paridad en `nexus_semantic.php`. → t02/t05/t14 ahora resuelven el acudiente real.
+- **«del último mes» extraía `student=ultimo`**: ordinales y unidades temporales (`ultimo`, `primero`, `mes`, `dia`, `siguiente`…) añadidos a stopwords PHP+Python. → t09 `count_events`+`days=30` correcto.
+- **«asistencias de mis grupos en total»** secuestrado por `count_events` sin módulo («en total» disparaba el switch): exento `asistencias` — los ingresos biométricos no son módulo de incidentes. → t06 `count_present` → «6 ingresaron en tus grupos».
+- **«¿y del mes pasado?» → `birthdays_today`** (modelo aprende «del mes»≈cumpleaños): un turno 100% temporal hereda el intent activo; lista de intents heredables ampliada. términos sin artículo (`mes pasado`, `semana anterior`…) añadidos.
+- **Set vacío mataba navegación**: `hasResult` pedía `items` no vacío → «los demás» tras un 0-resultado caía a `top_offenders`. Ahora `isset(last_result)` + handler honesto (`no hay nada que navegar` / count→`hay 0` explícito).
+- **Set de ruta-chat incompleto**: `chat_students_in_group` no emitía `columns/rows` ni `f` → nav-table caía a bullets y `agrega documento` proyectaba vacío. Materializado completo (paridad con el plan semántico).
+- **«estudiantes de grado 9» → `math_operation`**: cobertura — el grado académico filtra roster (la capa semántica ya extrae `filters.grade`).
+
+Verificación live final: §1 14/14 (invariante §4: `active_collection=students(10-A)` + cursor → acudiente del ítem), continuity_50 53/53, gate 18/18, capability 153/153, DSM 60/60, real_conversation 103/103, forensic 36/36, phpunit 244, resiliencia 15/15, readonly 53 handlers, inventario dentro del contenedor (39 caps, 132 tablas, 96 composiciones).
+
+Notas honestas: rate-limit 60/10min real — `chat_rl:{uid}` se limpia en Redis de prueba entre corridas; servicios NLU zombie en :8090/:8096 divergen del php-model (reiniciar antes de comparar); php-model y service.py difieren en «y del mes» (php→birthdays_today, py→oos) — ambos resuelven bien vía herencia.

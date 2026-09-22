@@ -57,7 +57,26 @@ Docker/BD/HTTP API: PENDIENTE POR ALCANCE AUTORIZADO (usuario eligió solo prueb
 
 Hardening aplicado a harness en este checkpoint: continuity_50 (exit 1 + aserciones no vacuas + credenciales por env), blind_eval (exit 1), capability_eval (sin auto-compare), real_conversation_v1 (convCtx con turn_type real + parity con chatBuildDs + consistency exige respaldo en ctx), release_gate G7b (críticos =0, no ≤6), ecosystem_inventory ($entityTables corregido vs sql/schema.sql).
 
-Suites fuera de alcance local (requieren API/BD real): continuity_50 (estructura endurecida, no ejecutada), ecosystem_capability_inventory (requiere PDO).
+Suites fuera de alcance local (requieren API/BD real): ya ejecutadas contra el stack nexo-test reconstruido (api/nlu rebuild, puerto 18080): continuity_50 53/53, inventario dentro del contenedor (39 caps/132 tablas), live_probe §1 verbatim 14/14.
+
+## Resultados LIVE CLOSURE (2026-09-22, rama nexus-longrun-20260922)
+
+| Comando | Resultado | Estado |
+|---|---|---|
+| php test/live_probe.php (API :18080, sesión real) | §1 verbatim 14/14 turnos, _ds before/after persistido | PASS |
+| php test/continuity_50.php (API :18080) | 53/53 turnos coherentes | PASS |
+| php test/nexus_release_gate.php (NLU :8096) | 18/18 READY FOR CONTROLLED PRODUCTION | PASS |
+| php test/nexus_capability_eval_v1.php | 153/153 | PASS |
+| php test/real_conversation_v1.php | 103/103 (consistency 381/381) | PASS |
+| php test/chat_forensic_harness.php | 36/36 | PASS |
+| php test/dsm_units.php | 60/60 | PASS |
+| php test/readonly_guard.php | 53 handlers read-only | PASS |
+| php test/resilience.php | 15/15 | PASS |
+| phpunit 'API Unit Tests' | 244 tests / 937 assertions | PASS |
+| php test/blind_eval.php | 169/235 (71.9%) — diagnóstico, exit 1 honesto | DIAGNÓSTICO |
+| ecosystem_capability_inventory (en contenedor) | 39 caps, 62 relaciones, 132 tablas, 96 composiciones | PASS |
+
+Operación live: rate-limit real 60/10min por usuario — limpiar `chat_rl:{uid}` en Redis de prueba entre corridas. NLU local se levanta en :8096 (`service.py`, ver AGENTS.md); matar zombies :8090 antes de comparar — divergencia conocida php-model(birthdays_today) vs service(out_of_scope) en «y del mes», ambos resuelven por herencia.
 
 Regresiones cerradas por el gate endurecido: «abre la tabla de usuarios» era derive_action — ahora security_probe (sonda de esquema). Extractor PHP↔Python: residuo tras stopword ya no produce nombres («cuantica», «nombre»); marcador de persona extendido (muchacha/pelada/chica/menor); meta-tema sin dominio → foreign_culture («cuéntame sobre la física cuántica»).
 

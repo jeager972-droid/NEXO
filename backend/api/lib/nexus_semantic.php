@@ -584,11 +584,16 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     // ── posición en colección ─────────────────────────────────────────────
     $pos = null;
     // «los cinco primeros / las tres últimas» = slice top-N, NO posición
-    if (preg_match('/\b(?:los|las)\s+(\d{1,2}|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]s|ultim[oa]s|primeras)\b/u', $q0, $msl)) {
-        $numw = ['dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5,'seis'=>6,'siete'=>7,'ocho'=>8,'nueve'=>9,'diez'=>10];
-        $n3 = ctype_digit($msl[1]) ? (int)$msl[1] : ($numw[$msl[1]] ?? 5);
-        $sig['slice'] = ['n'=>$n3,'from'=>in_array($msl[2],['ultimo','ultima','ultimos','ultimas'],true)?'end':'start'];
-        $sig['op'] = 'slice'; $e[]="slice:{$n3}:{$sig['slice']['from']}";
+    // — y el orden inverso «los primeros 5 / los últimos 3» es lo mismo
+    if (preg_match('/\b(?:los|las)\s+(\d{1,2}|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]s|ultim[oa]s|primeras)\b/u', $q0, $msl)
+        || preg_match('/\b(?:los|las)\s+(primer[oa]s?|ultim[oa]s?)\s+(\d{1,2}|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/u', $q0, $msr)) {
+        $numw = ['uno'=>1,'dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5,'seis'=>6,'siete'=>7,'ocho'=>8,'nueve'=>9,'diez'=>10];
+        if (isset($msr[1])) { $n3 = ctype_digit($msr[2]) ? (int)$msr[2] : ($numw[$msr[2]] ?? 5);
+                              $from = str_starts_with($msr[1],'ultim') ? 'end' : 'start'; }
+        else                { $n3 = ctype_digit($msl[1]) ? (int)$msl[1] : ($numw[$msl[1]] ?? 5);
+                              $from = in_array($msl[2],['ultimo','ultima','ultimos','ultimas'],true)?'end':'start'; }
+        $sig['slice'] = ['n'=>$n3,'from'=>$from];
+        $sig['op'] = 'slice'; $e[]="slice:{$n3}:{$from}";
     }
     // «el primero en llegar / quién llegó primero» — orden temporal de ingresos
     if (preg_match('/\b(lleg(o|aron) (primero|antes|mas temprano|primero en)|primero(s)? (en|a) llegar|primero en entrar|antes de que|el primero en llegar|quien llego primero|quien entro primero)\b/u', $q0)) {
@@ -612,7 +617,7 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     }
     // guardias: «primer dia», «primera semana», «grado primero», «sexto grado» son temporales/grado
     if ($pos !== null && preg_match('/\b(primer|primera|segunda|tercera|sexto|septimo|octavo|noveno|decimo)\s+(dia|semana|mes|ano|grado|clase|periodo|bloque)\b/u', $q0)) $pos = null;
-    if ($pos !== null && preg_match('/\bultim[oa]s?\s+\d+\s+(dias|semanas|meses|anos|horas|minutos)\b/u', $q0)) $pos = null; // «últimos 3 días» = rango
+    if ($pos !== null && preg_match('/\bultim[oa]s?\s+(\d+\s+)?(dias?|dia|semanas?|mes|meses|anos?|horas?|minutos?|quincena|bimestre|periodo|corte|semestre|trimestre)\b/u', $q0)) $pos = null; // «últimos 3 días», «del último mes» = rango
     if (isset($sig['slice'])) $pos = null; // el slice manda
     if ($pos !== null && preg_match('/\bgrado\s+(primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo)\b/u', $q0)) $pos = null;
     if ($pos !== null) { $sig['position']=$pos; $sig['op']=$sig['op'] ?? 'position'; $e[]='pos:'.$pos; }
@@ -1313,8 +1318,10 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
         $w[] = 'ag.grade_level = :grade'; $p[':grade'] = (string)$f['grade'];
     }
     if (!empty($f['search'])) {
-        $p[':q'] = '%' . mb_strtolower($f['search']) . '%';
-        $w[] = "(translate(lower(s.first_name||' '||s.last_name),'áéíóú','aeiou') LIKE :q OR translate(lower(s.last_name||' '||s.first_name),'áéíóú','aeiou') LIKE :q OR s.document_number = :doc)";
+        // sin acentos de ambos lados — «Tomás»/«Castaño» solo matchean si
+        // el parámetro va desacentuado igual que la columna traducida
+        $p[':q'] = '%' . mb_strtolower(strtr($f['search'], ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n','Á'=>'a','É'=>'e','Í'=>'i','Ó'=>'o','Ú'=>'u','Ü'=>'u','Ñ'=>'n'])) . '%';
+        $w[] = "(translate(lower(s.first_name||' '||s.last_name),'áéíóúüñ','aeiouun') LIKE :q OR translate(lower(s.last_name||' '||s.first_name),'áéíóúüñ','aeiouun') LIKE :q OR s.document_number = :doc)";
         $p[':doc'] = $f['search'];
     }
     // estado asistencial → subconsulta

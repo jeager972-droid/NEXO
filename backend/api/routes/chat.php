@@ -52,7 +52,10 @@ function chatScope(PDO $conn, array $u): array {
 function chatResolveStudent(PDO $conn, array $u, ?string $name): ?array {
     if (!$name) return null;
     $scope = chatScope($conn, $u);
-    $like = '%' . mb_strtolower($name) . '%';
+    // la columna se compara sin acentos — el parámetro también debe ir sin
+    // acentos o «Tomás» jamás coincide con «tomas» traducido en la BD
+    $like = '%' . mb_strtolower(strtr($name, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','Á'=>'a','É'=>'e','Í'=>'i','Ó'=>'o','Ú'=>'u','ü'=>'u','Ü'=>'u','ñ'=>'n','Ñ'=>'n'])) . '%';
+    $nameDoc = trim(preg_replace('/[^\d]/','', (string)$name));
     $stmt = $conn->prepare("
         SELECT s.student_id, s.first_name, s.last_name, s.document_number,
                s.birth_date, s.work_shift, s.grade_level,
@@ -63,14 +66,14 @@ function chatResolveStudent(PDO $conn, array $u, ?string $name): ?array {
         LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
         WHERE s.school_id = ?
           AND s.deleted_at IS NULL
-          AND (translate(lower(s.first_name || ' ' || s.last_name),'áéíóú','aeiou') LIKE ?
-            OR translate(lower(s.last_name || ' ' || s.first_name),'áéíóú','aeiou') LIKE ?
+          AND (translate(lower(s.first_name || ' ' || s.last_name),'áéíóúüñ','aeiouun') LIKE ?
+            OR translate(lower(s.last_name || ' ' || s.first_name),'áéíóúüñ','aeiouun') LIKE ?
             OR s.document_number = ?)
           {$scope['sql']}
         ORDER BY s.last_name, s.first_name
         LIMIT 3
     ");
-    $stmt->execute(array_merge([$u['school_id'], $like, $like, $name], $scope['params']));
+    $stmt->execute(array_merge([$u['school_id'], $like, $like, $nameDoc !== '' ? $nameDoc : $name], $scope['params']));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     return $rows ?: null; // null = no encontrado; >1 = ambiguo
 }
@@ -465,6 +468,49 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $intent = $interp['resolved']['intent'];
     $slots  = $interp['resolved']['slots'];
     if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
+
+    // ── «mi grupo» (*mine*) → scope real del usuario (§9-10) ────────────
+    // 1 grupo → ese; varios → aclaración explícita; ninguno → fallo honesto.
+    if (($slots['group'] ?? null) === '*mine*') {
+        $st = $conn->prepare("SELECT ag.group_name FROM teacher_group_access tga
+            JOIN academic_groups ag ON ag.group_id=tga.group_id
+            WHERE tga.teacher_user_id=? AND ag.school_id=? ORDER BY ag.group_name");
+        $st->execute([$userId, $schoolId]);
+        $mine = array_column($st->fetchAll(PDO::FETCH_ASSOC), 'group_name');
+        if (count($mine) === 1) {
+            $slots['group'] = $mine[0];
+        } elseif (count($mine) > 1) {
+            $out = ['reply'=>"Tienes " . count($mine) . " grupos asignados: " . implode(', ', $mine)
+                    . ". ¿De cuál hablas?", 'intent'=>'clarify','confidence'=>$conf,
+                    'session_id'=>$sessionId,'_interpretation'=>$out['_interpretation'] ?? null];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        } else {
+            $out = ['reply'=>"No tienes grupos asignados en el sistema todavía — eso lo gestiona coordinación.",
+                    'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+    }
+
+    // ── nav + campo relacional: «el acudiente del primero» ──────────────
+    // La posición materializa el ÍTEM del set; el campo corre sobre él
+    // (relación target=guardian), nunca una consulta nueva de «grado 1».
+    if (!empty($slots['_nav']) && !empty($slots['field'])
+        && preg_match('/^(nth:\d+|first)$/', (string)$slots['_nav'])
+        && $ds && !empty($ds['last_result']['items'])) {
+        $idx = $slots['_nav'] === 'first' ? 0 : max(0, (int)substr($slots['_nav'], 4) - 1);
+        $it = $ds['last_result']['items'][$idx] ?? null;
+        if ($it) {
+            $slots['student'] = $it['label'];
+            $slots['_ref'] = $slots['_ref'] ?? 'guardian';
+            unset($slots['_nav']);
+            $intent = 'student_field';
+            $interp['resolved']['intent'] = 'student_field';
+            $interp['resolved']['slots'] = $slots;
+            $interp['requires_clarification'] = false;
+        }
+    }
     $out['_interpretation'] = [
         'turn_type' => $interp['turn_type'],
         'nlu_intent' => $cls['intent'],
@@ -552,7 +598,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             // con grupo/ámbito explícito = consulta nueva; sin él = transform
             // del set activo («dame los tres últimos» después de ordenar)
             && preg_match('/\b(?:de|del|en|grupo|salon)\s+[\da-z]/u', $q0));
-    if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items']) && !$navGroupClash && !$navEventVerb) {
+    if (!empty($slots['_nav']) && $ds && isset($ds['last_result']) && !$navGroupClash && !$navEventVerb) {
         $out = chatResultNav($ds, $slots['_nav'], $vars);
         $out['session_id'] = $sessionId;
         $out['_ds'] = chatBuildDs($interp, $out, $ds);
@@ -850,6 +896,16 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
     $cur  = (int)($ds['cursor'] ?? 0);
     $lbl  = $rs['label'] ?? 'resultados';
     $one  = fn($i) => $items[$i]['label'] . (!empty($items[$i]['sub']) ? ' — ' . $items[$i]['sub'] : '');
+
+    // «cuántos son/hay» sobre un set vacío — el cero ES la respuesta
+    if ($n === 0 && $nav === 'count')
+        return ['reply'=>"En esa consulta hay 0 {$lbl} — no trajo ninguno.",
+                'intent'=>'result_nav', '_result_nav'=>'count'];
+    // set vacío o ya consumido — respuesta honesta, nunca caer al
+    // clasificador con un deíctico («los demás» ≠ consulta nueva)
+    if ($n === 0)
+        return ['reply'=>"La consulta anterior no trajo {$lbl} — no hay nada que navegar. ¿Quieres otra lista?",
+                'intent'=>'result_nav', '_result_nav'=>'empty'];
 
     if ($nav === 'count')
         return ['reply'=>"En esa consulta hay {$n} {$lbl}." . ($n === 1 ? " Es {$items[0]['label']}." : ''),
@@ -1500,11 +1556,13 @@ function chat_students_count(PDO $conn, array $u, array $s, array $v): array {
 function chat_groups_list(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
     if (in_array($u['role'],['TEACHER','COUNSELOR'],true)) {
+        // «mis grupos» = los grupos ASIGNADOS al docente (§9-10), no todos
+        // los que tienen algún docente — el scope es del usuario actual
         $st=$conn->prepare("SELECT ag.group_name, ag.grade_level, COUNT(sga.student_id) n FROM teacher_group_access tga
             JOIN academic_groups ag ON ag.group_id=tga.group_id
             LEFT JOIN student_group_assignments sga ON sga.group_id=ag.group_id AND sga.active=TRUE
-            WHERE ag.school_id=? GROUP BY ag.group_id, ag.group_name, ag.grade_level ORDER BY ag.grade_level, ag.group_name");
-        $st->execute([$u['school_id']]);
+            WHERE tga.teacher_user_id=? AND ag.school_id=? GROUP BY ag.group_id, ag.group_name, ag.grade_level ORDER BY ag.grade_level, ag.group_name");
+        $st->execute([$u['id'],$u['school_id']]);
     } else {
         $st=$conn->prepare("SELECT ag.group_name, ag.grade_level, COUNT(sga.student_id) n FROM academic_groups ag
             LEFT JOIN student_group_assignments sga ON sga.group_id=ag.group_id AND sga.active=TRUE
@@ -1884,7 +1942,12 @@ function chat_students_in_group(PDO $conn, array $u, array $s, array $v): array 
                         'entities'=>['group'=>$g['group_name']]];
     $items = array_map(fn($r)=>['id'=>$r['student_id'],
         'label'=>trim($r['first_name'].' '.$r['last_name']),
-        'sub'=>'doc '.$r['document_number']], $rows);
+        'sub'=>'doc '.$r['document_number'],
+        'group'=>$g['group_name'],
+        // campos materializados — proyección/navegación sobre el set
+        // sin reconsultar (paridad con el result-set del plan semántico)
+        'f'=>['sid'=>$r['student_id'],'fn'=>$r['first_name'],'ln'=>$r['last_name'],
+              'doc'=>$r['document_number'],'grp'=>$g['group_name']]], $rows);
     $n = count($items);
     $show = array_slice($items, 0, 5);
     $reply = "{$g['group_name']} tiene {$n} estudiante" . ($n === 1 ? '' : 's') . ":";
@@ -1900,7 +1963,11 @@ function chat_students_in_group(PDO $conn, array $u, array $s, array $v): array 
     }
     return ['reply'=>$reply,
             'entities'=>['group'=>$g['group_name']],
-            '_result_set'=>['type'=>'students','label'=>'estudiantes','items'=>$items,'count'=>$n]];
+            '_result_set'=>['type'=>'students','label'=>'estudiantes','items'=>$items,'count'=>$n,
+                'columns'=>['#','Estudiante','Documento','Grupo'],
+                'rows'=>array_map(fn($i,$r)=>[$i+1,trim($r['first_name'].' '.$r['last_name']),$r['document_number'],$g['group_name']],
+                                  array_keys($rows),$rows),
+                '_filters'=>['group'=>$g['group_name']]]];
 }
 
 function chat_group_student_count(PDO $conn, array $u, array $s, array $v): array {
