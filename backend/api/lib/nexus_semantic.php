@@ -51,7 +51,7 @@ function nxCapabilityRegistry(): array {
         'required_context'=>[],'optional_context'=>['group','student','last_result'],
         'required_parameters'=>[],
         'related'=>['students.count','students.position','guardians.of_group','students.percent'],
-        'nearby'=>['groups.list','students.in_group','attendance.absent_list'],
+        'nearby'=>['groups.list','students.list','incidents.list'],
         'endpoints'=>['GET /students','POST /consultations/query(group_students|all_students)'],
         'service'=>'nexus_semantic','query'=>'students×sga×ag',
         'response_shape'=>'text+card+result_set','presentation'=>['list','table','count'],
@@ -64,7 +64,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['count'],'filters'=>['group','grade','status','search'],
         'sorting'=>[],'aggregation'=>'count','pagination'=>null,'time_scope'=>'range',
         'required_context'=>[],'optional_context'=>['group'],'required_parameters'=>[],
-        'related'=>['students.list','students.percent'],'nearby'=>['groups.count'],
+        'related'=>['students.list','students.percent'],'nearby'=>['groups.list'],
         'endpoints'=>['GET /dashboard/stats'],'service'=>'nexus_semantic',
         'query'=>'COUNT students×scope','response_shape'=>'scalar',
         'presentation'=>['scalar'],'rbac'=>$S,'read_only'=>true,'exec'=>'students',
@@ -77,7 +77,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['name','document','group'],'filters'=>['group','grade','status','module','range'],
         'sorting'=>['name','time'],'aggregation'=>null,'pagination'=>'result_set',
         'time_scope'=>'range','required_context'=>[],'optional_context'=>['last_result','group'],
-        'required_parameters'=>[],'related'=>['students.list','result_nav'],
+        'required_parameters'=>[],'related'=>['students.list'],
         'nearby'=>['students.count'],'endpoints'=>['(derivable de students list)'],
         'service'=>'nexus_semantic','query'=>'students ORDER BY last_name,first_name OFFSET n',
         'response_shape'=>'scalar+result_set','presentation'=>['scalar'],
@@ -90,7 +90,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['percent','n','total'],'filters'=>['group','status','module','range'],
         'sorting'=>[],'aggregation'=>'ratio','pagination'=>null,'time_scope'=>'range',
         'required_context'=>[],'optional_context'=>['group'],'required_parameters'=>[],
-        'related'=>['students.count','attendance.absent_count'],'nearby'=>['groups.compare'],
+        'related'=>['students.count','incidents.count'],'nearby'=>['groups.compare'],
         'endpoints'=>['(derivable)'],'service'=>'nexus_semantic',
         'query'=>'COUNT(filtered)/COUNT(universe)','response_shape'=>'scalar',
         'presentation'=>['scalar'],'rbac'=>$S,'read_only'=>true,'exec'=>'students',
@@ -103,7 +103,7 @@ function nxCapabilityRegistry(): array {
         'filters'=>['student'],'sorting'=>[],'aggregation'=>null,'pagination'=>null,
         'time_scope'=>null,'required_context'=>['student'],'optional_context'=>['person'],
         'required_parameters'=>['student'],
-        'related'=>['students.field','guardian.of_student'],'nearby'=>['students.summary'],
+        'related'=>['students.field','guardian.of_student'],'nearby'=>['students.detail'],
         'endpoints'=>['GET /students','POST /consultations/query'],'service'=>'chat intent',
         'query'=>'chatResolveStudent','response_shape'=>'text',
         'presentation'=>['detail'],'rbac'=>$S,'read_only'=>true,
@@ -117,7 +117,7 @@ function nxCapabilityRegistry(): array {
         'filters'=>['student'],'sorting'=>[],'aggregation'=>null,'pagination'=>null,
         'time_scope'=>null,'required_context'=>['student'],'optional_context'=>['person'],
         'required_parameters'=>['student','field'],
-        'related'=>['students.detail','guardian.of_student'],'nearby'=>['guardians.field'],
+        'related'=>['students.detail','guardian.of_student'],'nearby'=>['guardian.of_student'],
         'endpoints'=>['(derivable)'],'service'=>'chat intent','query'=>'chat_student_field',
         'response_shape'=>'text','presentation'=>['scalar'],'rbac'=>$S,'read_only'=>true,
         'exec'=>'intent:student_field',
@@ -144,7 +144,7 @@ function nxCapabilityRegistry(): array {
         'filters'=>['student'],'sorting'=>[],'aggregation'=>null,'pagination'=>null,
         'time_scope'=>null,'required_context'=>['student'],'optional_context'=>['person'],
         'required_parameters'=>['student'],
-        'related'=>['students.of_guardian','guardians.field'],'nearby'=>['students.field'],
+        'related'=>['students.of_guardian','guardians.of_group'],'nearby'=>['students.field'],
         'endpoints'=>['(derivable)'],'service'=>'chat intent','query'=>'chat_student_field(acudiente)',
         'response_shape'=>'text','presentation'=>['scalar'],'rbac'=>$S,'read_only'=>true,
         'exec'=>'intent:student_field',
@@ -183,7 +183,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['name','email','groups'],'filters'=>['shift'],
         'sorting'=>['name'],'aggregation'=>'count','pagination'=>'card',
         'time_scope'=>null,'required_context'=>[],'optional_context'=>[],
-        'required_parameters'=>[],'related'=>['teachers.of_group'],'nearby'=>['staff.list'],
+        'required_parameters'=>[],'related'=>['teachers.of_group'],'nearby'=>['teachers.list'],
         'endpoints'=>['GET /school/teachers'],'service'=>'chat intent','query'=>'chat_teachers_list',
         'response_shape'=>'card','presentation'=>['table'],'rbac'=>['RECTOR','COORDINATOR','SECRETARY','COUNSELOR'],
         'read_only'=>true,'exec'=>'intent:teachers_list',
@@ -208,7 +208,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['group','count','metric'],'filters'=>['group','group2','module','range'],
         'sorting'=>[],'aggregation'=>'count','pagination'=>null,'time_scope'=>'range',
         'required_context'=>[],'optional_context'=>['module','range'],'required_parameters'=>[],
-        'related'=>['groups.rank','attendance.ranking'],'nearby'=>['students.count'],
+        'related'=>['groups.rank'],'nearby'=>['students.count'],
         'endpoints'=>['(derivable de attendance_incidents GROUP BY group)'],
         'service'=>'nexus_semantic','query'=>'ai GROUP BY group','response_shape'=>'text+card',
         'presentation'=>['comparison'],'rbac'=>$S,'read_only'=>true,'exec'=>'groups_compare',
@@ -220,7 +220,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['group','count'],'filters'=>['module','range'],
         'sorting'=>['count_desc'],'aggregation'=>'count','pagination'=>null,'time_scope'=>'range',
         'required_context'=>[],'optional_context'=>['module','range'],'required_parameters'=>[],
-        'related'=>['groups.compare','attendance.ranking'],'nearby'=>['students.top'],
+        'related'=>['groups.compare','groups.rank'],'nearby'=>['students.top'],
         'endpoints'=>['(derivable)'],'service'=>'nexus_semantic','query'=>'ai GROUP BY group ORDER BY n',
         'response_shape'=>'text+card','presentation'=>['comparison','table'],
         'rbac'=>['RECTOR','COORDINATOR','COUNSELOR','SECRETARY','TEACHER'],
@@ -288,7 +288,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['student','group','exit_time','expected_return'],'filters'=>['range'],
         'sorting'=>['time'],'aggregation'=>'count','pagination'=>'card','time_scope'=>'now',
         'required_context'=>[],'optional_context'=>[],'required_parameters'=>[],
-        'related'=>['permissions.pending','exits.list'],'nearby'=>['incidents.list'],
+        'related'=>['permissions.pending','exits.school'],'nearby'=>['incidents.list'],
         'endpoints'=>['POST /consultations/query(active_permissions|issued_permissions)'],
         'service'=>'chat intent','query'=>'chat_permissions','response_shape'=>'card',
         'presentation'=>['table'],'rbac'=>$S,'read_only'=>true,'exec'=>'intent:permissions'],
@@ -341,7 +341,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['student','group','risk_level','score'],'filters'=>['level'],
         'sorting'=>['score_desc'],'aggregation'=>'count','pagination'=>'card','time_scope'=>'snapshot',
         'required_context'=>[],'optional_context'=>[],'required_parameters'=>[],
-        'related'=>['trackings.active','risk.alerts'],'nearby'=>['students.top'],
+        'related'=>['trackings.active','risk.students'],'nearby'=>['students.top'],
         'endpoints'=>['GET /behavior/risk','GET /risk/alerts'],'service'=>'chat intent',
         'query'=>'chat_risk_students','response_shape'=>'card','presentation'=>['table'],
         'rbac'=>['RECTOR','COORDINATOR','COUNSELOR','TEACHER'],'read_only'=>true,'exec'=>'intent:risk_students'],
@@ -440,7 +440,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['action_type','count'],'filters'=>['range'],'sorting'=>['count_desc'],
         'aggregation'=>'count','pagination'=>'card','time_scope'=>'range',
         'required_context'=>[],'optional_context'=>[],'required_parameters'=>[],
-        'related'=>['audit.query'],'nearby'=>['session.summary'],
+        'related'=>['audit.query'],'nearby'=>['my.activity'],
         'endpoints'=>['GET /audit/teacher/system-activity'],'service'=>'chat intent',
         'query'=>'chat_my_activity','response_shape'=>'card','presentation'=>['table'],
         'rbac'=>'ALL','read_only'=>true,'exec'=>'intent:my_activity'],
@@ -451,7 +451,7 @@ function nxCapabilityRegistry(): array {
         'target_entity'=>null,'fields'=>['late','absent','evasion','present','permissions','notifications'],
         'filters'=>[],'sorting'=>[],'aggregation'=>'count','pagination'=>'card','time_scope'=>'today',
         'required_context'=>[],'optional_context'=>[],'required_parameters'=>[],
-        'related'=>['attendance.today'],'nearby'=>['session.summary'],
+        'related'=>['attendance.today'],'nearby'=>['day.summary'],
         'endpoints'=>['GET /dashboard/stats'],'service'=>'chat intent','query'=>'chat_day_summary',
         'response_shape'=>'text+card','presentation'=>['summary'],'rbac'=>$S,'read_only'=>true,
         'exec'=>'intent:day_summary'],
@@ -470,7 +470,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['name','role'],'filters'=>['role'],'sorting'=>['role'],
         'aggregation'=>null,'pagination'=>null,'time_scope'=>null,'required_context'=>[],
         'optional_context'=>[],'required_parameters'=>[],'related'=>['teachers.list'],
-        'nearby'=>['about.me'],'endpoints'=>['GET /users/by-role','POST /consultations/query(staff*)'],
+        'nearby'=>['my.activity'],'endpoints'=>['GET /users/by-role','POST /consultations/query(staff*)'],
         'service'=>'chat intent','query'=>'chat_staff_lookup','response_shape'=>'text',
         'presentation'=>['list'],'rbac'=>'ALL','read_only'=>true,'exec'=>'intent:staff_lookup'],
     'operations.derive' => ['name'=>'Operaciones (navegación)','description'=>'permiso/citación/seguimiento/etc. — el chat NO ejecuta, abre el flujo autorizado',
@@ -479,7 +479,7 @@ function nxCapabilityRegistry(): array {
         'fields'=>['cmd','student'],'filters'=>['student','op'],
         'sorting'=>[],'aggregation'=>null,'pagination'=>null,'time_scope'=>null,
         'required_context'=>[],'optional_context'=>['student','_op'],'required_parameters'=>[],
-        'related'=>['operations.start'],'nearby'=>['citations.list','trackings.active'],
+        'related'=>['operations.derive'],'nearby'=>['citations.list','trackings.active'],
         'endpoints'=>['POST /chat/action → /operacion?cmd=…','POST /operations/execute (UI, no chat)'],
         'service'=>'chat intent','query'=>'chat_derive_action|chat_start_operation',
         'response_shape'=>'chip_nav','presentation'=>['action'],'rbac'=>'chatCanAction',
@@ -1394,6 +1394,14 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
         usort($rows, fn($a,$b)=>strcmp($arr[$a['student_id']],$arr[$b['student_id']]));
     }
     $n = count($rows);
+    // count/percent deben medir el universo real — el listado trae LIMIT 400;
+    // un «n» truncado sería una cifra inventada, no un dato
+    if (in_array($plan['op'] ?? '', ['count','percent'], true)) {
+        $cs = $conn->prepare("SELECT COUNT(DISTINCT s.student_id) FROM students s {$join}
+            WHERE " . implode(' AND ', $w) . " {$scope['sql']}");
+        $cs->execute(array_merge($p, $scope['params']));
+        $n = (int)$cs->fetchColumn();
+    }
     $gl = $plan['_group_name'] ?? ($f['group'] ?? ($f['grade'] ? 'grado '.$f['grade'] : 'el colegio'));
     $stLbl = ['absent'=>'que faltaron','present'=>'presentes','late'=>'con tardanza','evasion'=>'con evasión',
               'permission'=>'con permiso','risk'=>'en riesgo','tracking'=>'en seguimiento','exempt'=>'exentos',
@@ -1479,14 +1487,17 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
 
     if ($plan['op']==='position' || $plan['position']!==null) {
         $pos = $plan['position'];
+        // los ordinales operan sobre la ventana traída (≤400 filas) — $n es
+        // el total real del filtro, no el límite navegable
+        $avail = count($rs['items']);
         $idx = is_int($pos) ? $pos - 1
-             : ($pos === 'last' ? $n - 1
-             : (is_string($pos) && str_starts_with($pos,'last-') ? $n - 1 - (int)substr($pos,5) : null));
-        if ($n === 0)
+             : ($pos === 'last' ? $avail - 1
+             : (is_string($pos) && str_starts_with($pos,'last-') ? $avail - 1 - (int)substr($pos,5) : null));
+        if ($avail === 0)
             return ['reply'=>"No hay estudiantes {$where}{$rl} — la lista está vacía.",
                     'intent'=>'students.position','_result_set'=>$rs,'_plan'=>$plan];
-        if ($idx === null || $idx < 0 || $idx >= $n)
-            return ['reply'=>"{$where}: solo hay {$n} estudiantes — no existe la posición pedida.",
+        if ($idx === null || $idx < 0 || $idx >= $avail)
+            return ['reply'=>"{$where}: solo puedo navegar las primeras {$avail} — no existe la posición pedida.",
                     'intent'=>'students.position','_result_set'=>$rs,'_plan'=>$plan];
         $it = $rs['items'][$idx];
         $ord = ['1'=>'primero','2'=>'segundo','3'=>'tercero','4'=>'cuarto','5'=>'quinto'];
@@ -1770,6 +1781,17 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
     $stmt->execute(array_merge($p, $scope['params']));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $n = count($rows);
+    // count mide el universo real — el listado trae LIMIT 400; reportar
+    // filas truncadas como total sería una cifra inventada
+    if (($plan['op'] ?? '') === 'count') {
+        $cs = $conn->prepare("SELECT COUNT(*) FROM attendance_incidents ai
+            JOIN students s ON s.student_id = ai.student_id AND s.deleted_at IS NULL
+            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE " . implode(' AND ', $w) . " {$scope['sql']}");
+        $cs->execute(array_merge($p, $scope['params']));
+        $n = (int)$cs->fetchColumn();
+    }
     $typLbl = NX_MODULE_LABEL[$f['module'] ?? ''] ?? 'eventos';
     $gl = $plan['_group_name'] ?? ($f['group'] ?? 'el colegio');
     $rs = ['type'=>'incidents','label'=>$typLbl,'entity'=>'incidents','order'=>'fecha (antiguo→reciente)',
@@ -1783,13 +1805,15 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
                 '_result_set'=>$rs,'_plan'=>$plan];
     if ($plan['op']==='position' || $plan['position']!==null) {
         $pos = $plan['position'];
-        // «primero» = más temprano del rango; «último» = más reciente
+        // los ordinales operan sobre la ventana traída (≤400 filas) — $n es
+        // el total real del rango, no el límite navegable
+        $avail = count($rows);
         $idx = is_int($pos) ? $pos-1
-             : ($pos==='last' ? $n-1
-             : (is_string($pos) && str_starts_with($pos,'last-') ? $n-1-(int)substr($pos,5) : null));
-        if ($n===0) return ['reply'=>"No hay {$typLbl} en ese rango.",'intent'=>'incidents.position','_result_set'=>$rs,'_plan'=>$plan];
-        if ($idx===null || $idx<0 || $idx>=$n)
-            return ['reply'=>"Solo hay {$n} {$typLbl} en el rango — esa posición no existe.",
+             : ($pos==='last' ? $avail-1
+             : (is_string($pos) && str_starts_with($pos,'last-') ? $avail-1-(int)substr($pos,5) : null));
+        if ($avail===0) return ['reply'=>"No hay {$typLbl} en ese rango.",'intent'=>'incidents.position','_result_set'=>$rs,'_plan'=>$plan];
+        if ($idx===null || $idx<0 || $idx>=$avail)
+            return ['reply'=>"Solo puedo navegar las primeras {$avail} {$typLbl} del rango — esa posición no existe en la ventana.",
                     'intent'=>'incidents.position','_result_set'=>$rs,'_plan'=>$plan];
         $it=$rs['items'][$idx];
         return ['reply'=>ucfirst($typLbl)." · posición ".($idx+1)." de {$n}: *{$it['label']}* — {$it['sub']}.",

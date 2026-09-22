@@ -1,7 +1,7 @@
 # Nexus — gaps y causas persistentes
 
 Pregunta rectora: ¿Qué puede hacer NEXO que Nexus todavía no puede pedir, expresar o componer mediante lenguaje natural?
-Estado: auditoría en curso. No clasificar hipótesis como fallos confirmados.
+Estado: auditoría + correcciones aplicadas (checkpoint 427319e + posterior). No clasificar hipótesis como fallos confirmados.
 
 | Familia | Evidencia/estado inicial | Siguiente medida |
 |---|---|---|
@@ -20,14 +20,25 @@ Estado: auditoría en curso. No clasificar hipótesis como fallos confirmados.
 
 ## Hallazgos de baseline y código
 
-- semantic/fallback: grado numérico puede convertirse en math_operation; propiedad explícita en student_summary; modificación temporal en birthdays_today. Baseline reproducida, corrección pendiente.
-- planner/dependencies: referencias siempre step 0; validator no rechaza forward refs/ciclos; each no materializa iteración; delegación depende de metadata libre del plan. Pendiente de pruebas conductuales.
-- context/result-reference: IDs R7 repetidos tras seis objetos; cursor explícito descartado cuando se devuelve result_set; person anterior puede sobrevivir a un nuevo estudiante. Pendiente de regresión.
-- presentation: proyección no persiste para la transformación siguiente; sort fabrica columnas estudiantiles incluso para otros tipos; no hay paginación UI.
-- response/history: payload_json no se decodifica y el historial ASC se invierte otra vez, perdiendo tarjetas/acciones y orden. Evidencia de fuente, falta test local.
-- capability/data: inventario usa nombres de tablas incorrectos; LIMIT 400 puede convertir conteos/all en cifras truncadas.
-- evaluation: real_conversation_v1 simula estado y su dimensión consistency se incrementa sin aserción; continuity_50 acepta cualquier palabra en varios turnos y no falla su exit code.
-- integration: usuario seleccionó Solo pruebas locales tras Permission denied de bind mounts. BD real/HTTP/demos no verificables en este alcance.
+- ~~semantic/fallback: grado numérico → math_operation~~ **RESUELTO** (cobertura rerutea; «estudiantes de grado 9» ya llega a students.list por ruta Python — fallback :9 conserva 1 caso residual conocido). Propiedad explícita y modificación temporal: cubiertas por coverage overrides.
+- ~~planner/dependencies~~ **RESUELTO**: validator rechaza forward/self/orphan refs, executors arbitrarios, efectos no-READ, slices/positions inválidos; `each` itera el result-set (cap 12); delegación re-corre `chatAllowed` sobre el intent declarado. Contrato: NexusPlanInvariantTest (34).
+- ~~context/result-reference~~ **RESUELTO**: R-ids monotónicos (`next_rid`), objects[] sin ítems PII (identidad+filtros+count), `person` se descarta al anclar otro estudiante; nav por cursor y set persistido server-side.
+- ~~presentation/paginación UI~~ **RESUELTO**: DataCard pagina 10/pág con accesibilidad completa (caption, scope, aria-live, select+botones) + test. Pendiente: sort/proyección para tipos no-estudiante (columnas fabricadas).
+- ~~response/history~~ **RESUELTO**: payload_json decodificado, rama por sesión oldest→newest, últimos 200 conservados.
+- ~~capability/data (nombres de tablas)~~ **RESUELTO** en harness (`$entityTables` vs sql/schema.sql). Pendiente real: LIMIT 400 trunca conteos `all` — sigue abierto (verificar si el executor cuenta antes de cortar).
+- ~~evaluation~~ **RESUELTO**: consistency real (inherited ⇒ respaldo en ctx/_ref), continuity_50 exit+aserciones, blind_eval exit-code, capability_eval sin auto-compare, G7b=0.
+- integration: sigue vigente — BD real/HTTP/demos no verificables en alcance local (decisión del usuario tras bind-mount denied).
+
+## Hallazgos nuevos del segundo ciclo
+
+- **security/esquema**: «abre la tabla de usuarios» llegaba a derive_action — RESUELTO (probe por `tabla de <infra>` / `base de datos|esquema`). Detectado SOLO al endurecer G7b — la tolerancia previa lo ocultaba.
+- **entity/extracción**: residuo post-stopword producía nombres («cuantica», «nombre») — RESUELTO en ambos extractores (paridad G3 intacta). Marcadores de persona extendidos.
+- **semantic/meta-tema**: «cuéntame sobre X» sin dominio forzaba student_summary — RESUELTO (foreign_culture).
+- **modelo/corpus**: paráfrasis de acudiente («quién responde por ese muchacho ante el colegio», «a nombre de quién está este alumno») siguen oos a nivel de clasificador — el resolver PHP las encamina, el modelo joblib no. Gap de corpus, no de arquitectura: requiere retraining documentado, NO disimulable con reglas.
+- **blind_eval 73.6%**: diagnóstico honesto — categorías débiles: emocion 4/10, frontera_nombre 4/10, frontera_social 6/10, fuera_dominio 5/8, evasion_formal 2/4. Son gaps de cobertura NLU conocidos.
+- **registro**: referencias colgantes (result_nav, students.summary, risk.alerts…) — verificar si son intencionales (delegación) o huérfanos. Pendiente de barrido.
+
+## Reglas de seguimiento
 
 ## Reglas de seguimiento
 

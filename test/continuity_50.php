@@ -7,11 +7,13 @@
  * Uso: php test/continuity_50.php  (host; necesita NEXO_TOKEN o login)
  */
 $BASE = getenv('NEXO_API') ?: 'http://localhost:18080';
-// login fresco — el token de /tmp puede estar expirado
+// credenciales del entorno de pruebas — sobreescribibles por entorno, nunca
+// de producción: NEXO_TEST_USER / NEXO_TEST_PASS
 $ch = curl_init("$BASE/auth/login");
 curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>15,
     CURLOPT_HTTPHEADER=>['Content-Type: application/json','X-Requested-With: XMLHttpRequest'],
-    CURLOPT_POSTFIELDS=>json_encode(['email'=>'teach@test.nexo','password'=>'test1234'])]);
+    CURLOPT_POSTFIELDS=>json_encode(['email'=>getenv('NEXO_TEST_USER') ?: 'teach@test.nexo',
+        'password'=>getenv('NEXO_TEST_PASS') ?: 'test1234'])]);
 $login = json_decode(curl_exec($ch) ?: '{}', true); curl_close($ch);
 $TOKEN = $login['data']['token'] ?? $login['token'] ?? (getenv('NEXO_TOKEN') ?: trim(@file_get_contents('/tmp/nexo_token.txt')));
 // session_id es UUID — ids arbitrarios rompen chatLoadDs silenciosamente
@@ -57,7 +59,8 @@ $turns = [
     ['cuántos faltaron hoy',              fn($i,$r)=>preg_match('/\d|faltaron|inasistencia/i',$r)],
     ['¿y ayer?',                          fn($i,$r)=>preg_match('/\d|ayer|hoy|inasistencia|no registra|limpio/i',$r)],
     ['las tardanzas de esta semana',      fn($i,$r)=>preg_match('/tardanza|semana|no hay|sin/i',$r)],
-    ['la primera tardanza de hoy',        fn($i,$r)=>preg_match('/\w{3,}/',$r)],
+    ['la primera tardanza de hoy',        fn($i,$r)=>in_array($i,['students.position','incidents.position','result_nav','list_events'],true)
+        || preg_match('/tardanza|primero|no hay|registra|limpio/i',$r)],
     // bloque 4: relaciones
     ['acudientes del 6-A',                fn($i,$r)=>str_contains($r,'cudiente') || str_contains($r,'no tiene')],
     ['docentes del 6-A',                  fn($i,$r)=>preg_match('/docente|profesor|no tiene|staff/i',$r)],
@@ -78,7 +81,7 @@ $turns = [
     // bloque 8: cortesía y ruido (no debe romper el estado)
     ['hola',                              fn($i,$r)=>strlen($r) > 3],
     ['gracias',                           fn($i,$r)=>strlen($r) > 3],
-    ['el primero otra vez',               fn($i,$r)=>preg_match('/\w{3,}/',$r)],
+    ['el primero otra vez',               fn($i,$r)=>str_contains($r,'Ana')],
     // bloque 9: porcentajes y conteos
     ['cuántos estudiantes hay en total',  fn($i,$r)=>preg_match('/\d/',$r)],
     ['qué porcentaje de 6-A faltó hoy',   fn($i,$r)=>preg_match('/%|por ciento|0|no hay/i',$r)],
@@ -86,19 +89,20 @@ $turns = [
     ['estudiantes sin grupo',             fn($i,$r)=>preg_match('/\d|grupo|no hay/i',$r)],
     // bloque 10: recuperación tras OOD (no debe perder el set)
     ['cuál es la capital de Francia',     fn($i,$r)=>strlen($r) > 5],
-    ['los demás',                         fn($i,$r)=>preg_match('/demás|todos|más|\w{3,}/',$r)],
+    ['los demás',                         fn($i,$r)=>$i==='result_nav' || str_contains($r,'demás') || str_contains($r,'todos')],
     ['vuelve al primero',                 fn($i,$r)=>str_contains($r,'Ana') || str_contains($r,'Luis') || str_contains($r,'Eva')],
     // bloque 11: slice + sort encadenados
     ['los dos primeros',                  fn($i,$r)=>preg_match('/primeros 2|Ana|Luis/',$r)],
     ['en tabla',                          fn($i,$r)=>!empty($GLOBALS['_last']['cards']) || str_contains($r,'Tabla')],
-    ['solo sus nombres',                  fn($i,$r)=>preg_match('/\w{3,}/',$r)],
+    ['solo sus nombres',                  fn($i,$r)=>preg_match('/Ana|Luis|Eva/',$r) && !str_contains($r,'doc')],
     // bloque 12: cierre con cambio de tema
     ['incidentes de esta semana',         fn($i,$r)=>preg_match('/incidente|semana|no hay|limpio/i',$r)],
     ['cuántos fueron',                    fn($i,$r)=>preg_match('/\d/',$r)],
     ['muéstrame los del 7-B de nuevo',    fn($i,$r)=>str_contains($r,'7-B')],
-    ['el segundo',                        fn($i,$r)=>preg_match('/\w{3,}/',$r)],
+    ['el segundo',                        fn($i,$r)=>in_array($i,['result_nav','students.position'],true)
+        || preg_match('/segundo|posición|puesto|—/',$r)],
     ['su acudiente',                      fn($i,$r)=>preg_match('/cudiente|responsable|no tiene/i',$r)],
-    ['los demás',                         fn($i,$r)=>preg_match('/demás|todos|\w{3,}/',$r)],
+    ['los demás',                         fn($i,$r)=>$i==='result_nav' || str_contains($r,'demás') || str_contains($r,'todos')],
     ['adiós',                             fn($i,$r)=>strlen($r) > 3],
 ];
 
@@ -117,3 +121,4 @@ foreach ($turns as $i => [$msg, $check]) {
 }
 printf("\n  %d/%d turnos coherentes\n", $pass, count($turns));
 if ($fails) { echo "\n  incoherencias:\n"; foreach ($fails as [$n,$m,$i,$r]) echo "    t{$n} «{$m}» → {$i}: {$r}\n"; }
+exit($fails ? 1 : 0);

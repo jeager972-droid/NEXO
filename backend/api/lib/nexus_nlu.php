@@ -545,7 +545,7 @@ function nxExtractStudent(string $q): ?string {
         // presentación/orden — nunca nombres («ordenados por nombre» en 6-A)
         'ordenado','ordenada','ordenados','ordenadas','orden','alfabeticamente',
         'alfabetico','alfabetica','completo','completa','completos','completas',
-        'tabla','tablas','columnas','nomina','nominas','listado','listados',
+        'tabla','tablas','columnas','nomina','nominas','nombre','nombres','listado','listados',
         'primeros','primeras','entero','entera','integro','integra','todos',
         'todas','listar','listando','tabulado','tabulada','porcentaje','porcentajes',
         // copulativos sueltos — «cuál es el primero» no nombra a nadie
@@ -563,16 +563,30 @@ function nxExtractStudent(string $q): ?string {
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
-        '/(?=(?:estudiante|alumno|alumna|nino|nina)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
+        // marcador de persona explícito — «la niña camila», «el muchacho
+        // juan»: el nombre sigue al sustantivo, no al conector
+        '/(?=(?:estudiante|alumno|alumna|nino|nina|muchacho|muchacha|pelado|pelada|chico|chica|menor)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
         '/(?=\b(?:de|del|sobre|para|(?<![-\d])a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
         // «camila del septimo», «juan del 8a», «pedro del jardin» —
         // nombre + «del/de» + grado: el nombre precede al conector
         '/\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)/u',
     ] as $pat) {
         preg_match_all($pat, $q, $mm, PREG_OFFSET_CAPTURE);
+        static $leadMarkers = ['el','la','los','las','un','una','del','de','al',
+            'mismo','misma','mismos','mismas','estudiante','estudiantes',
+            'alumno','alumna','alumnos','alumnas','nino','nina','muchacho',
+            'muchacha','pelado','pelada','chico','chica','menor'];
         foreach ($mm[1] ?? [] as $cand) {
+            $raw = explode(' ', trim($cand[0]));
+            // saltar artículos/marcadores iniciales («el mismo juan»,
+            // «la niña camila») — el primer término tras ellos debe ser el
+            // nombre; si es stopword («sobre LA física cuántica» → «fisica»)
+            // el residuo filtrado es resto de frase, no persona
+            $lead = $raw;
+            while ($lead && in_array($lead[0], $leadMarkers, true)) array_shift($lead);
+            if (!$lead || in_array($lead[0], $stop, true)) continue;
             $words = array_values(array_filter(
-                explode(' ', trim($cand[0])),
+                $raw,
                 fn($w) => !in_array($w, $stop) && mb_strlen($w) > 1
                     && !preg_match('/\d/', $w)));
             if ($words) $cands[] = implode(' ', $words);
@@ -1166,6 +1180,13 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     if (preg_match('/\b(exporta|descarga|extrae|copia|vuelca|dame|muestrame|saca) (toda|todas|todo|todos) (la|el|los|las)? ?\w*/u', $q0)
         && preg_match('/\b(base|datos|informacion|registros|tabla)\b/u', $q0))
         return 'security_probe';
+    // sonda de esquema BD — «abre/dame la tabla de usuarios». Una tabla
+    // presentacional lleva dominio («tabla de tardanzas» es legítima);
+    // tabla + nombre de infraestructura (usuarios, roles, claves…) es
+    // intento de exponer el esquema, no una operación ni una consulta
+    if (preg_match('/\btablas?\s+(de|del)\s+(los\s+|las\s+)?(usuarios?|roles?|contrasenas?|claves?|tokens?|passwords?|credenciales|sesiones?|huellas?|fingerprints?)\b/u', $q0)
+        || preg_match('/\b(abre|abrir|muestra|muestrame|muéstrame|dame|lista|lee|vuelca|vuelque|descarga|descargar|exporta|exportar)\b.{0,12}\b(base de datos|la bd|el esquema|tabla(s)? de (los |las )?(usuarios?|roles?|credenciales|claves?|contrasenas?))\b/u', $q0))
+        return 'security_probe';
     // «exporta todo» sin objeto = volcado masivo — la exportación legítima
     // siempre nombra su objeto («exporta el reporte de tardanzas»)
     if (preg_match('/\b(exporta|exportar|exporte|descarga|descargar|vuelca|vuelque|saca|saque)\s+(todo|todos|todas|toda|todo el|toda la)\b/u', $q0)
@@ -1185,6 +1206,14 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         if ($topic !== '' && !preg_match('/^(' . $col . '|historia|geografia|cultura|presidente|presidentes|capital|capitales|departamento|departamentos|region|regiones|pais|nacion)/u', $topic))
             return 'do_for_me';
     }
+    // «háblame/cuéntame/explícame/enséñame/infórmame (de|sobre) <tema>» —
+    // el tema decide: sin sustantivo de dominio ni persona resuelta es
+    // cultura general; forzar student_summary sobre «la física cuántica»
+    // sería adivinar (corpus blind: esperaba oos|foreign_culture)
+    if (preg_match('/\b(hablame|cuentame|cuentanos|explicame|ensename|informame|hablemos)\s+(de|del|sobre|acerca de)\s+(.+)/u', $q0, $mm)
+        && empty($slots['student']) && empty($slots['group'])
+        && !preg_match('/\b(sistema|nexo|nexus|asistente|plataforma|app|aplicacion|programa|chatbot|bot|capacidades?|funciones?|ayuda|asistencia|inasistencia|tardanza|evasion|permiso|citacion|seguimiento|estudiantes?|alumn|grupo|salon|horario|docente|profesor|acudiente|sensor|lector|huella|riesgo|alerta|evento|incidente|jornada|matricula|colegio|escuela|institucion|calendario|reporte|notificacion|whatsapp|auditoria|historial|conducta|merito)\b/u', $mm[3]))
+        return 'foreign_culture';
     // corrección de referencia: «hazlo sobre X aunque yo haya dicho Y»
     if (preg_match('/\baunque (yo )?(haya |habia )?(dicho|dije|pedi|pedido|mencionado)\b/u', $q0))
         return 'student_summary';

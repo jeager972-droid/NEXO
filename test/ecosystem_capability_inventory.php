@@ -23,24 +23,25 @@ $tables = $conn->query(
       WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY 1"
 )->fetchAll(PDO::FETCH_COLUMN);
 
-// mapeo entidad-conversacional → tabla(s) real(es)
+// mapeo entidad-conversacional → tabla(s) real(es) — verificado contra
+// sql/schema.sql (2026-09-22): nombres corregidos donde divergían
 $entityTables = [
     'students'    => ['students','student_group_assignments'],
     'guardians'   => ['guardians','guardian_student_relationships'],
-    'teachers'    => ['users','teacher_group_access','teacher_subject_assignments'],
+    'teachers'    => ['users','teacher_group_access'],
     'groups'      => ['academic_groups'],
     'subjects'    => ['subjects'],
-    'schedules'   => ['schedules','school_schedule_config'],
+    'schedules'   => ['schedules','school_schedule_config','daily_schedule_config','school_time_blocks'],
     'attendance'  => ['biometric_events','attendance_incidents'],
-    'incidents'   => ['attendance_incidents'],
-    'tracking'    => ['student_tracking'],
-    'permissions' => ['class_exit_authorizations','school_exit_authorizations'],
+    'incidents'   => ['attendance_incidents','security_incidents'],
+    'tracking'    => ['student_tracking','student_tracking_notes'],
+    'permissions' => ['class_exit_authorizations','school_exit_authorizations','pedagogical_trip_authorizations'],
     'exits'       => ['school_exit_authorizations'],
-    'notifications'=>['notification_queue','whatsapp_notifications'],
-    'devices'     => ['biometric_devices'],
-    'audit'       => ['audit_log','audit_logs'],
+    'notifications'=>['notifications','twilio_messages','school_notification_routes','internal_messages'],
+    'devices'     => ['edge_devices','device_commands'],
+    'audit'       => ['global_audit_logs','student_record_audit','risk_audit_log'],
     'users'       => ['users','roles'],
-    'risk'        => ['student_behavior_metrics'],
+    'risk'        => ['student_behavior_metrics','risk_alerts','risk_active_snapshot','risk_rules'],
 ];
 
 /* ── 2. endpoints reales (rutas + handlers consulta) ─────────────────────── */

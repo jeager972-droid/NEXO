@@ -190,7 +190,7 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          # copulativos y sustantivos de colección/presentación — nunca personas
          'es','sea','sean','fuese','estando','siendo',
          'lista','listas','fila','filas','columna','columnas','tabla','tablas',
-         'nomina','nominas','listado','listados','posicion','posiciones',
+         'nomina','nominas','nombre','nombres','listado','listados','posicion','posiciones',
          'puesto','puestos','lugar','lugares','ranking','top','completo',
          'completa','completos','completas','ordenado','ordenada','ordenados',
          'ordenadas','orden','alfabeticamente','alfabetico','alfabetica',
@@ -198,7 +198,9 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
 
 _BOUNDARY = r'(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)'
 _STUDENT_PATS = [
-    r'(?=(?:estudiante|alumno|alumna|niño|niña)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    # marcador de persona explícito — «la niña camila», «el muchacho juan»:
+    # el nombre sigue al sustantivo, no al conector (paridad PHP)
+    r'(?=(?:estudiante|alumno|alumna|niño|niña|muchacho|muchacha|pelado|pelada|chico|chica|menor)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
     r'(?=\b(?:de|del|sobre|para|(?<![-\d])a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
     # «camila del septimo», «juan del 8a» — nombre + conector + grado
     r'\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)',
@@ -261,9 +263,22 @@ def extract_entities(q: str) -> dict:
             e['days'] = 365
 
     cands = []
+    _LEAD = {'el','la','los','las','un','una','del','de','al',
+             'mismo','misma','mismos','mismas','estudiante','estudiantes',
+             'alumno','alumna','alumnos','alumnas','nino','nina','niño','niña',
+             'muchacho','muchacha','pelado','pelada','chico','chica','menor'}
     for pat in _STUDENT_PATS:
         for m in re.finditer(pat, q):
-            words = [w for w in m.group(1).split() if w not in _STOP and len(w) > 1 and not re.search(r'\d', w)]
+            raw = m.group(1).split()
+            # saltar artículos/marcadores iniciales («el mismo juan»); el
+            # primer término restante debe ser el nombre — si es stopword
+            # («sobre LA física cuántica») el residuo no es persona (paridad PHP)
+            lead = list(raw)
+            while lead and lead[0] in _LEAD:
+                lead.pop(0)
+            if not lead or lead[0] in _STOP:
+                continue
+            words = [w for w in raw if w not in _STOP and len(w) > 1 and not re.search(r'\d', w)]
             if words:
                 cands.append(' '.join(words))
     if cands:

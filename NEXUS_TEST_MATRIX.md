@@ -41,19 +41,25 @@ Docker/BD/HTTP API: PENDIENTE POR ALCANCE AUTORIZADO (usuario eligió solo prueb
 
 | Comando | Resultado | Estado |
 |---|---|---|
-| php test/nexus_release_gate.php | 18/18 puertas PASS — READY FOR CONTROLLED PRODUCTION (10.9s) | PASS |
-| php test/real_conversation_v1.php | 103/103 convos; intent 381/381; refs 25/25; carry 241/241; nav 60/60 | PASS |
+| php test/nexus_release_gate.php | 18/18 puertas PASS — READY FOR CONTROLLED PRODUCTION (10.7s) | PASS |
+| php test/real_conversation_v1.php | 103/103 convos; intent 381/381; refs 25/25; carry 241/241; nav 60/60; consistency 381/381 (real) | PASS |
 | php test/chat_forensic_harness.php | 36/36 (G7 acepta derive_action) | PASS |
 | php test/dsm_units.php | 50/50 | PASS |
 | php test/readonly_guard.php | 53 handlers, 0 escrituras | PASS |
 | php test/resilience.php | 15/15 | PASS |
-| php test/nexus_capability_eval_v1.php | 154/154 | PASS |
+| php test/nexus_capability_eval_v1.php | 154/154 (context ya no auto-compara) | PASS |
 | php test/nexus_ecosystem_open_composition.php | 59/59 | PASS |
-| phpunit test/api/NexusPlanInvariantTest.php | 34 tests / 57 assertions | PASS (nuevo) |
+| phpunit 'API Unit Tests' | 244 tests / 937 assertions (incl. 34 invariantes de plan) | PASS |
+| php test/semantic_eval.php | singles por categoría ~95%, adversariales 533/533, convos 320/320 (2732 turnos) | PASS |
+| php test/blind_eval.php | 173/235 (73.6%) — diagnóstico, exit 1 honesto con fallos | DIAGNÓSTICO |
+| python3 test/generalization_eval.py | gen 87.5% / F1 79.7% / ood 75% / near-miss 90% | DIAGNÓSTICO |
+| PWA npm test | 601 tests (incl. ChatDataCard 11) | PASS |
 
-Suites pendientes de hardening/ejecución dentro del alcance: continuity_50 (exit-code + aserciones, requiere API/BD real — NO ejecutar en alcance local), blind_eval (exit-code), semantic_eval, generalization_eval.py, ecosystem_capability_inventory (tablas mal nombradas en $entityTables — corregir antes de medir), PWA vitest.
+Hardening aplicado a harness en este checkpoint: continuity_50 (exit 1 + aserciones no vacuas + credenciales por env), blind_eval (exit 1), capability_eval (sin auto-compare), real_conversation_v1 (convCtx con turn_type real + parity con chatBuildDs + consistency exige respaldo en ctx), release_gate G7b (críticos =0, no ≤6), ecosystem_inventory ($entityTables corregido vs sql/schema.sql).
 
-Debilidades conocidas de harness a corregir: real_conversation_v1 consistency auto-pasa (métrica no implementada); capability_eval auto-compara casos sin expectativa; blind_eval no sale non-zero; continuity_50 con aserciones vacuas `/\w{3,}/`; release_gate G7b tolera ≤6 críticos.
+Suites fuera de alcance local (requieren API/BD real): continuity_50 (estructura endurecida, no ejecutada), ecosystem_capability_inventory (requiere PDO).
+
+Regresiones cerradas por el gate endurecido: «abre la tabla de usuarios» era derive_action — ahora security_probe (sonda de esquema). Extractor PHP↔Python: residuo tras stopword ya no produce nombres («cuantica», «nombre»); marcador de persona extendido (muchacha/pelada/chica/menor); meta-tema sin dominio → foreign_culture («cuéntame sobre la física cuántica»).
 
 ## Criterios de ejecución
 

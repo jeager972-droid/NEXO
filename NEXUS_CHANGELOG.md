@@ -51,7 +51,27 @@ Resultados: release gate 18/18 PASS (READY FOR CONTROLLED PRODUCTION, 10.9s); re
 
 Pendiente: hardening de tests débiles (exit-codes, métricas vacuas), accesibilidad/paginación Chat.jsx, evaluación de criterios terminales.
 
+## 2026-09-22 — Harness honesto + fix real de sonda/esquema y extractor
+
+- **G7b endurecido**: `críticos-fallidos ≤6` → `=0`. Al apretar el umbral apareció 1 crítico real: «abre la tabla de usuarios» → `derive_action` (op=null, student='usuarios'). Nueva regla en `nxCoverageOverride`: `tabla(s) de (usuarios|roles|claves|…)` y verbo+`base de datos|esquema` → `security_probe`. Tablas presentacionales legítimas («tabla de tardanzas») intactas.
+- **Extractor PHP↔Python**: el residuo tras filtrar stopwords ya no produce nombres — se saltan artículos/marcadores iniciales y el primer término restante debe no ser stopword («sobre LA física cuántica» → `null`, no «cuantica»; «el mismo juan» → `juan`). Patrón-1 extendido a `muchacho|muchacha|pelado|pelada|chico|chica|menor` («la ficha de la muchacha sofia» → `sofia`). Stopwords: `nombre|nombres`. Espejo en `preprocess.py` — G3 paridad PASS.
+- **Meta-tema generalizado**: `háblame/cuéntame/explícame/enséñame/infórmame (de|sobre|acerca de) X` sin persona ni sustantivo de dominio → `foreign_culture` («cuéntame sobre la física cuántica» ya no inventa student_summary). Dominio y persona resuelta siguen intactos.
+- **Harness endurecidos**: `continuity_50` exit-code + aserciones `/\w{3,}/` reemplazadas por intent/contenido + credenciales por env (`NEXO_TEST_USER/PASS`); `blind_eval` exit 1 con fallos (173/235=73.6% — diagnóstico honesto); `capability_eval` sin auto-compare en CTX; `real_conversation_v1` `convCtx` recibe DSM completo (turn_type estaba indefinido — nunca heredaba tema; ahora paridad real con `chatBuildDs`, `field` excluido) + `consistency` real: todo `inherited` debe tener respaldo en ctx o `_ref` (isset, no empty — `days=0` válido); `ecosystem_inventory` `$entityTables` corregido contra `sql/schema.sql` (notification_queue→notifications+twilio, biometric_devices→edge_devices, audit_log→global_audit_logs, teacher_subject_assignments eliminada).
+- **UI**: `DataCard` paginado y accesible (10 filas/página, caption sr-only, scope=col, aria-live status, nav con select+botones aria-controls, reset al reemplazar card, celdas null→—) + `ChatDataCard.test.jsx` (11 tests). `RichText` split único.
+- Servicios NLU :8090/:8094/:8095/:8096 reiniciados con `preprocess.py` nuevo.
+
+Resultados: gate 18/18 (con G7b=0), real_conversation 103/103, capability 154/154, composición 59/59, forense 36/36, DSM 50/50, phpunit 244, semantic_eval adversariales 533/533 + convos 320/320, generalización 87.5%/F1 79.7%, PWA 601 tests.
+
+Pendiente honesto: paráfrasis de acudiente a nivel de modelo (3 casos blind — cobertura de corpus, no resolver); blind_eval 73.6% documenta calibración; suites live (continuity_50, inventory) sin ejecutar por alcance local.
+
+## 2026-09-22 — Registry auditado + conteos reales (LIMIT 400)
+
+- **Refs colgantes → 0**: `related`/`nearby` del registry nombraban 17 capacidades inexistentes (result_nav, students.in_group, attendance.absent_list, guardians.field, staff.list, attendance.ranking, exits.list, risk.alerts, session.summary, about.me, operations.start, groups.count, students.summary…). Mapeadas a la capacidad real o retiradas (result_nav es DSM, no capability). El grafo ahora solo referencia capacidades existentes.
+- **LIMIT 400 → conteos truncados**: `students.count`/`students.percent`/`incidents.count` usaban `count($rows)` tras LIMIT 400 — un colegio >400 estudiantes o >400 tardanzas del mes reportaba «400» como cifra real. Ahora op∈{count,percent} ejecuta `COUNT(DISTINCT)`/`COUNT(*)` sobre el mismo WHERE — el listado sigue paginado pero la cifra es el universo real.
+- **Ordinales acotados a la ventana**: `position`/`last`/`last-N` en students e incidents ahora verifican contra las filas traídas (≤400), no contra el total — antes un ordinal >400 pasaba el check y luego `items[$idx]` era null.
+- Verificación: `php -l` limpio; suites conversacionales intactas (los ejecutores SQL no se ejercen en alcance local — cambio verificado por contrato, no por ejecución).
+
 ## Checkpoints por construir
 
-ARCHITECTURE, SEMANTIC CORE, CAPABILITY GRAPH, PLANNER ✔, CONTEXT ✔, GENERALIZATION, PRESENTATION, SECURITY ✔, RESILIENCE ✔, FINAL VALIDATION.
+ARCHITECTURE, SEMANTIC CORE, CAPABILITY GRAPH, PLANNER ✔, CONTEXT ✔, GENERALIZATION (87.5% blind — gap de corpus acudiente documentado), PRESENTATION ✔, SECURITY ✔, RESILIENCE ✔, FINAL VALIDATION.
 Cada checkpoint registrará hash, alcance real y resultados; no se marcará completado por compilación solamente.

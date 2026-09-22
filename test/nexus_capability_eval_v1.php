@@ -181,8 +181,11 @@ foreach ($CTX_CASES as $c) {
     else {
         $p = $r['plan'];
         if ($p === null) { chk($dim,'context',false,"«{$text}» → null",$fail); continue; }
-        chk($dim,'context', ($p['capability'] ?? null) === ($expect['capability'] ?? $p['capability']),
-            "«{$text}» cap=" . json_encode($p['capability'] ?? null), $fail);
+        // sin expectativa de capability no hay chequeo posible — un caso
+        // 'plan' sin 'capability' es un hueco del test, no un pass tácito
+        chk($dim,'context', !empty($expect['capability']) && ($p['capability'] ?? null) === $expect['capability'],
+            "«{$text}» cap=" . json_encode($p['capability'] ?? null)
+            . " esperaba " . json_encode($expect['capability'] ?? '(sin expectativa)'), $fail);
         foreach (($expect ?? []) as $k=>$v) {
             if ($k==='capability') continue;
             $cur = $p; foreach (explode('.',$k) as $seg) $cur = $cur[$seg] ?? null;

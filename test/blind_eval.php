@@ -22,10 +22,7 @@ $wrongConfident = []; $abstain = [];
 foreach ($set['single'] as $t) {
     $r = nxClassify($t['text']);
     $intent = $r['intent']; $conf = $r['confidence'] ?? 0;
-    $ok = in_array($intent, $t['expect'], true);
     $band = $conf >= 0.90 ? '>=0.90' : ($conf >= 0.65 ? '0.65-0.90' : '<0.65');
-    // tras threshold, <0.65 ⇒ out_of_scope ya marcado por nxClassify
-    if ($conf < 0.65) { $intent = $r['intent']; } // ya out_of_scope
     $okPost = in_array($intent, $t['expect'], true);
     $bands[$band]['n']++;
     if ($okPost) $bands[$band]['ok']++;
@@ -67,3 +64,6 @@ foreach ($byCat as $c => $d) {
 
 file_put_contents('/tmp/blind_eval.json', json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 echo "\n→ /tmp/blind_eval.json\n";
+// evaluación honesta: cualquier fallo rompe el exit code — un benchmark
+// bonito que siempre pasa no prueba nada
+exit($correct === $total ? 0 : 1);

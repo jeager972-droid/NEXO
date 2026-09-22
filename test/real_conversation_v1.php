@@ -41,16 +41,20 @@ foreach ($argv ?? [] as $a) if (str_starts_with($a,'--only=')) $ONLY = substr($a
 
 /* ---------- helpers de simulación del estado conversacional ---------- */
 
-/** ctx que el SERVIDOR expondría en el próximo turno (espejo de chatBuildDs). */
-function convCtx(array $resolved, array $emitted, ?array $prev): array {
+/** ctx que el SERVIDOR expondría en el próximo turno (espejo de chatBuildDs).
+ *  Recibe el resultado COMPLETO del DSM (resolved + turn_type), igual que
+ *  chatBuildDs($interp, $out, $prev) en producción. */
+function convCtx(array $interp, array $emitted, ?array $prev): array {
+    $resolved = $interp['resolved'] ?? [];
     $slots = $resolved['slots'] ?? [];
     $ent = array_filter(array_merge($slots, $emitted), fn($v) => $v !== null && $v !== []);
     // paridad chatBuildDs: el tema se hereda SOLO en continuaciones —
     // un tema nuevo no arrastra entidades del turno previo (§26)
-    $isCont = !empty($slots['_nav'])
+    $isCont = !empty($slots['_nav']) || !empty($emitted['_result_nav'])
         || in_array($interp['turn_type'] ?? '', ['context_modify','op_repeat','correction','confirmation','deictic','followup'], true);
     if ($isCont) {
-        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+        // 'field' excluido — paridad con producción: es de la frase, no del tema
+        foreach (['student','group','module','days','from','to','range_label'] as $k) {
             if (empty($ent[$k]) && !empty($prev['_ds']['entities'][$k])) $ent[$k] = $prev['_ds']['entities'][$k];
         }
     }
@@ -439,12 +443,28 @@ foreach ($CONVOS as $cv) {
             if ($isCl === $exp['clarify']) $dims['clarify_ok'][0]++;
             else { $ok=false; $why[] = $exp['clarify'] ? 'NO aclaró' : 'aclara sin necesidad'; }
         }
-        // consistencia: el turno no debe contradecir el estado
-        $dims['consistency'][1]++; $dims['consistency'][0]++;
+        // consistencia real: todo slot marcado como heredado debe tener
+        // respaldo en el ctx previo — «inherited» sin fuente = memoria
+        // inventada. isset (no empty): days=0 es un valor real («hoy»).
+        // 'group' también puede venir de _ref (group_of_student resuelve
+        // vía el estudiante activo, no via ctx.group). Marcadores
+        // 'intent'/'intent_ctx_generic' no son slots de entidad.
+        $dims['consistency'][1]++;
+        $cOk = true;
+        $ref = $res['slots']['_ref'] ?? null;
+        $refCovers = in_array($ref, ['student_group','group_of_student'], true) ? ['group'] : [];
+        foreach (($res['inherited'] ?? []) as $k) {
+            if ($k === 'intent' || $k === 'intent_ctx_generic') continue;
+            if (isset($ctx['entities'][$k])) continue;
+            if (in_array($k, $refCovers, true) && isset($ctx['entities']['student'])) continue;
+            $cOk = false; break;
+        }
+        if ($cOk) $dims['consistency'][0]++;
+        else { $ok=false; $why[]="heredó '{$k}' sin ctx que lo respalde"; }
 
         $trace[] = "    «{$say}» → {$res['intent']} " . ($why? 'FAIL '.implode(' | ',$why) : 'ok');
-        // actualizar ctx como lo haría el servidor
-        $ctx = convCtx($res, $turn['emits'] ?? [], $ctx);
+        // actualizar ctx como lo haría el servidor (mismo contrato que chatBuildDs)
+        $ctx = convCtx($r, $turn['emits'] ?? [], $ctx);
     }
     if ($ok) $convPass++; else { $convFail++; $fails[$cv['id']]=$trace; }
 }

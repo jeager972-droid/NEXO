@@ -120,7 +120,7 @@ $convPct = $m[3] ?? 0;
 gate('G7', 'benchmark conversacional ≥85% turnos', $convPct >= 85,
      "convos={$convPct}%");
 preg_match('/críticos-fallidos=(\d+)/', $out, $m2);
-gate('G7b', 'críticos fallidos ≤6 (single)', isset($m2[1]) && $m2[1] <= 6,
+gate('G7b', 'críticos fallidos = 0 (single)', isset($m2[1]) && (int)$m2[1] === 0,
      "críticos=" . ($m2[1] ?? '?'));
 
 /* ── G8: abstención — no inventar ── */
