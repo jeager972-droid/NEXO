@@ -654,6 +654,12 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     }
     if ($sig['entity']==='guardians' && !empty($slots['group'])) { $sig['relation']='guardians_of_group'; $e[]='rel:guardians_of_group'; }
     elseif (preg_match('/\bacudientes? (del|de los|de las) (grupo|salon|curso)\b/u', $q0) && !empty($slots['group'])) { $sig['relation']='guardians_of_group'; $e[]='rel:guardians_of_group'; }
+    // «quién responde por los del 7-B», «responsables de los del 8-A»
+    elseif (preg_match('/\b(responde[mn]? por|responsables? de|tutores? de|figura[mn]? como (?:acudiente|responsable) de)\s+(los|las|el|la|al|del)?\s*(estudiantes|alumnos|estudiante|alumno|grupo|los|las|del|de)\b/u', $q0)
+        && !empty($slots['group'])) { $sig['relation']='guardians_of_group'; $sig['entity']='guardians'; $e[]='rel:guardians_of_group'; }
+    // «padres de familia del 8-C», «las madres del sexto»
+    elseif (preg_match('/\b(padres de familia|padres|madres|familias|familiares|papas|mamas)\s+(del|de los|de las|de)\b/u', $q0)
+        && !empty($slots['group'])) { $sig['relation']='guardians_of_group'; $sig['entity']='guardians'; $e[]='rel:guardians_of_group'; }
     if ($sig['entity']==='teachers' && !empty($slots['group'])) { $sig['relation']='teachers_of_group'; $e[]='rel:teachers_of_group'; }
     elseif (preg_match('/\b(quien (ensena|dicta|da clase|le da clase|les ensena|esta a cargo|atiende)|quienes (ensenan|dictan|dan clase|atienden)) .{0,24}\b(grupo|salon|curso|\d|sexto|septimo|octavo|noveno|decimo|once|undecimo)/u', $q0) && !empty($slots['group'])) {
         $sig['entity']='teachers'; $sig['relation']='teachers_of_group'; $e[]='rel:teachers_of_group';
@@ -698,7 +704,7 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
  * interpretación que los intents no expresan (posición, cardinalidad,
  * presentación, relación inversa, filtro compuesto).
  * ========================================================================== */
-function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots, array $interp, ?array $ds): ?array {
+function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots, array $interp, ?array $ds, bool $forCompound = false): ?array {
     // ── guardias: no tocar operaciones, seguridad, confirmaciones ni nav ──
     static $never = ['security_probe','start_operation','derive_action','confirm_op',
         'cancel','repeat_op','clarify','result_nav','deictic'];
@@ -716,14 +722,17 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
     // field lookup con persona concreta ya cubierto por student_field;
     // sin estudiante («nómina del 6-A por documento») el compositor decide
     if (($slots['field'] ?? null) && in_array($intent,['student_field','guardian_field'],true)
-        && !empty($slots['student'])) {
+        && !empty($slots['student'])
+        // grupo explícito nuevo = cambio de scope, no campo sobre la persona
+        // previa («y en 7-B» tras «su número» pide la nómina de 7-B)
+        && !preg_match('/\b(?:en|del|de|al)\s+\d{1,2}[-\s]?[a-z]\b/u', $q0)) {
         $probe = nxSemSignals($q0, $slots, $ds);
         if (($probe['relation'] ?? null) !== 'students_of_guardian') return null;
     }
     if (preg_match('/\b(al azar|aleatorio|random|cualquiera|uno cualquiera|una cualquiera|azar)\b/u', $q0)) return null; // random_student
     // veto mutativo — «cambia el horario del 7-B» es operación, nunca consulta:
     // el verbo mutativo INVALIDA cualquier señal de datos. §33: el chat es read-only.
-    if (preg_match('/\b(cambi(a|ar|e|o)|modific(a|ar|o)|edit(a|ar|o)|borr(a|ar|e|o)|elimin(a|ar|e|o)|crea(r|e|o)?|registr(a|ar|o|e)|actualiz(a|ar|o)|mueve|r?asign(a|ar|o)|quit(a|ar|o)|pon(er|e|go)|guarda(r|e|o)|gener(a|ar|o)|emit(ir|e|o)|exped(ir|e|o)|suspend(er|e|o)|activa(r|e|o)|desactiva(r|e|o)|anul(a|ar|o)|autoriz(a|ar|o)|rechaz(a|ar|o)|apr(o|u)eb(a|o|e)|revoc(a|ar|o))\b/u', $q0)) return null;
+    if (preg_match('/\b(cambi(a|ar|e|o)|modific(a|ar|o)|edit(a|ar|o)|borr(a|ar|e|o)|elimin(a|ar|e|o)|crea(r|e|o)?|registr(a|ar|o|e)|actualiz(a|ar|o)|mueve|r?asign(a|ar|o)|quit(a|ar|o)|pon(er|e|go)|guarda(r|e|o)|gener(a|ar|o)|emit(ir|e|o)|exped(ir|e|o)|suspend(er|e|o)|activa(r|e|o)|desactiva(r|e|o)|anul(a|ar|o)|autoriz(a|ar|o)|rechaz(a|ar|o)|apr(o|u)eb(a|o|e)|revoc(a|ar|o)|vaci(a|ar|e|o)|limpi(a|ar|e|o)|restaur(a|ar|e|o)|resetea(r|e|o)?|reinici(a|ar|e|o)|formate(a|ar|e|o))\b/u', $q0)) return null;
 
     $sig = nxSemSignals($q0, $slots, $ds);
     $ent  = $sig['entity'];
@@ -749,6 +758,36 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
     if (!$ent && $sig['position']!==null && !empty($f['group'])) { $ent='students'; $sig['evidence'][]='entity:pos+group'; }
     // porcentaje + estado → estudiantes («qué % del colegio llegó tarde»)
     if (!$ent && $sig['op']==='percent' && !empty($f['status'])) { $ent='students'; $sig['evidence'][]='entity:pct+status'; }
+    // conteo + grupo sin sustantivo — «y cuántos son» sobre el roster
+    if (!$ent && $sig['op']==='count' && !empty($f['group']) && empty($f['module'])) {
+        $ent='students'; $sig['evidence'][]='entity:count+group';
+    }
+    // referencia de grupo desnuda — «los de 6-A», «10A», «muéstrame el 7-B»
+    // → su nómina (op list/count no descartan: «ver el 6-A» sigue siendo roster).
+    // field/days heredados del turno previo NO bloquean: «y en 7-B» después
+    // de «su documento» pide la nómina de 7-B, no el documento de 7-B.
+    $inh2 = $interp['resolved']['inherited'] ?? [];
+    // «por documento/apellido/nombre» es un SORT, no un field-lookup
+    $sortOnly = (bool)preg_match('/\bpor\s+(el\s+|los\s+|las\s+)?(documento|apellido|nombre|edad|grupo|fecha|alfabetico)\b/u', $q0);
+    $freshField = !empty($f['field']) && !in_array('field',$inh2,true) && !$sortOnly;
+    $freshDays  = isset($f['days']) && !in_array('days',$inh2,true);
+    if (!$ent && !empty($f['group']) && in_array($sig['op'], [null,'list','count'], true)
+        && $sig['position']===null && $rel===null && empty($f['module'])
+        && !$freshField && !($freshDays && empty($f['status']))
+        // «el de 6-A» (singular, desnudo) es ambiguo — no es una nómina
+        && !preg_match('/^(?:el|la)\s+de\s+\d{1,2}[-\s]?[a-z]?/u', $q0)) {
+        $ent='students'; $sig['evidence'][]='entity:group-only';
+    }
+    // seguimiento puramente temporal («y ayer», «y esta semana») tras una
+    // consulta de módulo → repite la consulta con el nuevo rango
+    if (!$ent && $ds && !empty($ds['last_result']['_filters']['module'])
+        && preg_match('/^(?:y\s+)?(?:ayer|hoy|anteayer|esta semana|la semana pasada|este mes|el mes pasada?|esta manana|esta tarde|anoche)[?¡!.\s]*$/u',$q0)) {
+        $ent='incidents';
+        foreach (['module','group','status'] as $k)
+            if (empty($sig['filters'][$k]) && !empty($ds['last_result']['_filters'][$k]))
+                $sig['filters'][$k] = $ds['last_result']['_filters'][$k];
+        $sig['evidence'][]='entity:temporal+ctx_module';
+    }
     // posición + estado → estudiantes («quién llegó primero», «el último en faltar»)
     // — va ANTES del ctx: el estado textual es evidencia más fuerte que la
     // entidad del set anterior
@@ -828,6 +867,10 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
         elseif ($sig['op']==='count' && (!empty($f['module']) && (isset($f['days']) || !empty($f['from']))))
             { $plan['capability']='incidents.list'; $plan['entity']='incidents'; $plan['op']='count'; $score=0.75; }
         elseif ($sig['cardinality']==='all' || $sig['presentation']==='table') { $plan['capability']='incidents.list'; $plan['entity']='incidents'; $plan['op']='list'; $score=0.72; }
+        elseif (!empty($f['module']) && (isset($f['days']) || !empty($f['from']) || !empty($f['group']))) {
+            // «tardanzas de hoy», «evasiones del 6-A» — derivación directa §15
+            $plan['capability']='incidents.list'; $plan['entity']='incidents'; $plan['op']='list'; $score=0.72;
+        }
         else return null;
     } elseif ($ent === 'guardians' && $sig['op']==='count') {
         $plan['capability']='guardians.of_group'; $plan['entity']='guardians'; $plan['op']='count'; $score=0.75;
@@ -851,12 +894,22 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
     if ($conf < 0.65) $score += 0.05; // NLU inseguro → la estructura manda
     if ($conf >= 0.9 && $sig['op']==='list' && !$sig['position'] && !$sig['presentation']
         && $sig['cardinality']!=='all' && !$sig['sort'] && !$sig['projection'] && !$rel
-        && !isset($sig['slice'])) {
+        && !isset($sig['slice'])
+        // filtros enriquecedores (estado/módulo/rango/grado/búsqueda) SÍ
+        // justifican el plan — el intent trusted los ignoraría («exentos»)
+        && empty($f['status']) && empty($f['module']) && empty($f['grade'])
+        && empty($f['search']) && !isset($f['days'])) {
         // intent muy seguro y sin señales nuevas → conservar pipeline
-        if (in_array($intent, ['students_in_group','group_student_count','students_count','teachers_list','groups_list'], true)) return null;
+        if (in_array($intent, ['students_in_group','group_student_count','students_count','teachers_list','groups_list'], true) && !$forCompound) return null;
     }
     $plan['conf'] = min(0.99, $score);
-    return $plan['conf'] >= 0.62 ? $plan : null;
+    if ($plan['conf'] >= 0.62) {
+        // §18 — retrieval visible: ranking de candidatos en la evidencia
+        $cands = array_slice(array_keys(nxCapabilityRetrieve($sig, $ds)), 0, 3);
+        if ($cands) $plan['evidence'][] = 'retrieval:' . implode(',', $cands);
+        return $plan;
+    }
+    return null;
 }
 
 
@@ -864,6 +917,14 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
  * 4. VALIDACIÓN + RBAC — §33: RBAC se aplica DESPUÉS de comprender.
  * ========================================================================== */
 function nxPlanAllowed(PDO $conn, array $u, array $plan, string $role): bool {
+    // plan compuesto — cada paso se autoriza por separado (§20)
+    if (!empty($plan['steps'])) {
+        foreach ($plan['steps'] as $st) {
+            $p2 = $st; unset($p2['steps']);
+            if (!nxPlanAllowed($conn, $u, $p2, $role)) return false;
+        }
+        return true;
+    }
     $cap = nxCapabilityRegistry()[$plan['capability']] ?? null;
     if (!$cap) return false;
     $roles = $cap['rbac'];
@@ -884,11 +945,207 @@ function nxPlanAllowed(PDO $conn, array $u, array $plan, string $role): bool {
     return true;
 }
 
+/** §14/§27 — split composicional: «A y B», «A y del primero B».
+ *  Devuelve cláusulas solo si cada lado trae señal propia; nunca parte
+ *  comparaciones («compara 6-A y 7-B») ni enumeraciones de grupos. */
+function nxSemSplitCompound(string $q0): array {
+    // conectores coordinativos de consulta — «y», «y además», «y después»…
+    $pat = '/\s*(?:,\s*)?\b(y|e|ademas|y ademas|tambien|y tambien|despues|y despues|y luego|luego|y ahora|ahora tambien|y por ultimo|y por favor|y de paso|y ya que estas|y dime|y muestrame|y dame|y cuentame)\b\s*/u';
+    $parts = preg_split($pat, ' ' . $q0 . ' ', -1, PREG_SPLIT_NO_EMPTY);
+    if (count($parts) < 2) return [$q0];
+    $out = [];
+    foreach ($parts as $c) {
+        $c = trim($c);
+        if ($c === '') continue;
+        // no partir «6-A y 7-B» — enumeración de grupos es UN solo filtro
+        if (preg_match('/^\d{1,2}[-\s]?[a-z]$/u', $c) && $out) { $out[count($out)-1] .= ' y ' . $c; continue; }
+        // ni ordinales coordinados («primero y segundo» = misma posición)
+        if (preg_match('/^(primer|segund|tercer|ultim|penultim|anterior|siguiente)[oa]?\b/u', $c) && $out) { $out[count($out)-1] .= ' y ' . $c; continue; }
+        $out[] = $c;
+    }
+    // solo es compuesto si ≥2 cláusulas tienen señal propia (verbo/sustantivo/
+    // posición/referencia); si no, la «y» era cortesía o enumeración
+    $signal = fn($c) => (bool)preg_match('/\b(?:muestra|dame|dime|lista|cuant|quien|cual|estudiant|alumn|acudient|docent|profesor|incident|tardanz|inasistenc|evasion|horario|primer|ultim|porcentaj|tabla|nombres?|de los|de las|de ese|de esos|de cada|del |su |sus |los de|las de|los del|las del)|\b\d{1,2}[-\s]?[a-z]\b/u', $c);
+    return count(array_filter($out, $signal)) >= 2 ? $out : [$q0];
+}
+
+/** Referencia al resultado de un paso anterior: «del primero», «de esos». */
+function nxSemRefOf(string $clause): ?array {
+    if (preg_match('/\b(del|de los|de las|de ese|de esa|de esos|de esas|de cada|del|del primero|del segundo|del tercero|del ultimo)\s*(primer[oa]?|segund[oa]?|tercer[oa]?|cuart[oa]?|quint[oa]?|ultim[oa]s?|penultim[oa]s?|estudiante|alumn[oa])?\b/u', $clause, $m)) {
+        $ord = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,'tercero'=>3,'tercera'=>3,'cuarto'=>4,'cuarta'=>4,'quinto'=>5,'quinta'=>5];
+        $pos = isset($m[2]) && $m[2] !== '' ? ($ord[$m[2]] ?? (str_starts_with($m[2],'ultim') ? -1 : (str_starts_with($m[2],'penultim') ? -2 : 1))) : 1;
+        // «de cada uno» → iteración sobre el set; «del primero» → item[0]
+        if (preg_match('/\b(de cada|cada uno|cada una)\b/u', $clause)) return ['pos'=>'each'];
+        return ['pos'=>$pos];
+    }
+    return null;
+}
+
+/* ============================================================================
+ * 3b. CAPABILITY GRAPH (§3/§4) — vista normalizada del registry, usable en
+ * runtime: domain, relaciones, composabilidad y dependencias derivadas de la
+ * metadata declarativa de cada capability.
+ * ========================================================================== */
+function nxCapabilityGraph(): array {
+    static $g = null;
+    if ($g !== null) return $g;
+    $reg = nxCapabilityRegistry();
+    $g = [];
+    foreach ($reg as $id => $c) {
+        $ent = $c['source_entity'] ?? null;
+        $domain = $ent ? explode('(', preg_split('/[._+]/', $ent)[0])[0] : 'system';
+        $g[$id] = $c + [
+            'capability_id'  => $id,
+            'domain'         => $domain,
+            'goal'           => $c['user_goal'] ?? null,
+            'operation'      => $c['action_type'] ?? 'list',
+            'relations'      => $c['related'] ?? [],
+            'positions'      => in_array('position', [$c['action_type'] ?? ''], true)
+                                || str_contains($id,'position') ? ['nth','first','last','penultimate'] : [],
+            'slices'         => !empty($c['pagination']) ? ['first_n','last_n','rest'] : [],
+            'aggregations'   => array_filter([$c['aggregation'] ?? null]),
+            'scope_requirements' => $c['rbac'] ?? 'ALL',
+            'required_parameters'  => $c['required_parameters'] ?? [],
+            'optional_parameters'  => $c['optional_context'] ?? [],
+            'dependencies'    => $c['required_context'] ?? [],
+            // composabilidad: las capacidades de datos con executor propio
+            // pueden ser pasos de un plan compuesto; las delegadas también,
+            // vía _delegate_intent. Mutativas nunca.
+            'compatible_compositions' => array_values(array_filter($c['related'] ?? [])),
+            'incompatible_compositions' => [],
+            'presentation_modes' => $c['presentation'] ?? ['list'],
+            'executor'        => $c['exec'] ?? null,
+            'authorization'   => $c['rbac'] ?? 'ALL',
+            'read_only'       => $c['read_only'] ?? true,
+        ];
+    }
+    return $g;
+}
+
+/** §18 — capability retrieval: ranking de candidatos antes de planificar.
+ *  Léxico + señal de entidad/dominio; barato y auditable. */
+function nxCapabilityRetrieve(array $sig, ?array $ds = null): array {
+    $g = nxCapabilityGraph();
+    $scored = [];
+    $ent = $sig['entity'] ?? null;
+    $rel = $sig['relation'] ?? null;
+    foreach ($g as $id => $c) {
+        $score = 0.0;
+        $src = $c['source_entity'] ?? '';
+        if ($ent && (str_contains($src, $ent) || str_contains($ent, (string)explode('+',$src)[0]))) $score += 0.5;
+        if ($rel && in_array($rel, [$id, str_replace(['.','_'], '_', $id)], true)) $score += 0.4;
+        if ($rel === 'guardians_of_group'  && $id === 'guardians.of_group')  $score = 0.95;
+        if ($rel === 'students_of_guardian'&& $id === 'students.of_guardian')$score = 0.95;
+        if ($rel === 'teachers_of_group'   && $id === 'teachers.of_group')   $score = 0.95;
+        if ($rel === 'schedule_of_group'   && $id === 'schedule.of_group')   $score = 0.95;
+        $op = $sig['op'] ?? null;
+        if ($op && ($c['operation'] === $op || str_contains($id, '.'.$op))) $score += 0.2;
+        // continuidad: el dominio del set activo suma un poco
+        if ($ds && !empty($ds['current']['entity']) && str_contains($src, $ds['current']['entity'])) $score += 0.05;
+        if ($score > 0) $scored[$id] = round($score,3);
+    }
+    arsort($scored);
+    return $scored;
+}
+
+/* ============================================================================
+ * 4b. PLAN VALIDATOR (§20) — nunca ejecutar un plan incompleto o inexistente.
+ * Devuelve [ok, failure_code]: los códigos alimentan respuestas tipadas (§21).
+ * ========================================================================== */
+function nxPlanValidate(array $plan): array {
+    $reg = nxCapabilityRegistry();
+    if (!empty($plan['steps'])) {
+        foreach ($plan['steps'] as $i => $st) {
+            [$ok,$why] = nxPlanValidate($st);
+            if (!$ok) return [false, "step{$i}:{$why}"];
+        }
+        return [true,null];
+    }
+    $cap = $plan['capability'] ?? null;
+    if (!$cap || !isset($reg[$cap])) return [false,'unsupported_operation'];
+    $f = $plan['filters'] ?? [];
+    // parámetros requeridos por capability
+    if ($cap === 'groups.compare' && empty($f['group2'])) return [false,'missing_parameter:group2'];
+    if (in_array($cap,['guardians.of_group','teachers.of_group','schedule.of_group'],true) && empty($f['group']))
+        return [false,'missing_parameter:group'];
+    if ($cap === 'students.of_guardian' && empty($f['student']) && empty($f['guardian']))
+        return [false,'missing_parameter:guardian'];
+    // posición dentro del universo razonable
+    if (isset($plan['position']) && is_int($plan['position']) && ($plan['position'] < 1 || $plan['position'] > 500))
+        return [false,'invalid_parameter:position'];
+    // slice razonable
+    if (!empty($plan['slice']) && (($plan['slice']['n'] ?? 0) < 1)) return [false,'invalid_parameter:slice'];
+    return [true,null];
+}
+
+/** respuesta tipada por causa de fallo (§21) — nunca «no puedo» genérico. */
+function nxPlanFailure(string $code, array $plan, array $vars): array {
+    $q = $vars['_q'] ?? '';
+    $reply = match (true) {
+        str_starts_with($code,'missing_parameter:group2') =>
+            '¿Qué dos grupos comparo? Dime algo como «compara 6-A con 6-B».',
+        str_starts_with($code,'missing_parameter:group') =>
+            '¿De qué grupo? Dime algo como «los del 10-A» o «acudientes del 8-C».',
+        str_starts_with($code,'missing_parameter:guardian') =>
+            '¿De qué acudiente? Dame el nombre del estudiante o del acudiente.',
+        str_starts_with($code,'missing_parameter:') =>
+            'Me falta un dato para resolver eso — dime con más detalle qué necesitas.',
+        str_starts_with($code,'invalid_parameter:') =>
+            'Ese parámetro no tiene sentido así — reformúlalo y lo intento de nuevo.',
+        $code === 'unsupported_operation' =>
+            'Eso todavía no está entre mis capacidades sobre estos datos. ' .
+            'Puedo listar, contar, comparar grupos, ubicar posiciones, traer acudientes ' .
+            'y más — dime qué necesitas.',
+        $code === 'unauthorized' => nxSmalltalk('denied', $vars),
+        $code === 'empty_result' =>
+            'No encontré resultados para eso — puede que no haya datos en ese rango o grupo.',
+        default => 'No pude resolver esa consulta con los datos actuales — dime si la replanteo.',
+    };
+    return ['reply'=>$reply,'intent'=>$plan['capability'] ?? 'plan_failure',
+            '_failure'=>$code,'_plan'=>$plan];
+}
+
 /* ============================================================================
  * 5. PLANNER → SQL real. Toda consulta parametrizada + school_id + scope.
  * ========================================================================== */
 function nxPlanExecute(PDO $conn, array $u, array $plan, array $vars): array {
+    // plan compuesto: pasos con dependencias (§7) — cada paso es un plan
+    // pleno; `_ref` enlaza al result-set de un paso anterior.
+    if (!empty($plan['steps'])) {
+        $replies = []; $results = []; $lastRs = null; $entities = [];
+        foreach ($plan['steps'] as $i => $step) {
+            if (!empty($step['_ref'])) {
+                $src = $results[$step['_ref']['step'] ?? 0]['_result_set']['items'] ?? null;
+                if (!$src) { $replies[] = 'No tengo un resultado previo para enlazar eso.'; continue; }
+                $pos = $step['_ref']['pos'];
+                $item = $pos === 'each' ? null
+                    : $src[$pos === -1 ? count($src)-1 : ($pos === -2 ? count($src)-2 : $pos-1)] ?? null;
+                if ($pos !== 'each' && !$item) { $replies[] = 'Ese elemento no existe en el resultado anterior.'; continue; }
+                if ($item) $step['filters']['student'] = trim(($item['f']['fn'] ?? '') . ' ' . ($item['f']['ln'] ?? '')) ?: $item['label'];
+            }
+            $r = nxPlanExecuteStep($conn, $u, $step, $vars);
+            $results[$i] = $r;
+            $replies[] = $r['reply'] ?? '';
+            if (!empty($r['_result_set'])) $lastRs = $r['_result_set'];
+            $entities = array_merge($entities, $r['entities'] ?? []);
+        }
+        return ['reply'=>implode("\n\n—\n\n", array_filter($replies)),
+                'intent'=>'composed','_plan'=>$plan,'entities'=>$entities,
+                '_result_set'=>$lastRs,'_steps'=>$results];
+    }
+    return nxPlanExecuteStep($conn, $u, $plan, $vars);
+}
+
+function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array {
     try {
+        // paso delegado a un intent existente (guardian.of_student → student_field)
+        if (str_starts_with((string)($plan['exec'] ?? ''), 'intent:') || !empty($plan['_delegate_intent'])) {
+            $intent = substr((string)$plan['exec'], 7) ?: $plan['_delegate_intent'];
+            $slots = ['student'=>$plan['filters']['student'] ?? null,
+                      'field'=>$plan['filters']['field'] ?? null,
+                      'group'=>$plan['filters']['group'] ?? null];
+            return chatDispatch($conn, $u, $intent, $slots, $vars, $u['role'] ?? 'TEACHER');
+        }
         switch ($plan['capability']) {
             case 'students.list': case 'students.count': case 'students.position':
             case 'students.percent': case 'students.in_group':
@@ -1050,7 +1307,9 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
         $cnt = count($sl);
         $lbl = $fromEnd ? "los últimos {$n5}" : "los primeros {$n5}";
         $items = array_map(fn($r)=>['id'=>$r['student_id'],'label'=>trim($r['first_name'].' '.$r['last_name']),
-            'sub'=>'doc '.$r['document_number'].($r['group_name']?' · '.$r['group_name']:'')], $sl);
+            'sub'=>'doc '.$r['document_number'].($r['group_name']?' · '.$r['group_name']:''),
+            'f'=>['sid'=>$r['student_id'],'fn'=>$r['first_name'],'ln'=>$r['last_name'],
+                  'doc'=>$r['document_number'],'grp'=>$r['group_name']]], $sl);
         $rs2 = ['type'=>'students','label'=>"estudiantes {$lbl}",'entity'=>'students',
             'order'=>'apellido, nombre','count'=>$cnt,'items'=>$items,
             '_capability'=>$plan['capability'],'_filters'=>$f,
@@ -1099,6 +1358,8 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
             'label'=>trim($r['first_name'].' '.$r['last_name']),
             'sub'=>'doc '.$r['document_number'] . ($r['group_name'] ? ' · '.$r['group_name'] : ''),
             'group'=>$r['group_name'],
+            'f'=>['sid'=>$r['student_id'],'fn'=>$r['first_name'],'ln'=>$r['last_name'],
+                  'doc'=>$r['document_number'],'grp'=>$r['group_name']],
         ], $rows),
         'columns'=>['#','Estudiante','Documento','Grupo'],
         'rows'=>array_map(fn($i,$r)=>[$i+1, trim($r['first_name'].' '.$r['last_name']), $r['document_number'], $r['group_name'] ?? '—'],
@@ -1184,7 +1445,9 @@ function nxExecGuardiansOfGroup(PDO $conn, array $u, array $plan, array $vars): 
     $n = count($rows);
     $rs = ['type'=>'guardians','label'=>'acudientes','entity'=>'guardians','order'=>'estudiante (apellido)',
         'count'=>$n,'columns'=>['#','Estudiante','Acudiente','WhatsApp','Documento'],
-        'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['gname'],'sub'=>'de '.$r['sname'].($r['whatsapp_phone']?' · '.$r['whatsapp_phone']:'')],$rows),
+        'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['gname'],
+            'sub'=>'de '.$r['sname'].($r['whatsapp_phone']?' · '.$r['whatsapp_phone']:''),
+            'f'=>['name'=>$r['gname'],'phone'=>$r['whatsapp_phone'],'doc'=>$r['gdoc'],'student'=>$r['sname']]],$rows),
         'rows'=>array_map(fn($i,$r)=>[$i+1,$r['sname'],$r['gname'],$r['whatsapp_phone']?:'—',$r['gdoc']?:'—'],array_keys($rows),$rows)];
     if (($plan['op'] ?? '') === 'count')
         return ['reply'=>"{$g['group_name']} tiene {$n} acudientes registrados (uno por estudiante).",
@@ -1494,6 +1757,8 @@ function nxExecGroupsRank(PDO $conn, array $u, array $plan, array $vars): array 
     if ($allowed !== null) {
         if (!$allowed) return ['reply'=>"No tienes grupos asignados para comparar.",
                                'intent'=>'groups.rank','_plan'=>$plan];
+        if (count($allowed) < 2) return ['reply'=>"Solo tengo acceso a tu grupo asignado — un ranking necesita al menos dos grupos en tu alcance.",
+                               'intent'=>'groups.rank','_plan'=>$plan];
         $scopeSql = ' AND ag.group_id IN (' . implode(',', array_fill(0, count($allowed), '?')) . ')';
     }
     $st = $conn->prepare("SELECT ag.group_name, COUNT(DISTINCT ai.incident_id) AS n
@@ -1504,7 +1769,8 @@ function nxExecGroupsRank(PDO $conn, array $u, array $plan, array $vars): array 
         WHERE ai.school_id=? AND ai.detected_at >= ?::date AND ai.detected_at < (?::date + INTERVAL '1 day') {$modSql}{$scopeSql}
         GROUP BY ag.group_name ORDER BY n {$dir} LIMIT 12");
     $q = array_merge([$u['school_id'],$from,$to], [$mod], $allowed ?? []);
-    $st->execute(array_filter($q, fn($v)=>$v!==null));
+    // array_values: array_filter conserva llaves — PDO posicional exige 0..N
+    $st->execute(array_values(array_filter($q, fn($v)=>$v!==null)));
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     $lbl = $mod ? (NX_MODULE_LABEL[$mod] ?? $mod) : 'incidentes';
     $rl  = $f['range_label'] ?? (isset($f['days'])&&$f['days']>0 ? 'en el rango' : 'hoy');

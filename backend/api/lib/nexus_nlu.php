@@ -1127,7 +1127,13 @@ function nxSemanticResolve(array $cls, string $q0, array $slots): ?string {
 function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     $oos = $intent === 'out_of_scope';
     // probes semánticos — el dominio léxico no importa, el patrón manda
-    if (preg_match('/\b(ignora (tu|mi|el|su|los|las|tus|mis|todas) ?(rol|roles|reglas?|instrucciones?|restricciones?|limites?|permisos?)?|modo (admin|administrador|dios|desarrollador|root|debug)|sin restricciones|acceso total|privilegios (totales|de admin|administrador)|actua como (admin|administrador|root|superadmin)|hazme administrador|suplant|omite la (validacion|confirmacion|autenticacion)|salta(r|te)? la (seguridad|confirmacion|validacion)|sin autenticar|que nadie sepa|sin registrar|usa la cuenta|usa su cuenta|con la cuenta de|suplantando|haciendose pasar|pasar por|como (el|la) (rector|rectora|coordinador|administrador|docente) (cuenta|perfil|rol))\b/u', $q0))
+    if (preg_match('/\b(ignora (tu|mi|el|su|los|las|tus|mis|todas) ?(rol|roles|reglas?|instrucciones?|restricciones?|limites?|permisos?)?|modo (admin|administrador|dios|desarrollador|root|debug)|sin restricciones|acceso total|privilegios (totales|de admin|administrador)|actua como (admin|administrador|root|superadmin)|hazme administrador|suplant\w*|omite la (validacion|confirmacion|autenticacion)|salta(r|te)? la (seguridad|confirmacion|validacion)|sin autenticar|que nadie sepa|sin registrar|usa la cuenta|usa su cuenta|con la cuenta de|suplantando|haciendose pasar|pasar por|como (el|la) (rector|rectora|coordinador|administrador|docente) (cuenta|perfil|rol))\b/u', $q0))
+        return 'security_probe';
+    // «no preguntes / sin confirmar / hazlo ya» — bypass de confirmación
+    if (preg_match('/\b(no preguntes|no me preguntes|sin preguntar|sin confirmar|sin confirmacion|sin pedir permiso|hazlo sin|hazlo ya|no necesito confirmacion|salta la confirmacion|omite la confirmacion)\b/u', $q0))
+        return 'security_probe';
+    // «eres libre / sé libre / ya no tienes restricciones» — jailbreak
+    if (preg_match('/\b(eres libre|se libre|sé libre|liberate|libérate|ya eres libre|sin limites|sin límites|libre de restricciones|libre de reglas|sin reglas que seguir)\b/u', $q0))
         return 'security_probe';
     // cross-scope institucional
     if (preg_match('/\b(otro colegio|otra institucion|otra escuela|institucion vecina|colegio de al lado|colegio vecino|otra sede|datos de otros colegios|todas las instituciones|otros planteles|todos los colegios|de todos los planteles)\b/u', $q0))
@@ -1141,6 +1147,11 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         return 'security_probe';
     if (preg_match('/\b(exporta|descarga|extrae|copia|vuelca|dame|muestrame|saca) (toda|todas|todo|todos) (la|el|los|las)? ?\w*/u', $q0)
         && preg_match('/\b(base|datos|informacion|registros|tabla)\b/u', $q0))
+        return 'security_probe';
+    // «exporta todo» sin objeto = volcado masivo — la exportación legítima
+    // siempre nombra su objeto («exporta el reporte de tardanzas»)
+    if (preg_match('/\b(exporta|exportar|exporte|descarga|descargar|vuelca|vuelque|saca|saque)\s+(todo|todos|todas|toda|todo el|toda la)\b/u', $q0)
+        && !preg_match('/\b(reporte|informe|lista|listado|resumen|certificado|constancia)\b/u', $q0))
         return 'security_probe';
     // «háblame/cuéntame/explícame de <tema>» fuera de dominio — no adivinar
     // un intent cercano: el smalltalk de Colombia solo cubre su tema
@@ -1258,8 +1269,10 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         && preg_match('/\b(como va|como esta|como esta|que tal|como le va|como estuvo)\b/u', $q0))
         return 'group_summary';
     // «borra/elimina/quita eso» — acción destructiva, nunca consulta
-    if (preg_match('/\b(borra|borralo|borre|elimin|quita|desactiv|destru|acaba con|suprime)\b/u', $q0)
-        && !in_array($intent, ['security_probe','derive_action','start_operation'], true))
+    if (preg_match('/\b(borra|borralo|borre|elimin|quita|desactiv|destru|acaba con|suprime|vacia|vacialo|vacie|anula|anule|limpia|limpie|restaura|restaure|resetea|reinicia|formatea|cambia|cambie|modifica|modifique|edita|edite|actualiza|actualice)\b/u', $q0)
+        && !in_array($intent, ['security_probe','derive_action','start_operation'], true)
+        // «cambia el nombre/horario» sobre entidades del sistema = mutación
+        && !preg_match('/\b(mejor|peor|mas limpio|menos tardanzas)\b/u', $q0))
         return 'security_probe';
     // «mis permisos / mi rol» = meta-pregunta del usuario, NO permisos de salida
     if (preg_match('/\b(mis permisos|mi rol|mis privilegios|mi perfil|quien soy|mis funciones|mi rol aqui)\b/u', $q0)
@@ -1419,7 +1432,9 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             // «esta semana», «este mes» son temporales, no referenciales
             || (bool)preg_match('/\b(ahi|alli|alla|aca|ahi mismo|ahi dentro|alli dentro|en ese|en esa|esos|esas|del mismo|de la misma|el mismo|la misma|del tal|ese|esa)\\b/u', $q0);
         if ($ctxEntities && $dependent) {
-            foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+            // 'field' excluido: el campo pedido es de la frase, no del tema —
+            // «y cuántas evasiones tiene» no debe arrastrar 'documento'
+            foreach (['student','group','module','days','from','to','range_label'] as $k) {
                 // days=0 («hoy») es un valor válido — isset, no empty
                 $absent = $k === 'days' ? !isset($slots[$k]) : empty($slots[$k]);
                 $ctxHas = array_key_exists($k, $ctxEntities) && $ctxEntities[$k] !== null;
@@ -1440,7 +1455,29 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // sobre el result-set anterior — consulta informativa, nunca op
         if ($hasResult) {
             $nav = null;
-            if (preg_match('/^(y |dame |dime |muestra(?:me)? |trae(?:me)? |y )?(el |la |los |las )?(otro|otra|uno mas|una mas|mas|siguiente|el siguiente|y otro|y otra|de nuevo|el proximo|la proxima|continua|sigue)[.! ]*$/u', $q0)) $nav = 'next';
+            // ── transformaciones sobre el set activo (§12-13): proyección,
+            // orden, slice, goto — antes de los ordinales sueltos ──
+            if (preg_match('/\b(solo (los |las )?nombres?|nada mas (los |las )?nombres?|solo sus nombres|sin documentos?|solo el nombre)\b[.!? ]*$/u', $q0)) $nav = 'proj:name';
+            elseif (preg_match('/\b(agrega|añade|anade|incluye|ponles|mete|con)\s*(le|les|me)?\s*(el |los |la |las )?(documento|documentos|telefono|celular|whatsapp|grupo|edad)\b/u', $q0, $mp)
+                    && preg_match('/\b(agrega|añade|anade|incluye|ponles|mete)\b/u', $q0))
+                $nav = 'proj:' . ['documento'=>'+document','documentos'=>'+document','telefono'=>'+phone','celular'=>'+phone','whatsapp'=>'+phone','grupo'=>'+group','edad'=>'+group'][$mp[4]];
+            elseif (preg_match('/\b(ordena(?:l[oa]s|me|los|las)?|por apellido|alfabeticamente|alfabetico|por nombre|por documento|por grupo|de la a a la z)\b/u', $q0)
+                    && !preg_match('/\b(de|del|en|grupo|salon)\s+\d/u', $q0))
+                $nav = 'sort:' . (preg_match('/\b(apellido)\b/u',$q0) ? 'last_name'
+                              : (preg_match('/\b(nombre|alfabetic|de la a)\b/u',$q0) ? 'first_name'
+                              : (preg_match('/\b(documento|cedula)\b/u',$q0) ? 'document' : 'group')));
+            elseif (preg_match('/\b(?:los|las)\s+(\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]?s?|ultim[oa]s?)\b/u', $q0, $ms)
+                    && !preg_match('/\b(de|del|en|grupo|salon)\s+[\da-z]/u', $q0)) {
+                $nums = ['un'=>1,'una'=>1,'dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5,'seis'=>6,'siete'=>7,'ocho'=>8,'nueve'=>9,'diez'=>10];
+                $k = $nums[$ms[1]] ?? (int)$ms[1];
+                $nav = 'slice:' . $k . ':' . (str_starts_with($ms[2],'ultim') ? 'end' : 'start');
+            }
+            elseif (preg_match('/\b(vuelve|vuelveme|regresa|devuelvete|volvamos|vamos de nuevo|regresemos)\s+(al|a la|a los|a las)\s+(primer[oa]?s?|segund[oa]?s?|tercer[oa]?s?|ultim[oa]s?|estudiante|resultado|inicio|principio)\b/u', $q0, $mg)) {
+                $w2 = trim($mg[3]);
+                $nav = 'goto:' . (['segundo'=>2,'segunda'=>2,'tercero'=>3,'tercera'=>3][$w2]
+                    ?? (in_array($w2,['ultimo','ultima'],true) ? count($dsState['last_result']['items'] ?? [1]) : 1));
+            }
+            elseif (preg_match('/^(y |ahora |y ahora |dame |dime |muestra(?:me)? |trae(?:me)? )?(el |la |los |las )?(otro|otra|uno mas|una mas|mas|siguiente|el siguiente|y otro|y otra|de nuevo|el proximo|la proxima|continua|sigue)[.! ]*$/u', $q0)) $nav = 'next';
             elseif (preg_match('/\b(el|la|los|las)? ?(primer[oa]?s?|segund[oa]?s?|tercer[oa]?s?|ultim[oa]s?|penultim[oa]s?|anterior|siguiente|proxim[oa])\b/u', $q0, $mnav)
                 && !preg_match('/\b(primer|primero|ultimo) (dia|día|mes|lunes|martes|miercoles|jueves|viernes|sabado|domingo|periodo|bimestre|ano|año|semestre|trimestre|corte|semana)\b/u', $q0)) {
                 $w = trim($mnav[2]);
@@ -1452,7 +1489,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 elseif (in_array($w, ['penultimo','penultima'], true)) $nav = 'nth:' . max(1, $n2 - 1);
                 else $nav = 'nth:' . ($ord[$w] ?? 1);
             }
-            elseif (preg_match('/^(y |dame |dime |muestra(?:me)? )?(los demas|las demas|los otros|las otras|el resto|todos ellos|todos|los que faltan|los restantes)[.! ]*$/u', $q0)) $nav = 'rest';
+            elseif (preg_match('/^(y |ahora |y ahora |dame |dime |muestra(?:me)? |muestrame |trae(?:me)? )?(los demas|las demas|los otros|las otras|el resto|todos ellos|todos|los que faltan|los restantes)[.! ]*$/u', $q0)) $nav = 'rest';
             elseif (preg_match('/\b(en tabla|en una tabla|como tabla|formato tabla|ponmelos en una tabla|ponlos en tabla|en columnas|en cuadro|tabulados?|la tabla completa|todos en tabla|muestralos todos|muéstralos todos|muestramelos todos|muéstramelos todos|pasame todos|dame todos|lista completa|la lista entera|la nomina completa|el listado completo)\b/u', $q0)) $nav = 'table';
             elseif (preg_match('/\b(cuantos|cuantas|cuanto|cuanta|cuantos son|cuantas son|cuantos hay|cuantas hay)( son| hay| eran| fueron| resultaron| en total| son en total| al final| en total son)?\b[?¡! ]*$/u', $q0)) $nav = 'count';
             elseif (preg_match('/\b(cual|como|quien) (es|fue|se llama)? ?(su|el) (nombre|como se llama)\b[?¡! ]*$/u', $q0)

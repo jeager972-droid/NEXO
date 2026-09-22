@@ -105,7 +105,7 @@ $CASES = [
 ['hola',                               null],
 ['gracias',                            null],
 ['cuántos faltaron hoy',               ['capability'=>'incidents.list','op'=>'count','filters.module'=>'INASISTENCIA']], // compone: count+module
-['muéstrame las evasiones de ayer',    null], // list_events cubre
+['muéstrame las evasiones de ayer',    ['capability'=>'incidents.list','filters.module'=>'EVASION_INTERNA']], // module+range → derivación §15
 ['un estudiante al azar',              null], // random_student
 ['genera un permiso para Ana',         null], // operación — nunca plan
 ['cita al acudiente de Luis',          null], // operación

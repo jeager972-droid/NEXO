@@ -306,7 +306,87 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $tNlu = microtime(true) - $tNlu;
 
     // ── Multi-intención: «hola quién eres y quién soy yo», «tardanzas y evasiones del 8A» ──
+    // enumeración conjuntiva ≠ composición: «compara 6-A y 7-B» tiene una sola
+    // meta (los grupos son UN filtro); el splitter del NLU parte en «y»
+    // ingenuamente — rearmar antes de componer pasos.
+    $q0chk = nxNorm($text);
+    if (!empty($cls['parts']) && count($cls['parts']) > 1
+        && (preg_match('/\b(compar|versus| vs |entre)\b/u', $q0chk)
+            || preg_match('/\b\d{1,2}[-\s]?[a-z]\s+y\s+\d{1,2}[-\s]?[a-z]\b/u', $q0chk))) {
+        unset($cls['parts']);
+    }
     if (!empty($cls['parts']) && count($cls['parts']) > 1) {
+        // §27 — primero intentar open composition: si TODAS las partes
+        // componen planes semánticos, el conjunto es un plan multi-paso
+        // (con refs e herencia), no dos intents independientes.
+        $dsPre2 = chatLoadDs($conn, $userId, $sessionId);
+        $mpSteps = []; $mpOk = true;
+        $fieldMap = ['acudiente'=>'acudiente','tutor'=>'acudiente','responsable'=>'acudiente',
+            'telefono'=>'celular','celular'=>'celular','whatsapp'=>'celular','numero'=>'celular',
+            'documento'=>'documento','cedula'=>'documento','grupo'=>'grupo','jornada'=>'jornada',
+            'nombre'=>'nombre','edad'=>'edad','nacimiento'=>'nacimiento'];
+        foreach ($cls['parts'] as $pi => $p) {
+            $pN = nxNorm($p['text'] ?? '');
+            // cláusula referencial («del primero», «de esos»): neutralizar el
+            // fragmento para que no contamine la señal del propio paso
+            $ref = $pi > 0 ? nxSemRefOf($pN) : null;
+            if ($ref) {
+                $pN = trim(preg_replace('/\s{2,}/u',' ', preg_replace(
+                    '/\b(del|de los|de las|de ese|de esa|de esos|de esas|de cada)\s*(primer[oa]?s?|segund[oa]?s?|tercer[oa]?s?|cuart[oa]?s?|quint[oa]?s?|ultim[oa]s?|penultim[oa]s?|estudiantes?|alumn[oa]s?)?\b/u',
+                    ' ', $pN)));
+            }
+            $pIp = nxDialogueResolve(['intent'=>$p['intent'],'confidence'=>$p['confidence'] ?? 0,'entities'=>$p['entities'] ?? []],
+                $dsPre2 ? ['entities'=>$dsPre2['entities'] ?? [],'last_intent'=>$dsPre2['intent'] ?? null,'_ds'=>$dsPre2] : null, $pN);
+            // herencia de scope DESDE pasos previos — antes de componer
+            if ($pi > 0 && $mpSteps) {
+                foreach (['group','module','status','days','range_label','from','to'] as $fk)
+                    if (empty($pIp['resolved']['slots'][$fk]))
+                        foreach ($mpSteps as $sp)
+                            if (!empty($sp['filters'][$fk])) { $pIp['resolved']['slots'][$fk] = $sp['filters'][$fk]; break; }
+            }
+            // pseudo-plan delegado: «del primero dime el acudiente» es un
+            // field-lookup sobre el ítem referenciado, no una posición nueva
+            if ($ref) {
+                $fld = null;
+                foreach ($fieldMap as $w => $fk) if (preg_match('/\b'.$w.'\b/u', $pN)) { $fld = $fk; break; }
+                if ($fld) {
+                    $pPl = ['capability'=>'guardian.of_student','_delegate_intent'=>'student_field',
+                            'entity'=>'students','op'=>'field','filters'=>['field'=>$fld,'student'=>'@ref'],
+                            '_ref'=>['step'=>0]+$ref,'conf'=>0.8,'evidence'=>['ref_clause:'.$fld]];
+                    $mpSteps[] = $pPl;
+                    continue;
+                }
+            }
+            if ($ref) $pIp['resolved']['slots']['student'] = '@ref';
+            $pPl = nxSemanticCompose($pN, $pIp['resolved']['intent'], (float)($p['confidence'] ?? 0),
+                $pIp['resolved']['slots'], $pIp, $dsPre2, true);
+            if (!$pPl) { $mpOk = false; break; }
+            if ($ref) $pPl['_ref'] = ['step'=>0] + $ref;
+            $pexec = nxCapabilityRegistry()[$pPl['capability']]['exec'] ?? null;
+            if ($pexec && str_starts_with($pexec, 'intent:'))
+                $pPl['_delegate_intent'] = substr($pexec, 7);
+            $mpSteps[] = $pPl;
+        }
+        if ($mpOk && $mpSteps) {
+            $plan = ['capability'=>'composed','entity'=>'composed','steps'=>$mpSteps,
+                     'read_only'=>true,'_src'=>'semantic','presentation'=>'multi',
+                     'conf'=>min(array_map(fn($x)=>$x['conf'] ?? 0.7, $mpSteps)),
+                     'evidence'=>['compound:' . count($mpSteps) . ' parts']];
+            [$planOk, $planWhy] = nxPlanValidate($plan);
+            if ($planOk && nxPlanAllowed($conn, $authUser, $plan, $role)) {
+                $tDisp = microtime(true);
+                $out = nxPlanExecute($conn, $authUser, $plan, $vars);
+                $tDisp = microtime(true) - $tDisp;
+                $out = nxPlanResponse($out, 'composed', 'plan:composed');
+                $out['intent'] = 'composed'; $out['confidence'] = $conf;
+                $out['session_id'] = $sessionId;
+                $out['_interpretation'] = ['timing_ms'=>['nlu'=>round($tNlu*1000,2),'dispatch'=>round($tDisp*1000,2)],'plan'=>$plan];
+                $interp = ['resolved'=>['intent'=>'composed','slots'=>[], 'inherited'=>[]],'turn_type'=>'autonomous'];
+                $out['_ds'] = chatBuildDs($interp, $out, $dsPre2);
+                chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+                exit(json_encode(['status'=>'ok','data'=>$out]));
+            }
+        }
         $outs = [];
         foreach ($cls['parts'] as $p) {
             if (!chatAllowed($conn, $authUser, $p['intent'], $role)) {
@@ -429,7 +509,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // «el primer incidente», «los cinco primeros de 6-A» ≠ «el primero»
     $navEventVerb = (bool)preg_match('/\b(llego|llegaron|entro|entraron|falto|faltaron|marco|marcaron|salio|salieron|registro|registraron|asistio|asistieron|vino|vinieron)\b/u', $q0)
         || preg_match('/\b(incidente|incidentes|tardanza|tardanzas|inasistencia|inasistencias|evasion|evasiones|evento|eventos|registro|registros|novedad|novedades)\b/u', $q0)
-        || preg_match('/\b(?:los|las)\s+(\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]?s?|ultim[oa]s?)\b/u', $q0);
+        || (preg_match('/\b(?:los|las)\s+(\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]?s?|ultim[oa]s?)\b/u', $q0)
+            // con grupo/ámbito explícito = consulta nueva; sin él = transform
+            // del set activo («dame los tres últimos» después de ordenar)
+            && preg_match('/\b(?:de|del|en|grupo|salon)\s+[\da-z]/u', $q0));
     if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items']) && !$navGroupClash && !$navEventVerb) {
         $out = chatResultNav($ds, $slots['_nav'], $vars);
         $out['session_id'] = $sessionId;
@@ -479,9 +562,73 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // capacidades (posición/cardinalidad/presentación/relación/filtro
     // compuesto). Devuelve null → el pipeline de intents decide. §50: el
     // plan es una estructura verificable antes de ejecutar.
-    $plan = nxSemanticCompose($q0, $intent, (float)$conf, $slots, $interp, $ds);
+    // ── open composition (§6/§14/§27): «A y B», «A y del primero B» ──
+    // cada cláusula compone su propio plan; las referencias posicionales
+    // («del primero», «de esos») enlazan el paso al result-set anterior.
+    $plan = null;
+    $clauses = nxSemSplitCompound($q0);
+    if (count($clauses) > 1) {
+        $steps = []; $okAll = true;
+        $fieldMap = ['acudiente'=>'acudiente','tutor'=>'acudiente','responsable'=>'acudiente',
+            'telefono'=>'celular','celular'=>'celular','whatsapp'=>'celular','numero'=>'celular',
+            'documento'=>'documento','cedula'=>'documento','grupo'=>'grupo','jornada'=>'jornada',
+            'nombre'=>'nombre','edad'=>'edad','nacimiento'=>'nacimiento'];
+        foreach ($clauses as $ci => $clause) {
+            $cN = nxNorm($clause);
+            $ref = $ci > 0 ? nxSemRefOf($cN) : null;
+            if ($ref) {
+                $cN = trim(preg_replace('/\s{2,}/u',' ', preg_replace(
+                    '/\b(del|de los|de las|de ese|de esa|de esos|de esas|de cada)\s*(primer[oa]?s?|segund[oa]?s?|tercer[oa]?s?|cuart[oa]?s?|quint[oa]?s?|ultim[oa]s?|penultim[oa]s?|estudiantes?|alumn[oa]s?)?\b/u',
+                    ' ', $cN)));
+            }
+            $cCls = nxClassify($cN);
+            $cIp = nxDialogueResolve($cCls, is_array($ctx) ? $ctx : null, $cN);
+            if ($ci > 0 && $steps) {
+                foreach (['group','module','status','days','range_label','from','to'] as $fk)
+                    if (empty($cIp['resolved']['slots'][$fk]))
+                        foreach ($steps as $sp)
+                            if (!empty($sp['filters'][$fk])) { $cIp['resolved']['slots'][$fk] = $sp['filters'][$fk]; break; }
+            }
+            if ($ref) {
+                $fld = null;
+                foreach ($fieldMap as $w => $fk) if (preg_match('/\b'.$w.'\b/u', $cN)) { $fld = $fk; break; }
+                if ($fld) {
+                    $steps[] = ['capability'=>'guardian.of_student','_delegate_intent'=>'student_field',
+                        'entity'=>'students','op'=>'field','filters'=>['field'=>$fld,'student'=>'@ref'],
+                        '_ref'=>['step'=>0]+$ref,'conf'=>0.8,'evidence'=>['ref_clause:'.$fld]];
+                    continue;
+                }
+            }
+            if ($ref) $cIp['resolved']['slots']['student'] = '@ref';
+            $cPl = nxSemanticCompose($cN, $cIp['resolved']['intent'],
+                (float)($cCls['confidence'] ?? 0), $cIp['resolved']['slots'], $cIp, $ds, true);
+            if (!$cPl) { $okAll = false; break; }
+            if ($ref) $cPl['_ref'] = ['step'=>0] + $ref;
+            $cexec = nxCapabilityRegistry()[$cPl['capability']]['exec'] ?? null;
+            if ($cexec && str_starts_with($cexec, 'intent:'))
+                $cPl['_delegate_intent'] = substr($cexec, 7);
+            $steps[] = $cPl;
+        }
+        if ($okAll && $steps)
+            $plan = ['capability'=>'composed','entity'=>'composed','steps'=>$steps,
+                     'read_only'=>true,'_src'=>'semantic','presentation'=>'multi',
+                     'conf'=>min(array_map(fn($x)=>$x['conf'] ?? 0.7, $steps)),
+                     'evidence'=>['compound:' . count($steps) . ' clauses']];
+    }
+    if (!$plan)
+        $plan = nxSemanticCompose($q0, $intent, (float)$conf, $slots, $interp, $ds);
     if ($plan) {
         $plan['_ctx_person'] = $ds['person'] ?? null;
+        // §20 — validación estructural antes de autorizar/ejecutar
+        [$planOk, $planWhy] = nxPlanValidate($plan);
+        if (!$planOk) {
+            $out = nxPlanFailure($planWhy, $plan, $vars);
+            $out['session_id'] = $sessionId; $out['confidence'] = $conf;
+            $out['_interpretation'] = $out['_interpretation'] ?? [];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
         if (!nxPlanAllowed($conn, $authUser, $plan, $role)) {
             $out = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$plan['capability'],
                     'confidence'=>$conf,'denied'=>true,'session_id'=>$sessionId,
@@ -581,10 +728,37 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     $isCont = $tt === 'context_modify' || !empty($slots['_nav']) || !empty($out['_result_nav'])
         || in_array($tt, ['op_repeat','correction','confirmation','deictic','followup'], true);
     if ($isCont) {
-        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+        // field NO se hereda: es de la frase, no del tema («y cuántas
+        // evasiones tiene» no debe arrastrar el documento del turno previo)
+        foreach (['student','group','module','days','from','to','range_label'] as $k) {
             if (empty($merged[$k]) && !empty($prev['entities'][$k])) $merged[$k] = $prev['entities'][$k];
         }
     }
+    // ── memoria de trabajo (§29): historial de objetos conversacionales ──
+    // cada result-set materializado recibe un id R<N>; «vuelve al primero
+    // de 10A» lo busca por su filtro sin depender de una sola variable.
+    $objects = $prev['objects'] ?? [];
+    if (!empty($out['_result_set'])) {
+        $rs = $out['_result_set'];
+        $objects[] = [
+            'id'      => 'R' . (count($objects) + 1),
+            'type'    => $rs['type'] ?? null,
+            'label'   => $rs['label'] ?? null,
+            'entity'  => $rs['entity'] ?? null,
+            'filters' => $rs['_filters'] ?? [],
+            'count'   => $rs['count'] ?? count($rs['items'] ?? []),
+            'items'   => $rs['items'] ?? [],
+            'columns' => $rs['columns'] ?? null,
+            'rows'    => $rs['rows'] ?? null,
+        ];
+        if (count($objects) > 6) $objects = array_slice($objects, -6);
+    }
+    // jerarquía contexto vs referente (§9): el goal cambia con consultas
+    // nuevas; el scope es el grupo/entidad activa; historical conserva
+    // los goals anteriores para «volvamos a…».
+    $currentEntity = ($out['_result_set']['entity'] ?? null)
+        ?? ($merged['student'] ? 'students' : ($merged['group'] ? 'groups' : ($prev['current']['entity'] ?? null)));
+    $goal = $slots['field'] ?? $slots['goal'] ?? ($out['_plan']['capability'] ?? ($interp['resolved']['intent'] ?? null));
     $ds = [
         // turnos de navegación no cambian el tema: el intent queda del
         // último query real — «la última» no convierte el tema en sos_alerts
@@ -593,7 +767,16 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
             : ($interp['resolved']['intent'] ?? ($out['intent'] ?? null)),
         'prev_intent' => $prev['intent'] ?? null,
         'entities'    => $merged,
-        'goal'        => $slots['field'] ?? $slots['goal'] ?? ($prev['goal'] ?? null),
+        'goal'        => $goal,
+        'current'     => [
+            'entity'   => $currentEntity,
+            'result'   => !empty($out['_result_set']) ? end($objects)['id'] : ($prev['current']['result'] ?? null),
+            'scope'    => $merged['group'] ?? ($prev['current']['scope'] ?? null),
+            'relation' => $out['_plan']['relation'] ?? ($prev['current']['relation'] ?? null),
+            'goal'     => $goal,
+        ],
+        'previous'    => $prev['current'] ?? null,
+        'objects'     => $objects,
         'last_result' => $out['_result_set'] ?? ($prev['last_result'] ?? null),
         'cursor'      => $out['_result_set'] ? 0
                         : ($out['_result_cursor'] ?? ($prev['cursor'] ?? 0)),
@@ -630,7 +813,8 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
     }
     if ($nav === 'first' || $nav === 'prev' && $cur === 0) {
         if ($nav === 'first' || $cur === 0)
-            return ['reply'=>"El primero es {$one(0)}.", 'intent'=>'result_nav', '_result_nav'=>'first', '_result_cursor'=>0];
+            return ['reply'=>"El primero es {$one(0)}.", 'intent'=>'result_nav', '_result_nav'=>'first', '_result_cursor'=>0,
+                    'entities'=>[($rs['type']==='students' ? 'student' : ($rs['type'] ?? 'item')) => $items[0]['label'] ?? null]];
     }
     if ($nav === 'prev') { $nav = 'nth'; $idx = max(0, $cur - 1); }
     if (preg_match('/^nth:(\d+)$/', $nav, $m)) $idx = max(0, (int)$m[1] - 1);
@@ -658,13 +842,58 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
 ", $lines),
                 'intent'=>'result_nav','_result_nav'=>'rest','_result_cursor'=>$n - 1];
     }
+
+    // ── transformaciones sobre el set guardado (§12-13): proyección,
+    // orden y slice SIN reconsultar — el dataset ya está en memoria ──
+    if (preg_match('/^proj:(name|\+document|\+phone|\+group)$/', $nav, $m)) {
+        $fld = $m[1];
+        if ($fld === 'name') {
+            $names = array_map(fn($it)=>$it['label'], $items);
+            return ['reply'=>"Solo nombres ({$n}):\n• " . implode("\n• ", $names),
+                    'cards'=>!empty($rs['columns']) ? [['title'=>ucfirst($lbl),'columns'=>['#','Nombre'],
+                        'rows'=>array_map(fn($i,$it)=>[$i+1,$it['label']],array_keys($items),$items)]] : null,
+                    'intent'=>'result_nav','_result_nav'=>'proj'];
+        }
+        $key = ['+document'=>'doc','+phone'=>'phone','+group'=>'grp'][$fld];
+        $colN = ['+document'=>'Documento','+phone'=>'Teléfono','+group'=>'Grupo'][$fld];
+        $lines = array_map(fn($it)=>'• '.$it['label'].' — '.($it['f'][$key] ?? '—'), $items);
+        return ['reply'=>"Con {$colN} ({$n}):\n" . implode("\n",$lines),
+                'cards'=>[['title'=>ucfirst($lbl),'columns'=>['#','Nombre',$colN],
+                    'rows'=>array_map(fn($i,$it)=>[$i+1,$it['label'],$it['f'][$key] ?? '—'],array_keys($items),$items)]],
+                'intent'=>'result_nav','_result_nav'=>'proj'];
+    }
+    if (preg_match('/^sort:(last_name|first_name|document|group)$/', $nav, $m)) {
+        $key = ['last_name'=>'ln','first_name'=>'fn','document'=>'doc','group'=>'grp'][$m[1]];
+        $items2 = $items;
+        usort($items2, fn($a,$b)=>strnatcasecmp((string)($a['f'][$key] ?? $a['label']), (string)($b['f'][$key] ?? $b['label'])));
+        $lbl2 = ['ln'=>'apellido','fn'=>'nombre','doc'=>'documento','grp'=>'grupo'][$key];
+        $lines = array_map(fn($it)=>'• '.$it['label'].(!empty($it['sub'])?' — '.$it['sub']:''), array_slice($items2,0,12));
+        return ['reply'=>"Ordenados por {$lbl2} ({$n}):\n" . implode("\n",$lines) . ($n>12?"\n…y ".($n-12)." más":''),
+                'intent'=>'result_nav','_result_nav'=>'sort',
+                '_result_set'=>array_merge($rs,['items'=>$items2,'order'=>$lbl2,
+                    'rows'=>array_map(fn($i,$it)=>[$i+1,$it['label'],$it['f']['doc']??'—',$it['f']['grp']??($it['group']??'—')],array_keys($items2),$items2)]),
+                '_result_cursor'=>0];
+    }
+    if (preg_match('/^slice:(\d+):(start|end)$/', $nav, $m)) {
+        $k = (int)$m[1]; $sl = $m[2]==='end' ? array_slice($items,-$k) : array_slice($items,0,$k);
+        if (!$sl) return ['reply'=>"El set solo tiene {$n} {$lbl}.",'intent'=>'result_nav','_result_nav'=>'slice'];
+        $lines = array_map(fn($it)=>'• '.$it['label'].(!empty($it['sub'])?' — '.$it['sub']:''), $sl);
+        $which = $m[2]==='end' ? "los últimos {$k}" : "los primeros {$k}";
+        // el slice es una VISTA — el set completo queda como last_result
+        // («vuelve al primero», «los demás» operan sobre el total)
+        return ['reply'=>"De los {$n} {$lbl}, {$which}:\n" . implode("\n",$lines),
+                'intent'=>'result_nav','_result_nav'=>'slice',
+                '_result_cursor'=>array_search($sl[0],$items,true) ?: 0];
+    }
+    if (preg_match('/^goto:(\d+)$/', $nav, $m)) { $nav = 'nth:' . $m[1]; $idx = max(0,(int)$m[1]-1); }
     // next / nth
     $idx = $idx ?? ($cur + 1);
     if ($idx >= $n)
         return ['reply'=>"No hay más {$lbl} — ya te mostré los {$n} que encontré.",
                 'intent'=>'result_nav','_result_nav'=>'next','_result_cursor'=>$cur];
     return ['reply'=>$one($idx) . ($idx < $n - 1 ? ". ¿El siguiente?" : '. Era el último de la lista.'),
-            'intent'=>'result_nav','_result_nav'=>'next','_result_cursor'=>$idx];
+            'intent'=>'result_nav','_result_nav'=>'next','_result_cursor'=>$idx,
+            'entities'=>[($rs['type']==='students' ? 'student' : ($rs['type'] ?? 'item')) => $items[$idx]['label'] ?? null]];
 }
 
 /** Último payload del asistente en esta sesión — seguimiento contextual («dame otro»). */
