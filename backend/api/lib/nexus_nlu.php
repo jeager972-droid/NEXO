@@ -553,6 +553,10 @@ function nxExtractStudent(string $q): ?string {
         'tabla','tablas','columnas','nomina','nominas','nombre','nombres','listado','listados',
         'primeros','primeras','entero','entera','integro','integra','todos',
         'todas','listar','listando','tabulado','tabulada','porcentaje','porcentajes',
+        // pronombres clíticos y lugares — «se presente en coordi» no es nombre
+        'se','me','te','nos','lo','le','les','coordi','rectoria',
+        // adverbios deícticos — «quiénes faltaron ahí» no nombra a nadie
+        'ahi','alli','aca','alla',
         // copulativos sueltos — «cuál es el primero» no nombra a nadie
         'es','sea','sean','fuese','estando','siendo',
         // colección como objeto — «el primero de la lista» no es persona
@@ -1723,6 +1727,29 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             $intent = 'group_student_count';
             $turnType = 'context_modify';
         }
+        // «¿y cuántos son en total?» — conteo desnudo sobre el set activo.
+        // Sin sustantivo el clasificador cae a oos/list_events; el universo
+        // lo define el contexto: nómina → conteo del grupo, módulo/eventos
+        // → count_events del rango
+        if (in_array($intent, ['out_of_scope','list_events','count_events'], true)
+            && preg_match('/\b(cuantos|cuantas)\s+(son|hay|en total|somos|en el grupo|quedan)\b/u', $q0)
+            && !preg_match('/\b(en el colegio|del colegio|de la institucion|matriculados en total)\b/u', $q0)
+            && (!empty($slots['group']) || !empty($ctxEntities['group']))) {
+            $studentsSet = (($dsState['last_result']['type'] ?? null) === 'students')
+                || in_array($lastIntent, ['students_in_group','group_student_count','students_count','group_summary'], true);
+            if (empty($slots['group'])) { $slots['group'] = $ctxEntities['group']; $inherited[] = 'group'; }
+            if ($studentsSet && empty($slots['module']) && empty($ctxEntities['module'])) {
+                $intent = 'group_student_count';
+            } elseif (!$studentsSet || !empty($slots['module']) || !empty($ctxEntities['module'])) {
+                $intent = 'count_events';
+            }
+            if ($intent === 'group_student_count' || $intent === 'count_events') {
+                $turnType = 'context_modify';
+                // el conteo contextual es una resolución — la herencia de
+                // bajo-confianza y la modificación genérica no deben pisarlo
+                $coverageHit = true;
+            }
+        }
         // «ahí / allí / en ese grupo» — el deíctico espacial ancla el
         // grupo activo aunque el turno no traiga «y»
         if (preg_match('/\b(ahi|alli|en ese|en esa|del grupo|de ese grupo|del mismo|en el grupo)\b/u', $q0)
@@ -1929,7 +1956,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // modificación deíctica — el intent propio es el correcto.
         // «ahora las tardanzas» (sin cuantificador) SÍ modifica la cadena.
         $ownCount = (bool)(preg_match('/\b(cuant[oa]s?|que numero|cuanto)\b/u', $q0)
-            && preg_match('/\b(tardanza|inasist|falt|evasion|permiso|citacion|seguim|evento|incident|notif|salid|ingres|ausen|presente|estudiant|alumn)/u', $q0));
+            && (preg_match('/\b(tardanza|inasist|falt|evasion|permiso|citacion|seguim|evento|incident|notif|salid|ingres|ausen|presente|estudiant|alumn)/u', $q0)
+                // «y cuántos son en total» — conteo desnudo sobre el set
+                // activo: también es consulta propia, no modificación deíctica
+                || preg_match('/\b(son|hay|en total|quedan|eran|fueron|somos|en el grupo)\b/u', $q0)));
         if ($inheritable && $intent !== $lastIntent && !$coverageHit && !$ownCount
             && in_array($intent, NX_GENERIC_INTENTS, true)
             && $followupMark && !$explicitAction

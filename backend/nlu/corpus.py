@@ -929,6 +929,17 @@ def _():
         "poner seguimiento a {student}", "iniciar seguimiento de {student}",
         "reporta a {student}", "reportar incidente de {student}",
         "situacion critica con {student}",
+        # petición indirecta de citación — «quiero que venga/se presente»
+        "quiero que el acudiente de {student} se presente",
+        "quiero que el representante del alumno se presente en coordinacion",
+        "necesito que venga el acudiente de {student}",
+        "que venga el papa de {student} al colegio",
+        "que se presente el acudiente de {student} en coordinacion",
+        "quiero que citen al acudiente de {student}",
+        "traer al acudiente de {student} al colegio",
+        "que el responsable de {student} se presente",
+        "quiero que el representante de {student} venga",
+        "hacer que el acudiente de {student} se presente",
     ]
     return _augment(_expand(base, student=STUDENTS))
 

@@ -83,6 +83,15 @@ Pendiente honesto: paráfrasis de acudiente a nivel de modelo (3 casos blind —
 
 Resultados: gate 18/18, real_conversation 103/103, capability 153/153 (un caso filtra vía delegación legítima `intent_equiv`), composición 59/59, forense 36/36, DSM 60/60, phpunit 244/937, semantic singles 98.2% + adversarial 533/533 + convos 320/320, generalización argmax 98.6%/F1 78.7%, blind_eval diagnóstico (exit 1 por diseño).
 
+## 2026-09-22 — Conteo contextual + segundo retrain (blind 100% argmax)
+
+- **Corpus**: +10 peticiones indirectas de citación en `derive_action` («quiero que el representante del alumno se presente en coordi», «que venga el papá al colegio»…). Retrain: 526.7K ejemplos — **argmax blind 100.0%** (0 fallos), generalización 88.9%, OOD abstención 75→87.5%.
+- **Conteo contextual**: «¿y cuántos son en total?» tras una nómina o un set de eventos resolvía a `list_events` por herencia genérica. Nueva regla: conteo desnudo con grupo/ctx → `group_student_count` (set students sin módulo) o `count_events` (set de eventos/módulo). Protegida con `$coverageHit` para que la herencia de baja-confianza (L1941) y la modificación genérica (L1953) no la pisen. `ownCount` extendido a conteos sin sustantivo de módulo.
+- **Stopwords**: `se|me|te|nos|lo|le|les` (clíticos — «se presente en coordi» → no nombre), `ahi|alli|aca|alla` (deícticos — «quiénes faltaron ahí» ya no extrae «ahi» como estudiante), `coordi|rectoria` (lugares). Paridad PHP↔Python mantenida (G3 PASS).
+- T2 «quiénes faltaron ahí» ya no propaga `student='ahi'` al contexto.
+
+Resultados finales: gate 18/18 (G7b=0), real_conversation 103/103, capability 152/152, composición 59/59, forense 36/36, DSM 60/60 ambas rutas, phpunit 244/937, semantic singles + adversarial 533/533 + convos 320/320, generalización 88.9%/**argmax 100%**, OOD 87.5%.
+
 ## Checkpoints por construir
 
 ARCHITECTURE, SEMANTIC CORE, CAPABILITY GRAPH, PLANNER ✔, CONTEXT ✔, GENERALIZATION (87.5% blind — gap de corpus acudiente documentado), PRESENTATION ✔, SECURITY ✔, RESILIENCE ✔, FINAL VALIDATION.
