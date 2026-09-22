@@ -104,7 +104,7 @@ function nxCapabilityRegistry(): array {
         'time_scope'=>null,'required_context'=>['student'],'optional_context'=>['person'],
         'required_parameters'=>['student'],
         'related'=>['students.field','guardian.of_student'],'nearby'=>['students.summary'],
-        'endpoints'=>['GET /students','POST /consultation/search'],'service'=>'chat intent',
+        'endpoints'=>['GET /students','POST /consultations/query'],'service'=>'chat intent',
         'query'=>'chatResolveStudent','response_shape'=>'text',
         'presentation'=>['detail'],'rbac'=>$S,'read_only'=>true,
         'exec'=>'intent:student_field','intent_equiv'=>'student_field|student_summary',
@@ -928,14 +928,18 @@ function nxPlanAllowed(PDO $conn, array $u, array $plan, string $role): bool {
     $cap = nxCapabilityRegistry()[$plan['capability']] ?? null;
     if (!$cap) return false;
     $roles = $cap['rbac'];
-    if ($roles === 'ALL') return chatPolicyEnabled($conn, $u['school_id'], 'chat.smalltalk.enabled') !== false || true;
+    // rbac:ALL → todo rol pasa; las políticas institucionales no aplican a
+    // capacidades de datos abiertas (no son smalltalk).
+    if ($roles === 'ALL') return true;
     if ($roles === 'chatCanAction') return true; // ops navegan; la UI autoriza
     if (!in_array($role, (array)$roles, true)) return false;
     // políticas institucionales por capacidad → mismas llaves del mapa de intents
     if (in_array($role, ['TEACHER','COUNSELOR'], true)) {
         $intentKey = ['students.list'=>'chat.teacher.student_fields','students.position'=>'chat.teacher.student_fields',
+            'students.detail'=>'chat.teacher.student_fields','students.field'=>'chat.teacher.student_fields',
             'students.count'=>'chat.teacher.aggregates','students.percent'=>'chat.teacher.aggregates',
-            'students.of_guardian'=>'chat.teacher.student_fields','guardians.of_group'=>'chat.teacher.student_fields',
+            'students.of_guardian'=>'chat.teacher.student_fields','guardian.of_student'=>'chat.teacher.student_fields',
+            'guardians.of_group'=>'chat.teacher.student_fields',
             'teachers.of_group'=>'chat.teacher.aggregates','schedule.of_group'=>'chat.teacher.aggregates',
             'incidents.list'=>'chat.teacher.aggregates','incidents.position'=>'chat.teacher.aggregates',
             'groups.compare'=>'chat.teacher.aggregates','groups.rank'=>'chat.teacher.aggregates'];
@@ -1052,29 +1056,87 @@ function nxCapabilityRetrieve(array $sig, ?array $ds = null): array {
  * 4b. PLAN VALIDATOR (§20) — nunca ejecutar un plan incompleto o inexistente.
  * Devuelve [ok, failure_code]: los códigos alimentan respuestas tipadas (§21).
  * ========================================================================== */
-function nxPlanValidate(array $plan): array {
+function nxPlanValidate(array $plan, int $depth = 0): array {
     $reg = nxCapabilityRegistry();
-    if (!empty($plan['steps'])) {
-        foreach ($plan['steps'] as $i => $st) {
-            [$ok,$why] = nxPlanValidate($st);
+    if ($depth > 3) return [false,'invalid_plan:depth'];
+    // ── plan compuesto: cada paso es un plan pleno; las referencias solo
+    // pueden apuntar hacia atrás (sin ciclos ni forwards). ──
+    if (array_key_exists('steps', $plan) || ($plan['capability'] ?? null) === 'composed') {
+        $steps = $plan['steps'] ?? null;
+        if (!is_array($steps) || !$steps) return [false,'invalid_plan:steps'];
+        foreach ($steps as $i => $st) {
+            if (!is_array($st)) return [false,"step{$i}:invalid_plan"];
+            [$ok,$why] = nxPlanValidate($st, $depth + 1);
             if (!$ok) return [false, "step{$i}:{$why}"];
+            if (isset($st['_ref'])) {
+                $ref = $st['_ref'];
+                $step = $ref['step'] ?? null;
+                $pos  = $ref['pos'] ?? null;
+                $posOk = is_int($pos) ? in_array($pos, [-2,-1], true) || $pos >= 1
+                                    : $pos === 'each';
+                if (!is_int($step) || $step < 0 || $step >= $i || !$posOk)
+                    return [false,"step{$i}:invalid_reference"];
+            }
         }
         return [true,null];
     }
     $cap = $plan['capability'] ?? null;
-    if (!$cap || !isset($reg[$cap])) return [false,'unsupported_operation'];
+    if (!$cap || !is_string($cap) || !isset($reg[$cap])) return [false,'unsupported_operation'];
+    $c = $reg[$cap];
+    // efecto: esta capa solo ejecuta READ — nada mutativo ni side-effects
+    if (isset($plan['effect']) && strtoupper((string)$plan['effect']) !== 'READ')
+        return [false,'non_read_operation'];
+    if (($c['read_only'] ?? true) !== true) return [false,'non_read_operation'];
+    // ejecutor: el plan no puede nombrar executors fuera del registry
+    $declared = $c['exec'] ?? '';
+    $intentSet = [];
+    if (str_starts_with((string)$declared,'intent:'))
+        $intentSet = explode('|', substr($declared,7));
+    foreach (explode('|', (string)($c['intent_equiv'] ?? '')) as $iv)
+        if ($iv !== '') $intentSet[] = $iv;
+    $intentSet = array_values(array_unique($intentSet));
+    if (isset($plan['exec']) && $plan['exec'] !== $declared) return [false,'invalid_executor'];
+    if (isset($plan['_delegate_intent'])
+        && !in_array($plan['_delegate_intent'], $intentSet, true)) return [false,'invalid_executor'];
     $f = $plan['filters'] ?? [];
-    // parámetros requeridos por capability
-    if ($cap === 'groups.compare' && empty($f['group2'])) return [false,'missing_parameter:group2'];
-    if (in_array($cap,['guardians.of_group','teachers.of_group','schedule.of_group'],true) && empty($f['group']))
-        return [false,'missing_parameter:group'];
+    if (!is_array($f)) return [false,'invalid_parameter:filters'];
+    // _ref solo tiene sentido dentro de un steps[] (el padre valida límites);
+    // a nivel raíz es una referencia huérfana
+    if ($depth === 0 && isset($plan['_ref'])) return [false,'invalid_reference'];
+    foreach ($f as $fv)
+        if ($fv === '@ref' && !isset($plan['_ref'])) return [false,'invalid_reference'];
+    // operación conocida y soportada por la capacidad
+    $op = $plan['op'] ?? 'list';
+    $allowed = explode('|', (string)($c['action_type'] ?? 'list'));
+    $allowed[] = 'list';
+    if (array_intersect($allowed, ['first','last','nth'])) $allowed[] = 'position';
+    if (($c['aggregation'] ?? null) === 'count') $allowed[] = 'count';
+    if (($c['aggregation'] ?? null) === 'ratio') $allowed[] = 'percent';
+    if (($c['pagination'] ?? null) === 'result_set') { $allowed[]='position'; $allowed[]='slice'; }
+    if (!empty($f['field']) || $intentSet) $allowed[] = 'field';
+    if (!in_array($op, array_unique($allowed), true)) return [false,'unsupported_operation'];
+    // parámetros requeridos declarados por la capacidad (genérico, no hardcode)
+    foreach ($c['required_parameters'] ?? [] as $req)
+        if (empty($f[$req])) return [false,"missing_parameter:$req"];
+    // reglas específicas del dominio
+    if ($cap === 'groups.compare' && (empty($f['group']) || empty($f['group2'])))
+        return [false,'missing_parameter:' . (empty($f['group']) ? 'group' : 'group2')];
     if ($cap === 'students.of_guardian' && empty($f['student']) && empty($f['guardian']))
         return [false,'missing_parameter:guardian'];
-    // posición dentro del universo razonable
-    if (isset($plan['position']) && is_int($plan['position']) && ($plan['position'] < 1 || $plan['position'] > 500))
-        return [false,'invalid_parameter:position'];
-    // slice razonable
-    if (!empty($plan['slice']) && (($plan['slice']['n'] ?? 0) < 1)) return [false,'invalid_parameter:slice'];
+    // posición: entero 1..500, 'last' o 'last-N'
+    $pos = $plan['position'] ?? null;
+    if ($pos !== null) {
+        $okPos = is_int($pos) ? ($pos >= 1 && $pos <= 500)
+             : ($pos === 'last' || (is_string($pos) && preg_match('/^last-[1-9]\d{0,2}$/', $pos)));
+        if (!$okPos) return [false,'invalid_parameter:position'];
+    }
+    // slice: {n: int>=1, from: start|end}
+    if (!empty($plan['slice'])) {
+        $sl = $plan['slice'];
+        if (!is_array($sl) || !is_int($sl['n'] ?? null) || $sl['n'] < 1
+            || !in_array($sl['from'] ?? '', ['start','end'], true))
+            return [false,'invalid_parameter:slice'];
+    }
     return [true,null];
 }
 
@@ -1114,14 +1176,32 @@ function nxPlanExecute(PDO $conn, array $u, array $plan, array $vars): array {
     if (!empty($plan['steps'])) {
         $replies = []; $results = []; $lastRs = null; $entities = [];
         foreach ($plan['steps'] as $i => $step) {
+            // la persona activa del turno se propaga a cada paso — un paso
+            // de relación («estudiantes del acudiente») no pierde el sujeto
+            if (!isset($step['_ctx_person']) && isset($plan['_ctx_person']))
+                $step['_ctx_person'] = $plan['_ctx_person'];
             if (!empty($step['_ref'])) {
                 $src = $results[$step['_ref']['step'] ?? 0]['_result_set']['items'] ?? null;
                 if (!$src) { $replies[] = 'No tengo un resultado previo para enlazar eso.'; continue; }
                 $pos = $step['_ref']['pos'];
-                $item = $pos === 'each' ? null
-                    : $src[$pos === -1 ? count($src)-1 : ($pos === -2 ? count($src)-2 : $pos-1)] ?? null;
-                if ($pos !== 'each' && !$item) { $replies[] = 'Ese elemento no existe en el resultado anterior.'; continue; }
-                if ($item) $step['filters']['student'] = trim(($item['f']['fn'] ?? '') . ' ' . ($item['f']['ln'] ?? '')) ?: $item['label'];
+                // «de cada uno» → el paso se ejecuta por ítem (acotado a 12)
+                if ($pos === 'each') {
+                    $items = array_slice($src, 0, 12);
+                    $sub = [];
+                    foreach ($items as $it) {
+                        $st2 = $step; unset($st2['_ref']);
+                        $st2['filters']['student'] = trim(($it['f']['fn'] ?? '') . ' ' . ($it['f']['ln'] ?? '')) ?: $it['label'];
+                        $r2 = nxPlanExecuteStep($conn, $u, $st2, $vars);
+                        $sub[] = '*'.$it['label'].'*: ' . ($r2['reply'] ?? 'sin datos');
+                    }
+                    $more = count($src) > 12 ? "\n…y " . (count($src) - 12) . " más — pídeme uno por nombre." : '';
+                    $r = ['reply'=>implode("\n", $sub) . $more,
+                          'intent'=>$step['capability'] ?? 'composed','_plan'=>$step];
+                    $results[$i] = $r; $replies[] = $r['reply']; continue;
+                }
+                $item = $src[$pos === -1 ? count($src)-1 : ($pos === -2 ? count($src)-2 : $pos-1)] ?? null;
+                if (!$item) { $replies[] = 'Ese elemento no existe en el resultado anterior.'; continue; }
+                $step['filters']['student'] = trim(($item['f']['fn'] ?? '') . ' ' . ($item['f']['ln'] ?? '')) ?: $item['label'];
             }
             $r = nxPlanExecuteStep($conn, $u, $step, $vars);
             $results[$i] = $r;
@@ -1140,7 +1220,28 @@ function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array
     try {
         // paso delegado a un intent existente (guardian.of_student → student_field)
         if (str_starts_with((string)($plan['exec'] ?? ''), 'intent:') || !empty($plan['_delegate_intent'])) {
-            $intent = substr((string)$plan['exec'], 7) ?: $plan['_delegate_intent'];
+            // intents declarados por la capacidad: exec «intent:a|b» + intent_equiv
+            $cap = nxCapabilityRegistry()[$plan['capability'] ?? ''] ?? [];
+            $declared = [];
+            if (str_starts_with((string)($cap['exec'] ?? ''), 'intent:'))
+                $declared = explode('|', substr($cap['exec'], 7));
+            foreach (explode('|', (string)($cap['intent_equiv'] ?? '')) as $iv)
+                if ($iv !== '') $declared[] = $iv;
+            $declared = array_values(array_unique($declared));
+            $intent = $plan['_delegate_intent'] ?? null;
+            if ($intent === null && $declared) {
+                // exec multi-intent: preferir el intent semántico del plan si
+                // está declarado; si no, el primero del conjunto
+                $intent = in_array($plan['intent'] ?? '', $declared, true)
+                    ? $plan['intent'] : $declared[0];
+            }
+            if (!$intent || !in_array($intent, $declared, true))
+                return ['reply'=>'Esa operación no está disponible desde aquí.',
+                        'intent'=>$plan['capability'] ?? 'invalid','_plan'=>$plan];
+            // la capacidad ya pasó nxPlanAllowed; el intent delegado tiene su
+            // propia matriz RBAC/política — re-verificar antes de despachar
+            if (!chatAllowed($conn, $u, $intent, $u['role'] ?? 'TEACHER'))
+                return ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$intent,'denied'=>true];
             $slots = ['student'=>$plan['filters']['student'] ?? null,
                       'field'=>$plan['filters']['field'] ?? null,
                       'group'=>$plan['filters']['group'] ?? null];
@@ -1148,7 +1249,7 @@ function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array
         }
         switch ($plan['capability']) {
             case 'students.list': case 'students.count': case 'students.position':
-            case 'students.percent': case 'students.in_group':
+            case 'students.percent':
                 return nxExecStudents($conn, $u, $plan, $vars);
             case 'guardians.of_group':   return nxExecGuardiansOfGroup($conn, $u, $plan, $vars);
             case 'students.of_guardian': return nxExecStudentsOfGuardian($conn, $u, $plan, $vars);
@@ -1168,12 +1269,11 @@ function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array
 
 /** helpers compartidos ---------------------------------------------------- */
 function nxSemRange(array $f): array {
-    // [from, to] en 'Y-m-d' — igual criterio que chatRange
+    // [from, to] en 'Y-m-d' — día civil de la institución (America/Bogota),
+    // igual criterio que el resto del sistema de asistencia
     if (!empty($f['from']) && !empty($f['to'])) return [$f['from'], $f['to']];
     $d = isset($f['days']) ? (int)$f['days'] : 0;
-    $to = gmdate('Y-m-d');
-    $from = gmdate('Y-m-d', strtotime('-' . max(0,$d) . ' days'));
-    return [$from, $to];
+    return [nxToday(max(0,$d)), nxToday()];
 }
 
 function nxSemGroupId(PDO $conn, array $u, ?string $g): ?array {
@@ -1221,8 +1321,10 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
     [$from,$to] = nxSemRange($f);
     $st = $f['status'] ?? null;
     if ($st === 'absent') {
+        // el composer colapsa todas las inasistencias en «absent» — el
+        // ejecutor debe cubrir también las variantes justificadas
         $w[] = "s.student_id IN (SELECT ai.student_id FROM attendance_incidents ai
-                WHERE ai.school_id = :sid2 AND ai.incident_type IN ('INASISTENCIA','UNAUTHORIZED_ABSENCE')
+                WHERE ai.school_id = :sid2 AND ai.incident_type IN ('INASISTENCIA','UNAUTHORIZED_ABSENCE','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA')
                   AND ai.detected_at >= :from::date AND ai.detected_at < (:to::date + INTERVAL '1 day'))";
         $p[':sid2']=$u['school_id']; $p[':from']=$from; $p[':to']=$to;
     } elseif ($st === 'present') {
@@ -1331,11 +1433,14 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
     if ($plan['op']==='percent') {
         $den = $n;
         if (!empty($f['group']) || !empty($f['grade'])) {
+            // denominador coherente con el numerador: si «group» resolvió a un
+            // grupo real → group_id; si fue numérico sin resolver → grade_level
+            $byGid = !empty($g);
             $d = $conn->prepare("SELECT COUNT(*) FROM students s
                 JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
                 JOIN academic_groups ag ON ag.group_id=sga.group_id
-                WHERE s.school_id=? AND s.deleted_at IS NULL AND " . (!empty($f['group']) ? 'ag.group_id=?' : 'ag.grade_level=?') . " {$scope['sql']}");
-            $d->execute(array_merge([$u['school_id'], !empty($f['group']) ? $g['group_id'] : (string)$f['grade']], $scope['params']));
+                WHERE s.school_id=? AND s.deleted_at IS NULL AND " . ($byGid ? 'ag.group_id=?' : 'ag.grade_level=?') . " {$scope['sql']}");
+            $d->execute(array_merge([$u['school_id'], $byGid ? $g['group_id'] : (string)($f['group'] ?? $f['grade'])], $scope['params']));
             $den = max(1,(int)$d->fetchColumn());
         } else {
             $d = $conn->prepare("SELECT COUNT(*) FROM students s WHERE s.school_id=? AND s.deleted_at IS NULL {$scope['sql']}");
@@ -1427,6 +1532,15 @@ function nxExecGuardiansOfGroup(PDO $conn, array $u, array $plan, array $vars): 
     $g = nxSemGroupId($conn, $u, $f['group'] ?? '');
     if (!$g) return ['reply'=>"¿De qué grupo? Dime algo como «acudientes del 6-A».",
                      'intent'=>'guardians.of_group','_plan'=>$plan];
+    // alcance explícito: docente/psicoorientador sin el grupo asignado recibe
+    // negación honesta, no un «no hay acudientes» silencioso
+    if (in_array($u['role'], ['TEACHER','COUNSELOR'], true)) {
+        $ck = $conn->prepare("SELECT 1 FROM teacher_group_access WHERE teacher_user_id=? AND group_id=? LIMIT 1");
+        $ck->execute([$u['id'], $g['group_id']]);
+        if (!$ck->fetchColumn())
+            return ['reply'=>"No tienes asignado el grupo {$g['group_name']} — no puedo mostrar sus acudientes.",
+                    'intent'=>'guardians.of_group','denied'=>true,'_plan'=>$plan];
+    }
     $scope = chatScope($conn, $u);
     $stmt = $conn->prepare("
         SELECT s.first_name||' '||s.last_name AS sname, s.document_number AS sdoc,
@@ -1570,6 +1684,15 @@ function nxExecGroupSchedule(PDO $conn, array $u, array $plan, array $vars): arr
     $g = nxSemGroupId($conn, $u, $f['group'] ?? '');
     if (!$g) return ['reply'=>"¿De qué grupo es el horario? Dime algo como «horario del 6-A».",
                      'intent'=>'schedule.of_group','_plan'=>$plan];
+    // mismo alcance que teachers.of_group: el horario de un grupo ajeno
+    // no se muestra a docentes/psicoorientadores sin asignación
+    if (in_array($u['role'], ['TEACHER','COUNSELOR'], true)) {
+        $ck = $conn->prepare("SELECT 1 FROM teacher_group_access WHERE teacher_user_id=? AND group_id=? LIMIT 1");
+        $ck->execute([$u['id'], $g['group_id']]);
+        if (!$ck->fetchColumn())
+            return ['reply'=>"No tienes asignado el grupo {$g['group_name']} — no puedo mostrar su horario.",
+                    'intent'=>'schedule.of_group','denied'=>true,'_plan'=>$plan];
+    }
     $dayFilter = '';
     $p = [$u['school_id'], $g['group_id']];
     if (preg_match('/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/u', $vars['_q'] ?? '', $mm)) {

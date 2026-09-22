@@ -37,6 +37,24 @@ Docker/BD/HTTP API: PENDIENTE POR ALCANCE AUTORIZADO (usuario eligió solo prueb
 | Generalización | test/generalization_eval.py | Pendiente |
 | Frontend | PWA/package.json | Pendiente de inspección |
 
+## Resultados tras SECURITY+PLANNER (2026-09-22, rama nexus-longrun-20260922)
+
+| Comando | Resultado | Estado |
+|---|---|---|
+| php test/nexus_release_gate.php | 18/18 puertas PASS — READY FOR CONTROLLED PRODUCTION (10.9s) | PASS |
+| php test/real_conversation_v1.php | 103/103 convos; intent 381/381; refs 25/25; carry 241/241; nav 60/60 | PASS |
+| php test/chat_forensic_harness.php | 36/36 (G7 acepta derive_action) | PASS |
+| php test/dsm_units.php | 50/50 | PASS |
+| php test/readonly_guard.php | 53 handlers, 0 escrituras | PASS |
+| php test/resilience.php | 15/15 | PASS |
+| php test/nexus_capability_eval_v1.php | 154/154 | PASS |
+| php test/nexus_ecosystem_open_composition.php | 59/59 | PASS |
+| phpunit test/api/NexusPlanInvariantTest.php | 34 tests / 57 assertions | PASS (nuevo) |
+
+Suites pendientes de hardening/ejecución dentro del alcance: continuity_50 (exit-code + aserciones, requiere API/BD real — NO ejecutar en alcance local), blind_eval (exit-code), semantic_eval, generalization_eval.py, ecosystem_capability_inventory (tablas mal nombradas en $entityTables — corregir antes de medir), PWA vitest.
+
+Debilidades conocidas de harness a corregir: real_conversation_v1 consistency auto-pasa (métrica no implementada); capability_eval auto-compara casos sin expectativa; blind_eval no sale non-zero; continuity_50 con aserciones vacuas `/\w{3,}/`; release_gate G7b tolera ≤6 críticos.
+
 ## Criterios de ejecución
 
 Inspeccionar cada harness antes de ejecutarlo: detectar BD real, escrituras, servicios externos y generación de artefactos.

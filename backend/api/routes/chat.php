@@ -144,18 +144,22 @@ function chatPolicyEnabled(PDO $conn, string $schoolId, string $key): bool {
 
 /** Gate completo: matriz de rol + política institucional. */
 function chatAllowed(PDO $conn, array $u, string $intent, string $role): bool {
-    if (!nxAllowed($intent, $role)) return false;
+    $ok = nxAllowed($intent, $role);
     // políticas solo acotan roles no-globales
-    if (in_array($role, ['TEACHER','COUNSELOR'], true)) {
+    if ($ok && in_array($role, ['TEACHER','COUNSELOR'], true)) {
         $key = NX_CHAT_POLICY_MAP[$intent] ?? null;
-        if ($key && !chatPolicyEnabled($conn, $u['school_id'], $key)) return false;
+        if ($key && !chatPolicyEnabled($conn, $u['school_id'], $key)) $ok = false;
     }
     // smalltalk puede desactivarse globalmente por la escuela
-    if (!chatPolicyEnabled($conn, $u['school_id'], 'chat.smalltalk.enabled')) {
+    if ($ok && !chatPolicyEnabled($conn, $u['school_id'], 'chat.smalltalk.enabled')) {
         $dataIntents = array_merge(array_keys(NX_CHAT_POLICY_MAP), ['count_events','list_events','permissions','notifications_unread','devices_status','audit_query','groups_list','teachers_list','schedule_info','export_data','about_me','time','date']);
-        if (!in_array($intent, $dataIntents, true) && $intent !== 'out_of_scope') return false;
+        if (!in_array($intent, $dataIntents, true) && $intent !== 'out_of_scope') $ok = false;
     }
-    return true;
+    // un probe negado también es evidencia — el log no depende del smalltalk
+    if (!$ok && $intent === 'security_probe' && function_exists('securityLog')) {
+        securityLog('CHAT_SECURITY_PROBE', 'denied-by-gate | user ' . ($u['id'] ?? '?'));
+    }
+    return $ok;
 }
 
 /** ¿Puede el rol ejecutar esta acción derivada? */
@@ -289,6 +293,15 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         && preg_match('/^(dame |dime )?(otro|otra|uno mas|una mas|mas|siguiente|otra vez|y otro|y otra|de nuevo|dame mas|dime mas|continua|sigue|y eso|y ese|y esa)[.! ]*$/u', $q0)) {
         $last = chatLastPayload($conn, $userId, $sessionId);
         if ($last && !empty($last['intent'])) {
+            // la repetición hereda el intent — la autorización no se hereda:
+            // el gate corre de nuevo antes de despachar (políticas pueden
+            // haber cambiado y el payload anterior pudo ser smalltalk)
+            if (!chatAllowed($conn, $authUser, $last['intent'], $role)) {
+                $out = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$last['intent'],
+                        'denied'=>true,'confidence'=>1.0,'session_id'=>$sessionId];
+                chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+                exit(json_encode(['status'=>'ok','data'=>$out]));
+            }
             $vars['_last_reply'] = $last['reply'] ?? '';
             $slots = $last['entities'] ?? [];
             $slots['_repeat'] = true; // los handlers aleatorios eligen otro valor
@@ -378,7 +391,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 $out = nxPlanExecute($conn, $authUser, $plan, $vars);
                 $tDisp = microtime(true) - $tDisp;
                 $out = nxPlanResponse($out, 'composed', 'plan:composed');
-                $out['intent'] = 'composed'; $out['confidence'] = $conf;
+                $out['intent'] = 'composed'; $out['confidence'] = $plan['conf'];
                 $out['session_id'] = $sessionId;
                 $out['_interpretation'] = ['timing_ms'=>['nlu'=>round($tNlu*1000,2),'dispatch'=>round($tDisp*1000,2)],'plan'=>$plan];
                 $interp = ['resolved'=>['intent'=>'composed','slots'=>[], 'inherited'=>[]],'turn_type'=>'autonomous'];
@@ -387,15 +400,32 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 exit(json_encode(['status'=>'ok','data'=>$out]));
             }
         }
+        // fallback por partes: cada cláusula pasa por el DSM para que las
+        // reglas de cobertura y el downgrade destructivo→security_probe
+        // apliquen igual que en la vía principal (una cláusula mutativa
+        // nunca se despacha como intent de datos)
         $outs = [];
         foreach ($cls['parts'] as $p) {
-            if (!chatAllowed($conn, $authUser, $p['intent'], $role)) {
-                $outs[] = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$p['intent'],'denied'=>true];
+            $pN = nxNorm($p['text'] ?? '');
+            $pIp = nxDialogueResolve(
+                ['intent'=>$p['intent'],'confidence'=>$p['confidence'] ?? 0,
+                 'entities'=>$p['entities'] ?? [],'top3'=>$p['top3'] ?? [],
+                 'domain'=>$p['domain'] ?? null],
+                $dsPre2 ? ['entities'=>$dsPre2['entities'] ?? [],
+                           'last_intent'=>$dsPre2['intent'] ?? null,'_ds'=>$dsPre2] : null,
+                $pN);
+            $pIntent = $pIp['resolved']['intent'];
+            if (!empty($pIp['requires_clarification'])) {
+                $outs[] = ['reply'=>$pIp['clarify'],'intent'=>'clarify'];
+                continue;
+            }
+            if (!chatAllowed($conn, $authUser, $pIntent, $role)) {
+                $outs[] = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$pIntent,'denied'=>true];
                 continue;
             }
             // slots por segmento: nxSlots completa module/field/dates que Python no extrae
-            $pslots = array_merge(nxSlots(nxNorm($p['text'] ?? '')), $p['entities'] ?? []);
-            $outs[] = chatDispatch($conn, $authUser, $p['intent'], $pslots, $vars, $role);
+            $pslots = array_merge(nxSlots($pN), $pIp['resolved']['slots'] ?? []);
+            $outs[] = chatDispatch($conn, $authUser, $pIntent, $pslots, $vars, $role);
         }
         $out = [
             'reply' => implode("\n\n—\n\n", array_column($outs,'reply')),
@@ -417,8 +447,17 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // payload_json._ds (result_set, entidad activa, cursor). El ctx del front
     // es solo respaldo/compatibilidad, nunca la fuente de verdad.
     $ds = chatLoadDs($conn, $userId, $sessionId);
+    // fallback de compatibilidad: el ctx del cliente solo aporta entidades
+    // visibles — jamás operaciones pendientes, intents ni result-sets
+    // (esos nacen del estado server-side; el cliente no los puede fabricar)
+    $clientCtx = null;
+    if (!$ds && is_array($input['ctx'] ?? null)) {
+        $ce = is_array($input['ctx']['entities'] ?? null) ? $input['ctx']['entities'] : [];
+        unset($ce['_op'], $ce['_ds']);
+        $clientCtx = ['entities' => $ce];
+    }
     $ctx = $ds ? ['entities' => $ds['entities'] ?? [], 'last_intent' => $ds['intent'] ?? null, '_ds' => $ds]
-               : ($input['ctx'] ?? null);
+               : $clientCtx;
     if (is_array($ctx) && !empty($ctx['last_reply'])) $vars['_last_reply'] = $ctx['last_reply'];
     $tDsm = microtime(true);
     $interp = nxDialogueResolve($cls, is_array($ctx) ? $ctx : null, $q0);
@@ -735,22 +774,23 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         }
     }
     // ── memoria de trabajo (§29): historial de objetos conversacionales ──
-    // cada result-set materializado recibe un id R<N>; «vuelve al primero
-    // de 10A» lo busca por su filtro sin depender de una sola variable.
+    // cada result-set materializado recibe un id R<N> MONOTÓNICO (nunca se
+    // recicla tras el trim — una referencia «R3» apunta siempre al mismo
+    // set). Solo se conserva identidad + filtros + conteo: los ítems con
+    // datos personales viven una sola vez, en last_result.
     $objects = $prev['objects'] ?? [];
+    $nextRid = (int)($prev['next_rid'] ?? 1);
     if (!empty($out['_result_set'])) {
         $rs = $out['_result_set'];
         $objects[] = [
-            'id'      => 'R' . (count($objects) + 1),
+            'id'      => 'R' . $nextRid,
             'type'    => $rs['type'] ?? null,
             'label'   => $rs['label'] ?? null,
             'entity'  => $rs['entity'] ?? null,
             'filters' => $rs['_filters'] ?? [],
             'count'   => $rs['count'] ?? count($rs['items'] ?? []),
-            'items'   => $rs['items'] ?? [],
-            'columns' => $rs['columns'] ?? null,
-            'rows'    => $rs['rows'] ?? null,
         ];
+        $nextRid++;
         if (count($objects) > 6) $objects = array_slice($objects, -6);
     }
     // jerarquía contexto vs referente (§9): el goal cambia con consultas
@@ -781,10 +821,21 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         'cursor'      => $out['_result_set'] ? 0
                         : ($out['_result_cursor'] ?? ($prev['cursor'] ?? 0)),
         'pending_op'  => $slots['_op'] ?? ($prev['pending_op'] ?? null),
+        'next_rid'    => $nextRid,
     ];
-    // persona referenciada (acudiente/docente) — el handler la declara
-    if (!empty($ent['_person'])) $ds['person'] = $ent['_person'];
-    elseif (!empty($prev['person'])) $ds['person'] = $prev['person'];
+    // persona referenciada (acudiente/docente) — el handler la declara.
+    // El referente solo sobrevive mientras el sujeto activo no cambie: si
+    // el turno ancló OTRO estudiante, el acudiente del turno previo ya no
+    // aplica a «su X» (persona obsoleta ≠ persona actual).
+    if (!empty($ent['_person'])) {
+        $ds['person'] = $ent['_person'];
+    } elseif (!empty($prev['person'])) {
+        $prevStudent = $prev['entities']['student'] ?? null;
+        $newStudent  = $merged['student'] ?? null;
+        $sameSubject = empty($newStudent) || empty($prevStudent)
+            || mb_strtolower($newStudent) === mb_strtolower($prevStudent);
+        if ($sameSubject) $ds['person'] = $prev['person'];
+    }
     return $ds;
 }
 
@@ -898,11 +949,14 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
 
 /** Último payload del asistente en esta sesión — seguimiento contextual («dame otro»). */
 function chatLastPayload(PDO $conn, string $userId, ?string $sessionId = null): ?array {
+    // payload denegado ≠ seguimiento repetible — excluirlo para que «otro»
+    // no pueda re-ejecutar un intent rechazado por RBAC/política
+    $notDenied = " AND COALESCE(payload_json->>'denied','false') <> 'true'";
     if ($sessionId) {
-        $st = $conn->prepare("SELECT payload_json FROM chat_messages WHERE user_id=? AND session_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 1");
+        $st = $conn->prepare("SELECT payload_json FROM chat_messages WHERE user_id=? AND session_id=? AND role='assistant'{$notDenied} ORDER BY created_at DESC LIMIT 1");
         $st->execute([$userId,$sessionId]);
     } else {
-        $st = $conn->prepare("SELECT payload_json FROM chat_messages WHERE user_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 1");
+        $st = $conn->prepare("SELECT payload_json FROM chat_messages WHERE user_id=? AND role='assistant'{$notDenied} ORDER BY created_at DESC LIMIT 1");
         $st->execute([$userId]);
     }
     $r = $st->fetchColumn();
@@ -966,29 +1020,39 @@ if ($cleanPath === '/chat/sessions' && $method === 'GET') {
 if ($cleanPath === '/chat/history' && $method === 'GET') {
     $authUser = requireAuth();
     $sessionId = (string)($_GET['session_id'] ?? '');
+    $rows = [];
     if (preg_match('/^[0-9a-f-]{36}$/i', $sessionId)) {
+        // sesión: ASC directo — ya viene oldest→newest
         $stmt = $conn->prepare("
             SELECT role, content, payload_json, created_at
             FROM chat_messages WHERE user_id = ? AND session_id = ?
             ORDER BY created_at ASC LIMIT 200
         ");
         $stmt->execute([$authUser['id'], $sessionId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
+        // sin sesión: DESC para quedarnos con los MÁS recientes, luego invertir
         $stmt = $conn->prepare("
             SELECT role, content, payload_json, created_at
             FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 60
         ");
         $stmt->execute([$authUser['id']]);
+        $rows = array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
-    $rows = array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC));
-    echo json_encode(['status'=>'ok','data'=>array_map(fn($r)=>[
-        'from' => $r['role'] === 'user' ? 'user' : 'bot',
-        'text' => $r['content'],
-        'cards' => ($r['payload_json']['cards'] ?? null),
-        'actions' => ($r['payload_json']['actions'] ?? null),
-        'intent' => ($r['payload_json']['intent'] ?? null),
-        'ts' => $r['created_at'],
-    ], $rows)]);
+    echo json_encode(['status'=>'ok','data'=>array_map(function($r) {
+        $payload = is_array($r['payload_json'] ?? null)
+            ? $r['payload_json']
+            : json_decode($r['payload_json'] ?? 'null', true);
+        if (!is_array($payload)) $payload = [];
+        return [
+            'from' => $r['role'] === 'user' ? 'user' : 'bot',
+            'text' => $r['content'],
+            'cards' => ($payload['cards'] ?? null),
+            'actions' => ($payload['actions'] ?? null),
+            'intent' => ($payload['intent'] ?? null),
+            'ts' => $r['created_at'],
+        ];
+    }, $rows)]);
     exit;
 }
 
@@ -1114,7 +1178,7 @@ function chatHelp(string $role): string {
 
 function chat_day_summary(PDO $conn, array $u, array $s, array $v): array {
     $scope = chatScope($conn, $u);
-    $today = gmdate('Y-m-d');
+    $today = nxToday();
     $q = function(string $type, string $extra='') use ($conn,$u,$today,$scope) {
         $st = $conn->prepare("SELECT COUNT(*) FROM attendance_incidents ai
             JOIN students s ON s.student_id=ai.student_id
@@ -1174,7 +1238,7 @@ function chatListIncidents(PDO $conn, array $u, array $s, string $type, string $
 }
 
 function chatRange(array $s): array {
-    return [$s['from'] ?? gmdate('Y-m-d'), $s['to'] ?? gmdate('Y-m-d')];
+    return [$s['from'] ?? nxToday(), $s['to'] ?? nxToday()];
 }
 
 function chat_count_events(PDO $conn, array $u, array $s, array $v): array {
@@ -1292,7 +1356,7 @@ function chat_student_summary(PDO $conn, array $u, array $s, array $v): array {
     // conteos últimos 30 días
     $cnt=$conn->prepare("SELECT incident_type, COUNT(*) FROM attendance_incidents
         WHERE student_id=? AND detected_at::date >= ? GROUP BY incident_type");
-    $cnt->execute([$st['student_id'], gmdate('Y-m-d', time()-30*86400)]);
+    $cnt->execute([$st['student_id'], nxToday(30)]);
     $counts=$cnt->fetchAll(PDO::FETCH_KEY_PAIR);
     // riesgo
     $risk=$conn->prepare("SELECT risk_level, risk_score FROM student_behavior_metrics WHERE student_id=? ORDER BY calculated_at DESC LIMIT 1");
@@ -1325,7 +1389,7 @@ function chat_group_summary(PDO $conn, array $u, array $s, array $v): array {
         $chk->execute([$u['id'],$g['group_id']]);
         if (!$chk->fetchColumn()) return ['reply'=>"El grupo {$g['group_name']} no está en tu alcance — solo puedo mostrarte los tuyos."];
     }
-    $today=gmdate('Y-m-d');
+    $today=nxToday();
     $n=$conn->prepare("SELECT COUNT(*) FROM student_group_assignments WHERE group_id=? AND active=TRUE");
     $n->execute([$g['group_id']]); $total=(int)$n->fetchColumn();
     $st=$conn->prepare("SELECT incident_type,COUNT(*) FROM attendance_incidents WHERE group_id=? AND detected_at::date=? GROUP BY incident_type");
@@ -1938,7 +2002,7 @@ function chat_pending_tasks(PDO $conn, array $u, array $s, array $v): array {
             WHERE t.school_id=? AND t.status='en proceso' AND t.assigned_to_user_id=?");
         try { $st->execute([$u['school_id'],$u['id']]); $t2=(int)$st->fetchColumn(); if($t2) $bits[]="{$t2} seguimiento(s) asignados a ti"; } catch (Throwable $e) {}
     }
-    $scope=chatScope($conn,$u); $today=gmdate('Y-m-d');
+    $scope=chatScope($conn,$u); $today=nxToday();
     $st=$conn->prepare("SELECT COUNT(*) FROM class_exit_authorizations c JOIN students s ON s.student_id=c.student_id
         WHERE c.school_id=? AND c.status='ACTIVE' AND c.expected_return_time < NOW() {$scope['sql']}");
     $st->execute([$u['school_id']]); $p=(int)$st->fetchColumn();
@@ -1948,7 +2012,7 @@ function chat_pending_tasks(PDO $conn, array $u, array $s, array $v): array {
 
 /** Estado de la cola de mensajería (Twilio/WhatsApp). */
 function chat_whatsapp_status(PDO $conn, array $u, array $s, array $v): array {
-    $today=gmdate('Y-m-d');
+    $today=nxToday();
     $st=$conn->prepare("SELECT COUNT(*) FROM notifications WHERE school_id=? AND created_at::date=?");
     $st->execute([$u['school_id'],$today]); $n=(int)$st->fetchColumn();
     return ['reply'=>"Mensajería del día: {$n} notificación(es) generadas. La cola procesa con reintentos — si algo falla lo ves en «mensajes fallidos»."];

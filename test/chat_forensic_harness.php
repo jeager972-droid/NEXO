@@ -103,7 +103,10 @@ $SUITE['G6c_rango_reemplazo'] = [
 /* GRUPO 7 — cambio de intención + entidad */
 $SUITE['G7_intent_switch'] = [
     ['text' => 'Muéstrame las evasiones de Juan.', 'expect' => ['intent' => ['list_events','count_events']]],
-    ['text' => 'Ahora quiero citar a su acudiente.', 'expect' => ['intent' => ['start_operation'], 'op' => 'Citar acudiente']],
+    // derive_action es el reroute honesto del DSM cuando el NLU dijo consulta
+    // y el verbo de operación domina — mismo chip, misma operación (paridad
+    // con G7b: ambos nombres aceptados, la operación es la que cuenta)
+    ['text' => 'Ahora quiero citar a su acudiente.', 'expect' => ['intent' => ['start_operation','derive_action'], 'op' => 'Citar acudiente']],
 ];
 $SUITE['G7b_switch_inverso'] = [
     // derive_action resuelve la misma operación (chatOperationCmd) — equivalente

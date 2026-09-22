@@ -5,7 +5,7 @@
  * actions — el texto libre nunca ejecuta operaciones; las acciones navegan a
  * /operacion con el formulario precargado y su confirmación propia.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Send, Sparkles, ArrowRight, RotateCcw, MessageSquare, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,23 +24,26 @@ const SUGGESTIONS = [
 ];
 
 /** Render markdown-lite del bot: **negrilla**, saltos de línea, • listas. */
-const RichText = ({ text }) => (
-  <>
-    {String(text).split('\n').map((line, i) => {
-      const parts = line.split(/(\*[^*]+\*)/g).map((p, j) =>
-        p.startsWith('*') && p.endsWith('*')
-          ? <strong key={j} className="font-semibold text-[var(--nx-text)]">{p.slice(1, -1)}</strong>
-          : p
-      );
-      const isList = line.trim().startsWith('•');
-      return (
-        <span key={i} className={isList ? 'block pl-1' : undefined}>
-          {parts}{i < text.split('\n').length - 1 && <br />}
-        </span>
-      );
-    })}
-  </>
-);
+const RichText = ({ text }) => {
+  const lines = String(text).split('\n');
+  return (
+    <>
+      {lines.map((line, i) => {
+        const parts = line.split(/(\*[^*]+\*)/g).map((p, j) =>
+          p.startsWith('*') && p.endsWith('*')
+            ? <strong key={j} className="font-semibold text-[var(--nx-text)]">{p.slice(1, -1)}</strong>
+            : p
+        );
+        const isList = line.trim().startsWith('•');
+        return (
+          <span key={i} className={isList ? 'block pl-1' : undefined}>
+            {parts}{i < lines.length - 1 && <br />}
+          </span>
+        );
+      })}
+    </>
+  );
+};
 
 const UserBubble = ({ children }) => (
   <div className="flex justify-end">
@@ -50,35 +53,85 @@ const UserBubble = ({ children }) => (
   </div>
 );
 
-const DataCard = ({ card }) => (
-  <div className="mt-3 overflow-hidden rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)]">
-    {card.title && (
-      <p className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-3 py-1.5 text-caption font-semibold uppercase tracking-wide text-[var(--nx-text-muted)]">
-        {card.title}
-      </p>
-    )}
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-[12.5px]">
-        <thead>
-          <tr className="border-b border-[var(--nx-border)]">
-            {card.columns.map((c, i) => (
-              <th key={i} className="px-3 py-1.5 font-semibold text-[var(--nx-text-muted)]">{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {card.rows.map((r, i) => (
-            <tr key={i} className="border-b border-[var(--nx-border)] last:border-0">
-              {r.map((cell, j) => (
-                <td key={j} className="px-3 py-1.5 text-[var(--nx-text)]">{cell}</td>
+const CARD_PAGE = 10;
+const cellText = (v) => (v === null || v === undefined ? '—' : String(v));
+
+export const DataCard = ({ card }) => {
+  const tableId = useId();
+  const [page, setPage] = useState(0);
+  // una tarjeta reemplazada reinicia su paginación — el set cambió, la
+  // posición previa dejó de tener significado
+  useEffect(() => { setPage(0); }, [card]);
+  const title = card.title || 'Datos de Nexus';
+  const rows = Array.isArray(card.rows) ? card.rows : [];
+  const cols = Array.isArray(card.columns) ? card.columns.length : 0;
+  const total = rows.length;
+  const pages = Math.ceil(total / CARD_PAGE);
+  const from = total === 0 ? 0 : page * CARD_PAGE + 1;
+  const to = Math.min((page + 1) * CARD_PAGE, total);
+  const visible = rows.slice(page * CARD_PAGE, page * CARD_PAGE + CARD_PAGE);
+  return (
+    <div className="mt-3 overflow-hidden rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)]">
+      {card.title && (
+        <p className="border-b border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-3 py-1.5 text-caption font-semibold uppercase tracking-wide text-[var(--nx-text-muted)]">
+          {card.title}
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table id={tableId} aria-label={title} className="w-full text-left text-[12.5px]">
+          {card.title && <caption className="sr-only">{card.title}</caption>}
+          <thead>
+            <tr className="border-b border-[var(--nx-border)]">
+              {(card.columns ?? []).map((c, i) => (
+                <th key={i} scope="col" className="px-3 py-1.5 font-semibold text-[var(--nx-text-muted)]">{c}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visible.map((r, i) => {
+              const cells = Array.isArray(r) ? r : [];
+              const span = Math.max(cols, cells.length);
+              return (
+                <tr key={i} className="border-b border-[var(--nx-border)] last:border-0">
+                  {Array.from({ length: span }, (_, j) => (
+                    <td key={j} className="px-3 py-1.5 text-[var(--nx-text)]">{cellText(cells[j])}</td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t border-[var(--nx-border)] px-3 py-1.5">
+        <p role="status" aria-live="polite" className="text-caption text-[var(--nx-text-muted)]">
+          Filas {from}–{to} de {total}
+        </p>
+        {pages > 1 && (
+          <nav aria-label={`Paginación de ${title}`} className="flex items-center gap-2">
+            <button
+              type="button" disabled={page === 0} aria-controls={tableId}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="rounded-full border border-[var(--nx-border)] px-2.5 py-1 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)] disabled:opacity-40"
+            >Anterior</button>
+            <select
+              aria-label="Página" value={page} onChange={(e) => setPage(Number(e.target.value))}
+              className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] px-2 py-1 text-caption text-[var(--nx-text)]"
+            >
+              {Array.from({ length: pages }, (_, i) => (
+                <option key={i} value={i}>Página {i + 1} de {pages}</option>
+              ))}
+            </select>
+            <button
+              type="button" disabled={page >= pages - 1} aria-controls={tableId}
+              onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
+              className="rounded-full border border-[var(--nx-border)] px-2.5 py-1 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)] disabled:opacity-40"
+            >Siguiente</button>
+          </nav>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const BotBubble = ({ msg, onAction }) => (
   <div className="flex items-start gap-3">

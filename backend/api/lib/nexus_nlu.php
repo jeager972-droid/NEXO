@@ -19,6 +19,13 @@
 
 const NX_NLU_THRESHOLD = 0.65;   // umbral estricto por nivel (spec: 65%)
 
+/** Día civil institucional — el colegio opera en America/Bogota; «hoy» y
+ *  «ayer» deben ser el día local, no el día UTC (desfase −5h). */
+function nxToday(int $minusDays = 0): string {
+    return (new DateTime('today', new DateTimeZone('America/Bogota')))
+        ->modify('-' . max(0, $minusDays) . ' days')->format('Y-m-d');
+}
+
 /* ---------------------------------------------------------------------------
  * Normalización (idéntica a la del pipeline Python)
  * ------------------------------------------------------------------------- */
@@ -328,8 +335,8 @@ function nxSlots(string $q): array {
         $s['days'] = 365;
     }
     if (isset($s['days'])) {
-        $s['from'] = gmdate('Y-m-d', time() - $s['days'] * 86400);
-        $s['to'] = gmdate('Y-m-d');
+        $s['to'] = nxToday();
+        $s['from'] = nxToday($s['days']);
         $s['range_label'] = $s['days'] === 0 ? 'hoy' : ($s['days'] === 1 ? 'ayer' : "últimos {$s['days']} días");
     }
 
@@ -879,8 +886,19 @@ function nxIntentRoles(): array {
 
 function nxAllowed(string $intent, string $role): bool {
     $roles = nxIntentRoles()[$intent] ?? null;
-    // intents smalltalk no listados → permitidos a todos
-    return $roles === null || in_array($role, $roles, true);
+    if ($roles !== null) return in_array($role, $roles, true);
+    // intents fuera de la matriz: solo pasan smalltalk/meta/utilidades
+    // conocidas — un intent de datos nuevo sin entrada niega por defecto.
+    static $open = null;
+    $open ??= array_fill_keys(array_merge(NX_SMALLTALK_INTENTS, [
+        'out_of_scope','security_probe','clarify','result_nav','confirm_op',
+        'repeat_op','cancel','deictic','composed','repeat',
+        'colombia_capital','colombia_culture','colombia_department',
+        'colombia_fun_fact','colombia_geography','colombia_history',
+        'colombia_president','math_operation','random_department',
+        'random_number','capabilities','help',
+    ]), true);
+    return isset($open[$intent]);
 }
 
 /* ============================================================================
@@ -1153,6 +1171,11 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
     if (preg_match('/\b(exporta|exportar|exporte|descarga|descargar|vuelca|vuelque|saca|saque)\s+(todo|todos|todas|toda|todo el|toda la)\b/u', $q0)
         && !preg_match('/\b(reporte|informe|lista|listado|resumen|certificado|constancia)\b/u', $q0))
         return 'security_probe';
+    // «háblame del sistema / cuéntame de nexo» — pregunta sobre el propio
+    // asistente, no un tema externo: el dominio «sistema» ES este sistema
+    if (in_array($intent, ['out_of_scope','do_for_me','greeting','help'], true)
+        && preg_match('/\b(hablame|cuentame|explicame|dime|informame|cuentanos)\s+(de|del|sobre|acerca de)\s+(el\s+|la\s+)?(sistema|nexo|nexus|asistente|plataforma|aplicacion|programa|chatbot|bot)\b/u', $q0))
+        return 'about_nexus';
     // «háblame/cuéntame/explícame de <tema>» fuera de dominio — no adivinar
     // un intent cercano: el smalltalk de Colombia solo cubre su tema
     if (str_starts_with($intent, 'colombia_')
@@ -1242,9 +1265,11 @@ function nxCoverageOverride(string $q0, string $intent, array $slots): ?string {
         return 'derive_action';
     // «qué estudiantes hay en el 6-A / estudiantes del 8A» — lista real.
     // Con «cuántos» es conteo (group_student_count), no listado.
+    // group_summary también corrige: el sustantivo explícito «estudiantes»
+    // hace lista; el resumen de grupo no lista personas.
     if (!empty($slots['group']) && preg_match('/\b(estudiantes|alumnos|chicos|muchachos|pelados|ninos|niños)\b/u', $q0)
         && !preg_match('/\b(cuant[oa]s?|cuanto|numero de|total|cuantos son|cuantas son)\b/u', $q0)
-        && in_array($intent, ['out_of_scope','students_count','group_student_count','list_events','groups_list','count_present','count_events'], true))
+        && in_array($intent, ['out_of_scope','students_count','group_student_count','list_events','groups_list','count_present','count_events','group_summary'], true))
         return 'students_in_group';
     // «qué pasó con él/ese/ese estudiante» — ficha del referente, no auditoría
     // «qué pasó con él» sin referente → student_summary SIN estudiante:
@@ -1840,7 +1865,11 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // Guardia: un sustantivo de operación con verbo/artículo («una
         // solicitud aparte», «el permiso») NO se degrada a la consulta previa.
         $hasOpNoun = (bool)preg_match('/\b(una?|el|la|esa|ese|otra?|hacer|haz|mandar|enviar|generar|crear|quiero|necesito)\s+\w*\s*(solicitud|citacion|cita|permiso|autorizacion|salida|seguimiento|incidente|reporte|registro|excusa)\b/u', $q0);
+        // la herencia no pisa un reroute de operación: «ahora quiero citar
+        // a su acudiente» ya fue resuelto a derive_action por el verbo —
+        // volver al lastIntent lo degradaría a consulta fantasma
         if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD)
+            && !in_array($intent, ['derive_action','start_operation','repeat_op','confirm_op','security_probe'], true)
             && $inheritable && $dependent && !$hasOpNoun && !$coverageHit) {
             $intent = $lastIntent;
             $inherited[] = 'intent';
