@@ -146,8 +146,43 @@ texto → nxNorm → nxClassify (LR: smalltalk/OOD/meta/ops)
 - `test/readonly_guard.php` → 53 handlers, 0 escrituras
 - `test/nexus_release_gate.php` → READY (18 puertas)
 - `test/nexus_capability_eval_v1.php` → **153/153** (nuevo, en contenedor)
+- `test/corpus_semantic_gen.php` → **1796/1797 (99.9%)** — generador
+  combinatorial por espacio semántico (sujeto × verbo × grupo × estado ×
+  rango × presentación × posición × cardinalidad × relación × comparación
+  × negativos). Único fallo: «dame todos los 10B» → security_probe
+  (misroute del clasificador; veto conservador — nunca compone bajo
+  security_probe, correcto por seguridad).
 - `test/blind_eval.php` → misses pre-existentes del clasificador
   (`estudiante` 2/5: out_of_scope/random_student — cobertura NLU, no capa semántica)
+
+### RBAC en la capa semántica
+
+- Todos los executors aplican `chatScope` (students/incidents/guardians).
+- `nxScopeGroupIds()` restringe `groups.compare`/`groups.rank` a los grupos
+  del docente: comparar un grupo fuera de scope → negación honesta
+  («Solo puedes consultar los grupos que tienes asignados») en vez de
+  ceros falsos que filtran tamaño del grupo ajeno.
+- teachers/schedule son datos de staff (menor sensibilidad) — documentado.
+
+### Nota de sesión
+
+- `session_id` es **UUID** — ids arbitrarios hacen fallar `chatLoadDs`
+  silenciosamente (try/catch → `$ds=null` → nav muerta). El frontend siempre
+  envía UUID; los harnesses de prueba deben usar UUIDs válidos.
+
+### Veto mutativo
+
+El composer devuelve null ante verbos mutativos (`cambia|borra|elimina|
+crea|registra|actualiza|asigna|genera|emite|suspende|activa|anula|autoriza|
+rechaza|aprueba|revoca`) — «cambia el horario del 7-B» nunca produce un plan
+de consulta. La operación la resuelve el pipeline de intents/acciones.
+
+### Clarify provisional
+
+`student_field`/`guardian_field` con `requires_clarification` ahora prueba un
+compose provisional: si el texto tiene estructura suficiente (lista+grupo+
+presentación), el clarify era falso positivo y se ejecuta el plan; si no,
+el clarify procede normalmente («¿De qué estudiante?»).
 
 ### Datos sembrados para pruebas
 

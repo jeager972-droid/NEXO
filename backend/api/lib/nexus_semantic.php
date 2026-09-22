@@ -250,7 +250,7 @@ function nxCapabilityRegistry(): array {
         'endpoints'=>['POST /consultations/query(absences|late_arrivals|incidents|evasions)','GET /dashboard/events'],
         'service'=>'nexus_semantic|chat intent','query'=>'attendance_incidents×students×sga×ag',
         'response_shape'=>'card+result_set','presentation'=>['list','table','scalar'],
-        'rbac'=>$S,'read_only'=>true,'exec'=>'incidents|intent:list_events','intent_equiv'=>'list_events'],
+        'rbac'=>$S,'read_only'=>true,'exec'=>'incidents|intent:list_events','intent_equiv'=>'list_events|late_today|attendance_today|count_events|top_offenders'],
     'incidents.count' => ['name'=>'Conteo de incidentes','description'=>'cuántos eventos del tipo en el rango',
         'user_goal'=>'saber la magnitud','action_type'=>'count',
         'source_entity'=>'attendance_incidents','target_entity'=>null,
@@ -605,17 +605,20 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     elseif (preg_match('/\b(?:numero|posicion|puesto|lugar)\s*(\d{1,3})\b/u', $q0, $mm)) $pos = (int)$mm[1];
     elseif (preg_match('/\b(?:el|la)\s+(\d{1,2})\s+de(?:l| la lista| la tabla| la nomina| los| las)\b/u', $q0, $mm)) $pos = (int)$mm[1];
     elseif (preg_match('/\b(sexto|septimo|octavo|noveno|decimo)\b/u', $q0, $mm)
+        && !preg_match('/\b(del|de|el|la|los|las|grado|al|en)\s+' . $mm[1] . '\b/u', $q0)
         && preg_match('/\b(lista|tabla|nomina|grupo|de los|de las|del salon|del curso)\b/u', $q0)) {
+        // «el sexto de la lista» = posición; «los del sexto en tabla» = grado
         $pos = ['sexto'=>6,'septimo'=>7,'octavo'=>8,'noveno'=>9,'decimo'=>10][$mm[1]];
     }
     // guardias: «primer dia», «primera semana», «grado primero», «sexto grado» son temporales/grado
     if ($pos !== null && preg_match('/\b(primer|primera|segunda|tercera|sexto|septimo|octavo|noveno|decimo)\s+(dia|semana|mes|ano|grado|clase|periodo|bloque)\b/u', $q0)) $pos = null;
+    if ($pos !== null && preg_match('/\bultim[oa]s?\s+\d+\s+(dias|semanas|meses|anos|horas|minutos)\b/u', $q0)) $pos = null; // «últimos 3 días» = rango
     if (isset($sig['slice'])) $pos = null; // el slice manda
     if ($pos !== null && preg_match('/\bgrado\s+(primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo)\b/u', $q0)) $pos = null;
     if ($pos !== null) { $sig['position']=$pos; $sig['op']=$sig['op'] ?? 'position'; $e[]='pos:'.$pos; }
 
     // ── cardinalidad total ────────────────────────────────────────────────
-    if (preg_match('/\b(todos|todas|completo|completa|entero|entera|integro|integra|la nomina completa|listado completo|tabla completa|relacion completa|todo el grupo|el grupo completo|toda la lista|la lista completa|sin faltar|todos y cada uno|sin excepcion|full|en totalidad|completica|completitos|el listado entero|la relacion entera|todos los|todas las)\b/u', $q0)) {
+    if (preg_match('/\b(todos|todas|completo|completa|entero|entera|integro|integra|la nomina completa|toda la nomina|toda nomina|listado completo|todo el listado|tabla completa|relacion completa|toda la relacion|todo el grupo|el grupo completo|toda la lista|la lista completa|sin faltar|todos y cada uno|sin excepcion|full|en totalidad|completica|completitos|el listado entero|la relacion entera|todos los|todas las)\b/u', $q0)) {
         $sig['cardinality']='all'; $e[]='card:all';
     }
 
@@ -652,7 +655,7 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     if ($sig['entity']==='guardians' && !empty($slots['group'])) { $sig['relation']='guardians_of_group'; $e[]='rel:guardians_of_group'; }
     elseif (preg_match('/\bacudientes? (del|de los|de las) (grupo|salon|curso)\b/u', $q0) && !empty($slots['group'])) { $sig['relation']='guardians_of_group'; $e[]='rel:guardians_of_group'; }
     if ($sig['entity']==='teachers' && !empty($slots['group'])) { $sig['relation']='teachers_of_group'; $e[]='rel:teachers_of_group'; }
-    elseif (preg_match('/\b(quien (ensena|dicta|da clase|le da clase|les ensena)|quienes (ensenan|dictan|dan clase)) .{0,24}\b(grupo|salon|curso|\d)/u', $q0) && !empty($slots['group'])) {
+    elseif (preg_match('/\b(quien (ensena|dicta|da clase|le da clase|les ensena|esta a cargo|atiende)|quienes (ensenan|dictan|dan clase|atienden)) .{0,24}\b(grupo|salon|curso|\d|sexto|septimo|octavo|noveno|decimo|once|undecimo)/u', $q0) && !empty($slots['group'])) {
         $sig['entity']='teachers'; $sig['relation']='teachers_of_group'; $e[]='rel:teachers_of_group';
     }
     if ($sig['entity']==='schedules' && !empty($slots['group'])) { $sig['relation']='schedule_of_group'; $e[]='rel:schedule_of_group'; }
@@ -718,6 +721,9 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
         if (($probe['relation'] ?? null) !== 'students_of_guardian') return null;
     }
     if (preg_match('/\b(al azar|aleatorio|random|cualquiera|uno cualquiera|una cualquiera|azar)\b/u', $q0)) return null; // random_student
+    // veto mutativo — «cambia el horario del 7-B» es operación, nunca consulta:
+    // el verbo mutativo INVALIDA cualquier señal de datos. §33: el chat es read-only.
+    if (preg_match('/\b(cambi(a|ar|e|o)|modific(a|ar|o)|edit(a|ar|o)|borr(a|ar|e|o)|elimin(a|ar|e|o)|crea(r|e|o)?|registr(a|ar|o|e)|actualiz(a|ar|o)|mueve|r?asign(a|ar|o)|quit(a|ar|o)|pon(er|e|go)|guarda(r|e|o)|gener(a|ar|o)|emit(ir|e|o)|exped(ir|e|o)|suspend(er|e|o)|activa(r|e|o)|desactiva(r|e|o)|anul(a|ar|o)|autoriz(a|ar|o)|rechaz(a|ar|o)|apr(o|u)eb(a|o|e)|revoc(a|ar|o))\b/u', $q0)) return null;
 
     $sig = nxSemSignals($q0, $slots, $ds);
     $ent  = $sig['entity'];
@@ -843,7 +849,9 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
     if (!empty($f['status'])) $score += 0.05;
     if ($sig['presentation'] || $sig['cardinality']==='all' || $sig['position']!==null) $score += 0.05;
     if ($conf < 0.65) $score += 0.05; // NLU inseguro → la estructura manda
-    if ($conf >= 0.9 && $sig['op']==='list' && !$sig['position'] && !$sig['presentation'] && $sig['cardinality']!=='all' && !$rel) {
+    if ($conf >= 0.9 && $sig['op']==='list' && !$sig['position'] && !$sig['presentation']
+        && $sig['cardinality']!=='all' && !$sig['sort'] && !$sig['projection'] && !$rel
+        && !isset($sig['slice'])) {
         // intent muy seguro y sin señales nuevas → conservar pipeline
         if (in_array($intent, ['students_in_group','group_student_count','students_count','teachers_list','groups_list'], true)) return null;
     }
@@ -1420,6 +1428,14 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
 }
 
 /** comparación de dos grupos sobre la misma métrica. */
+/** ids de grupo accesibles para roles acotados; null = acceso global. */
+function nxScopeGroupIds(PDO $conn, array $u): ?array {
+    if (in_array($u['role'] ?? '', ['RECTOR','COORDINATOR','SECRETARY'], true)) return null;
+    $st = $conn->prepare("SELECT group_id::text FROM teacher_group_access WHERE teacher_user_id=?");
+    $st->execute([(string)$u['id']]);
+    return $st->fetchAll(PDO::FETCH_COLUMN);
+}
+
 function nxExecGroupsCompare(PDO $conn, array $u, array $plan, array $vars): array {
     $f = $plan['filters'];
     $g1 = nxSemGroupId($conn, $u, $f['group'] ?? '');
@@ -1427,6 +1443,11 @@ function nxExecGroupsCompare(PDO $conn, array $u, array $plan, array $vars): arr
     if (!$g1 || !$g2)
         return ['reply'=>"¿Qué dos grupos comparo? Dime algo como «compara 6-A con 6-B».",
                 'intent'=>'groups.compare','_plan'=>$plan];
+    $allowed = nxScopeGroupIds($conn, $u);
+    if ($allowed !== null && (!in_array((string)$g1['group_id'], $allowed, true)
+        || !in_array((string)$g2['group_id'], $allowed, true)))
+        return ['reply'=>"Solo puedes consultar los grupos que tienes asignados.",
+                'intent'=>'groups.compare','denied'=>true,'_plan'=>$plan];
     [$from,$to] = nxSemRange($f);
     $mod = $f['module'] ?? null;
     $modSql = $mod ? ' AND ai.incident_type = ?' : '';
@@ -1468,14 +1489,22 @@ function nxExecGroupsRank(PDO $conn, array $u, array $plan, array $vars): array 
     $mod = $f['module'] ?? null;
     $modSql = $mod ? ' AND ai.incident_type = ?' : '';
     $dir = preg_match('/\b(menos|menor|mas bajo|mas baja|mas limpio|mas limpia|mejor)\b/u', $vars['_q'] ?? '') ? 'ASC' : 'DESC';
+    $allowed = nxScopeGroupIds($conn, $u);
+    $scopeSql = '';
+    if ($allowed !== null) {
+        if (!$allowed) return ['reply'=>"No tienes grupos asignados para comparar.",
+                               'intent'=>'groups.rank','_plan'=>$plan];
+        $scopeSql = ' AND ag.group_id IN (' . implode(',', array_fill(0, count($allowed), '?')) . ')';
+    }
     $st = $conn->prepare("SELECT ag.group_name, COUNT(DISTINCT ai.incident_id) AS n
         FROM attendance_incidents ai
         JOIN students s ON s.student_id=ai.student_id AND s.deleted_at IS NULL
         JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
         JOIN academic_groups ag ON ag.group_id=sga.group_id
-        WHERE ai.school_id=? AND ai.detected_at >= ?::date AND ai.detected_at < (?::date + INTERVAL '1 day') {$modSql}
+        WHERE ai.school_id=? AND ai.detected_at >= ?::date AND ai.detected_at < (?::date + INTERVAL '1 day') {$modSql}{$scopeSql}
         GROUP BY ag.group_name ORDER BY n {$dir} LIMIT 12");
-    $st->execute(array_filter([$u['school_id'],$from,$to,$mod], fn($v)=>$v!==null));
+    $q = array_merge([$u['school_id'],$from,$to], [$mod], $allowed ?? []);
+    $st->execute(array_filter($q, fn($v)=>$v!==null));
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     $lbl = $mod ? (NX_MODULE_LABEL[$mod] ?? $mod) : 'incidentes';
     $rl  = $f['range_label'] ?? (isset($f['days'])&&$f['days']>0 ? 'en el rango' : 'hoy');

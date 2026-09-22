@@ -169,6 +169,24 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          'perfil','resumen','estado','edad','cumpleanos','contacto','telefono',
          'documento','cedula','identificacion','whatsapp','celular','numero',
          'acudiente','acudientes','responsable','familiar','papa','mama','padre','madre',
+         # colectivos genéricos — «chicos del 7-B» es el grupo, no una persona
+         'chico','chicos','chica','chicas','muchacho','muchachos','muchacha','muchachas',
+         'pelado','pelados','pelada','peladas','menor','menores','chino','chinos','china','chinas',
+         # imperativos/verbos de petición — «necesito los matriculados» no es persona
+         'tardanza','inasistencia','evasion','ausencia','falta','permiso',
+         'citacion','familia','familiar','pariente','parientes',
+         # adjetivos de estado del estudiante — «alumnos exentos» no es persona
+         'exento','exentos','exenta','exentas','eximido','eximidos','dispensado',
+         'dispensados','presente','presentes','ausente','ausentes','tarde','puntual',
+         'impuntual','impuntuales','asignado','asignada','asignados','asignadas',
+         'huerfano','huerfanos','libre','libres','enrolado','enrolados','activo',
+         'activa','activos','inactivo','inactiva','retirado','retirada','graduado',
+         'graduada','nuevo','nueva','antiguo','antigua','bajo','alto','media','medio',
+         'critico','critica','vulnerable','vulnerables','derivado','derivados',
+         'observado','observados','citado','citados','faltado','faltados',
+         'ensename','dime','dame','muestrame','muéstrame','necesito','quiero','queria',
+         'pasame','pásame','ver','mira','mirame','buscame','buscáme','listame','contame',
+         'cuentame','decime','traeme','ponme','sacame','enseñame','liste','muéstrese',
          # copulativos y sustantivos de colección/presentación — nunca personas
          'es','sea','sean','fuese','estando','siendo',
          'lista','listas','fila','filas','columna','columnas','tabla','tablas',
@@ -209,7 +227,7 @@ def extract_entities(q: str) -> dict:
     elif re.search(r'este mes|del mes|en el mes|ultimo mes|al mes|de este mes', q):
         e['days'] = 30
 
-    m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
+    m = re.search(r'\b(?:grupo|salon|del|de|en|al|el)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
         or re.search(r'\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2})\b', q) \
         or re.search(r'\b(\d{1,2}\s\d{1,2})\b', q)   # «11.2» → normalizado «11 2»
     if m:
@@ -224,7 +242,9 @@ def extract_entities(q: str) -> dict:
                  'noveno|novena|decimo|decima|once|undecimo')  # «primera» = fem, no primer+A
         mo = re.search(r'\b(' + _ORDL + r')\s*([a-j])(?![a-z])', q) \
              or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q) \
-             or re.search(r'\b(?:del|de|los|las)\s+(' + '|'.join(_ORD) + r')\b(?!\s+(?:de|del)\b)', q)
+             or re.search(r'\b(?:del|de|los|las)\s+(primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|primer|tercer)\b(?!\s+(?:de|del|en|a|por|para)\b)', q) \
+             or re.search(r'\b(?:del|de|los|las)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo|sexta|septima|octava|novena|decima)\b', q) \
+             or re.search(r'\b(?:en|el|al)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo)\b(?!\s+(?:de|del|en|a|por|para|lugar|puesto|posicion|dia|mes|semana|ano)\b)', q)
         if mo:
             _base = re.sub(r'a$','o',mo.group(1))  # primera→primero
             num = _ORD.get(_base, _ORD.get(mo.group(1)))

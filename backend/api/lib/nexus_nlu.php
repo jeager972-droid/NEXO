@@ -333,7 +333,7 @@ function nxSlots(string $q): array {
         $s['range_label'] = $s['days'] === 0 ? 'hoy' : ($s['days'] === 1 ? 'ayer' : "últimos {$s['days']} días");
     }
 
-    if (preg_match('/\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
+    if (preg_match('/\b(?:grupo|salon|del|de|en|al|el)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
         || preg_match('/\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|\d{1,2} \d{1,2})\b/u', $q, $m)) {
         $s['group'] = strtoupper(str_replace([' ', '.'], ['-', '-'], $m[1]));
     }
@@ -352,7 +352,9 @@ function nxSlots(string $q): array {
             // ordinal desnudo tras preposición: «del octavo», «los del noveno»
             // — salvo «el primero de la lista/de 6-A»: ahí es POSICIÓN, no grado;
             // y «el segundo» solo es ordinal suelto si sigue algo («del 6-A»)
-            || preg_match('/\b(?:del|de|los|las)\s+(' . implode('|', array_keys($ord)) . ')\b(?!\s+(?:de|del)\b)/u', $q, $mo)) {
+            || preg_match('/\b(?:del|de|los|las)\s+(primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|primer|tercer)\b(?!\s+(?:de|del|en|a|por|para)\b)/u', $q, $mo)
+            || preg_match('/\b(?:del|de|los|las)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo|sexta|septima|octava|novena|decima)\b/u', $q, $mo)
+            || preg_match('/\b(?:en|el|al)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo)\b(?!\s+(?:de|del|en|a|por|para|lugar|puesto|posicion|dia|mes|semana|ano)\b)/u', $q, $mo)) {
             $s['group'] = ($ord[$mo[1]] ?? $ord[preg_replace('/a$/u','o',$mo[1])] ?? '1')
                 . (isset($mo[2]) && $mo[2] !== '' ? strtoupper($mo[2]) : '');
         }
@@ -468,7 +470,24 @@ function nxExtractStudent(string $q): ?string {
         'salida','papas','ultimos','timbre','cancha','tienda','cobija','pinta',
         'pintas','puente','materia','clase','leccion','recreo','descanso',
         'primero','segundo','tercero','cuarto','quinto','sexto','septimo',
-        'octavo','noveno','decimo','once','onceavo','undecimo',
+        'octavo','noveno','decimo','once','primera','segunda','tercera',
+        // colectivos genéricos — «chicos del 7-B» es el grupo, no una persona
+        'chico','chicos','chica','chicas','muchacho','muchachos','muchacha',
+        'muchachas','pelado','pelados','pelada','peladas','menor','menores',
+        'chino','chinos','china','chinas','ninios','ninias','onceavo','undecimo',
+          'tardanza','inasistencia','evasion','ausencia','falta','permiso',
+         'citacion','familia','familiar','pariente','parientes',
+        # adjetivos de estado del estudiante — «alumnos exentos» no es persona
+         'exento','exentos','exenta','exentas','eximido','eximidos','dispensado',
+         'dispensados','presente','presentes','ausente','ausentes','tarde','puntual',
+         'impuntual','impuntuales','asignado','asignada','asignados','asignadas',
+         'huerfano','huerfanos','libre','libres','enrolado','enrolados','activo',
+         'activa','activos','inactivo','inactiva','retirado','retirada','graduado',
+         'graduada','nuevo','nueva','antiguo','antigua','bajo','alto','media','medio',
+         'critico','critica','vulnerable','vulnerables','derivado','derivados',
+         'observado','observados','citado','citados','faltado','faltados',
+        'ensename','necesito','queria','pasame','mirame','buscame','listame',
+        'contame','cuentame','decime','traeme','ponme','sacame','mira','pon',
         'aleatorio','aleatoria','cualquiera','azar','random',
         'existimos','vivimos','nacimos','estamos','somos','fueron',
         // materias académicas y cultura general — nunca nombres de estudiante

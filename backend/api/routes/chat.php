@@ -352,12 +352,19 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         'inherited' => $interp['resolved']['inherited'],
         'timing_ms' => ['nlu' => round($tNlu * 1000, 2), 'dsm' => round($tDsm * 1000, 2)],
     ];
+    // clarify provisional: si el texto YA contiene señales estructurales
+    // suficientes para un plan (lista+grupo+presentación), no hay ambigüedad
+    // real — el clarify de intent es un falso positivo (ej. «chicos del 7-B
+    // por documento» → student_field pide persona pero es una lista)
     if ($interp['requires_clarification']) {
-        $out = ['reply'=>$interp['clarify'],'intent'=>'clarify','confidence'=>$conf,
-                'session_id'=>$sessionId,'entities'=>$slots,
-                '_interpretation'=>$out['_interpretation']];
-        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
-        exit(json_encode(['status'=>'ok','data'=>$out]));
+        $provisional = nxSemanticCompose($q0, $intent, (float)$conf, $slots, $interp, $ds);
+        if (!$provisional) {
+            $out = ['reply'=>$interp['clarify'],'intent'=>'clarify','confidence'=>$conf,
+                    'session_id'=>$sessionId,'entities'=>$slots,
+                    '_interpretation'=>$out['_interpretation']];
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
     }
 
     // ── Confirmación / cancelación de operación pendiente ────────────────
