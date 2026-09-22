@@ -32,4 +32,27 @@ OPEN_QUESTIONS: ¿Poblado teacher_group_access en producción (scope parity asum
 4. Continuar desde NEXT_ACTION; no reiniciar auditorías ya verificadas.
 5. Cada edición contendrá como máximo 300 líneas y conservará los comentarios existentes.
 
-FINAL_STATE: CONTROLLED_PRODUCTION_GATE_GREEN — el gate formal pasa 18/18; queda hardening de tests y UI antes del estado terminal «NEXUS UNIVERSAL CONVERSATIONAL LAYER — READY».
+FINAL_STATE: CONTROLLED_PRODUCTION_GATE_GREEN — el gate formal pasa 18/18 con umbrales endurecidos; la evaluación terminal por criterio queda documentada abajo — 13 demostrados, 3 parciales (generalización modelo, rendimiento medido, conversación larga sobre API real).
+
+## Evaluación de los 16 criterios terminales (2026-09-22)
+
+| # | Criterio | Estado | Evidencia |
+|---|---|---|---|
+| 1 | Grafo de capacidades completo y auditado | ✅ | 39 capacidades; 0 refs colgantes tras barrido; endpoints corregidos (students.detail→/consultations/query); validator registry-driven |
+| 2 | Capacidades NEXO expuestas a NL | ✅ | capability_eval 154/154 — cubre students/guardians/teachers/groups/schedule/incidents/permissions/exits/risk/tracking/citations/devices/notifs/whatsapp/sos/audit/activity/day/birthdays/staff/ops |
+| 3 | Representación semántica universal | ✅ | plan IR con capability/filters/op/position/slice/presentation/projection; validado estructuralmente (34 invariantes) |
+| 4 | Composición abierta | ✅ | open_composition 59/59 — conjunciones, refs cruzadas, OOD |
+| 5 | Subplanes | ✅ | steps compuestos con _ref hacia atrás validado; `each` itera result-sets (cap 12) |
+| 6 | Memoria de trabajo | ✅ | _ds server-side: entities/goal/last_result/cursor/person/next_rid; prevalece sobre ctx cliente saneado |
+| 7 | Memoria de result-sets | ✅ | objects[] identidad+filtros+count (sin PII duplicada); R-ids monotónicos; «vuelve a R3» re-ejecuta por filtros |
+| 8 | Encadenamiento de referencias | ✅ | refs 25/25 + invariants: solo hacia atrás, posiciones ±, each; nav 60/60 |
+| 9 | Transformaciones de presentación | ✅ | proj/sort/slice/table vía result_nav; sort preserva columnas del set (no fabrica doc/grupo para guardianes); DataCard paginado accesible |
+| 10 | Generalización a frases no vistas | ⚠️ | blind 87.5% / F1 79.7% / near-miss 90% — bueno, no perfecto; gap conocido: paráfrasis de acudiente a nivel de clasificador (corpus, no resolver) |
+| 11 | Abstención OOD honesta | ✅ | out_of_scope + foreign_culture + clarify (clarify_ok 381/381); «cuantas hubo hoy» aclara; «física cuántica» → cultura general |
+| 12 | RBAC correcto | ✅ | G4 estático + G9 cadena + G11 0/533 escapes; autorización por capa (entrada, repetición, delegación); default-deny en intents desconocidos |
+| 13 | Canal read-only | ✅ | G13: 52-53 handlers auditados, 0 escrituras; operaciones solo chips de navegación/confirmación |
+| 14 | Resiliencia | ✅ | G14 15/15 — NLU caído/timeout/BD vacía degradan seguro |
+| 15 | Rendimiento aceptable | ⚠️ | NO medido por capa — solo duración total del gate (~10.7s/18 suites). Falta p50/p95/p99 por turno NLU+DSM+SQL |
+| 16 | Conversación larga end-to-end | ⚠️ | Simulado: 103/103 + 320/320 convos multi-turno. continuity_50 (52 turnos vs API real) escrito y endurecido, NO ejecutado — requiere entorno con BD |
+
+Veredicto honesto: el núcleo conversacional está verificado localmente en todas sus capas simulables. Lo que NO se puede afirmar hoy: comportamiento sobre datos reales de producción (SQL ejecutado), latencia percibida, y una sesión de ≥50 turnos contra el servicio vivo. Esos tres necesitan el entorno real que el alcance actual excluye.

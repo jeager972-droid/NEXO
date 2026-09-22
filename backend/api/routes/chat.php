@@ -915,14 +915,23 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
     }
     if (preg_match('/^sort:(last_name|first_name|document|group)$/', $nav, $m)) {
         $key = ['last_name'=>'ln','first_name'=>'fn','document'=>'doc','group'=>'grp'][$m[1]];
-        $items2 = $items;
-        usort($items2, fn($a,$b)=>strnatcasecmp((string)($a['f'][$key] ?? $a['label']), (string)($b['f'][$key] ?? $b['label'])));
+        // permutar índices — las filas del card conservan SUS columnas
+        // (un set de acudientes/incidentes no tiene doc/grupo estudiantil)
+        $order = array_keys($items);
+        usort($order, fn($i,$j)=>strnatcasecmp(
+            (string)($items[$i]['f'][$key] ?? $items[$i]['label']),
+            (string)($items[$j]['f'][$key] ?? $items[$j]['label'])));
+        $items2 = array_map(fn($i)=>$items[$i], $order);
+        $rows2 = !empty($rs['rows'])
+            ? array_map(fn($k,$i)=>[$k+1, ...array_slice($rs['rows'][$i],1)],
+                        array_keys($order), $order)
+            : null;
         $lbl2 = ['ln'=>'apellido','fn'=>'nombre','doc'=>'documento','grp'=>'grupo'][$key];
         $lines = array_map(fn($it)=>'• '.$it['label'].(!empty($it['sub'])?' — '.$it['sub']:''), array_slice($items2,0,12));
         return ['reply'=>"Ordenados por {$lbl2} ({$n}):\n" . implode("\n",$lines) . ($n>12?"\n…y ".($n-12)." más":''),
                 'intent'=>'result_nav','_result_nav'=>'sort',
-                '_result_set'=>array_merge($rs,['items'=>$items2,'order'=>$lbl2,
-                    'rows'=>array_map(fn($i,$it)=>[$i+1,$it['label'],$it['f']['doc']??'—',$it['f']['grp']??($it['group']??'—')],array_keys($items2),$items2)]),
+                '_result_set'=>array_merge($rs,['items'=>$items2,'order'=>$lbl2]
+                    + ($rows2 !== null ? ['rows'=>$rows2] : [])),
                 '_result_cursor'=>0];
     }
     if (preg_match('/^slice:(\d+):(start|end)$/', $nav, $m)) {
