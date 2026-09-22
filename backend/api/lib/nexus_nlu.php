@@ -342,11 +342,19 @@ function nxSlots(string $q): array {
         $ord = ['primero'=>'1','segundo'=>'2','tercero'=>'3','cuarto'=>'4','quinto'=>'5',
                 'sexto'=>'6','septimo'=>'7','octavo'=>'8','noveno'=>'9','decimo'=>'10',
                 'once'=>'11','onceavo'=>'11','undecimo'=>'11'];
-        if (preg_match('/\b(' . implode('|', array_keys($ord)) . ')\s*([a-j])\b/u', $q, $mo)
+        // patrón con letra: solo formas en o/a — «primera tardanza» es femenino
+        // de «primero», NO primer+A. Igual para «tercera», «segunda»…
+        $ordL = 'primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|'
+              . 'quinto|quinta|sexto|sexta|septimo|septima|octavo|octava|'
+              . 'noveno|novena|decimo|decima|once|undecimo';
+        if (preg_match('/\b(' . $ordL . ')\s*([a-j])(?![a-z])/u', $q, $mo)
             || preg_match('/\b(?:grado|grupo|salon)\s+(' . implode('|', array_keys($ord)) . ')\b/u', $q, $mo)
             // ordinal desnudo tras preposición: «del octavo», «los del noveno»
-            || preg_match('/\b(?:del|de|los|las|el|al)\s+(' . implode('|', array_keys($ord)) . ')\b/u', $q, $mo)) {
-            $s['group'] = $ord[$mo[1]] . (isset($mo[2]) ? strtoupper($mo[2]) : '');
+            // — salvo «el primero de la lista/de 6-A»: ahí es POSICIÓN, no grado;
+            // y «el segundo» solo es ordinal suelto si sigue algo («del 6-A»)
+            || preg_match('/\b(?:del|de|los|las)\s+(' . implode('|', array_keys($ord)) . ')\b(?!\s+(?:de|del)\b)/u', $q, $mo)) {
+            $s['group'] = ($ord[$mo[1]] ?? $ord[preg_replace('/a$/u','o',$mo[1])] ?? '1')
+                . (isset($mo[2]) && $mo[2] !== '' ? strtoupper($mo[2]) : '');
         }
     }
 
@@ -508,6 +516,17 @@ function nxExtractStudent(string $q): ?string {
         'abierto','abierta','abiertos','cerrado','cerrada','pendiente','pendientes',
         'activo','activa','activos','vigente','vigentes','anterior','anteriores',
         'reciente','recientes','nuevo','nueva',
+        // presentación/orden — nunca nombres («ordenados por nombre» en 6-A)
+        'ordenado','ordenada','ordenados','ordenadas','orden','alfabeticamente',
+        'alfabetico','alfabetica','completo','completa','completos','completas',
+        'tabla','tablas','columnas','nomina','nominas','listado','listados',
+        'primeros','primeras','entero','entera','integro','integra','todos',
+        'todas','listar','listando','tabulado','tabulada','porcentaje','porcentajes',
+        // copulativos sueltos — «cuál es el primero» no nombra a nadie
+        'es','sea','sean','fuese','estando','siendo',
+        // colección como objeto — «el primero de la lista» no es persona
+        'lista','listas','fila','filas','columna','posicion','posiciones',
+        'puesto','puestos','lugar','lugares','ranking','top',
         'matematicas','ingles','espanol','ciencias','sociales','fisica','quimica',
         'biologia','historia','geografia','arte','musica','religion','etica',
         'informatica','lectura','escritura','coordinador','coordinadores',
@@ -519,7 +538,7 @@ function nxExtractStudent(string $q): ?string {
     $cands = [];
     foreach ([
         '/(?=(?:estudiante|alumno|alumna|nino|nina)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
-        '/(?=\b(?:de|del|sobre|para|a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
+        '/(?=\b(?:de|del|sobre|para|(?<![-\d])a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' . $boundary . ')/u',
         // «camila del septimo», «juan del 8a», «pedro del jardin» —
         // nombre + «del/de» + grado: el nombre precede al conector
         '/\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)/u',
@@ -1403,7 +1422,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         if ($hasResult) {
             $nav = null;
             if (preg_match('/^(y |dame |dime |muestra(?:me)? |trae(?:me)? |y )?(el |la |los |las )?(otro|otra|uno mas|una mas|mas|siguiente|el siguiente|y otro|y otra|de nuevo|el proximo|la proxima|continua|sigue)[.! ]*$/u', $q0)) $nav = 'next';
-            elseif (preg_match('/\b(el|la|los|las)? ?(primer[oa]s?|segund[oa]s?|tercer[oa]s?|ultim[oa]s?|penultim[oa]s?|anterior|siguiente|proxim[oa])\b/u', $q0, $mnav)
+            elseif (preg_match('/\b(el|la|los|las)? ?(primer[oa]?s?|segund[oa]?s?|tercer[oa]?s?|ultim[oa]s?|penultim[oa]s?|anterior|siguiente|proxim[oa])\b/u', $q0, $mnav)
                 && !preg_match('/\b(primer|primero|ultimo) (dia|día|mes|lunes|martes|miercoles|jueves|viernes|sabado|domingo|periodo|bimestre|ano|año|semestre|trimestre|corte|semana)\b/u', $q0)) {
                 $w = trim($mnav[2]);
                 $ord = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,'tercero'=>3,'tercera'=>3,'ultimo'=>$rsCount??0,'ultima'=>$rsCount??0,'anterior'=>0,'siguiente'=>0,'proximo'=>0,'proxima'=>0,'penultimo'=>-1,'penultima'=>-1];
@@ -1414,7 +1433,8 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 elseif (in_array($w, ['penultimo','penultima'], true)) $nav = 'nth:' . max(1, $n2 - 1);
                 else $nav = 'nth:' . ($ord[$w] ?? 1);
             }
-            elseif (preg_match('/^(y |dame |dime |muestra(?:me)? )?(los demas|las demas|los otros|las otras|el resto|todos ellos|todos|los que faltan)[.! ]*$/u', $q0)) $nav = 'rest';
+            elseif (preg_match('/^(y |dame |dime |muestra(?:me)? )?(los demas|las demas|los otros|las otras|el resto|todos ellos|todos|los que faltan|los restantes)[.! ]*$/u', $q0)) $nav = 'rest';
+            elseif (preg_match('/\b(en tabla|en una tabla|como tabla|formato tabla|ponmelos en una tabla|ponlos en tabla|en columnas|en cuadro|tabulados?|la tabla completa|todos en tabla|muestralos todos|muéstralos todos|muestramelos todos|muéstramelos todos|pasame todos|dame todos|lista completa|la lista entera|la nomina completa|el listado completo)\b/u', $q0)) $nav = 'table';
             elseif (preg_match('/\b(cuantos|cuantas|cuanto|cuanta|cuantos son|cuantas son|cuantos hay|cuantas hay)( son| hay| eran| fueron| resultaron| en total| son en total| al final| en total son)?\b[?¡! ]*$/u', $q0)) $nav = 'count';
             elseif (preg_match('/\b(cual|como|quien) (es|fue|se llama)? ?(su|el) (nombre|como se llama)\b[?¡! ]*$/u', $q0)
                 || preg_match('/^(y )?(su nombre|el nombre|como se llama|quien es|quien era)[.!? ]*$/u', $q0)) $nav = 'name';

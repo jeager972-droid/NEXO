@@ -574,6 +574,8 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread
+    ON notifications(user_id, created_at DESC) WHERE read_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_notifications_origin ON notifications(origin_type, origin_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_dedup
     ON notifications (dedup_key) WHERE dedup_key IS NOT NULL;
@@ -591,6 +593,11 @@ CREATE TABLE IF NOT EXISTS attendance_incidents (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY(incident_id, detected_at)
 ) PARTITION BY RANGE(detected_at);
+
+-- Migración idempotente: BD desplegadas antes de la consolidación no tienen
+-- group_id (CREATE TABLE IF NOT EXISTS no añade columnas a tablas existentes).
+-- En tabla particionada el ALTER se propaga a todas las particiones.
+ALTER TABLE attendance_incidents ADD COLUMN IF NOT EXISTS group_id UUID;
 
 CREATE INDEX IF NOT EXISTS idx_attendance_incidents_school_type_detected
     ON attendance_incidents(school_id, incident_type, detected_at DESC);
@@ -1889,7 +1896,7 @@ DECLARE
     v_total_score NUMERIC(8,2) := 0.0;
     v_event_count INTEGER := 0;
     v_events_json JSONB := '[]'::jsonb;
-    v_intervals INTEGER[] := '{}';
+    v_intervals DATE[] := '{}';
     v_prev_date DATE;
     v_clustering NUMERIC(5,2) := 1.00;
     v_stddev DOUBLE PRECISION;

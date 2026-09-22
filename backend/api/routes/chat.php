@@ -26,6 +26,7 @@
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 require_once __DIR__ . '/../lib/nexus_nlu.php';
+require_once __DIR__ . '/../lib/nexus_semantic.php';
 require_once __DIR__ . '/../lib/kb_colombia.php';
 require_once __DIR__ . '/../lib/calculator.php';
 
@@ -410,8 +411,19 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
 
     // ── navegación sobre el result-set guardado («dame otro», «el primero»,
     // «los demás», «su nombre») — consulta informativa sobre contexto,
-    // no requiere nuevo intent ni clasificador
-    if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items'])) {
+    // no requiere nuevo intent ni clasificador.
+    // Salvo: si el turno nombra un GRUPO distinto al activo, la posición se
+    // resuelve contra ese grupo (consulta nueva), no contra el set viejo.
+    $rsGroup = $ds['last_result']['_filters']['group'] ?? ($ds['entities']['group'] ?? null);
+    $navGroupClash = !empty($slots['group']) && $rsGroup
+        && strtoupper((string)$slots['group']) !== strtoupper((string)$rsGroup);
+    // verbo de evento / sustantivo de serie / slice-N en el enunciado →
+    // consulta NUEVA, no navegación del set: «quién llegó primero»,
+    // «el primer incidente», «los cinco primeros de 6-A» ≠ «el primero»
+    $navEventVerb = (bool)preg_match('/\b(llego|llegaron|entro|entraron|falto|faltaron|marco|marcaron|salio|salieron|registro|registraron|asistio|asistieron|vino|vinieron)\b/u', $q0)
+        || preg_match('/\b(incidente|incidentes|tardanza|tardanzas|inasistencia|inasistencias|evasion|evasiones|evento|eventos|registro|registros|novedad|novedades)\b/u', $q0)
+        || preg_match('/\b(?:los|las)\s+(\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]?s?|ultim[oa]s?)\b/u', $q0);
+    if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items']) && !$navGroupClash && !$navEventVerb) {
         $out = chatResultNav($ds, $slots['_nav'], $vars);
         $out['session_id'] = $sessionId;
         $out['_ds'] = chatBuildDs($interp, $out, $ds);
@@ -454,6 +466,38 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $slots['group'] = $grp;
         $slots['student'] = trim($found[0]['first_name'] . ' ' . $found[0]['last_name']);
         $slots['_ref_resolved'] = 'student→group: ' . $grp;
+    }
+
+    // ── Capa semántica — composición estructural sobre el registro de
+    // capacidades (posición/cardinalidad/presentación/relación/filtro
+    // compuesto). Devuelve null → el pipeline de intents decide. §50: el
+    // plan es una estructura verificable antes de ejecutar.
+    $plan = nxSemanticCompose($q0, $intent, (float)$conf, $slots, $interp, $ds);
+    if ($plan) {
+        $plan['_ctx_person'] = $ds['person'] ?? null;
+        if (!nxPlanAllowed($conn, $authUser, $plan, $role)) {
+            $out = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$plan['capability'],
+                    'confidence'=>$conf,'denied'=>true,'session_id'=>$sessionId,
+                    '_plan'=>$plan,'_interpretation'=>$out['_interpretation']];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        $tDisp = microtime(true);
+        $out = nxPlanExecute($conn, $authUser, $plan, $vars);
+        $tDisp = microtime(true) - $tDisp;
+        $out = nxPlanResponse($out, $plan['capability'], 'plan:' . $plan['capability']);
+        $out['intent'] = $plan['capability'];
+        $out['confidence'] = $conf;
+        $out['session_id'] = $sessionId;
+        $out['entities'] = array_merge($slots, $out['entities'] ?? []);
+        $out['_ds'] = chatBuildDs($interp, $out, $ds);
+        if (isset($out['_interpretation']['timing_ms']))
+            $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
+        $out['_interpretation']['plan'] = $plan;
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        echo json_encode(['status'=>'ok','data'=>$out], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     // ── RBAC + políticas institucionales ──
@@ -584,7 +628,20 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
     if ($nav === 'prev') { $nav = 'nth'; $idx = max(0, $cur - 1); }
     if (preg_match('/^nth:(\d+)$/', $nav, $m)) $idx = max(0, (int)$m[1] - 1);
     if ($nav === 'next') $idx = $cur + 1;
-    if ($nav === 'rest' || $nav === 'all') {
+    if ($nav === 'table' || $nav === 'all') {
+        // §10: la tabla completa es una capacidad — si el set trae filas
+        // materializadas (columns/rows) se emiten TODAS en una tarjeta.
+        if (!empty($rs['rows']) && !empty($rs['columns']))
+            return ['reply'=>"Tabla completa: {$n} {$lbl}.",
+                    'cards'=>[['title'=>ucfirst($lbl),'columns'=>$rs['columns'],'rows'=>$rs['rows']]],
+                    'intent'=>'result_nav','_result_nav'=>'table'];
+        $all = array_map(fn($it) => '• ' . $it['label'] . (!empty($it['sub']) ? ' — ' . $it['sub'] : ''), $items);
+        return ['reply'=>"Todos los {$lbl} ({$n}):
+" . implode("
+", $all),
+                'intent'=>'result_nav','_result_nav'=>'table','_result_cursor'=>$n - 1];
+    }
+    if ($nav === 'rest') {
         if ($n <= $cur + 1)
             return ['reply'=>"Ya te mostré todos los {$lbl} — no quedan más.", 'intent'=>'result_nav','_result_nav'=>'rest'];
         $rest = array_slice($items, $cur + 1);
@@ -632,7 +689,9 @@ function chatDispatch(PDO $conn, array $authUser, string $intent, array $slots, 
             securityLog('CHAT_SECURITY_PROBE', mb_substr($vars['_q'] ?? '',0,200) . ' | user ' . ($authUser['id'] ?? '?'));
         return ['reply' => nxSmalltalk($intent, $vars), 'intent'=>$intent];
     }
-    $handler = 'chat_' . $intent;
+    // alias: el intent del corpus no siempre coincide 1:1 con el handler
+    $handlerMap = ['notifications_unread'=>'chat_notifications','audit_query'=>'chat_audit'];
+    $handler = $handlerMap[$intent] ?? ('chat_' . $intent);
     if (!function_exists($handler))
         return ['reply' => nxSmalltalk('out_of_scope', $vars), 'intent'=>$intent];
     try {
@@ -959,7 +1018,7 @@ function chat_student_field(PDO $conn, array $u, array $s, array $v): array {
     // acudiente — también cuando el campo pide datos DEL acudiente
     $isGuardField = str_contains($field, 'acudiente') || $field === 'celular';
     if ($isGuardField) {
-        $g = $conn->prepare("SELECT u.first_name||' '||u.last_name AS name, u.document_number AS doc, u.phone, g.whatsapp_phone
+        $g = $conn->prepare("SELECT g.guardian_id AS gid, u.first_name||' '||u.last_name AS name, u.document_number AS doc, u.phone, g.whatsapp_phone
             FROM guardian_student_relationships r JOIN guardians g ON g.guardian_id=r.guardian_id
             JOIN users u ON u.user_id=g.user_id
             WHERE r.student_id=? ORDER BY r.primary_guardian DESC LIMIT 1");
@@ -967,8 +1026,8 @@ function chat_student_field(PDO $conn, array $u, array $s, array $v): array {
     }
     $ent = ['student'=>mb_strtolower($name),'group'=>$st['group_name']];
     // el acudiente queda como persona referenciada — «su número» siguiente
-    // se refiere a él, no al estudiante
-    if (!empty($guard['name'])) $ent['_person'] = ['type'=>'guardian','name'=>$guard['name'],'student'=>$st['student_id']];
+    // se refiere a él, no al estudiante; gid sostiene students.of_guardian
+    if (!empty($guard['name'])) $ent['_person'] = ['type'=>'guardian','name'=>$guard['name'],'gid'=>$guard['gid'] ?? null,'student'=>$st['student_id']];
     return match($field) {
         'documento' => ['reply'=>"{$name}: documento *{$st['document_number']}* — grupo {$st['group_name']}, grado {$st['grade_level']}.",'entities'=>$ent],
         'acudiente' => ['reply'=>$guard ? "Acudiente de {$name}: *{$guard['name']}* — WhatsApp {$guard['whatsapp_phone']}" . ($guard['phone']&&$guard['phone']!==$guard['whatsapp_phone']?" · tel {$guard['phone']}":'') . "." : "{$name} no tiene acudiente registrado — te tocaría registrarlo primero.",'entities'=>$ent],

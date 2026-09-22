@@ -168,12 +168,20 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          'emergencias','panico','sos','seguimiento','datos','informacion','ficha',
          'perfil','resumen','estado','edad','cumpleanos','contacto','telefono',
          'documento','cedula','identificacion','whatsapp','celular','numero',
-         'acudiente','acudientes','responsable','familiar','papa','mama','padre','madre'}
+         'acudiente','acudientes','responsable','familiar','papa','mama','padre','madre',
+         # copulativos y sustantivos de colección/presentación — nunca personas
+         'es','sea','sean','fuese','estando','siendo',
+         'lista','listas','fila','filas','columna','columnas','tabla','tablas',
+         'nomina','nominas','listado','listados','posicion','posiciones',
+         'puesto','puestos','lugar','lugares','ranking','top','completo',
+         'completa','completos','completas','ordenado','ordenada','ordenados',
+         'ordenadas','orden','alfabeticamente','alfabetico','alfabetica',
+         'entero','entera','integro','integra','porcentaje','porcentajes'}
 
 _BOUNDARY = r'(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)'
 _STUDENT_PATS = [
     r'(?=(?:estudiante|alumno|alumna|niño|niña)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
-    r'(?=\b(?:de|del|sobre|para|a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    r'(?=\b(?:de|del|sobre|para|(?<![-\d])a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
     # «camila del septimo», «juan del 8a» — nombre + conector + grado
     r'\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)',
 ]
@@ -207,15 +215,19 @@ def extract_entities(q: str) -> dict:
     if m:
         e['group'] = m.group(1).upper().replace(' ', '-').replace('.', '-')
     # ordinales: «octavo a», «onceavo b», «grado noveno», «11.2» ya cubierto
-    _ORD = {'primero':'1','segundo':'2','tercero':'3','cuarto':'4','quinto':'5',
+    _ORD = {'primero':'1','primer':'1','segundo':'2','tercero':'3','tercer':'3','cuarto':'4','quinto':'5',
             'sexto':'6','septimo':'7','octavo':'8','noveno':'9','decimo':'10',
             'once':'11','onceavo':'11','undecimo':'11','onceavo':'11'}
     if 'group' not in e:
-        mo = re.search(r'\b(' + '|'.join(_ORD) + r')\s*([a-j])\b', q) \
+        _ORDL = ('primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|'
+                 'quinto|quinta|sexto|sexta|septimo|septima|octavo|octava|'
+                 'noveno|novena|decimo|decima|once|undecimo')  # «primera» = fem, no primer+A
+        mo = re.search(r'\b(' + _ORDL + r')\s*([a-j])(?![a-z])', q) \
              or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q) \
-             or re.search(r'\b(?:del|de|los|las|el|al)\s+(' + '|'.join(_ORD) + r')\b', q)
+             or re.search(r'\b(?:del|de|los|las)\s+(' + '|'.join(_ORD) + r')\b(?!\s+(?:de|del)\b)', q)
         if mo:
-            num = _ORD[mo.group(1)]
+            _base = re.sub(r'a$','o',mo.group(1))  # primera→primero
+            num = _ORD.get(_base, _ORD.get(mo.group(1)))
             letter = mo.group(2).upper() if mo.lastindex >= 2 and mo.group(2) else ''
             e['group'] = num + letter
             e['_group_src'] = mo.group(0)   # para enmascarar la forma ordinal
