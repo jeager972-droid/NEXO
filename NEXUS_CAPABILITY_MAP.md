@@ -30,8 +30,15 @@ Cobertura conversacional sobre capacidades de NEXO: NO DEMOSTRADA.
 
 ## Gaps ya localizados en la superficie declarativa
 
-- Validación no contrasta required_parameters genéricos ni elección de executor delegado.
-- nxPlanExecuteStep solo reconoce delegación si el plan trae exec/_delegate_intent; el registry por sí solo no basta.
-- attendance.today, trackings.active y operations.derive declaran múltiples intents; falta selección inequívoca del executor.
-- Los límites SQL (p. ej. students LIMIT 400) también afectan conteos y cardinality=all.
-- Los filtros declarados no prueban que el executor los aplique; hace falta inventario de contratos verificable.
+- ~~Validación no contrasta required_parameters genéricos ni elección de executor delegado~~ **RESUELTO** (nxPlanValidate genérico + NexusPlanInvariantTest 34).
+- ~~nxPlanExecuteStep solo reconoce delegación si el plan trae exec/_delegate_intent~~ **RESUELTO** (delegación re-verifica intents declarados, normaliza `a|b`).
+- ~~attendance.today/trackings.active/operations.derive con múltiples intents~~ **RESUELTO** (selección entre intents declarados + re-auth).
+- ~~Límites SQL LIMIT 400 en conteos~~ **RESUELTO** (count/percent usan COUNT real; ordinales acotados a ventana).
+- ~~`related`/`nearby` con 17 refs colgantes~~ **RESUELTO** (0 refs a capacidades inexistentes tras barrido).
+- Los filtros declarados no prueban que el executor los aplique; hace falta inventario de contratos verificable — **siguiente**: `$entityTables` corregido en ecosystem_inventory (corre con PDO real, fuera de alcance local).
+
+## Estado del grafo (post-auditoría)
+
+- 39 capacidades; 12 con ejecutor SQL propio; 27 delegadas a intents `chat_*` con re-verificación RBAC.
+- `related`/`nearby` son pistas de navegación, no ejecutables — ahora todas apuntan a capacidades existentes.
+- `result_nav` (DSM, no capability) removido del grafo.

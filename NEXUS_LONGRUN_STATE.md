@@ -2,14 +2,14 @@
 
 CURRENT_PHASE: HARDENING + REGRESSION
 CURRENT_OBJECTIVE: Todo el hardening de tests hecho (exit-codes, aserciones no vacuas, consistency real, G7b=0) y accesibilidad de DataCard; verificar contra los criterios terminales y documentar el alcance honesto.
-LAST_SUCCESSFUL_MILESTONE: Release gate 18/18 PASS con umbral honesto (G7b críticos=0, antes ≤6) — READY FOR CONTROLLED PRODUCTION (10741ms). La tolerancia endurecida destapó 1 crítico real (sonda «tabla de usuarios») ya corregido.
-CURRENT_FAILURE: Ninguna en las suites ejecutadas. Gaps vivos documentados: 3 paráfrasis de acudiente a nivel de modelo (corpus), blind_eval 73.6% diagnóstico, suites live (continuity_50, inventory) sin ejecutar por alcance local, LIMIT 400 en conteos all.
+LAST_SUCCESSFUL_MILESTONE: Modelo re-entrenado con corpus de paráfrasis de acudiente (argmax 95.8→98.6%); gate 18/18 PASS post-retrain; bug preexistente roster→list_events corregido; rendimiento medido (classify p95=4.1ms + resolve p95=0.2ms).
+CURRENT_FAILURE: Ninguna en las suites ejecutadas. Gaps vivos: 1 paráfrasis de operación blind («representante del alumno se presente en coordi»), blind_eval diagnóstico por diseño, suites live (continuity_50, inventory) sin ejecutar por alcance local.
 ROOT_CAUSE: (resueltos este ciclo) — (k) «tabla de usuarios» era derive_action: añadida sonda de esquema a nxCoverageOverride; (l) residuo post-stopword producía nombres («cuantica», «nombre»): saltar artículos/marcadores + primer término no-stopword, espejo Python; (m) «cuéntame sobre X» sin dominio forzaba student_summary: foreign_culture; (n) convCtx del harness no leía turn_type (nunca heredaba) ni excluía field: paridad real con chatBuildDs.
 FILES_CHANGED: backend/api/lib/nexus_nlu.php (sonda esquema, extractor first-word, meta-tema foreign_culture), backend/nlu/preprocess.py (espejo extractor), test/continuity_50.php, test/blind_eval.php, test/nexus_capability_eval_v1.php, test/real_conversation_v1.php, test/nexus_release_gate.php, test/ecosystem_capability_inventory.php, PWA/src/pages/Chat.jsx (DataCard paginado accesible), PWA/src/__tests__/components/ChatDataCard.test.jsx (nuevo).
 TESTS_PASSED: Release gate 18/18 (READY FOR CONTROLLED PRODUCTION, G7b=0); real_conversation 103/103 (consistency 381/381 real); forensic 36/36; DSM 50/50; readonly 53; resiliencia 15/15; capability 154/154; composition 59/59; phpunit 244/937; semantic_eval adversarial 533/533 + convos 320/320; PWA 601 tests; generalización 87.5%/F1 79.7%.
 TESTS_FAILED: blind_eval 173/235=73.6% exit 1 — diagnóstico esperado (emocion/fronteras/fuera_dominio son gaps de cobertura NLU documentados, no regresión).
 KNOWN_REGRESSIONS: Ninguna tras re-correr toda la matriz post-fix. Baseline ee12db9 preservado.
-NEXT_ACTION: (1) Barrido de referencias colgantes en registry (result_nav, students.summary, risk.alerts — ¿delegación válida u huérfanos?); (2) LIMIT 400 en conteos all — verificar si el executor cuenta antes de cortar; (3) evaluar los 16 criterios terminales contra evidencia; (4) commit checkpoint; (5) cuando el usuario autorice, correr continuity_50 + inventory contra entorno real.
+NEXT_ACTION: (1) commit de esta ola (corpus+modelo+resolver+dsm_units); (2) evaluar si vale retrain adicional para la paráfrasis de operación restante; (3) cuando el usuario autorice, correr continuity_50 + inventory contra entorno real — el único camino para cerrar criterios 15/16 completamente.
 ARCHITECTURAL_DECISIONS: Ver NEXUS_DECISIONS.md — nxPlanValidate es contrato estructural genérico (registry-driven), la autorización corre por capa y no se hereda, el cliente jamás decide operaciones, día civil = America/Bogota, objetos de memoria conservan identidad+filtros (no ítems PII), intents desconocidos niegan por defecto.
 OPEN_QUESTIONS: ¿Poblado teacher_group_access en producción (scope parity asume datos)? ¿Aceptable que objects[] no guarde ítems (referencias a sets antiguos re-ejecutan por filtro, no por snapshot)?
 
@@ -47,12 +47,12 @@ FINAL_STATE: CONTROLLED_PRODUCTION_GATE_GREEN — el gate formal pasa 18/18 con 
 | 7 | Memoria de result-sets | ✅ | objects[] identidad+filtros+count (sin PII duplicada); R-ids monotónicos; «vuelve a R3» re-ejecuta por filtros |
 | 8 | Encadenamiento de referencias | ✅ | refs 25/25 + invariants: solo hacia atrás, posiciones ±, each; nav 60/60 |
 | 9 | Transformaciones de presentación | ✅ | proj/sort/slice/table vía result_nav; sort preserva columnas del set (no fabrica doc/grupo para guardianes); DataCard paginado accesible |
-| 10 | Generalización a frases no vistas | ⚠️ | blind 87.5% / F1 79.7% / near-miss 90% — bueno, no perfecto; gap conocido: paráfrasis de acudiente a nivel de clasificador (corpus, no resolver) |
+| 10 | Generalización a frases no vistas | ⚠️→mejorado | blind 87.5% / argmax 98.6% / F1 78.7% — paráfrasis de acudiente resueltas vía corpus+resolver; queda 1 caso (paráfrasis de operación) |
 | 11 | Abstención OOD honesta | ✅ | out_of_scope + foreign_culture + clarify (clarify_ok 381/381); «cuantas hubo hoy» aclara; «física cuántica» → cultura general |
 | 12 | RBAC correcto | ✅ | G4 estático + G9 cadena + G11 0/533 escapes; autorización por capa (entrada, repetición, delegación); default-deny en intents desconocidos |
 | 13 | Canal read-only | ✅ | G13: 52-53 handlers auditados, 0 escrituras; operaciones solo chips de navegación/confirmación |
 | 14 | Resiliencia | ✅ | G14 15/15 — NLU caído/timeout/BD vacía degradan seguro |
-| 15 | Rendimiento aceptable | ⚠️ | NO medido por capa — solo duración total del gate (~10.7s/18 suites). Falta p50/p95/p99 por turno NLU+DSM+SQL |
+| 15 | Rendimiento aceptable | ⚠️→medido | NLU+DSM medido localmente (660 turnos): classify p50=2.9ms/p95=4.1ms/p99=4.6ms, resolve p50=0.1ms/p95=0.2ms — ~3-5ms/turno sobre el coste SQL normal. SQL sin medir (sin BD local) |
 | 16 | Conversación larga end-to-end | ⚠️ | Simulado: 103/103 + 320/320 convos multi-turno. continuity_50 (52 turnos vs API real) escrito y endurecido, NO ejecutado — requiere entorno con BD |
 
 Veredicto honesto: el núcleo conversacional está verificado localmente en todas sus capas simulables. Lo que NO se puede afirmar hoy: comportamiento sobre datos reales de producción (SQL ejecutado), latencia percibida, y una sesión de ≥50 turnos contra el servicio vivo. Esos tres necesitan el entorno real que el alcance actual excluye.

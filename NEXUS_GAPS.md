@@ -34,7 +34,9 @@ Estado: auditoría + correcciones aplicadas (checkpoint 427319e + posterior). No
 - **security/esquema**: «abre la tabla de usuarios» llegaba a derive_action — RESUELTO (probe por `tabla de <infra>` / `base de datos|esquema`). Detectado SOLO al endurecer G7b — la tolerancia previa lo ocultaba.
 - **entity/extracción**: residuo post-stopword producía nombres («cuantica», «nombre») — RESUELTO en ambos extractores (paridad G3 intacta). Marcadores de persona extendidos.
 - **semantic/meta-tema**: «cuéntame sobre X» sin dominio forzaba student_summary — RESUELTO (foreign_culture).
-- **modelo/corpus**: paráfrasis de acudiente («quién responde por ese muchacho ante el colegio», «a nombre de quién está este alumno») siguen oos a nivel de clasificador — el resolver PHP las encamina, el modelo joblib no. Gap de corpus, no de arquitectura: requiere retraining documentado, NO disimulable con reglas.
+- ~~modelo/corpus acudiente~~ **RESUELTO**: +16 paráfrasis en corpus + retrain (argmax 95.8→98.6%) + sinónimos relacionales en `nxFieldSynonyms` + `_ref=guardian`. Único blind vivo: «quiero que el representante del alumno se presente en coordi» (paráfrasis de operación — mismo tipo de gap de corpus).
+- **semantic/rerank (preexistente, encontrado por prueba manual)**: «muéstrame los estudiantes del 6-A» → `list_events` — el léxico de list_events («muestrame/dame») robaba el turno del modelo (0.998) porque `students_in_group` carece de entrada léxica y coverage corre antes del rerank. RESUELTO con corrección post-rerank espejo + regresión en dsm_units §N.
+- **entity/campo (preexistente)**: `str_contains('ti')` hacía match dentro de «institu**ti**ción» → `field=documento` espurio. RESUELTO: sinsortas ≤3 letras exigen límite de palabra.
 - **blind_eval 73.6%**: diagnóstico honesto — categorías débiles: emocion 4/10, frontera_nombre 4/10, frontera_social 6/10, fuera_dominio 5/8, evasion_formal 2/4. Son gaps de cobertura NLU conocidos.
 - **registro**: referencias colgantes (result_nav, students.summary, risk.alerts…) — verificar si son intencionales (delegación) o huérfanos. Pendiente de barrido.
 

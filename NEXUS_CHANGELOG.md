@@ -71,6 +71,18 @@ Pendiente honesto: paráfrasis de acudiente a nivel de modelo (3 casos blind —
 - **Ordinales acotados a la ventana**: `position`/`last`/`last-N` en students e incidents ahora verifican contra las filas traídas (≤400), no contra el total — antes un ordinal >400 pasaba el check y luego `items[$idx]` era null.
 - Verificación: `php -l` limpio; suites conversacionales intactas (los ejecutores SQL no se ejercen en alcance local — cambio verificado por contrato, no por ejecución).
 
+## 2026-09-22 — Corpus acudiente + rerank roster + boundary fix (modelo re-entrenado)
+
+- **Bug preexistente encontrado**: «muéstrame los estudiantes del 6-A» (la forma más natural de pedir la nómina) resolvía a `list_events` — el reranker léxico dejaba que «muéstrame/dame» robara el turno al modelo (0.998) porque `students_in_group` no tiene entrada en `NX_INTENT_LEXICON` y `nxCoverageOverride` corre ANTES del rerank. Fix post-rerank espejo de la regla de cobertura: `list_events` + grupo + sustantivo-persona + sin módulo → `students_in_group`. Verificado con stash: no era regresión propia.
+- **Corpus**: +16 paráfrasis relacionales de acudiente en `student_field` («quién responde por X», «lo representa ante la institución», «a nombre de quién está», «figura como responsable», «adulto a cargo de»…). Retrain completo: 518.2K ejemplos/87 intents — router 99.68%, formal 98.42%, informal 98.73%; `model.joblib`+`model_php.json` regenerados.
+- **`nxFieldSynonyms` acudiente**: +formas relacionales (`responde por`, `a cargo de`, `lo representa`, `figura como`, `a nombre de quien`, `tutor legal`…) — el resolver produce `field=acudiente` y `_ref=guardian`.
+- **Bug `str_contains('ti')`**: la sigla TI hacía match dentro de «institu**ti**ción» → `field=documento` espurio. Sinsortas ≤3 letras ahora exigen límite de palabra.
+- Resultado: blind paráfrasis acudiente 3→1 fallos; argmax 95.8→98.6%; near-miss 90→80% a nivel modelo crudo (los 10 casos resuelven bien tras resolver — la métrica mide cls). Único blind vivo: «quiero que el representante del alumno se presente en coordi» (paráfrasis de operación).
+- Regresiones nuevas en `dsm_units`: sección N (roster con verbo de listado) + O (campo acudiente por paráfrasis) + extracción «física cuántica»/«a nombre de quién»/«la muchacha sofia». 60/60 en ambas rutas NLU.
+- Rendimiento medido: classify p50=2.9ms/p95=4.1ms, resolve p50=0.1ms — ~3-5ms/turno de capa conversacional sobre coste SQL.
+
+Resultados: gate 18/18, real_conversation 103/103, capability 153/153 (un caso filtra vía delegación legítima `intent_equiv`), composición 59/59, forense 36/36, DSM 60/60, phpunit 244/937, semantic singles 98.2% + adversarial 533/533 + convos 320/320, generalización argmax 98.6%/F1 78.7%, blind_eval diagnóstico (exit 1 por diseño).
+
 ## Checkpoints por construir
 
 ARCHITECTURE, SEMANTIC CORE, CAPABILITY GRAPH, PLANNER ✔, CONTEXT ✔, GENERALIZATION (87.5% blind — gap de corpus acudiente documentado), PRESENTATION ✔, SECURITY ✔, RESILIENCE ✔, FINAL VALIDATION.

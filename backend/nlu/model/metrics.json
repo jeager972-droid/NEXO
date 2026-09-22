@@ -1,9 +1,9 @@
 {
-  "router_acc": 0.9968783860481916,
-  "formal_acc": 0.9804463211065291,
-  "informal_acc": 0.9860096856022753,
-  "n_examples": 511324,
+  "router_acc": 0.9967793265864681,
+  "formal_acc": 0.9842399396670083,
+  "informal_acc": 0.987316473210854,
+  "n_examples": 518200,
   "n_intents": 87,
-  "n_formal": 337872,
+  "n_formal": 344748,
   "n_informal": 173452
 }

@@ -385,7 +385,12 @@ function nxSlots(string $q): array {
     // campo de estudiante
     foreach (nxFieldSynonyms() as $field => $syns) {
         foreach ($syns as $syn) {
-            if (str_contains($q, $syn)) { $s['field'] = $field; break 2; }
+            // siglas cortas solo cuentan como palabra completa —
+            // «institución» no contiene la TI (tarjeta de identidad)
+            $hit = mb_strlen($syn) <= 3
+                ? (bool)preg_match('/\b' . preg_quote($syn, '/') . '\b/u', $q)
+                : str_contains($q, $syn);
+            if ($hit) { $s['field'] = $field; break 2; }
         }
     }
     // estudiante (misma heurística que service.py)
@@ -619,7 +624,12 @@ function nxFieldSynonyms(): array {
     return [
         'documento'  => ['documento','cedula','ti','tarjeta de identidad','numero de documento','identificacion'],
         'celular'    => ['celular','telefono','whatsapp','movil','numero de celular'],
-        'acudiente'  => ['acudiente','acudientes','papa','mama','padre','madre','responsable','familiar','quien lo recoge','quien la recoge'],
+        'acudiente'  => ['acudiente','acudientes','papa','mama','padre','madre','responsable','familiar','quien lo recoge','quien la recoge',
+            // paráfrasis relacionales — «quién responde por él», «a nombre
+            // de quién está», «la persona que lo representa»
+            'responde por','responde ante','quien responde','lo representa','la representa','representa ante',
+            'a cargo de','a cargo del','encargado del','encargada del','encargada de','encargado de el',
+            'figura como','a nombre de quien','persona a cargo','adulto a cargo','tutor legal','adulto responsable'],
         'grupo'      => ['grupo','salon','curso'],
         'jornada'    => ['jornada','turno'],
         'nacimiento' => ['nacimiento','edad','cuando nacio','anos tiene','fecha de nacimiento','cumpleanos'],
@@ -1398,6 +1408,15 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         if ($intent === 'students_count' && !empty($slots['group'])
             && preg_match('/\b(cuant[oa]s?|numero|total|cuantos son|cuantas son)\b/u', $q0))
             $intent = 'group_student_count';
+        // post-rerank: «muéstrame los estudiantes del 6-A» — el verbo de
+        // listado («muéstrame», «dame») del léxico de list_events roba el
+        // turno aunque el modelo diga students_in_group; el sustantivo de
+        // persona + grupo sin módulo de incidentes es nómina, no eventos
+        if ($intent === 'list_events' && !empty($slots['group'])
+            && empty($slots['module'])
+            && preg_match('/\b(estudiantes|alumnos|chicos|muchachos|pelados|peladas|ninos|niños)\b/u', $q0)
+            && !preg_match('/\b(cuant[oa]s?|cuanto|numero de|total)\b/u', $q0))
+            $intent = 'students_in_group';
     }
     // temporal-guard: attendance/late/count_present sin marcador temporal
     // («faltas del once» ≠ «faltas de hoy») → la familia correcta según

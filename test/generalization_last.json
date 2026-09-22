@@ -1,9 +1,9 @@
 {
   "semantic_generalization": 0.875,
-  "semantic_generalization_argmax": 0.9583333333333334,
-  "macro_f1_blind": 0.7974930959844753,
+  "semantic_generalization_argmax": 0.9861111111111112,
+  "macro_f1_blind": 0.7868055555555555,
   "courtesy_robustness": 0.875,
   "typo_robustness": 0.8333333333333334,
-  "near_miss_rejection": 0.9,
+  "near_miss_rejection": 0.8,
   "ood_abstention": 0.75
 }

@@ -169,12 +169,38 @@ $extractCases = [
     ['de juan especificamente',      'juan'],
     ['maria manana',                 null],
     ['para ella',                    null],
+    ['sobre la fisica cuantica',     null],
+    ['a nombre de quien esta este alumno', null],
+    ['la ficha de la muchacha sofia','sofia'],
 ];
 foreach ($extractCases as [$q, $want]) {
     $slots = nxSlots(nxNorm($q));
     $got = $slots['student'] ?? null;
     chk("extr " . $q . "→" . var_export($want, true), $got === $want,
         "student=" . var_export($got, true));
+}
+
+/* ── N. Nómina con verbo de listado — «muestrame/dame los estudiantes del
+ *      6-A» es roster, no eventos (el léxico de list_events no debe robar
+ *      el turno cuando hay sustantivo de persona + grupo sin módulo) ── */
+$ctx = null;
+foreach ([['muéstrame los estudiantes del 6-A','students_in_group','6-A'],
+          ['dame los alumnos del 8-B','students_in_group','8-B'],
+          ['lista las tardanzas del 6-A','list_events','6-A'],
+          ['muéstrame los eventos del 6-A','list_events','6-A']] as [$q,$want,$grp]) {
+    $t = turn($q, $ctx);
+    chk("roster {$q}→{$want}", $t['intent'] === $want && ($t['slots']['group'] ?? '') === $grp,
+        "intent={$t['intent']} group=" . var_export($t['slots']['group'] ?? null, true));
+}
+
+/* ── O. Campo acudiente por paráfrasis relacional ──────────────────────── */
+$ctx = null;
+foreach ([['quién responde por ese muchacho ante el colegio','acudiente'],
+          ['la persona que lo representa ante la institución','acudiente'],
+          ['a nombre de quién está este alumno','acudiente']] as [$q,$wantField]) {
+    $t = turn($q, $ctx);
+    chk("relField {$q}→{$wantField}", ($t['slots']['field'] ?? '') === $wantField,
+        "field=" . var_export($t['slots']['field'] ?? null, true) . " intent={$t['intent']}");
 }
 
 /* ── resumen ── */

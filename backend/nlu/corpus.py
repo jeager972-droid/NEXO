@@ -694,6 +694,20 @@ def _():
         "como contacto al acudiente de {student}",
         "dame el documento de {student}", "dime el telefono de {student}",
         "necesito el celular de {student}", "necesito el acudiente de {student}",
+        # paráfrasis relacionales de acudiente — «responde por / representa /
+        # figura como responsable» (masker → acudiente_ent; blind set)
+        "quien responde por {student}", "quien responde por ese muchacho",
+        "quien responde por ese estudiante ante el colegio",
+        "quien responde por ella ante la institucion",
+        "la persona que lo representa ante la institucion quien es",
+        "la persona que la representa ante el colegio quien es",
+        "quien lo representa ante el colegio", "quien la representa",
+        "a nombre de quien esta este alumno", "a nombre de quien esta {student}",
+        "quien figura como responsable de {student}",
+        "quien figura como responsable de ese alumno",
+        "el adulto a cargo de {student} quien es",
+        "el encargado de {student} quien es", "el tutor de {student} quien es",
+        "quien esta a cargo de {student} en el colegio",
     ]
     return _augment(_expand(base, student=STUDENTS))
 
