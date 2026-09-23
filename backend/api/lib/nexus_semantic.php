@@ -673,6 +673,11 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     elseif (preg_match('/\b(que (clases|materias|asignaturas) (tiene|ve|recibe|dicta)|que se ve en|que dictan en|horario del|horario de)\b/u', $q0) && !empty($slots['group'])) {
         $sig['entity']='schedules'; $sig['relation']='schedule_of_group'; $e[]='rel:schedule_of_group';
     }
+    // «y su horario?» con grupo en contexto → el horario es DEL GRUPO
+    // (schedule.of_group), no un campo de estudiante
+    elseif (preg_match('/\b(horarios?|jornada|bloques?)\b/u', $q0) && !empty($slots['group'])) {
+        $sig['entity']='schedules'; $sig['relation']='schedule_of_group'; $e[]='rel:schedule_of_group';
+    }
     // estudiante → acudiente ya lo cubre student_field; acudiente→estudiante vía ctx.
 
     // ── tiempo (slots ya calculan days/from/to) ───────────────────────────

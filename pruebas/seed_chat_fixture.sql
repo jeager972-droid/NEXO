@@ -164,6 +164,12 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM guardian_student_relationships WHERE guardian_id=v_gjc AND student_id=v_jc);
 
     -- ── Incidentes: ranking de faltas diferenciado + casos C/D/G ────────
+    -- Idempotencia entre corridas/días: los incidentes de JC y MF son
+    -- datos del fixture — se reemplazan, nunca se acumulan (un re-seed al
+    -- otro día NO debe duplicar las faltas esperadas por las suites).
+    DELETE FROM attendance_incidents
+    WHERE student_id IN (v_jc, v_mf)
+      AND incident_type IN ('INASISTENCIA','EVASION_INTERNA','LATE_ARRIVAL');
     -- Juan Camilo: 4 faltas (15d) + 1 tardanza → caso G = «cuánto ha faltado… 15 días» = 4
     FOR d IN SELECT * FROM (VALUES (2),(5),(9),(13)) AS t(days) LOOP
         INSERT INTO attendance_incidents(incident_id, school_id, student_id, group_id, incident_type, detected_at)
@@ -204,6 +210,23 @@ BEGIN
         SET late_count=EXCLUDED.late_count, absence_count=EXCLUDED.absence_count,
             total_events=EXCLUDED.total_events, risk_score=EXCLUDED.risk_score,
             risk_level=EXCLUDED.risk_level, calculated_at=NOW();
+
+    -- ── Sofía Herrera Ruiz (10-A) + acudiente propia — golden §15 t9 ───
+    INSERT INTO students(student_id, school_id, document_number, first_name, last_name, active, work_shift, grade_level, biometric_exempt)
+    VALUES ('66666666-6666-4666-8666-6666666600a9', v_school, '8109', 'Sofía', 'Herrera Ruiz', TRUE, 'mañana', '10', FALSE)
+    ON CONFLICT (school_id, document_number) DO NOTHING;
+    INSERT INTO student_group_assignments(student_id, group_id, active)
+    SELECT '66666666-6666-4666-8666-6666666600a9', v_g10a, TRUE
+    WHERE NOT EXISTS (SELECT 1 FROM student_group_assignments WHERE student_id='66666666-6666-4666-8666-6666666600a9' AND active);
+    INSERT INTO users(user_id, school_id, role_id, first_name, last_name, document_number, phone, active, password_hash, password_salt, created_at)
+    VALUES ('99999999-9999-4999-8999-9999999999a9', v_school, v_role_g, 'Paola', 'Ruiz Ríos', '9006', '+573000000004', TRUE, '$2y$12$fixtureplaceholderhashneverlogin.', 'fixture', NOW())
+    ON CONFLICT (user_id) DO NOTHING;
+    INSERT INTO guardians(guardian_id, user_id, whatsapp_phone, whatsapp_phone_normalized)
+    VALUES ('77777777-7777-4777-8777-7777777777a9', '99999999-9999-4999-8999-9999999999a9', '+573000000004', '+573000000004')
+    ON CONFLICT (guardian_id) DO NOTHING;
+    INSERT INTO guardian_student_relationships(guardian_id, student_id, relationship_type, primary_guardian)
+    SELECT '77777777-7777-4777-8777-7777777777a9', '66666666-6666-4666-8666-6666666600a9', 'MADRE', TRUE
+    WHERE NOT EXISTS (SELECT 1 FROM guardian_student_relationships WHERE guardian_id='77777777-7777-4777-8777-7777777777a9' AND student_id='66666666-6666-4666-8666-6666666600a9');
 
     -- ── Ingresos de hoy (presentes hoy — coherente con el resto) ────────
     FOR s IN SELECT student_id FROM students WHERE school_id=v_school AND document_number IN ('8107','8108') LOOP

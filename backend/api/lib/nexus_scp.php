@@ -49,7 +49,11 @@ function nxScpTask(string $q0, array $slots, ?array $sig, ?array $ds): array {
     }
 
     // — conteo (de colección o de una persona: «cuánto ha faltado Juan») —
-    if ($t === 'lookup' && preg_match('/\b(cu[áa]nt[oa]s?|cu[áa]nto|n[úu]mero de|total de|ha faltado|han faltado)\b/u', $q0)) {
+    // Guarda: «el número de celular del acudiente» pide un DATO de
+    // persona, no una agregación — campo de persona presente ≠ conteo.
+    $personField = (bool)preg_match('/documento|telefono|celular|correo|direccion|whatsapp|contacto|acudiente|tutor|profesor|docente/u', (string)($slots['field'] ?? ''));
+    if ($t === 'lookup' && !$personField
+        && preg_match('/\b(cu[áa]nt[oa]s?|cu[áa]nto|n[úu]mero de|total de|ha faltado|han faltado)\b/u', $q0)) {
         $t = 'count';
         $e[] = !empty($slots['student']) ? 'lex:count_person' : 'lex:count';
     }
@@ -503,6 +507,10 @@ function nxScpToSlots(array $frame): array {
             return ['count_events', $slots, true];
 
         case 'relation':
+            // relaciones de GRUPO (horario/docentes/acudientes del grupo)
+            // las compone el planner — no son campos de un estudiante
+            if (in_array($frame['relation'] ?? '', ['schedule_of_group','teachers_of_group','guardians_of_group'], true))
+                return [null, $slots, false];
             $slots['student'] = $frame['subject']['name'];
             $slots['field'] = $frame['field'] ?: 'acudiente';
             if (!empty($frame['subject']['qualifies']) || $frame['domain'] === 'guardians')

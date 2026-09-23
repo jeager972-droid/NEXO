@@ -229,21 +229,42 @@ gate('G17b', 'navegación de result-set (otro/los demás/ordinales) 100%',
 /* ── G18/G19: golden A–N + held-out contra API real (§16/§17/§24).
  *   Requieren el stack nexo-test en :18080 — si no responde, se omiten
  *   honestamente (una puerta ausente no simula un pase). ── */
-$apiUp = (bool)@file_get_contents((getenv('NEXO_API') ?: 'http://localhost:18080') . '/health');
+$apiUp = (function() {
+    $ctx = stream_context_create(['http'=>['ignore_errors'=>true,'timeout'=>3]]);
+    $body = @file_get_contents((getenv('NEXO_API') ?: 'http://localhost:18080') . '/health', false, $ctx);
+    return is_string($body) && str_contains($body, '"db":true');
+})();
+// rate-limit real (60 msg/10min): las suites live suman ~88 turnos —
+// purgar la ventana de prueba entre suites (best-effort, entorno test)
+$rlReset = function() {
+    @shell_exec('docker exec nexo-test-db-1 psql -U nexo_test -d nexo_test -c '
+        . '"DELETE FROM rate_limits WHERE rl_key LIKE \'login:%\'" >/dev/null 2>&1');
+    @shell_exec('docker exec nexo-test-redis-1 redis-cli -a nexo_test_redis --no-auth-warning '
+        . 'DEL chat_rl:55555555-5555-4555-8555-555555555552 >/dev/null 2>&1');
+};
 if ($apiUp) {
+    $rlReset();
     $sc = run('php ' . __DIR__ . '/scp_live.php');
     preg_match('/scp_live: (\d+)\/(\d+) turnos PASS/', $sc, $m7);
     gate('G18', 'transcript golden A–N live = 26/26',
          isset($m7[2]) && (int)$m7[1] === (int)$m7[2] && (int)$m7[2] === 26,
          $m7[0] ?? 'salida ilegible');
+    $rlReset();
     $ho = run('php ' . __DIR__ . '/heldout_live.php');
     preg_match('/heldout_live: (\d+)\/(\d+) turnos PASS/', $ho, $m8);
     gate('G19', 'held-out conversations ≥90% turnos',
          isset($m8[2]) && (int)$m8[1] / max(1, (int)$m8[2]) >= 0.90,
          $m8[0] ?? 'salida ilegible');
+    $rlReset();
+    $gd = run('php ' . __DIR__ . '/golden_live.php');
+    preg_match('/golden_live: (\d+)\/(\d+) turnos PASS/', $gd, $m9);
+    gate('G20', 'golden conversation §15 = 9/9 (bloqueante)',
+         isset($m9[2]) && (int)$m9[1] === (int)$m9[2] && (int)$m9[2] === 9,
+         $m9[0] ?? 'salida ilegible');
 } else {
     gate('G18', 'transcript golden A–N live = 26/26', false, 'API :18080 ausente');
     gate('G19', 'held-out conversations ≥90% turnos', false, 'API :18080 ausente');
+    gate('G20', 'golden conversation §15 = 9/9 (bloqueante)', false, 'API :18080 ausente');
 }
 
 /* ── veredicto ── */

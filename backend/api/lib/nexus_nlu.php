@@ -379,7 +379,9 @@ function nxSlots(string $q): array {
     $greetTime = (bool)preg_match('/\b(buenas tardes|buenas noches|por la tarde|en la tarde|de la tarde|la tarde de|tarde de)\b/u', $q);
     foreach (nxModuleSynonyms() as $canon => $syns) {
         foreach ($syns as $syn) {
-            if (str_contains($q, $syn)) {
+            // borde de palabra: «inasistieron» contiene «asistieron» pero
+            // es INASISTENCIA, no INGRESO — el substring miente aquí
+            if (preg_match('/\b' . preg_quote($syn, '/') . '/u', $q)) {
                 if ($greetTime && $canon === 'LATE_ARRIVAL'
                     && in_array($syn, ['tarde','tardes'], true)
                     && !preg_match('/\b(tardanza|tardanzas|llego tarde|llegaron tarde|llegada tarde|llegadas tarde)\b/u', $q)) {
@@ -624,7 +626,7 @@ function nxExtractStudent(string $q): ?string {
 function nxModuleSynonyms(): array {
     return [
         'LATE_ARRIVAL'      => ['llegadas tarde','llegada tarde','tardanzas','tardanza','tarde','llego tarde','llegaron tarde','tardes'],
-        'INASISTENCIA'      => ['inasistencias','inasistencia','faltas','falta','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente','no llegaron','no llego','no entraron','no entro','no asistieron','no asistio','no se presentaron','no se presento','se ausentaron','se ausento'],
+        'INASISTENCIA'      => ['inasistencias','inasistencia','inasistieron','inasistio','inasistió','inasiste','faltas','falta','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente','no llegaron','no llego','no entraron','no entro','no asistieron','no asistio','no se presentaron','no se presento','se ausentaron','se ausento'],
         'INASISTENCIA_JUSTIFICADA'    => ['inasistencias justificadas','justificadas','faltas justificadas'],
         'INASISTENCIA_NO_JUSTIFICADA' => ['inasistencias no justificadas','sin justificar','injustificadas'],
         'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono','se volaron','se volo','se la volaron','se la volo','tiraron','se tiraron','tajaron','se tajaron','caparon','se caparon','evasores','se fueron','se fueron de clase','se fueron del salon','abandono durante','abandonaron el aula'],
@@ -1581,6 +1583,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             elseif (preg_match('/\b(agrega|añade|anade|incluye|ponles|mete|con)\s*(le|les|me)?\s*(el |los |la |las )?(documento|documentos|telefono|celular|whatsapp|grupo|edad)\b/u', $q0, $mp)
                     && preg_match('/\b(agrega|añade|anade|incluye|ponles|mete)\b/u', $q0))
                 $nav = 'proj:' . ['documento'=>'+document','documentos'=>'+document','telefono'=>'+phone','celular'=>'+phone','whatsapp'=>'+phone','grupo'=>'+group','edad'=>'+group'][$mp[4]];
+            // «con documento» desnudo tras un set = añade la columna a la
+            // vista activa — no es un lookup de estudiante
+            elseif (preg_match('/^(?:y\s+|ahora\s+|pero\s+)?con\s+(?:el\s+|los\s+|la\s+|las\s+|su\s+|sus\s+)?(documento|documentos|telefono|celular|whatsapp|grupo)\b[.!? ]*$/u', $q0, $mpb))
+                $nav = 'proj:' . ['documento'=>'+document','documentos'=>'+document','telefono'=>'+phone','celular'=>'+phone','whatsapp'=>'+phone','grupo'=>'+group'][$mpb[1]];
             elseif (preg_match('/\b(ordena(?:l[oa]s|me|los|las)?|por apellido|alfabeticamente|alfabetico|por nombre|por documento|por grupo|de la a a la z)\b/u', $q0)
                     && !preg_match('/\b(de|del|en|grupo|salon)\s+\d/u', $q0))
                 $nav = 'sort:' . (preg_match('/\b(apellido)\b/u',$q0) ? 'last_name'

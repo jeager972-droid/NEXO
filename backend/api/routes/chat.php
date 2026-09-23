@@ -1906,7 +1906,11 @@ function chat_students_count(PDO $conn, array $u, array $s, array $v): array {
 
 function chat_groups_list(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
-    if (in_array($u['role'],['TEACHER','COUNSELOR'],true)) {
+    // «todos los grupos del colegio» = alcance INSTITUCIONAL explícito —
+    // no filtrar por docente; «a mi cargo / mis grupos» (default docente)
+    // sí filtra por teacher_group_access
+    $allSchool = (bool)preg_match('/\b(todos? los grupos|todos? los cursos|del colegio|de la institucion|de todo el plantel|del plantel|todos los salones)\b/u', $v['_q'] ?? '');
+    if (in_array($u['role'],['TEACHER','COUNSELOR'],true) && !$allSchool) {
         // «mis grupos» = los grupos ASIGNADOS al docente (§9-10), no todos
         // los que tienen algún docente — el scope es del usuario actual
         $st=$conn->prepare("SELECT ag.group_name, ag.grade_level, COUNT(sga.student_id) n FROM teacher_group_access tga
