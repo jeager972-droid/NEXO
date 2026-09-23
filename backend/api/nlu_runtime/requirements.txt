@@ -1,4 +1,4 @@
-scikit-learn>=1.5
-numpy
-scipy
-joblib
+scikit-learn==1.9.1
+numpy==2.4.6
+scipy==1.16.2
+joblib==1.6.0

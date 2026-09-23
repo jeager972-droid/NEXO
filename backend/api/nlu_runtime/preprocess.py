@@ -87,6 +87,9 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          'ninos','ninas','docentes','docente','profesores','profesor','profesora',
          # pronombres y cortesía — nunca son nombres de estudiante
          'ti','mi','vos','usted','ustedes','ellos','ellas','nosotros','gracias',
+         'muchas','muchisimas','mil','bendiciones','amable','senor','senora',
+         'quien','quienes','responde','cargo','figura','registrada','registrado',
+         'aparece','responsable','responsabilidad','volvamos','vuelve','volver',
          'porfavor','porfa','favor','puedes','puedo','por','si','ok','vale','dale',
          # vocabulario del dominio — sustantivos del sistema, no personas
          'sensores','sensor','dispositivos','dispositivo','nodos','nodo',
@@ -165,12 +168,47 @@ _STOP = {'filosofia','literatura','politica','geografia','historia','quimica',
          'emergencias','panico','sos','seguimiento','datos','informacion','ficha',
          'perfil','resumen','estado','edad','cumpleanos','contacto','telefono',
          'documento','cedula','identificacion','whatsapp','celular','numero',
-         'acudiente','acudientes','responsable','familiar','papa','mama','padre','madre'}
+         'acudiente','acudientes','responsable','familiar','papa','mama','padre','madre',
+         # colectivos genéricos — «chicos del 7-B» es el grupo, no una persona
+         'chico','chicos','chica','chicas','muchacho','muchachos','muchacha','muchachas',
+         'pelado','pelados','pelada','peladas','menor','menores','chino','chinos','china','chinas',
+         # imperativos/verbos de petición — «necesito los matriculados» no es persona
+         'tardanza','inasistencia','evasion','ausencia','falta','permiso',
+         'citacion','familia','familiar','pariente','parientes',
+         # adjetivos de estado del estudiante — «alumnos exentos» no es persona
+         'exento','exentos','exenta','exentas','eximido','eximidos','dispensado',
+         'dispensados','presente','presentes','ausente','ausentes','tarde','puntual',
+         'impuntual','impuntuales','asignado','asignada','asignados','asignadas',
+         'huerfano','huerfanos','libre','libres','enrolado','enrolados','activo',
+         'activa','activos','inactivo','inactiva','retirado','retirada','graduado',
+         'graduada','nuevo','nueva','antiguo','antigua','bajo','alto','media','medio',
+         'critico','critica','vulnerable','vulnerables','derivado','derivados',
+         'observado','observados','citado','citados','faltado','faltados',
+         'ensename','dime','dame','muestrame','muéstrame','necesito','quiero','queria',
+         'pasame','pásame','ver','mira','mirame','buscame','buscáme','listame','contame',
+         'cuentame','decime','traeme','ponme','sacame','enseñame','liste','muéstrese',
+         # copulativos y sustantivos de colección/presentación — nunca personas
+         'es','sea','sean','fuese','estando','siendo',
+         'lista','listas','fila','filas','columna','columnas','tabla','tablas',
+         'nomina','nominas','nombre','nombres','listado','listados','posicion','posiciones',
+         'se','me','te','nos','lo','le','les','coordi','rectoria',
+         'ahi','alli','aca','alla',
+         # ordinales y unidades temporales — «del último mes» no es persona
+         'ultimo','ultima','ultimos','ultimas','primero','primera',
+         'segundo','segunda','tercero','tercera','mes','meses','semana',
+         'semanas','ano','anos','dia','dias','quincena','bimestre',
+         'siguiente','anterior','proximo','proxima',
+         'puesto','puestos','lugar','lugares','ranking','top','completo',
+         'completa','completos','completas','ordenado','ordenada','ordenados',
+         'ordenadas','orden','alfabeticamente','alfabetico','alfabetica',
+         'entero','entera','integro','integra','porcentaje','porcentajes'}
 
 _BOUNDARY = r'(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)'
 _STUDENT_PATS = [
-    r'(?=(?:estudiante|alumno|alumna|niño|niña)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
-    r'(?=\b(?:de|del|sobre|para|a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    # marcador de persona explícito — «la niña camila», «el muchacho juan»:
+    # el nombre sigue al sustantivo, no al conector (paridad PHP)
+    r'(?=(?:estudiante|alumno|alumna|niño|niña|muchacho|muchacha|pelado|pelada|chico|chica|menor)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
+    r'(?=\b(?:de|del|sobre|para|(?<![-\d])a|solo|solamente|tenido|tuvo|tiene|tienen|sido|hizo|estado|estuvo|hecho|falto|faltaron|llego|entro|salio|capo|volo|evadio|evadieron|caparon|volaron|volado|capado)\s+([a-z]+(?:\s+[a-z]+){0,3})' + _BOUNDARY + r')',
     # «camila del septimo», «juan del 8a» — nombre + conector + grado
     r'\b([a-z]{2,}(?:\s+[a-z]+){0,2})\s+(?:del|de)\s+(?:el |la )?(?:primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|once|undecimo|jardin|kinder|transicion|prescolar|\d)',
 ]
@@ -198,24 +236,35 @@ def extract_entities(q: str) -> dict:
     elif re.search(r'este mes|del mes|en el mes|ultimo mes|al mes|de este mes', q):
         e['days'] = 30
 
-    m = re.search(r'\b(?:grupo|salon|del|de|en)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
+    m = re.search(r'\b(?:grupo|salon|del|de|en|al|el)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b', q) \
         or re.search(r'\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2})\b', q) \
         or re.search(r'\b(\d{1,2}\s\d{1,2})\b', q)   # «11.2» → normalizado «11 2»
     if m:
         e['group'] = m.group(1).upper().replace(' ', '-').replace('.', '-')
     # ordinales: «octavo a», «onceavo b», «grado noveno», «11.2» ya cubierto
-    _ORD = {'primero':'1','segundo':'2','tercero':'3','cuarto':'4','quinto':'5',
+    _ORD = {'primero':'1','primer':'1','segundo':'2','tercero':'3','tercer':'3','cuarto':'4','quinto':'5',
             'sexto':'6','septimo':'7','octavo':'8','noveno':'9','decimo':'10',
             'once':'11','onceavo':'11','undecimo':'11','onceavo':'11'}
     if 'group' not in e:
-        mo = re.search(r'\b(' + '|'.join(_ORD) + r')\s*([a-j])\b', q) \
+        _ORDL = ('primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|'
+                 'quinto|quinta|sexto|sexta|septimo|septima|octavo|octava|'
+                 'noveno|novena|decimo|decima|once|undecimo')  # «primera» = fem, no primer+A
+        mo = re.search(r'\b(' + _ORDL + r')\s*([a-j])(?![a-z])', q) \
              or re.search(r'\b(?:grado|grupo|salon)\s+(' + '|'.join(_ORD) + r')\b', q) \
-             or re.search(r'\b(?:del|de|los|las|el|al)\s+(' + '|'.join(_ORD) + r')\b', q)
+             or re.search(r'\b(?:del|de|los|las)\s+(primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|primer|tercer)\b(?!\s+(?:de|del|en|a|por|para)\b)', q) \
+             or re.search(r'\b(?:del|de|los|las)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo|sexta|septima|octava|novena|decima)\b', q) \
+             or re.search(r'\b(?:en|el|al)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo)\b(?!\s+(?:de|del|en|a|por|para|lugar|puesto|posicion|dia|mes|semana|ano)\b)', q)
         if mo:
-            num = _ORD[mo.group(1)]
+            _base = re.sub(r'a$','o',mo.group(1))  # primera→primero
+            num = _ORD.get(_base, _ORD.get(mo.group(1)))
             letter = mo.group(2).upper() if mo.lastindex >= 2 and mo.group(2) else ''
             e['group'] = num + letter
             e['_group_src'] = mo.group(0)   # para enmascarar la forma ordinal
+    # «mi(s) grupo(s)» — scope RBAC del usuario (paridad PHP nxSlots)
+    if 'group' not in e and re.search(r'\b(mi grupo|mi curso|el grupo que tengo|mi salon)\b', q):
+        e['group'] = '*mine*'
+    if re.search(r'\b(mis grupos|mis cursos|los grupos que tengo|los cursos que tengo|los grupos a mi cargo|a mi cargo|que tengo asignados|mis estudiantes|los estudiantes que tengo|mis pelados|mis muchachos)\b', q):
+        e['_my_scope'] = True
     # períodos nombrados que no son "días"
     if 'days' not in e:
         if re.search(r'mes pasado', q):
@@ -226,9 +275,22 @@ def extract_entities(q: str) -> dict:
             e['days'] = 365
 
     cands = []
+    _LEAD = {'el','la','los','las','un','una','del','de','al',
+             'mismo','misma','mismos','mismas','estudiante','estudiantes',
+             'alumno','alumna','alumnos','alumnas','nino','nina','niño','niña',
+             'muchacho','muchacha','pelado','pelada','chico','chica','menor'}
     for pat in _STUDENT_PATS:
         for m in re.finditer(pat, q):
-            words = [w for w in m.group(1).split() if w not in _STOP and len(w) > 1 and not re.search(r'\d', w)]
+            raw = m.group(1).split()
+            # saltar artículos/marcadores iniciales («el mismo juan»); el
+            # primer término restante debe ser el nombre — si es stopword
+            # («sobre LA física cuántica») el residuo no es persona (paridad PHP)
+            lead = list(raw)
+            while lead and lead[0] in _LEAD:
+                lead.pop(0)
+            if not lead or lead[0] in _STOP:
+                continue
+            words = [w for w in raw if w not in _STOP and len(w) > 1 and not re.search(r'\d', w)]
             if words:
                 cands.append(' '.join(words))
     if cands:

@@ -1532,9 +1532,21 @@ function chatNewSessionId(): string {
         random_int(0,0xffff),random_int(0,0xffff),random_int(0,0xffff));
 }
 
-function chatLog(PDO $conn, string $schoolId, string $userId, string $text, array $out, ?string $sessionId = null): void {
+function chatLog(PDO $conn, string $schoolId, string $userId, string $text, array &$out, ?string $sessionId = null): void {
     // session_id puede no existir aún en DBs sin el patch — degradar sin romper
     static $hasSession = null;
+    // LLM #2 — response composer: reformula el reply verificado en español
+    // natural (nunca toca datos/cards). Por referencia: se persiste y se
+    // devuelve ya compuesto. Falla → reply original intacto.
+    if (function_exists('nxLlmComposeReply')) {
+        try {
+            $better = nxLlmComposeReply($text, $out);
+            if (is_string($better) && $better !== '') {
+                $out['reply_raw'] = $out['reply'] ?? null;
+                $out['reply'] = $better;
+            }
+        } catch (Throwable $e) { /* composer nunca bloquea */ }
+    }
     if ($hasSession === null) {
         try {
             $st = $conn->prepare("SELECT 1 FROM information_schema.columns WHERE table_name='chat_messages' AND column_name='session_id'");

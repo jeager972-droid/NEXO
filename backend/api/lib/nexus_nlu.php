@@ -17,6 +17,8 @@
  * Retorna: ['intent','confidence','entities','top3','source']
  */
 
+require_once __DIR__ . '/nexus_llm.php';
+
 const NX_NLU_THRESHOLD = 0.65;   // umbral estricto por nivel (spec: 65%)
 
 /** Día civil institucional — el colegio opera en America/Bogota; «hoy» y
@@ -267,6 +269,14 @@ function nxClassifyLocal(string $text): ?array {
 /* ---------------------------------------------------------------------------
  * Clasificación final
  * ------------------------------------------------------------------------- */
+/** Clasificación de un solo texto: servicio → modelo PHP → refinador LLM. */
+function nxClassifyCore(string $text): ?array {
+    $r = nxClassifyService($text) ?? nxClassifyLocal($text);
+    // parser LLM (Groq/compatible-OpenAI): en modo primary parsea todo, en
+    // fallback solo rescata lo que el clasificador local dejó débil.
+    return nxLlmRefine($text, $r);
+}
+
 function nxClassify(string $text): array {
     // multi-intención local — el servicio Python ya devuelve 'parts'
     $norm = nxNorm($text);
@@ -274,7 +284,7 @@ function nxClassify(string $text): array {
     if (count($segments) > 1) {
         $parts = [];
         foreach (array_slice($segments,0,4) as $seg) {
-            $p = nxClassifyService($seg) ?? nxClassifyLocal($seg);
+            $p = nxClassifyCore($seg);
             if (!$p) continue;
             // dedupe por intención+segmento — mismo intent con params distintos cuenta doble
             if (($p['confidence'] ?? 0) >= 0.55 && !in_array($seg, array_column($parts,'text'), true))
@@ -286,7 +296,7 @@ function nxClassify(string $text): array {
                     'top3'=>$parts[0]['top3']??[],'entities'=>$parts[0]['entities']??[],'parts'=>$parts,'source'=>'multi'];
         }
     }
-    $r = nxClassifyService($text) ?? nxClassifyLocal($text)
+    $r = nxClassifyCore($text)
         ?? ['intent' => 'out_of_scope', 'confidence' => 0.0,
             'entities' => nxSlots(nxNorm($text)), 'top3' => [], 'source' => 'none'];
     // entidades: siempre fusionar con nxSlots — el servicio no extrae
@@ -2164,8 +2174,9 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         $ents = array_intersect_key($slots, array_flip(
             ['student','group','module','days','prev_days','from','to','range_label','field','_op']));
         if ($ents) {
-            $newCtx = $newCtx ?? [];
-            $newCtx['entities'] = array_merge($newCtx['entities'] ?? [], $ents);
+            $newCtx = is_array($newCtx) ? $newCtx : [];
+            $prev = is_array($newCtx['entities'] ?? null) ? $newCtx['entities'] : [];
+            $newCtx['entities'] = array_merge($prev, $ents);
             $newCtx['ts'] = time();
         }
     }
