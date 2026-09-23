@@ -303,6 +303,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             if (!chatAllowed($conn, $authUser, $last['intent'], $role)) {
                 $out = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$last['intent'],
                         'denied'=>true,'confidence'=>1.0,'session_id'=>$sessionId];
+                if ($dsPre) $out['_ds'] = $dsPre;   // denied no altera el estado
                 chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
                 exit(json_encode(['status'=>'ok','data'=>$out]));
             }
@@ -312,6 +313,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             $out = chatDispatch($conn, $authUser, $last['intent'], $slots, $vars, $role);
             $out['confidence'] = 1.0;
             $out['session_id'] = $sessionId;
+            // _ds: la repetición refresca el result-set del intent heredado
+            $out['_ds'] = chatBuildDs(
+                ['resolved'=>['intent'=>$last['intent'],'slots'=>$slots],
+                 'turn_type'=>'context_modify'], $out, $dsPre);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -427,7 +432,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 $outs[] = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$pIntent,'denied'=>true];
                 continue;
             }
-            // slots por segmento: nxSlots completa module/field/dates que Python no extrae
+            // slots por segmento: nxSlots completa module/field/dates que el parser no extrae
             $pslots = array_merge(nxSlots($pN), $pIp['resolved']['slots'] ?? []);
             $outs[] = chatDispatch($conn, $authUser, $pIntent, $pslots, $vars, $role);
         }
@@ -439,6 +444,13 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             'confidence' => min(array_column($cls['parts'],'confidence')),
             'session_id' => $sessionId,
         ];
+        // _ds: el estado lo define la última parte resuelta (interp propia)
+        $allEnt = [];
+        foreach ($outs as $o) $allEnt = array_merge($allEnt, $o['entities'] ?? []);
+        if ($allEnt) $out['entities'] = $allEnt;
+        $out['_ds'] = chatBuildDs(
+            $pIp ?? ['resolved'=>['slots'=>[]],'turn_type'=>'autonomous'],
+            $out, $dsPre2);
         chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
         exit(json_encode(['status'=>'ok','data'=>$out]));
     }
@@ -542,11 +554,13 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             $out = ['reply'=>"Tienes " . count($mine) . " grupos asignados: " . implode(', ', $mine)
                     . ". ¿De cuál hablas?", 'intent'=>'clarify','confidence'=>$conf,
                     'session_id'=>$sessionId,'_interpretation'=>$out['_interpretation'] ?? null];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         } else {
             $out = ['reply'=>"No tienes grupos asignados en el sistema todavía — eso lo gestiona coordinación.",
                     'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -603,6 +617,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             $out = ['reply'=>$interp['clarify'],'intent'=>'clarify','confidence'=>$conf,
                     'session_id'=>$sessionId,'entities'=>$slots,
                     '_interpretation'=>$out['_interpretation']];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -620,6 +635,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                     'actions'=>[chatActionChip($pendingOp,'Continuar → '.$pendingOp,null)],
                     'intent'=>'confirm_op','confidence'=>$conf,'session_id'=>$sessionId,
                     'entities'=>['_op'=>$pendingOp],'_interpretation'=>$out['_interpretation']];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -628,6 +644,9 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $out = ['reply'=>'Cancelado — no quedó registrada ninguna operación.',
                 'intent'=>'cancel','confidence'=>$conf,'session_id'=>$sessionId,
                 'entities'=>[], '_interpretation'=>$out['_interpretation']];
+        // cancelar limpia la operación pendiente pero conserva el tema activo
+        $out['_ds'] = $ds ?: null;
+        if ($out['_ds']) unset($out['_ds']['entities']['_op'], $out['_ds']['pending_op']);
         chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
         exit(json_encode(['status'=>'ok','data'=>$out]));
     }
@@ -640,6 +659,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 $found = chatResolveStudent($conn, $authUser, $slots['student']);
                 if ($found && count($found) === 1) $student = $found[0];
                 elseif ($found) { $out = chatAmbiguous($found); $out['session_id']=$sessionId;
+                    $out['_ds'] = chatBuildDs($interp, $out, $ds);
                     chatLog($conn,$schoolId,$userId,$text,$out,$sessionId);
                     exit(json_encode(['status'=>'ok','data'=>$out])); }
             }
@@ -648,6 +668,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                     'actions'=>[chatActionChip($pendingOp,'Continuar → '.$pendingOp,$student)],
                     'intent'=>'repeat_op','confidence'=>$conf,'session_id'=>$sessionId,
                     'entities'=>['_op'=>$pendingOp],'_interpretation'=>$out['_interpretation']];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -695,6 +716,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             $out = ['reply'=>"No encontré a «{$slots['student']}» entre tus estudiantes. "
                     . "¿Puedes darme el nombre completo o el documento?",
                     'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -704,6 +726,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 array_slice($found, 0, 3)));
             $out = ['reply'=>"Hay varios estudiantes llamados {$slots['student']}: $opts. ¿A cuál te refieres?",
                     'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -711,6 +734,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         if (!$grp) {
             $out = ['reply'=>"{$found[0]['first_name']} {$found[0]['last_name']} no tiene grupo asignado actualmente.",
                     'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
             chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
             exit(json_encode(['status'=>'ok','data'=>$out]));
         }
@@ -873,6 +897,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     if (!chatAllowed($conn, $authUser, $intent, $role)) {
         $reply = nxSmalltalk('denied', $vars);
         $out = ['reply'=>$reply,'intent'=>$intent,'confidence'=>$conf,'denied'=>true,'session_id'=>$sessionId];
+        if ($ds) $out['_ds'] = $ds;   // denied no altera el estado conversacional
         chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
         exit(json_encode(['status'=>'ok','data'=>$out]));
     }

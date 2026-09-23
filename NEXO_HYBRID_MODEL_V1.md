@@ -127,7 +127,9 @@ exactos; jokes intactos en modo `data`.
 
 1. Deploy: push → Render (el modelo sync, entrypoint, health y las dos capas
    LLM viajan en este commit).
-2. `_ds` en todos los paths de salida (clarify/denied/repeat no lo escriben).
+2. ~~`_ds` en todos los paths de salida~~ — **hecho** (2026-09-24): clarify,
+   denied, confirm, cancel, repeat_op y multi-intent ahora persisten `_ds`
+   (denied/cancel preservan el previo; cancel limpia `_op`/`pending_op`).
 3. Set de evaluación real (frases de usuarios reales, no del corpus).
 4. Pasar contexto de conversación (`_ds` resumido) al prompt del parser para
    resolver referencias vagas por sí solo (hoy lo hace el DSM determinista).
