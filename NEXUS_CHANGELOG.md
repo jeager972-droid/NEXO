@@ -170,3 +170,15 @@ Notas honestas: rate-limit 60/10min real — `chat_rl:{uid}` se limpia en Redis 
 - §19 recovery live: duplicado idempotente, inexistente→clarify, ambigua→candidatos, veto mutativo+inyección→security_probe.
 - §24 gate: +G18 (scp_live 26/26) + G19 (heldout ≥90%) → **20/20 READY FOR CONTROLLED PRODUCTION**.
 - §26 reporte final: NEXUS_FINAL_REPORT.md.
+
+## 2026-09-22 — PIVOT §15/§22: golden bloqueante + held-out 53 + gate 21/21
+
+- `test/golden_live.php` (§15): los 9 turnos verbatim bloqueantes — tabla 10A → acudiente del primero → «del chico de 10A» → conteo → todos los grupos → mis grupos → inasistencias hoy → reacción → celular de Sofía Herrera Ruiz. **9/9**.
+- Fixture: +Sofía Herrera Ruiz (10-A) + acudiente Paola Ruiz Ríos (+573000000004); seed de incidentes JC/MF ahora idempotente entre días (DELETE+INSERT en vez de NOT EXISTS por fecha móvil).
+- «inasistieron» ya no colisiona con «asistieron»: sinónimos de módulo con `\b` boundary + formas verbales.
+- `groups_list`: «todos los grupos del colegio» = alcance escolar (5) vs «a mi cargo» = teacher_group_access (4).
+- SCP: «número de celular del acudiente» no es count (guarda de campo-persona); relaciones de grupo (schedule/teachers/guardians_of_group) van al compose, no a student_field.
+- Resolver: «con documento» desnudo = proyección +document del set activo; ordinal desnudo tras conteo hereda group/module.
+- Gate: +G20 golden §15 bloqueante; health-check con ignore_errors (503 de worker ≠ API caída); reset de rate-limit entre suites live.
+- §22: comparación A/B/C/D registrada en NEXUS_DECISIONS.md D010 — híbrido con frame como autoridad.
+- Held-out ampliado a 20 conversaciones / 53 turnos: 53/53.

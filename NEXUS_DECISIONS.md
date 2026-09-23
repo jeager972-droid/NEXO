@@ -122,3 +122,18 @@ WHY: El cuello de botella real era significado conversacional (referencias, corr
 TRADEOFF: Frases muy fuera de dominio general caen en abstención honesta (oos) en vez de respuesta generativa — aceptable: Nexus es asistente institucional, no chat general.
 AFFECTED_COMPONENTS: ninguno (decisión arquitectónica registrada).
 TESTS_SUPPORTING_DECISION: gate 20/20 · heldout 33/33 · scp 26/26 · §1 14/14 · continuity 53/53.
+
+## D010 — §22 Comparación objetiva de runtimes: híbrido con frame como autoridad
+
+DECISION: Arquitectura D (híbrida) — NLU estadístico como fast path/candidato + SCP (frame semántico estructurado) como AUTORIDAD de interpretación + planner determinista + executors/RBAC.
+DATE: 2026-09-22.
+PROBLEM: §22 exige comparar A) NLU solo, B) NLU+rerank, C) semantic model+structured plan, D) híbrido — elegir por comportamiento medido, no por menor cambio.
+EVALUACIÓN (evidencia medida, no intuición):
+- A) NLU solo: demostrado insuficiente — sin estado ni referencias («del primero», «su acudiente», «todos» fallaban); el intent plano no expresa sujeto/relación/transformación. Pre-SCP: §1 fallaba.
+- B) NLU+rerank: mejora top-1 de intents pero el intent sigue siendo la unidad — no porta frame; no resuelve correcciones ni multi-goal. Insuficiente estructuralmente.
+- C) Modelo semántico que emite frame JSON (LLM o seq2seq): correcto en principio, pero añade latencia/costo/inyección y el grounding sigue siendo de executors; el frame SCP determinista produce el MISMO contrato estructurado (task/domain/subject/relation/field/filters/scope/time_range/ranking/corrections/references/confidence/evidence) con evidencia por decisión.
+- D) Híbrido elegido: NLU alimenta candidatos+confianza; el frame validado manda (forced solo con soporte estructural); planner+RBAC+executors ejecutan; nxResultValidate cierra el contrato.
+MEDIDA: golden §15 9/9 · heldout 53/53 · scp_live 26/26 · §1 14/14 · continuity 53/53 · gate 21/21.
+WHY: C y D producen el mismo contrato de frame; D lo hace determinista, trazable y sin coste/latencia externa. Si el dominio crece más allá del vocabulario institucional o el held-out cae <90% por errores de significado, re-evaluar con un modelo generador de frames (C puro) tras el mismo contrato.
+AFFECTED_COMPONENTS: nexus_scp.php (autoridad), nexus_nlu.php (auxiliar), chat.php (orden: resolver→SCP→correcciones→compose→validate→RBAC→exec→result-validate→ds).
+TESTS_SUPPORTING_DECISION: gate 21/21 con G18/G19/G20 live.

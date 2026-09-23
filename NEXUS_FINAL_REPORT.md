@@ -48,10 +48,11 @@ general fuera de dominio se abstiene honestamente (por diseño).
 | Suite | Resultado |
 |---|---|
 | test/scp_live.php (API real) | 26/26 (A–N) |
-| test/heldout_live.php (API real, ciego) | 33/33 |
+| test/heldout_live.php (API real, ciego) | 53/53 (20 conversaciones) |
+| test/golden_live.php (§15 bloqueante) | 9/9 |
 | test/live_probe.php (§1 verbatim) | 14/14 |
 | test/continuity_50.php (API real) | 53/53 |
-| test/nexus_release_gate.php | 20/20 READY |
+| test/nexus_release_gate.php | 21/21 READY (G18 scp 26/26 · G19 heldout · G20 golden §15) |
 | test/scp_regression.php | 74/74 |
 | test/nexus_capability_eval_v1.php | 153/153 |
 | test/real_conversation_v1.php | 103/103 · 381/381 |
@@ -112,5 +113,4 @@ existentes; no se añadió consulta nueva por turno.
 
 READY se declara solo si las 20 puertas pasan, incluidas G18 (transcript
 golden live = 26/26) y G19 (held-out ≥90%), sobre API+BD reales, con las
-regresiones completas verdes. Estado actual: **20/20 — READY FOR CONTROLLED
-PRODUCTION**, con los residuales honestos listados arriba.
+regresiones completas verdes. Estado actual: **21/21 — READY FOR CONTROLLED PRODUCTION**, con los residuales honestos listados arriba.
