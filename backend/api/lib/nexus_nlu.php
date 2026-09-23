@@ -1612,7 +1612,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 elseif (in_array($w, ['penultimo','penultima'], true)) $nav = 'nth:' . max(1, $n2 - 1);
                 else $nav = 'nth:' . ($ord[$w] ?? 1);
             }
-            elseif (preg_match('/^(y |ahora |y ahora |dame |dime |muestra(?:me)? |muestrame |trae(?:me)? )?(los demas|las demas|los otros|las otras|el resto|todos ellos|todos|los que faltan|los restantes)[.! ]*$/u', $q0)) $nav = 'rest';
+            // «todos» = el set COMPLETO activo (caso J), no el resto que
+            // falta tras un slice — «los demás» sí es el resto
+            elseif (preg_match('/^(y |ahora |dame |dime |muestra(?:me)? |muestrame |trae(?:me)? )?(todos|todas|todo|todos ellos|todas ellas|el listado completo|la lista completa)[.! ]*$/u', $q0)) $nav = 'all';
+            elseif (preg_match('/^(y |ahora |y ahora |dame |dime |muestra(?:me)? |muestrame |trae(?:me)? )?(los demas|las demas|los otros|las otras|el resto|los que faltan|los restantes)[.! ]*$/u', $q0)) $nav = 'rest';
             elseif (preg_match('/\b(en tabla|en una tabla|como tabla|formato tabla|ponmelos en una tabla|ponlos en tabla|en columnas|en cuadro|tabulados?|la tabla completa|todos en tabla|muestralos todos|muéstralos todos|muestramelos todos|muéstramelos todos|pasame todos|dame todos|lista completa|la lista entera|la nomina completa|el listado completo)\b/u', $q0)) $nav = 'table';
             elseif (preg_match('/\b(cuantos|cuantas|cuanto|cuanta|cuantos son|cuantas son|cuantos hay|cuantas hay)( son| hay| eran| fueron| resultaron| en total| son en total| al final| en total son)?\b[?¡! ]*$/u', $q0)) $nav = 'count';
             elseif (preg_match('/\b(cual|como|quien) (es|fue|se llama)? ?(su|el) (nombre|como se llama)\b[?¡! ]*$/u', $q0)

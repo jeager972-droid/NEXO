@@ -1179,7 +1179,7 @@ function nxPlanExecute(PDO $conn, array $u, array $plan, array $vars): array {
     // plan compuesto: pasos con dependencias (§7) — cada paso es un plan
     // pleno; `_ref` enlaza al result-set de un paso anterior.
     if (!empty($plan['steps'])) {
-        $replies = []; $results = []; $lastRs = null; $entities = [];
+        $replies = []; $results = []; $lastRs = null; $entities = []; $composedCards = [];
         foreach ($plan['steps'] as $i => $step) {
             // la persona activa del turno se propaga a cada paso — un paso
             // de relación («estudiantes del acudiente») no pierde el sujeto
@@ -1212,10 +1212,15 @@ function nxPlanExecute(PDO $conn, array $u, array $plan, array $vars): array {
             $results[$i] = $r;
             $replies[] = $r['reply'] ?? '';
             if (!empty($r['_result_set'])) $lastRs = $r['_result_set'];
+            // las tarjetas de cada paso acompañan al resultado compuesto
+            // («un chiste y una tabla de comparación» → la tabla llega)
+            foreach (($r['cards'] ?? []) as $card)
+                $composedCards[] = $card;
             $entities = array_merge($entities, $r['entities'] ?? []);
         }
         return ['reply'=>implode("\n\n—\n\n", array_filter($replies)),
                 'intent'=>'composed','_plan'=>$plan,'entities'=>$entities,
+                'cards'=>$composedCards ?: null,
                 '_result_set'=>$lastRs,'_steps'=>$results];
     }
     return nxPlanExecuteStep($conn, $u, $plan, $vars);

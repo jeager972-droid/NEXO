@@ -27,6 +27,7 @@ global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 require_once __DIR__ . '/../lib/nexus_nlu.php';
 require_once __DIR__ . '/../lib/nexus_semantic.php';
+require_once __DIR__ . '/../lib/nexus_scp.php';
 require_once __DIR__ . '/../lib/kb_colombia.php';
 require_once __DIR__ . '/../lib/calculator.php';
 
@@ -469,6 +470,58 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $slots  = $interp['resolved']['slots'];
     if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
 
+    // ── SCP — Semantic Conversational Parsing (§CAMBIO ARQUITECTÓNICO) ──
+    // Interpretar → validar → planificar → ejecutar. El frame normaliza el
+    // significado del turno contra el estado conversacional; NO ejecuta ni
+    // inventa datos. Salidas: (a) correcciones que actualizan el contexto,
+    // (b) intent+slots refinados cuando el frame tiene soporte estructural,
+    // (c) plan especializado (compare) que pasa por validate+allowed igual
+    // que cualquier otro plan. RBAC intacto: sigue en nxPlanAllowed/chatAllowed.
+    $scpFrame = null; $scpPlan = null; $scpForced = false;
+    try {
+        $scpFrame = nxScpFrame($q0, $cls, $interp, $ds);
+        [$scpOk, $scpWhy] = nxScpValidate($scpFrame);
+        nxScpTrace('FRAME', ['task'=>$scpFrame['task'],'domain'=>$scpFrame['domain'],
+            'subject'=>$scpFrame['subject'],'filters'=>$scpFrame['filters'],
+            'scope'=>$scpFrame['scope'],'time'=>$scpFrame['time_range'],
+            'ranking'=>$scpFrame['ranking'],'corrections'=>$scpFrame['corrections'],
+            'targets'=>$scpFrame['targets'],'conf'=>$scpFrame['confidence'],
+            'valid'=>$scpOk,'why'=>$scpWhy]);
+        if ($scpOk) {
+            // correcciones primero: actualizan el plan/contexto activo
+            $corr = chatScpCorrections($conn, $authUser, $scpFrame, $ds, $interp,
+                $vars, $role, $sessionId, $q0, $conf);
+            if ($corr !== null) {
+                $corr['_ds'] = $corr['_ds'] ?? chatBuildDs($interp, $corr, $ds);
+                $corr['_interpretation'] = ['turn_type'=>$interp['turn_type'],
+                    'nlu_intent'=>$cls['intent'], 'scp'=>['task'=>$scpFrame['task'],
+                    'timing_ms'=>['nlu'=>round($tNlu*1000,2),'dsm'=>round($tDsm*1000,2)]],
+                    'inherited'=>$interp['resolved']['inherited']];
+                chatLog($conn, $schoolId, $userId, $text, $corr, $sessionId);
+                exit(json_encode(['status'=>'ok','data'=>$corr]));
+            }
+            [$cIntent, $cSlots, $cForced] = nxScpToSlots($scpFrame);
+            if ($cForced && $cIntent) {
+                $slots = array_merge($slots, $cSlots);
+                if (!empty($scpFrame['subject']['name']) && in_array($scpFrame['task'], ['relation','count'], true))
+                    $slots['student'] = $scpFrame['subject']['name'];
+                if ($scpFrame['task'] === 'relation' && !empty($slots['_nav']))
+                    unset($slots['_nav']); // la referencia ya está materializada
+                $intent = $cIntent;
+                $interp['resolved']['intent'] = $intent;
+                $interp['resolved']['slots'] = $slots;
+                $interp['requires_clarification'] = false;
+                $scpForced = true; // el frame decidió — el compose clásico no lo pisa
+                nxScpTrace('TRANSLATED', ['intent'=>$intent,'slots'=>$cSlots,'task'=>$scpFrame['task']]);
+            }
+            $scpPlan = nxScpToPlan($scpFrame);
+        } else {
+            nxScpTrace('INVALID', ['why'=>$scpWhy,'task'=>$scpFrame['task']]);
+        }
+    } catch (Throwable $scpE) {
+        nxScpTrace('ERROR', ['msg'=>$scpE->getMessage()]); // SCP nunca rompe el turno
+    }
+
     // ── «mi grupo» (*mine*) → scope real del usuario (§9-10) ────────────
     // 1 grupo → ese; varios → aclaración explícita; ninguno → fallo honesto.
     if (($slots['group'] ?? null) === '*mine*') {
@@ -507,6 +560,23 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             unset($slots['_nav']);
             $intent = 'student_field';
             $interp['resolved']['intent'] = 'student_field';
+            $interp['resolved']['slots'] = $slots;
+            $interp['requires_clarification'] = false;
+        }
+    }
+
+    // ── «todos» sobre una vista recortada (slice): pide el UNIVERSO, no
+    // la vista — re-ejecutar la colección original con sus filtros (§J)
+    if (($slots['_nav'] ?? null) === 'all' && $ds
+        && preg_match('/primeros|últimos|ultimos|slice/i', (string)($ds['last_result']['label'] ?? ''))) {
+        $orig = null;
+        foreach (array_reverse($ds['objects'] ?? []) as $obj)
+            if (!empty($obj['filters'])) { $orig = $obj; break; }
+        if ($orig && ($orig['type'] ?? '') === 'students' && !empty($orig['filters']['group'])) {
+            $slots = array_intersect_key($slots, array_flip(['_inherited']));
+            $slots['group'] = $orig['filters']['group'];
+            $intent = 'students_in_group';
+            $interp['resolved']['intent'] = $intent;
             $interp['resolved']['slots'] = $slots;
             $interp['requires_clarification'] = false;
         }
@@ -652,12 +722,17 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // («del primero», «de esos») enlazan el paso al result-set anterior.
     $plan = null;
     $clauses = nxSemSplitCompound($q0);
+    $scpChatter = []; $scpPendingTargets = [];
     if (count($clauses) > 1) {
         $steps = []; $okAll = true;
         $fieldMap = ['acudiente'=>'acudiente','tutor'=>'acudiente','responsable'=>'acudiente',
             'telefono'=>'celular','celular'=>'celular','whatsapp'=>'celular','numero'=>'celular',
             'documento'=>'documento','cedula'=>'documento','grupo'=>'grupo','jornada'=>'jornada',
             'nombre'=>'nombre','edad'=>'edad','nacimiento'=>'nacimiento'];
+        // cláusulas de conversación general (chiste/saludo) — se resuelven
+        // inline; NO rompen la composición del resto (objetivos múltiples)
+        $chatterIntents = ['greeting','greeting_time','joke','fun_fact','thanks','wellbeing',
+            'wellbeing_reply','compliment','motivation','human_check','about_nexus'];
         foreach ($clauses as $ci => $clause) {
             $cN = nxNorm($clause);
             $ref = $ci > 0 ? nxSemRefOf($cN) : null;
@@ -668,6 +743,13 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             }
             $cCls = nxClassify($cN);
             $cIp = nxDialogueResolve($cCls, is_array($ctx) ? $ctx : null, $cN);
+            // objetivo de conversación general → respuesta inline, la
+            // cláusula de datos sigue componiendo (caso L: chiste + tabla)
+            if (in_array($cIp['resolved']['intent'], $chatterIntents, true) && !$ref) {
+                $sr = chatDispatch($conn, $authUser, $cIp['resolved']['intent'], [], $vars, $role);
+                $scpChatter[] = $sr['reply'] ?? '';
+                continue;
+            }
             if ($ci > 0 && $steps) {
                 foreach (['group','module','status','days','range_label','from','to'] as $fk)
                     if (empty($cIp['resolved']['slots'][$fk]))
@@ -687,21 +769,46 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             if ($ref) $cIp['resolved']['slots']['student'] = '@ref';
             $cPl = nxSemanticCompose($cN, $cIp['resolved']['intent'],
                 (float)($cCls['confidence'] ?? 0), $cIp['resolved']['slots'], $cIp, $ds, true);
-            if (!$cPl) { $okAll = false; break; }
+            if (!$cPl) {
+                // cláusula no componible → queda PENDIENTE («te faltó lo
+                // otro» la recupera); no mata las demás cláusulas
+                $scpPendingTargets[] = ['intent'=>$cIp['resolved']['intent'],
+                    'slots'=>$cIp['resolved']['slots'], 'text'=>$cN, 'delivered'=>false];
+                $okAll = false;
+                continue;
+            }
             if ($ref) $cPl['_ref'] = ['step'=>0] + $ref;
             $cexec = nxCapabilityRegistry()[$cPl['capability']]['exec'] ?? null;
             if ($cexec && str_starts_with($cexec, 'intent:'))
                 $cPl['_delegate_intent'] = substr($cexec, 7);
             $steps[] = $cPl;
         }
-        if ($okAll && $steps)
+        if ($steps)
             $plan = ['capability'=>'composed','entity'=>'composed','steps'=>$steps,
                      'read_only'=>true,'_src'=>'semantic','presentation'=>'multi',
                      'conf'=>min(array_map(fn($x)=>$x['conf'] ?? 0.7, $steps)),
                      'evidence'=>['compound:' . count($steps) . ' clauses']];
     }
-    if (!$plan)
+    // plan SCP especializado (compare con métrica) cuando la composición
+    // clásica no produjo nada — mismo contrato: validate + allowed
+    if (!$plan && $scpPlan) { $plan = $scpPlan; }
+    // cuando el frame decidió (rank/filter/count/relation), el compose
+    // clásico no lo pisa: el significado normalizado tiene prioridad
+    if (!$plan && !$scpForced)
         $plan = nxSemanticCompose($q0, $intent, (float)$conf, $slots, $interp, $ds);
+    // cláusulas de conversación general pendientes sin plan de datos:
+    // responderlas igual (un chiste solo no debe caer a out_of_scope)
+    if (!$plan && $scpChatter) {
+        $out = ['reply'=>implode("\n\n", $scpChatter), 'intent'=>'composed_chat',
+                'confidence'=>$conf, 'session_id'=>$sessionId,
+                'entities'=>$scpPendingTargets ? ['_pending_targets'=>$scpPendingTargets] : []];
+        $out['_ds'] = chatBuildDs($interp, $out, $ds);
+        $out['_interpretation'] = ['turn_type'=>$interp['turn_type'],'nlu_intent'=>$cls['intent'],
+            'scp'=>['task'=>$scpFrame['task'] ?? null,'chatter'=>count($scpChatter)],
+            'inherited'=>$interp['resolved']['inherited'] ?? []];
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
+    }
     if ($plan) {
         $plan['_ctx_person'] = $ds['person'] ?? null;
         // §20 — validación estructural antes de autorizar/ejecutar
@@ -729,11 +836,21 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $out['intent'] = $plan['capability'];
         $out['confidence'] = $conf;
         $out['session_id'] = $sessionId;
+        // objetivos de conversación general del turno compuesto: sus
+        // respuestas acompañan al resultado de datos (caso L)
+        if ($scpChatter)
+            $out['reply'] = implode("\n\n", $scpChatter) . "\n\n—\n\n" . ($out['reply'] ?? '');
         $out['entities'] = array_merge($slots, $out['entities'] ?? []);
+        // objetivos que quedaron sin componer → pendientes («te faltó lo
+        // otro» los recupera en el siguiente turno)
+        if ($scpPendingTargets)
+            $out['entities']['_pending_targets'] = $scpPendingTargets;
         $out['_ds'] = chatBuildDs($interp, $out, $ds);
         if (isset($out['_interpretation']['timing_ms']))
             $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
         $out['_interpretation']['plan'] = $plan;
+        if (isset($scpFrame)) $out['_interpretation']['scp'] = [
+            'task'=>$scpFrame['task'], 'conf'=>$scpFrame['confidence']['frame'] ?? null];
         chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
         echo json_encode(['status'=>'ok','data'=>$out], JSON_UNESCAPED_UNICODE);
         exit;
@@ -760,6 +877,13 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $out['_ds'] = chatBuildDs($interp, $out, $ds);
     if (isset($out['_interpretation']['timing_ms']))
         $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
+    // traza SCP — el frame viaja con el turno para diagnóstico por capa
+    if (isset($scpFrame)) $out['_interpretation']['scp'] = [
+        'task'=>$scpFrame['task'], 'domain'=>$scpFrame['domain'],
+        'subject'=>['name'=>$scpFrame['subject']['name'], 'source'=>$scpFrame['subject']['source']],
+        'scope'=>$scpFrame['scope'], 'time_range'=>$scpFrame['time_range'],
+        'ranking'=>$scpFrame['ranking'], 'corrections'=>$scpFrame['corrections'],
+        'confidence'=>$scpFrame['confidence']];
 
     chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
     echo json_encode(['status'=>'ok','data'=>$out], JSON_UNESCAPED_UNICODE);
@@ -867,6 +991,8 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         'cursor'      => $out['_result_set'] ? 0
                         : ($out['_result_cursor'] ?? ($prev['cursor'] ?? 0)),
         'pending_op'  => $slots['_op'] ?? ($prev['pending_op'] ?? null),
+        // objetivos compuestos sin entregar («te faltó lo otro» los recupera)
+        'pending_targets' => $ent['_pending_targets'] ?? ($prev['pending_targets'] ?? null),
         'next_rid'    => $nextRid,
     ];
     // persona referenciada (acudiente/docente) — el handler la declara.
@@ -883,6 +1009,108 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         if ($sameSubject) $ds['person'] = $prev['person'];
     }
     return $ds;
+}
+
+/**
+ * SCP — correcciones del usuario: actualizan el plan/contexto activo en
+ * lugar de reiniciar la conversación (§REGLAS FUNDAMENTALES). Devuelve
+ * null cuando la corrección no aplica (sigue el flujo normal).
+ */
+function chatScpCorrections(PDO $conn, array $u, array $frame, ?array $ds, array $interp,
+    array $vars, string $role, string $sessionId, string $q0, float $conf): ?array {
+    if ($frame['task'] !== 'correct' || empty($frame['corrections'])) return null;
+    $ds = $ds ?: [];
+    $ent = $ds['entities'] ?? [];
+    foreach ($frame['corrections'] as $c) {
+        switch ($c['kind']) {
+            // «no, me refiero al de Tomás Castaño Gutiérrez» — el nombre
+            // completo explícito domina: re-ejecutar la tarea previa con
+            // el sujeto corregido, heredando campo/alcance/tiempo activos
+            case 'replace_subject': {
+                $prevIntent = $ds['intent'] ?? null;
+                $newStudent = nxScpCorrectionSubject($c['value'] ?? '');
+                if (!$prevIntent || !$newStudent) break;
+                $slots = array_intersect_key($ent, array_flip(['field','group','module','days','from','to']));
+                $slots['student'] = $newStudent;
+                $out = chatDispatch($conn, $u, $prevIntent, $slots, $vars, $role);
+                if (!is_array($out)) $out = [];
+                $out += ['intent'=>$prevIntent, 'confidence'=>$conf, 'session_id'=>$sessionId, 'entities'=>$slots];
+                return $out;
+            }
+            // «te faltó lo otro» — objetivo compuesto pendiente de entrega
+            case 'pending_target': {
+                foreach (($ds['pending_targets'] ?? []) as $p) {
+                    if (!empty($p['delivered'])) continue;
+                    $out = chatDispatch($conn, $u, $p['intent'], $p['slots'] ?? [], $vars, $role);
+                    if (!is_array($out)) $out = [];
+                    $out += ['intent'=>$p['intent'], 'confidence'=>$conf, 'session_id'=>$sessionId];
+                    $out['reply'] = 'Faltaba esto — ' . ($out['reply'] ?? '');
+                    return $out;
+                }
+                $done = $ds['intent'] ?? 'tu consulta';
+                return ['reply'=>"No quedó nada pendiente — tu última petición quedó completa. ¿Qué más te consigo?",
+                        'intent'=>'clarify', 'confidence'=>$conf, 'session_id'=>$sessionId];
+            }
+            // «no sería empate, sería que ninguna» — reencuadre honesto del
+            // resultado de comparación activo (los datos no cambian: la
+            // interpretación sí) — pasa por validate+allowed como todo plan
+            case 'none_of': {
+                if (empty($ent['group']) || empty($ent['group2'])) break;
+                $plan = ['capability'=>'groups.compare','entity'=>'groups','op'=>'compare',
+                    'filters'=>['group'=>$ent['group'],'group2'=>$ent['group2'],
+                        'module'=>$ent['module'] ?? null,'days'=>$ent['days'] ?? null,
+                        'from'=>$ent['from'] ?? null,'to'=>$ent['to'] ?? null,
+                        'range_label'=>$ent['range_label'] ?? null],
+                    'read_only'=>true,'_src'=>'scp-correct','conf'=>0.8,
+                    'evidence'=>['correction:none_of']];
+                [$ok] = nxPlanValidate($plan);
+                if ($ok && nxPlanAllowed($conn, $u, $plan, $role)) {
+                    $out = nxPlanExecute($conn, $u, $plan, $vars);
+                    $rl = $ent['range_label'] ?? 'hoy';
+                    if (str_contains((string)($out['reply'] ?? ''), 'Empate'))
+                        $out['reply'] = "Corrijo: ninguna de las dos — {$ent['group']} y {$ent['group2']} registran cero ({$rl}).";
+                    $out += ['intent'=>'groups.compare','confidence'=>$conf,'session_id'=>$sessionId,'entities'=>$ent];
+                    return $out;
+                }
+                break;
+            }
+            // «solo cinco» como turno propio — recorte del ranking activo
+            case 'limit': {
+                $prevIntent = $ds['intent'] ?? null;
+                if (!in_array($prevIntent, ['top_offenders'], true) || empty($c['value'])) break;
+                $slots = array_intersect_key($ent, array_flip(['module','group','days','from','to','range_label']));
+                $slots['_rank_limit'] = $c['value'];
+                $out = chatDispatch($conn, $u, $prevIntent, $slots, $vars, $role);
+                if (!is_array($out)) $out = [];
+                $out += ['intent'=>$prevIntent,'confidence'=>$conf,'session_id'=>$sessionId];
+                return $out;
+            }
+            // «no esos» — exclusión del set mostrado: honesto sin datos
+            case 'exclude_active':
+                return ['reply'=>'Entendido — descartamos esos. Dime qué criterio uso en su lugar (otro grupo, otra condición).',
+                        'intent'=>'clarify','confidence'=>$conf,'session_id'=>$sessionId];
+            // «de mi clase» — refinamiento de alcance sobre la tarea activa
+            case 'refine_scope': {
+                $prevIntent = $ds['intent'] ?? null;
+                if (!$prevIntent) break;
+                $slots = array_intersect_key($ent, array_flip(['field','module','student','days','from','to']));
+                $slots['group'] = '*mine*';
+                $out = chatDispatch($conn, $u, $prevIntent, $slots, $vars, $role);
+                if (!is_array($out)) $out = [];
+                $out += ['intent'=>$prevIntent,'confidence'=>$conf,'session_id'=>$sessionId];
+                return $out;
+            }
+        }
+    }
+    return null;
+}
+
+/** nombre limpio desde el valor de una corrección («al de Tomás…» → «Tomás…»). */
+function nxScpCorrectionSubject(string $v): ?string {
+    $v = trim(preg_replace('/^(al|a la|a|el|la|los|las|de|del|estudiante|acudiente|de el|de la)\s+/ui', '', trim($v)));
+    $v = trim(preg_replace('/\b(de|del)\s+(10|11|6|7|8|9)\s*-?[ab]\b.*$/ui', '', $v)); // «de 10A» no es parte del nombre
+    $v = preg_replace('/[.!?]+$/u', '', $v);
+    return (mb_strlen($v) >= 4 && !preg_match('/^(si|no|este|esa|eso)$/ui', $v)) ? $v : null;
 }
 
 /**
@@ -1465,15 +1693,22 @@ function chat_group_summary(PDO $conn, array $u, array $s, array $v): array {
 
 function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
+    // filtro de grupo explícito («estudiantes de 10A pasaron el umbral») —
+    // el umbral del motor de riesgo no se degrada a «todos del grupo»
+    $groupFilter = '';
+    if (!empty($s['group']) && ($g = chatResolveGroup($conn, $u, $s['group']))) {
+        $groupFilter = ' AND sga.group_id=' . $conn->quote($g['group_id']);
+    }
     $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, bm.risk_level, bm.risk_score
         FROM student_behavior_metrics bm JOIN students s ON s.student_id=bm.student_id
         LEFT JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
         LEFT JOIN academic_groups ag ON ag.group_id=sga.group_id
-        WHERE bm.school_id=? AND bm.risk_level IN ('HIGH','CRITICAL') {$scope['sql']}
+        WHERE bm.school_id=? AND bm.risk_level IN ('HIGH','CRITICAL') {$scope['sql']}{$groupFilter}
         ORDER BY bm.risk_score DESC LIMIT 12");
     $st->execute([$u['school_id']]); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-    if(!$rows) return ['reply'=>'El motor de riesgo no tiene alertas activas — ningún patrón supera los umbrales configurados.'];
-    return ['reply'=>count($rows)." estudiante(s) en riesgo alto o crítico:",
+    $gLabel = !empty($s['group']) ? " en {$s['group']}" : '';
+    if(!$rows) return ['reply'=>"El motor de riesgo no tiene alertas activas{$gLabel} — ningún patrón supera los umbrales configurados."];
+    return ['reply'=>count($rows)." estudiante(s) que superaron el umbral de alerta{$gLabel}:",
         'cards'=>[['title'=>'Riesgo activo','columns'=>['Estudiante','Grupo','Nivel','Score'],
         'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['risk_level'],$r['risk_score']],$rows)]],
         'actions'=>chatDerivedActions($u,null,'riesgo')];
@@ -1866,11 +2101,13 @@ function chat_top_offenders(PDO $conn, array $u, array $s, array $v): array {
     $params=[$u['school_id'],$from,$to]; $extra='';
     if ($module) { $extra=" AND ai.incident_type=?"; $params[]=$module; }
     if (!empty($s['group']) && ($g=chatResolveGroup($conn,$u,$s['group']))) { $extra.=" AND ai.group_id=?"; $params[]=$g['group_id']; }
+    // límite explícito del ranking («top 5», «solo cinco») — SCP lo trae
+    $limit = max(1, min(20, (int)($s['_rank_limit'] ?? 8)));
     $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, COUNT(*) c
         FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
         LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
         WHERE ai.school_id=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
-        GROUP BY s.student_id, s.first_name, s.last_name, ag.group_name ORDER BY c DESC LIMIT 8");
+        GROUP BY s.student_id, s.first_name, s.last_name, ag.group_name ORDER BY c DESC LIMIT {$limit}");
     $st->execute($params); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel = $module ? strtolower(NX_MODULE_LABEL[$module]??$module) : 'incidentes';
     if(!$rows) return ['reply'=>nxVaryClean($mlabel, 'en ese periodo', ($v['_q']??'').$mlabel)];
