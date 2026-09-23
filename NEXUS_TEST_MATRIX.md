@@ -1,5 +1,15 @@
 # Nexus — matriz persistente de verificación
 
+> **2026-09-24 — arquitectura híbrida v1.0 (commits e437d4f + 1b36423).**
+> El clasificador sintético TF-IDF+LR se retiró por completo (`backend/nlu`,
+> `nlu_runtime`, `nxClassifyService`, `nxClassifyLocal`, `nxCoverageOverride`,
+> `nxSemanticResolve`, `nxLlmRefine`, `generalization_eval.py`, parity_*).
+> El parser del chat es ahora el LLM (`lib/nexus_llm.php`); las suites de
+> pipeline sirven intents del snapshot `test/fixtures/llm_intents.json`.
+> Toda fila que mencione `NEXO_NLU_URL`, `:8096`, `service.py`, "fallback :9"
+> o generalization_eval describe la arquitectura anterior — es registro
+> histórico, no instrucción vigente. Comandos actuales: ver AGENTS.md.
+
 Base: ee12db93aa24bb2e068aceae4111c239b73e8bad. Fecha: 2026-09-22.
 Línea base local ejecutada sin modificar expectativas. PHP host 8.5.10; Python local :8096 o fallback forzado :9.
 Resultados por ruta NLU no intercambiables. Ninguna simulación prueba la ejecución SQL.
@@ -34,7 +44,7 @@ Docker/BD/HTTP API: PENDIENTE POR ALCANCE AUTORIZADO (usuario eligió solo prueb
 | Read-only | test/readonly_guard.php | Pendiente |
 | Resiliencia | test/resilience.php | Pendiente |
 | Release | test/nexus_release_gate.php | Pendiente |
-| Generalización | test/generalization_eval.py | Pendiente |
+| Generalización | ~~test/generalization_eval.py~~ retirado 2026-09-24 (requería backend/nlu) | Retirado |
 | Frontend | PWA/package.json | Pendiente de inspección |
 
 ## Resultados tras SECURITY+PLANNER (2026-09-22, rama nexus-longrun-20260922)
