@@ -1,5 +1,12 @@
 # Nexus — memoria persistente de ejecución
 
+⚠️ 2026-09-23 — ARQUITECTURA CAMBIADA: el clasificador TF-IDF+LR (servicio
+Python, modelo PHP, overrides/reranker) fue RETIRADO. El parser del chat es el
+LLM (`lib/nexus_llm.php`, `NLU_LLM_*`); sin key → out_of_scope. Suites sirven
+`test/fixtures/llm_intents.json` (snapshot real regenerable). Las métricas
+NLU/blind de checkpoints anteriores describen el stack muerto — referencia
+vigente: `NEXO_HYBRID_MODEL_V1.md` + `auditoria/AUDITORIA_NLU_VEREDICTO_2026-09-23.md`.
+
 CURRENT_PHASE: LIVE CLOSURE VERIFICADO — stack real corriendo (api/nlu/db/redis recreados con código actual).
 CURRENT_OBJECTIVE: Cierre de integración conversacional live cerrado: §1 verbatim 14/14 + continuity_50 53/53 contra API real con _ds persistido por turno.
 LAST_SUCCESSFUL_MILESTONE: LIVE 14/14 (§1 verbatim) + continuity_50 53/53 + gate 18/18 + capability 153/153 + DSM 60/60 + real_conversation 103/103 + phpunit 244 — todo contra API/DB/Redis reales (nexo-test, puerto 18080). Fixture extendido: 10-A (6 estudiantes, Tomás Castaño Gutiérrez con acudiente), 10-B, teacher con 3 grupos (pruebas/seed_chat_fixture.sql).

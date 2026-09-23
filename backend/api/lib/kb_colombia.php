@@ -1,7 +1,6 @@
 <?php
 /**
  * lib/kb_colombia.php — Conocimiento de Colombia para el chatbot.
- * Espejo de backend/nlu/kb_colombia.py. PHP responde, Python solo clasifica.
  */
 
 const NX_KB_DEPTS = [

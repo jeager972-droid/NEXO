@@ -15,21 +15,21 @@
  *   NLU_LLM_MODEL  modelo (default qwen/qwen3.8-27b — Groq free 1k req/día,
  *                  8k tokens/min; alternativas en la cuenta: openai/gpt-oss-20b,
  *                  openai/gpt-oss-120b)
- *   NLU_LLM_MODE   off | fallback | primary
- *                    fallback = solo rescata cuando el clasificador local falla
- *                    primary  = el LLM parsea todo; el clasificador queda de backup
+ *   NLU_LLM_MODE   off | on  (el LLM es EL parser: no existe clasificador
+ *                  local; 'primary'/'fallback' se aceptan como 'on' por
+ *                  compatibilidad de env)
  *   NLU_LLM_TIMEOUT_MS  (default 6000)
  */
 
 function nxLlmCfg(): array {
     static $c = null;
     if ($c !== null) return $c;
-    $mode = strtolower((string)(getenv('NLU_LLM_MODE') ?: 'fallback'));
+    $mode = strtolower((string)(getenv('NLU_LLM_MODE') ?: 'on'));
     $c = [
         'url'   => rtrim((string)(getenv('NLU_LLM_URL') ?: 'https://api.groq.com/openai/v1'), '/'),
         'key'   => (string)(getenv('NLU_LLM_KEY') ?: ''),
         'model' => (string)(getenv('NLU_LLM_MODEL') ?: 'qwen/qwen3.8-27b'),
-        'mode'  => in_array($mode, ['off','fallback','primary'], true) ? $mode : 'fallback',
+        'mode'  => $mode === 'off' ? 'off' : 'on',
         'ms'    => max(500, (int)(getenv('NLU_LLM_TIMEOUT_MS') ?: 6000)),
     ];
     return $c;
@@ -40,7 +40,7 @@ function nxLlmEnabled(): bool {
     return $c['key'] !== '' && $c['mode'] !== 'off';
 }
 
-/* Taxonomía — espejo de backend/nlu/domains.py. Mantener sincronizada. */
+/* Taxonomía de intents del chat — whitelist que valida la salida del LLM. */
 const NX_LLM_FORMAL = [
     'day_summary','attendance_today','late_today','count_events','list_events',
     'student_field','student_summary','group_summary','risk_students',
@@ -177,14 +177,14 @@ SOCIAL/GENERAL: greeting|greeting_time=buenos días/tardes/noches|wellbeing=cóm
 
 entities (opcional): student=nombre estudiante | group=ej "8-B","10A","sexto" | module=INASISTENCIA|LATE_ARRIVAL|EVASION_INTERNA|PERMISO|SALIDA_ANTICIPADA | field=documento|celular|acudiente|grupo|jornada|nacimiento|estado | days=N ("últimos N días") | person=docente/acudiente mencionado | grade | shift=mañana|tarde
 
-REGLAS: acudiente/padre/madre de <estudiante o "el niño que..."> → student_field field=acudiente; referencia "el niño/el estudiante que llegó tarde/faltó/está en X" cuenta como estudiante (no uses out_of_scope por eso); padres/acudientes de un grupo → students_in_group; permisos/autorizaciones pendientes o por aprobar → permissions; no marcaron entrada/no han llegado → attendance_today; comparar grupos → attendance_ranking; comparar días/periodos → list_events con days; dato+social juntos → intent del dato; ambiguo real → confidence<0.6. Solo JSON.
+REGLAS: acudiente/padre/madre de <estudiante o "el niño que..."> → student_field field=acudiente; referencia "el niño/el estudiante que llegó tarde/faltó/está en X" cuenta como estudiante (no uses out_of_scope por eso); padres/acudientes de un grupo → students_in_group; permisos/autorizaciones pendientes o por aprobar → permissions; no marcaron entrada/no han llegado → attendance_today; comparar grupos → attendance_ranking; comparar días/periodos → list_events con days; dato+social juntos → intent del dato; pronombres/deícticos/posesivos (él, ella, su, sus, este, ese, aquel, el primero, el último, el niño ese, uno, otro, le, les) NUNCA van en entities — student/person/search quedan vacíos (el DSM los resuelve por contexto); «<incidente> de <persona>» sin verbo de listado → count_events; «los/las que <verbo>» (los que se volaron, las que faltaron) → list_events; «faltaron/faltan» sobre asistencia → attendance_today o list_events, nunca group_summary; fragmentos de seguimiento sin verbo ni sujeto («y del mes», «y ayer», «y los del 8B», «y de X») → confidence≤0.5; ambiguo real → confidence<0.6. Solo JSON.
 PROMPT;
 }
 
 /**
  * POST {NLU_LLM_URL}/chat/completions (compatible-OpenAI) → arreglo con la
- * misma forma que devuelve nxClassifyService/nxClassifyLocal, o null si el
- * proveedor no respondió / devolvió algo inválido.
+ * misma forma que espera nxDialogueResolve (intent/confidence/entities/top3),
+ * o null si el proveedor no respondió / devolvió algo inválido.
  */
 function nxLlmClassify(string $text): ?array {
     $c = nxLlmCfg();
@@ -245,27 +245,3 @@ function nxLlmClassify(string $text): ?array {
     ];
 }
 
-/**
- * Decide si el resultado local $r debe ser reemplazado por el LLM según
- * NLU_LLM_MODE:
- *   fallback → solo cuando el clasificador local falló o quedó débil.
- *   primary  → el LLM siempre tiene la palabra; lo local es respaldo.
- * Devuelve el resultado final (nunca null si $r no era null).
- */
-function nxLlmRefine(string $text, ?array $r): ?array {
-    if (!nxLlmEnabled()) return $r;
-    $mode = nxLlmCfg()['mode'];
-    $weak = !$r
-        || ($r['intent'] ?? 'out_of_scope') === 'out_of_scope'
-        || (float)($r['confidence'] ?? 0) < NX_NLU_THRESHOLD;
-    if ($mode === 'fallback' && !$weak) return $r;
-    $llm = nxLlmClassify($text);
-    if (!$llm) return $r;
-    // nxSlots manda en lo estructural (grupo/módulo/fechas/días); el LLM
-    // rellena lo que el extractor no vio (nombres, campo pedido, persona).
-    $llm['entities'] = array_merge(
-        $llm['entities'] ?? [],
-        array_filter(nxSlots(nxNorm($text)), fn($v) => $v !== null && $v !== '')
-    );
-    return $llm;
-}

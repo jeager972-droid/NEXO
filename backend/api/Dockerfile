@@ -15,13 +15,6 @@ RUN apt-get update \
 
 RUN install-php-extensions pdo_pgsql mysqli redis sockets zip pcntl
 
-# NLU embebido — el clasificador jerárquico corre en el mismo contenedor
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv \
-    && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/nlu-venv \
-    && /opt/nlu-venv/bin/pip install --no-cache-dir scikit-learn numpy scipy joblib
-
 WORKDIR /var/www/html
 
 # Build context is backend/api directory

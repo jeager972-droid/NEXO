@@ -22,6 +22,7 @@
  */
 define('ROLE', 'TEACHER');
 require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 /** Réplica del flujo NUEVO de /chat/message: clasifica → nxDialogueResolve
  *  con ctx server-side (entities + _ds). Devuelve la interpretación. */

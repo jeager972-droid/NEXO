@@ -65,18 +65,28 @@ class ChatNluTest extends PHPUnit\Framework\TestCase
         $this->assertContains($r['intent'], ['out_of_scope']);
     }
 
-    public function testModeloPhpExportadoYClasifica(): void
+    public function testParserLlmPresenteYFixtureReproduce(): void
     {
-        $model = __DIR__ . '/../../backend/nlu/model/model_php.json';
-        $this->assertFileExists($model);
-        $r = nxClassifyLocal('cuéntame un chiste');
+        // el parser real es el LLM — el cliente existe y la taxonomía no está vacía
+        $this->assertFileExists(__DIR__ . '/../../backend/api/lib/nexus_llm.php');
+        $this->assertNotEmpty(NX_LLM_FORMAL);
+        $this->assertNotEmpty(NX_LLM_INFORMAL);
+        // sin proveedor → out_of_scope honesto (phpunit no exporta NLU_LLM_KEY)
+        putenv('NX_CLASSIFY_FIXTURE=');
+        $r = nxClassify('cuantas evasiones tuvo juan perez del 7a en 15 dias');
+        $this->assertSame('out_of_scope', $r['intent']);
+        // fixture replay: una respuesta LLM guardada se sirve tal cual
+        $fx = tempnam(sys_get_temp_dir(), 'fx');
+        file_put_contents($fx, json_encode([
+            nxNorm('cuéntame un chiste') => ['intent' => 'joke', 'confidence' => 0.95,
+                'entities' => [], 'domain' => 'informal', 'top3' => []],
+        ]));
+        putenv("NX_CLASSIFY_FIXTURE=$fx");
+        $r = nxClassify('cuéntame un chiste');
         $this->assertSame('joke', $r['intent']);
-        $this->assertGreaterThan(0.66, $r['confidence']);
-        $r = nxClassifyLocal('cuantas evasiones tuvo juan perez del 7a en 15 dias');
-        $this->assertSame('count_events', $r['intent']);
-        $this->assertSame('7A', $r['entities']['group']);
-        $this->assertSame(15, $r['entities']['days']);
-        $this->assertSame('juan perez', $r['entities']['student']);
+        $this->assertSame('fixture', $r['source']);
+        unlink($fx);
+        putenv('NX_CLASSIFY_FIXTURE');
     }
 
     public function testExtraccionDeEntidades(): void

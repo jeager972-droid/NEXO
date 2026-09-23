@@ -16,7 +16,6 @@ $response = [
     'db'      => false,
     'redis'   => false,
     'workers' => [],
-    'nlu'     => false,
     'llm'     => false,
 ];
 $allHealthy = true;
@@ -153,27 +152,13 @@ foreach ($response['workers'] as $name => $alive) {
     }
 }
 
-// 4. NLU health — /health del clasificador embebido (:8090 o NEXO_NLU_URL).
-// Un NLU caído deja el chat 100% en out_of_scope: es dependencia crítica.
-$nluOk = false;
-try {
-    $nluUrl = rtrim(getenv('NEXO_NLU_URL') ?: 'http://localhost:8090', '/');
-    $ch = curl_init($nluUrl . '/health');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT_MS=>800,
-        CURLOPT_CONNECTTIMEOUT_MS=>400]);
-    $res = curl_exec($ch);
-    $nluOk = curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
-    curl_close($ch);
-} catch (Exception $e) {
-    $nluOk = false;
-}
-$response['nlu'] = $nluOk;
-if (!$nluOk) $allHealthy = false;
-
-// 5. Parser LLM — configurado (key presente) o no. Informativo: no tumba
-// health porque el clasificador local sigue sirviendo sin él.
-$response['llm'] = (getenv('NLU_LLM_KEY') ?: '') !== ''
-    && (getenv('NLU_LLM_MODE') ?: 'fallback') !== 'off';
+// 4. Parser LLM — configurado (key presente + no apagado). El LLM es EL
+// parser del chat: sin él todo cae a out_of_scope, así que es dependencia
+// crítica y sí tumba el health.
+$llmOk = (getenv('NLU_LLM_KEY') ?: '') !== ''
+    && (getenv('NLU_LLM_MODE') ?: 'on') !== 'off';
+$response['llm'] = $llmOk;
+if (!$llmOk) $allHealthy = false;
 
 http_response_code($allHealthy ? 200 : 503);
 echo json_encode($response, JSON_UNESCAPED_UNICODE);

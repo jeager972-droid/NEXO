@@ -15,18 +15,19 @@ function ok(bool $c, string $label): void {
     else    { $F++; echo "  ✗ $label\n"; }
 }
 
-echo "── NLU caído → fallback PHP-model, nunca 'none' ──\n";
-putenv('NEXO_NLU_URL=http://127.0.0.1:9'); // puerto muerto → servicio inalcanzable
+echo "── Parser LLM ausente → out_of_scope honesto, nunca inventa ──\n";
+putenv('NX_CLASSIFY_FIXTURE');  // replay apagado → path real del parser
+putenv('NLU_LLM_KEY=');         // sin key → proveedor deshabilitado
 $t0 = microtime(true);
 $c = nxClassify('cuantas tardanzas hubo hoy');
 $dt = (microtime(true) - $t0) * 1000;
-ok($c['intent'] !== null && $c['intent'] !== '', 'intent válido sin servicio');
-ok(($c['fallback'] ?? false) === true || ($c['source'] ?? '') !== 'service', 'fallback marcado o fuente≠service');
-ok($dt < 3000, "timeout acotado ({$dt}ms < 3000)");
+ok($c['intent'] === 'out_of_scope', 'sin parser → out_of_scope: ' . $c['intent']);
+ok(($c['source'] ?? '') === 'none' || ($c['fallback'] ?? false), 'marcado como fallback');
+ok($dt < 3000, "sin espera de red ({$dt}ms < 3000)");
 $i = nxDialogueResolve($c, null, nxNorm('cuantas tardanzas hubo hoy'));
-ok(in_array($i['resolved']['intent'], ['late_today','count_events'], true),
-   'resolución sigue siendo correcta: ' . $i['resolved']['intent']);
-putenv('NEXO_NLU_URL=http://localhost:8095'); // restaurar
+ok(in_array($i['resolved']['intent'], ['out_of_scope'], true),
+   'DSM no inventa un intent: ' . $i['resolved']['intent']);
+putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json'); // restaurar replay
 
 echo "\n── Contexto corrupto ──\n";
 $c = nxClassify('y las de hoy');
@@ -62,15 +63,16 @@ echo "\n── Servicio «reiniciado» — determinismo ──\n";
 $a = nxClassify('los que se volaron'); $b = nxClassify('los que se volaron');
 ok($a['intent'] === $b['intent'], 'misma entrada → mismo intent (' . $a['intent'] . ')');
 
-echo "\n── Timeout de NLU no bloquea la conversación ──\n";
+echo "\n── Parser caído no bloquea la conversación ──\n";
 $ctx = null; $last = null;
-putenv('NEXO_NLU_URL=http://127.0.0.1:9');
+putenv('NX_CLASSIFY_FIXTURE');   // replay apagado → path real
+putenv('NLU_LLM_KEY=');          // proveedor deshabilitado
 $t0 = microtime(true);
 $r = simulateTurn('cuantas evasiones hoy', $ctx, $last);
 $dt = (microtime(true) - $t0) * 1000;
-ok($dt < 5000, "turno completo en {$dt}ms con NLU caído");
-ok($r['intent'] !== 'confused', 'intent razonable sin servicio: ' . $r['intent']);
-putenv('NEXO_NLU_URL=http://localhost:8095');
+ok($dt < 5000, "turno completo en {$dt}ms con parser caído");
+ok($r['intent'] !== 'confused', 'degrada honesto: ' . $r['intent']);
+putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 echo "\n═══════════════════════════════════════════\n";
 printf("  RESULTADO: %d PASS · %d FAIL\n", $P, $F);

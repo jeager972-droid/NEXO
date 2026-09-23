@@ -3,7 +3,7 @@
  * test/op_eval.php — Evaluador del benchmark operativo.
  * Corre production_operational_blind.json: singles por nxClassify y
  * conversaciones por simulateTurn (misma lógica de ctx que producción).
- * Uso: NEXO_NLU_URL=http://localhost:8095 php test/op_eval.php [--clean]
+ * Uso (parser en vivo — NX_CLASSIFY_FIXTURE= fuerza API real): php test/op_eval.php [--clean]
  */
 require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
 require __DIR__ . '/../backend/api/routes/chat.php';

@@ -238,26 +238,6 @@ echo "[nexo] Mosquitto MQTT broker iniciado en puerto 1883"
 echo "[nexo] Arrancando nginx en puerto 8080 (en background)..."
 nginx
 
-# NLU local — clasificador jerárquico en localhost:8090 (mismo contenedor).
-# Con backoff: antes corría una sola vez; si moría (OOM, joblib incompatible)
-# el chat quedaba ciego en out_of_scope sin que /health lo reportara.
-run_nlu_with_backoff() {
-    local backoff=2
-    local max_backoff=60
-    while true; do
-        cd /var/www/html/nlu_runtime && /opt/nlu-venv/bin/python service.py >> /var/www/html/infra/logs/nlu.log 2>&1
-        echo "[nexo] WARN: NLU local murió. Reintentando en ${backoff}s..."
-        sleep $backoff
-        backoff=$((backoff * 2))
-        if [ $backoff -gt $max_backoff ]; then backoff=$max_backoff; fi
-    done
-}
-if [ -d /var/www/html/nlu_runtime ] && [ -x /opt/nlu-venv/bin/python ]; then
-    echo "[nexo] Iniciando NLU local en :8090 (supervisado)..."
-    mkdir -p /var/www/html/infra/logs
-    run_nlu_with_backoff &
-fi
-
 echo "[nexo] Configurando supercronic para tareas periódicas..."
 mkdir -p /var/www/html/infra/logs
 chmod +x /var/www/html/infra/scripts/recalc_risk.sh

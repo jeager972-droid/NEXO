@@ -54,16 +54,6 @@ services:
       db: {condition: service_healthy}
     networks: [nexo-test]
 
-  nlu:
-    build:
-      context: ../backend/nlu
-    networks: [nexo-test]
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8090/health')"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   api:
     build:
       context: ../backend/api
@@ -92,7 +82,12 @@ services:
       PGPASSWORD: nexo_test_pw
       DATABASE_URL: "postgresql://nexo_test:nexo_test_pw@pgbouncer:6432/nexo_test"
       PORT: 8080
-      NEXO_NLU_URL: http://nlu:8090
+      # Parser LLM — el chat depende de él; sin key todo cae a out_of_scope.
+      NLU_LLM_URL: "${NLU_LLM_URL:-https://api.groq.com/openai/v1}"
+      NLU_LLM_KEY: "${NLU_LLM_KEY:-}"
+      NLU_LLM_MODEL: "${NLU_LLM_MODEL:-qwen/qwen3.8-27b}"
+      NLU_LLM_MODE: "${NLU_LLM_MODE:-on}"
+      NLU_LLM_COMPOSE: "${NLU_LLM_COMPOSE:-data}"
       REDISHOST: redis
       REDISPORT: 6379
       REDIS_PASSWORD: nexo_test_redis

@@ -238,3 +238,28 @@ NEXO_NLU_URL=http://localhost:8090   (embebido; en Render no hace falta)
   detenido y el usuario eligió solo pruebas locales tras fallos de bind-mount.
 - `continuity_50.php` no se corrió (requiere API/BD real y escribe historial).
 - No se modificó código ni se re-entrenó nada: esto es diagnóstico.
+
+---
+
+## Addendum — remediación ejecutada (2026-09-23, segunda ola)
+
+Tras integrar el parser LLM (`NEXO_HYBRID_MODEL_V1.md`), la causa raíz #1 se
+eliminó de raíz: **todo el stack estadístico fue retirado del código**.
+
+| Retirado | Detalle |
+|---|---|
+| `backend/nlu/` (~723MB) | corpus sintético (~526K ejemplos), generadores, entrenamiento, modelos |
+| `backend/api/nlu_runtime/` (84MB) | runtime Python embebido + model.joblib |
+| `nexus_nlu.php` (−630 líneas) | `nxClassifyService`, `nxPhpModel`, `nxMask`, `nxSoftmax`, `nxClassifyLocal`, `NX_INTENT_LEXICON`, `NX_MODULE_INTENT`, `nxLexGuarded`, `nxSemanticResolve`, `nxCoverageOverride`, temporal-guard |
+| Infra | Python/venv/scikit-learn del Dockerfile, supervisión NLU del entrypoint, servicio `nlu` del compose de pruebas, `NEXO_NLU_URL` |
+| Tests | `parity_v2b.php`, `parity_dsm.php` (medían el componente retirado) |
+
+Conservado deliberadamente (no era deuda del clasificador): `nxDialogueResolve`
+completo (correcciones, herencia, deícticos, navegación de resultados),
+`nxSlots`/`nxNorm`/`nxRegions`/`nxIsForeign`, smalltalk, `nxAllowed` (RBAC),
+multi-intent por segmentos, `nxPlanResponse`.
+
+Nueva verdad del parser: `nxLlmClassify` (LLM) → `out_of_scope` honesto cuando
+no hay key/proveedor. Suites: `test/fixtures/llm_intents.json` (snapshot de
+respuestas reales del LLM, regenerable — patrón VCR) cubre las puertas de
+pipeline; las eval suites de calidad del parser corren en vivo.

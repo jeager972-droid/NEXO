@@ -5,6 +5,13 @@
  * Requiere: nexus_nlu.php + routes/chat.php cargados, const ROLE, $TRACES global.
  */
 
+// Fixture LLM por defecto para todas las suites: replay determinista del
+// parser real (test/fixtures/llm_intents.json — ver test/gen_llm_fixture.php).
+// NX_CLASSIFY_FIXTURE= vacío → llama el proveedor real (gasta cuota).
+if (!getenv('NX_CLASSIFY_FIXTURE')) {
+    putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
+}
+
 /**
  * Réplica fiel del flujo /chat/message hasta el punto de dispatch.
  * $ctx = sessionStorage simulado (se pasa por referencia entre turnos).
@@ -34,7 +41,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     }
     $tr['followup_detectado'] = false;
 
-    /* ── clasificación — chat.php:279 (servicio→php-model→none) ── */
+    /* ── clasificación — chat.php:279 (fixture→llm→none) ── */
     $cls = nxClassify($text);
     $tr['3_partes_multi'] = array_map(fn($p) => ['text' => $p['text'] ?? null,
         'intent' => $p['intent'], 'conf' => $p['confidence'] ?? null], $cls['parts'] ?? []);
@@ -44,7 +51,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     $tr['7_top3'] = $cls['top3'] ?? [];
     $tr['8_entidades'] = $cls['entities'] ?? [];
     $tr['fallback_nlu'] = $cls['fallback'] ?? false;
-    $tr['fuente_clasif'] = $cls['source'] ?? 'service';
+    $tr['fuente_clasif'] = $cls['source'] ?? 'none';
 
     /* ── Dialogue State Manager — fuente única nxDialogueResolve (paridad
        con chat.php por construcción: mismo código) ── */

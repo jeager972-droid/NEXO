@@ -11,10 +11,7 @@ y **expresar** lo que el sistema verificó.
 
 ```
 Usuario ──► LLM #1 PARSER          ──► intent + entidades (JSON)
-              │
-              ▼
-        Clasificador TF-IDF local (respaldo/validación cruzada)
-              │
+              │                      (sin key / caído → out_of_scope honesto)
               ▼
         DSM → SCP → Planner → RBAC → SQL read-only
               │                          (la verdad: solo NEXO la conoce)
@@ -30,23 +27,24 @@ Usuario ──► LLM #1 PARSER          ──► intent + entidades (JSON)
 
 ## 2. Componentes
 
-### LLM #1 — Parser semántico (`nxLlmClassify`, `nxLlmRefine`)
-Archivo: `backend/api/lib/nexus_llm.php`.
+### LLM #1 — Parser semántico (`nxLlmClassify`)
+Archivo: `backend/api/lib/nexus_llm.php`. **Es EL clasificador** — el stack
+TF-IDF+LR (servicio Python, modelo PHP, reranker léxico, overrides) se
+retiró: era la fuente de la deuda sintética (~526K ejemplos de plantilla,
+~400 regex de parcheo). Ver auditoría.
 
 - API compatible-OpenAI (`/chat/completions`), provider agnóstico por env.
 - Salida: `{"intent","confidence","entities"}`. `intent` validado contra la
-  taxonomía (whitelist `NX_LLM_FORMAL ∪ NX_LLM_INFORMAL` — espejo de
-  `backend/nlu/domains.py`); un intent fuera de lista → `out_of_scope`.
+  taxonomía (whitelist `NX_LLM_FORMAL ∪ NX_LLM_INFORMAL`); un intent fuera
+  de lista → `out_of_scope`.
 - `nxSlots` (determinista) sigue mandando en slots estructurales: el LLM solo
   rellena huecos (nombres, campo pedido, persona).
-- Entra por `nxClassifyCore()` en `nexus_nlu.php` → mismo contrato que
-  `nxClassifyService`/`nxClassifyLocal` (`source: 'llm'`).
+- Entra por `nxClassifyCore()` en `nexus_nlu.php` (`source: 'llm'`).
+- Degradación: sin `NLU_LLM_KEY`, `NLU_LLM_MODE=off` o proveedor caído →
+  `out_of_scope` → flujo de clarificación honesto. Nunca intent inventado.
 
-Modos (`NLU_LLM_MODE`):
-- `off` o sin `NLU_LLM_KEY` → comportamiento idéntico al sistema anterior.
-- `fallback` → el LLM solo rescata cuando el clasificador local falla o queda
-  débil. ~70% menos cuota que primary.
-- `primary` → el LLM parsea todo; lo local es respaldo si Groq cae.
+Modos (`NLU_LLM_MODE`): `off` | `on` (default; `primary`/`fallback` se
+aceptan como `on` por compatibilidad de env).
 
 ### LLM #2 — Response Composer (`nxLlmComposeReply`)
 Mismo archivo. Se engancha en `chatLog` **por referencia** (`array &$out`):
@@ -69,11 +67,18 @@ DSM (`nxDialogueResolve`), SCP, `nxSemanticCompose`, capability registry,
 RBAC, ejecutores SQL read-only, `chatDispatch`. La memoria `_ds` sigue en
 `chat_messages.payload_json`.
 
-### Clasificador TF-IDF local (respaldo)
-Servicio Python embebido (:8090) + modelo PHP. Ahora **supervisado** en
-`docker-entrypoint.sh` (reinicio con backoff) y reportado en `/health`
-(`nlu`, `llm`). Runtime sincronizado: `nlu_runtime` = modelo 22-sep, 87
-intents; deps fijadas (`scikit-learn==1.9.1` …).
+### Lo que se retiró (deuda sintética)
+Servicio Python embebido + modelo PHP + `nxCoverageOverride` +
+`nxSemanticResolve`/`NX_INTENT_LEXICON` + temporal-guard: ~630 líneas de
+`nexus_nlu.php`, `backend/nlu` (723MB de corpus/entrenamiento),
+`backend/api/nlu_runtime` (84MB), Python/scikit-learn del Dockerfile.
+`/health` ahora reporta `llm` como dependencia crítica.
+
+Lo que SÍ se quedó de esa capa (no era deuda): `nxNorm`, `nxSlots`
+(entidades/fechas deterministas), `nxRegions`/`nxIsForeign`, smalltalk,
+`nxAllowed` (RBAC), `nxDialogueResolve` completo (correcciones, herencia de
+slots, navegación de resultados, referencias deícticas, multi-intent) y el
+`parts` multi-segmento de `nxClassify`.
 
 ## 3. Configuración
 
@@ -81,10 +86,9 @@ intents; deps fijadas (`scikit-learn==1.9.1` …).
 NLU_LLM_URL=https://api.groq.com/openai/v1     # cualquier compatible-OpenAI
 NLU_LLM_KEY=gsk_...                            # vacío ⇒ LLM off total
 NLU_LLM_MODEL=qwen/qwen3.8-27b
-NLU_LLM_MODE=primary                           # off|fallback|primary
+NLU_LLM_MODE=on                                # off|on
 NLU_LLM_COMPOSE=data                           # off|data|all
 NLU_LLM_TIMEOUT_MS=6000
-NEXO_NLU_URL=http://localhost:8090             # embebido; opcional
 ```
 
 Local: `backend/api/.env` (gitignored). Render: dashboard → Environment.
@@ -92,14 +96,14 @@ Local: `backend/api/.env` (gitignored). Render: dashboard → Environment.
 ## 4. Cuota Groq free (medida en headers)
 
 `qwen/qwen3.8-27b`: **1.000 req/día · 8.000 tokens/min** (~10 llamadas/min con
-el prompt de ~600 tok). Con `primary` + `compose=data`: ~2 llamadas por turno
+el prompt de ~600 tok). Con parser + `compose=data`: ~2 llamadas por turno
 de datos → **~500 turnos/día** de margen. Si se agota la cuota o Groq falla:
-el parser cae al clasificador local y el composer devuelve el reply original
-— degradación silenciosa, nunca un error al usuario.
+el parser devuelve `out_of_scope` honesto (clarificación) y el composer pasa
+el reply original — degradación segura, nunca un error ni un intent inventado.
 
 ## 5. Resultados medidos (sonda de 20 frases naturales, `test/llm_probe.php`)
 
-| | Sin LLM (modelo 22-sep) | Con LLM primary |
+| | Clasificador TF-IDF (retirado) | LLM parser |
 |---|---|---|
 | Intent correcto | 12/20 | **16/20** |
 | Errores graves (conf alta, intent errado) | 4 | **0** |
@@ -127,14 +131,19 @@ exactos; jokes intactos en modo `data`.
 3. Set de evaluación real (frases de usuarios reales, no del corpus).
 4. Pasar contexto de conversación (`_ds` resumido) al prompt del parser para
    resolver referencias vagas por sí solo (hoy lo hace el DSM determinista).
-5. Si la cuota se queda corta: `NLU_LLM_MODE=fallback`, caché de consultas
-   repetidas, o `openai/gpt-oss-120b`/`gpt-oss-20b` (misma cuenta).
+5. Si la cuota se queda corta: caché de consultas repetidas, o
+   `openai/gpt-oss-120b`/`gpt-oss-20b` (misma cuenta, límites distintos).
 6. Migración futura a servidor propio: mismo contrato (SemanticFrame /
    VerifiedResult / ResponseEnvelope), solo cambia `NLU_LLM_URL`.
 
 ## 8. Verificación
 
-- `test/llm_probe.php` — sonda de lenguaje natural (con/sin LLM).
-- Suites intactas con LLM off: `dsm_units` 60/60, `real_conversation` 381/381,
-  `resilience` 15/15 (se arregló crash preexistente de contexto corrupto),
-  `capability_eval` 153/153, `phpunit` 244/244, `readonly_guard` ✓.
+- `test/llm_probe.php` — sonda de lenguaje natural en vivo (gasta cuota).
+- `test/fixtures/llm_intents.json` — snapshot de respuestas REALES del parser
+  para las frases de las suites de pipeline (`NX_CLASSIFY_FIXTURE` lo activan
+  los entry points). Regenerar: `NX_CLASSIFY_LOG` + `test/gen_llm_fixture.php`
+  (ver AGENTS.md). Las eval suites de calidad del parser (op_eval,
+  semantic_eval, blind_eval, audit_single_errors) corren en vivo, no contra
+  el fixture.
+- Suites contra el fixture: `dsm_units`, `real_conversation`, `resilience`,
+  `capability_eval`, `scp_regression`, `phpunit`, `readonly_guard`.

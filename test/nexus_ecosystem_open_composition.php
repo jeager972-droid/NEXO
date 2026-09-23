@@ -14,6 +14,7 @@ foreach (['nexus_nlu.php','nexus_semantic.php'] as $lib)
     foreach ([__DIR__.'/../backend/api/lib/'.$lib, __DIR__.'/../lib/'.$lib] as $p)
         if (is_file($p)) { require $p; break; }
 
+if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 $V = in_array('--verbose', $argv ?? []);
 
 /* ── harness ─────────────────────────────────────────────────────────── */

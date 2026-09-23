@@ -12,6 +12,7 @@
  * Exit 0 si la herencia funciona.
  */
 require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 echo "╔══════════════════════════════════════════════════════════════╗\n";
 echo "║  SIMULACIÓN DE SESIÓN — memoria de contexto (sessionStorage) ║\n";

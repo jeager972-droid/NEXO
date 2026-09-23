@@ -1,5 +1,31 @@
 # Nexus — checkpoints persistentes
 
+## 2026-09-23 — Modelo híbrido v1.0 + retiro del clasificador sintético
+
+Auditoría (`auditoria/AUDITORIA_NLU_VEREDICTO_2026-09-23.md`): el "99% accuracy"
+medía el propio corpus (~526K ejemplos sintéticos por plantilla); en lenguaje
+natural real el TF-IDF+LR caía a ~50-60% y producción empaquetaba un runtime
+desincronizado. Decisión: LLM como parser + response composer sobre el motor
+determinista intacto (`NEXO_HYBRID_MODEL_V1.md`).
+
+Segunda ola (este commit): **el stack estadístico se retiró completo** —
+servicio Python embebido, modelo PHP (`model_php.json`), `nxClassifyService/
+Local`, `nxMask`/`nxSoftmax`, `nxCoverageOverride`, `nxSemanticResolve` +
+`NX_INTENT_LEXICON`/`NX_MODULE_INTENT`/`nxLexGuarded`, temporal-guard
+(~630 líneas de `nexus_nlu.php`), `backend/nlu` (~723MB corpus+training),
+`backend/api/nlu_runtime` (84MB), Python/scikit-learn del Dockerfile, servicio
+`nlu` del compose de pruebas. `nxDialogueResolve`, `nxSlots`, `nxNorm`,
+`nxRegions`, smalltalk, `nxAllowed` y multi-intent se conservan — son lógica
+conversacional, no deuda del clasificador.
+
+El LLM (`nxLlmClassify`) es ahora EL parser (`source:'llm'`); sin key/proveedor
+→ `out_of_scope` honesto. `/health` reporta `llm` como dependencia crítica.
+Tests: fixture VCR `test/fixtures/llm_intents.json` (respuestas reales del LLM
+para frases de las suites; regenerable con `NX_CLASSIFY_LOG` +
+`test/gen_llm_fixture.php`); `parity_v2b`/`parity_dsm` borrados (medían el
+componente retirado); `ChatNluTest`/`resilience` actualizados a la nueva
+verdad. Eval suites de calidad del parser corren en vivo, no contra fixture.
+
 ## 2026-09-22 — SEMANTIC CONVERSATIONAL PARSING (SCP): núcleo de significado entre mensaje y planner
 
 Nueva capa `backend/api/lib/nexus_scp.php` (~550 líneas): frame semántico normalizado

@@ -2,7 +2,7 @@
 /* test/semantic_eval.php — evalúa semantic_blind.json por la ruta real
  * (nxClassify → nxDialogueResolve). Imprime ablación crudo vs resuelto,
  * métricas por categoría, falsos-convencidos y críticos.
- * Uso: NEXO_NLU_URL=http://localhost:8095 php test/semantic_eval.php
+ * Uso (parser en vivo — NX_CLASSIFY_FIXTURE= fuerza API real): php test/semantic_eval.php
  */
 define('ROLE', 'TEACHER');
 require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';

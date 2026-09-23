@@ -16,25 +16,34 @@ No declarar READY con suites simuladas; registrar fallos y limitaciones de ejecu
 
 ## Verificación local
 
-Desde la raíz:
+Desde la raíz (las suites sirven el parser vía fixture — ver abajo):
 
 ```
-NEXO_NLU_URL=http://127.0.0.1:9 php test/dsm_units.php
-NEXO_NLU_URL=http://127.0.0.1:9 php test/nexus_capability_eval_v1.php
-NEXO_NLU_URL=http://127.0.0.1:9 php test/real_conversation_v1.php
+php test/dsm_units.php
+php test/nexus_capability_eval_v1.php
+php test/real_conversation_v1.php
 php test/readonly_guard.php
 php test/resilience.php
 backend/api/vendor/bin/phpunit --configuration test/phpunit.xml --testsuite 'API Unit Tests' --do-not-cache-result
 ```
 
-El puerto :9 fuerza la ruta fallback PHP. Para usar el modelo Python real sin Docker, ejecutar desde backend/nlu:
+El clasificador TF-IDF+LR (servicio Python + modelo PHP) se retiró: el parser
+del chat es el LLM (lib/nexus_llm.php). Para las suites, las respuestas del
+parser se sirven del snapshot `test/fixtures/llm_intents.json`
+(NX_CLASSIFY_FIXTURE lo activan los propios entry points; `= ` vacío fuerza
+el path real y gasta cuota API).
+
+Para regenerar el fixture tras cambiar frases de las suites:
 
 ```
-python3 -u -c 'from service import Handler, HTTPServer; HTTPServer(("127.0.0.1", 8096), Handler).serve_forever()'
+NX_CLASSIFY_LOG=/tmp/frases.txt NX_CLASSIFY_FIXTURE= php test/<suite>.php
+sort -u /tmp/frases.txt > /tmp/frases_u.txt
+NLU_LLM_KEY=... php test/gen_llm_fixture.php /tmp/frases_u.txt
 ```
 
-Después anteponer NEXO_NLU_URL=http://127.0.0.1:8096 a las suites PHP.
-El servicio no recarga cambios automáticamente; reiniciarlo al modificar service.py/preprocess.py.
+Las eval suites grandes (op_eval, semantic_eval, blind_eval,
+audit_single_errors) miden al parser mismo: correrlas contra el fixture es
+circular — ejecutarlas en vivo (gastan cuota) cuando se evalúe calidad.
 Las dependencias Python, PHPUnit y PWA/node_modules estaban disponibles al iniciar esta sesión.
 
 Las pruebas PWA existentes se ejecutan con npm test desde PWA; npm run build verifica Vite.

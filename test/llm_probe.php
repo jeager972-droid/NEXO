@@ -2,11 +2,10 @@
 /* test/llm_probe.php — sonda de lenguaje natural REAL sobre nxClassify.
  *
  * Frases escritas como las habla/escribe personal de un colegio colombiano
- * (no copiadas del corpus sintético). Sirve para comparar:
- *   · clasificador solo      : php test/llm_probe.php
- *   · con parser LLM activo  : NLU_LLM_KEY=gsk_... NLU_LLM_MODE=primary php test/llm_probe.php
- *   · servicio python local  : NEXO_NLU_URL=http://127.0.0.1:8096 php test/llm_probe.php
- *   · solo fallback PHP      : NEXO_NLU_URL=http://127.0.0.1:9 php test/llm_probe.php
+ * (no copiadas del corpus sintético). Sonda EN VIVO del parser LLM:
+ *   · con key configurada : NLU_LLM_KEY=gsk_... php test/llm_probe.php
+ *   · sin key (degradado) : php test/llm_probe.php → todo out_of_scope
+ *   · contra fixture      : NX_CLASSIFY_FIXTURE=test/fixtures/llm_intents.json php test/llm_probe.php
  *
  * El chequeo ($expect) es aproximado — intenta el intent "correcto" pero lo
  * que importa es la columna impresa: intent/conf/fuente por frase.

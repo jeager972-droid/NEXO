@@ -5,13 +5,12 @@
  * normaliza el significado correctamente antes de planificar. La
  * validación end-to-end (SQL/RBAC/sesión) vive en test/scp_live.php.
  *
- * Uso: NEXO_NLU_URL=http://127.0.0.1:9 php test/scp_regression.php
+ * Uso: php test/scp_regression.php
  * ========================================================================== */
 require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 require __DIR__ . '/../backend/api/lib/nexus_semantic.php';
 require __DIR__ . '/../backend/api/lib/nexus_scp.php';
-
-$NLU = getenv('NEXO_NLU_URL') ?: 'http://127.0.0.1:9';
 
 /* estado conversacional simulado — espejo del _ds real tras la tabla 10-A
  * (cursor sobre el último elemento mostrado) + contexto de conteo */

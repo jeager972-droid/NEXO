@@ -3,10 +3,11 @@
  * Dump: mensaje → esperado → intent NLU → conf → top-k → entities → slots
  * → causa clasificada (vocabulario|sintaxis|semantica|entidad|ambiguedad|
  * taxonomia|contexto|resolver|correcto).
- * Uso: NEXO_NLU_URL=http://localhost:8095 php test/audit_single_errors.php
+ * Uso (parser en vivo — NX_CLASSIFY_FIXTURE= fuerza API real): php test/audit_single_errors.php
  */
 define('ROLE', 'TEACHER');
 require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 require_once __DIR__ . '/../backend/api/routes/chat.php';
 
 $set = json_decode(file_get_contents(__DIR__ . '/production_operational_blind.json'), true);
