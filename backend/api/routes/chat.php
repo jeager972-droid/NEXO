@@ -1028,6 +1028,18 @@ function chatScpCorrections(PDO $conn, array $u, array $frame, ?array $ds, array
             // el sujeto corregido, heredando campo/alcance/tiempo activos
             case 'replace_subject': {
                 $prevIntent = $ds['intent'] ?? null;
+                // «me refiero a los de 6A / a ese grupo» — el objetivo es
+                // la COLECCIÓN: re-ejecutar la consulta con el grupo
+                if (preg_match('/\b(\d{1,2})\s*-?\s*([a-e])\b/i', (string)($c['value'] ?? ''), $mg)
+                    && in_array($prevIntent, ['students_in_group','students.list','result_nav','students_count','group_student_count'], true)) {
+                    $slots = array_intersect_key($ent, array_flip(['field','module','days','from','to','range_label']));
+                    $slots['group'] = strtoupper($mg[1] . '-' . $mg[2]);
+                    $out = chatDispatch($conn, $u, 'students_in_group', $slots, $vars, $role);
+                    if (!is_array($out)) $out = [];
+                    $out += ['intent'=>'students_in_group','confidence'=>$conf,'session_id'=>$sessionId,'entities'=>$slots];
+                    $out['reply'] = 'Corrijo — ' . ($out['reply'] ?? '');
+                    return $out;
+                }
                 $newStudent = nxScpCorrectionSubject($c['value'] ?? '');
                 if (!$prevIntent || !$newStudent) break;
                 $slots = array_intersect_key($ent, array_flip(['field','group','module','days','from','to']));
@@ -1035,6 +1047,47 @@ function chatScpCorrections(PDO $conn, array $u, array $frame, ?array $ds, array
                 $out = chatDispatch($conn, $u, $prevIntent, $slots, $vars, $role);
                 if (!is_array($out)) $out = [];
                 $out += ['intent'=>$prevIntent, 'confidence'=>$conf, 'session_id'=>$sessionId, 'entities'=>$slots];
+                return $out;
+            }
+            // «no, eran las faltas» — la métrica/módulo de la consulta
+            // activa era otra: re-ejecutar con el módulo corregido
+            case 'replace_metric': {
+                $noun = mb_strtolower(trim((string)($c['value'] ?? '')));
+                $module = null;
+                foreach (['inasist'=>'INASISTENCIA','falt'=>'INASISTENCIA','ausen'=>'INASISTENCIA',
+                          'tardanz'=>'LATE_ARRIVAL','llegad'=>'LATE_ARRIVAL','tarde'=>'LATE_ARRIVAL',
+                          'evasi'=>'EVASION_INTERNA','fug'=>'EVASION_INTERNA','escap'=>'EVASION_INTERNA',
+                          'incident'=>'INCIDENTE','permis'=>'PERMISO','citaci'=>'CITACION',
+                          'seguim'=>'SEGUIMIENTO','casos'=>'SEGUIMIENTO'] as $p => $mod)
+                    if (str_contains($noun, $p)) { $module = $mod; break; }
+                if (!$module) break;
+                // comparación activa → re-ejecutar el plan con la métrica nueva
+                if (!empty($ent['group']) && !empty($ent['group2'])) {
+                    $plan = ['capability'=>'groups.compare','entity'=>'groups','op'=>'compare',
+                        'filters'=>['group'=>$ent['group'],'group2'=>$ent['group2'],'module'=>$module,
+                            'days'=>$ent['days'] ?? null,'from'=>$ent['from'] ?? null,
+                            'to'=>$ent['to'] ?? null,'range_label'=>$ent['range_label'] ?? null],
+                        'read_only'=>true,'_src'=>'scp-correct','conf'=>0.8,
+                        'evidence'=>['correction:replace_metric']];
+                    [$ok] = nxPlanValidate($plan);
+                    if ($ok && nxPlanAllowed($conn, $u, $plan, $role)) {
+                        $out = nxPlanExecute($conn, $u, $plan, $vars);
+                        if (!is_array($out)) $out = [];
+                        $out += ['intent'=>'groups.compare','confidence'=>$conf,'session_id'=>$sessionId,
+                                 'entities'=>array_merge($ent,['module'=>$module])];
+                        $out['reply'] = 'Corrijo — ' . ($out['reply'] ?? '');
+                        return $out;
+                    }
+                    break;
+                }
+                $prevIntent = $ds['intent'] ?? null;
+                if (!in_array($prevIntent, ['count_events','list_events','top_offenders','late_today'], true)) break;
+                $slots = array_intersect_key($ent, array_flip(['student','group','days','from','to','range_label','status','_rank_limit','_my_scope']));
+                $slots['module'] = $module;
+                $out = chatDispatch($conn, $u, $prevIntent, $slots, $vars, $role);
+                if (!is_array($out)) $out = [];
+                $out += ['intent'=>$prevIntent,'confidence'=>$conf,'session_id'=>$sessionId,'entities'=>$slots];
+                $out['reply'] = 'Corrijo — ' . ($out['reply'] ?? '');
                 return $out;
             }
             // «te faltó lo otro» — objetivo compuesto pendiente de entrega
@@ -2103,7 +2156,7 @@ function chat_top_offenders(PDO $conn, array $u, array $s, array $v): array {
     if (!empty($s['group']) && ($g=chatResolveGroup($conn,$u,$s['group']))) { $extra.=" AND ai.group_id=?"; $params[]=$g['group_id']; }
     // límite explícito del ranking («top 5», «solo cinco») — SCP lo trae
     $limit = max(1, min(20, (int)($s['_rank_limit'] ?? 8)));
-    $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, COUNT(*) c
+    $st=$conn->prepare("SELECT s.student_id, s.first_name||' '||s.last_name AS name, ag.group_name, COUNT(*) c
         FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
         LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
         WHERE ai.school_id=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
@@ -2111,9 +2164,21 @@ function chat_top_offenders(PDO $conn, array $u, array $s, array $v): array {
     $st->execute($params); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel = $module ? strtolower(NX_MODULE_LABEL[$module]??$module) : 'incidentes';
     if(!$rows) return ['reply'=>nxVaryClean($mlabel, 'en ese periodo', ($v['_q']??'').$mlabel)];
+    // el ranking ES un result-set de estudiantes: «el segundo», «en
+    // tabla», «su acudiente» navegan/materializan sobre él (§12)
+    $rs = ['type'=>'students','entity'=>'students','label'=>"top {$mlabel}",
+        'order'=>'frecuencia (desc)','count'=>count($rows),
+        'columns'=>['#','Estudiante','Grupo','#'],
+        'items'=>array_map(fn($r)=>['id'=>$r['student_id'],'label'=>$r['name'],
+            'sub'=>($r['group_name']??'—')." · {$r['c']}"],$rows),
+        'rows'=>array_map(fn($i,$r)=>[$i+1,$r['name'],$r['group_name']??'—',$r['c']],array_keys($rows),$rows),
+        '_filters'=>array_filter(['module'=>$module,'group'=>$s['group']??null,
+            'days'=>$s['days']??null,'range_label'=>$s['range_label']??null]),
+        '_capability'=>'ranking.events'];
     return ['reply'=>"Top de {$mlabel} (" . ($s['range_label']??'hoy') . "):",
         'cards'=>[['title'=>'Ranking','columns'=>['Estudiante','Grupo','#'],
-        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['c']],$rows)]]];
+        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['c']],$rows)]],
+        '_result_set'=>$rs];
 }
 
 /** Permisos de salida activos que ya pasaron su hora de retorno. */

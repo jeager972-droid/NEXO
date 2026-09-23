@@ -28,14 +28,14 @@ function nxScpTask(string $q0, array $slots, ?array $sig, ?array $ds): array {
     $t = 'lookup'; $e = [];
 
     // — corrección del usuario (siempre gana: es meta-conversación) —
-    if (preg_match('/\b(me refiero|no me refiero|no esos|no esas|no era|'
+    if (preg_match('/\b(me refiero|no me refiero|no esos|no esas|no era|no eran|no es |no son |'
         . 'te falt(ó|o)|se te olvid(ó|o)|se me pas(ó|o)|te olvidaste|'
         . 'no ser(ía|ia) empate|ser(ía|ia) que ninguna'
         . '|mejor (dame|muestrame)|no,? mejor)\b/u', $q0)) { $t = 'correct'; $e[] = 'lex:correction'; }
 
     // — ranking: superlativo sobre métrica, con o sin «top N» —
     if ($t !== 'correct'
-        && (preg_match('/\btop\s*\d*|\blos? (que )?(m[áa]s|mayor|mayores|peores)|\branking\b|\breinciden|\blidera|\bencabeza|\bel mayor n[úu]mero de|\bpeores\b|\bmayores ofensores\b|\bque m[áa]s (faltas|tardanzas|inasistencias|evasiones|incidentes|llegadas)/u', $q0)
+        && (preg_match('/\btop\s*\d*|\blos? (que )?(m[áa]s|mayor|mayores|peores)|\branking\b|\breinciden|\blidera|\bencabeza|\bel mayor n[úu]mero de|\bpeores\b|\bmayores ofensores\b|\bque m[áa]s (han\s+)?(faltado|faltaron|faltan|falta|faltas|tardanzas|inasistencias|ausencias|evasiones|incidentes|llegadas)/u', $q0)
             || preg_match('/\bcu[áa]l(es)? (grupo|estudiante|estudiantes|curso)\b.{0,30}\bm[áa]s\b/u', $q0)
             || preg_match('/\blos? \d+ (peores|mayores|con m[áa]s)\b/u', $q0))) {
         $t = 'rank'; $e[] = 'lex:rank';
@@ -153,6 +153,11 @@ function nxScpCorrections(string $q0, array $slots): array {
     // «no sería empate, sería que ninguna» — corrección de interpretación
     if (preg_match('/\bno\s+ser[íi]a\s+empate\b.{0,40}\b(ninguna|ninguno|que ninguna|que ninguno)\b/u', $q0))
         $c[] = ['kind'=>'none_of', 'evidence'=>'lex:no_empate_ninguna'];
+    // «no, eran las faltas» — reemplazo de la métrica/módulo activo
+    if (preg_match('/\bno,?\s+(?:ser[íi]an|ser[íi]a|eran|era|son|es)\s+(?:las|los|unas|unos|la|lo|el|del|de|en|una|un)?\s*([a-záéíóúñü]+(?:\s+[a-záéíóúñü]+){0,2})/u', $q0, $mm)
+        && !preg_match('/\bempate\b/u', $q0)
+        && !preg_match('/^(que|ningun|eso|esa|ese|esto|esta|este)\b/u', $mm[1]))
+        $c[] = ['kind'=>'replace_metric', 'value'=>trim($mm[1]), 'evidence'=>'lex:no_era_metric'];
     // «de mi clase» — refinamiento de alcance
     if (preg_match('/\bde mi (clase|grupo|curso|sal[óo]n)\b/u', $q0))
         $c[] = ['kind'=>'refine_scope', 'value'=>'teacher_scope', 'evidence'=>'lex:mi_clase'];
@@ -336,6 +341,7 @@ function nxScpFrame(string $q0, array $cls, array $interp, ?array $ds, ?array $s
         elseif (preg_match('/incident|novedad/u', $q0)) $metric = 'events';
         $limit = null;
         if (preg_match('/\btop\s*(\d+)/u', $q0, $m)) $limit = (int)$m[1];
+        elseif (preg_match('/\b(?:los|las)\s+(\d+)\s+(?:[\wáéíóúñü]+\s+)?que\s+m[aá]s/u', $q0, $m)) $limit = (int)$m[1];
         elseif (preg_match('/\blos\s+(\d+)\s+(peores|mayores|con\s*m[áa]s|primeros|primeras)/u', $q0, $m)) $limit = (int)$m[1];
         elseif (preg_match('/\b(los )?(primeros|primeras)\s*(\d+)?\b/u', $q0, $m)) $limit = $m[3] ? (int)$m[3] : 5;
         foreach ($corrections as $cc) if ($cc['kind'] === 'limit') $limit = $cc['value'] ?? $limit;
@@ -483,6 +489,11 @@ function nxScpToSlots(array $frame): array {
             return ['risk_students', $slots, true];
 
         case 'count':
+            // conteo de PERSONAS en un grupo («los pelados de 6A cuántos
+            // son») — dominio students, sin módulo de eventos
+            if ($frame['domain'] === 'students' && !empty($slots['group'])
+                && empty($slots['module']) && empty($frame['subject']['name']))
+                return ['group_student_count', $slots, true];
             // métrica de UNA persona («cuánto ha faltado Juan…»)
             if (!empty($frame['subject']['name']) && $frame['subject']['entity'] === 'student') {
                 $slots['student'] = $frame['subject']['name'];

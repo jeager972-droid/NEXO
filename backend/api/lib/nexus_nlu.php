@@ -581,7 +581,11 @@ function nxExtractStudent(string $q): ?string {
         'docente','docentes','profesor','profesores','maestro','maestros',
         'personal','rector','rectores','secretaria','secretarias','directivo',
         'exactamente','precisamente','respectivamente','personalmente',
-        'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','filosofia','literatura','politica','geografia','historia','quimica','biologia','astronomia','religion','matematicas','espanol','ingles','frances','aleman','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo','excepto','menos','salvo','aparte','reporto','reportaste','reportamos','aplican','aplica'];
+        'excusa','medica','medico','durante','tiempo','sistemas','mejora','seguridad','conducta','nino','nina','academico','academica','transferida','transferido','natacion','autorizada','autorizado','autorizados','autorizadas','bimestre','preescolar','en','falto','jornada','estado','grupo','estudiante','estudiantes','alumno','alumnos','proceso','procesos','area','nivel','registrada','registrado','registrados','entrada','entradas','salida','salidas','anticipada','anticipado','temprana','temprano','tardia','tardio','alerta','alertas','tarea','tareas','caso','casos','incidencia','incidencias','evento','eventos','fuga','fugas','lector','lectores','piso','pisos','recreo','descanso','observacion','presente','presentes','ausente','ausentes','vinieron','llego','llegaron','entro','entraron','presento','presentaron','regreso','regresaron','acumulada','acumuladas','acumulado','acumulados','marcada','marcado','marcados','marcaron','resuelto','resueltos','resuelta','resueltas','completado','autorizo','autorizaron','faltaron','impuntual','impuntuales','registrar','registren','detectada','detectadas','detectado','detectados','detectaron','reportada','reportadas','reportado','reportados','reportaron','llamado','llamada','llamar','llamen','citado','citada','convocar','convocado','convocada','reunion','reuniones','peticion','peticiones','padres','padre','madre','mama','papa','abuela','abuelo','tia','tio','hermano','hermana','amigo','amiga','vecino','vecina','nadie','alguien','alguno','alguna','algunos','algunas','ninguno','ninguna','ningunos','ningunas','cualquiera','quienquiera','cuyo','cuya','filosofia','literatura','politica','geografia','historia','quimica','biologia','astronomia','religion','matematicas','espanol','ingles','frances','aleman','lejos','cerca','arriba','abajo','dentro','fuera','encima','debajo','delante','detras','alrededor','junto','juntos','juntas','aparte','incluso','volaron','volar','escaparon','escapar','caparon','capar','volaron','voló','volo','excepto','menos','salvo','aparte','reporto','reportaste','reportamos','aplican','aplica',
+        // verbos de consulta/comparación — «compara las tardanzas de 10A»
+        // no nombra a nadie; «compara» es operación, no apellido
+        'compara','comparar','comparame','comparacion','comparativa','versus',
+        'vs','contra','diferencia','diferencias','mide','miden','evalua'];
     $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
     $cands = [];
     foreach ([
@@ -1805,7 +1809,11 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             && !preg_match('/\b(en el colegio|del colegio|de la institucion|matriculados en total)\b/u', $q0)
             && (!empty($slots['group']) || !empty($ctxEntities['group']))) {
             $studentsSet = (($dsState['last_result']['type'] ?? null) === 'students')
-                || in_array($lastIntent, ['students_in_group','group_student_count','students_count','group_summary'], true);
+                || in_array($lastIntent, ['students_in_group','group_student_count','students_count','group_summary'], true)
+                // «los pelados/muchachos de 6A cuántos son» — el sustantivo
+                // persona del turno define el dominio sin set previo
+                || (preg_match('/\b(estudiantes|alumnos|alumnas|pelados|peladas|chicos|chicas|ninos|ninas|niños|niñas|muchachos|muchachas|menores|jovenes|pelaos)\b/u', $q0)
+                    && !empty($slots['group']));
             if (empty($slots['group'])) { $slots['group'] = $ctxEntities['group']; $inherited[] = 'group'; }
             if ($studentsSet && empty($slots['module']) && empty($ctxEntities['module'])) {
                 $intent = 'group_student_count';
@@ -1817,6 +1825,25 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 // el conteo contextual es una resolución — la herencia de
                 // bajo-confianza y la modificación genérica no deben pisarlo
                 $coverageHit = true;
+            }
+        }
+        // «el primero / el segundo» desnudo tras un conteo/lista — sin
+        // set activo es POSICIÓN sobre la colección del contexto (grupo
+        // y/o módulo heredados; el planner materializa el fetch)
+        if (!isset($slots['_nav']) && empty($slots['position']) && empty($slots['student'])
+            && preg_match('/^(?:y\s+)?(?:el|la|los|las|dame|muestra(?:me)?|cual es|quien es)\s*(primer[oa]|segund[oa]|tercer[oa]|cuart[oa]|quint[oa]|últim[oa]|ultim[oa])[.!? ]*$/u', $q0, $mo)
+            && (empty($dsState['last_result']['items']))) {
+            $ordMap = ['primero'=>1,'primera'=>1,'segundo'=>2,'segunda'=>2,'tercero'=>3,'tercera'=>3,
+                       'cuarto'=>4,'cuarta'=>4,'quinto'=>5,'quinta'=>5,'último'=>'last','ultimo'=>'last',
+                       'última'=>'last','ultima'=>'last'];
+            $p = $ordMap[mb_strtolower($mo[1])] ?? null;
+            if ($p !== null && (!empty($ctxEntities['group']) || !empty($ctxEntities['module']))) {
+                $slots['position'] = $p;
+                if (empty($slots['group']) && !empty($ctxEntities['group'])) {
+                    $slots['group'] = $ctxEntities['group']; $inherited[] = 'group'; }
+                if (empty($slots['module']) && !empty($ctxEntities['module'])) {
+                    $slots['module'] = $ctxEntities['module']; $inherited[] = 'module'; }
+                $turnType = 'context_modify';
             }
         }
         // «ahí / allí / en ese grupo» — el deíctico espacial ancla el
