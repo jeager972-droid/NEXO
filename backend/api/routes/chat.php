@@ -488,6 +488,12 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             'targets'=>$scpFrame['targets'],'conf'=>$scpFrame['confidence'],
             'valid'=>$scpOk,'why'=>$scpWhy]);
         if ($scpOk) {
+            // el frame viaja en la interpretación: el ds registra la
+            // última corrección del usuario y su tarea normalizada (§4/§10)
+            if (!empty($scpFrame['corrections']))
+                $interp['resolved']['corrections'] = array_map(
+                    fn($cc) => $cc['kind'] ?? null, $scpFrame['corrections']);
+            $interp['resolved']['scp_task'] = $scpFrame['task'];
             // correcciones primero: actualizan el plan/contexto activo
             $corr = chatScpCorrections($conn, $authUser, $scpFrame, $ds, $interp,
                 $vars, $role, $sessionId, $q0, $conf);
@@ -832,6 +838,13 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $tDisp = microtime(true);
         $out = nxPlanExecute($conn, $authUser, $plan, $vars);
         $tDisp = microtime(true) - $tDisp;
+        // §8/§13 — contrato post-ejecución: un resultado que no conserva
+        // lo pedido NO se presenta como correcto — se bloquea honesto
+        [$resOk, $resWhy] = nxResultValidate($plan, $out);
+        if (!$resOk) {
+            nxScpTrace('RESULT_MISMATCH', ['why'=>$resWhy,'cap'=>$plan['capability']]);
+            $out = nxPlanFailure($resWhy, $plan, $vars);
+        }
         $out = nxPlanResponse($out, $plan['capability'], 'plan:' . $plan['capability']);
         $out['intent'] = $plan['capability'];
         $out['confidence'] = $conf;
@@ -995,6 +1008,56 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         'pending_targets' => $ent['_pending_targets'] ?? ($prev['pending_targets'] ?? null),
         'next_rid'    => $nextRid,
     ];
+    // ── estado tipado (§4) — el ds no es solo last_intent+slots: tarea,
+    // entidad, colección, resultado, relación, campo, filtros, alcance,
+    // rango temporal, métrica, agregación, orden, límite y posición ──
+    $lr = $ds['last_result'];
+    $ds['active'] = [
+        'task'        => $ds['intent'],
+        'entity'      => $currentEntity,
+        'collection'  => $lr['label'] ?? ($prev['active']['collection'] ?? null),
+        'result'      => $ds['current']['result'],
+        'relation'    => $ds['current']['relation'],
+        'field'       => $merged['field'] ?? null,
+        'filters'     => $lr['_filters'] ?? array_filter($merged,
+                        fn($v,$k)=>in_array($k,['group','module','status','student','search'],true),ARRAY_FILTER_USE_BOTH),
+        'scope'       => $ds['current']['scope'],
+        'time_range'  => array_filter(['days'=>$merged['days']??null,'from'=>$merged['from']??null,
+                        'to'=>$merged['to']??null,'label'=>$merged['range_label']??null]),
+        'metric'      => $merged['module'] ?? null,
+        'aggregation' => in_array($ds['intent'], ['count_events','group_student_count','students_count'], true) ? 'count'
+                        : (in_array($ds['intent'], ['top_offenders','groups.rank'], true) ? 'rank' : null),
+        'sort'        => $lr['order'] ?? null,
+        'limit'       => $slots['_rank_limit'] ?? ($ent['_rank_limit'] ?? null),
+        'position'    => $ds['cursor'],
+    ];
+    // clarificación pendiente + última corrección del usuario (§10)
+    $ds['pending_clarification'] = !empty($interp['requires_clarification'])
+        ? ($interp['clarify'] ?? true) : null;
+    $ds['last_correction'] = $interp['resolved']['corrections'] ?? null;
+    // último plan y última ejecución — trazabilidad plan↔resultado (§8)
+    $ds['last_plan'] = !empty($out['_plan'])
+        ? ['capability'=>$out['_plan']['capability'] ?? null,'op'=>$out['_plan']['op'] ?? null,
+           'filters'=>$out['_plan']['filters'] ?? null]
+        : ($prev['last_plan'] ?? null);
+    $ds['last_execution'] = ['intent'=>$out['intent'] ?? null,
+        'source'=>$out['_interpretation']['source'] ?? null,
+        'turn'=>$ds['intent']];
+    // ── lineage del result-set (§12): cada resultado sabe de dónde vino,
+    // qué lo transformó y cuál es su ítem activo; el padre sobrevive en
+    // objects[] aunque la vista cambie ──
+    if (is_array($lr)) {
+        if (!empty($out['_result_set'])) {
+            $lr['rid']              = $ds['current']['result'];
+            $lr['parent_result']    = $prev['current']['result'] ?? null;
+            $lr['source_capability']= $lr['_capability'] ?? ($out['_plan']['capability'] ?? null);
+            $lr['source_intent']    = $interp['resolved']['intent'] ?? null;
+        }
+        if (!empty($out['_result_nav'])) $lr['transformation'] = $out['_result_nav'];
+        $lr['active_item']    = $lr['items'][$ds['cursor']]['label'] ?? null;
+        $lr['visible_items']  = count($lr['items'] ?? []);
+        $ds['last_result']    = $lr;
+    }
     // persona referenciada (acudiente/docente) — el handler la declara.
     // El referente solo sobrevive mientras el sujeto activo no cambie: si
     // el turno ancló OTRO estudiante, el acudiente del turno previo ya no

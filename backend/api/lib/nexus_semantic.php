@@ -1172,6 +1172,40 @@ function nxPlanFailure(string $code, array $plan, array $vars): array {
             '_failure'=>$code,'_plan'=>$plan];
 }
 
+/** §8/§13 — contrato post-ejecución: lo que salió debe corresponder a lo
+ *  que el plan pidió. Solo falla cuando AMBOS valores existen y difieren
+ *  (conservador: nunca bloquea por ausencia de metadato).
+ */
+function nxResultValidate(array $plan, array $out): array {
+    $f = $plan['filters'] ?? [];
+    $e = $out['entities'] ?? [];
+    // grupo ejecutado = grupo pedido
+    if (!empty($f['group']) && !empty($e['group'])) {
+        $asked = mb_strtoupper(preg_replace('/\s/','',(string)($plan['_group_name'] ?? $f['group'])));
+        $got   = mb_strtoupper(preg_replace('/\s/','',(string)$e['group']));
+        $askedN = preg_replace('/^(\d+)-?([A-E])$/', '$1-$2', $asked);
+        $gotN   = preg_replace('/^(\d+)-?([A-E])$/', '$1-$2', $got);
+        if ($askedN !== $gotN) return [false, 'result_mismatch:group'];
+    }
+    // módulo/métrica pedida conservada
+    if (!empty($f['module']) && !empty($e['module']) && $e['module'] !== $f['module'])
+        return [false, 'result_mismatch:module'];
+    // posición pedida → el resultado la ubicó (cursor o set con ítems)
+    if (($plan['op'] ?? null) === 'position'
+        && !isset($out['_result_cursor']) && empty($out['_result_set']['items']))
+        return [false, 'result_mismatch:position'];
+    // rango temporal pedido conservado
+    if (isset($f['days']) && $f['days'] !== null && isset($e['days'])
+        && (int)$e['days'] !== (int)$f['days'])
+        return [false, 'result_mismatch:time_range'];
+    // sujeto pedido = sujeto del resultado (cuando el executor lo declara)
+    if (!empty($f['student']) && !empty($e['student'])
+        && mb_strtolower((string)$e['student']) !== mb_strtolower((string)$f['student'])
+        && !str_contains(mb_strtolower((string)$e['student']), mb_strtolower((string)$f['student'])))
+        return [false, 'result_mismatch:subject'];
+    return [true, null];
+}
+
 /* ============================================================================
  * 5. PLANNER → SQL real. Toda consulta parametrizada + school_id + scope.
  * ========================================================================== */
