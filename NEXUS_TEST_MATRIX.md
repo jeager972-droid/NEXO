@@ -64,6 +64,8 @@ Suites fuera de alcance local (requieren API/BD real): ya ejecutadas contra el s
 | Comando | Resultado | Estado |
 |---|---|---|
 | php test/live_probe.php (API :18080, sesión real) | §1 verbatim 14/14 turnos, _ds before/after persistido | PASS |
+| php test/scp_live.php (API :18080) | casos A–N: 26/26 turnos (tabla→acudiente, correcciones, ranking, umbral, compuestos, «todos», «te faltó lo otro», «no sería empate») | PASS |
+| NEXO_NLU_URL=http://127.0.0.1:9 php test/scp_regression.php | 74/74 chequeos de frame semántico | PASS |
 | php test/continuity_50.php (API :18080) | 53/53 turnos coherentes | PASS |
 | php test/nexus_release_gate.php (NLU :8096) | 18/18 READY FOR CONTROLLED PRODUCTION | PASS |
 | php test/nexus_capability_eval_v1.php | 153/153 | PASS |

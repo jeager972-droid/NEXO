@@ -1,5 +1,50 @@
 # Nexus — checkpoints persistentes
 
+## 2026-09-22 — SEMANTIC CONVERSATIONAL PARSING (SCP): núcleo de significado entre mensaje y planner
+
+Nueva capa `backend/api/lib/nexus_scp.php` (~550 líneas): frame semántico normalizado
+(`task/domain/subject/relation/field/filters/scope/time_range/aggregation/ranking/output/
+references/transformations/corrections/position/confidence/evidence`) construido desde
+mensaje + `_ds` server-side + señales semánticas + registry. Pipeline en `chat.php`:
+interpretar → validar (contrato por tarea) → traducir (intent+slots o plan especializado)
+→ RBAC → planner/executors existentes. Nada ejecuta desde lenguaje natural directo.
+
+Prioridad de sujeto: explícito > posicional > anafórico > ítem activo > herencia.
+Tareas: lookup/count/aggregate/compare/rank/filter/relation/navigate/transform/general/
+out_of_scope/correct/clarify. Correcciones tipadas: replace_subject, exclude_active,
+limit, pending_target («te faltó lo otro»), refine_scope, none_of («no sería empate…»).
+
+Casos obligatorios A–N verificados live (`test/scp_live.php`, 26/26): tabla→acudiente del
+primero; corrección explícita a Tomás; acudiente de María→documento; datos de María→
+evasiones 30d→llegadas tarde; top-5 faltas mis clases; «SOLO 5» como recorte del ranking;
+«cuánto ha faltado Juan Camilo 15d» como métrica de persona; «ese último»→acudiente→
+documento del acudiente; umbral de alerta (risk_students); «todos» restaura colección
+completa tras slice; celular del acudiente por nombre explícito; chiste+tabla comparación
+compuestos; «te faltó lo otro» honesto; «no sería empate, sería que ninguna» → corrección
+de interpretación de la comparación.
+
+Suites nuevas: `test/scp_regression.php` (74 chequeos de frame, local) y `test/scp_live.php`
+(14 sesiones/26 turnos contra API real).
+
+Fallos encontrados solo en live y corregidos:
+
+- **«todos» tras slice devolvía la vista recortada**: nav `all` nuevo (nexus_nlu) —
+  «todos» restaura el universo; «los demás» sigue siendo el resto. En chat.php, `all`
+  sobre set con label de slice re-ejecuta la colección original por sus filtros.
+- **Plan compuesto perdía tarjetas**: `nxPlanExecute` agregaba replies pero no `cards`
+  de los pasos — ahora las propaga (caso L: chiste + tabla comparación).
+- **«¿Y del último mes?» inyectaba estudiante activo**: la resolución posicional del SCP
+  trataba «último» como referencia a ítem. Guarda: ordinal+unidad temporal = rango.
+- **«la primera tardanza de hoy» → count_events**: la regla de seguimiento de módulo del
+  SCP clasificaba el ordinal como conteo heredado → forzaba count_events y el compose
+  (incidents.position) nunca corría. Guarda `$posRef`: ordinal posicional no temporal →
+  no es seguimiento de conteo; task=navigate (no forzado) → compose → incidents.position.
+
+Verificación live post-SCP: §1 14/14, scp_live 26/26, continuity_50 53/53, gate 18/18
+READY (NLU :8096), capability 153/153, DSM 60/60, real_conversation 381/381,
+forensic 36/36, phpunit 244/938, resiliencia 15/15, readonly 53 handlers,
+scp_regression 74/74.
+
 ## 2026-09-22 — Inicialización de memoria externa
 
 - HEAD inicial: ee12db93aa24bb2e068aceae4111c239b73e8bad.

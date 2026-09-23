@@ -32,7 +32,20 @@ OPEN_QUESTIONS: ¿Poblado teacher_group_access en producción (scope parity asum
 4. Continuar desde NEXT_ACTION; no reiniciar auditorías ya verificadas.
 5. Cada edición contendrá como máximo 300 líneas y conservará los comentarios existentes.
 
-FINAL_STATE: CONTROLLED_PRODUCTION_GATE_GREEN — el gate formal pasa 18/18 con umbrales endurecidos; la evaluación terminal por criterio queda documentada abajo — 13 demostrados, 3 parciales (generalización modelo, rendimiento medido, conversación larga sobre API real).
+FINAL_STATE: CONTROLLED_PRODUCTION_GATE_GREEN + SCP — el gate formal pasa 18/18; la capa Semantic Conversational Parsing (nexus_scp.php) produce el frame normalizado que consume el planner; casos A–N verificados live 26/26; continuity 53/53; §1 14/14; matriz completa en NEXUS_TEST_MATRIX.md.
+
+## SCP — estado (2026-09-22)
+
+- `backend/api/lib/nexus_scp.php`: nxScpFrame (mensaje+_ds+sig+cls→frame), nxScpValidate
+  (contrato por tarea), nxScpToSlots (frame→intent/slots forzados cuando aplica),
+  nxScpToPlan (compare especializado), nxScpTrace (forense por capa).
+- Cableado en chat.php tras nxDialogueResolve; plan SCP solo si compose clásico no
+  produjo nada; frame forzado solo en tareas con soporte estructural (rank/filter/
+  count/relation/compare/correct); navigate/transform no fuerzan — chatResultNav
+  y compose siguen decidiendo.
+- `_ds` server-side sigue siendo autoridad; el frame materializa referencias
+  (posicional/anafórica/ítem activo) pero nunca inventa entidades.
+- Pendiente: ningún bug abierto; verificación live completa en CHANGELOG sección SCP.
 
 ## Evaluación de los 16 criterios terminales (2026-09-22)
 
