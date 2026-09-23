@@ -28,7 +28,9 @@ function nxLlmCfg(): array {
     $c = [
         'url'   => rtrim((string)(getenv('NLU_LLM_URL') ?: 'https://api.groq.com/openai/v1'), '/'),
         'key'   => (string)(getenv('NLU_LLM_KEY') ?: ''),
-        'model' => (string)(getenv('NLU_LLM_MODEL') ?: 'qwen/qwen3.8-27b'),
+        // GROQ_MODEL aceptado como alias — evita el fallo silencioso de
+        // configurar el nombre del proveedor en Render y no verlo aplicado
+        'model' => (string)(getenv('NLU_LLM_MODEL') ?: getenv('GROQ_MODEL') ?: 'qwen/qwen3.8-27b'),
         'mode'  => $mode === 'off' ? 'off' : 'on',
         'ms'    => max(500, (int)(getenv('NLU_LLM_TIMEOUT_MS') ?: 6000)),
     ];
