@@ -87,3 +87,5 @@ Regresiones cerradas por el gate endurecido: «abre la tabla de usuarios» era d
 Inspeccionar cada harness antes de ejecutarlo: detectar BD real, escrituras, servicios externos y generación de artefactos.
 Registrar comando, entorno, población, aprobados, fallidos, salida reproducible y límites de la evidencia.
 No usar corpus BLIND para entrenamiento; no alterar expectativas para ocultar fallos.
+| php test/heldout_live.php (API :18080, ciego §17) | 33/33 turnos — tildes/typos/jerga/correcciones/multi-goal/veto | PASS |
+| php test/nexus_release_gate.php (NLU :8096 + API :18080) | 20/20 READY — incluye G18 golden live y G19 held-out | PASS |

@@ -104,3 +104,21 @@ TESTS_SUPPORTING_DECISION: real_conversation 103/103; clarificaciones intactas.
 - Máximo 300 líneas por bloque de edición; conservar comentarios existentes.
 - Commits pequeños con pruebas y estado actualizado; no push.
 - No modificar controles de seguridad para superar fallos del entorno.
+
+## D009 — Runtime híbrido: TF-IDF+LR + extracción determinista + SCP (§14 evaluación)
+
+DECISION: Mantener el runtime actual (clasificador TF-IDF+LogisticRegression + extracción de slots determinista + rerank) con la capa SCP como núcleo semántico; NO introducir un LLM/generative semantic runtime en este ciclo.
+DATE: 2026-09-22.
+PROBLEM: §14 exige evaluar objetivamente si el runtime actual cumple lenguaje natural abierto institucional.
+EVIDENCE:
+- blind_eval argmax 100% sobre el set operativo calibrado; singles operativos 80.1% (G12b ≥80).
+- scp_regression 74/74: el frame normalizado se construye y valida para las 12 tareas.
+- scp_live 26/26 + heldout_live 33/33 contra API real: referencias, correcciones, rankings, umbrales, multi-goal, «todos», «te faltó lo otro».
+- Fallos de comportamiento observados en vivo NO fueron de clasificación NLU sino de resolución/navegación/corrección — todos corregidos en la capa determinista (resolver+SCP+executors).
+- El dominio es institucional cerrado (~90 intents, 39 capabilities): la cobertura abierta la da la composición semántica (frame→plan), no el recall de intents.
+OPTIONS_CONSIDERED: (a) LLM como parser semántico — añade latencia, costo, superficie de inyección y no resuelve grounding (los datos siempre vienen de executors); (b) embeddings locales — mejora recall de intents, que ya no es el cuello de botella; (c) runtime actual + SCP.
+CHOSEN_APPROACH: (c). El modelo interpreta lenguaje a nivel de intent; el SCP produce el significado estructurado; planner+executors+RBAC garantizan grounding. Re-evaluar si: el dominio crece fuera de las 39 capabilities, o el held-out cae <90% por errores de significado (no de datos).
+WHY: El cuello de botella real era significado conversacional (referencias, correcciones, multi-goal), no recall de intents — y eso lo resuelve el frame, no otro modelo de intents.
+TRADEOFF: Frases muy fuera de dominio general caen en abstención honesta (oos) en vez de respuesta generativa — aceptable: Nexus es asistente institucional, no chat general.
+AFFECTED_COMPONENTS: ninguno (decisión arquitectónica registrada).
+TESTS_SUPPORTING_DECISION: gate 20/20 · heldout 33/33 · scp 26/26 · §1 14/14 · continuity 53/53.

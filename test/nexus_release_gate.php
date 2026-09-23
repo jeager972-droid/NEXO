@@ -226,6 +226,26 @@ gate('G17b', 'navegación de result-set (otro/los demás/ordinales) 100%',
      isset($m6[2]) && (int)$m6[2] > 0 && (int)$m6[1] === (int)$m6[2],
      $m6[0] ?? 'sin salida');
 
+/* ── G18/G19: golden A–N + held-out contra API real (§16/§17/§24).
+ *   Requieren el stack nexo-test en :18080 — si no responde, se omiten
+ *   honestamente (una puerta ausente no simula un pase). ── */
+$apiUp = (bool)@file_get_contents((getenv('NEXO_API') ?: 'http://localhost:18080') . '/health');
+if ($apiUp) {
+    $sc = run('php ' . __DIR__ . '/scp_live.php');
+    preg_match('/scp_live: (\d+)\/(\d+) turnos PASS/', $sc, $m7);
+    gate('G18', 'transcript golden A–N live = 26/26',
+         isset($m7[2]) && (int)$m7[1] === (int)$m7[2] && (int)$m7[2] === 26,
+         $m7[0] ?? 'salida ilegible');
+    $ho = run('php ' . __DIR__ . '/heldout_live.php');
+    preg_match('/heldout_live: (\d+)\/(\d+) turnos PASS/', $ho, $m8);
+    gate('G19', 'held-out conversations ≥90% turnos',
+         isset($m8[2]) && (int)$m8[1] / max(1, (int)$m8[2]) >= 0.90,
+         $m8[0] ?? 'salida ilegible');
+} else {
+    gate('G18', 'transcript golden A–N live = 26/26', false, 'API :18080 ausente');
+    gate('G19', 'held-out conversations ≥90% turnos', false, 'API :18080 ausente');
+}
+
 /* ── veredicto ── */
 $fail = array_filter($gates, fn($g) => !$g[2]);
 echo "\n";

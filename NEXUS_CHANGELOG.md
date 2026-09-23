@@ -159,3 +159,14 @@ Fallos encontrados SOLO en live (las suites simuladas los tenían verdes) y corr
 Verificación live final: §1 14/14 (invariante §4: `active_collection=students(10-A)` + cursor → acudiente del ítem), continuity_50 53/53, gate 18/18, capability 153/153, DSM 60/60, real_conversation 103/103, forensic 36/36, phpunit 244, resiliencia 15/15, readonly 53 handlers, inventario dentro del contenedor (39 caps, 132 tablas, 96 composiciones).
 
 Notas honestas: rate-limit 60/10min real — `chat_rl:{uid}` se limpia en Redis de prueba entre corridas; servicios NLU zombie en :8090/:8096 divergen del php-model (reiniciar antes de comparar); php-model y service.py difieren en «y del mes» (php→birthdays_today, py→oos) — ambos resuelven bien vía herencia.
+
+## 2026-09-22 — HELD-OUT + ESTADO TIPADO + VALIDACIÓN + GATE 20/20
+
+- `test/heldout_live.php` (§17): 12 conversaciones nuevas/33 turnos ciegos — 33/33 tras 7 fixes reales (ver commit 7a08bfa).
+- `chatBuildDs` tipado (§4): `active` (task/entity/collection/result/relation/field/filters/scope/time_range/metric/aggregation/sort/limit/position), `pending_clarification`, `last_correction`, `last_plan`, `last_execution`. Lineage §12 en `last_result`: rid, parent_result, source_capability, source_intent, transformation, active_item, visible_items.
+- `nxResultValidate` (§8/§13): contrato post-ejecución — grupo/módulo/tiempo/sujeto/posición ejecutados deben coincidir con lo pedido; mismatch → fallo honesto.
+- §9 temporal: ya centralizado en `nxSlots`/`preprocess.py` + TZ America/Bogota — verificado, sin cambios.
+- §14 runtime: evaluación objetiva registrada en NEXUS_DECISIONS.md D009 — runtime híbrido actual + SCP; sin LLM.
+- §19 recovery live: duplicado idempotente, inexistente→clarify, ambigua→candidatos, veto mutativo+inyección→security_probe.
+- §24 gate: +G18 (scp_live 26/26) + G19 (heldout ≥90%) → **20/20 READY FOR CONTROLLED PRODUCTION**.
+- §26 reporte final: NEXUS_FINAL_REPORT.md.

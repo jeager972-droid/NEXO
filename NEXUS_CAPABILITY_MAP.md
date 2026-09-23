@@ -42,3 +42,25 @@ Cobertura conversacional sobre capacidades de NEXO: NO DEMOSTRADA.
 - 39 capacidades; 12 con ejecutor SQL propio; 27 delegadas a intents `chat_*` con re-verificación RBAC.
 - `related`/`nearby` son pistas de navegación, no ejecutables — ahora todas apuntan a capacidades existentes.
 - `result_nav` (DSM, no capability) removido del grafo.
+
+## Cobertura end-to-end post-SCP (2026-09-22)
+
+Camino verificado USER LANGUAGE → FRAME → PLAN → EXECUTOR → RESPONSE para cada
+familia de capabilities, con la suite que lo demuestra:
+
+| Familia | Expresiones NL | Frame task | Plan/Cap | Executor | Evidencia |
+|---|---|---|---|---|---|
+| students.list/count/position | «estudiantes de 10A», «el primero», «cuántos son» | lookup/count/navigate | students.* | SQL + nav | live_probe t1-t14, heldout H1-H3, capability_eval |
+| guardians.* | «acudiente del primero», «celular del acudiente X» | relation | student_field / guardians.* | chat_student_field | A/B/C/H/K, heldout H12 |
+| incidents.list/count/position | «tardanzas de la semana», «la primera tardanza» | count/navigate | incidents.* / count_events | SQL + nav | continuity t18-t20, heldout H9 |
+| ranking.events | «top 5 más faltas», «los 3 que más faltaron» | rank | top_offenders | GROUP BY + _result_set | E/F, heldout H5 |
+| risk.students (umbral) | «pasaron mi umbral» | filter | risk_students | risk metrics | I, heldout H7 |
+| groups.compare/rank | «10A vs 8C», «qué grupo tiene más» | compare | groups.compare | SQL compare | L/N, heldout H10 |
+| attendance.today | «asistencias de mis grupos» | count | count_present | biométricos | live_probe t06 |
+| schedule/teachers/permissions/exits/trackings/citations/devices/notifs/whatsapp/sos/audit/day/birthdays/staff | intents dedicados | lookup/count | capability registry | handlers chat_* | capability_eval 153/153 |
+| operations (mutativas) | «cita al acudiente», «autoriza salida» | relation/general | derive → chip | NUNCA ejecuta | G5/G9/G10, heldout H11 |
+| general | «chiste», «gracias», smalltalk | general | composed_chat | plantillas | L/M, heldout H6 |
+| multi-goal | «un chiste y una tabla» | targets[] | composed | steps + pending | L/M |
+
+Regla de la matriz: una capability solo cuenta como cubierta si existe el camino
+completo verificado — handler presente ≠ soportado.
