@@ -7,7 +7,8 @@ LLM (`lib/nexus_llm.php`, `NLU_LLM_*`); sin key → out_of_scope. Suites sirven
 NLU/blind de checkpoints anteriores describen el stack muerto — referencia
 vigente: `NEXO_HYBRID_MODEL_V1.md` + `auditoria/AUDITORIA_NLU_VEREDICTO_2026-09-23.md`.
 
-CURRENT_PHASE: LIVE CLOSURE VERIFICADO — stack real corriendo (api/nlu/db/redis recreados con código actual).
+CURRENT_PHASE: 2026-09-24 — CAPA CONVERSACIONAL LLM EN VIVO — parser con contexto, seguridad generalista, tablas automáticas, exportación chat-nativa, deep-links a operaciones. Stack pruebas/ (api+db+redis :18080) con fixture extendido. PENDIENTE: batería LLM completa — cuota Groq 200K TPD agotada durante la evaluación (verificar con parser vivo cuando libere); todas las rutas deterministas verificadas live sin parser.
+
 CURRENT_OBJECTIVE: Cierre de integración conversacional live cerrado: §1 verbatim 14/14 + continuity_50 53/53 contra API real con _ds persistido por turno.
 LAST_SUCCESSFUL_MILESTONE: LIVE 14/14 (§1 verbatim) + continuity_50 53/53 + gate 18/18 + capability 153/153 + DSM 60/60 + real_conversation 103/103 + phpunit 244 — todo contra API/DB/Redis reales (nexo-test, puerto 18080). Fixture extendido: 10-A (6 estudiantes, Tomás Castaño Gutiérrez con acudiente), 10-B, teacher con 3 grupos (pruebas/seed_chat_fixture.sql).
 CURRENT_FAILURE: Ninguna en producción live. blind_eval 169/235=71.9% (diagnóstico NLU por diseño; -4 vs baseline 173 por deriva de modelo/corpus, no del resolver — blind_eval solo ejerce nxClassify).

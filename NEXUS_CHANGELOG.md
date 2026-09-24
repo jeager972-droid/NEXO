@@ -1,5 +1,79 @@
 # Nexus — checkpoints persistentes
 
+## 2026-09-24 — Evaluación en vivo + capa contextual del LLM, seguridad, tablas y exportación
+
+Batería forense en vivo (`test/live_battery.php`, API+DB+LLM reales, sesiones
+UUID válidas) sobre el stack `pruebas/` — hallazgos y arreglos:
+
+**Contexto LLM (§7.4)**
+- El parser recibe contexto compacto: entidades activas + descriptor del
+  result-set + últimos 3 turnos (`chatRecentTurns`). Regla nueva: con
+  `nav`/`position` NO copia `student` del contexto (el nav ES el sujeto).
+- El composer recibe `meta.recent` (últimos 2 turnos) para coherencia.
+- `_ds` sigue siendo la autoridad de estado; el contexto LLM complementa.
+
+**Contrato del parser ampliado** — entidades con allowlist saneada:
+`nav` (first/last/nth:N/others/all/next/rest/table/count/name), `position`,
+`relation`, `presentation`, `export_format`, `compare[]`, `op`, `topic`,
+`target_role` + `uses_context` + `safety` (flag transversal, nunca intent).
+Mapeo a slots internos en `nxClassify` (`_nav`, `_ref`, `_op`, `_export_format`).
+
+**Seguridad generalista** — doble detector: flag `safety` del parser +
+backstop determinista `nxSafetyScreen` (atracción hacia estudiantes/menores,
+falsificación de registros, extracción de credenciales). Respuesta fija seria
+`safety_guard`, `securityLog` audita. En vivo: 5/5 patrones bloqueados —
+antes «me gusta una estudiante» caía en smalltalk `love` con respuesta jocosa.
+
+**Flujo informal LLM** (`nxLlmChat`, LLM #3) — cuando el parser marca
+domain=informal, conversa con historial real bajo persona institucional
+(`NLU_LLM_CHAT=off` lo apaga). `security_probe` queda determinista.
+
+**Tablas siempre** — `_result_set` con columns+rows materializa card
+automáticamente en `chatLog` (reemplaza la sección de consultas).
+
+**Deep-link a operaciones** — `Operation.jsx` capturaba `cmd` pero borraba
+`student`/`group` con `setSearchParams({})` antes de leerlos → formulario
+genérico. Ahora `preselect` siembra estudiante+grupo+grado en el form.
+
+**Nav posicional re-despacha** — «lo mismo pero con el último» / «para el
+segundo de la lista»: el ítem materializa el sujeto y se re-ejecuta el intent
+heredado (student_field/summary/derive_action). `position=last` resuelve con
+el conteo del set. SCP ya no descarta `_nav` posicional con set activo.
+
+**Exportación por chat** — `chat_export_data` real: pide rango si falta
+(diferido vía herencia de `_ds`), consulta verificada (eventos por módulo /
+roster por grupo), card + acciones `kind:export` (Excel/PDF/Word) que
+`Chat.jsx` ejecuta client-side con `exporters.js`. Verbos de exportación
+salieron de `opVerb` del DSM (antes forzaban `derive_action`→«Solicitar
+seguimiento» — bug: «exporta las tardanzas» abría seguimiento).
+
+**Nueva capacidad** — `frequency_table` ($STAFF): frecuencia de un evento por
+día de la semana o por estudiante, con rango/grupo/estudiante.
+
+**`_ds.intent` corregido** — los paths de continuación registraban
+`out_of_scope` como tema y envenenaban la herencia del turno siguiente;
+ahora se prefiere el intent real despachado.
+
+**SCP no degrada rutas chat-nativas** — dos pisadas encontradas en vivo:
+(a) `nxScpToSlots` traducía «cita al acudiente de X» → task=relation →
+`student_field` y pisaba el `derive_action` del DSM; (b) `nxScpToPlan`
+ejecutaba `incidents.list` sobre «exporta las tardanzas» y saltaba
+`chat_export_data`. Ahora: frame de consulta no degrada
+`derive_action|start_operation|export_data`, y el planner semántico se
+salta para esas rutas (sus handlers son la fuente de verdad).
+Verificado live: «cita al acudiente del último» → chip `Citar acudiente`
+con el ítem correcto; «exporta las tardanzas de la semana» → card +
+3 acciones de descarga.
+
+**Fixture** — `rector@test.nexo` añadido al colegio 2222… en
+`seed_chat_fixture.sql` (rector@nexo.edu vive en otro tenant del seed
+base → sus consultas daban 0 datos: alcance correcto, datos vacíos).
+
+**Hallazgo de cuota** — Groq free tier: 200K TPD. Con cuota agotada el parser
+cae a `out_of_scope` honesto y el DSM+slots resuelven contexto solos
+(verificado: «lo mismo con el último» funcionó sin parser). Producción
+necesita Dev Tier o caché de consultas para volumen real.
+
 ## 2026-09-23 — Modelo híbrido v1.0 + retiro del clasificador sintético
 
 Auditoría (`auditoria/AUDITORIA_NLU_VEREDICTO_2026-09-23.md`): el "99% accuracy"
