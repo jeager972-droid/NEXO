@@ -107,7 +107,7 @@ function nxIsForeign(string $r): bool {
  *     de suites antes de regenerar el fixture.
  *  3. Parser LLM real (nxLlmClassify). nxSlots manda en slots estructurales.
  */
-function nxClassifyCore(string $text): ?array {
+function nxClassifyCore(string $text, ?array $ctx = null): ?array {
     static $fxMap = []; static $fxPath = null;
     $f = getenv('NX_CLASSIFY_FIXTURE') ?: '';
     if ($f !== $fxPath) {  // env puede cambiar entre llamadas dentro de una suite
@@ -123,7 +123,7 @@ function nxClassifyCore(string $text): ?array {
         $k = nxNorm($text);
         if (isset($fxMap[$k])) $r = $fxMap[$k] + ['source' => 'fixture'];
     }
-    if (!$r) $r = nxLlmClassify($text);
+    if (!$r) $r = nxLlmClassify($text, $ctx);
     if ($r) {
         $r['entities'] = array_merge(
             $r['entities'] ?? [],
@@ -133,14 +133,14 @@ function nxClassifyCore(string $text): ?array {
     return $r;
 }
 
-function nxClassify(string $text): array {
+function nxClassify(string $text, ?array $ctx = null): array {
     // multi-intención — cada segmento se clasifica por separado
     $norm = nxNorm($text);
     $segments = array_values(array_filter(preg_split('/\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*/u', $norm), fn($s)=>mb_strlen(trim($s))>2));
     if (count($segments) > 1) {
         $parts = [];
         foreach (array_slice($segments,0,4) as $seg) {
-            $p = nxClassifyCore($seg);
+            $p = nxClassifyCore($seg, $ctx);
             if (!$p) continue;
             // dedupe por intención+segmento — mismo intent con params distintos cuenta doble
             if (($p['confidence'] ?? 0) >= 0.55 && !in_array($seg, array_column($parts,'text'), true))
@@ -152,12 +152,34 @@ function nxClassify(string $text): array {
                     'top3'=>$parts[0]['top3']??[],'entities'=>$parts[0]['entities']??[],'parts'=>$parts,'source'=>'multi'];
         }
     }
-    $r = nxClassifyCore($text)
+    $r = nxClassifyCore($text, $ctx)
         ?? ['intent' => 'out_of_scope', 'confidence' => 0.0,
             'entities' => nxSlots(nxNorm($text)), 'top3' => [], 'source' => 'none'];
     // entidades: siempre fusionar con nxSlots — el parser no extrae
     // module/field/from/to/range_label (eso lo completa PHP)
     $r['entities'] = array_merge(nxSlots($norm), $r['entities'] ?? []);
+    // contrato amplio del parser → slots internos del motor
+    $e =& $r['entities'];
+    if (!empty($e['nav']) && empty($e['_nav'])) {
+        // 'last' no es nav directo: el DSM lo resuelve a nth:N con el conteo
+        // del set activo; 'others/another' mapean al vocabulario del motor
+        $navMap = ['first'=>'first','others'=>'rest','rest'=>'rest','all'=>'all',
+                   'another'=>'next','next'=>'next','prev'=>'prev','table'=>'table',
+                   'count'=>'count','name'=>'name'];
+        if ($e['nav'] === 'last') { $e['position'] = 'last'; }
+        elseif (preg_match('/^nth:(\d+)$/', (string)$e['nav'], $m)) $e['_nav'] = 'nth:'.$m[1];
+        elseif (isset($navMap[$e['nav']])) $e['_nav'] = $navMap[$e['nav']];
+    }
+    // 'last' queda como position — chat.php lo convierte a nth:N con el
+    // conteo del set activo (aquí no está disponible)
+    if (!empty($e['position']) && $e['position'] !== 'last' && empty($e['_nav']))
+        $e['_nav'] = 'nth:' . (int)$e['position'];
+    if (!empty($e['presentation'])) $e['_presentation'] = $e['presentation'];
+    if (!empty($e['export_format'])) $e['_export_format'] = $e['export_format'];
+    if (!empty($e['compare'])) $e['_compare'] = $e['compare'];
+    if (!empty($e['relation'])) $e['_ref'] = $e['_ref'] ?? $e['relation'];
+    if (!empty($e['op'])) $e['_op'] = $e['_op'] ?? $e['op'];
+    unset($e);
     // «excepto el 8A» — el parser puede traer group=8A que es exclusión
     if (isset($r['entities']['_except'])
         && ($r['entities']['group'] ?? null) === $r['entities']['_except'])
@@ -777,6 +799,7 @@ function nxIntentRoles(): array {
         'count_present' => $STAFF,
         'count_trackings' => ['RECTOR','COORDINATOR','COUNSELOR','SECRETARY','TEACHER'],
         'top_offenders' => $STAFF,
+        'frequency_table' => $STAFF,
         'pending_returns' => $STAFF,
         'sos_alerts' => ['RECTOR','COORDINATOR','SECURITY'],
         'biometric_spam' => ['RECTOR','COORDINATOR','SECURITY'],
@@ -831,7 +854,7 @@ const NX_QUERY_INTENTS = ['list_events','count_events','trackings','permissions'
     'attendance_ranking','group_student_count','students_count','devices_status',
     'notifications_unread','audit_query','sos_alerts','biometric_spam','birthdays_today',
     'failed_messages','whatsapp_status','my_activity','pending_tasks','schedule_info',
-    'risk_students','export_data','students_in_group','result_nav',
+    'risk_students','export_data','students_in_group','result_nav','frequency_table',
     // consultas de datos adicionales — también pueden ser tema activo
     'attendance_today','late_today','count_present','day_summary'];
 
@@ -1021,7 +1044,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // produjo group='1'/'2'/…; con referente activo (set, tema de grupo
         // o campo relacional) es POSICIÓN sobre el tema, nunca grado N.
         if (!empty($slots['group']) && !preg_match('/\d/', $q0)
-            && preg_match('/\b(?:del|de|los|las)\s+(primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|primer|tercer|ultimo|ultima)\b(?!\s+(?:de|del|en|a|por|para|dia|mes|semana|ano|lugar|puesto)\b)/u', $q0, $mog)
+            && preg_match('/\b(?:del|de|el|la|los|las)\s+(primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|primer|tercer|ultimo|ultima)\b(?!\s+(?:de|del|en|a|por|para|dia|mes|semana|ano|lugar|puesto)\b)/u', $q0, $mog)
             && !preg_match('/\b(grado|grupo|salon|curso)\b/u', $q0)
             && (!empty($dsState['last_result']['items']) || !empty($ctxEntities['group']) || !empty($slots['field']))) {
             $posOrd = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,
@@ -1368,10 +1391,17 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // Regla de preservación: un turno de operación SIN sustantivo/verbo
         // de operación («no, para María») NO recalcula el comando — conserva
         // el _op pendiente en lugar de caer al default.
-        $opVerb = (bool)preg_match('/\b(citar|citalo|citala|cite|citamos|convocar|convoca|'
+        $opVerb = (bool)preg_match('/\b(citar|cita|citas|cite|citemos|citan|citalo|citala|citamos|convocar|convoca|'
             . 'generar|genera|autorizar|autoriza|mandar|manda|enviar|envia|'
             . 'reportar|reporta|registrar|registra|crear|crea|expedir|expide|'
-            . 'derivar|deriva|tramitar|tramita|constancia|dejar constancia|llamar a citacion|llamado a|convoco|convoca|emitir|emite|dar salida|da salida|exportar|exporta|descargar|descarga|extraer|extrae|saca|sacar)\b/u', $q0);
+            . 'derivar|deriva|tramitar|tramita|constancia|dejar constancia|llamar a citacion|llamado a|convoco|convoca|emitir|emite|dar salida|da salida)\b/u', $q0);
+        // exportar/descargar/sacar NO son verbos de operación — van a
+        // export_data (reporte con formato), nunca a un formulario
+        if (preg_match('/\b(exportar|exporta|exporte|exportame|expórtame|descargar|descarga|descargue|descárgame|extraer|extrae|saca\w*|sacar|pasa\w* a (excel|pdf|word|csv)|en (excel|pdf|word))\b/u', $q0)
+            && in_array($intent, ['derive_action','start_operation','out_of_scope','list_events','count_events','students.list','incidents.list'], true)) {
+            $intent = 'export_data';
+            $turnType = 'intent_switch';
+        }
         // «no, mejor una citación» — corrección DE operación: cambia el
         // comando, conserva la entidad y el flujo
         if ($correctionWeak && preg_match('/\b(solicitud|citacion|cita|permiso|autorizacion|salida|seguimiento|incidente|reporte)\b/u', $q0)

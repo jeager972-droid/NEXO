@@ -223,6 +223,45 @@ function chatOperationCmd(string $q): string {
 /** Etiquetas legibles por comando (para el chip y la respuesta). */
 function chatOperationLabel(string $cmd): string { return $cmd; }
 
+/**
+ * Últimos turnos user/assistant de la sesión — contexto conversacional
+ * para el parser y el chat informal del LLM (texto ya persistido, no PII
+ * nueva: es la misma conversación del usuario).
+ */
+function chatRecentTurns(PDO $conn, string $userId, string $sessionId, int $n = 3): array {
+    try {
+        $st = $conn->prepare("SELECT role, content FROM chat_messages
+            WHERE user_id=? AND session_id=? AND role IN ('user','assistant')
+            ORDER BY created_at DESC LIMIT " . (int)($n * 2));
+        $st->execute([$userId, $sessionId]);
+        $rows = array_reverse($st->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Throwable $e) { return []; }
+    $turns = []; $cur = [];
+    foreach ($rows as $r) {
+        if ($r['role'] === 'user') { if ($cur) { $turns[] = $cur; } $cur = ['u'=>$r['content'],'a'=>'']; }
+        else { if ($cur) $cur['a'] = $r['content']; }
+    }
+    if ($cur) $turns[] = $cur;
+    return array_slice($turns, -$n);
+}
+
+/**
+ * Red de seguridad DETERMINISTA para contenido riesgoso — backstop del flag
+ * `safety` del parser LLM (que puede fallar o estar apagado). Generalista:
+ * categorías de riesgo, nunca un intent por tema.
+ */
+function nxSafetyScreen(string $q): bool {
+    return (bool)(
+        // atracción/romance/sexualización hacia estudiantes o menores
+        preg_match('/\b(me (gusta|enamore|encanta|atrae|prende)|enamorado|enamorada|novia|novio|salir con|besar|beso|linda|bonita|buena|rica|sexy|hot)\b[^.!?]{0,40}\b(estudiante|alumn[ao]s?|niñ[oa]s?|menor(?:es)?|pelada|muchacha|chica del|quinceañera)/u', $q)
+        || preg_match('/\b(estudiante|alumn[ao]s?|niñ[oa]s?|menor(?:es)?|pelada|muchacha)\b[^.!?]{0,30}\b(est[áa] (buena|rica|linda|muy bien)|me (gusta|enamore|encanta|atrae)|novia|novio)/u', $q)
+        // falsificación/eliminación de registros o extracción de credenciales
+        || preg_match('/\b(borra|borrar|elimina|eliminar|quita|quitar|falsifica|falsificar|modifica|alterar|cambia|inventa|inventar)\w*\b[^.!?]{0,30}\b(inasistencia|tardanza|registro|evasion|incidente|historial|asistencia|datos)/u', $q)
+        || preg_match('/\b(contraseña|password|clave|credenciales|token|pin)\b[^.!?]{0,25}\b(de |del |otro|rector|docente|admin|coordinador|usuario)/u', $q)
+        || preg_match('/\b(como|puedo|ayudame a|ensename a)\b[^.!?]{0,25}\b(hackear|piratear|entrar sin|saltar|burlar|falsificar)/u', $q)
+    );
+}
+
 /** Chips de acción → navegación a /operacion con comando precargado. */
 function chatActionChip(string $cmd, string $label, ?array $student = null): array {
     $q = '/operacion?cmd=' . urlencode($cmd);
@@ -292,6 +331,20 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // ── Seguimiento contextual: «dame otro», «otra», «más», «siguiente» ──
     $q0 = nxNorm($text);
     $dsPre = chatLoadDs($conn, $userId, $sessionId);
+    // Contexto compacto para el parser LLM (§7.4): entidades activas +
+    // descriptor del result-set + últimos turnos — el modelo resuelve
+    // referencias por sí mismo; el DSM sigue siendo la autoridad.
+    $llmCtx = [
+        'entities'    => $dsPre['entities'] ?? [],
+        'last_result' => isset($dsPre['last_result'])
+            ? ['type'=>$dsPre['last_result']['type'] ?? null,
+               'label'=>$dsPre['last_result']['label'] ?? null,
+               'count'=>$dsPre['last_result']['count'] ?? count($dsPre['last_result']['items'] ?? [])]
+            : null,
+        'turns'       => chatRecentTurns($conn, $userId, $sessionId, 3),
+    ];
+    $vars['_history'] = $llmCtx['turns'];   // historial para el chat informal LLM
+    $vars['_raw'] = $text;                  // texto original (sin normalizar)
     $hasNavableSet = !empty($dsPre['last_result']['items']);
     if (!$hasNavableSet
         && preg_match('/^(dame |dime )?(otro|otra|uno mas|una mas|mas|siguiente|otra vez|y otro|y otra|de nuevo|dame mas|dime mas|continua|sigue|y eso|y ese|y esa)[.! ]*$/u', $q0)) {
@@ -324,7 +377,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
 
     // ── telemetría por capa (NLU → DSM → auth → dispatch) ─────────────
     $tNlu = microtime(true);
-    $cls = nxClassify($text);
+    $cls = nxClassify($text, $llmCtx);
     $tNlu = microtime(true) - $tNlu;
 
     // ── Multi-intención: «hola quién eres y quién soy yo», «tardanzas y evasiones del 8A» ──
@@ -455,6 +508,20 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         exit(json_encode(['status'=>'ok','data'=>$out]));
     }
 
+    // ── Compuerta de seguridad generalista (antes de DSM/SCP/dispatch) ──
+    // Dos detectores independientes: flag `safety` del parser LLM +
+    // backstop determinista. Ninguno es un intent de tema — es un flag
+    // transversal que bloquea con una respuesta seria fija.
+    if (($cls['safety'] ?? 'ok') === 'risky' || nxSafetyScreen($q0)
+        || (!empty($cls['parts']) && array_filter($cls['parts'], fn($p) => ($p['safety'] ?? 'ok') === 'risky'))) {
+        securityLog('CHAT_SAFETY_GUARD', mb_substr($q0,0,200) . ' | user ' . $userId);
+        $out = ['reply'=>'Eso no es algo en lo que pueda ayudarte. Si hay una situación que te preocupa, los canales y protocolos de la institución son el camino — y si necesitas reportar algo, coordinación está para eso.',
+                'intent'=>'safety_guard','confidence'=>1.0,'session_id'=>$sessionId,'denied'=>true];
+        if ($dsPre) $out['_ds'] = $dsPre;  // el bloqueo no borra el contexto
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
+    }
+
     $intent  = $cls['intent'];
     $slots   = $cls['entities'] ?? [];
     $conf    = $cls['confidence'] ?? 0;
@@ -481,6 +548,17 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $intent = $interp['resolved']['intent'];
     $slots  = $interp['resolved']['slots'];
     if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
+
+    // ── verbo de operación + op del parser → ES una operación, no una
+    // consulta de campo («cita al acudiente de X» cae a student_field por
+    // la entidad acudiente). El intent se corrige antes de plan/ejecución.
+    if (!empty($slots['_op'])
+        && in_array($intent, ['student_field','student_summary','list_events','citations','trackings','permissions','count_events'], true)
+        && preg_match('/\b(cita\w*|citamos|convoca\w*|convoc\w*|deriva\w*|genera\w*|tramit\w*|autoriza\w*|reporta\w*|registra\w*|agenda\w*|llama\w* a citaci\w*)\b/u', $q0)) {
+        $intent = 'derive_action';
+        $interp['resolved']['intent'] = $intent;
+        $interp['resolved']['slots']  = $slots;
+    }
 
     // ── SCP — Semantic Conversational Parsing (§CAMBIO ARQUITECTÓNICO) ──
     // Interpretar → validar → planificar → ejecutar. El frame normaliza el
@@ -520,17 +598,32 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             }
             [$cIntent, $cSlots, $cForced] = nxScpToSlots($scpFrame);
             if ($cForced && $cIntent) {
+                // un frame de relación/consulta («acudiente de X» →
+                // student_field; «exporta tardanzas» → incidents.list) NO
+                // degrada una operación o exportación que el DSM ya resolvió
+                // por verbo («cita al acudiente», «exporta…»). Los slots
+                // sí se fusionan — sujetan el objetivo de la operación.
+                $opResolved = in_array($intent, ['derive_action','start_operation','export_data'], true);
+                $downgradeToQuery = in_array($cIntent, ['student_field','student_summary',
+                    'list_events','count_events','permissions','citations','trackings',
+                    'incidents.list','students.list','incidents.count'], true);
                 $slots = array_merge($slots, $cSlots);
                 if (!empty($scpFrame['subject']['name']) && in_array($scpFrame['task'], ['relation','count'], true))
                     $slots['student'] = $scpFrame['subject']['name'];
-                if ($scpFrame['task'] === 'relation' && !empty($slots['_nav']))
-                    unset($slots['_nav']); // la referencia ya está materializada
-                $intent = $cIntent;
+                // la referencia materializada por el frame es de ENTIDAD —
+                // un nav posicional («la primera», «el último») aún debe
+                // resolver el ítem del set activo: no se descarta aquí
+                if ($scpFrame['task'] === 'relation' && !empty($slots['_nav'])
+                    && !(preg_match('/^(nth:\d+|first)$/', (string)$slots['_nav'])
+                         && !empty($ds['last_result']['items'])))
+                    unset($slots['_nav']);
+                if (!($opResolved && $downgradeToQuery)) $intent = $cIntent;
                 $interp['resolved']['intent'] = $intent;
                 $interp['resolved']['slots'] = $slots;
                 $interp['requires_clarification'] = false;
                 $scpForced = true; // el frame decidió — el compose clásico no lo pisa
-                nxScpTrace('TRANSLATED', ['intent'=>$intent,'slots'=>$cSlots,'task'=>$scpFrame['task']]);
+                nxScpTrace('TRANSLATED', ['intent'=>$intent,'slots'=>$cSlots,'task'=>$scpFrame['task'],
+                    'op_kept'=>$opResolved && $downgradeToQuery]);
             }
             $scpPlan = nxScpToPlan($scpFrame);
         } else {
@@ -578,8 +671,16 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             $slots['student'] = $it['label'];
             $slots['_ref'] = $slots['_ref'] ?? 'guardian';
             unset($slots['_nav']);
-            $intent = 'student_field';
-            $interp['resolved']['intent'] = 'student_field';
+            // con verbo/_op de operación («cita al acudiente del último») el
+            // ítem materializa el SUJETO de la operación, no una consulta.
+            // El verbo del texto decide aunque parser/DSM no hayan marcado op
+            $keepOp = in_array($intent, ['derive_action','start_operation'], true)
+                || !empty($slots['_op'])
+                || preg_match('/\b(cita(?:r|mos|n|te|me|lo|la)?|citamos|convoca\w*|deriva\w*|genera\w*|reporta\w*|registra\w*|autoriza\w*|tramit\w*)\b/u', $q0);
+            $intent = $keepOp
+                ? ($intent === 'start_operation' ? 'start_operation' : 'derive_action')
+                : 'student_field';
+            $interp['resolved']['intent'] = $intent;
             $interp['resolved']['slots'] = $slots;
             $interp['requires_clarification'] = false;
         }
@@ -695,6 +796,57 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             // con grupo/ámbito explícito = consulta nueva; sin él = transform
             // del set activo («dame los tres últimos» después de ordenar)
             && preg_match('/\b(?:de|del|en|grupo|salon)\s+[\da-z]/u', $q0));
+    // position emitido por el parser sin nav → nav posicional, usando el
+    // conteo del set activo para resolver «último»
+    if (empty($slots['_nav']) && !empty($slots['position'])
+        && $ds && !empty($ds['last_result']['items'])) {
+        $nPos = count($ds['last_result']['items']);
+        $p = $slots['position'];
+        $slots['_nav'] = 'nth:' . ($p === 'last' ? $nPos : max(1, (int)$p));
+    }
+    // «el segundo de la lista (que me diste)» — deíctico posicional sobre el
+    // set activo aunque el parser no haya emitido nav/position
+    if (empty($slots['_nav']) && empty($slots['position'])
+        && $ds && !empty($ds['last_result']['items'])
+        && preg_match('/\b(primer[oa]|segund[oa]|tercer[oa]|cuart[oa]|quint[oa]|últim[oa]|ultim[oa])\b[^.!?]{0,20}\b(lista|tabla|resultados?|tanda)\b/u', $q0, $om)) {
+        $ord = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,
+                'tercero'=>3,'tercera'=>3,'tercer'=>3,'cuarto'=>4,'cuarta'=>4,'quinto'=>5,'quinta'=>5];
+        $w = mb_strtolower($om[1]);
+        $slots['position'] = in_array($w, ['último','última','ultimo','ultima'], true) ? 'last' : ($ord[$w] ?? 1);
+        $slots['_nav'] = 'nth:' . ($slots['position'] === 'last'
+            ? count($ds['last_result']['items']) : (int)$slots['position']);
+    }
+
+    // ── «lo mismo pero con el último» / «para el segundo de la lista» ────
+    // Nav posicional sin campo propio pero con intent de estudiante heredado:
+    // el nav materializa el SUJETO y se re-ejecuta la consulta previa sobre
+    // él — no se responde solo el nombre del ítem.
+    if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items'])
+        && preg_match('/^(nth:\d+|first)$/', (string)$slots['_nav'])
+        && (empty($slots['student'])
+            || in_array('student', $slots['_inherited'] ?? [], true)
+            || (isset($ds['entities']['student']) && $slots['student'] === $ds['entities']['student']))
+        && !$navGroupClash && !$navEventVerb
+        && (in_array($intent, ['student_field','student_summary','derive_action','start_operation'], true)
+            || in_array($ds['intent'] ?? '', ['student_field','student_summary','derive_action','start_operation'], true))) {
+        $idx = $slots['_nav'] === 'first' ? 0 : max(0, (int)substr($slots['_nav'], 4) - 1);
+        $it = $ds['last_result']['items'][$idx] ?? null;
+        if ($it && !empty($it['label'])) {
+            $slots['student'] = $it['label'];
+            foreach (['field','module'] as $k)
+                if (empty($slots[$k]) && !empty($ds['entities'][$k])) $slots[$k] = $ds['entities'][$k];
+            if (empty($slots['_op']) && !empty($ds['entities']['_op'])) $slots['_op'] = $ds['entities']['_op'];
+            unset($slots['_nav']);
+            // el intent a re-ejecutar: el propio si ya es de sujeto (derive/
+            // field), si no el heredado del turno previo («lo mismo»)
+            $intent = in_array($intent, ['student_field','student_summary','derive_action','start_operation'], true)
+                ? $intent : $ds['intent'];
+            $interp['resolved']['intent'] = $intent;
+            $interp['resolved']['slots']  = $slots;
+            $interp['requires_clarification'] = false;
+        }
+    }
+
     if (!empty($slots['_nav']) && $ds && isset($ds['last_result']) && !$navGroupClash && !$navEventVerb) {
         $out = chatResultNav($ds, $slots['_nav'], $vars);
         $out['session_id'] = $sessionId;
@@ -820,11 +972,15 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                      'evidence'=>['compound:' . count($steps) . ' clauses']];
     }
     // plan SCP especializado (compare con métrica) cuando la composición
-    // clásica no produjo nada — mismo contrato: validate + allowed
-    if (!$plan && $scpPlan) { $plan = $scpPlan; }
+    // clásica no produjo nada — mismo contrato: validate + allowed.
+    // EXCEPTO rutas chat-nativas (export_data/derive_action/start_operation):
+    // el registro semántico no tiene capability para ellas y degradaría la
+    // petición a una lista genérica («exporta tardanzas» → incidents.list).
+    $chatNative = in_array($intent, ['export_data','derive_action','start_operation'], true);
+    if (!$plan && $scpPlan && !$chatNative) { $plan = $scpPlan; }
     // cuando el frame decidió (rank/filter/count/relation), el compose
     // clásico no lo pisa: el significado normalizado tiene prioridad
-    if (!$plan && !$scpForced)
+    if (!$plan && !$scpForced && !$chatNative)
         $plan = nxSemanticCompose($q0, $intent, (float)$conf, $slots, $interp, $ds);
     // cláusulas de conversación general pendientes sin plan de datos:
     // responderlas igual (un chiste solo no debe caer a out_of_scope)
@@ -912,6 +1068,17 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $out['confidence'] = $conf;
     $out['session_id'] = $sessionId;
     $out['entities'] = array_merge($slots, $out['entities'] ?? []); // el handler resuelve nombres reales
+    // «expórtame X en Excel» — el parser marcó formato; si el handler
+    // materializó una card, las acciones de descarga viajan con el mensaje
+    if (!empty($slots['_export_format']) && !empty($out['cards']) && empty($out['denied'])) {
+        [$ef, $et] = chatRange($slots);
+        $title = $out['cards'][0]['title'] ?? 'Exportación NEXO';
+        $fmt = (string)$slots['_export_format'];
+        $want = in_array($fmt, ['excel','pdf','word','csv'], true) ? [$fmt] : [];
+        $acts = chatExportActions($title, $ef, $et);
+        if ($want) $acts = array_values(array_filter($acts, fn($a) => $a['format'] === $want[0]));
+        $out['actions'] = array_merge($out['actions'] ?? [], $acts);
+    }
     $out['_ds'] = chatBuildDs($interp, $out, $ds);
     if (isset($out['_interpretation']['timing_ms']))
         $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
@@ -945,16 +1112,16 @@ function nxVaryClean(string $what, string $where, string $seed): string {
 
 /** Estado conversacional persistido — leído del último payload del asistente. */
 function chatLoadDs(PDO $conn, string $userId, string $sessionId): ?array {
-    static $ok = null;
-    if ($ok === false) return null;
+    // Sin latch de fallo: un error transitorio (BD aún no lista al boot del
+    // contenedor) NO debe desactivar la memoria para siempre — el static
+    // anterior envenenaba al worker php-fpm para todas sus requests.
     try {
         $st = $conn->prepare("SELECT payload_json FROM chat_messages
             WHERE user_id=? AND session_id=? AND role='assistant' AND jsonb_exists(payload_json, '_ds')
             ORDER BY created_at DESC LIMIT 1");
         $st->execute([$userId,$sessionId]);
         $r = $st->fetchColumn();
-    } catch (Throwable $e) { $ok = false; return null; }
-    $ok = true;
+    } catch (Throwable $e) { return null; }
     if (!$r) return null;
     $p = json_decode($r, true);
     return $p['_ds'] ?? null;
@@ -974,10 +1141,18 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     $tt = $interp['turn_type'] ?? '';
     $isCont = $tt === 'context_modify' || !empty($slots['_nav']) || !empty($out['_result_nav'])
         || in_array($tt, ['op_repeat','correction','confirmation','deictic','followup'], true);
-    if ($isCont) {
+    // Un turno que no aporta tema propio NO debe borrar el contexto:
+    // out_of_scope / clarify / denied / smalltalk son ruido conversacional,
+    // no cambio de tema — sin esto un solo fallo mata la conversación.
+    $noiseIntent = in_array($interp['resolved']['intent'] ?? $out['intent'] ?? '',
+        ['out_of_scope','clarify','confirm_op','cancel','repeat_op','security_probe'], true)
+        || !empty($out['denied']);
+    $noNewSubject = empty($out['_result_set']) && empty($merged['student'])
+        && empty($merged['group']) && empty($merged['person']);
+    if ($isCont || $noiseIntent || $noNewSubject) {
         // field NO se hereda: es de la frase, no del tema («y cuántas
         // evasiones tiene» no debe arrastrar el documento del turno previo)
-        foreach (['student','group','module','days','from','to','range_label'] as $k) {
+        foreach (['student','group','module','days','from','to','range_label','person'] as $k) {
             if (empty($merged[$k]) && !empty($prev['entities'][$k])) $merged[$k] = $prev['entities'][$k];
         }
     }
@@ -1007,12 +1182,19 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     $currentEntity = ($out['_result_set']['entity'] ?? null)
         ?? ($merged['student'] ? 'students' : ($merged['group'] ? 'groups' : ($prev['current']['entity'] ?? null)));
     $goal = $slots['field'] ?? $slots['goal'] ?? ($out['_plan']['capability'] ?? ($interp['resolved']['intent'] ?? null));
+    // el intent de tema debe ser el que REALMENTE se despachó: los paths de
+    // continuación re-ejecutan intents sin reescribir resolved.intent —
+    // registrar out_of_scope aquí envenena la herencia del próximo turno
+    $resolvedIntent = $interp['resolved']['intent'] ?? null;
+    $outIntent = $out['intent'] ?? null;
+    $isNoiseIntent = fn($i) => $i === null || in_array($i,
+        ['out_of_scope','clarify','confirm_op','cancel','repeat_op','security_probe','result_nav'], true);
+    $dsIntent = !empty($slots['_nav']) || !empty($out['_result_nav'])
+        ? ($prev['intent'] ?? $resolvedIntent ?? $outIntent)
+        : (!$isNoiseIntent($resolvedIntent) ? $resolvedIntent
+            : (!$isNoiseIntent($outIntent) ? $outIntent : ($resolvedIntent ?? $outIntent)));
     $ds = [
-        // turnos de navegación no cambian el tema: el intent queda del
-        // último query real — «la última» no convierte el tema en sos_alerts
-        'intent'      => !empty($slots['_nav']) || !empty($out['_result_nav'])
-            ? ($prev['intent'] ?? ($interp['resolved']['intent'] ?? null))
-            : ($interp['resolved']['intent'] ?? ($out['intent'] ?? null)),
+        'intent'      => $dsIntent,
         'prev_intent' => $prev['intent'] ?? null,
         'entities'    => $merged,
         'goal'        => $goal,
@@ -1411,6 +1593,16 @@ function chatDispatch(PDO $conn, array $authUser, string $intent, array $slots, 
     if (in_array($intent, $smalltalkIntents, true)) {
         if ($intent === 'security_probe')
             securityLog('CHAT_SECURITY_PROBE', mb_substr($vars['_q'] ?? '',0,200) . ' | user ' . ($authUser['id'] ?? '?'));
+        // flujo informal → LLM #3: conversa con contexto nativo (historial
+        // real) bajo persona institucional. security_probe se queda fijo;
+        // out_of_scope también prueba el chat — una pregunta de cultura
+        // general sin intent cubierto merece respuesta natural, no rechazo.
+        if (!in_array($intent, ['security_probe'], true)) {
+            $chat = function_exists('nxLlmChat')
+                ? nxLlmChat($vars['_raw'] ?? '', $vars['_history'] ?? []) : null;
+            if (is_string($chat) && $chat !== '')
+                return ['reply'=>$chat, 'intent'=>$intent, '_llm_chat'=>true];
+        }
         return ['reply' => nxSmalltalk($intent, $vars), 'intent'=>$intent];
     }
     // alias: el intent del corpus no siempre coincide 1:1 con el handler
@@ -1563,9 +1755,23 @@ function chatLog(PDO $conn, string $schoolId, string $userId, string $text, arra
     // LLM #2 — response composer: reformula el reply verificado en español
     // natural (nunca toca datos/cards). Por referencia: se persiste y se
     // devuelve ya compuesto. Falla → reply original intacto.
+    // Todo conjunto de datos se entrega como tabla: si el handler materializó
+    // un _result_set (columns+rows) pero no emitió card, la UI la recibe aquí
+    // — la sección de consultas vive en el chat, nunca como texto plano.
+    if (empty($out['cards']) && !empty($out['_result_set']['columns']) && !empty($out['_result_set']['rows'])) {
+        $rs = $out['_result_set'];
+        $out['cards'] = [[
+            'title'   => ucfirst($rs['label'] ?? 'Resultados'),
+            'columns' => $rs['columns'],
+            'rows'    => $rs['rows'],
+        ]];
+    }
     if (function_exists('nxLlmComposeReply')) {
         try {
+            // contexto de los últimos turnos para coherencia (no se persiste)
+            $out['_recent'] = $sessionId ? chatRecentTurns($conn, $userId, $sessionId, 2) : [];
             $better = nxLlmComposeReply($text, $out);
+            unset($out['_recent']);
             if (is_string($better) && $better !== '') {
                 $out['reply_raw'] = $out['reply'] ?? null;
                 $out['reply'] = $better;
@@ -1577,7 +1783,7 @@ function chatLog(PDO $conn, string $schoolId, string $userId, string $text, arra
             $st = $conn->prepare("SELECT 1 FROM information_schema.columns WHERE table_name='chat_messages' AND column_name='session_id'");
             $st->execute();
             $hasSession = (bool)$st->fetchColumn();
-        } catch (Throwable $e) { $hasSession = false; }
+        } catch (Throwable $e) { /* transitorio: reintentar en la próxima request */ }
     }
     try {
         if ($hasSession) {
@@ -1987,8 +2193,134 @@ function chat_schedule_info(PDO $conn, array $u, array $s, array $v): array {
 }
 
 function chat_export_data(PDO $conn, array $u, array $s, array $v): array {
-    return ['reply'=>'Para exportar te llevo a la sección con los filtros listos — ahí eliges formato (Excel, Word, PDF).',
-        'actions'=>[['kind'=>'nav','label'=>'Abrir exportación','to'=>'/operacion']]];
+    // Exportar requiere saber QUÉ y EN QUÉ RANGO. Si falta el rango → pedirlo;
+    // el _ds retiene la petición y el próximo turno («del mes pasado») la
+    // completa por herencia contextual.
+    $hasRange = isset($s['days']) || !empty($s['from']) || !empty($s['to']);
+    if (!$hasRange)
+        return ['reply'=>"¿De qué rango de fechas lo exporto? Ejemplo: «hoy», «últimos 15 días», «del mes pasado» o «del 1 al 15 de septiembre».",
+                'intent'=>'clarify', 'entities'=>['module'=>$s['module'] ?? null, 'group'=>$s['group'] ?? null, 'student'=>$s['student'] ?? null]];
+    [$from,$to] = chatRange($s);
+    $rl = $s['range_label'] ?? "{$from} a {$to}";
+    $scope = chatScope($conn,$u);
+
+    // dominio: módulo de eventos (evasiones, tardanzas, permisos…) o
+    // listados (estudiantes). El módulo es el caso dominante.
+    $module = $s['module'] ?? null;
+    if (!$module) {
+        // «exporta los estudiantes del 10-A» → roster del grupo
+        if (!empty($s['group']) && ($g = chatResolveGroup($conn,$u,$s['group']))) {
+            $st = $conn->prepare("SELECT s.first_name||' '||s.last_name AS name, s.document_number AS doc,
+                    ag.group_name, s.grade_level, s.work_shift
+                FROM students s JOIN student_group_assignments ga ON ga.student_id=s.student_id
+                JOIN academic_groups ag ON ag.group_id=ga.group_id
+                WHERE s.school_id=? AND ga.group_id=? {$scope['sql']}
+                ORDER BY s.last_name, s.first_name LIMIT 1000");
+            $st->execute(array_merge([$u['school_id'], $g['group_id']], $scope['params']));
+            $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+            if (!$rows) return ['reply'=>"No encontré estudiantes en {$g['group_name']} para exportar."];
+            $title = "Estudiantes {$g['group_name']}";
+            return ['reply'=>count($rows)." estudiantes de {$g['group_name']} listos para exportar:",
+                'cards'=>[['title'=>$title,'columns'=>['Estudiante','Documento','Grupo','Grado','Jornada'],
+                    'rows'=>array_map(fn($r)=>[$r['name'],$r['doc'],$r['group_name'],$r['grade_level'],$r['work_shift']],$rows)]],
+                '_result_set'=>['type'=>'students','label'=>"estudiantes {$g['group_name']}",
+                    'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['name'],'sub'=>$r['doc'].' · '.$r['group_name']],$rows),
+                    'count'=>count($rows)],
+                'actions'=>chatExportActions($title, $from, $to)];
+        }
+        return ['reply'=>"¿Qué exporto? Puedo generar reportes de eventos (inasistencias, tardanzas, evasiones, permisos…) con rango, o la lista de estudiantes de un grupo."];
+    }
+
+    $mlabel = NX_MODULE_LABEL[$module] ?? strtolower($module);
+    $params = [$u['school_id'], $module, $from, $to]; $extra = '';
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn,$u,$s['student']);
+        if (!$found) return ['reply'=>"No encuentro a «{$s['student']}» dentro de tu alcance."];
+        if (count($found)>1) return chatAmbiguous($found);
+        $extra .= " AND ai.student_id=?"; $params[] = $found[0]['student_id'];
+    }
+    if (!empty($s['group']) && ($g = chatResolveGroup($conn,$u,$s['group']))) {
+        $extra .= " AND ai.group_id=?"; $params[] = $g['group_id'];
+    }
+    $st = $conn->prepare("SELECT s.first_name||' '||s.last_name AS name, s.document_number AS doc,
+            ag.group_name, ai.detected_at::date AS d, ai.detected_at::time(0) AS t
+        FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
+        LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
+        WHERE ai.school_id=? AND ai.incident_type=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
+        ORDER BY ai.detected_at DESC LIMIT 2000");
+    $st->execute(array_merge($params, $scope['params']));
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply'=>"No hay registros de {$mlabel} en {$rl} — nada que exportar."];
+    $title = ucfirst($mlabel) . " ({$rl})";
+    return ['reply'=>count($rows)." registros de {$mlabel} en {$rl} — elige el formato:",
+        'cards'=>[['title'=>$title,'columns'=>['Estudiante','Documento','Grupo','Fecha','Hora'],
+            'rows'=>array_map(fn($r)=>[$r['name'],$r['doc'],$r['group_name']??'—',$r['d'],substr($r['t'],0,5)],$rows)]],
+        '_result_set'=>['type'=>'events','label'=>"registros de {$mlabel}",
+            'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['name'],'sub'=>($r['group_name']??'—').' · '.$r['d']],$rows),
+            'count'=>count($rows)],
+        'actions'=>chatExportActions($title, $from, $to)];
+}
+
+/** Acciones de exportación sobre la card del mismo mensaje (spec client-side). */
+function chatExportActions(string $title, string $from, string $to): array {
+    $base = ['kind'=>'export','card'=>0,'title'=>$title,'from'=>$from,'to'=>$to];
+    return [
+        $base + ['format'=>'excel','label'=>'Descargar Excel'],
+        $base + ['format'=>'pdf',  'label'=>'Descargar PDF'],
+        $base + ['format'=>'word', 'label'=>'Descargar Word'],
+    ];
+}
+
+/** Frecuencia de un evento por día de la semana (o por estudiante si se pide). */
+function chat_frequency_table(PDO $conn, array $u, array $s, array $v): array {
+    $module = $s['module'] ?? null;
+    if (!$module) return ['reply'=>"¿Frecuencia de qué? Ejemplo: «llegadas tarde por día de la semana», «inasistencias por estudiante»."];
+    $scope = chatScope($conn,$u); [$from,$to] = chatRange($s);
+    $mlabel = NX_MODULE_LABEL[$module] ?? strtolower($module);
+    $params = [$u['school_id'], $module, $from, $to]; $extra = '';
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn,$u,$s['student']);
+        if (!$found) return ['reply'=>"No encuentro a «{$s['student']}» dentro de tu alcance."];
+        if (count($found)>1) return chatAmbiguous($found);
+        $extra .= " AND ai.student_id=?"; $params[] = $found[0]['student_id'];
+    }
+    if (!empty($s['group']) && ($g = chatResolveGroup($conn,$u,$s['group']))) {
+        $extra .= " AND ai.group_id=?"; $params[] = $g['group_id'];
+    }
+    $byStudent = (bool)preg_match('/estudiante|alumn|quien|quién|persona/u', (string)($v['_q'] ?? ''));
+    if ($byStudent) {
+        $st = $conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, COUNT(*) AS c
+            FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
+            LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
+            WHERE ai.school_id=? AND ai.incident_type=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
+            GROUP BY name, ag.group_name ORDER BY c DESC, name LIMIT 50");
+        $st->execute(array_merge($params, $scope['params']));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply'=>"No hay registros de {$mlabel} en ese rango."];
+        $title = "Frecuencia de {$mlabel} por estudiante";
+        return ['reply'=>"Frecuencia de {$mlabel} por estudiante (" . ($s['range_label'] ?? "$from a $to") . "):",
+            'cards'=>[['title'=>$title,'columns'=>['Estudiante','Grupo','Total'],
+                'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',(int)$r['c']],$rows)]],
+            '_result_set'=>['type'=>'frequency','label'=>"frecuencia {$mlabel}",
+                'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['name'],'sub'=>($r['group_name']??'—')." · {$r['c']}"],$rows),
+                'count'=>count($rows)]];
+    }
+    $st = $conn->prepare("SELECT EXTRACT(ISODOW FROM ai.detected_at) AS dow,
+            TRIM(TO_CHAR(ai.detected_at,'Day')) AS dname, COUNT(*) AS c
+        FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
+        WHERE ai.school_id=? AND ai.incident_type=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
+        GROUP BY dow, dname ORDER BY dow");
+    $st->execute(array_merge($params, $scope['params']));
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply'=>"No hay registros de {$mlabel} en ese rango."];
+    $dowEs = ['Monday'=>'Lunes','Tuesday'=>'Martes','Wednesday'=>'Miércoles','Thursday'=>'Jueves','Friday'=>'Viernes','Saturday'=>'Sábado','Sunday'=>'Domingo'];
+    $title = "Frecuencia de {$mlabel} por día";
+    return ['reply'=>"Frecuencia de {$mlabel} por día de la semana (" . ($s['range_label'] ?? "$from a $to") . "):",
+        'cards'=>[['title'=>$title,'columns'=>['Día','Total'],
+            'rows'=>array_map(fn($r)=>[$dowEs[$r['dname']] ?? $r['dname'],(int)$r['c']],$rows)]],
+        '_result_set'=>['type'=>'frequency','label'=>"frecuencia {$mlabel} por día",
+            'items'=>array_map(fn($r)=>['id'=>null,'label'=>$dowEs[$r['dname']] ?? $r['dname'],'sub'=>"{$r['c']} registros"],$rows),
+            'count'=>count($rows)]];
 }
 
 function chat_derive_action(PDO $conn, array $u, array $s, array $v): array {
@@ -1999,9 +2331,10 @@ function chat_derive_action(PDO $conn, array $u, array $s, array $v): array {
         if(count($found)>1) return chatAmbiguous($found);
         $student=$found[0];
     }
-    // qué acción pidió → deep-link a la operación exacta
+    // qué acción pidió → el parser puede emitir entities.op explícita;
+    // si no, el léxico determinista la deriva del texto
     $q=$v['_q']??'';
-    $cmd = chatOperationCmd($q);
+    $cmd = !empty($s['_op']) ? (string)$s['_op'] : chatOperationCmd($q);
     if(!chatCanAction($cmd,$u['role'])) return ['reply'=>'Esa acción no está disponible para tu rol — la gestiona coordinación o rectoría.'];
     $name=$student?" para {$student['first_name']} {$student['last_name']}":'';
     return ['reply'=>"Te llevo a «{$cmd}»{$name} — confirmas ahí y queda registrado.",
