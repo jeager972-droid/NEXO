@@ -68,6 +68,7 @@ const Operation = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeCommand, setActiveCommand] = useState(null);
+  const [preselect, setPreselect] = useState(null);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +108,14 @@ const Operation = () => {
     const cmdTitle = searchParams.get('cmd');
     if (cmdTitle) {
       const found = filteredCommands.find((c) => c.title === cmdTitle);
-      if (found) setActiveCommand(found);
+      if (found) {
+        // Capturar TODOS los params antes de limpiar la URL — el chip del
+        // chat trae student/group pre-cargados («cita al acudiente de X»)
+        const sid = searchParams.get('student');
+        const grp = searchParams.get('group');
+        if (sid || grp) setPreselect({ student: sid || '', group: grp || '' });
+        setActiveCommand(found);
+      }
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams, filteredCommands]);
@@ -158,7 +166,8 @@ const Operation = () => {
           command={activeCommand}
           groups={groups}
           students={students}
-          onClose={() => setActiveCommand(null)}
+          preselect={preselect}
+          onClose={() => { setActiveCommand(null); setPreselect(null); }}
           fetchError={fetchError}
         />
       )}
@@ -166,7 +175,7 @@ const Operation = () => {
   );
 };
 
-const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
+const CommandForm = ({ command, groups, students, preselect, onClose, fetchError }) => {
   const [form, setForm] = useState({});
   const [targetUsers, setTargetUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -178,6 +187,30 @@ const CommandForm = ({ command, groups, students, onClose, fetchError }) => {
   const currentStep = result ? 2 : 1;
 
   const updateField = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+
+  // Deep-link del chat: pre-rellena estudiante (y su grupo/grado) para que
+  // «cita al acudiente de Tomás» abra el formulario ya apuntando a Tomás.
+  useEffect(() => {
+    if (!preselect || !students.length) return;
+    setForm((f) => {
+      const next = { ...f };
+      if (preselect.student) {
+        const st = students.find((s) => (s.student_id || s.id) === preselect.student);
+        if (st) {
+          next.student = preselect.student;
+          const g = st.group_name || st.group || '';
+          if (g) next.group = g;
+          const grade = String(g).match(/^(\d+)/)?.[1];
+          if (grade) next.grade = grade;
+        } else {
+          next.student = preselect.student;
+        }
+      } else if (preselect.group) {
+        next.group = preselect.group;
+      }
+      return next;
+    });
+  }, [preselect, students]);
 
   useEffect(() => {
     if (command.fields.includes('targets') && form.targetRole) {

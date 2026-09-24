@@ -13,6 +13,7 @@ import { chatApi } from '../api/chat';
 import { saveCtx, injectCtx } from '../lib/chatContext';
 import { NexoAvatar } from '../components/patterns/NexoChat';
 import { Surface } from '../components/ui/Surface';
+import { EXPORT_FORMATS } from '../utils/exporters';
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -52,6 +53,25 @@ const UserBubble = ({ children }) => (
     </div>
   </div>
 );
+
+/** Las acciones export descargan la card del mensaje con los exporters del cliente. */
+const runExportAction = (a, msg) => {
+  const card = msg?.cards?.[a.card ?? 0];
+  if (!card?.rows?.length) return;
+  const columns = card.columns?.length
+    ? card.columns
+    : card.rows[0]?.map((_, i) => `col_${i + 1}`);
+  const spec = {
+    title: a.title || card.title || 'Exportación NEXO',
+    // las cards llevan filas planas → objetos indexados por nombre de columna
+    rows: card.rows.map((r) =>
+      Array.isArray(r) ? Object.fromEntries(columns.map((c, i) => [c, r[i]])) : r),
+    columns,
+    from: a.from,
+    to: a.to,
+  };
+  EXPORT_FORMATS.find((f) => f.id === a.format)?.run(spec);
+};
 
 const CARD_PAGE = 10;
 const cellText = (v) => (v === null || v === undefined ? '—' : String(v));
@@ -146,7 +166,7 @@ const BotBubble = ({ msg, onAction }) => (
               <button
                 key={i}
                 type="button"
-                onClick={() => onAction(a)}
+                onClick={() => onAction(a, msg)}
                 className="flex items-center gap-1.5 rounded-full border border-[var(--nx-accent)] bg-[var(--nx-subtle-bg-accent)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--nx-accent)] transition-colors hover:bg-[var(--nx-surface-accent)]"
               >
                 {a.label} <ArrowRight size={12} />
@@ -241,8 +261,9 @@ const Chat = () => {
     }
   }, [input, thinking, sessionId]);
 
-  const onAction = (a) => {
+  const onAction = (a, msg) => {
     if (a.kind === 'nav' && a.to) navigate(a.to);
+    if (a.kind === 'export') runExportAction(a, msg);
   };
 
   return (
