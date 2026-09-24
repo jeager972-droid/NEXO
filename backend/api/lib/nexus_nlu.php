@@ -315,6 +315,11 @@ function nxSlots(string $q): array {
     // no-justificado: «sin excusa», «sin justificar», «sin permiso»
     if (preg_match('/\b(sin excusa|sin justificar|injustificad\w*|sin permiso|sin autorizar|sin autorizacion)\b/u', $q))
         $s['_unjustified'] = true;
+    // excusa explícita — «con excusa», «justificadas», «las que tienen
+    // excusa» → filtro justified=yes (el contrario ya quedó en _unjustified)
+    if (!empty($s['_unjustified'])) $s['justified'] = 'no';
+    elseif (preg_match('/\b(con excusa|con justificacion|tiene excusa|tienen excusa|justificad\w*|excusad[oa]s?|las excusadas|los excusados)\b/u', $q))
+        $s['justified'] = 'yes';
     // negación de asistencia — la ausencia no es el ingreso
     if (empty($s['module']) && preg_match('/\b(no llegaron|no vinieron|no entraron|no asistieron|no se present|faltaron|ausentes)\b/u', $q))
         $s['module'] = 'INASISTENCIA';
@@ -339,8 +344,12 @@ function nxSlots(string $q): array {
     return $s;
 }
 
-function nxExtractStudent(string $q): ?string {
-    static $stop = ['grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
+/* Vocabulario que NUNCA puede ser nombre de estudiante — lo usan tanto el
+ * extractor determinista (nxExtractStudent) como el sanitizador de entidades
+ * del parser LLM (nexus_llm.php) para rechazar «llegadas», «fechas»… que el
+ * modelo pegue como student. */
+function nxStudentStopwords(): array {
+    return ['grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
         'mes','ano','dias','dia','el','la','los','las','un','una','este','esta','esto',
         'eso','mi','tu','su','mis','tus','sus','que','cual','cuales','cuanto','cuanta',
         'cuantos','cuantas','dime','dame','muestrame','ver','hay','tiene','tienen',
@@ -384,8 +393,10 @@ function nxExtractStudent(string $q): ?string {
         'chico','chicos','chica','chicas','muchacho','muchachos','muchacha',
         'muchachas','pelado','pelados','pelada','peladas','menor','menores',
         'chino','chinos','china','chinas','ninios','ninias','onceavo','undecimo',
-          'tardanza','inasistencia','evasion','ausencia','falta','permiso',
-         'citacion','familia','familiar','pariente','parientes',
+          'tardanza','tardanzas','inasistencia','inasistencias','evasion',
+         'evasiones','ausencia','ausencias','falta','faltas','permiso',
+         'permisos','llegada','llegadas','llegado','llegados',
+         'citacion','citaciones','familia','familiar','pariente','parientes',
         # adjetivos de estado del estudiante — «alumnos exentos» no es persona
          'exento','exentos','exenta','exentas','eximido','eximidos','dispensado',
          'dispensados','presente','presentes','ausente','ausentes','tarde','puntual',
@@ -475,8 +486,20 @@ function nxExtractStudent(string $q): ?string {
         // verbos de consulta/comparación — «compara las tardanzas de 10A»
         // no nombra a nadie; «compara» es operación, no apellido
         'compara','comparar','comparame','comparacion','comparativa','versus',
-        'vs','contra','diferencia','diferencias','mide','miden','evalua'];
-    $boundary = '(?:\s+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y)\b|$)';
+        'vs','contra','diferencia','diferencias','mide','miden','evalua',
+        // columnas/detalle pedido — «fechas y motivo», «cantidad y aumento»
+        // jamás son apellido; se pegan al final del nombre si no se cortan
+        'fecha','fechas','motivo','motivos','razon','razones','causa','causas',
+        'detalle','detalles','cantidad','aumento','aumentos','total','totales',
+        'conteo','conteos','suma','sumas','promedio','promedios','media',
+        'autorizado','autorizada','autorizados','autorizadas','justificada',
+        'justificadas','justificado','justificados','excusa','excusas'];
+}
+
+function nxExtractStudent(string $q): ?string {
+    static $stop = null;
+    if ($stop === null) $stop = nxStudentStopwords();
+    $boundary = '(?:[\s,;.!?]+(?:del|de|en|grupo|salon|durante|en los|en las|hoy|ayer|esta|ultimos|en el|por|que|y|los|las|con)\b|,|;|\.|!|\?|[\s,;.!?]*$)';
     $cands = [];
     foreach ([
         // marcador de persona explícito — «la niña camila», «el muchacho
@@ -809,7 +832,7 @@ function nxIntentRoles(): array {
         'my_activity' => $ALL,
         'failed_messages' => ['RECTOR','COORDINATOR','SECRETARY'],
         'risk_config' => ['RECTOR','COORDINATOR'],
-        'attendance_ranking' => ['RECTOR','COORDINATOR','COUNSELOR','SECRETARY'],
+        'attendance_ranking' => $STAFF,
         'session_summary' => $ALL,
         'pending_tasks' => $ALL,
         'whatsapp_status' => ['RECTOR','COORDINATOR','SECRETARY'],
@@ -1293,9 +1316,15 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             if (empty($slots['group']) && !empty($ctxEntities['group'])) {
                 $slots['group'] = $ctxEntities['group']; $inherited[] = 'group';
             }
+            // el rango completo se hereda — «y llegadas tarde?» tras «últimos
+            // 15 días» NO debe reiniciar a «hoy» (bug visto en producción)
             if (($slots['days'] ?? null) === null && isset($ctxEntities['days'])) {
                 $slots['days'] = $ctxEntities['days']; $inherited[] = 'days';
             }
+            foreach (['from','to','range_label'] as $rk)
+                if (empty($slots[$rk]) && !empty($ctxEntities[$rk])) {
+                    $slots[$rk] = $ctxEntities[$rk]; $inherited[] = $rk;
+                }
             $intent = $lastIntent; $inherited[] = 'intent';
             $turnType = 'context_modify';
         }
@@ -1352,6 +1381,66 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 $intent = $lastIntent; $inherited[] = 'intent';
                 $turnType = 'context_modify';
             }
+        }
+
+        // ── 2a′. Sustantivo de módulo → intent dedicado ──────────────────
+        // «permisos que ha tenido X», «las citaciones del mes», «los
+        // seguimientos activos» — con el parser caído quedan out_of_scope
+        // aunque el sustantivo ya define la consulta. El bloque opVerb
+        // posterior sigue pudiendo rerutar a derive_action («genera un
+        // permiso»), por eso este rescate no se aplica si hay verbo de op.
+        if (in_array($intent, ['out_of_scope','smalltalk','foreign_culture','deictic','yes','math_operation','random_student'], true)
+            && !empty($slots['module'])
+            && !preg_match('/\b(genera\w*|crea\w*|citar|cita\b|citas\b|cite|citemos|citalo|citala|citamos|convoca\w*|autoriza\w*|derivar|deriva\b|derivo\b|derive\b|deriven\b|reporta\w*|registra\w*|emite\w*|tramita\w*|haz|hacer|mandar|manda|envia\w*|expide\w*|expedir|llamar|llamado|exporta\w*|descarga\w*|saca\w*)\b/u', $q0)) {
+            $modIntent = ['PERMISO'=>'permissions','CITACION'=>'citations',
+                'SEGUIMIENTO'=>'trackings','SOS'=>'sos_alerts',
+                'INASISTENCIA'=>'list_events','LATE_ARRIVAL'=>'list_events',
+                'EVASION_INTERNA'=>'list_events','INCIDENTE'=>'list_events',
+                'SALIDA_ANTICIPADA'=>'list_events','SALIDA_PEDAGOGICA'=>'list_events'];
+            if (isset($modIntent[$slots['module']])) {
+                $intent = $modIntent[$slots['module']];
+                // «cuántas tardanzas» es conteo, no listado
+                if ($intent === 'list_events'
+                    && preg_match('/\b(cuantos|cuantas|cuanto|numero de|total de|cantidad de)\b/u', $q0))
+                    $intent = 'count_events';
+                $turnType = 'context_modify';
+            }
+            // «compara/ranking/cantidad y aumento … por grupo(s)» — la
+            // comparación entre grupos es attendance_ranking, no una lista
+            if ($intent === 'list_events'
+                && preg_match('/\b(compara\w*|comparativo|ranking|top|orden\w*|cantidad|aumento|vs\.?|versus|entre)\b/u', $q0)
+                && preg_match('/\b(grupos?|cursos?|salones?|grados?)\b/u', $q0)) {
+                $intent = 'attendance_ranking';
+                $slots['group_by'] = 'group';
+                if (preg_match('/\b(aumento|subi|baj|increment|comparad|cantidad)\b/u', $q0))
+                    $slots['trend'] = true;
+                if (preg_match('/\b(decim\w*|grado\s*10)\b/u', $q0)) $slots['grade'] = '10';
+                $turnType = 'context_modify';
+            }
+        }
+        // «¿alguno tiene excusa? / ¿cuáles están justificadas?» — filtro de
+        // excusa sobre la consulta activa; hereda intent+rango y fija
+        // justified según la polaridad («con excusa» vs «sin justificar»)
+        if (in_array($intent, ['out_of_scope','smalltalk','deictic','yes','random_student','list_events','incidents.list','count_events'], true)
+            && $inheritable
+            && preg_match('/\b(excusa\w*|justificad\w*)\b/u', $q0)) {
+            $slots['justified'] = (!empty($slots['_unjustified'])
+                || preg_match('/\b(sin excusa|sin justificar|injustificad|no justificad|ningun\w*\s+excusa|no tienen excusa|sin una excusa)\b/u', $q0))
+                ? 'no' : 'yes';
+            if (in_array($intent, ['out_of_scope','smalltalk','deictic','yes','random_student'], true)) {
+                $intent = $lastIntent; $inherited[] = 'intent';
+            }
+            $turnType = 'context_modify';
+        }
+        // «los grupos que tengo a mi cargo / mis grupos» — alcance del
+        // docente, nunca un estudiante. Gana sobre la herencia de tema:
+        // pedir los grupos propios es sujeto nuevo explícito aunque el
+        // turno anterior fuese una lista de incidentes.
+        if (!empty($slots['_my_scope'])
+            && preg_match('/\b(grupos?|cursos?|salones?)\b/u', $q0)
+            && !preg_match('/\b(tardanza|llegada|inasist|falt|ausen|evasion|fuga|permiso|citacion|incidente|evento|alerta|seguim|sos\b)/u', $q0)
+            && in_array($intent, ['out_of_scope','smalltalk','deictic','student_field','students_in_group','group_summary','random_student','list_events','incidents.list','count_events','attendance_today','late_today','students.list'], true)) {
+            $intent = 'groups_list'; $turnType = 'context_modify';
         }
 
         // ── 2b. Posesivos / pronombres → entidad del contexto ────────────

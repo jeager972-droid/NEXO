@@ -681,7 +681,8 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     // estudiante → acudiente ya lo cubre student_field; acudiente→estudiante vía ctx.
 
     // ── tiempo (slots ya calculan days/from/to) ───────────────────────────
-    foreach (['group','student','module','days','from','to','range_label','field'] as $k)
+    foreach (['group','student','module','days','from','to','range_label','field',
+              'justified','status','group_by','trend','scope','grade'] as $k)
         if (isset($slots[$k]) && $slots[$k] !== '' && $slots[$k] !== null) $sig['filters'][$k]=$slots[$k];
     $gs = nxSemGroups($q0);
     if (!empty($slots['group'])) {
@@ -968,6 +969,12 @@ function nxSemSplitCompound(string $q0): array {
     $parts = preg_split($pat, ' ' . $q0 . ' ', -1, PREG_SPLIT_NO_EMPTY);
     if (count($parts) < 2) return [$q0];
     $out = [];
+    // «y» entre sustantivos de DETALLE es enumeración de columnas de la
+    // misma petición («fechas y motivo», «cantidad y aumento», «nombre y
+    // apellido») — NO una cláusula nueva. Sin esta guardia, «motivo los
+    // últimos 15 días» se convertía en una consulta fantasma (bug real:
+    // doble respuesta «No hay permisos» + «¿Frecuencia de qué?»).
+    $detailNoun = '/^(la |las |el |los |su |sus |un |una |unos |unas )?(fecha|fechas|motivo|motivos|cantidad|aumento|disminucion|nombre|nombres|apellido|apellidos|hora|horas|documento|telefono|celular|estado|autorizado|autorizad[oa]s?|total|totales|porcentaje|promedio|conteo|nota|notas|edad|grado|jornada|dia|dias|mes|meses|semana|semanas|excusa|excusas|justificacion)\b/u';
     foreach ($parts as $c) {
         $c = trim($c);
         if ($c === '') continue;
@@ -975,6 +982,11 @@ function nxSemSplitCompound(string $q0): array {
         if (preg_match('/^\d{1,2}[-\s]?[a-z]$/u', $c) && $out) { $out[count($out)-1] .= ' y ' . $c; continue; }
         // ni ordinales coordinados («primero y segundo» = misma posición)
         if (preg_match('/^(primer|segund|tercer|ultim|penultim|anterior|siguiente)[oa]?\b/u', $c) && $out) { $out[count($out)-1] .= ' y ' . $c; continue; }
+        // ni pares de sustantivos de detalle coordinados
+        if ($out && preg_match($detailNoun, $c)
+            && preg_match('/(fecha|fechas|motivo|motivos|cantidad|aumento|disminucion|nombre|nombres|apellido|apellidos|hora|horas|documento|telefono|celular|estado|total|totales|porcentaje|promedio|conteo|nota|notas|edad|grado|jornada|dia|dias|mes|meses|semana|semanas|excusa|excusas|justificacion|dato|datos)s?\s*$/u', $out[count($out)-1])) {
+            $out[count($out)-1] .= ' y ' . $c; continue;
+        }
         $out[] = $c;
     }
     // solo es compuesto si ≥2 cláusulas tienen señal propia (verbo/sustantivo/
@@ -1818,14 +1830,43 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
     }
     if (!empty($f['student'])) {
         $st = chatResolveStudent($conn, $u, $f['student']);
-        if ($st && count($st)===1) { $w[]='ai.student_id = :stuid'; $p[':stuid']=$st[0]['student_id']; }
+        // el filtro de estudiante es DURO: si no resuelve o hay homónimos,
+        // NUNCA se descarta en silencio — un volcado escolar sin filtro
+        // presentaría datos de otros estudiantes como si fueran los pedidos
+        if (!$st) return ['reply'=>"No encuentro a «{$f['student']}» dentro de tu alcance — revisa el nombre o dime su grupo.",
+                          'intent'=>'incidents.list','_plan'=>$plan];
+        if (count($st) > 1) {
+            $opts = array_map(fn($x)=>($x['first_name']??'').' '.($x['last_name']??'').' ('.($x['group_name']??'?').')', array_slice($st,0,5));
+            return ['reply'=>"Hay varios estudiantes con ese nombre: " . implode(' · ', $opts) . ". ¿De cuál hablas?",
+                    'intent'=>'clarify','_plan'=>$plan];
+        }
+        $w[]='ai.student_id = :stuid'; $p[':stuid']=$st[0]['student_id'];
+        $plan['_student_name'] = trim(($st[0]['first_name']??'').' '.($st[0]['last_name']??''));
+    }
+    // excusa — risk_justifications por (student, tipo, fecha del incidente)
+    $justCol = '';
+    $hasJJoin = !empty($f['justified']);
+    if ($hasJJoin) {
+        $justCol = ', rj.reason AS excuse';
+        if ($f['justified'] === 'no') $w[] = 'rj.justification_id IS NULL';
+    } elseif (!empty($f['module']) && $f['module'] !== 'INCIDENTE') {
+        $justCol = ", (SELECT rj2.reason FROM risk_justifications rj2
+            WHERE rj2.student_id = ai.student_id AND rj2.incident_type = ai.incident_type
+              AND rj2.incident_date = ai.detected_at::date AND rj2.school_id = ai.school_id
+            LIMIT 1) AS excuse";
     }
     $sql = "SELECT ai.incident_id, ai.incident_type, ai.detected_at,
                    s.first_name||' '||s.last_name AS sname, s.document_number, ag.group_name
+                   {$justCol}
             FROM attendance_incidents ai
             JOIN students s ON s.student_id = ai.student_id AND s.deleted_at IS NULL
             LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
             LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+            " . (!empty($f['justified']) && $f['justified']==='yes'
+                ? "JOIN risk_justifications rj ON rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date AND rj.school_id=ai.school_id"
+                : ($hasJJoin
+                    ? "LEFT JOIN risk_justifications rj ON rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date AND rj.school_id=ai.school_id"
+                    : '')) . "
             WHERE " . implode(' AND ', $w) . " {$scope['sql']}
             ORDER BY ai.detected_at ASC LIMIT 400";
     $stmt = $conn->prepare($sql);
@@ -1845,11 +1886,19 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
     }
     $typLbl = NX_MODULE_LABEL[$f['module'] ?? ''] ?? 'eventos';
     $gl = $plan['_group_name'] ?? ($f['group'] ?? 'el colegio');
+    // columna de excusa cuando la consulta la pide o filtra por ella
+    $withExcuse = !empty($f['justified']) || $justCol !== '';
+    $cols = ['#','Estudiante','Grupo','Tipo','Fecha'];
+    if ($withExcuse) $cols[] = 'Excusa';
     $rs = ['type'=>'incidents','label'=>$typLbl,'entity'=>'incidents','order'=>'fecha (antiguo→reciente)',
-        'count'=>$n,'columns'=>['#','Estudiante','Grupo','Tipo','Fecha'],
+        'count'=>$n,'columns'=>$cols,
         'items'=>array_map(fn($r)=>['id'=>$r['incident_id'],'label'=>$r['sname'],
             'sub'=>$typLbl.' · '.substr($r['detected_at'],0,16)],$rows),
-        'rows'=>array_map(fn($i,$r)=>[$i+1,$r['sname'],$r['group_name']?:'—',$typLbl,substr($r['detected_at'],0,16)],array_keys($rows),$rows)];
+        'rows'=>array_map(function($i,$r) use ($withExcuse,$typLbl){
+            $row=[$i+1,$r['sname'],$r['group_name']?:'—',$typLbl,substr($r['detected_at'],0,16)];
+            if ($withExcuse) $row[] = !empty($r['excuse']) ? $r['excuse'] : 'Sin excusa';
+            return $row;
+        },array_keys($rows),$rows)];
     if ($plan['op']==='count')
         return ['reply'=>nxVary(["Se registran {$n} {$typLbl} en el rango.","Hay {$n} {$typLbl} en el rango.","El conteo da {$n} {$typLbl}."], $u['id'].$typLbl),
                 'intent'=>'incidents.count','entities'=>array_filter(['group'=>$plan['_group_name']??null,'module'=>$f['module']??null]),

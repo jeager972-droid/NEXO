@@ -239,6 +239,19 @@ BEGIN
     SELECT '77777777-7777-4777-8777-7777777777a9', '66666666-6666-4666-8666-6666666600a9', 'MADRE', TRUE
     WHERE NOT EXISTS (SELECT 1 FROM guardian_student_relationships WHERE guardian_id='77777777-7777-4777-8777-7777777777a9' AND student_id='66666666-6666-4666-8666-6666666600a9');
 
+    -- ── Excusa justificada (caso excusa: «¿alguno tiene excusa?») ──────
+    -- Tomás Castaño: inasistencia de hoy con justificación médica —
+    -- habilita el filtro justified=yes/no del chat.
+    INSERT INTO attendance_incidents(incident_id, school_id, student_id, group_id, incident_type, detected_at)
+    SELECT uuid_generate_v4(), v_school, '66666666-6666-4666-8666-6666666600a1', v_g10a, 'INASISTENCIA', NOW()
+    WHERE NOT EXISTS (SELECT 1 FROM attendance_incidents WHERE student_id='66666666-6666-4666-8666-6666666600a1'
+                      AND incident_type='INASISTENCIA' AND detected_at::date = CURRENT_DATE);
+    INSERT INTO risk_justifications(school_id, student_id, incident_type, incident_date, justified_by, justification_type, reason, justified_at)
+    SELECT v_school, '66666666-6666-4666-8666-6666666600a1', 'INASISTENCIA', CURRENT_DATE,
+           '55555555-5555-4555-8555-555555555552', 'medico', 'Cita médica con soporte', NOW()
+    WHERE NOT EXISTS (SELECT 1 FROM risk_justifications WHERE student_id='66666666-6666-4666-8666-6666666600a1'
+                      AND incident_type='INASISTENCIA' AND incident_date = CURRENT_DATE);
+
     -- ── Ingresos de hoy (presentes hoy — coherente con el resto) ────────
     FOR s IN SELECT student_id FROM students WHERE school_id=v_school AND document_number IN ('8107','8108') LOOP
         INSERT INTO biometric_events(event_id, school_id, student_id, device_id, event_type, event_result, confidence_score, event_timestamp)

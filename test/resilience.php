@@ -24,9 +24,16 @@ $dt = (microtime(true) - $t0) * 1000;
 ok($c['intent'] === 'out_of_scope', 'sin parser → out_of_scope: ' . $c['intent']);
 ok(($c['source'] ?? '') === 'none' || ($c['fallback'] ?? false), 'marcado como fallback');
 ok($dt < 3000, "sin espera de red ({$dt}ms < 3000)");
+// con parser caído, un sustantivo de módulo recupera determinista el intent
+// de su consulta («cuántas tardanzas» → count_events) — eso es resiliencia
+// reglada, no invención: fuera de dominio sigue siendo out_of_scope
 $i = nxDialogueResolve($c, null, nxNorm('cuantas tardanzas hubo hoy'));
-ok(in_array($i['resolved']['intent'], ['out_of_scope'], true),
-   'DSM no inventa un intent: ' . $i['resolved']['intent']);
+ok(in_array($i['resolved']['intent'], ['count_events','list_events'], true),
+   'DSM recupera intent de dominio sin parser: ' . $i['resolved']['intent']);
+$c2 = nxClassify('de que color es el cielo de noche');
+$i2 = nxDialogueResolve($c2, null, nxNorm('de que color es el cielo de noche'));
+ok($i2['resolved']['intent'] === 'out_of_scope',
+   'fuera de dominio sigue honesto: ' . $i2['resolved']['intent']);
 putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json'); // restaurar replay
 
 echo "\n── Contexto corrupto ──\n";

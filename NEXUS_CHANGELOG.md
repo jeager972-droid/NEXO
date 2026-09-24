@@ -282,3 +282,56 @@ Notas honestas: rate-limit 60/10min real — `chat_rl:{uid}` se limpia en Redis 
 - Gate: +G20 golden §15 bloqueante; health-check con ignore_errors (503 de worker ≠ API caída); reset de rate-limit entre suites live.
 - §22: comparación A/B/C/D registrada en NEXUS_DECISIONS.md D010 — híbrido con frame como autoridad.
 - Held-out ampliado a 20 conversaciones / 53 turnos: 53/53.
+
+## 2026-09-24 — CORRECCIONES DE TRANSCRIPCIÓN REAL (producción)
+
+De la sesión live del usuario (docente real, dataset producción). Fallos
+reproducidos contra fixture local y corregidos:
+
+- **`student:"llegadas"` / `"tomas … fechas"`**: doble capa — (a)
+  `nxStudentStopwords()` ahora exporta el vocabulario de dominio y cubre
+  llegada(s)/tardanza(s)/excusa/fechas/motivo/cantidad/aumento…; (b) el
+  sanitizador de entidades del parser (`nexus_llm.php`) recorta stopwords
+  de cabeza/cola en `student`/`person` y descarta valores sin nombre real;
+  (c) el boundary del extractor acepta puntuación (`,`) como fin de nombre.
+- **Filtro de estudiante descartado → 400 filas del colegio**: el ejecutor
+  semántico `incidents.list` ignoraba silenciosamente el filtro cuando el
+  nombre no resolvía → ahora falla honesto («no encuentro a X») en vez de
+  presentar datos del colegio entero como si fueran del estudiante.
+- **`_ds.intent` guardaba la capability (`incidents.list`)** → la herencia
+  moría (`NX_QUERY_INTENTS` no la reconocía) → «y llegadas tarde?» caía a
+  out_of_scope. `chatBuildDs` traduce capability→intent conversacional.
+- **Permisos/citaciones/seguimientos por estudiante con rango**: handlers
+  reales — `chat_permissions` une `class_exit_authorizations` +
+  `school_exit_authorizations` con motivo/fechas/retorno/autorizó;
+  `chat_citations` lista filas reales de `twilio_messages` (type CITACION);
+  `chat_trackings` filtra por estudiante/estado. Antes: solo «activos
+  ahora» o un COUNT — y el planner semántico los secuestraba a
+  `incidents.list` (gate `chatNative` ampliado).
+- **Excusa (`risk_justifications`)**: slot `justified` (parser + nxSlots),
+  join LEFT con `reason`, filtro yes/no y columna «Excusa» en
+  `incidents.list`/`chat_list_events`. «¿alguno tiene excusa?» /
+  «¿cuáles no tienen excusa?» heredan módulo+rango (verificado:
+  19 total = 18 sin excusa + 1 justificada).
+- **Comparación por grupo + tendencia**: rescate determinista
+  `cantidad/aumento/compara … por grupo` → `attendance_ranking` con
+  `group_by=group`, `trend` (período actual vs anterior, columna Δ) y
+  `grade` («grupos décimos» → 10). RBAC `attendance_ranking` abierto a
+  docente (scope `mine` vía `teacher_group_access` cuando dice «a mi
+  cargo»). Bug de alias: `chatScope` emite `s.student_id` y el ranking
+  usaba `ai` → SQL roto para docente; corregido.
+- **Rescate módulo→intent sin parser** (DSM §2a′): sustantivo de módulo
+  (PERMISO/CITACION/SEGUIMIENTO/módulos de incidente) con parser caído
+  recupera `permissions`/`citations`/`trackings`/`list_events` —
+  «cuántas» → `count_events`. Verbos de operación/exportación excluidos
+  (siguen yendo a `derive_action`/`export_data`). Contrato de resiliencia
+  actualizado: dominio recupera reglado, fuera-de-dominio sigue honesto.
+- **`los grupos que tengo a mi cargo`** → `groups_list`/`scope=mine` —
+  sujeto nuevo explícito que gana sobre la herencia del tema.
+- **Splitter compuesto**: «fechas y motivo», «cantidad y aumento» son
+  enumeraciones de columnas, no cláusulas — sin más «¿Frecuencia de qué?»
+  fantasma ni metas-pendientes espurias.
+- Fixture: justificación médica sembrada para Tomás (habilita probar el
+  filtro de excusa); `test/live_probe_student.php` reproduce la
+  transcripción; resiliencia 16/16, DSM 60/60, capability 150/150,
+  real_conversation 381/381.

@@ -185,11 +185,11 @@ DATOS ESCOLARES: students_in_group=lista estudiantes de grupo|students_count=tot
 
 SOCIAL/GENERAL: greeting|greeting_time=buenos días/tardes/noches|wellbeing=cómo estás|wellbeing_reply|thanks|goodbye|yes|no|apology|compliment|insult|insult_back=insulto al bot|joke|fun_fact|story|sing|dance|bored|love=cariño al BOT|emotion_sad|motivation|human_check=eres humano/IA|do_for_me|confused|repeat|weather|news_sports|food_music|meaning_life|age|creator|about_nexus|name_meaning|time|date|math_operation|colombia_capital|colombia_department|colombia_president|colombia_history|colombia_geography|colombia_culture|colombia_fun_fact|foreign_culture|out_of_scope=nada encaja
 
-entities (todas opcionales, null si no aplican): student=nombre estudiante|group="8-B","10A","sexto"|module=INASISTENCIA|LATE_ARRIVAL|EVASION_INTERNA|PERMISO|SALIDA_ANTICIPADA|INCIDENTE|SEGUIMIENTO|CITACION|field=documento|celular|acudiente|grupo|jornada|nacimiento|estado|days=N|from/to=fecha ISO|person=docente/acudiente|grade|shift=mañana|tarde|nav=first|last|nth:N|others|all|another ("el primero","los demás","otro")|relation=guardian|phone|document|group|schedule|risk (qué dato se pide del referente)|presentation=table|summary ("en tabla","en cuadro")|export_format=excel|pdf|word|csv|compare=["10-A","10-B"]|search=texto libre|range_label="el mes pasado"
+entities (todas opcionales, null si no aplican): student=nombre estudiante|group="8-B","10A","sexto"|module=INASISTENCIA|LATE_ARRIVAL|EVASION_INTERNA|PERMISO|SALIDA_ANTICIPADA|INCIDENTE|SEGUIMIENTO|CITACION|field=documento|celular|acudiente|grupo|jornada|nacimiento|estado|days=N|from/to=fecha ISO|person=docente/acudiente|grade|shift=mañana|tarde|nav=first|last|nth:N|others|all|another ("el primero","los demás","otro")|relation=guardian|phone|document|group|schedule|risk (qué dato se pide del referente)|presentation=table|summary ("en tabla","en cuadro")|export_format=excel|pdf|word|csv|compare=["10-A","10-B"]|search=texto libre|range_label="el mes pasado"|group_by=group|student|weekday|day|month (eje de agregación: "por grupo","por estudiante","por día de la semana","por mes")|trend=true ("aumento","subió","bajó","comparado con antes" = comparar con el período anterior)|justified=yes|no ("con excusa","justificadas","sin justificar" — excusas de incidentes)|status=active|completed|pending|all ("activos","vigentes"=active; "que ha tenido","del mes"=all+range)|scope=mine ("mis grupos","los que tengo a mi cargo","de mi grupo" — NUNCA emitas group=ALL ni "mis")|detail=["fechas","motivo","autorizado_por","estado"] (columnas pedidas explícitas)|needs=["student","group","range"] (slots que faltan cuando el mensaje es ambiguo — para aclaración dirigida)
 
 SAFETY: safety="risky" si el mensaje insinúa atracción/romance hacia estudiantes o menores, sexualización, daño a menores, falsificar/eliminar registros, extraer credenciales o abusar de datos personales. Es un flag general — NUNCA un intent específico. Si risky, intent=security_probe.
 
-REGLAS: acudiente/padre/madre de <estudiante o "el niño que..."> → student_field field=acudiente; "el niño/estudiante que llegó tarde/faltó/está en X" cuenta como estudiante (no out_of_scope); padres/acudientes de un grupo → students_in_group; permisos pendientes → permissions; no marcaron entrada → attendance_today; comparar grupos → attendance_ranking + entities.compare; dato+social juntos → intent del dato; pronombres/posesivos (él, ella, su, sus, este, ese, aquel, le, les) NUNCA van en entities — si el mensaje se refiere a alguien del CONTEXTO (turnos/entidades previas que recibes en el JSON), SÍ puedes copiar ese nombre a student/person/group y marcar uses_context=true; referencia posicional ("el primero","el último","los demás","el segundo","la primera que me mostraste") → nav; cuando emites nav/position NO copies student del contexto — el nav ES el sujeto; «<incidente> de <persona>» sin verbo → count_events; «los que <verbo>» → list_events; pedir tabla/formato → presentation=table SIN cambiar el intent de datos; exportar/descargar → export_data + export_format; verbos de OPERACIÓN (citar, convocar, generar permiso, derivar, reportar, registrar salida, autorizar salida) → derive_action con entities.op («Citar acudiente», «Generar permiso», «Solicitar seguimiento», «Reportar incidente», «Autorizar salida»…) — NUNCA student_field aunque mencione acudiente/estudiante; frecuencia por día de la semana/por fecha → frequency_table; fragmentos de seguimiento («y del mes», «y ayer», «y los del 8B») → confidence≤0.5; ambiguo real → confidence<0.6. Solo JSON.
+REGLAS: acudiente/padre/madre de <estudiante o "el niño que..."> → student_field field=acudiente; "el niño/estudiante que llegó tarde/faltó/está en X" cuenta como estudiante (no out_of_scope); padres/acudientes de un grupo → students_in_group; permisos pendientes/activos → permissions status=active; "permisos/citaciones/seguimientos que ha tenido X" o con rango → permissions/citations/trackings status=all + student + range — NUNCA uses el sentido "activos ahora" si piden historial; no marcaron entrada → attendance_today; comparar grupos/rankings → attendance_ranking + entities.compare o grade ("grupos décimos"→grade="10"); dato+social juntos → intent del dato; pronombres/posesivos (él, ella, su, sus, este, ese, aquel, le, les) NUNCA van en entities — si el mensaje se refiere a alguien del CONTEXTO (turnos/entidades previas que recibes en el JSON), SÍ puedes copiar ese nombre a student/person/group y marcar uses_context=true; referencia posicional ("el primero","el último","los demás","el segundo","la primera que me mostraste") → nav; cuando emites nav/position NO copies student del contexto — el nav ES el sujeto; «<incidente> de <persona>» sin verbo → count_events; «los que <verbo>» → list_events; "con excusa/sin excusa/justificadas" → justified=yes|no en list_events; pedir tabla/formato → presentation=table SIN cambiar el intent de datos; exportar/descargar → export_data + export_format; verbos de OPERACIÓN (citar, convocar, generar permiso, derivar, reportar, registrar salida, autorizar salida) → derive_action con entities.op («Citar acudiente», «Generar permiso», «Solicitar seguimiento», «Reportar incidente», «Autorizar salida»…) — NUNCA student_field aunque mencione acudiente/estudiante; frecuencia por día de la semana/por fecha → frequency_table + group_by=weekday|student|group|day; "cantidad y aumento"/"comparado"/"subió o bajó" → trend=true; nombres de evento (tardanzas, llegadas, inasistencias, evasiones, permisos) NUNCA son student; fragmentos de seguimiento («y del mes», «y ayer», «y los del 8B», «y sus X») → copia el tema del contexto, confidence≤0.5; ambiguo real → confidence<0.6 + needs con los slots faltantes. Solo JSON.
 PROMPT;
 }
 
@@ -201,13 +201,16 @@ PROMPT;
 function nxLlmClassify(string $text, ?array $ctx = null): ?array {
     $c = nxLlmCfg();
     if (!nxLlmEnabled()) return null;
-    // El parser recibe contexto resumido (§7.4): últimos turnos + entidades
-    // activas + descriptor del result-set — resuelve «y su acudiente» sin
-    // depender solo del DSM. Nunca filas crudas: solo nombres/etiquetas.
+    // El parser recibe la SESIÓN COMPLETA resumida (§7.4): hasta N turnos
+    // recientes + entidades activas + descriptor del result-set — el LLM
+    // sostiene el hilo («y sus inasistencias», «de la primera») sin depender
+    // solo del DSM. Nunca filas crudas: solo nombres/etiquetas.
+    // NLU_LLM_CTX_TURNS controla la ventana (default 20 ≈ 40 mensajes).
     $userMsg = ['text' => $text];
     if ($ctx) {
         $cx = [];
-        foreach (array_slice($ctx['turns'] ?? [], -3) as $t) {
+        $maxTurns = max(3, min(40, (int)(getenv('NLU_LLM_CTX_TURNS') ?: 20)));
+        foreach (array_slice($ctx['turns'] ?? [], -$maxTurns) as $t) {
             $cx['turns'][] = ['u' => mb_substr((string)($t['u'] ?? ''), 0, 120),
                               'a' => mb_substr((string)($t['a'] ?? ''), 0, 120)];
         }
@@ -260,17 +263,44 @@ function nxLlmClassify(string $text, ?array $ctx = null): ?array {
     static $keys = ['student','group','module','field','days','from','to',
                     'person','grade','shift','search','range_label',
                     'nav','position','relation','presentation','export_format',
-                    'compare','topic','target_role','op'];
+                    'compare','topic','target_role','op',
+                    'group_by','trend','justified','status','scope','detail','needs'];
+    static $enums = [
+        'group_by'   => ['group','student','weekday','day','month'],
+        'justified'  => ['yes','no'],
+        'status'     => ['active','completed','pending','all'],
+        'scope'      => ['mine','all'],
+        'relation'   => ['guardian','phone','document','group','schedule','risk'],
+        'presentation'=>['table','summary'],
+        'export_format'=>['excel','pdf','word','csv'],
+    ];
     $ent = [];
     foreach ((array)($j['entities'] ?? []) as $k => $v) {
         if (!in_array($k, $keys, true) || $v === null || $v === '') continue;
         if ($k === 'days') { $ent[$k] = max(0, (int)$v); continue; }
         if ($k === 'position') { $ent[$k] = ($v === 'last') ? 'last' : max(1, (int)$v); continue; }
-        if ($k === 'compare' && is_array($v)) {
+        if ($k === 'trend') { $ent[$k] = (bool)$v; continue; }
+        if (($k === 'compare' || $k === 'detail' || $k === 'needs') && is_array($v)) {
             $ent[$k] = array_slice(array_map(fn($x)=>mb_substr(trim((string)$x),0,60), $v), 0, 6);
             continue;
         }
-        $ent[$k] = mb_substr(trim((string)$v), 0, 120);
+        $v = mb_substr(trim((string)$v), 0, 120);
+        // enums cerrados: valor fuera de dominio → se descarta, no se inventa
+        if (isset($enums[$k]) && !in_array(strtolower($v), $enums[$k], true)) continue;
+        // group jamás puede ser un literal de alcance («ALL», «mis», «todos»)
+        if ($k === 'group' && preg_match('/^(all|todos|todas|mis|ninguno|ninguna|cada)$/iu', $v)) continue;
+        // student/person: el LLM a veces pega vocabulario de dominio como
+        // nombre («student:"llegadas"», «tomas … fechas»). Se recortan los
+        // stopwords de cola y se descarta si no queda nombre real.
+        if (($k === 'student' || $k === 'person') && function_exists('nxStudentStopwords')) {
+            $w = array_values(array_filter(explode(' ', nxNorm($v))));
+            $stop = nxStudentStopwords();
+            while ($w && in_array(end($w), $stop, true)) array_pop($w);
+            while ($w && in_array($w[0], $stop, true)) array_shift($w);
+            if (!$w) continue;
+            $v = implode(' ', $w);
+        }
+        $ent[$k] = $v;
     }
     if (!empty($j['uses_context'])) $ent['_uses_context'] = true;
     $safety = (isset($j['safety']) && $j['safety'] === 'risky') ? 'risky' : 'ok';
@@ -309,6 +339,7 @@ TU FORMA:
 - Español colombiano natural, cálido y profesional. 1-4 frases cortas.
 - Conversación libre: cultura general, chistes suaves, ánimo, preguntas comunes — respondes con lo que sabes.
 - NO inventes datos del colegio (estudiantes, grupos, cifras, nombres). Si piden datos reales, di que eso lo consultas por el sistema: «eso te lo traigo del sistema — pídemelo directo, ej: "tardanzas de hoy"».
+- NUNCA digas «no tengo acceso» ni describas límites de capacidad, ni ofrezcas acciones que no existen (redactar correos, llamar, agendar). Si algo falta, redirige a lo que sí haces: «no tengo ese dato aún — pero sí puedo mostrarte inasistencias, permisos, seguimientos…».
 - Siempre opción de volver al trabajo: cierra ligero («¿miramos cómo va la jornada?») sin ser pesado — no cada respuesta necesita el cierre.
 
 SEGURIDAD — LÍNEAS QUE NUNCA CRUZAS:

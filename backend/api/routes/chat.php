@@ -341,7 +341,8 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                'label'=>$dsPre['last_result']['label'] ?? null,
                'count'=>$dsPre['last_result']['count'] ?? count($dsPre['last_result']['items'] ?? [])]
             : null,
-        'turns'       => chatRecentTurns($conn, $userId, $sessionId, 3),
+        'turns'       => chatRecentTurns($conn, $userId, $sessionId,
+                        max(3, min(40, (int)(getenv('NLU_LLM_CTX_TURNS') ?: 20)))),
     ];
     $vars['_history'] = $llmCtx['turns'];   // historial para el chat informal LLM
     $vars['_raw'] = $text;                  // texto original (sin normalizar)
@@ -600,10 +601,14 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             if ($cForced && $cIntent) {
                 // un frame de relación/consulta («acudiente de X» →
                 // student_field; «exporta tardanzas» → incidents.list) NO
-                // degrada una operación o exportación que el DSM ya resolvió
-                // por verbo («cita al acudiente», «exporta…»). Los slots
+                // degrada una operación, exportación o consulta dedicada que
+                // el DSM ya resolvió por sustantivo/verbo («cita al
+                // acudiente», «exporta…», «las citaciones de X»). Los slots
                 // sí se fusionan — sujetan el objetivo de la operación.
-                $opResolved = in_array($intent, ['derive_action','start_operation','export_data'], true);
+                $opResolved = in_array($intent, ['derive_action','start_operation','export_data',
+                    'permissions','citations','trackings','frequency_table',
+                    'groups_list','attendance_ranking','pending_returns'], true)
+                    && $cIntent !== $intent;
                 $downgradeToQuery = in_array($cIntent, ['student_field','student_summary',
                     'list_events','count_events','permissions','citations','trackings',
                     'incidents.list','students.list','incidents.count'], true);
@@ -973,10 +978,15 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     }
     // plan SCP especializado (compare con métrica) cuando la composición
     // clásica no produjo nada — mismo contrato: validate + allowed.
-    // EXCEPTO rutas chat-nativas (export_data/derive_action/start_operation):
-    // el registro semántico no tiene capability para ellas y degradaría la
-    // petición a una lista genérica («exporta tardanzas» → incidents.list).
-    $chatNative = in_array($intent, ['export_data','derive_action','start_operation'], true);
+    // EXCEPTO rutas chat-nativas (export_data/derive_action/start_operation
+    // y las consultas con handler dedicado — permissions/citations/
+    // trackings/groups_list/attendance_ranking): el registro semántico no
+    // tiene capability para ellas y degradaría la petición a una lista
+    // genérica («exporta tardanzas» → incidents.list, «citaciones de X» →
+    // incidents.list sin filas reales de citación).
+    $chatNative = in_array($intent, ['export_data','derive_action','start_operation',
+        'permissions','citations','trackings','groups_list','attendance_ranking',
+        'pending_returns'], true);
     if (!$plan && $scpPlan && !$chatNative) { $plan = $scpPlan; }
     // cuando el frame decidió (rank/filter/count/relation), el compose
     // clásico no lo pisa: el significado normalizado tiene prioridad
@@ -1180,7 +1190,7 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     // nuevas; el scope es el grupo/entidad activa; historical conserva
     // los goals anteriores para «volvamos a…».
     $currentEntity = ($out['_result_set']['entity'] ?? null)
-        ?? ($merged['student'] ? 'students' : ($merged['group'] ? 'groups' : ($prev['current']['entity'] ?? null)));
+        ?? (!empty($merged['student']) ? 'students' : (!empty($merged['group']) ? 'groups' : ($prev['current']['entity'] ?? null)));
     $goal = $slots['field'] ?? $slots['goal'] ?? ($out['_plan']['capability'] ?? ($interp['resolved']['intent'] ?? null));
     // el intent de tema debe ser el que REALMENTE se despachó: los paths de
     // continuación re-ejecutan intents sin reescribir resolved.intent —
@@ -1193,6 +1203,22 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         ? ($prev['intent'] ?? $resolvedIntent ?? $outIntent)
         : (!$isNoiseIntent($resolvedIntent) ? $resolvedIntent
             : (!$isNoiseIntent($outIntent) ? $outIntent : ($resolvedIntent ?? $outIntent)));
+    // el plan semántico nombra el resultado por capability («incidents.list»);
+    // _ds.intent debe conservar el intent conversacional para que la herencia
+    // de NX_QUERY_INTENTS siga funcionando («y llegadas tarde?» tras una lista)
+    static $capToIntent = [
+        'incidents.list'      => 'list_events',
+        'incidents.count'     => 'count_events',
+        'students.list'       => 'students_in_group',
+        'students.field'      => 'student_field',
+        'students.position'   => 'students_in_group',
+        'guardian.of_student' => 'student_field',
+        'attendance.today'    => 'attendance_today',
+        'attendance.ranking'  => 'attendance_ranking',
+        'frequency_table'     => 'frequency_table',
+        'export_data'         => 'export_data',
+    ];
+    if (isset($capToIntent[$dsIntent])) $dsIntent = $capToIntent[$dsIntent];
     $ds = [
         'intent'      => $dsIntent,
         'prev_intent' => $prev['intent'] ?? null,
@@ -1936,26 +1962,39 @@ function chat_list_events(PDO $conn, array $u, array $s, array $v): array {
     if (!$module) return ['reply'=>'¿Qué quieres ver? Ejemplo: «muéstrame las evasiones de X» o «lista de permisos de hoy».'];
     $scope = chatScope($conn,$u); [$from,$to]=chatRange($s);
     $params=[$u['school_id'],$module,$from,$to]; $extra='';
+    $stu = null;
     if (!empty($s['student'])) {
         $found=chatResolveStudent($conn,$u,$s['student']);
         if (!$found) return ['reply'=>"No encuentro a «{$s['student']}» dentro de tu alcance."];
         if (count($found)>1) return chatAmbiguous($found);
-        $extra.=" AND ai.student_id=?"; $params[]=$found[0]['student_id'];
+        $stu = $found[0];
+        $extra.=" AND ai.student_id=?"; $params[]=$stu['student_id'];
     }
     if (!empty($s['group']) && ($g=chatResolveGroup($conn,$u,$s['group']))) { $extra.=" AND ai.group_id=?"; $params[]=$g['group_id']; }
-    $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, ai.detected_at::date AS d, ai.detected_at::time(0) AS t
+    // excusa — «las que tienen excusa», «sin justificar», «¿tienen excusa?»
+    $justified = $s['justified'] ?? null;
+    if ($justified === 'yes') $extra .= " AND EXISTS (SELECT 1 FROM risk_justifications rj WHERE rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date AND rj.school_id=ai.school_id)";
+    elseif ($justified === 'no') $extra .= " AND NOT EXISTS (SELECT 1 FROM risk_justifications rj WHERE rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date AND rj.school_id=ai.school_id)";
+    $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, ai.detected_at::date AS d, ai.detected_at::time(0) AS t,
+            (SELECT rj.reason FROM risk_justifications rj WHERE rj.student_id=ai.student_id
+             AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date
+             AND rj.school_id=ai.school_id LIMIT 1) AS excuse
         FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
         LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
         WHERE ai.school_id=? AND ai.incident_type=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
         ORDER BY ai.detected_at DESC LIMIT 30");
     $st->execute($params); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel=NX_MODULE_LABEL[$module]??strtolower($module);
-    if(!$rows) return ['reply'=>nxVaryClean($mlabel, 'en ese rango', ($v['_q']??'').$mlabel)];
+    $ent = array_filter(['student'=>$stu?mb_strtolower("{$stu['first_name']} {$stu['last_name']}"):null,
+        'module'=>$module,'range_label'=>$s['range_label']??null,'days'=>$s['days']??null]);
+    if(!$rows) return ['reply'=>nxVaryClean($mlabel, 'en ese rango', ($v['_q']??'').$mlabel),'entities'=>$ent];
     $items = array_map(fn($r)=>['id'=>null,'label'=>$r['name'],
         'sub'=>($r['group_name']??'—').' · '.$r['d'].' '.substr($r['t'],0,5)],$rows);
     return ['reply'=>count($rows)." ".(count($rows)===1?'registro':'registros')." de {$mlabel} (" . ($s['range_label']??'hoy') . "):",
-        'cards'=>[['title'=>ucfirst($mlabel),'columns'=>['Estudiante','Grupo','Fecha','Hora'],
-        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['d'],substr($r['t'],0,5)],$rows)]],
+        'cards'=>[['title'=>ucfirst($mlabel),'columns'=>['Estudiante','Grupo','Fecha','Hora','Excusa'],
+        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['d'],substr($r['t'],0,5),
+            $r['excuse'] ? mb_strimwidth($r['excuse'],0,40,'…') : 'Sin excusa'],$rows)]],
+        'entities'=>$ent,
         '_result_set'=>['type'=>'events','label'=>"registros de {$mlabel}",'items'=>$items,'count'=>count($items)]];
 }
 
@@ -2075,40 +2114,142 @@ function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
 
 function chat_trackings(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
+    $w=['t.school_id=?']; $p=[$u['school_id']]; $stu=null;
+    $status = $s['status'] ?? 'active';
+    if ($status === 'completed' || $status === 'all') { /* sin filtro o cerrados */ }
+    else $w[] = "t.status='en proceso'";
+    if ($status === 'completed') $w[] = "t.status<>'en proceso'";
+    if (!empty($s['student'])) {
+        $found=chatResolveStudent($conn,$u,$s['student']);
+        if (!$found) return ['reply'=>"No encuentro a «{$s['student']}» dentro de tu alcance."];
+        if (count($found)>1) return chatAmbiguous($found);
+        $stu=$found[0]; $w[]='t.student_id=?'; $p[]=$stu['student_id'];
+    }
+    if (!empty($s['group']) && ($g=chatResolveGroup($conn,$u,$s['group']))) { $w[]='ag.group_id=?'; $p[]=$g['group_id']; }
     $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, t.dependency, t.status, t.created_at::date AS d
         FROM student_tracking t JOIN students s ON s.student_id=t.student_id
         LEFT JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
         LEFT JOIN academic_groups ag ON ag.group_id=sga.group_id
-        WHERE t.school_id=? AND t.status='en proceso' {$scope['sql']} ORDER BY t.created_at DESC LIMIT 20");
-    $st->execute([$u['school_id']]); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-    if(!$rows) return ['reply'=>'No hay seguimientos abiertos — todo resuelto o descartado.'];
-    return ['reply'=>count($rows)." seguimiento(s) en proceso:",
-        'cards'=>[['title'=>'Seguimientos','columns'=>['Estudiante','Grupo','Origen','Desde'],
-        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['dependency']??'—',$r['d']],$rows)]]];
+        WHERE " . implode(' AND ', $w) . " {$scope['sql']} ORDER BY t.created_at DESC LIMIT 30");
+    $st->execute(array_merge($p,$scope['params'])); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
+    $who = $stu ? " de {$stu['first_name']} {$stu['last_name']}" : '';
+    $ent = array_filter(['student'=>$stu?mb_strtolower("{$stu['first_name']} {$stu['last_name']}"):null,'module'=>'SEGUIMIENTO']);
+    $lbl = $status === 'completed' ? 'completados' : ($status === 'all' ? 'registrados' : 'en proceso');
+    if(!$rows) return ['reply'=>"No hay seguimientos {$lbl}{$who}.",'entities'=>$ent];
+    return ['reply'=>count($rows)." seguimiento(s) {$lbl}{$who}:",
+        'cards'=>[['title'=>'Seguimientos','columns'=>['Estudiante','Grupo','Origen','Estado','Desde'],
+        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['dependency']??'—',$r['status']??'—',$r['d']],$rows)]],
+        'entities'=>$ent,
+        '_result_set'=>['type'=>'trackings','label'=>"seguimientos{$who}",
+            'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['name'],'sub'=>($r['group_name']??'—').' · '.($r['status']??'')],$rows),
+            'count'=>count($rows)]];
 }
 
 function chat_permissions(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
-    $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, c.exit_time::time(0) AS t, c.authorization_reason
-        FROM class_exit_authorizations c JOIN students s ON s.student_id=c.student_id
-        LEFT JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
-        LEFT JOIN academic_groups ag ON ag.group_id=sga.group_id
-        WHERE c.school_id=? AND c.status='ACTIVE' {$scope['sql']} ORDER BY c.exit_time DESC LIMIT 20");
-    $st->execute([$u['school_id']]); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-    if(!$rows) return ['reply'=>'No hay permisos activos ahora — nadie está fuera con autorización.'];
-    return ['reply'=>count($rows)." permiso(s) activos:",
-        'cards'=>[['title'=>'Permisos','columns'=>['Estudiante','Grupo','Salió','Motivo'],
-        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',substr($r['t'],0,5),mb_strimwidth($r['authorization_reason']??'—',0,40,'…')],$rows)]]];
+    // historial cuando hay rango/estudiante/status=all — «activos ahora»
+    // solo si no se pidió rango ni estudiante (bug prod: pedir el historial
+    // de un estudiante respondía «no hay activos ahora»)
+    $hist = ($s['status'] ?? null) === 'all'
+        || !empty($s['student']) || isset($s['days']) || !empty($s['from']) || !empty($s['range_label']);
+    $w = ['x.school_id = ?']; $p = [$u['school_id']];
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn,$u,$s['student']);
+        if (!$found) return ['reply'=>"No encuentro a «{$s['student']}» dentro de tu alcance — revisa el nombre o dime su grupo."];
+        if (count($found)>1) return chatAmbiguous($found);
+        $stu = $found[0];
+        $w[] = 'x.student_id = ?'; $p[] = $stu['student_id'];
+    }
+    if ($hist) { [$from,$to]=chatRange($s); $w[]='x.exit_time::date BETWEEN ? AND ?'; $p[]=$from; $p[]=$to; }
+    elseif (($s['status'] ?? null) !== 'all') { $w[] = "x.status = 'ACTIVE'"; }
+    if (($s['status'] ?? null) === 'completed') { $w[] = "x.status <> 'ACTIVE'"; }
+    if (!empty($s['group']) && ($g=chatResolveGroup($conn,$u,$s['group']))) { $w[]='ag.group_id = ?'; $p[]=$g['group_id']; }
+    // union: salidas de clase (con retorno) + salidas del colegio
+    $sql = "SELECT * FROM (
+        SELECT c.student_id, c.school_id, c.authorization_reason AS reason, c.exit_time,
+               c.return_time, c.status, 'clase' AS kind,
+               ub.first_name||' '||ub.last_name AS issuer
+        FROM class_exit_authorizations c
+        LEFT JOIN users ub ON ub.user_id=c.authorized_by_user_id
+        UNION ALL
+        SELECT se.student_id, se.school_id, se.authorization_reason, se.exit_time,
+               se.actual_return_time, se.status, 'colegio' AS kind,
+               ub.first_name||' '||ub.last_name
+        FROM school_exit_authorizations se
+        LEFT JOIN users ub ON ub.user_id=se.authorized_by_user_id
+    ) x
+    JOIN students st ON st.student_id = x.student_id
+    LEFT JOIN student_group_assignments sga ON sga.student_id = x.student_id AND sga.active = TRUE
+    LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+    WHERE " . implode(' AND ', $w) . " {$scope['sql']}
+    ORDER BY x.exit_time DESC LIMIT 60";
+    // el scope aplica sobre s.student_id — el alias es st aquí
+    $sql = str_replace("{$scope['sql']}", preg_replace('/\bs\./', 'st.', (string)$scope['sql']), $sql);
+    $st=$conn->prepare($sql); $st->execute(array_merge($p,$scope['params'])); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
+    $rl = $s['range_label'] ?? 'ahora';
+    $who = $stu ? " de {$stu['first_name']} {$stu['last_name']}" : '';
+    $ent = array_filter(['student'=>$stu?mb_strtolower("{$stu['first_name']} {$stu['last_name']}"):null,
+        'module'=>'PERMISO','range_label'=>$s['range_label']??null]);
+    if(!$rows) return ['reply'=>$hist ? "No hay permisos{$who} en {$rl} — nada registrado." : "No hay permisos activos ahora — nadie está fuera con autorización.",
+        'entities'=>$ent];
+    $label = $hist ? "permiso(s) en {$rl}" : "permiso(s) activos ahora";
+    return ['reply'=>count($rows)." {$label}{$who}:",
+        'cards'=>[['title'=>'Permisos','columns'=>['Estudiante','Grupo','Tipo','Motivo','Salida','Retorno','Estado','Autorizó'],
+        'rows'=>array_map(fn($r)=>[
+            $r['first_name'].' '.$r['last_name'] ?? '—',
+            $r['group_name']??'—', $r['kind']==='colegio'?'Colegio':'Clase',
+            mb_strimwidth($r['reason']??'—',0,45,'…'),
+            substr((string)$r['exit_time'],0,16),
+            $r['return_time'] ? substr((string)$r['return_time'],0,16) : '—',
+            $r['status']??'—', $r['issuer']??'—'],$rows)]],
+        'entities'=>$ent,
+        '_result_set'=>['type'=>'permissions','label'=>"permisos{$who}",
+            'items'=>array_map(fn($r)=>['id'=>null,'label'=>($r['first_name']??'').' '.($r['last_name']??''),
+                'sub'=>mb_strimwidth($r['reason']??'—',0,40,'…').' · '.substr((string)$r['exit_time'],0,16)],$rows),
+            'count'=>count($rows)]];
 }
 
 function chat_citations(PDO $conn, array $u, array $s, array $v): array {
     [$from,$to]=chatRange($s);
+    $scope=chatScope($conn,$u);
+    $w=['tm.school_id=?','tm.sent_at::date BETWEEN ? AND ?']; $p=[$u['school_id'],$from,$to];
+    $stu=null;
+    if (!empty($s['student'])) {
+        $found=chatResolveStudent($conn,$u,$s['student']);
+        if (!$found) return ['reply'=>"No encuentro a «{$s['student']}» dentro de tu alcance — revisa el nombre o dime su grupo."];
+        if (count($found)>1) return chatAmbiguous($found);
+        $stu=$found[0]; $w[]='tm.student_id=?'; $p[]=$stu['student_id'];
+    }
     // docente/psy: solo las citaciones que ellos enviaron (scope honesto)
-    $own = in_array($u['role'],['TEACHER','COUNSELOR'],true) ? ' AND sender_user_id = ?' : '';
-    $st=$conn->prepare("SELECT COUNT(*) FROM internal_messages WHERE school_id=? AND sent_at::date BETWEEN ? AND ? {$own}");
-    $st->execute($own ? [$u['school_id'],$from,$to,$u['id']] : [$u['school_id'],$from,$to]); $n=(int)$st->fetchColumn();
+    if (in_array($u['role'],['TEACHER','COUNSELOR'],true)) { $w[]='tm.sender_user_id=?'; $p[]=$u['id']; }
+    $sqlScoped = "SELECT tm.sent_at::date AS d, tm.message_content, tm.delivery_status,
+            st2.first_name||' '||st2.last_name AS name, ag.group_name,
+            g2.first_name||' '||g2.last_name AS guardian_name
+        FROM twilio_messages tm
+        LEFT JOIN students st2 ON st2.student_id=tm.student_id
+        LEFT JOIN student_group_assignments sga ON sga.student_id=st2.student_id AND sga.active=TRUE
+        LEFT JOIN academic_groups ag ON ag.group_id=sga.group_id
+        LEFT JOIN guardians gd ON gd.guardian_id=tm.guardian_id
+        LEFT JOIN users g2 ON g2.user_id=gd.user_id
+        WHERE " . implode(' AND ', $w) . " AND tm.type_code='CITACION' "
+        . preg_replace('/\bs\./','st2.',(string)$scope['sql'])
+        . " ORDER BY tm.sent_at DESC LIMIT 40";
+    $st=$conn->prepare($sqlScoped); $st->execute(array_merge($p,$scope['params']));
+    $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $rl=$s['range_label']??'hoy';
-    return ['reply'=>$n ? "{$n} citación(es) enviadas ({$rl}). ¿Quieres el detalle?" : "No se enviaron citaciones ({$rl})."];
+    $who = $stu ? " de {$stu['first_name']} {$stu['last_name']}" : '';
+    $ent = array_filter(['student'=>$stu?mb_strtolower("{$stu['first_name']} {$stu['last_name']}"):null,
+        'module'=>'CITACION','range_label'=>$s['range_label']??null]);
+    if(!$rows) return ['reply'=>"No hay citaciones{$who} en {$rl} — nada enviado.",'entities'=>$ent];
+    return ['reply'=>count($rows)." citación(es){$who} ({$rl}):",
+        'cards'=>[['title'=>'Citaciones','columns'=>['Fecha','Estudiante','Grupo','Acudiente','Motivo','Estado'],
+        'rows'=>array_map(fn($r)=>[$r['d'],$r['name']??'—',$r['group_name']??'—',$r['guardian_name']??'—',
+            mb_strimwidth($r['message_content']??'—',0,60,'…'),$r['delivery_status']??'—'],$rows)]],
+        'entities'=>$ent,
+        '_result_set'=>['type'=>'citations','label'=>"citaciones{$who}",
+            'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['name']??'—','sub'=>$r['d'].' · '.mb_strimwidth($r['message_content']??'',0,40,'…')],$rows),
+            'count'=>count($rows)]];
 }
 
 function chat_devices_status(PDO $conn, array $u, array $s, array $v): array {
@@ -2287,8 +2428,52 @@ function chat_frequency_table(PDO $conn, array $u, array $s, array $v): array {
     if (!empty($s['group']) && ($g = chatResolveGroup($conn,$u,$s['group']))) {
         $extra .= " AND ai.group_id=?"; $params[] = $g['group_id'];
     }
-    $byStudent = (bool)preg_match('/estudiante|alumn|quien|quién|persona/u', (string)($v['_q'] ?? ''));
-    if ($byStudent) {
+    // eje de agregación: group_by del parser tiene prioridad; el texto
+    // sigue como respaldo («por estudiante», «por día», «por grupo»)
+    $by = $s['group_by'] ?? null;
+    if (!$by) {
+        if (preg_match('/por (d[ií]a de la semana|d[ií]a|fecha)/u', (string)($v['_q'] ?? ''))) $by = 'weekday';
+        elseif (preg_match('/por (estudiante|alumn|quien)/u', (string)($v['_q'] ?? ''))) $by = 'student';
+        elseif (preg_match('/por (grupo|salon|curso)/u', (string)($v['_q'] ?? ''))) $by = 'group';
+        elseif (preg_match('/por mes/u', (string)($v['_q'] ?? ''))) $by = 'month';
+        elseif (preg_match('/estudiante|alumn|quien|quién|persona/u', (string)($v['_q'] ?? ''))) $by = 'student';
+        else $by = 'weekday';
+    }
+    if ($by === 'group') {
+        $st = $conn->prepare("SELECT ag.group_name, COUNT(*) AS c
+            FROM attendance_incidents ai
+            LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
+            JOIN students s ON s.student_id=ai.student_id
+            WHERE ai.school_id=? AND ai.incident_type=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
+            GROUP BY ag.group_name ORDER BY c DESC NULLS LAST LIMIT 30");
+        $st->execute(array_merge($params, $scope['params']));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply'=>"No hay registros de {$mlabel} en ese rango."];
+        return ['reply'=>"{$mlabel} por grupo (" . ($s['range_label'] ?? "$from a $to") . "):",
+            'cards'=>[['title'=>ucfirst($mlabel).' por grupo','columns'=>['Grupo','Total'],
+                'rows'=>array_map(fn($r)=>[$r['group_name']??'Sin grupo',(int)$r['c']],$rows)]],
+            '_result_set'=>['type'=>'frequency','label'=>"frecuencia {$mlabel} por grupo",
+                'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['group_name']??'Sin grupo','sub'=>"{$r['c']} registros"],$rows),
+                'count'=>count($rows)]];
+    }
+    if ($by === 'day' || $by === 'month') {
+        $bucket = $by === 'day' ? "ai.detected_at::date" : "to_char(ai.detected_at,'YYYY-MM')";
+        $st = $conn->prepare("SELECT {$bucket} AS b, COUNT(*) AS c
+            FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
+            WHERE ai.school_id=? AND ai.incident_type=? AND ai.detected_at::date BETWEEN ? AND ? {$extra} {$scope['sql']}
+            GROUP BY b ORDER BY b LIMIT 60");
+        $st->execute(array_merge($params, $scope['params']));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply'=>"No hay registros de {$mlabel} en ese rango."];
+        $lbl = $by === 'day' ? 'por día' : 'por mes';
+        return ['reply'=>"{$mlabel} {$lbl} (" . ($s['range_label'] ?? "$from a $to") . "):",
+            'cards'=>[['title'=>ucfirst($mlabel).' '.$lbl,'columns'=>[$by==='day'?'Fecha':'Mes','Total'],
+                'rows'=>array_map(fn($r)=>[(string)$r['b'],(int)$r['c']],$rows)]],
+            '_result_set'=>['type'=>'frequency','label'=>"frecuencia {$mlabel} {$lbl}",
+                'items'=>array_map(fn($r)=>['id'=>null,'label'=>(string)$r['b'],'sub'=>"{$r['c']} registros"],$rows),
+                'count'=>count($rows)]];
+    }
+    if ($by === 'student') {
         $st = $conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, COUNT(*) AS c
             FROM attendance_incidents ai JOIN students s ON s.student_id=ai.student_id
             LEFT JOIN academic_groups ag ON ag.group_id=ai.group_id
@@ -2778,17 +2963,60 @@ function chat_risk_config(PDO $conn, array $u, array $s, array $v): array {
 /** Ranking de grupos por incidentes del periodo. */
 function chat_attendance_ranking(PDO $conn, array $u, array $s, array $v): array {
     [$from,$to]=chatRange($s);
-    $st=$conn->prepare("SELECT ag.group_name, ai.incident_type, COUNT(*) c
+    $scope=chatScope($conn,$u);
+    $module = $s['module'] ?? null;
+    $w=['ai.school_id=?','ai.detected_at::date BETWEEN ? AND ?']; $p=[$u['school_id'],$from,$to];
+    if ($module) { $w[]='ai.incident_type=?'; $p[]=$module; }
+    // «grupos décimos» / «de grado 10» — filtra por grade_level
+    $grade = $s['grade'] ?? null;
+    if ($grade === null && preg_match('/\b(decim|d[eé]cim|grado\s*10|10\b)/u', (string)($v['_q']??''))) $grade = '10';
+    if ($grade !== null && $grade !== '') { $w[]='ag.grade_level=?'; $p[]=(string)$grade; }
+    // «los grupos que tengo a mi cargo» → solo los del docente
+    $mine = ($s['scope'] ?? null) === 'mine'
+        || preg_match('/\b(mis grupos|a mi cargo|que tengo|de mi grupo|mis salones)\b/u', (string)($v['_q']??''));
+    if ($mine && in_array($u['role'],['TEACHER','COUNSELOR'],true)) {
+        $w[]='ai.group_id IN (SELECT tga.group_id FROM teacher_group_access tga WHERE tga.teacher_user_id=?)';
+        $p[]=$u['id'];
+    }
+    // trend: «aumento»/«comparado» = período actual vs período anterior
+    $trend = !empty($s['trend']) || preg_match('/\b(aumento|subi|baj|increment|comparad|vs\.? anterior|respecto)\b/u', (string)($v['_q']??''));
+    $mlabel = $module ? (NX_MODULE_LABEL[$module] ?? strtolower($module)) : 'incidentes';
+    // chatScope emite el alias «s.student_id» — aquí la tabla es «ai»
+    $scopeSql = preg_replace('/\bs\./', 'ai.', (string)$scope['sql']);
+    $st=$conn->prepare("SELECT ag.group_name, COUNT(*) c
         FROM attendance_incidents ai JOIN academic_groups ag ON ag.group_id=ai.group_id
-        WHERE ai.school_id=? AND ai.detected_at::date BETWEEN ? AND ?
-        GROUP BY ag.group_name, ai.incident_type ORDER BY ag.group_name, c DESC LIMIT 40");
-    $st->execute([$u['school_id'],$from,$to]); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-    if(!$rows) return ['reply'=>'Sin incidentes registrados en ese rango en ningún grupo — todos limpios.'];
-    $by=[]; foreach($rows as $r){ $by[$r['group_name']]=($by[$r['group_name']]??0)+$r['c']; }
-    arsort($by); $by=array_slice($by,0,8,true);
-    return ['reply'=>"Grupos con más incidentes (" . ($s['range_label']??'hoy') . "):",
-        'cards'=>[['title'=>'Ranking de grupos','columns'=>['Grupo','Incidentes'],
-        'rows'=>array_map(fn($k,$c)=>[$k,$c],array_keys($by),$by)]]];
+        WHERE " . implode(' AND ', $w) . " $scopeSql
+        GROUP BY ag.group_name ORDER BY c DESC LIMIT 20");
+    $st->execute(array_merge($p,$scope['params'])); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
+    if(!$rows) return ['reply'=>"Sin {$mlabel} registrados en ese rango" . ($grade?" para grado {$grade}":'') . ($mine?' en tus grupos':'') . " — todo limpio."];
+    $rl = $s['range_label'] ?? "$from a $to";
+    if ($trend) {
+        // período anterior de la misma longitud
+        $span = max(1, (int)((strtotime($to)-strtotime($from))/86400) + 1);
+        $pFrom = date('Y-m-d', strtotime("$from -{$span} days")); $pTo = date('Y-m-d', strtotime("$to -{$span} days"));
+        $wPrev = $w; $pPrev = $p; $pPrev[1]=$pFrom; $pPrev[2]=$pTo;
+        $st2=$conn->prepare("SELECT ag.group_name, COUNT(*) c
+            FROM attendance_incidents ai JOIN academic_groups ag ON ag.group_id=ai.group_id
+            WHERE " . implode(' AND ', $wPrev) . " $scopeSql
+            GROUP BY ag.group_name");
+        $st2->execute(array_merge($pPrev,$scope['params']));
+        $prev = $st2->fetchAll(PDO::FETCH_KEY_PAIR);
+        return ['reply'=>"Comparativo de {$mlabel} por grupo — {$rl} vs período anterior ({$pFrom} a {$pTo}):",
+            'cards'=>[['title'=>ucfirst($mlabel)." por grupo — {$rl}",
+                'columns'=>['Grupo','Actual','Anterior','Δ'],
+                'rows'=>array_map(fn($r)=>[
+                    $r['group_name']??'Sin grupo',(int)$r['c'],(int)($prev[$r['group_name']]??0),
+                    (($d=(int)$r['c']-(int)($prev[$r['group_name']]??0))>=0?'+':'').$d],$rows)]],
+            '_result_set'=>['type'=>'ranking','label'=>"comparativo {$mlabel}",
+                'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['group_name']??'—','sub'=>"{$r['c']} ahora"],$rows),
+                'count'=>count($rows)]];
+    }
+    return ['reply'=>"{$mlabel} por grupo ({$rl})" . ($grade?" — grado {$grade}":'') . ($mine?' — tus grupos':'') . ":",
+        'cards'=>[['title'=>ucfirst($mlabel).' por grupo','columns'=>['Grupo','Total'],
+        'rows'=>array_map(fn($r)=>[$r['group_name']??'Sin grupo',(int)$r['c']],$rows)]],
+        '_result_set'=>['type'=>'ranking','label'=>"{$mlabel} por grupo",
+            'items'=>array_map(fn($r)=>['id'=>null,'label'=>$r['group_name']??'—','sub'=>"{$r['c']} registros"],$rows),
+            'count'=>count($rows)]];
 }
 
 /** Resumen de la conversación actual — meta-del-chat. */
