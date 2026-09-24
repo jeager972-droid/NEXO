@@ -85,6 +85,17 @@ BEGIN
         SELECT uuid_generate_v4(), v_school, s.student_id, v_dev, 'INGRESO', 'MATCH', 98.5, NOW() - INTERVAL '3 hours'
         WHERE NOT EXISTS (SELECT 1 FROM biometric_events WHERE student_id=s.student_id AND event_type='INGRESO' AND event_timestamp::date = CURRENT_DATE);
     END LOOP;
+
+    -- ── Rector del colegio fixture — las baterías de rol global necesitan
+    -- un RECTOR dentro de la escuela de datos (rector@nexo.edu vive en otro
+    -- tenant). Misma credencial de prueba que teach/coord.
+    INSERT INTO users(user_id, school_id, role_id, first_name, last_name, document_number, email, phone, active, password_hash, password_salt, created_at)
+    SELECT '55555555-5555-4555-8555-555555555550', v_school,
+           (SELECT role_id FROM roles WHERE role_name='RECTOR' LIMIT 1),
+           'Rector','Prueba Test','9000','rector@test.nexo','+573000000000',TRUE,
+           u.password_hash, u.password_salt, NOW()
+    FROM users u WHERE u.email='teach@test.nexo'
+    ON CONFLICT (user_id) DO NOTHING;
 END $$;
 
 -- =============================================================================
