@@ -616,7 +616,7 @@ Gestionado por `routes/_cors_middleware.php`. `CORS_ALLOW_ORIGINS` lista los or√
 
 ## Endpoints legacy / redirecciones
 
-- `/auditoria` y `/riesgo` en la PWA redirigen a `/consulta` y `/perfil` respectivamente (ver `PWA/src/App.jsx`). No son endpoints de API.
+- `/auditoria` y `/riesgo` en la PWA redirigen a `/consulta` y `/perfil` respectivamente (ver `frontend/pwa/src/App.jsx`). No son endpoints de API.
 - No hay endpoints de API marcados como deprecated en el c√≥digo actual.
 
 ## Variables de entorno relevantes para la API

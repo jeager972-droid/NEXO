@@ -15,7 +15,7 @@
  * =============================================================================
  */
 
-require_once __DIR__ . '/../../backend/api/lib/ota.php';
+require_once __DIR__ . '/../../../backend/api/lib/ota.php';
 
 class OtaNodeSimulator
 {

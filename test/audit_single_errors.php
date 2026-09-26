@@ -10,7 +10,7 @@ require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 require_once __DIR__ . '/../backend/api/routes/chat.php';
 
-$set = json_decode(file_get_contents(__DIR__ . '/production_operational_blind.json'), true);
+$set = json_decode(file_get_contents(__DIR__ . '/fixtures/production_operational_blind.json'), true);
 
 /* Clasificador de causa — heurístico pero explícito y revisable */
 function classifyCause(array $t, array $cls, string $resolved): string {

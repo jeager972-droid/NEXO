@@ -56,3 +56,6 @@ venv/
 .agents/
 .obsidian/
 nexo_edge.db*
+
+# === Cuarentena de limpieza (archivos no trackeados pendientes de veredicto) ===
+_cuarentena/_no_trackeado/

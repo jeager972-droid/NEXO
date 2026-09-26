@@ -1,6 +1,6 @@
 # LANDING.md — Landing page de NEXO
 
-Documentación técnica de la landing page, basada en el código de `landing/`.
+Documentación técnica de la landing page, basada en el código de `frontend/landing/`.
 
 ## Responsabilidades
 

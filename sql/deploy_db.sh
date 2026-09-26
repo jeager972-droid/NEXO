@@ -23,7 +23,7 @@ if ! command -v psql &> /dev/null; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCHEMA_FILE="$SCRIPT_DIR/sql/schema.sql"
+SCHEMA_FILE="$SCRIPT_DIR/schema.sql"
 
 if [ ! -f "$SCHEMA_FILE" ]; then
     echo "ERROR: No se encontró $SCHEMA_FILE"

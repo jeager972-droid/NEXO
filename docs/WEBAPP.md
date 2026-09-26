@@ -1,6 +1,6 @@
 # WEBAPP.md — Aplicación web (PWA) de NEXO
 
-Documentación técnica de la PWA de NEXO, basada en el código de `PWA/`.
+Documentación técnica de la PWA de NEXO, basada en el código de `frontend/pwa/`.
 
 ## Responsabilidades
 
@@ -23,7 +23,7 @@ Documentación técnica de la PWA de NEXO, basada en el código de `PWA/`.
 ## Estructura
 
 ```
-PWA/
+frontend/pwa/
 ├── src/
 │   ├── main.jsx                     # Bootstrap React + Router
 │   ├── App.jsx                      # Definición de rutas + ProtectedRoute

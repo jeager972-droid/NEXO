@@ -15,7 +15,7 @@
  * =============================================================================
  */
 require_once __DIR__ . '/../../backend/api/vendor/autoload.php';
-require_once __DIR__ . '/../../simulaciones/biometria/FingerprintSimulator.php';
+require_once __DIR__ . '/../simulaciones/biometria/FingerprintSimulator.php';
 
 class MultiFingerprintTest extends PHPUnit\Framework\TestCase
 {

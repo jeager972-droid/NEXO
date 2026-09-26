@@ -18,7 +18,7 @@ sql/schema.sql
 ## Instalación limpia
 
 ```bash
-DATABASE_URL="postgresql://usuario:password@host:5432/nexo" ./deploy_db.sh
+DATABASE_URL="postgresql://usuario:password@host:5432/nexo" ./sql/deploy_db.sh
 ```
 
 Requisitos:
@@ -29,7 +29,7 @@ Requisitos:
 - Rol con permisos para crear tablas, funciones, triggers, políticas RLS y extensiones.
 - Variable de entorno `DATABASE_URL` en formato `postgresql://usuario:password@host:5432/nexo`.
 
-`deploy_db.sh` ejecuta `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/schema.sql`. El flag `ON_ERROR_STOP` aborta al primer error.
+`sql/deploy_db.sh` ejecuta `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/schema.sql`. El flag `ON_ERROR_STOP` aborta al primer error.
 
 El seed inicial crea:
 
@@ -197,7 +197,7 @@ Cada una tiene una partición `DEFAULT` (catch-all) y particiones mensuales con 
 - **Funciones SECURITY DEFINER** con `search_path` fijado.
 - **Soft-delete** para preservar integridad referencial histórica.
 
-El detalle de seguridad a nivel de aplicación (JWT, CORS, cifrado edge, etc.) está en [documentation/SECURITY.md](documentation/SECURITY.md).
+El detalle de seguridad a nivel de aplicación (JWT, CORS, cifrado edge, etc.) está en [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Pruebas del schema
 
@@ -218,7 +218,7 @@ Ejecución:
 cd test && ../backend/api/vendor/bin/phpunit --testsuite "SQL Schema Tests"
 ```
 
-`test/runners/SchemaPhpAlignmentTest.php` verifica que el schema SQL y el código PHP estén alineados (columnas que usa la API existen en el schema). Más detalle en [documentation/TESTING.md](documentation/TESTING.md).
+`test/runners/SchemaPhpAlignmentTest.php` verifica que el schema SQL y el código PHP estén alineados (columnas que usa la API existen en el schema). Más detalle en [docs/TESTING.md](docs/TESTING.md).
 
 ## Desarrollo del esquema
 
@@ -229,6 +229,6 @@ Para modificar el esquema:
 3. Si añades o modificas tablas multi-tenant, refleja el cambio en las policies RLS correspondientes.
 4. Si tocas tablas particionadas, verifica que `fn_ensure_partitions` y `create_monthly_partition.sh` sigan siendo coherentes.
 5. Valida con `test/sql/` y `test/runners/SchemaPhpAlignmentTest.php`.
-6. Para instalar una base limpia desde cero, crea una base vacía y ejecuta `deploy_db.sh`.
+6. Para instalar una base limpia desde cero, crea una base vacía y ejecuta `sql/deploy_db.sh`.
 
 La alineación entre el esquema SQL y el código PHP la verifica `SchemaPhpAlignmentTest.php`; úsalo tras cualquier cambio de modelo.

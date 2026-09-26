@@ -4,7 +4,7 @@
 .env
 .env.*
 node_modules/
-landing/node_modules/
-WebApp/node_modules/
+frontend/pwa/node_modules/
+frontend/landing/node_modules/
 backend/api/.git-backup-old/
 *.md

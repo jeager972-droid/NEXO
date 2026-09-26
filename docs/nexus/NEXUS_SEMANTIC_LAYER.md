@@ -23,7 +23,7 @@ encontrados y estado de implementación del salto `intent → capacidad`.
 - **Intents**: 87 clases (43 formal + 43 informal + random_*). Clasificador TF-IDF(word 1-2 + char_wb 2-5) + LR, 511k ejemplos, holdout ~0.98. Servicio Python :8090 + fallback PHP (`model_php.json`, word-only).
 - **DSM**: `nxDialogueResolve` en `nexus_nlu.php` — turn_type, herencia de slots, `_nav`, `_ref`, corrección, confirm/cancel/op_repeat. Estado real en `chat_messages.payload_json._ds` (server-side).
 - **RBAC**: `nxIntentRoles`/`nxAllowed` por intent + `school_chat_policies` + `chatCanAction` para ops + scope docente `teacher_group_access`.
-- **Presentación**: `cards` → `DataCard` renderiza tabla HTML real en `PWA/src/pages/Chat.jsx`; `actions` → chips nav.
+- **Presentación**: `cards` → `DataCard` renderiza tabla HTML real en `frontend/pwa/src/pages/Chat.jsx`; `actions` → chips nav.
 
 ## Bugs / gaps encontrados (baseline)
 

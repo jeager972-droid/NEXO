@@ -9,7 +9,7 @@
  */
 
 require_once __DIR__ . '/../../backend/api/lib/ota.php';
-require_once __DIR__ . '/../../simulaciones/ota/OtaNodeSimulator.php';
+require_once __DIR__ . '/../simulaciones/ota/OtaNodeSimulator.php';
 
 use PHPUnit\Framework\TestCase;
 

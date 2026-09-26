@@ -15,15 +15,15 @@ jobs:
       with:
         node-version: 22
         cache: 'npm'
-        cache-dependency-path: PWA/package-lock.json
+        cache-dependency-path: frontend/pwa/package-lock.json
     - name: Install dependencies
-      run: cd PWA && npm ci
+      run: cd frontend/pwa && npm ci
     - name: Lint PWA
-      run: cd PWA && npm run lint
+      run: cd frontend/pwa && npm run lint
     - name: Build Vite
-      run: cd PWA && npm run build
+      run: cd frontend/pwa && npm run build
     - name: Run Vitest
-      run: cd PWA && npx vitest run
+      run: cd frontend/pwa && npx vitest run
 
   test-backend-php:
     runs-on: ubuntu-latest
@@ -57,8 +57,8 @@ jobs:
       with:
         node-version: 22
         cache: 'npm'
-        cache-dependency-path: landing/package-lock.json
+        cache-dependency-path: frontend/landing/package-lock.json
     - name: Install dependencies
-      run: cd landing && npm ci
+      run: cd frontend/landing && npm ci
     - name: Build Landing
-      run: cd landing && npm run build
+      run: cd frontend/landing && npm run build

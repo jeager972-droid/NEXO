@@ -71,7 +71,7 @@ Tests end-to-end que levantan la API y verifican flujos completos (login, operac
 cd test && ../backend/api/vendor/bin/phpunit --testsuite "Integration Tests"
 ```
 
-### 5. PWA Tests (`PWA/tests/`)
+### 5. PWA Tests (`frontend/pwa/tests/`)
 
 Tests del frontend con Vitest + Testing Library. Cubren componentes, hooks, y flujos de autenticación.
 
@@ -93,7 +93,7 @@ cd backend/edge && ctest --test-dir build/dev --output-on-failure
 
 ### WebApp (PWA)
 
-- **On**: push/PR a `main`/`develop`, cambios en `PWA/**`.
+- **On**: push/PR a `main`/`develop`, cambios en `frontend/pwa/**`.
 - **Jobs**: `lint` (eslint), `test` (vitest), `build` (vite build), `deploy` (Vercel, solo en `main`).
 
 ### Backend (PHP)
@@ -103,7 +103,7 @@ cd backend/edge && ctest --test-dir build/dev --output-on-failure
 
 ### Landing
 
-- **On**: push/PR a `main`/`develop`, cambios en `landing/**`.
+- **On**: push/PR a `main`/`develop`, cambios en `frontend/frontend/landing/**`.
 - **Jobs**: `build` (vite build), `deploy` (Vercel, solo en `main`).
 
 ### Edge

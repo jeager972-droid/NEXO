@@ -46,6 +46,17 @@ audit_single_errors) miden al parser mismo: correrlas contra el fixture es
 circular — ejecutarlas en vivo (gastan cuota) cuando se evalúe calidad.
 Las dependencias Python, PHPUnit y PWA/node_modules estaban disponibles al iniciar esta sesión.
 
-Las pruebas PWA existentes se ejecutan con npm test desde PWA; npm run build verifica Vite.
+Las pruebas PWA existentes se ejecutan con npm test desde frontend/pwa; npm run build verifica Vite.
 continuity_50.php usa una API/BD real y escribe historial: NO ejecutarlo dentro del alcance local actual.
 real_conversation_v1.php es una simulación NLU/DSM; no prueba SQL, API HTTP ni memoria persistida real.
+
+## Estructura del repositorio (reorganización 2026-09-26)
+
+- `backend/` — `api/` (PHP: rutas, lib Nexus, workers) y `edge/` (nodo C++).
+- `frontend/` — `pwa/` (SPA principal), `landing/`, `prototipos/`, `design-philosophy/`.
+- `docs/` — documentación canónica (la vieja `documentation/` se fundió aquí).
+- `sql/` — schema, seeds, `deploy_db.sh`.
+- `test/` — suites; datos JSON en `test/fixtures/`; dobles de prueba en `test/simulaciones/`.
+- `pruebas/` — stack de integración Docker (api+db+redis); `prototipos/` se movió a `frontend/`.
+- `tools/` — utilidades de repo (repomix).
+- `_cuarentena/` — material pendiente de veredicto de borrado (no usar como fuente).

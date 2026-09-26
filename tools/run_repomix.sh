@@ -1,15 +1,20 @@
 #!/bin/bash
 
+# Repomix siempre opera sobre la raíz del repo, sin importar desde dónde se invoque.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 # Configuration file check
-if [ ! -f repomix.config.json ]; then
-  echo "Error: repomix.config.json not found."
+if [ ! -f tools/repomix.config.json ]; then
+  echo "Error: tools/repomix.config.json not found."
   exit 1
 fi
 
 echo "=========================================================="
 echo "📦 Running Repomix to pack your codebase into nexo_repomix.xml..."
 echo "=========================================================="
-npx repomix
+npx repomix --config tools/repomix.config.json
 
 echo ""
 echo "📊 Counting total lines of code and documentation (excluding libraries & builds)..."

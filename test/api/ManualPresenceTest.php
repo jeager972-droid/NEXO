@@ -24,7 +24,7 @@ if (!class_exists('PDO')) {
 }
 
 require_once __DIR__ . '/../../backend/api/workers/contingency_lib.php';
-require_once __DIR__ . '/../../simulaciones/biometria/ManualPresenceSimulator.php';
+require_once __DIR__ . '/../simulaciones/biometria/ManualPresenceSimulator.php';
 require_once __DIR__ . '/NodeHealthGateTest.php'; // FakePDO / FakeStmt
 
 class ManualPresenceTest extends PHPUnit\Framework\TestCase

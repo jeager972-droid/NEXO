@@ -137,7 +137,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Columna «Versión» en Dispositivos</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> mostrar <code>app_version</code> que <code>GET /devices</code> ya devuelve. <b>Por qué:</b> sin ella no se puede saber qué nodos quedaron atrás tras publicar una OTA — es el prerequisito visual del Tier 3.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/Devices.jsx</b> · Endpoint: GET /devices (campo app_version)</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/Devices.jsx</b> · Endpoint: GET /devices (campo app_version)</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Dispositivos — tabla actual + columna nueva</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:hidden">
       <table>
@@ -155,7 +155,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Deriva de reloj y «requiere resync»</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> columna con <code>clock_drift_s</code> y badge cuando <code>resync_required=true</code> (ya lo reporta <code>/devices/ping</code>). <b>Por qué:</b> un nodo con reloj corrido marca asistencia con horas falsas; hoy es invisible hasta que alguien reclama.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/Devices.jsx</b> · Datos: clock_drift_s, resync_required</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/Devices.jsx</b> · Datos: clock_drift_s, resync_required</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Dispositivos — misma tabla, segunda columna nueva</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:hidden">
       <table>
@@ -172,7 +172,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Hora de regreso en salida pedagógica</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> campo <code>return_time</code> (datetime) en el formulario de <code>salida_pedagogica</code>. <b>Por qué:</b> el backend ya lo acepta; sin él la salida queda abierta y el permiso no sabe cuándo esperar el regreso del grupo.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/Operation.jsx</b> · Comando: salida_pedagogica → payload return_time</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/Operation.jsx</b> · Comando: salida_pedagogica → payload return_time</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Operaciones → Salida pedagógica — formulario</span></div>
     <div class="frame-body"><div class="card" style="max-width:460px">
       <div class="fld"><label class="fld-l">Grupo</label><select class="inp"><option>9-B · Mañana</option></select></div>
@@ -187,7 +187,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Etiqueta «Reaparición tardía» en incidentes</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> traducción de <code>REAPARICION_TARDIA</code> en <code>EVENT_TRANSLATIONS</code> + render de <code>metadata_json.reconciled_classroom_id</code>. <b>Por qué:</b> hoy el evento llega crudo o no se muestra; es la señal de que un ausente reapareció en otra aula.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/ConsultationDrawer.jsx</b> · Tipo: attendance_incidents.REAPARICION_TARDIA</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/ConsultationDrawer.jsx</b> · Tipo: attendance_incidents.REAPARICION_TARDIA</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Consultas → Incidentes de asistencia</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:hidden">
       <div class="list-row"><div class="av">LV</div><div class="grow"><div class="tt">Luisa Vargas · 7-A</div><div class="st">Detectada en Aula 9-B a las 9:41 — marcada ausente a las 7:05</div></div><span class="badge b-wn new-mark">Reaparición tardía<span class="new-flag">NUEVO</span></span></div>
@@ -199,7 +199,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Indicador «regresó por espacio incorrecto»</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> en la lista de permisos, chip cuando <code>metadata_json.return_space_validated=false</code>. <b>Por qué:</b> el estudiante regresó pero por un nodo que no correspondía — hoy el permiso se ve «cerrado» y se pierde ese dato operativo.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/ConsultationDrawer.jsx</b> (lista Permisos) · Dato: return_space_validated</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/ConsultationDrawer.jsx</b> (lista Permisos) · Dato: return_space_validated</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Consultas → Permisos</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:hidden">
       <div class="list-row"><div class="grow"><div class="tt">Salida a enfermería — Daniel R. · 6-A</div><div class="st">8:15 → regresó 8:47 · por Nodo Biblioteca</div></div><span class="badge b-wn new-mark">Regreso por espacio incorrecto<span class="new-flag">NUEVO</span></span></div>
@@ -211,7 +211,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Mostrar <code>ota_key</code> al provisionar</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> tras <code>POST /devices</code> o <code>/configure</code>, la respuesta trae <code>ota_key</code> una sola vez; mostrarla con copiar, igual que el token. <b>Por qué:</b> sin ella el nodo no puede recibir OTAs firmadas y no hay forma de recuperarla después.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/Devices.jsx</b> (modal de provisión) · Respuesta: ota_key</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/Devices.jsx</b> (modal de provisión) · Respuesta: ota_key</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Dispositivos → Provisionar nodo — resultado</span></div>
     <div class="frame-body"><div class="card" style="max-width:480px">
       <div class="row" style="margin-bottom:14px"><span class="badge b-ok"><span class="dot"></span>Nodo creado</span><span class="tt">Nodo 11-A</span></div>
@@ -225,7 +225,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Respuesta del acudiente en inasistencias</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Trivial</span></div>
     <p class="item-why"><b>Qué:</b> columna con <code>guardian_response</code>, <code>reminders_sent</code> y <code>escalated</code> en la consulta de inasistencias. <b>Por qué:</b> el worker y el webhook ya lo pueblan; sin la columna, secretaría no ve quién respondió ni cuántos recordatorios van.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/ConsultationDrawer.jsx</b> · Datos: metadata_json.guardian_response / reminders_sent / escalated</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/ConsultationDrawer.jsx</b> · Datos: metadata_json.guardian_response / reminders_sent / escalated</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Consultas → Inasistencias</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:hidden">
       <table>
@@ -249,7 +249,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Comando «Registro manual pendiente»</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Pequeño</span></div>
     <p class="item-why"><b>Qué:</b> nueva tarjeta de comando en Operaciones que llama <code>POST /operations/registro_manual_pendiente</code> <code>{student, minutes?, reason?}</code>. <b>Por qué:</b> suspende los detectores de ese estudiante hasta N minutos (o hasta que se haga el <code>registro_manual</code>); hoy marcar a mano genera falsas alertas de evasión.</p>
-    <p class="item-meta">Archivos: <b>PWA/src/pages/Operation.jsx</b> + <b>PWA/src/api/operations.js</b> · Endpoint: POST /operations/registro_manual_pendiente</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/pages/Operation.jsx</b> + <b>frontend/pwa/src/api/operations.js</b> · Endpoint: POST /operations/registro_manual_pendiente</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Operaciones — selector de comando + formulario</span></div>
     <div class="frame-body">
       <div class="row" style="flex-wrap:wrap;margin-bottom:16px">
@@ -271,7 +271,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Botón «Derivar a seguimiento»</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Pequeño</span></div>
     <p class="item-why"><b>Qué:</b> acción en el detalle de alerta / <code>TrackingModal</code> que llama <code>POST /tracking/derive</code> con el origen. <b>Por qué:</b> hoy una alerta de riesgo no puede convertirse en seguimiento formal desde la UI; hay que salir y crearlo a mano perdiendo el vínculo origen.</p>
-    <p class="item-meta">Archivos: <b>PWA/src/api/tracking.js</b> (método nuevo) + <b>PWA/src/components/patterns/TrackingModal.jsx</b> · Endpoint: POST /tracking/derive</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/api/tracking.js</b> (método nuevo) + <b>frontend/pwa/src/components/patterns/TrackingModal.jsx</b> · Endpoint: POST /tracking/derive</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Detalle de alerta — acciones</span></div>
     <div class="frame-body"><div class="card" style="max-width:520px">
       <div class="row" style="margin-bottom:12px"><span class="badge b-dg">Riesgo alto</span><span class="tt">Sara Gómez · 7-B</span><span class="st" style="margin-left:auto">score 87</span></div>
@@ -288,7 +288,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Campos nuevos en la ficha de seguimiento</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Pequeño</span></div>
     <p class="item-why"><b>Qué:</b> mostrar <code>origin_type</code>/<code>origin_id</code> (alerta o incidente que lo originó), <code>dependency</code> y <code>assigned_to_user_id</code>. <b>Por qué:</b> el backend ya guarda la trazabilidad; sin mostrarla, el seguimiento aparece «de la nada» y nadie sabe quién es responsable.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/components/patterns/TrackingModal.jsx</b> (o ficha) · Datos: origin_*, dependency, assigned_to_user_id</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/components/patterns/TrackingModal.jsx</b> (o ficha) · Datos: origin_*, dependency, assigned_to_user_id</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Seguimiento — encabezado de ficha</span></div>
     <div class="frame-body"><div class="card" style="max-width:520px">
       <div class="row" style="margin-bottom:14px"><div class="av">SG</div><div class="grow"><div class="tt">Sara Gómez · 7-B</div><div class="st">Seguimiento activo desde 12 sep</div></div><span class="badge b-wn">En curso</span></div>
@@ -304,7 +304,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Acciones «Reasignar» y «Reprovisionar» en Dispositivos</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Pequeño</span></div>
     <p class="item-why"><b>Qué:</b> menú por fila con <code>POST /devices/reassign</code> <code>{device_id, group_id?, classroom_id?}</code> y <code>/reprovision</code> (rota token + ota_key). <b>Por qué:</b> hoy un nodo que cambia de aula o se compromete no tiene salida en la UI — hay que borrarlo y recrearlo.</p>
-    <p class="item-meta">Archivos: <b>PWA/src/pages/Devices.jsx</b> + <b>PWA/src/api/devices.js</b> · Endpoints: POST /devices/reassign, /devices/reprovision</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/pages/Devices.jsx</b> + <b>frontend/pwa/src/api/devices.js</b> · Endpoints: POST /devices/reassign, /devices/reprovision</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Dispositivos — menú de acciones por nodo</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:visible">
       <table>
@@ -326,7 +326,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Citación disponible para Secretaría</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Pequeño</span></div>
     <p class="item-why"><b>Qué:</b> agregar <code>SECRETARIA</code> al comando <code>citacion</code> en <code>roles.js</code> y verificar el permiso backend. <b>Por qué:</b> F-25 — secretaría es quien agenda con el acudiente en la práctica; hoy no puede emitir la citación aunque el flujo lo exige.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/config/roles.js</b> · Comando: citacion → roles + SECRETARIA</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/config/roles.js</b> · Comando: citacion → roles + SECRETARIA</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Operaciones — vista de Secretaría</span></div>
     <div class="frame-body">
       <div class="row" style="flex-wrap:wrap">
@@ -342,7 +342,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Interceptor HTTP 428 → wizard de onboarding</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Pequeño</span></div>
     <p class="item-why"><b>Qué:</b> en <code>client.js</code>, interceptar <code>{status:'onboarding_required', missing:[schedule|groups|risk_config]}</code> y abrir el wizard en el paso que falta (o <code>SystemInactiveScreen</code> si el rol no tiene potestad). <b>Por qué:</b> hoy un 428 cae como error genérico; el usuario no sabe que falta configuración ni cómo completarla.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/api/client.js</b> · Respuesta: HTTP 428 onboarding_required → OnboardingFlow / SystemInactiveScreen</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/api/client.js</b> · Respuesta: HTTP 428 onboarding_required → OnboardingFlow / SystemInactiveScreen</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Flujo: respuesta 428 → wizard en el paso faltante</span></div>
     <div class="frame-body">
       <div class="row" style="margin-bottom:16px;flex-wrap:wrap">
@@ -384,7 +384,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Publicar y revocar actualizaciones OTA</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Medio</span></div>
     <p class="item-why"><b>Qué:</b> en Dispositivos, panel para <code>POST /devices/ota/publish</code> <code>{version, payload_url, payload_sha256, min_version?, notes?}</code> y <code>/revoke</code> <code>{update_id}</code>, más la lista de despliegues. <b>Por qué:</b> sin UI, actualizar el firmware de los nodos exige tocar la API a mano — y revocar una mala es imposible.</p>
-    <p class="item-meta">Archivos: <b>PWA/src/pages/Devices.jsx</b> + <b>PWA/src/api/devices.js</b> · Endpoints: POST /devices/ota/publish, /ota/revoke · Roles: RECTOR/COORDINATOR</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/pages/Devices.jsx</b> + <b>frontend/pwa/src/api/devices.js</b> · Endpoints: POST /devices/ota/publish, /ota/revoke · Roles: RECTOR/COORDINATOR</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Dispositivos → pestaña «Actualizaciones»</span></div>
     <div class="frame-body">
       <div class="card" style="max-width:520px;margin-bottom:14px">
@@ -443,7 +443,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Descargas de reportes exportados</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Medio</span></div>
     <p class="item-why"><b>Qué:</b> lista paginada de <code>report_exports</code> con descarga. <b>Por qué:</b> <code>Downloads.jsx</code> hoy es la página de instalación de la PWA, no de exportaciones; los reportes pesados que genera el backend no tienen dónde aparecer.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/Downloads.jsx</b> (o sección en Informes) · Datos: report_exports (lista + descarga)</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/Downloads.jsx</b> (o sección en Informes) · Datos: report_exports (lista + descarga)</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Informes → «Exportaciones»</span></div>
     <div class="frame-body"><div class="card" style="padding:0;overflow:hidden">
       <div class="list-row"><div class="grow"><div class="tt">Asistencia septiembre — consolidado</div><div class="st">Generado 18 sep · 2.4 MB · CSV</div></div><span class="badge b-ok">Listo</span><button class="btn btn-s btn-sm new-mark">Descargar<span class="new-flag">NUEVO</span></button></div>
@@ -456,7 +456,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Acciones embebidas en la ficha del estudiante</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Medio</span></div>
     <p class="item-why"><b>Qué:</b> desde el drawer de consulta, atajos a permiso / incidente / citación con el estudiante ya preseleccionado (F-24 / V-140). <b>Por qué:</b> hoy la ficha solo tiene «Seguimiento»; actuar sobre lo que se ve exige salir a Operaciones y volver a buscar al estudiante.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/pages/ConsultationDrawer.jsx</b> · Acciones: abrir Operation con student preseleccionado</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/pages/ConsultationDrawer.jsx</b> · Acciones: abrir Operation con student preseleccionado</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Consultas → ficha de estudiante — pie de acciones</span></div>
     <div class="frame-body"><div class="card" style="max-width:560px">
       <div class="row" style="margin-bottom:14px"><div class="av">SG</div><div class="grow"><div class="tt">Sara Gómez · 7-B</div><div class="st">Riesgo alto · 3 ausencias en 10 días</div></div></div>
@@ -481,7 +481,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Notificaciones en vivo por SSE</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Grande</span></div>
     <p class="item-why"><b>Qué:</b> reemplazar el polling de <code>NotificationContext.jsx</code> por <code>EventSource</code> contra <code>/events/stream</code>, con fallback a polling si el stream cae. <b>Por qué:</b> V-110/F-29 — hoy las novedades tardan hasta el intervalo del poll; con SSE llegan al instante y se puede mostrar el estado «en vivo».</p>
-    <p class="item-meta">Archivos: <b>PWA/src/context/NotificationContext.jsx</b> + indicador en topbar · Endpoint: GET /events/stream (EventSource)</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/context/NotificationContext.jsx</b> + indicador en topbar · Endpoint: GET /events/stream (EventSource)</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Notificaciones — cabecera con estado de conexión</span></div>
     <div class="frame-body">
       <div class="row" style="margin-bottom:14px"><span class="tt">Notificaciones</span><span class="badge b-ok new-mark" style="margin-left:auto"><span class="dot"></span>En vivo<span class="new-flag">NUEVO</span></span></div>
@@ -497,7 +497,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Bandeja de mensajería interna</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Grande</span></div>
     <p class="item-why"><b>Qué:</b> módulo nuevo para <code>internal_messages</code>: lista de hilos + conversación + vínculo al acontecimiento origen (<code>origin_type</code>/<code>origin_id</code>). <b>Por qué:</b> F-22/V-027 — el backend guarda los mensajes pero la PWA no tiene dónde leerlos; hoy la coordinación interna se hace por fuera del sistema.</p>
-    <p class="item-meta">Archivos: página nueva (p.ej. <b>PWA/src/pages/Messages.jsx</b>) + entrada en sidebar · Datos: internal_messages con hilo y origen</p>
+    <p class="item-meta">Archivos: página nueva (p.ej. <b>frontend/pwa/src/pages/Messages.jsx</b>) + entrada en sidebar · Datos: internal_messages con hilo y origen</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Mensajes — lista + hilo</span></div>
     <div class="frame-body"><div class="shell">
       <div style="width:220px;flex-shrink:0;border-right:1px solid var(--nx-border);padding-right:12px">
@@ -517,7 +517,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Gestión de usuarios para directivos</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Grande</span></div>
     <p class="item-why"><b>Qué:</b> CRUD de usuarios/roles para RECTOR/COORDINATOR (F-26). <b>Por qué:</b> <code>users.js</code> solo cubre el propio perfil; hoy no hay forma de dar de alta a un docente o cambiar un rol sin tocar la base de datos. Requiere <code>admin.php</code> en backend además de la página.</p>
-    <p class="item-meta">Archivos: página nueva + <b>PWA/src/api/users.js</b> (métodos admin) · Requiere backend: admin.php</p>
+    <p class="item-meta">Archivos: página nueva + <b>frontend/pwa/src/api/users.js</b> (métodos admin) · Requiere backend: admin.php</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Usuarios — lista + acciones (solo directivos)</span></div>
     <div class="frame-body">
       <div class="row" style="margin-bottom:14px"><input class="inp" placeholder="Buscar usuario…" style="max-width:280px;height:40px"><button class="btn btn-p btn-sm new-mark" style="margin-left:auto">+ Nuevo usuario<span class="new-flag">NUEVO</span></button></div>
@@ -538,7 +538,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Reimplementación de Consultas</h3><span class="tag tag-new">NUEVO</span><span class="tag tag-tier">Grande</span></div>
     <p class="item-why"><b>Qué:</b> rediseñar <code>Consultation.jsx</code>/<code>ConsultationDrawer.jsx</code> según la filosofía — listas con contexto y siguiente acción, no tablas ERP. <b>Por qué:</b> DEC-FE-06 aplazó el rediseño a <code>14_CONSULTAS_EXPERIENCE_PROPOSAL.md</code>, <b>documento que aún no existe</b>: primero hay que escribir la propuesta, luego implementar.</p>
-    <p class="item-meta">Archivos: <b>PWA/src/pages/Consultation.jsx</b> + <b>ConsultationDrawer.jsx</b> · Bloqueado por: redactar doc 14</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/pages/Consultation.jsx</b> + <b>ConsultationDrawer.jsx</b> · Bloqueado por: redactar doc 14</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Consultas — concepto: de tabla a situaciones</span></div>
     <div class="frame-body">
       <div class="sig" style="margin-bottom:14px"><span class="sig-dot"></span><span class="sig-t">3 estudiantes requieren seguimiento esta semana</span><span class="sig-time">hoy</span></div>
@@ -560,7 +560,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">Bottom-bar móvil vs «nunca bottom-nav»</h3><span class="tag tag-tier">Decisión</span></div>
     <p class="item-why"><b>Situación:</b> <code>Layout.jsx</code> tiene una barra inferior (<code>PRIMARY_ACTIONS</code>) y oculta el sidebar a DOCENTE/PORTERO/AUXILIAR. <code>05_INFORMATION_ARCHITECTURE.md §6</code> dice «nunca bottom-nav ni arquitectura híbrida». <b>Decisión:</b> o se registra la excepción como DEC-* (la barra da acceso rápido a la acción primaria en el teléfono del docente) o se refactoriza a sidebar-only.</p>
-    <p class="item-meta">Archivo: <b>PWA/src/layout/Layout.jsx</b> · Regla: 05 §6 · Falta: DEC-* que la documente</p>
+    <p class="item-meta">Archivo: <b>frontend/pwa/src/layout/Layout.jsx</b> · Regla: 05 §6 · Falta: DEC-* que la documente</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Móvil — barra inferior actual (la que hay que decidir)</span></div>
     <div class="frame-body" style="display:flex;justify-content:center">
       <div style="width:300px;border:1px solid var(--nx-border);border-radius:20px;overflow:hidden;background:var(--nx-surface)">
@@ -581,7 +581,7 @@ footer{margin-top:64px;padding-top:32px;border-top:1px solid var(--nx-border);te
   <div class="item">
     <div class="item-h"><h3 class="item-t">JWT en localStorage (deuda de seguridad)</h3><span class="tag tag-tier">Decisión</span></div>
     <p class="item-why"><b>Situación:</b> B-07 — el token vive en <code>localStorage</code> como workaround de ITP (Safari bloquea cookies de terceros). Riesgo XSS. <b>Decisión:</b> se elimina solo cuando frontend y backend queden same-site y se pueda volver a cookie <code>HttpOnly</code> pura. No es una pantalla: es migración de infraestructura.</p>
-    <p class="item-meta">Archivos: <b>PWA/src/api/client.js</b> + <b>PWA/src/context/AuthContext.jsx</b> · Bloqueado por: same-site frontend/backend</p>
+    <p class="item-meta">Archivos: <b>frontend/pwa/src/api/client.js</b> + <b>frontend/pwa/src/context/AuthContext.jsx</b> · Bloqueado por: same-site frontend/backend</p>
     <div class="frame"><div class="frame-bar"><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-dot"></span><span class="frame-title">Flujo actual vs objetivo</span></div>
     <div class="frame-body">
       <div class="row" style="margin-bottom:12px;flex-wrap:wrap"><span class="badge b-wn">Ahora</span><span class="st">cross-site → ITP bloquea cookie → token en localStorage → riesgo XSS</span></div>

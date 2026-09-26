@@ -3,7 +3,7 @@
  * 1000 singles + 260 conversaciones (~2500 turnos) + 500 adversariales.
  * Semilla fija → artefacto reproducible e INDEPENDIENTE del entrenamiento:
  * los templates se escriben aquí, nunca se copian del blind operativo.
- * Uso: php test/gen_semantic_benchmark.php  → test/semantic_blind.json
+ * Uso: php test/gen_semantic_benchmark.php  → test/fixtures/semantic_blind.json
  */
 mt_srand(20260921);
 
@@ -294,5 +294,5 @@ $doc = [
     'adversarial' => $ADV,
     'conversations' => $CV,
 ];
-file_put_contents(__DIR__ . '/semantic_blind.json', json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+file_put_contents(__DIR__ . '/fixtures/semantic_blind.json', json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 printf("singles=%d convos=%d turnos=%d adversarial=%d\n", count($S), count($CV), $turns, count($ADV));

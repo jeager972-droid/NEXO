@@ -39,8 +39,8 @@ Documentación de los entornos de NEXO y cómo desplegar cada componente. Basada
 | Backend API | PHP 8.2 + Nginx + PHP-FPM | Render (Docker) | `backend/api/` |
 | Base de datos | PostgreSQL 15+ | Render | `sql/schema.sql` |
 | Cache/colas | Redis 7+ | Render (opcional) | — |
-| PWA | React + Vite | Vercel | `PWA/` |
-| Landing | React + Vite + GSAP | Vercel | `landing/` |
+| PWA | React + Vite | Vercel | `frontend/pwa/` |
+| Landing | React + Vite + GSAP | Vercel | `frontend/landing/` |
 | Edge | C++ (ARM64) | Raspberry Pi 4 (on-prem) | `backend/edge/` |
 | CI/CD | GitHub Actions | GitHub | `.github/workflows/` |
 
@@ -113,10 +113,10 @@ El job `backend-deploy` del CI/CD ejecuta en push a `main`:
 ### Instalación inicial
 
 ```bash
-DATABASE_URL="postgresql://user:pass@host:5432/nexo" ./deploy_db.sh
+DATABASE_URL="postgresql://user:pass@host:5432/nexo" ./sql/deploy_db.sh
 ```
 
-`deploy_db.sh` ejecuta `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/schema.sql`. Crea todas las tablas, funciones, triggers, policies RLS, particiones iniciales, y el seed mínimo.
+`sql/deploy_db.sh` ejecuta `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/schema.sql`. Crea todas las tablas, funciones, triggers, policies RLS, particiones iniciales, y el seed mínimo.
 
 ### PgBouncer
 
@@ -150,7 +150,7 @@ Variables: `REDISHOST`, `REDISPORT`, `REDIS_PASSWORD`, `REDIS_TLS` (o `REDIS_URL
 
 ### Configuración
 
-`PWA/vercel.json`:
+`frontend/pwa/vercel.json`:
 
 - Build command: `npm run build`.
 - Output: `dist`.
@@ -274,18 +274,18 @@ Desde la WebApp (`/dispositivos`), un RECTOR/COORDINATOR registra el dispositivo
 
 | Job | Condición | Qué hace |
 |---|---|---|
-| `webapp-lint` | cambios en `PWA/**` | eslint |
-| `webapp-test` | cambios en `PWA/**` | vitest |
-| `webapp-build` | cambios en `PWA/**` | vite build |
-| `webapp-deploy` | push a `main` + cambios en `PWA/**` | deploy a Vercel |
+| `webapp-lint` | cambios en `frontend/pwa/**` | eslint |
+| `webapp-test` | cambios en `frontend/pwa/**` | vitest |
+| `webapp-build` | cambios en `frontend/pwa/**` | vite build |
+| `webapp-deploy` | push a `main` + cambios en `frontend/pwa/**` | deploy a Vercel |
 | `backend-lint` | cambios en `backend/**` | php -l |
 | `backend-test-sql` | cambios en `backend/**` o `sql/**` | SQL Schema Tests |
 | `backend-test-api` | cambios en `backend/**` | API Unit Tests |
 | `backend-test-runners` | cambios en `backend/**` o `sql/**` | Runner Tests (con PostgreSQL service) |
 | `backend-build` | cambios en `backend/**` | docker build |
 | `backend-deploy` | push a `main` + cambios en `backend/**` | deploy a Render |
-| `landing-build` | cambios en `landing/**` | vite build |
-| `landing-deploy` | push a `main` + cambios en `landing/**` | deploy a Vercel |
+| `landing-build` | cambios en `frontend/frontend/landing/**` | vite build |
+| `landing-deploy` | push a `main` + cambios en `frontend/frontend/landing/**` | deploy a Vercel |
 | `edge-test` | cambios en `backend/edge/**` | CTest (x86) |
 | `edge-build` | cambios en `backend/edge/**` | CMake release (x86 + cross-compile ARM64) |
 

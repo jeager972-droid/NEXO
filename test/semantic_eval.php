@@ -9,7 +9,7 @@ require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';
 require_once __DIR__ . '/../backend/api/routes/chat.php';
 require_once __DIR__ . '/harness_turn.php';
 
-$set = json_decode(file_get_contents(__DIR__ . '/semantic_blind.json'), true);
+$set = json_decode(file_get_contents(__DIR__ . '/fixtures/semantic_blind.json'), true);
 
 $S = ['ok'=>0,'n'=>0,'raw'=>0,'fc'=>0,'crit'=>0];
 $perCat = []; $fcList = []; $critList = [];

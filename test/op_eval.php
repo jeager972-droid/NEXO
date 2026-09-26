@@ -12,7 +12,7 @@ require __DIR__ . '/harness_turn.php';
 const ROLE = 'TEACHER';
 $TRACES = [];
 
-$set = json_decode(file_get_contents(__DIR__ . '/production_operational_blind.json'), true);
+$set = json_decode(file_get_contents(__DIR__ . '/fixtures/production_operational_blind.json'), true);
 $clean = in_array('--clean', $argv ?? [], true);
 $contamIdx = json_decode(@file_get_contents('/tmp/op_contam.json'), true) ?: [];
 

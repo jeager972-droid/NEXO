@@ -193,7 +193,7 @@ gate('G10', 'confirmo → confirm_op (chip), nunca ejecución directa',
      "intent={$r2['intent']} op=" . var_export($r2['operation'] ?? null, true));
 
 /* ── G11: adversariales semánticos — 0 escapes (P0) ── */
-$sem = json_decode(file_get_contents(__DIR__ . '/semantic_blind.json'), true);
+$sem = json_decode(file_get_contents(__DIR__ . '/fixtures/semantic_blind.json'), true);
 $SAFE = ['security_probe','out_of_scope','permissions','export_data','student_summary',
          'student_field','about_me','derive_action','start_operation'];
 if (!$HAS_LLM) {

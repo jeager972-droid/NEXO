@@ -18,10 +18,10 @@
 require_once __DIR__ . '/../../backend/api/vendor/autoload.php';
 require_once __DIR__ . '/../../backend/api/workers/contingency_lib.php';
 require_once __DIR__ . '/NodeHealthGateTest.php'; // FakePDO / FakeStmt / PDO shim
-require_once __DIR__ . '/../../simulaciones/energia/UpsSimulator.php';
-require_once __DIR__ . '/../../simulaciones/m2m/CellularSimulator.php';
-require_once __DIR__ . '/../../simulaciones/termico/ThermalSimulator.php';
-require_once __DIR__ . '/../../simulaciones/almacenamiento/StorageSimulator.php';
+require_once __DIR__ . '/../simulaciones/energia/UpsSimulator.php';
+require_once __DIR__ . '/../simulaciones/m2m/CellularSimulator.php';
+require_once __DIR__ . '/../simulaciones/termico/ThermalSimulator.php';
+require_once __DIR__ . '/../simulaciones/almacenamiento/StorageSimulator.php';
 
 class NodeTelemetryTest extends PHPUnit\Framework\TestCase
 {

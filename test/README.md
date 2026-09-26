@@ -15,7 +15,7 @@ test/
 
 ## Tests de PWA (Vitest)
 
-Los tests de Vitest permanecen en `PWA/src/__tests__/` porque Vitest/Vite
+Los tests de Vitest permanecen en `frontend/pwa/src/__tests__/` porque Vitest/Vite
 no permite cargar tests desde fuera del root del proyecto. Ejecutar con:
 
 ```bash
