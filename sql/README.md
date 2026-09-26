@@ -15,7 +15,7 @@ detalle exacto de columnas y constraints consultar el archivo fuente.
 6. [Triggers](#6-triggers)
 7. [Funciones](#7-funciones)
 8. [Vistas](#8-vistas)
-9. [Despliegue: deploy_db.sh](#9-despliegue-deploy_dbsh)
+9. [Despliegue](#9-despliegue)
 10. [Seeds](#10-seeds)
 11. [Factory reset](#11-factory-reset)
 12. [Convenciones del esquema](#12-convenciones-del-esquema)
@@ -69,7 +69,6 @@ DISCARD ALL` limpia el estado al devolver la conexión al pool.
 | Archivo | Rol |
 |---|---|
 | `schema.sql` | Esquema canónico completo y autocontenido: extensiones, `schema_migrations`, 68 tablas, índices, funciones, triggers, RLS, particiones DEFAULT, funciones de particionado, seed mínimo. Idempotente. |
-| `deploy_db.sh` | Wrapper que ejecuta `schema.sql` contra `$DATABASE_URL` con `ON_ERROR_STOP=1`. |
 | `seed.sql` | Seed masivo de demostración: puebla todas las escuelas activas con un colegio colombiano realista (~500 estudiantes/escuela, 30 días lectivos de eventos). Requiere `factory_reset.sql` previo. |
 | `factory_reset.sql` | Borra toda la data operativa preservando institución, roles/permisos y usuarios no-GUARDIAN. |
 
@@ -77,8 +76,8 @@ Fuentes relacionadas fuera de este directorio:
 
 | Archivo | Rol |
 |---|---|
-| `pruebas/seed.sql` | Seed del stack de integración Docker (`pruebas/docker-compose.test.yml`): IDs fijos deterministas, escuela `IE Test NEXO` + `IE Sin Onboarding`. |
-| `pruebas/seed_chat_fixture.sql` | Fixture aditivo para pruebas conversacionales live (grupos 10-A/10-B, estudiantes e incidentes concretos). |
+| `test/e2e/seed.sql` | Seed del stack de integración Docker (`test/e2e/docker-compose.test.yml`): IDs fijos deterministas, escuela `IE Test NEXO` + `IE Sin Onboarding`. |
+| `test/e2e/seed_chat_fixture.sql` | Fixture aditivo para pruebas conversacionales live (grupos 10-A/10-B, estudiantes e incidentes concretos). |
 | `backend/api/infra/scripts/create_monthly_partition.sh` | Cron mensual que crea la partición de `biometric_events` del mes siguiente. |
 | `backend/api/infra/scripts/recalc_risk.sh` | Cron diario (02:00 UTC) que recalcula métricas de riesgo por escuela. |
 | `backend/api/infra/scripts/crontab` | Crontab del contenedor API (particiones, recálculo de riesgo, purga de notificaciones, keep-alive). |
@@ -473,17 +472,18 @@ lecturas derivadas se resuelven con:
 
 ---
 
-## 9. Despliegue: `deploy_db.sh`
+## 9. Despliegue
 
 ```bash
-DATABASE_URL="postgresql://usuario:password@host:5432/nexo" ./sql/deploy_db.sh
+psql "postgresql://usuario:password@host:5432/nexo" -v ON_ERROR_STOP=1 -f sql/schema.sql
 ```
 
 Comportamiento:
 
-1. Falla si `DATABASE_URL` está vacía, si `psql` no está en PATH o si falta `sql/schema.sql` (`set -euo pipefail`).
-2. Ejecuta `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/schema.sql` — aborta al primer error.
-3. Imprime cabecera con target/schema/fecha UTC y resultado `[OK]`/`[FAIL]`.
+1. `psql` aborta al primer error (`ON_ERROR_STOP=1`).
+2. `schema.sql` es autocontenido: crea extensiones, `schema_migrations`, las
+   68 tablas, índices, funciones, triggers, policies RLS, particiones
+   iniciales y el seed mínimo.
 
 ### Idempotencia
 
@@ -564,9 +564,9 @@ Puebla **todas las escuelas activas** con un colegio colombiano realista:
   acudientes, 24 aulas + 26 nodos edge, 720 schedules, ~75k eventos, ~2.5k
   incidentes, WhatsApp + notificaciones, riesgo evaluado en top-150.
 
-### 10.3 Seeds del stack de integración (`pruebas/`)
+### 10.3 Seeds del stack de integración (`test/e2e/`)
 
-- `pruebas/seed.sql` — corre tras `schema.sql` en el initdb de
+- `test/e2e/seed.sql` — corre tras `schema.sql` en el initdb de
   `docker-compose.test.yml`. Idempotente con **UUIDs fijos deterministas**:
   municipio/depto `TEST-*`, escuela `IE Test NEXO` (`dane_code TEST-001`),
   1 grupo 6-A, 3 estudiantes (Eva es `biometric_exempt`), coordinador /
@@ -577,7 +577,7 @@ Puebla **todas las escuelas activas** con un colegio colombiano realista:
   password `admin123`) sobre la escuela `000000000`, segunda escuela
   `IE Sin Onboarding` (`TEST-002`, todos los flags en FALSE) con secretaria
   y coordinador propios, y `daily_schedule_config` para hoy.
-- `pruebas/seed_chat_fixture.sql` — fixture **aditivo** para pruebas
+- `test/e2e/seed_chat_fixture.sql` — fixture **aditivo** para pruebas
   conversacionales live (`continuity_50`, `live_probe`, conversaciones
   §31–37 del spec): grupos 10-A/10-B, 6 estudiantes en 10-A (incl. Tomás
   Castaño Gutiérrez) + 2 en 10-B con acudiente compartido, acceso docente a
@@ -585,7 +585,7 @@ Puebla **todas las escuelas activas** con un colegio colombiano realista:
   métricas, justificaciones y usuarios/estudiantes extra. Idempotente.
 
 ```bash
-docker exec -i nexo-test-db-1 psql -U nexo_test -d nexo_test -f - < pruebas/seed_chat_fixture.sql
+docker exec -i nexo-test-db-1 psql -U nexo_test -d nexo_test -f - < test/e2e/seed_chat_fixture.sql
 ```
 
 ---

@@ -8,16 +8,14 @@ estudiantil, alertas automáticas y comunicación con familias por WhatsApp).
 > El usuario no abre software; entra a su jornada de trabajo.
 > — `frontend/design-philosophy/UX_DESIGN.md`
 
-El directorio `frontend/` contiene **dos aplicaciones desplegables**, una
-biblioteca de especificación de diseño y una colección de prototipos HTML
-desechables:
+El directorio `frontend/` contiene **dos aplicaciones desplegables** y una
+biblioteca de especificación de diseño:
 
 ```
 frontend/
 ├── pwa/                  # Aplicación principal (SPA instalable, todos los roles)
 ├── landing/              # Sitio público / marketing (captura de leads)
-├── design-philosophy/    # 15 documentos de especificación UX/UI (fuente de verdad)
-└── prototipos/           # 4 mocks HTML estáticos para validación visual
+└── design-philosophy/    # 15 documentos de especificación UX/UI (fuente de verdad)
 ```
 
 ## Los dos deployables
@@ -77,24 +75,6 @@ UX_DESIGN.md  (visión, prevalece ante cualquier contradicción)
 prevalece; si un componente cita `CMP-*`/`SCR-*`/`DEC-*`, ese identificador se
 puede buscar aquí para saber *por qué* existe.
 
-## Prototipos — `frontend/prototipos/`
-
-Mocks HTML estáticos (sin React, sin API) creados para validación visual antes
-de implementar. **Son desechables**: su README propio (`prototipos/onboarding/README.md`)
-los marca para borrado tras validar el flujo real.
-
-| Prototipo | Archivo | Qué valida | Implementación real |
-|---|---|---|---|
-| Onboarding guiado por Nexus | `prototipos/onboarding/index.html` | Flujo de configuración inicial (jornadas, grupos, riesgo) con el bot-guía | `pwa/src/pages/onboarding/OnboardingFlow.jsx` + `components/patterns/NexusGuide.jsx` |
-| Frontend pendiente | `prototipos/frontend/index.html` | Notificaciones con acciones, operación, dispositivos/OTA, configuración, vista docente | `pages/Notifications.jsx`, `Operation.jsx`, `Devices.jsx`, `Profile.jsx` |
-| Pantallas pendientes | `prototipos/pendientes/index.html` | Preview de implementación de pantallas por construir | páginas de `pwa/src/pages/` |
-| Lectores de huella | `prototipos/sensores/index.html` | Gestión de sensores biométricos | `pages/Devices.jsx` (SCR-DEV-01) |
-
-> ⚠️ El README de `prototipos/onboarding/` referencia un preview standalone
-> (`pwa/onboarding-preview.html`, `pwa/src/preview/`) que **ya no existe** en el
-> repo: el modo `simulate` sigue disponible en `OnboardingFlow` pero solo se usa
-> internamente para desarrollo.
-
 ## Stack compartido y convenciones
 
 - **React 18 + Vite 5** en ambos proyectos; todo JSX, sin TypeScript.
@@ -114,5 +94,4 @@ los marca para borrado tras validar el flujo real.
 |---|---|
 | [pwa/README.md](pwa/README.md) | Documentación exhaustiva de la aplicación (arquitectura, roles, API, chat Nexus, diseño, PWA, tests, deploy). Absorbe `docs/WEBAPP.md`. |
 | [landing/README.md](landing/README.md) | Documentación de la landing (secciones, canvas 3D, GSAP, contacto, build). Absorbe `docs/LANDING.md`. |
-| `docs/WEBAPP.md` / `docs/LANDING.md` | Versiones anteriores en `docs/`; los README de cada subproyecto son ahora la referencia actualizada. |
-| `../AGENTS.md` | Reglas de trabajo del repo (verificación local, restricciones). |
+| `../varios/docs/AGENTS.md` | Reglas de trabajo del repo (verificación local, restricciones). |

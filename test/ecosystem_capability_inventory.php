@@ -5,9 +5,9 @@
  * Produce cobertura trazable a elementos reales — nunca porcentajes libres.
  * Corre dentro del contenedor API (necesita PDO + archivos deployados).
  * ========================================================================== */
-$HTML = is_dir('/var/www/html/lib') ? '/var/www/html' : dirname(__DIR__) . '/backend/api';
+$HTML = is_dir('/var/www/html/nexus') ? '/var/www/html' : dirname(__DIR__) . '/backend/api';
 foreach (['nexus_nlu.php','nexus_semantic.php'] as $lib) {
-    foreach ([__DIR__.'/../backend/api/lib/'.$lib, "$HTML/lib/$lib"] as $p)
+    foreach ([__DIR__.'/../backend/api/nexus/'.$lib, "$HTML/nexus/$lib", "$HTML/lib/$lib"] as $p)
         if (is_file($p)) { require_once $p; break; }
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 }

@@ -55,10 +55,9 @@ Cada componente tiene documentación exhaustiva en su propio README
 | **PWA (app principal)** | `frontend/pwa/` | ~427 | [frontend/pwa/README.md](frontend/pwa/README.md) |
 | **Landing** | `frontend/landing/` | ~241 | [frontend/landing/README.md](frontend/landing/README.md) |
 | **Frontend global + diseño** | `frontend/` | ~118 | [frontend/README.md](frontend/README.md) · [design-philosophy/](frontend/design-philosophy/) |
-| **Pruebas (suites + stack)** | `test/` · `pruebas/` | ~360 | [test/README.md](test/README.md) · [pruebas/README.md](pruebas/README.md) |
-| **Despliegue** | `docs/DEPLOYMENT.md` | — | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| **Seguridad** | transversal | — | [docs/SECURITY.md](docs/SECURITY.md) |
-| **Utilidades de repo** | `tools/` | — | repomix (empaquetado del código para IA) |
+| **Pruebas (suites + stack e2e)** | `test/` | ~360 | [test/README.md](test/README.md) · [test/e2e/README.md](test/e2e/README.md) |
+| **Despliegue** | `varios/docs/DEPLOYMENT.md` | — | [varios/docs/DEPLOYMENT.md](varios/docs/DEPLOYMENT.md) |
+| **Seguridad** | transversal | — | [varios/docs/SECURITY.md](varios/docs/SECURITY.md) |
 
 ## Qué hace cada pieza
 
@@ -102,9 +101,10 @@ Sin clave LLM o con el proveedor caído, el sistema degrada a
 `school_id` en 53 tablas (los datos de un colegio son invisibles para otro,
 incluso con un bug en la API). Acceso vía PgBouncer (`transaction` pooling →
 el contexto RLS se fija por transacción, no por sesión). `schema.sql` es
-autocontenido e idempotente; despliegue con `sql/deploy_db.sh`.
+autocontenido e idempotente; despliegue con `psql` directo o el stack de
+`test/e2e/`.
 
-### `frontend/` — PWA, landing, diseño y prototipos
+### `frontend/` — PWA, landing y diseño
 
 - **`pwa/`** — React 18 + Vite + Tailwind + PWA instalable. Los 7 roles
   (rector, coordinador, docente, secretaría, portero, auxiliar,
@@ -112,7 +112,6 @@ autocontenido e idempotente; despliegue con `sql/deploy_db.sh`.
   notificaciones, enrolamiento. Spec de diseño: `design-philosophy/`.
 - **`landing/`** — sitio público/marketing con formulario de contacto y
   consentimiento de datos.
-- **`prototipos/`** — mockups HTML estáticos.
 - **`design-philosophy/`** — fuente de verdad UX/DES: filosofía, tokens,
   patrones, guía de implementación.
 
@@ -140,7 +139,7 @@ Dedo del estudiante
   compuerta `safety`, executors read-only, auditoría `CHAT_QUERY`.
 - **Auditoría**: `global_audit_logs` con cadena HMAC-SHA256 inmutable.
 
-Detalle completo: [docs/SECURITY.md](docs/SECURITY.md).
+Detalle completo: [varios/docs/SECURITY.md](varios/docs/SECURITY.md).
 
 ## Verificación local (sin cuota LLM)
 
@@ -159,26 +158,23 @@ Las suites sirven intents del snapshot `test/fixtures/llm_intents.json` —
 prueban el pipeline determinista completo menos la llamada al LLM. Las
 suites *live* (`continuity_50`, `scp_live`, `golden_live`, `heldout_live`,
 `live_probe*`, `blind_eval`, `op_eval`, `semantic_eval`) requieren el stack
-Docker de `pruebas/` o API/BD reales y gastan cuota del parser — ver
+Docker de `test/e2e/` o API/BD reales y gastan cuota del parser — ver
 [test/README.md](test/README.md) y AGENTS.md para cuándo correr cada una.
 
 ## Estructura del repo
 
 ```
 ├── backend/    api/ (PHP: rutas, nexus/, lib, workers) · edge/ (C++)
-├── frontend/   pwa/ · landing/ · prototipos/ · design-philosophy/
-├── docs/       DEPLOYMENT.md · SECURITY.md · documento_final.txt
-├── sql/        schema.sql · seed.sql · factory_reset.sql · deploy_db.sh
+├── frontend/   pwa/ · landing/ · design-philosophy/
+├── sql/        schema.sql · seed.sql · factory_reset.sql
 ├── test/       suites PHP + fixtures/ + simulaciones/ + api/ + runners/
-├── pruebas/    stack Docker de integración (api+db+redis+nodo)
-├── tools/      repomix (empaquetado del código)
-└── _cuarentena/ material retirado pendiente de veredicto — no es fuente
+│               + e2e/ (stack Docker de integración: api+db+redis+nodo)
+└── varios/     docs/ (DEPLOYMENT · SECURITY · AGENTS) · NEXO-HISTORY/
 ```
 
 ## Convenciones
 
-- Reglas para agentes y verificación local: [AGENTS.md](AGENTS.md).
-- Documento técnico-narrativo histórico: [docs/documento_final.txt](docs/documento_final.txt).
+- Reglas para agentes y verificación local: [varios/docs/AGENTS.md](varios/docs/AGENTS.md).
 - Commits pequeños con pruebas; no se hace push sin autorización.
-- `_cuarentena/` está pendiente de tu veredicto de borrado — ver
-  [_cuarentena/LEEME.md](_cuarentena/LEEME.md).
+- `varios/` contiene material auxiliar y el historial del proyecto
+  (`NEXO-HISTORY/`); no forma parte del producto vigente.

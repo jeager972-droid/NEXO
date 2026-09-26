@@ -11,9 +11,9 @@
  *
  * Uso: php test/nexus_capability_eval_v1.php [--json] [--verbose]
  */
-// el repo usa backend/api/lib/; en el contenedor de pruebas está plano en lib/
+// el repo usa backend/api/nexus/; en el contenedor de pruebas está plano en lib/
 foreach (['nexus_nlu.php','nexus_semantic.php'] as $lib) {
-    foreach ([__DIR__.'/../backend/api/lib/'.$lib, __DIR__.'/../lib/'.$lib] as $p)
+    foreach ([__DIR__.'/../backend/api/nexus/'.$lib, __DIR__.'/../lib/'.$lib] as $p)
         if (is_file($p)) { require $p; break; }
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 }

@@ -7,7 +7,7 @@ de verificación, del más barato al más real:
 |-------|-------|-------------|----------------|
 | (a) Suites PHP locales | `test/*.php` | Pipeline NLU/DSM real (`nxClassify`, `nxDialogueResolve`, `nxSlots`, `chatOperationCmd`, validador de planes) | Respuestas del parser LLM, servidas del snapshot `test/fixtures/llm_intents.json`; contexto de sesión en memoria; **sin DB ni HTTP** |
 | (b) PHPUnit | `test/api/`, `test/sql/`, `test/integration/`, `test/runners/` | Código PHP real, schema SQL real (parseo estático), simuladores de hardware | DB/Redis mockeados o ausentes; la mayoría son análisis estáticos |
-| (c) Stack Docker | `pruebas/` | **Todo**: PostgreSQL 15 + PgBouncer + Redis + API real + 6 workers en daemon + Mosquitto + supercronic | Solo el mundo exterior (módem, UPS, huella, tiempo) |
+| (c) Stack Docker | `test/e2e/` | **Todo**: PostgreSQL 15 + PgBouncer + Redis + API real + 6 workers en daemon + Mosquitto + supercronic | Solo el mundo exterior (módem, UPS, huella, tiempo) |
 | (d) Frontend/edge | `frontend/pwa` (Vitest), `backend/edge/tests/` (Catch2, symlink `test/edge`) | Componentes React, clientes API, módulos C++ del nodo | Hardware con stubs (no se necesita sensor real) |
 
 ## 1. Filosofía
@@ -22,11 +22,11 @@ de verificación, del más barato al más real:
 - **Lo que requiere entorno real**: las suites `*_live` (`continuity_50`,
   `scp_live`, `golden_live`, `heldout_live`, `live_probe*`, `live_battery`)
   hablan HTTP con la API y gastan cuota LLM. **NO corren en el alcance
-  local** — necesitan el stack `pruebas/` (`:18080`) o equivalente.
+  local** — necesitan el stack `test/e2e/` (`:18080`) o equivalente.
 - **Regla de honestidad del runner Docker**: ningún escenario inserta
   resultados para pasar; verifica el estado real persistido en la BD.
 
-## 2. Comandos canónicos locales (AGENTS.md)
+## 2. Comandos canónicos locales (varios/docs/AGENTS.md)
 
 Desde la raíz del repo:
 
@@ -160,7 +160,7 @@ tests PHPUnit de `test/api/` (sin hardware ni BD real):
 | `almacenamiento/StorageSimulator.php` | Disco + profundidad de cola + backlog DLQ — F-06/F-13 | `api/NodeTelemetryTest.php` |
 | `ota/OtaNodeSimulator.php` | Ciclo OTA del `OtaManager` C++: check→download(part)→verify sha256+firma→staged→applying→pending_confirm→APPLIED — Bloque D | `api/OtaUpdateTest.php` |
 
-## 7. `pruebas/` — stack Docker de integración
+## 7. `test/e2e/` — stack Docker de integración
 
 Levanta el **sistema backend real completo** en Docker, idéntico a
 producción: `PostgreSQL 15 → PgBouncer → API PHP (nginx+php-fpm)` con los 6
@@ -170,12 +170,12 @@ mundo exterior.
 
 | Archivo | Propósito |
 |---------|-----------|
-| `pruebas/docker-compose.test.yml` | Stack completo; schema auto-aplicado vía initdb (`sql/schema.sql` + `seed.sql` montados en `/docker-entrypoint-initdb.d/`); API en `:18080`; workers con intervalos acelerados (5–15 s); Twilio con credenciales dummy; `RATE_LIMIT_MAX=100000` para stress |
-| `pruebas/env.test` | Credenciales de prueba (claves JWT de test); `NLU_LLM_*` opcional vía defaults del compose (sin key, el chat cae a `out_of_scope`) |
-| `pruebas/seed.sql` | Seed determinista: escuela `22222222-…`, grupo 6-A mañana con 3 estudiantes, `coord@test.nexo` / `teach@test.nexo` / `guard@test.nexo` (`test1234`), dispositivo `44444444-…` token `nexo-test-device-token`, AES de prueba |
-| `pruebas/seed_chat_fixture.sql` | Fixture extendido para Nexus/chat: 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos, umbrales de riesgo, 8-C sin incidentes |
-| `pruebas/runner.py` | CLI maestro (requiere docker + compose + python3 + `cryptography`) |
-| `pruebas/nodo/` | Panel web del nodo: `panel_server.py` sirve `index.html` + mini-API JSON que acciona los hooks reales (`/api/fingerprint`→SYNC_ATTENDANCE, `/api/register`→REGISTER_STUDENT, `/api/ping`→telemetría) — forzado manual de acciones del edge |
+| `test/e2e/docker-compose.test.yml` | Stack completo; schema auto-aplicado vía initdb (`sql/schema.sql` + `seed.sql` montados en `/docker-entrypoint-initdb.d/`); API en `:18080`; workers con intervalos acelerados (5–15 s); Twilio con credenciales dummy; `RATE_LIMIT_MAX=100000` para stress |
+| `test/e2e/env.test` | Credenciales de prueba (claves JWT de test); `NLU_LLM_*` opcional vía defaults del compose (sin key, el chat cae a `out_of_scope`) |
+| `test/e2e/seed.sql` | Seed determinista: escuela `22222222-…`, grupo 6-A mañana con 3 estudiantes, `coord@test.nexo` / `teach@test.nexo` / `guard@test.nexo` (`test1234`), dispositivo `44444444-…` token `nexo-test-device-token`, AES de prueba |
+| `test/e2e/seed_chat_fixture.sql` | Fixture extendido para Nexus/chat: 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos, umbrales de riesgo, 8-C sin incidentes |
+| `test/e2e/runner.py` | CLI maestro (requiere docker + compose + python3 + `cryptography`) |
+| `test/e2e/nodo/` | Panel web del nodo: `panel_server.py` sirve `index.html` + mini-API JSON que acciona los hooks reales (`/api/fingerprint`→SYNC_ATTENDANCE, `/api/register`→REGISTER_STUDENT, `/api/ping`→telemetría) — forzado manual de acciones del edge |
 
 ### `runner.py`
 
@@ -207,11 +207,11 @@ anti-rollback), `horario`, `reconcile`.
 **⚠️ Advertencia bind-mount/SELinux.** Los volúmenes del compose usan la
 opción `:z` (re-etiquetado SELinux). En 2026-09-22 hubo un error de permisos
 de bind mount en este host y el usuario eligió **solo pruebas locales**; por
-regla de AGENTS.md no se altera SELinux ni controles de seguridad para
+regla de varios/docs/AGENTS.md no se altera SELinux ni controles de seguridad para
 sortearlo. Si `./runner.py up` falla con permisos de montaje, no forzar —
 reportar al usuario.
 
-Pendientes del entorno (según `pruebas/README.md`): escenarios edge-físico
+Pendientes del entorno (según `test/e2e/README.md`): escenarios edge-físico
 (`docker kill` vs `stop`), stress de workers con cola saturada, carga
 concurrente de N dispositivos, onboarding e2e por API, escenarios PWA (este
 stack es 100% backend) y Twilio real (credenciales dummy: valida la cola, no
@@ -276,7 +276,7 @@ Unitarios/estáticos de la API PHP; mockean DB/Redis donde hace falta.
 
 ### `test/integration/` — Integration Tests (2 archivos)
 
-End-to-end: **requieren la API corriendo** (local o el stack `pruebas/`) y
+End-to-end: **requieren la API corriendo** (local o el stack `test/e2e/`) y
 seed aplicado.
 
 | Test | Verifica |
@@ -333,12 +333,12 @@ Pipeline en push a `main`/`develop` y PR a `main`. Tres jobs:
 | `build-landing` | Node 22 · `frontend/landing`: `npm ci` → `npm run build` |
 
 **El CI no corre**: las suites de chat PHP locales (`test/*.php`), el stack
-Docker de `pruebas/`, los integration tests que requieren servidor, los tests
+Docker de `test/e2e/`, los integration tests que requieren servidor, los tests
 edge C++, ni —obviamente— las suites live que gastan cuota LLM.
 
 ## 11. Reglas de honestidad
 
-1. **No declarar READY con suites simuladas** (AGENTS.md). `dsm_units`,
+1. **No declarar READY con suites simuladas** (varios/docs/AGENTS.md). `dsm_units`,
    `real_conversation_v1`, `readonly_guard`, `resilience` y los PHPUnit son la
    puerta local mínima; READY exige además las live contra el stack real.
    `nexus_release_gate.php` emite el veredicto formal.
@@ -348,7 +348,7 @@ edge C++, ni —obviamente— las suites live que gastan cuota LLM.
 3. **`blind_eval` es diagnóstico**, no puerta: produce métricas y
    `/tmp/blind_eval.json`; no bloquea por sí solo.
 4. **`continuity_50.php` escribe historial real** en la BD — prohibido en el
-   alcance local (AGENTS.md); solo contra el stack de pruebas.
+   alcance local (varios/docs/AGENTS.md); solo contra el stack de pruebas.
 5. **`real_conversation_v1.php` no prueba** SQL, API HTTP ni memoria
    persistida real: es simulación NLU/DSM.
 6. **El runner Docker nunca inserta resultados**: un escenario pasa solo si el

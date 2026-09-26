@@ -10,7 +10,7 @@
  * Uso: php test/corpus_semantic_gen.php [--emit-json=path] [--max=N] [--verbose]
  */
 foreach (['nexus_nlu.php','nexus_semantic.php'] as $lib) {
-    foreach ([__DIR__.'/../backend/api/lib/'.$lib, __DIR__.'/../lib/'.$lib] as $p)
+    foreach ([__DIR__.'/../backend/api/nexus/'.$lib, __DIR__.'/../lib/'.$lib] as $p)
         if (is_file($p)) { require $p; break; }
 }
 

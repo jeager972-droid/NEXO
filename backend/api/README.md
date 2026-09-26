@@ -2,8 +2,8 @@
 
 Documentación exhaustiva del backend PHP 8 de NEXO (`backend/api/`). Toda la
 información aquí se deriva del código fuente real; documentos complementarios:
-[docs/SECURITY.md](../../docs/SECURITY.md),
-[docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md) y
+[docs/SECURITY.md](../../varios/docs/SECURITY.md),
+[docs/DEPLOYMENT.md](../../varios/docs/DEPLOYMENT.md) y
 [backend/api/nexus/README.md](../../backend/api/nexus/README.md) (subsistema conversacional,
 fuera del alcance de este documento salvo su entry point HTTP).
 

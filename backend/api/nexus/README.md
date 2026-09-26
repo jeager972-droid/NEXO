@@ -42,10 +42,9 @@ Fuentes de verdad usadas para este documento: `backend/api/routes/chat.php`,
 `backend/api/nexus/nexus_scp.php`, `backend/api/nexus/nexus_semantic.php`,
 `backend/api/lib/kb_colombia.php`, `frontend/pwa/src/pages/Chat.jsx`,
 `frontend/pwa/src/components/patterns/NexoChat.jsx`,
-`frontend/pwa/src/api/chat.js`, `frontend/pwa/src/lib/chatContext.js`,
-`test/fixtures/llm_intents.json` y la memoria de trabajo `NEXUS_*.md`
-(hoy archivada en `_cuarentena/memoria_nexus/`). Las referencias
-`archivo:línea` apuntan al código leído.
+`frontend/pwa/src/api/chat.js`, `frontend/pwa/src/lib/chatContext.js` y
+`test/fixtures/llm_intents.json`. Las referencias `archivo:línea`
+apuntan al código leído.
 
 ---
 
@@ -926,10 +925,10 @@ permitida. Los denegados de intent son 200 con `denied:true`.
   fixture es circular.
 - `continuity_50.php` usa API/BD real y escribe historial — fuera del
   alcance local.
-- Auditorías históricas (`_cuarentena/auditoria/`) y reportes `NEXUS_*.md`
-  (`_cuarentena/memoria_nexus/`) documentan ciclos de evaluación; sus
-  cifras de acierto miden al parser **de su momento** — se citan como
-  evidencia histórica, no como garantía de la versión actual.
+- Auditorías y reportes `NEXUS_*.md` de ciclos anteriores documentan
+  evaluaciones del parser **de su momento** — ese material fue
+  eliminado del repo; se cita solo como historia, no como garantía
+  de la versión actual.
 
 ## 19. Extender Nexus: añadir una capacidad
 
@@ -988,10 +987,10 @@ regresión logística** servido por un microservicio Python (`NEXO_NLU_URL`,
 puertos `:8090`/`:8096` en documentos antiguos) con un modelo de fallback
 en PHP y corpus sintético. Ese stack fue **retirado**: el parser actual
 es el LLM de `nexus_llm.php` y no existe runtime Python en la ruta del
-chat. Los documentos que lo describen como vigente (parte del material
-`NEXUS_*.md` y de `auditoria/` anteriores a la migración, archivados en
-`_cuarentena/`) son **historia**:
-sus métricas miden al clasificador viejo, no al parser actual. La taxonomía
+chat. Los documentos que lo describían como vigente (material `NEXUS_*.md`
+y de `auditoria/` anteriores a la migración, ya eliminados del repo) son
+**historia**:
+sus métricas medían al clasificador viejo, no al parser actual. La taxonomía
 de intents y las lecciones de normalización/DSM se conservaron; la
 clasificación estadística, no.
 
