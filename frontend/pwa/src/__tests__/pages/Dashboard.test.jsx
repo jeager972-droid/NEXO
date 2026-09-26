@@ -58,7 +58,7 @@ describe('Dashboard page (RECTOR)', () => {
 
   it('renders without crashing', async () => {
     renderDashboard();
-    // La lectura de la jornada de Nexus (burbujas de chat) reemplaza a "Novedades"
+    // La lectura de la jornada de Nexus (burbujas de chat)
     await waitFor(() => {
       expect(screen.getByText(/Todo dentro de lo normal/i)).toBeInTheDocument();
     });

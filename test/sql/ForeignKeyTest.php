@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 02_ForeignKeyTest.php — Test de integridad referencial (Foreign Keys).
+ * ForeignKeyTest.php — Test de integridad referencial (Foreign Keys).
  * =============================================================================
  * RESPONSABILIDAD:
  *   Parsea sql/schema.sql para extraer CREATE TABLE, columnas y

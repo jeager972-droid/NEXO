@@ -341,9 +341,8 @@ if (isset($input['payload'])) {
                         http_response_code(403);
                         exit(json_encode(['status' => 'error', 'message' => 'Nonce already used']));
                     }
-                    // Si $redis es null, fail-open: aceptar el nonce sin validar
-                    // (Redis caído — ver tener_en_cuenta.md). El timestamp check
-                    // ya protege contra replay de eventos viejos.
+                    // Si $redis es null, fail-open: aceptar el nonce sin validar.
+                    // El timestamp check ya protege contra replay de eventos viejos.
                 } catch (Exception $e) {
                     // FAIL-OPEN: Redis caído no debe bloquear el ingest del edge.
                     // Loggear pero continuar procesando.
@@ -356,7 +355,7 @@ if (isset($input['payload'])) {
             // ====================================================================
             // FAST PATH: REGISTER_STUDENT con has_fingerprint — procesar directo en
             // PostgreSQL sin pasar por Redis/worker. Esto permite que el polling
-            // de la WebApp vea has_fingerprint=true inmediatamente después del
+            // de la PWA vea has_fingerprint=true inmediatamente después del
             // enrolamiento, incluso si Redis está caído.
             // ====================================================================
             if ($action === 'REGISTER_STUDENT' && !empty($data['has_fingerprint'])) {
@@ -399,8 +398,8 @@ if (isset($input['payload'])) {
             try {
                 $redisIngest = getRedisConnection();
                 if (!$redisIngest) {
-                    // FALLBACK: Redis caído — procesar SYNC_ATTENDANCE directo en PostgreSQL
-                    // (ver tener_en_cuenta.md — el sistema debe funcionar sin Redis)
+                    // FALLBACK: Redis caído — procesar SYNC_ATTENDANCE directo en
+                    // PostgreSQL; el sistema debe funcionar sin Redis.
                     if ($action === 'SYNC_ATTENDANCE') {
                         try {
                             $conn->exec("BEGIN");
@@ -424,8 +423,8 @@ if (isset($input['payload'])) {
                                      ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                                 );
                                 $stmt->execute([$row['device_id'], $attEvt, $attTs, $fingerprint, $attDoc, $realSchoolId]);
-                                // V-530/531/574: reconciliar INASISTENCIA abierta si el
-                                // ingreso llega tarde (también en el camino Redis-down)
+                                // Reconciliar INASISTENCIA abierta si el ingreso llega
+                                // tarde (también en el camino Redis-down).
                                 if ($stmt->rowCount() > 0) {
                                     $sidStmt = $conn->prepare("SELECT student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
                                     $sidStmt->execute([$attDoc, $realSchoolId]);
@@ -460,7 +459,7 @@ if (isset($input['payload'])) {
                     'received_at' => time()
                 ], JSON_UNESCAPED_UNICODE);
 
-                // FIX: SYNC_ATTENDANCE siempre se procesa directo en PG además de encolar
+                // SYNC_ATTENDANCE siempre se procesa directo en PG además de encolar
                 // en Redis. Esto garantiza que el evento llegue a biometric_events incluso
                 // si Redis está intermitente y el worker no puede procesar la cola.
                 if ($action === 'SYNC_ATTENDANCE') {
@@ -481,9 +480,9 @@ if (isset($input['payload'])) {
                                  ON CONFLICT (event_fingerprint, event_timestamp) WHERE event_fingerprint IS NOT NULL DO NOTHING"
                             );
                             $stmt->execute([$row['device_id'], $attEvt, $attTs, $fingerprint, $attDoc, $realSchoolId]);
-                            // V-530/531/574: reconciliar INASISTENCIA abierta si el
-                            // ingreso llega tarde — el ingest síncrono es el camino
-                            // principal; el worker re-procesa idempotentemente.
+                            // Reconciliar INASISTENCIA abierta si el ingreso llega
+                            // tarde — el ingest síncrono es el camino principal;
+                            // el worker re-procesa idempotentemente.
                             if ($stmt->rowCount() > 0) {
                                 $sidStmt = $conn->prepare("SELECT student_id FROM students WHERE document_number = ? AND school_id = ? LIMIT 1");
                                 $sidStmt->execute([$attDoc, $realSchoolId]);
@@ -634,7 +633,7 @@ if ($cleanPath === '/health' || $cleanPath === '/health/workers') {
         }
     }
 
-    // 5. Disk space (basic)
+    // 4. Disk space (basic)
     $freeSpace = disk_free_space('.');
     $totalSpace = disk_total_space('.');
     $diskPercent = $totalSpace > 0 ? round((1 - $freeSpace / $totalSpace) * 100, 1) : 0;

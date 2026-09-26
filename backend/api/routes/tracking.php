@@ -143,7 +143,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
         exit;
     }
 
-    // V-151: derivar una alerta de riesgo o incidente a seguimiento formal,
+    // Derivar una alerta de riesgo o incidente a seguimiento formal,
     // asignando la dependencia responsable (coordinacion, psicoorientacion…)
     if ($cleanPath === '/tracking/derive' && $method === 'POST') {
         $studentId = $input['student_id'] ?? null;
@@ -235,7 +235,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
         }
         $noteText = trim($input['note_text'] ?? '');
         $status = $input['status'] ?? null;
-        // V-150: status es un workflow cerrado, no texto libre
+        // status es un workflow cerrado, no texto libre
         if ($status !== null && !in_array($status, ['en proceso','resuelto','descartado','escalado'], true)) {
             http_response_code(400);
             exit(json_encode(['status' => 'error', 'message' => "status debe ser 'en proceso'|'resuelto'|'descartado'|'escalado'"]));
@@ -272,7 +272,7 @@ if (strpos($cleanPath, '/tracking') === 0) {
         exit;
     }
 
-    // POST /tracking/close — cierre formal del caso (V-150).
+    // POST /tracking/close — cierre formal del caso.
     // {tracking_id, outcome: resuelto|descartado|escalado, reason?}
     if ($cleanPath === '/tracking/close' && $method === 'POST') {
         $trackingId = $input['tracking_id'] ?? null;

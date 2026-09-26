@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * tests/OnboardingAssignmentsTest.php — Test de integración del fix bugs #1-#4
+ * test/integration/OnboardingAssignmentsTest.php — Integración de las asignaciones del onboarding
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica que tras ejecutar POST /school/groups-onboarding:
@@ -12,8 +12,8 @@
  *     4. El onboarding rechaza payload sin teacher_assignments (obligatorio).
  *     5. El onboarding rechaza payload sin grade_shifts (jornada obligatoria).
  *
- *   Requiere: backend corriendo + seed aplicado + migración 2026-35 aplicada.
- *   Ejecutar: php tests/OnboardingAssignmentsTest.php
+ *   Requiere: backend corriendo + sql/schema.sql y seed aplicados.
+ *   Ejecutar: php test/integration/OnboardingAssignmentsTest.php
  *
  * CONFIGURACIÓN:
  *   Setear API_BASE_URL env var o usar default http://localhost:8080

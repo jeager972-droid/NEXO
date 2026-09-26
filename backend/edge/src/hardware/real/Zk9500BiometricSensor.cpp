@@ -17,8 +17,8 @@
  *   - libzkfp, libzkfptype
  *   - utils/ConfigManager.h para threshold.
  *
- * FIX C6: Timeout asíncrono para ZKFPM_AcquireFingerprint (evita watchdog reboot),
- *         cancelCapture() funcional, reconexión USB automática.
+ * Timeout asíncrono para ZKFPM_AcquireFingerprint (evita watchdog reboot),
+ * cancelCapture() funcional, reconexión USB automática.
  */
 
 #include "hal/IBiometricSensor.h"
@@ -38,7 +38,7 @@
 #include <algorithm>
 #include <future>
 
-// PILAR 3.2: Deleters RAII para handles ZKTeco
+// Deleters RAII para handles ZKTeco
 struct ZKDeviceDeleter {
     void operator()(void* h) const {
         if (h) ZKFPM_CloseDevice(h);
@@ -61,8 +61,8 @@ private:
     std::map<uint32_t, uint32_t> m_fidMap; // Mapeo DB interna
     int m_matchThreshold = 45; // Umbral dinámico configurable (0-100)
     int m_scoreDivisor = 1;    // Divisor configurable del score raw de ZKFPM_DBIdentify
-    int m_captureTimeoutMs = 10000;  // FIX C6: Timeout de captura configurable (default 10s)
-    std::atomic<bool> m_cancelFlag{false};  // FIX C6: Flag para cancelCapture()
+    int m_captureTimeoutMs = 10000;  // Timeout de captura configurable (default 10s)
+    std::atomic<bool> m_cancelFlag{false};  // Flag para cancelCapture()
 
 public:
     ~Zk9500BiometricSensor() {
@@ -87,7 +87,7 @@ public:
 
         m_matchThreshold = std::clamp(ConfigManager::getInstance().getMatchThreshold(), 0, 100);
         m_scoreDivisor = std::max(1, ConfigManager::getInstance().getInt("zk_score_divisor", 1));
-        // FIX C6: Timeout configurable desde config.json (default 10s)
+        // Timeout configurable desde config.json (default 10s)
         m_captureTimeoutMs = ConfigManager::getInstance().getInt("zk_capture_timeout_ms", 10000);
         LOG_INFO("ZK9500 match threshold={} score_divisor={} capture_timeout={}ms",
                  m_matchThreshold, m_scoreDivisor, m_captureTimeoutMs);
@@ -111,7 +111,7 @@ public:
         return NexoResult<void>::success();
     }
 
-    // FIX C6: Abrir dispositivo (extraído para reusar en reconexión)
+    // Abrir dispositivo (extraído para reusar en reconexión)
     bool openDevice() {
         void* rawDevice = ZKFPM_OpenDevice(0);
         if (!rawDevice) return false;
@@ -119,7 +119,7 @@ public:
         return true;
     }
 
-    // FIX C6: Reconexión USB automática (paridad con UareU5300)
+    // Reconexión USB automática (paridad con UareU5300)
     bool reconnectDevice() {
         LOG_WARN("[ZK9500] Attempting USB reconnection...");
         m_hDevice.reset();  // Cierra el dispositivo actual
@@ -138,7 +138,7 @@ public:
         return false;
     }
 
-    // FIX C6: Captura con timeout asíncrono — evita bloqueo indefinido
+    // Captura con timeout asíncrono — evita bloqueo indefinido
     // Usa std::async para ejecutar ZKFPM_AcquireFingerprint en un hilo separado
     // y esperar con timeout. Si expira, retorna error (no bloquea el watchdog).
     int acquireWithTimeout(unsigned char* templateBuf, unsigned int& cbTemplate) {
@@ -181,7 +181,7 @@ public:
             return NexoResult<void>::fail(NexoError::Cancelled, "Captura cancelada");
         }
         if (ret != 0) {
-            // FIX C6: Si el error indica dispositivo desconectado, intentar reconexión
+            // Si el error indica dispositivo desconectado, intentar reconexión
             LOG_ERROR("[ZK9500] AcquireFingerprint error: {}. Attempting reconnection.", ret);
             if (reconnectDevice()) {
                 ret = acquireWithTimeout(fpTemplate, cbTemplate);
@@ -224,7 +224,7 @@ public:
             return NexoResult<void>::fail(NexoError::Cancelled, "Captura cancelada");
         }
         if (ret != 0) {
-            // FIX C6: Intentar reconexión USB
+            // Intentar reconexión USB
             LOG_ERROR("[ZK9500] AcquireFingerprint error: {}. Attempting reconnection.", ret);
             if (reconnectDevice()) {
                 ret = acquireWithTimeout(fpTemplate, cbTemplate);
@@ -257,7 +257,7 @@ public:
         return NexoResult<void>::success();
     }
 
-    // FIX C6: cancelCapture() funcional — setea flag que el hilo de captura revisa
+    // cancelCapture() — setea flag que el hilo de captura revisa
     void cancelCapture() override {
         m_cancelFlag.store(true, std::memory_order_release);
     }

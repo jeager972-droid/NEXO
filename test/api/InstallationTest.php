@@ -1,15 +1,15 @@
 <?php
 /**
  * =============================================================================
- * 14_InstallationTest.php — Test de instalación y despliegue.
+ * InstallationTest.php — Test de instalación y despliegue.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica que los artefactos necesarios para instalar NEXO existan:
- *   - Archivos de migración (schema.sql) y seed (schema.sql).
- *   - Idempotencia de la migración (IF NOT EXISTS, DROP POLICY IF EXISTS).
+ *   - Schema consolidado sql/schema.sql (migración y seed en uno).
+ *   - Idempotencia del schema (IF NOT EXISTS, DROP POLICY IF EXISTS).
  *   - Extensiones requeridas declaradas (uuid-ossp, pgcrypto).
  *   - Sintaxis PHP válida en routes, workers y lib.
- *   - Existencia de config.php.
+ *   - Existencia de .env.example (config por entorno).
  */
 require_once __DIR__ . '/../../backend/api/vendor/autoload.php';
 

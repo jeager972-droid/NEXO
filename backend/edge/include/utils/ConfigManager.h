@@ -26,9 +26,9 @@ public:
     }
 
     bool loadConfig(const std::string& path = "config.json");
-    // FIX C2: Persistir config actualizada en disco (para auto-update de device_id)
+    // Persistir config actualizada en disco (para auto-update de device_id)
     bool saveConfig(const std::string& path = "");
-    // FIX C2: Actualizar un valor en memoria y opcionalmente persistirlo
+    // Actualizar un valor en memoria y opcionalmente persistirlo
     bool setValue(const std::string& key, const std::string& value, bool persist = false);
 
     std::string getString(const std::string& key, const std::string& defaultVal = "") const;
@@ -44,12 +44,12 @@ public:
     std::string getDeviceToken() const { return getString("device_token", ""); }
     int getMatchThreshold() const { return getInt("sensor_match_threshold", 45); }
 
-    // FIX C2: Valida que device_id sea UUID v4 (formato API)
+    // Valida que device_id sea UUID v4 (formato API)
     static bool isValidUuidV4(const std::string& id);
 
 private:
     ConfigManager() = default;
     mutable std::mutex m_mutex;
     nlohmann::json m_config;
-    std::string m_configPath = "config.json";  // FIX C2: path para saveConfig
+    std::string m_configPath = "config.json";  // path para saveConfig
 };

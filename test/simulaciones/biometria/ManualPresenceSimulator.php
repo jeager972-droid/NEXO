@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/biometria/ManualPresenceSimulator.php — Simulador del flujo de
+ * test/simulaciones/biometria/ManualPresenceSimulator.php — Simulador del flujo de
  * presencia manual (F-02).
  * =============================================================================
  *

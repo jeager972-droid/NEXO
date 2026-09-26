@@ -25,7 +25,6 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Navbar            from './components/Navbar'
 import HeroSection       from './sections/HeroSection'
-import CredibilityBar    from './sections/CredibilityBar'
 import ProblemSection    from './sections/ProblemSection'
 import HowItWorksSection from './sections/HowItWorksSection'
 import ValuePropSection  from './sections/ValuePropSection'
@@ -50,13 +49,13 @@ export default function LandingPage() {
   const cookieConsent = useCookieConsent()
 
   useEffect(() => {
-    // Bug 5: ScrollTrigger.refresh() called ONCE after full DOM paint
+    // ScrollTrigger.refresh() called ONCE after full DOM paint
     // setTimeout(1200) ensures all child components and 3D models have mounted and rendered
     const refreshTimer = setTimeout(() => {
       ScrollTrigger.refresh()
     }, 1200)
 
-    // Bug 5: Debounced refresh on resize (250ms cooldown)
+    // Debounced refresh on resize (250ms cooldown)
     let resizeTimer
     const handleResize = () => {
       clearTimeout(resizeTimer)
@@ -75,7 +74,7 @@ export default function LandingPage() {
 
   return (
     <>
-      {/* CAMBIO 6: Efecto de cursor global */}
+      {/* Efecto de cursor global */}
       <CustomCursor />
 
       {/* Fixed floating navbar */}
@@ -84,7 +83,6 @@ export default function LandingPage() {
       {/* Main content flow */}
       <main id="nx-landing">
         <HeroSection />         {/* 01 — Hero */}
-        {/* <CredibilityBar /> */} {/* 02 — Credibilidad */}
         <ProblemSection />      {/* 03 — Problema */}
         <HowItWorksSection />   {/* 04 — Cómo funciona */}
         <ValuePropSection />    {/* 05 — Propuesta de valor */}

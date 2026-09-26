@@ -59,7 +59,7 @@ function logE(string $e, string $m = ''): void {
  * Envía notificación WhatsApp + notificación interna a un usuario.
  */
 function notifyUser($conn, $redis, string $userId, string $phone, string $msg, string $schoolId, string $typeCode, array $meta): void {
-    // Notificación interna con dedup (VF-010)
+    // Notificación interna con dedup por incidente
     $incidentId = $meta['incident_id'] ?? null;
     $dedupKey = $incidentId ? hash('sha256', $userId . '|' . $incidentId) : null;
     try {
@@ -114,10 +114,9 @@ function notifyUser($conn, $redis, string $userId, string $phone, string $msg, s
 /**
  * Verifica si ya existe un incidente de evasión para el estudiante hoy
  * (evita duplicados / acumulación).
- * FIX (RLS): Setea RLS context en su propia transacción para que el SELECT
- * vea las filas insertadas por insertEvasionIncident en iteraciones anteriores.
- * Sin este fix, el check no veía las filas (RLS context perdido tras COMMIT)
- * y se re-insertaba + re-notificaba infinitamente → flood de Twilio.
+ * Setea RLS context en su propia transacción para que el SELECT vea las
+ * filas insertadas por insertEvasionIncident en iteraciones anteriores
+ * (el RLS context se pierde tras COMMIT en autocommit).
  */
 function hasEvasionToday(PDO $conn, string $schoolId, string $studentId): bool {
     $conn->exec("BEGIN");
@@ -140,7 +139,7 @@ function hasEvasionToday(PDO $conn, string $schoolId, string $studentId): bool {
 
 /**
  * Registra un incidente de evasión en attendance_incidents.
- * FIX (RLS): Setea RLS context en su propia transacción para que el INSERT
+ * Setea RLS context en su propia transacción para que el INSERT
  * respete la policy ai_insert (school_id = get_current_school_id()).
  */
 function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, string $metaJson): ?string {
@@ -148,7 +147,7 @@ function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, s
     $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
     $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
-    // F-02: estudiante exento de biometría — sin huella no puede "evadir" por
+    // Estudiante exento de biometría — sin huella no puede "evadir" por
     // falta de marcación; su presencia es por vía manual.
     $exStmt = $conn->prepare("SELECT biometric_exempt, manual_pending_until FROM students WHERE student_id = ? AND school_id = ?");
     $exStmt->execute([$studentId, $schoolId]);
@@ -160,7 +159,7 @@ function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, s
         return null;
     }
 
-    // V-013/041/058: política institucional — la escuela puede desactivar la
+    // Política institucional — la escuela puede desactivar la
     // generación automática de EVASION_INTERNA (school_action_policies).
     if (!nexoPolicyEnabled($conn, $schoolId, 'EVASION_INTERNA')) {
         $conn->exec("COMMIT");
@@ -168,8 +167,9 @@ function insertEvasionIncident(PDO $conn, string $schoolId, string $studentId, s
         return null;
     }
 
-    // F-04 gate: si el/los nodos del grupo del estudiante están caídos, no hay
-    // datos para afirmar evasión → se marca SIN_DATOS_NODO y se omite el incidente.
+    // Gate de salud de nodo: si el/los nodos del grupo del estudiante están
+    // caídos, no hay datos para afirmar evasión → se marca SIN_DATOS_NODO y
+    // se omite el incidente.
     if (ctGateEnabled()) {
         $offlineGid = ctStudentOfflineGroupId($conn, $schoolId, $studentId, ctOfflineSeconds());
         if ($offlineGid !== null) {
@@ -278,7 +278,7 @@ function getCurrentTeacher(PDO $conn, string $schoolId, string $studentId): ?arr
  * Obtiene los coordinadores de una escuela (para notificación).
  */
 function getCoordinators(PDO $conn, string $schoolId): array {
-    // V-066/081/388/462: destinatarios por school_notification_routes
+    // Destinatarios por school_notification_routes
     // (event_kind EVASION_INTERNA); sin rutas → default COORDINATOR.
     $ids = nexoRouteUserIds($conn, $schoolId, 'EVASION_INTERNA', ['COORDINATOR']);
     if (empty($ids)) return [];
@@ -517,7 +517,7 @@ function detectEvasionNonRotating(PDO $conn, $redis, string $schoolId, string $t
 
         try {
             $evasionIncidentId = insertEvasionIncident($conn, $schoolId, $studentId, $meta);
-            if ($evasionIncidentId === null) continue; // F-04: nodo offline — gateado
+            if ($evasionIncidentId === null) continue; // nodo offline — gateado
             $detected++;
             logE('EVASION_DETECTED', "school=$schoolId student=$studentName reason=$alertReason");
 
@@ -631,7 +631,7 @@ function detectEvasionRotating(PDO $conn, $redis, string $schoolId, string $toda
         return (bool)$stmt->fetchColumn();
     };
 
-    // ── Helper: salida pedagógica autorizada en curso (Bloque C) ────────
+    // ── Helper: salida pedagógica autorizada en curso ──────────────────
     // Un grupo completo puede estar en salida pedagógica — no es evasión.
     $onTrip = function(string $studentId) use ($conn, $schoolId): bool {
         $stmt = $conn->prepare("
@@ -942,7 +942,7 @@ function generateEvasionAlert(PDO $conn, $redis, string $schoolId, string $stude
     try {
         $incidentId = insertEvasionIncident($conn, $schoolId, $studentId, json_encode($metaArr, JSON_UNESCAPED_UNICODE));
         if ($incidentId === null) {
-            return 0; // F-04: nodo offline — sin incidente ni notificaciones
+            return 0; // nodo offline — sin incidente ni notificaciones
         }
         $metaArr['incident_id'] = $incidentId;
         $meta = json_encode($metaArr, JSON_UNESCAPED_UNICODE);
@@ -1017,6 +1017,20 @@ function detectBathroomAndPermissions(PDO $conn, $redis, string $schoolId, strin
         $stmt->execute([$schoolId, $studentId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
+    };
+
+    // ── Helper: salida pedagógica autorizada en curso ──────────────────
+    // Un grupo completo puede estar en salida pedagógica — no es evasión.
+    $onTrip = function(string $studentId) use ($conn, $schoolId): bool {
+        $stmt = $conn->prepare("
+            SELECT 1 FROM pedagogical_trip_authorizations
+            WHERE school_id = ? AND student_id = ?
+              AND departure_time <= NOW()
+              AND (return_time IS NULL OR return_time >= NOW())
+            LIMIT 1
+        ");
+        $stmt->execute([$schoolId, $studentId]);
+        return (bool)$stmt->fetchColumn();
     };
 
     // ── 1. SALIDA AL BAÑO: detectar por bloque ─────────────────────────
@@ -1264,7 +1278,7 @@ function checkRecessReturn(PDO $conn, $redis, string $schoolId, string $todayDat
 
         try {
             $recessIncidentId = insertEvasionIncident($conn, $schoolId, $studentId, $meta);
-            if ($recessIncidentId === null) continue; // F-04: nodo offline — gateado
+            if ($recessIncidentId === null) continue; // nodo offline — gateado
             $detected++;
             logE('RECESS_EVASION', "school=$schoolId student=$studentName");
 

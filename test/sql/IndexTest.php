@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 04_IndexTest.php — Test de índices del esquema SQL.
+ * IndexTest.php — Test de índices del esquema SQL.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Parsea sql/schema.sql para verificar:

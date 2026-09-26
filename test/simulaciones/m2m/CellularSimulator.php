@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/m2m/CellularSimulator.php — Simulador del módem celular M2M (F-10).
+ * test/simulaciones/m2m/CellularSimulator.php — Simulador del módem celular M2M (F-10).
  * =============================================================================
  * Modela el enlace M2M del nodo: registro en red, calidad de señal, interfaz
  * up/down y cambios de portador. produce el campo `cell` de la telemetría.

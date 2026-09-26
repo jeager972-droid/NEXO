@@ -32,7 +32,7 @@ bool MqttCommandWorker::start() {
     if (!m_mosq) { LOG_ERROR("[MQTT] mosquitto_new failed"); return false; }
     if (!m_username.empty()) mosquitto_username_pw_set(m_mosq, m_username.c_str(), m_password.c_str());
 
-    // FIX C4: Configurar TLS si está habilitado (puerto 8883)
+    // Configurar TLS si está habilitado (puerto 8883)
     if (m_useTls || m_brokerPort == 8883) {
         int tlsRc;
         if (!m_caCertPath.empty()) {

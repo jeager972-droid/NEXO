@@ -365,8 +365,8 @@ function nxScpFrame(string $q0, array $cls, array $interp, ?array $ds, ?array $s
     if (!empty($slots['_nav'])) $transforms[] = ['kind'=>'nav', 'value'=>$slots['_nav']];
 
     // — objetivos múltiples (composición): cada cláusula conserva su
-    // tarea — se clasifica cada cláusula por separado (un chiste no se
-    // detecta sin su clasificador) —
+    // tarea — se clasifica cada cláusula por separado (un chiste solo se
+    // detecta clasificando la cláusula) —
     $targets = [];
     $clauses = function_exists('nxSemSplitCompound') ? nxSemSplitCompound($q0) : [];
     if (count($clauses) > 1) {

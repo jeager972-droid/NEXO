@@ -3024,7 +3024,7 @@ INSERT INTO roles(role_id, role_name, description) VALUES
     (uuid_generate_v4(), 'SYSTEM_WORKER', 'Internal system worker / background process')
 ON CONFLICT(role_name) DO NOTHING;
 
--- Admin user (password: admin123 — bcrypt coste 10; el hash anterior era de 'password')
+-- Admin user (password: admin123 — bcrypt coste 10)
 INSERT INTO users(user_id, school_id, role_id, document_number, first_name, last_name, email, password_hash, password_salt, active)
 SELECT uuid_generate_v4(), s.school_id, r.role_id, '111111111', 'Admin', 'NEXO', 'admin@nexo.edu',
        '$2y$10$ixBEl1HY/wGL5DBEHQ/q/u1fdohSvdAQnji83oWGyzSK0IFR3Yxly', 'salt', TRUE

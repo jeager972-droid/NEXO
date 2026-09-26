@@ -2,7 +2,8 @@
 /**
  * ChatNluTest.php — Verificación estática del chatbot NLU.
  * Comprueba: endpoint registrado, auth obligatoria, RBAC por intent,
- * prepared statements, fallback <0.66, modelo exportado, sin SQL libre.
+ * prepared statements, abstención bajo NX_NLU_THRESHOLD, parser LLM
+ * presente + replay de fixture, sin SQL libre.
  */
 require_once __DIR__ . '/../../backend/api/vendor/autoload.php';
 require_once __DIR__ . '/../../backend/api/lib/nexus_nlu.php';

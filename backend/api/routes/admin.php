@@ -35,7 +35,7 @@
  *
  * Es utilizado por:
  *   - backend/api/api.php : lo incluye por routing basado en URI.
- *   - Frontend React: panel administrativo (Admin.jsx).
+ *   - Frontend PWA: panel administrativo.
  */
 
 global $cleanPath, $conn, $input, $method;
@@ -97,7 +97,7 @@ if ($cleanPath === '/admin/recalc-risk') {
 }
 
 // ============================================================================
-// GET /admin/config-check — V-614: diff configuración declarada vs realidad
+// GET /admin/config-check — diff configuración declarada vs realidad
 // operativa. Reporta inconsistencias accionables por categoría.
 // ============================================================================
 if ($cleanPath === '/admin/config-check' && $method === 'GET') {

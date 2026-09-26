@@ -18,7 +18,7 @@
 import { useRef, useState, useEffect } from 'react'
 import gsap from 'gsap'
 
-// CAMBIO 5: Modal de contacto
+// Modal de contacto
 // CTA: "Quiero que NEXO llegue a mi institución"
 // Validación inline, console.log con JSON, estado de carga y éxito.
 
@@ -58,7 +58,7 @@ export default function ContactModal({ onClose }) {
   const [errors, setErrors] = useState({})
   const [status, setStatus] = useState('idle') // idle | loading | success
 
-  // CAMBIO 5: Animación de entrada — escala 0.92 → 1.0 + fade in, power3.out
+  // Animación de entrada — escala 0.92 → 1.0 + fade in, power3.out
   useEffect(() => {
     const ctx = gsap.context(() => {
       gsap.fromTo(overlayRef.current,

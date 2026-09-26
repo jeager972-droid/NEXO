@@ -73,8 +73,8 @@ class RiskScoreEngine
 
     /**
      * Calcula el puntaje de riesgo a partir de conteos crudos.
-     * A4: bathroomCount cuenta salidas al baño sobre el baseline.
-     * A5: patternPenalty detecta recurrencia por día de semana.
+     * bathroomCount cuenta salidas al baño sobre el baseline;
+     * patternPenalty detecta recurrencia por día de semana.
      */
     public static function computeScore(
         int $lateCount,
@@ -131,8 +131,8 @@ class RiskScoreEngine
         // 1. Obtener conteos crudos de la DB (pura persistencia, sin lógica)
         // Late y absence se cuentan desde attendance_incidents (donde el worker
         // los inserta). total_events desde biometric_events (todos los ingresos).
-        // A4: bathroom_count cuenta SALIDA_BAÑO desde biometric_events.
-        // A5: pattern_day detecta el día de semana con más ausencias (recurrencia).
+        // bathroom_count cuenta SALIDA_BAÑO desde biometric_events;
+        // el subselect dow detecta el día de semana con más ausencias (recurrencia).
         $stmt = $conn->prepare("
             SELECT
                 (SELECT COUNT(*) FROM attendance_incidents
@@ -172,7 +172,7 @@ class RiskScoreEngine
         $bathroomCount   = (int)($counts['bathroom_count']    ?? 0);
         $maxAbsencePerDow = (int)($counts['max_absence_per_dow'] ?? 0);
 
-        // A5: Penalización por patrón temporal (recurrencia por día de semana)
+        // Penalización por patrón temporal (recurrencia por día de semana)
         // Si un estudiante falta 3+ veces el mismo día de la semana, es un patrón
         $patternPenalty = ($maxAbsencePerDow >= self::PATTERN_THRESHOLD)
             ? self::WEIGHT_PATTERN

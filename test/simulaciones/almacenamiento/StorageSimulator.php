@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/almacenamiento/StorageSimulator.php — Disco + cola/DLQ (F-06/F-13).
+ * test/simulaciones/almacenamiento/StorageSimulator.php — Disco + cola/DLQ (F-06/F-13).
  * =============================================================================
  * Modela el almacenamiento del nodo edge: espacio libre que decrece, profundidad
  * de cola de eventos pendientes y backlog de DLQ. Escenarios: sano, llenándose,

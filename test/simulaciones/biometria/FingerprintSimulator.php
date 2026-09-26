@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/biometria/FingerprintSimulator.php — Simulador del sensor
+ * test/simulaciones/biometria/FingerprintSimulator.php — Simulador del sensor
  * biométrico multi-dedo (F-03).
  * =============================================================================
  *

@@ -182,7 +182,7 @@ bool UareU5300BiometricSensor::openDevice() {
         return false;
     }
 
-    // DEBUG: Log device info para diagnosticar INVALID_PARAMETER
+    // Log device info para diagnosticar INVALID_PARAMETER
     LOG_INFO("UareU: query_devices found {} device(s)", devCnt);
     for (unsigned int i = 0; i < devCnt; ++i) {
         LOG_INFO("UareU: dev[{}] name='{}' vendor=0x{:04x} product=0x{:04x} product_name='{}'",

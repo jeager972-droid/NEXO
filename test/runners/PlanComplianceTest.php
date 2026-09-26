@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * PlanComplianceTest — Verificación exhaustiva del plan de migración/consolidación.
+ * PlanComplianceTest — Auditoría exhaustiva de la consolidación SQL↔PHP.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Script autónomo que realiza una auditoría profunda SQL↔PHP en secciones:
@@ -10,10 +10,10 @@
  *   C. PHP backend alineado con DB (tablas, columnas, roles, permisos, guardian).
  *   D. Funciones SQL y RLS.
  *   E. Sintaxis y calidad de código PHP.
- *   F. Cumplimiento de etapas del plan (archivos de documentación y estructura).
+ *   F. Consolidación del schema (registro de migraciones, schema único en sql/).
  *
  * USO:
- *   php tests/PlanComplianceTest.php
+ *   php test/runners/PlanComplianceTest.php
  */
 
 class PlanComplianceTest {
@@ -222,7 +222,7 @@ class PlanComplianceTest {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // SECCIÓN F: ETAPAS DEL PLAN.MD
+        // SECCIÓN F: CONSOLIDACIÓN DEL SCHEMA (migraciones + archivo único)
         // ═══════════════════════════════════════════════════════════════
         echo "\n━━━ F. CUMPLIMIENTO PLAN.MD ━━━\n";
 

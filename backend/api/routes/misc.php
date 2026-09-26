@@ -75,7 +75,7 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
     try {
         $rl = getRedisConnection();
         if (!$rl) {
-            // VF-023: Fail-closed — si Redis cae, no permitir spam
+            // Fail-closed — si Redis cae, no permitir spam
             http_response_code(503);
             echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
             exit;
@@ -89,7 +89,7 @@ if ($cleanPath === '/contacto' && $method === 'POST') {
             exit;
         }
     } catch (Throwable $e) {
-        // VF-023: Fail-closed también en excepciones
+        // Fail-closed también en excepciones
         http_response_code(503);
         echo json_encode(['status' => 'error', 'message' => 'Servicio temporalmente no disponible. Inténtalo más tarde.']);
         exit;
@@ -329,7 +329,7 @@ if (preg_match('#^/notifications/([0-9a-fA-F-]{36})/action$#', $cleanPath, $noti
         $incidentId = $meta['incident_id'] ?? null;
 
         if ($action === 'justify' && $incidentId) {
-            // VF-015: Soft-delete + audit trail — marcar como resolved en lugar de hard delete
+            // Soft-delete + audit trail — marcar como resolved en lugar de hard delete
             $resolveIncident = $conn->prepare(
                 "UPDATE attendance_incidents
                  SET resolved = TRUE, metadata_json = COALESCE(metadata_json, '{}'::jsonb) || ?::jsonb
@@ -416,13 +416,13 @@ if ($cleanPath === '/consultation/search') {
 // GET /reports/preview — Previsualización de eventos biométricos filtrados por fecha.
 if ($cleanPath === '/reports/preview') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
-    // BUG-05 FIX (backend): leer parámetros de fecha desde la query string
+    // Leer parámetros de fecha desde la query string
     $from = trim((string)($_GET['from'] ?? ''));
     $to   = trim((string)($_GET['to']   ?? ''));
 
     try {
-        // BUG-06 FIX (backend): JOIN con students y academic_groups para retornar
-        // student_name y group_name — el frontend ya no muestra student_id desnudo
+        // JOIN con students y academic_groups para retornar student_name y
+        // group_name — el frontend no muestra student_id desnudo
         $params = [$authUser['school_id']];
         $dateFilter = '';
         if ($from !== '') {
@@ -859,7 +859,7 @@ if ($cleanPath === '/webhooks/twilio/inbound') {
         }
 
         // ── Inasistencia: 1 = justificada, 2 = no está al tanto ──
-        // Bloque C: aceptar dígitos Y lenguaje natural (el acudiente no siempre
+        // Aceptar dígitos Y lenguaje natural (el acudiente no siempre
         // responde con el número del menú).
         $inasistenciaCtxRaw = null;
         try {

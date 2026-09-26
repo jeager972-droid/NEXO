@@ -1,12 +1,12 @@
 /**
  * =============================================================================
- * test_node_monitor.cpp — Tests Catch2 del monitoreo físico del nodo (Lote 5).
+ * test_node_monitor.cpp — Tests Catch2 del monitoreo físico del nodo.
  * =============================================================================
- * F-09 PowerMonitor: transiciones MAINS↔BATTERY, LOW_BATTERY, CRITICAL,
+ * PowerMonitor: transiciones MAINS↔BATTERY, LOW_BATTERY, CRITICAL,
  *   shutdown ordenado — con archivos fixture de sysfs (simulación integrada).
- * F-10 CellularManager: parser puro de mmcli + operstate por archivo.
- * F-06 NodeTelemetry: disk_free_mb real, cpu_temp_c por fixture, JSON.
- * F-13 DLQ: reintento de largo plazo sobre audit_trail real (SQLite).
+ * CellularManager: parser puro de mmcli + operstate por archivo.
+ * NodeTelemetry: disk_free_mb real, cpu_temp_c por fixture, JSON.
+ * DLQ: reintento de largo plazo sobre audit_trail real (SQLite).
  * =============================================================================
  */
 
@@ -34,7 +34,7 @@ static void rmTree(const std::string& path) {
     fs::remove_all(path, ec);
 }
 
-// ──────────────────────────── PowerMonitor (F-09) ────────────────────────────
+// ──────────────────────────── PowerMonitor ────────────────────────────
 
 TEST_CASE("PowerMonitor detecta transición MAINS→BATTERY→MAINS", "[power]") {
     std::string dir = "/tmp/nexo_pm_test/ups";
@@ -100,7 +100,7 @@ TEST_CASE("PowerMonitor batería sin lectura de capacidad → BATTERY", "[power]
     rmTree("/tmp/nexo_pm_test3");
 }
 
-// ──────────────────────────── TamperMonitor (V-333/397/398) ────────────────────────────
+// ──────────────────────────── TamperMonitor ────────────────────────────
 
 TEST_CASE("TamperMonitor: flanco cerrado→abierto dispara una sola vez", "[tamper]") {
     rmTree("/tmp/nexo_tamper_test");
@@ -130,7 +130,7 @@ TEST_CASE("TamperMonitor: sin sensor → nunca alerta", "[tamper]") {
     REQUIRE_FALSE(tm2.isOpen());
 }
 
-// ──────────────────────────── CellularManager (F-10) ────────────────────────────
+// ──────────────────────────── CellularManager ────────────────────────────
 
 TEST_CASE("CellularManager parsea salida mmcli real", "[cellular]") {
     CellularStatus st;
@@ -168,7 +168,7 @@ TEST_CASE("CellularManager sin interfaz → no interfaceUp", "[cellular]") {
     REQUIRE_FALSE(cm.readStatus().interfaceUp);
 }
 
-// ──────────────────────────── NodeTelemetry (F-06) ────────────────────────────
+// ──────────────────────────── NodeTelemetry ────────────────────────────
 
 TEST_CASE("NodeTelemetry: disk_free_mb real y cpu_temp por fixture", "[telemetry]") {
     writeFile("/tmp/nexo_thermal_test/temp", "52300\n"); // 52.3°C
@@ -208,9 +208,7 @@ TEST_CASE("NodeTelemetry: JSON incluye todos los campos del contrato", "[telemet
     REQUIRE(j["tamper_open"] == true);
 }
 
-// ──────────────────────────── DLQ (F-13) ────────────────────────────
-
-// ──────────────────────────── Cifrado de campos (F-11) ────────────────────────────
+// ──────────────────────────── Cifrado de campos ────────────────────────────
 
 TEST_CASE("F-11: PII de estudiantes cifrada en reposo, descifrada al leer", "[crypto_fields]") {
     std::string dbPath = "/tmp/nexo_test_f11.db";
@@ -236,7 +234,7 @@ TEST_CASE("F-11: PII de estudiantes cifrada en reposo, descifrada al leer", "[cr
     est.huella_id = 0;
     REQUIRE(db.saveEstudiante(est));
 
-    // En reposo: nombre NO es plaintext (prefijo enc:v1:). V-243: la columna
+    // En reposo: nombre NO es plaintext (prefijo enc:v1:). La columna
     // documento almacena la clave HMAC (64 hex), no el número real; el valor
     // real va en documento_enc cifrado.
     {
@@ -252,7 +250,7 @@ TEST_CASE("F-11: PII de estudiantes cifrada en reposo, descifrada al leer", "[cr
         REQUIRE(nombreRaw.rfind("enc:v1:", 0) == 0);
         REQUIRE(telRaw.rfind("enc:v1:", 0) == 0);
         REQUIRE(nombreRaw.find("María") == std::string::npos);
-        // V-243: el documento en reposo no es legible ni indexable en claro
+        // El documento en reposo no es legible ni indexable en claro
         REQUIRE(docRaw != "DOCPII");
         REQUIRE(docRaw.size() == 64);
         REQUIRE(!docEnc.empty());
@@ -267,7 +265,7 @@ TEST_CASE("F-11: PII de estudiantes cifrada en reposo, descifrada al leer", "[cr
     REQUIRE(got.telefono_acudiente == "3001234567");
     REQUIRE(got.nombre_acudiente == "Ana Pérez");
 
-    // audit_trail.documento y event también cifrados en reposo (V-243/V-245)
+    // audit_trail.documento y event también cifrados en reposo
     REQUIRE(db.saveAudit("DOCPII", "INGRESO"));
     {
         sqlite3_stmt* st;
@@ -299,7 +297,7 @@ TEST_CASE("F-11: filas legacy en claro siguen leyéndose (migración gradual)", 
     db.close();
     db.initialize(dbPath);
 
-    // Insertar directamente en claro (simula fila pre-F-11)
+    // Insertar directamente en claro (simula fila legacy sin cifrar)
     sqlite3_exec(db.getDB(),
         "INSERT INTO estudiantes (documento, nombre, telefono_acudiente) VALUES ('DOCLEG','Nombre Claro','3001112222');",
         nullptr, nullptr, nullptr);
@@ -310,6 +308,8 @@ TEST_CASE("F-11: filas legacy en claro siguen leyéndose (migración gradual)", 
 
     std::remove(dbPath.c_str());
 }
+
+// ──────────────────────────── DLQ ────────────────────────────
 
 TEST_CASE("DLQ: registros fallidos van a DLQ y se reintentan", "[dlq]") {
     std::string dbPath = "/tmp/nexo_test_dlq.db";

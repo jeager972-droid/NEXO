@@ -1,14 +1,15 @@
 <?php
 /**
  * test/blind_eval.php — Evaluación ciega + calibración del NLU.
- * Usa el camino REAL de producción: nxClassify() (servicio→php→fallback).
+ * Usa el camino REAL de producción: nxClassify() (parser LLM; replay del
+ * fixture test/fixtures/llm_intents.json salvo NX_CLASSIFY_FIXTURE= vacío).
  * Read-only. Uso: php test/blind_eval.php  → /tmp/blind_eval.json
  */
 require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 $set = json_decode(file_get_contents(__DIR__ . '/fixtures/blind_set.json'), true);
-// --clean: excluir frases contaminadas corpus↔blind (auditoría Fase 3B)
+// --clean: excluir frases contaminadas corpus↔blind (lista en /tmp/contam.json)
 $cleanOnly = in_array('--clean', $argv ?? [], true);
 $contam = json_decode(@file_get_contents('/tmp/contam.json'), true)['contaminated_idx'] ?? [];
 if ($cleanOnly && $contam) {

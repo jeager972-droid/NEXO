@@ -116,7 +116,7 @@ function processJob(array $job, PDO $conn): bool {
     $instId = $job['school_id'] ?? null;
     $capturedAt = (int)($data['captured_at'] ?? 0);
 
-    // FIX (PgBouncer): set_config(..., false) no persiste entre consultas con
+    // set_config(..., false) no persiste entre consultas con
     // PgBouncer transaction pooling. Cada caso debe usar beginTransaction() +
     // set_config(..., true) (transaction-level) para que RLS funcione.
     if (!$instId) {
@@ -136,10 +136,10 @@ function processJob(array $job, PDO $conn): bool {
                 (string)$capturedAt
             ]));
 
-            // FIX (SRE-1): Idempotencia vía fingerprint + ON CONFLICT DO NOTHING.
+            // Idempotencia vía fingerprint + ON CONFLICT DO NOTHING.
             // Si el worker re-procesa un job (ej. tras GC de zombies), el INSERT
             // es idempotente y no crea duplicados con distinto UUID.
-            // FIX (PgBouncer): Usar exec("BEGIN") + SET LOCAL en lugar de
+            // Usar exec("BEGIN") + SET LOCAL en lugar de
             // PDO::beginTransaction() + prepare(set_config). PDO con EMULATE_PREPARES
             // puede no manejar correctamente el estado de transacción con PgBouncer
             // transaction pooling. SET LOCAL es equivalente a set_config(..., true)
@@ -240,7 +240,7 @@ function processJob(array $job, PDO $conn): bool {
                     ? json_encode($permisoMetadata, JSON_UNESCAPED_UNICODE)
                     : null;
 
-                // ── F-01b: resolución espacial — dispositivo→grupo→schedule del bloque actual ──
+                // ── Resolución espacial — dispositivo→grupo→schedule del bloque actual ──
                 // edge_devices.group_id → schedules(group_id, day_of_week, ventana horaria)
                 // → classroom_id + schedule_id del evento. Sin grupo o sin schedule → NULLs
                 // (comportamiento degradado, no bloqueante).
@@ -262,7 +262,7 @@ function processJob(array $job, PDO $conn): bool {
                     if ($spatial) {
                         $classroomId = $spatial['scheduled_classroom'] ?? null;
                         $scheduleId = $spatial['schedule_id'] ?? null;
-                        // F-01c: enforcement — aula del dispositivo ≠ aula programada → wrong_classroom
+                        // Enforcement: aula del dispositivo ≠ aula programada → wrong_classroom
                         if (!empty($spatial['device_classroom']) && !empty($spatial['scheduled_classroom'])
                             && $spatial['device_classroom'] !== $spatial['scheduled_classroom']) {
                             $flagStmt = $conn->prepare("SELECT spatial_enforcement FROM schools WHERE school_id = ?");
@@ -316,7 +316,7 @@ function processJob(array $job, PDO $conn): bool {
                         error_log("[BIOMETRIC] Evasion clear failed: " . $evasionErr->getMessage());
                     }
 
-                    // V-530/V-531/V-574: un INGRESO tardío reconcilia la INASISTENCIA
+                    // Un INGRESO tardío reconcilia la INASISTENCIA
                     // abierta del día — la ausencia deja de tratarse como hecho y se
                     // genera alerta de reaparición con el espacio donde apareció.
                     try {
@@ -453,9 +453,9 @@ function processJob(array $job, PDO $conn): bool {
                         $studentIdForNotif = $studentRow['student_id'] ?? null;
 
                         if ($studentIdForNotif && $incidentId) {
-                            // FIX: usar teacher_group_access en lugar de schedules.
-                            // schedules puede estar vacío tras onboarding (modela horarios
-                            // reales, no acceso). Notificamos a todos los docentes del
+                            // Se usa teacher_group_access: schedules puede estar
+                            // vacío tras onboarding (modela horarios reales, no
+                            // acceso). Notificamos a todos los docentes del
                             // grupo del estudiante, no solo al que está en clase ahora.
                             $teacherStmt = $conn->prepare(
                                 "SELECT tga.teacher_user_id FROM teacher_group_access tga
@@ -561,7 +561,7 @@ function processJob(array $job, PDO $conn): bool {
 
             $conn->exec("BEGIN");
             try {
-                // FIX (PgBouncer): SET LOCAL en lugar de set_config con prepare
+                // SET LOCAL (set_config transaction-level) para RLS con pooling
                 $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$schoolId) . ", true)");
                 $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
@@ -574,12 +574,9 @@ function processJob(array $job, PDO $conn): bool {
                     $stmt = $conn->prepare("INSERT INTO students(school_id,document_number,first_name,last_name,active) VALUES(?,?,?,'',TRUE) ON CONFLICT(school_id, document_number) DO UPDATE SET first_name=EXCLUDED.first_name,active=TRUE RETURNING student_id");
                     $stmt->execute([$schoolId, $doc, $nombre]);
                 }
-                // FIX: se eliminó un execute() duplicado que re-ejecutaba el
-                // statement con solo 3 params — en la rama has_fingerprint el
-                // statement espera 4 → PDOException → rollback del enrolamiento.
                 $studentId = $stmt->fetchColumn();
 
-                // F-03: registrar el slot de dedo en student_fingerprints
+                // Registrar el slot de dedo en student_fingerprints
                 if ($hasFingerprint && $studentId) {
                     $fingerSlot = isset($data['finger_slot']) ? (int)$data['finger_slot'] : 1;
                     if (!in_array($fingerSlot, [1, 2], true)) $fingerSlot = 1;
@@ -680,7 +677,7 @@ function processJob(array $job, PDO $conn): bool {
 // Reliable Queue: LMOVE atomically moves ingest -> processing
 // ============================================================
 
-// FIX (SRE-2): Script Lua atómico que hace LMOVE + inyecta timestamp.
+// Script Lua atómico que hace LMOVE + inyecta timestamp.
 // Esto garantiza que, si el worker muere, el GC pueda medir cuánto tiempo
 // lleva el item en processing y reinsertarlo.
 $scriptReliablePop = <<<'LUA'
@@ -702,7 +699,7 @@ end
 return nil
 LUA;
 
-// FIX (SRE-2): Garbage Collector — reinserta en ingest los jobs zombies
+// Garbage Collector — reinserta en ingest los jobs zombies
 // (más de 5 minutos en processing sin commit exitoso).
 $scriptGc = <<<'LUA'
 local processing = KEYS[1]
@@ -750,13 +747,13 @@ while (!$shutdown) {
             if (!$redis) continue;
         }
 
-        // FIX: Enviar heartbeat cada 30 segundos
+        // Heartbeat cada 30 segundos
         if (time() - $lastHeartbeat >= 30) {
             $lastHeartbeat = time();
             try { sendHeartbeat($redis); } catch (Exception $e) {}
         }
 
-        // FIX (SRE-2): Atomic Lua pop + timestamp injection.
+        // Atomic Lua pop + timestamp injection.
         $item = false;
         try {
             $item = $redis->eval($scriptReliablePop, ['queue:biometric_ingest', 'queue:biometric_processing', time()], 2);
@@ -810,7 +807,7 @@ while (!$shutdown) {
         $redis = null; // Force reconnect
     }
 
-    // FIX (SRE-2): Ejecutar GC de zombies cada 60 segundos.
+    // GC de zombies cada 60 segundos.
     if (time() - $lastGc >= 60) {
         $lastGc = time();
         try {

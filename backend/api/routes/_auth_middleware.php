@@ -615,7 +615,7 @@ if (!function_exists('requireAuth')) {
         try {
             $claims = verifyJwtToken($token);
 
-            // FIX (PgBouncer): En transaction-pool mode, set_config(..., false)
+            // PgBouncer: en transaction-pool mode, set_config(..., false)
             // no persiste entre consultas. Usamos beginTransaction() + SET LOCAL
             // (equivalente a set_config(..., true)) para que RLS funcione.
             // SET LOCAL con exec() evita problemas con EMULATE_PREPARES.

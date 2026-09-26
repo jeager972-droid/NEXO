@@ -61,7 +61,7 @@ sudo apt-get install -y \
 sudo apt-get install -y \
     libspdlog-dev
 
-# MQTT (libmosquitto) — FIX C1: faltaba en el script de instalación
+# MQTT (libmosquitto)
 sudo apt-get install -y \
     libmosquitto-dev
 

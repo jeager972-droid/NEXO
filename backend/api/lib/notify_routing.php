@@ -5,8 +5,6 @@
  * políticas de acción por institución.
  * =============================================================================
  *
- * CUBRE: V-013/041/058/066/081/388/462/406.
- *
  *   - nexoRouteUserIds(): destinatarios internos vía school_notification_routes
  *     (event_kind → target_role). Sin filas = roles por defecto del llamador.
  *   - nexoPolicyEnabled(): on/off por evento vía school_action_policies

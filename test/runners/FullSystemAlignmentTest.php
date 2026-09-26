@@ -19,7 +19,7 @@
  *   - Permisos PHP existen en SQL.
  *
  * USO:
- *   php tests/FullSystemAlignmentTest.php
+ *   php test/runners/FullSystemAlignmentTest.php
  */
 
 class FullSystemAlignmentTest {

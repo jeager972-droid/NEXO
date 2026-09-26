@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * routes/teacher_alerts.php — Criterios de aviso configurables por docente (F-18)
+ * routes/teacher_alerts.php — Criterios de aviso configurables por docente
  * =============================================================================
  * Documento §4.5/§9.9: "los docentes pueden establecer criterios de aviso
  * asociados con su propia actividad — cantidad de llegadas tardías,

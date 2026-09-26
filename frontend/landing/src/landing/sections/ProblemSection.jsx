@@ -21,8 +21,8 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 03 — DECLARACIÓN DEL PROBLEMA
-// CAMBIO 2: Redacción en tercera persona generalizada. Tono diagnóstico, no acusatorio.
-// CAMBIO 6: Sticky scroll, animación de título por palabras y stagger de columnas
+// Redacción en tercera persona generalizada. Tono diagnóstico, no acusatorio.
+// Sticky scroll, animación de título por palabras y stagger de columnas
 
 const PROBLEMS = [
   {
@@ -105,7 +105,7 @@ export default function ProblemSection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: wrapper,
-        start: 'top 75%', // Bug 4: section content trigger at 75%
+        start: 'top 75%', // section content trigger at 75%
         toggleActions: 'play none none none',
       }
     })
@@ -152,9 +152,6 @@ export default function ProblemSection() {
         }}
       >
         <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
-          {/* Eyebrow removed */}
-
-          {/* CAMBIO 2: Nuevo título — diagnóstico, no acusatorio */}
           <h3
             ref={titleRef}
             className="nx-h2"

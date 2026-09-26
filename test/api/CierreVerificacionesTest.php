@@ -31,7 +31,7 @@ class CierreVerificacionesTest extends PHPUnit\Framework\TestCase
         $root = __DIR__ . '/../../';
         $this->opsSrc    = file_get_contents($root . 'backend/api/routes/operations.php');
         $this->schemaSrc = file_get_contents($root . 'sql/schema.sql');
-        // La migración 002 ya está consolidada dentro de schema.sql (ETAPA 7)
+        // La migración 002 ya está consolidada dentro de schema.sql
         $this->migSrc    = $this->schemaSrc;
         $this->permSrc   = file_get_contents($root . 'backend/api/workers/worker_permission_status.php');
         $this->bioSrc    = file_get_contents($root . 'backend/api/workers/worker_biometric.php')

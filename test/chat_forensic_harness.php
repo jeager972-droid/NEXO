@@ -2,8 +2,8 @@
 /**
  * test/chat_forensic_harness.php — HARNESS FORENSE conversacional.
  *
- * Replica EXACTAMENTE la lógica de POST /chat/message (routes/chat.php
- * líneas 239-347) usando las funciones REALES de producción
+ * Replica EXACTAMENTE la lógica de POST /chat/message (handler en
+ * routes/chat.php) usando las funciones REALES de producción
  * (nxClassify, nxSlots, nxAllowed, chatOperationCmd, chatAllowed no
  * aplica — necesita DB; se registra el gate con nxAllowed estático).
  *

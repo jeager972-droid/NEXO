@@ -162,7 +162,7 @@ function _twilioHttpPost(string $url, array $payload, string $sid, string $token
         CURLOPT_POSTFIELDS     => http_build_query($payload),
         CURLOPT_USERPWD        => "$sid:$token",
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 2,  // Reducido de 15s a 2s para evitar bloqueos largos
+        CURLOPT_TIMEOUT        => 2,  // Timeout corto para evitar bloqueos largos
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
     $response = curl_exec($ch);

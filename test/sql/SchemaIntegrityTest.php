@@ -4,7 +4,7 @@
  * SchemaIntegrityTest.php — Test exhaustivo de integridad del esquema SQL.
  * =============================================================================
  * RESPONSABILIDAD:
- *   Parsea sql/schema.sql y schema.sql estáticamente para
+ *   Parsea sql/schema.sql (schema consolidado + seed) estáticamente para
  *   validar integridad estructural sin necesidad de PostgreSQL corriendo.
  *   Cubre: tablas, columnas, tipos, primary keys, unique/check constraints,
  *   foreign keys, índices, triggers, funciones, roles, RLS policies,

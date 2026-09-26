@@ -70,8 +70,8 @@ export const SIDEBAR_ITEMS = [
     icon: FolderHeart,
     roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR],
   },
-  // Consultas fue reemplazada por «Pregúntale a Nexus» (chat NLU) —
-  // /consulta sigue existiendo como redirect a /chat.
+  // Las consultas las cubre «Pregúntale a Nexus» (chat NLU);
+  // /consulta existe como redirect a /chat.
 
   {
     title: 'Enrolamiento',

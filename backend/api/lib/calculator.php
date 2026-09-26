@@ -1,11 +1,11 @@
 <?php
 /**
  * lib/calculator.php — Calculadora científica del chatbot.
- * Evalúa las operaciones estructuradas por math_ner.py — NUNCA usa eval().
+ * Evalúa las operaciones matemáticas estructuradas — NUNCA usa eval().
  * La expresión literal pasa por un parser propio (shunting-yard → RPN).
  */
 
-/** Evalúa la operación estructurada por el NER matemático. */
+/** Evalúa una operación matemática estructurada. */
 function nxCalc(array $op): array {
     $f = $op['function'] ?? null;
     $a = $op['a'] ?? null; $b = $op['b'] ?? null; $c = $op['c'] ?? null;

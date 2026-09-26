@@ -122,7 +122,7 @@ services:
     networks:
       - nexo-internal
 
-  # Mosquitto MQTT Broker (V2 Pub/Sub para comandos M2M)
+  # Mosquitto MQTT Broker (Pub/Sub para comandos M2M)
   mosquitto:
     image: eclipse-mosquitto:2.0-openssl
     ports:

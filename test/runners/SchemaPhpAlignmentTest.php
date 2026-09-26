@@ -15,7 +15,7 @@
  *   - RLS en tablas críticas.
  *
  * USO:
- *   php tests/SchemaPhpAlignmentTest.php
+ *   php test/runners/SchemaPhpAlignmentTest.php
  */
 
 class SchemaPhpAlignmentTest {

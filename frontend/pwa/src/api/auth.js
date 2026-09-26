@@ -28,7 +28,7 @@ export const authApi = {
     const response = await client.get('/auth/me');
     return response.data;
   },
-  // VF-009: Refresh token endpoint
+  // Refresh token endpoint
   refresh: async (refreshToken) => {
     const response = await client.post('/auth/refresh', { refresh_token: refreshToken });
     return response.data;

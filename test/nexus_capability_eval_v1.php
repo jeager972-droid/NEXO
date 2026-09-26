@@ -6,7 +6,7 @@
  *   capability · entity · relation · op · filters{group,status,module,range}
  *   · position · cardinality · presentation · projection · contexto.
  *
- * Cubre composiciones nunca entrenadas: lista+posición, grupo+conteo,
+ * Cubre composiciones no derivadas de plantillas: lista+posición, grupo+conteo,
  * relación inversa, presentación=tabla, ordenamiento, porcentaje, comparación.
  *
  * Uso: php test/nexus_capability_eval_v1.php [--json] [--verbose]

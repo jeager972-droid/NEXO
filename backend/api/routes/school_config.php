@@ -611,7 +611,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'GET') {
 // ============================================================================
 // POST /school/groups-onboarding — Onboarding de grupos académicos (solo RECTOR)
 //
-// FIX bugs #1/#2/#3/#4 (2026-35):
+// Funcionamiento:
 //   - Usa SAVEPOINT sobre la transacción que requireAuth() ya abrió (no exec BEGIN/COMMIT).
 //   - Captura (student_id, grade_level) ANTES de borrar para repoblar
 //     student_group_assignments por grade_level.
@@ -724,7 +724,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        // FIX Bug #4: requireAuth() ya abrió beginTransaction() y seteó RLS context.
+        // requireAuth() ya abrió beginTransaction() y seteó RLS context.
         // Usamos SAVEPOINT para rollback parcial sin cerrar la transacción del middleware.
         $useSavepoint = $conn->inTransaction();
         $sp = 'sp_groups_onboarding';
@@ -869,7 +869,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
             ->execute([$currentYear, $schoolId]);
 
         // ──────────────────────────────────────────────────────────────────
-        // 5. Sensores (igual que antes)
+        // 5. Sensores
         // ──────────────────────────────────────────────────────────────────
         // Borrar sensores viejos (de grupos de años anteriores o genéricos)
         // Solo borrar los que NO están configurados (los configurados se conservan)
@@ -888,7 +888,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
               )
         ")->execute([$schoolId, $schoolId, $schoolId, $currentYear]);
 
-        // Ahora sí borrar los sensores viejos
+        // Borrar los sensores viejos
         $conn->prepare("
             DELETE FROM edge_devices
             WHERE school_id = ?
@@ -936,7 +936,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'POST') {
             $sensorStmt->execute([$schoolId, 'Sensor Coordinación', 'Coordinación', null]);
         }
 
-        // FIX Bug #4: no hacer exec("COMMIT"); la transacción la cierra el middleware en shutdown.
+        // No hacer exec("COMMIT"); la transacción la cierra el middleware en shutdown.
         if ($useSavepoint) {
             $conn->exec("RELEASE SAVEPOINT $sp");
         } else {

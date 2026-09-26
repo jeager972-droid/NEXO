@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/ota/OtaNodeSimulator.php — Simulador del ciclo OTA del nodo.
+ * test/simulaciones/ota/OtaNodeSimulator.php — Simulador del ciclo OTA del nodo.
  * =============================================================================
  * Reproduce la máquina de estados del OtaManager (C++) contra la API REAL:
  *   check → download (part) → verify sha256+firma → staged → applying →

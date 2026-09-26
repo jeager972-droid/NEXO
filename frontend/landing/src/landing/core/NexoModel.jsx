@@ -24,8 +24,8 @@ import { useGLTF, MeshDistortMaterial } from '@react-three/drei'
 import { Box3, Vector3, MathUtils } from 'three'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
-// BUG 1 FIX — rotación automática continua en eje Y usando Three.js clock (no GSAP)
-// BUG 1 FIX — drag orbital vía dragDeltaRef (overlay externo, no OrbitControls)
+// Rotación automática continua en eje Y usando Three.js clock (no GSAP)
+// Drag orbital vía dragDeltaRef (overlay externo, no OrbitControls)
 // El canvas tiene pointer-events: none; el overlay captura el drag sin bloquear el scroll.
 
 const MODEL_PATH = '/assets/models/nodonuevo.glb'
@@ -61,7 +61,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
     return cl
   }, [scene, gl])
 
-  // BUG 1: Normalize model position to bounding box center on first load
+  // Normalize model position to bounding box center on first load
   useEffect(() => {
     if (!clonedScene || !outerRef.current || !innerRef.current || hasNormalized.current) return
     hasNormalized.current = true
@@ -78,7 +78,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
       const s = TARGET_SIZE / maxDim
       outerRef.current.scale.setScalar(s)
 
-      // Centrar en bounding box real (Bug 1 fix)
+      // Centrar en bounding box real
       innerRef.current.position.set(-center.x, -center.y, -center.z)
 
       // Reset rotation so model always faces front on load
@@ -89,7 +89,7 @@ export default function NexoModel({ type, scale = 1.0, showShield = false, scrol
     }
   }, [clonedScene, scale])
 
-  // BUG 1: Auto-rotation + drag orbital (useFrame runs at ~60fps, no GSAP conflict)
+  // Auto-rotation + drag orbital (useFrame runs at ~60fps, no GSAP conflict)
   useFrame((_state, delta) => {
     if (!innerRef.current) return
 

@@ -63,7 +63,7 @@ public:
     bool deleteEstudiante(const std::string& doc);
     uint32_t getNextHuellaID();
 
-    // F-03: multi-huella (hasta 2 dedos por estudiante)
+    // Multi-huella (hasta 2 dedos por estudiante)
     bool saveHuella(const std::string& doc, int fingerSlot, uint32_t huellaId,
                     const std::vector<uint8_t>& tpl, const std::string& schoolId);
     int  getHuellaCount(const std::string& doc);
@@ -88,14 +88,14 @@ public:
     bool clearAudit(const std::string& documento, const std::string& event); // Keep for compatibility
     bool incrementAuditAttempt(int id);
     bool markAuditError(int id);
-    // FIX C3: Purgar registros antiguos sincronizados o en DLQ para evitar llenar la SD card
+    // Purgar registros antiguos sincronizados o en DLQ para evitar llenar la SD card
     int purgeOldAuditTrail(int daysSynced = 30, int daysDlq = 90);
-    // F-06/F-13: métricas de cola para telemetría
+    // Métricas de cola para telemetría
     int getPendingAuditCount();
     int getDlqCount();
-    // F-13: requeue de largo plazo — reactiva registros synced=-1 (SyncWorker, ~1h)
+    // Requeue de largo plazo — reactiva registros synced=-1 (SyncWorker, ~1h)
     int requeueDlqItems(int limit = 20);
-    // FIX C3: VACUUM para reclamar espacio físico tras purgado
+    // VACUUM para reclamar espacio físico tras purgado
     bool vacuum();
 
     // Bulk load for biometric cache

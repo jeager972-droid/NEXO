@@ -122,7 +122,7 @@ static bool httpClientPost(IHttpClient* client, const std::string& url,
     return client->postRequest(url, postData, headers, response);
 }
 
-// FIX: Safe JSON serialization using nlohmann
+// Safe JSON serialization using nlohmann
 static std::string jsonObj(std::initializer_list<std::pair<std::string, std::string>> kvs) {
     nlohmann::json j;
     for (auto& [k, v] : kvs) {

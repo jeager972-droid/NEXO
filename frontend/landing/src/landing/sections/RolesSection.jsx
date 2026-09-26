@@ -22,8 +22,8 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 07 — ROLES & USE CASES
-// CAMBIO 3: Bug fix — GSAP-driven tab transitions instead of CSS animation
-// CAMBIO 6: Sticky scroll, tabs stagger (0.08s) y switchTab animado con GSAP
+// GSAP-driven tab transitions instead of CSS animation
+// Sticky scroll, tabs stagger (0.08s) y switchTab animado con GSAP
 
 const ROLES = [
   {
@@ -174,7 +174,7 @@ export default function RolesSection() {
 
     const trigger = ScrollTrigger.create({
       trigger: wrapperRef.current,
-      start: 'top 75%', // Bug 4: content trigger at 75%
+      start: 'top 75%', // content trigger at 75%
       toggleActions: 'play none none none',
       onEnter: () => {
         if (tabs) gsap.to(tabs, {

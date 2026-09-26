@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# nexo-edge-run.sh — Wrapper de arranque con recuperación OTA (Bloque D).
+# nexo-edge-run.sh — Wrapper de arranque con recuperación OTA.
 # =============================================================================
 # El binario `nexo-edge` se auto-actualiza con swap atómico:
 #   nexo-edge.new → nexo-edge, copia de seguridad en nexo-edge.bak y bandera

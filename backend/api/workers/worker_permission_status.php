@@ -49,7 +49,7 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
     $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
     $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
 
-    // Obtener todos los permisos ACTIVE de esta escuela (con contexto espacial V-031)
+    // Obtener todos los permisos ACTIVE de esta escuela (con contexto espacial)
     $stmt = $conn->prepare("
         SELECT cea.authorization_id, cea.student_id, cea.exit_time, cea.return_time,
                cea.schedule_id, sch.classroom_id AS expected_classroom_id
@@ -68,7 +68,7 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
         $exitTime  = $perm['exit_time'];
 
         // 1. Buscar el evento de retorno (INGRESO_% posterior a exit_time).
-        //    V-063: si el permiso conoce el aula esperada, el retorno debe ocurrir
+        //    Si el permiso conoce el aula esperada, el retorno debe ocurrir
         //    en ese espacio — no vale identificarse en cualquier nodo.
         $expectedClassroom = $perm['expected_classroom_id'] ?? null;
         $returnCheck = $conn->prepare("
@@ -149,7 +149,7 @@ function processSchoolPermissions(PDO $conn, string $schoolId): int {
                         $updated++;
                         logE('EXPIRED', "auth=$authId student=$studentId school=$schoolId return_time=" . $perm['return_time']);
 
-                        // V-041: notificar a los destinatarios configurados
+                        // Notificar a los destinatarios configurados
                         // (school_notification_routes, event_kind PERMISSION_EXPIRED;
                         // default COORDINATOR+RECTOR)
                         try {

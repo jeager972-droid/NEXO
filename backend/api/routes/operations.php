@@ -126,7 +126,7 @@ function enqueueTwilioJob($to, $body, $schoolId, $studentId = null, $guardianId 
         securityLog('TWILIO_ENQUEUE_SKIPPED', "Invalid destination phone: " . ($to ?? 'NULL'));
         return ['ok' => false, 'reason' => 'missing_or_invalid_phone', 'phone_raw' => $to, 'phone_norm' => $toNorm];
     }
-    // V-406: las condiciones de disparo son configurables por escuela —
+    // Las condiciones de disparo son configurables por escuela —
     // school_action_policies 'WHATSAPP_<TYPE>' enabled=false omite el envío.
     if ($conn && function_exists('nexoPolicyEnabled')
         && !nexoPolicyEnabled($conn, (string)$schoolId, 'WHATSAPP_' . strtoupper($typeCode))) {
@@ -280,7 +280,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
     // Estas operaciones no tienen sentido si el estudiante está inasistente:
     //   - permiso: salida al baño (requiere estar en clase)
     //   - autorizar_salida: salida de la institución (requiere estar dentro)
-    // NOTA: 'horario' se removió — es una operación de GRUPO (daily_schedule_config);
+    // 'horario' no aplica aquí: es una operación de GRUPO (daily_schedule_config);
     // un cambio de jornada no depende de la presencia de un estudiante individual.
     // Excepciones permitidas para ausentes: consultas, casos activos (sos,
     // situacion_critica, solicitud, daño), citacion, incidente, seguimiento,
@@ -323,7 +323,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
         }
     }
 
-    // VF-012: Idempotency-Key — prevenir duplicados por reintentos del cliente
+    // Idempotency-Key — prevenir duplicados por reintentos del cliente
     $idempotencyKey = $_SERVER['HTTP_X_IDEMPOTENCY_KEY'] ?? '';
     $idemRedis = getRedisConnection();
     $idemRedisKey = null;
@@ -716,7 +716,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                     echo json_encode(['status' => 'error', 'message' => 'La hora de retorno debe ser una hora futura']);
                     break;
                 }
-                // V-031: resolver el bloque/espacio esperado del estudiante al momento del permiso
+                // Resolver el bloque/espacio esperado del estudiante al momento del permiso
                 $schStmt = $conn->prepare("
                     SELECT sch.schedule_id
                     FROM schedules sch
@@ -762,14 +762,14 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                     'action' => 'permiso',
                 ], JSON_UNESCAPED_UNICODE);
 
-                // FIX: Insertar en attendance_incidents para que aparezca en el dashboard
+                // Insertar en attendance_incidents para que aparezca en el dashboard
                 $incStmt = $conn->prepare("
                     INSERT INTO attendance_incidents (incident_id, school_id, student_id, incident_type, detected_at, metadata_json)
                     VALUES (uuid_generate_v4(), ?, ?, 'PERMISO', NOW(), ?::jsonb)
                 ");
                 $incStmt->execute([$schoolId, $studentId, $meta]);
 
-                // FIX: Batch INSERT notifications — destinatarios vía
+                // Batch INSERT notifications — destinatarios vía
                 // school_notification_routes (event_kind PERMISO; default COORDINATOR)
                 $coords = array_map(fn($uid) => ['user_id' => $uid],
                     nexoRouteUserIds($conn, (string)$schoolId, 'PERMISO', ['COORDINATOR']));
@@ -1021,7 +1021,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                 ]);
                 break;
 
-            // F-02: Registro manual de presencia — contingencia cuando la
+            // Registro manual de presencia — contingencia cuando la
             // biometría falla o el estudiante está exento. Genera un evento
             // INGRESO_MANUAL (cuenta como presencia: matchea 'INGRESO_%') y un
             // incidente REGISTRO_MANUAL con trazabilidad del actor + motivo.
@@ -1141,10 +1141,10 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                 $destination = trim((string)($params['destination'] ?? $purpose));
                 $tripReturn  = trim((string)($params['return_time'] ?? $params['end_time'] ?? ''));
 
-                // FIX Bloque C: persistir la autorización para que los detectores
-                // excluyan a estos estudiantes (ausencia/evasión) durante la salida.
-                // Antes solo se enviaba WhatsApp — los detectores seguían marcando
-                // inasistencia a todo el grupo en salida pedagógica.
+                // Persistir la autorización para que los detectores excluyan a
+                // estos estudiantes (ausencia/evasión) durante la salida; sin
+                // esto se marcaría inasistencia a todo el grupo en salida
+                // pedagógica.
                 if ($groupName) {
                     $tripReturnExpr = $tripReturn !== ''
                         ? "?::timestamptz"
@@ -1339,7 +1339,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                 $expectedEntry = $schedRow['entry_time'] ?? null;
                 $expectedExit = $schedRow['exit_time'] ?? null;
 
-                // FIX M5: Si schedules está vacío (NULL), usar school_schedule_config
+                // Si schedules está vacío (NULL), usar school_schedule_config
                 // por work_shift del grupo como fallback
                 if ($expectedEntry === null || $expectedExit === null) {
                     $sscStmt = $conn->prepare("
@@ -1412,7 +1412,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                     exit(json_encode(['status' => 'error', 'message' => 'La nueva hora de fin es obligatoria']));
                 }
 
-                // VF-021: Soportar filtrado por group_name (grupo específico a extender)
+                // Soportar filtrado por group_name (grupo específico a extender)
                 $groupName = trim((string)($params['group_name'] ?? $params['group'] ?? ''));
                 $todayDate = "(NOW() AT TIME ZONE 'America/Bogota')::date";
 
@@ -1424,17 +1424,17 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                 $checkStmt->execute([$schoolId]);
                 $existingCount = (int)$checkStmt->fetchColumn();
 
-                // FIX Bloque C: extender_bloque también debe suprimir las
-                // transiciones de bloque dentro de la ventana extendida (igual
-                // que fusionar_bloque → metadata merged=true + entry_time).
-                // Sin esto, el grupo quedaba marcado como evasión/ausente al
-                // no pasar al siguiente salón aunque el docente lo retuvo
+                // extender_bloque también debe suprimir las transiciones de
+                // bloque dentro de la ventana extendida (igual que
+                // fusionar_bloque → metadata merged=true + entry_time). Sin
+                // esto, el grupo queda marcado como evasión/ausente al no
+                // pasar al siguiente salón aunque el docente lo retuvo
                 // legítimamente (documento §4.5).
                 $extMeta = json_encode(['action' => 'extender_bloque', 'merged' => true], JSON_UNESCAPED_UNICODE);
                 if ($existingCount > 0) {
                     // UPDATE existing configs for today
                     if ($groupName !== '') {
-                        // VF-021: Filtrar por group_name si se especifica
+                        // Filtrar por group_name si se especifica
                         $updStmt = $conn->prepare("
                             UPDATE daily_schedule_config dsc
                             SET expected_exit_time = ?::time,
@@ -1532,7 +1532,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
 
                 if ($action === 'horario') {
                     // Persistir configuración de jornada (ScheduleTask) en daily_schedule_config
-                    // V-030/V-045: cada grupo afectado se comunica a sus acudientes.
+                    // Cada grupo afectado se comunica a sus acudientes.
                     $changes = $params['changes'] ?? [];
                     // Camino simple (Operation.jsx): un solo grupo + hora de salida opcional
                     if (empty($changes) && !empty($params['group'])) {

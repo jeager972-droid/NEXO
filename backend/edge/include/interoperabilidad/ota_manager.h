@@ -1,7 +1,7 @@
 #pragma once
 /**
  * =============================================================================
- * ota_manager.h — Actualización OTA del nodo por canal M2M (Bloque D).
+ * ota_manager.h — Actualización OTA del nodo por canal M2M.
  * =============================================================================
  * Flujo resistente a apagones (estado persistido en SQLite `config`):
  *
@@ -17,10 +17,11 @@
  *     versión. Si cualquiera falla → estado idle, se reporta FAILED.
  *   - Apagón a mitad de descarga: el .part persiste; al volver, se reanuda
  *     con Content-Range.
- *   - Apagón a mitad de swap: el archivo `ota_applying` + copia `.bak` del
- *     binario actual permiten restaurar en el siguiente arranque.
+ *   - Apagón a mitad de swap: el estado "applying" persistido + copia `.bak`
+ *     del binario actual permiten restaurar en el siguiente arranque.
  *   - Fallo de arranque del binario nuevo: el script wrapper de arranque
- *     restaura .bak si `ota_pending_confirm` existe tras N intentos.
+ *     restaura .bak si la bandera `<bin>.pending` sigue presente tras N
+ *     intentos.
  * =============================================================================
  */
 

@@ -68,7 +68,7 @@ if ($cleanPath === '/dashboard/stats') {
     try {
         if (!$conn) throw new Exception("Conexión a BD no disponible");
 
-        // VF-020: Debug queries gateadas tras APP_ENV=development
+        // Debug queries gateadas tras APP_ENV=development
         $isDev = getenv('APP_ENV') === 'development';
         $debugInfo = '';
         if ($isDev) {
@@ -154,7 +154,7 @@ if ($cleanPath === '/dashboard/stats') {
 
         // CONSOLIDACIÓN: Una sola query con CTEs para todos los COUNTs (presentes, ausentes, alertas, permisos)
         // Esto reduce 4 round-trips a 1 solo round-trip a la DB
-        // FIX: Si tiene global_view, usar query global (no teacher) aunque tenga teacher_view
+        // Si tiene global_view, usar query global (no teacher) aunque tenga teacher_view
         $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
             && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
         
@@ -391,7 +391,7 @@ if ($cleanPath === '/dashboard/stats') {
             securityLog('DASHBOARD_TASKS_ERROR', $e->getMessage());
         }
 
-        // 5. Estudiantes por grupo (FIX: docentes solo ven grupos asignados via teacher_group_access)
+        // 5. Estudiantes por grupo (docentes solo ven grupos asignados via teacher_group_access)
         $teacherFilter = '';
         $teacherFilterParams = [];
         if ($isTeacher) {
@@ -481,7 +481,7 @@ if ($cleanPath === '/dashboard/stats') {
                 'late' => (int)$lateCount
             ]
         ];
-        // VF-020: Solo incluir _debug en desarrollo
+        // Solo incluir _debug en desarrollo
         if ($isDev) {
             $responseData['_debug'] = $debugInfo ?? 'no-debug';
         }

@@ -31,7 +31,7 @@
  */
 class MqttCommandWorker {
 public:
-    // FIX C4: Añadidos parámetros para TLS (caCertPath, useTls)
+    // caCertPath/useTls habilitan TLS (puerto 8883)
     MqttCommandWorker(const std::string& brokerHost, int brokerPort,
                       const std::string& deviceId,
                       const std::string& username, const std::string& password,
@@ -43,7 +43,7 @@ public:
     void stop();
     bool isConnected() const;
 
-    // FIX (SRE-2): Timestamp de última actividad para HealthMonitor
+    // Timestamp de última actividad para HealthMonitor
     std::chrono::steady_clock::time_point lastActivity() const { return m_lastActivity.load(std::memory_order_acquire); }
 
     // Thread-safe: main.cpp llama esto para extraer comandos de forma segura
@@ -53,15 +53,15 @@ public:
 private:
     std::string m_brokerHost; int m_brokerPort;
     std::string m_deviceId, m_username, m_password, m_topic;
-    std::string m_caCertPath;  // FIX C4: Path al CA cert para TLS
-    bool m_useTls;             // FIX C4: Habilitar TLS (puerto 8883)
+    std::string m_caCertPath;  // Path al CA cert para TLS
+    bool m_useTls;             // Habilitar TLS (puerto 8883)
 
     struct mosquitto* m_mosq{nullptr};
     std::thread m_loopThread;
     std::atomic<bool> m_stop{false};
     std::atomic<bool> m_connected{false};
 
-    // FIX (SRE-2): Última actividad observable para HealthMonitor
+    // Última actividad observable para HealthMonitor
     std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
 
     // Producer-Consumer queue (protegida por mutex)

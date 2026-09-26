@@ -5,7 +5,7 @@
  * dónde están, si están configurados y puede registrar nuevos o revocarlos.
  *
  * Sensores: 1 por grupo + sensor de secretaria + sensor de coordinador.
- * "Configurado" reemplaza "Activo" en la UI.
+ * "Configurado" es el estado mostrado en la UI.
  * Revocación: password + countdown 1h + coordinador puede cancelar.
  * Eliminación: hard delete (no soft delete).
  */

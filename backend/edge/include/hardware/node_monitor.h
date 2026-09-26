@@ -7,7 +7,7 @@
 
 /**
  * =============================================================================
- * node_monitor.h — Monitoreo físico del nodo edge (F-06, F-09, F-10, F-13).
+ * node_monitor.h — Monitoreo físico del nodo edge.
  * =============================================================================
  * RESPONSABILIDAD:
  *   PowerMonitor      — lee el estado eléctrico vía sysfs (/sys/class/power_supply)
@@ -27,7 +27,7 @@
  * =============================================================================
  */
 
-// ── F-09: Monitor de energía / UPS ──────────────────────────────────────────
+// ── Monitor de energía / UPS ──────────────────────────────────────────────
 
 enum class PowerState { MAINS, BATTERY, LOW_BATTERY, CRITICAL, UNKNOWN };
 
@@ -57,7 +57,7 @@ private:
     std::string readFile(const std::string& name);
 };
 
-// ── V-333/397/398: Monitor de apertura del gabinete (tamper) ────────────────
+// ── Monitor de apertura del gabinete (tamper) ──────────────────────────────
 // Lee el estado del microswitch del gabinete vía un archivo inyectable —
 // en hardware real es /sys/class/gpio/gpio<N>/value o un GPIO de libgpiod;
 // en tests/simulación es un archivo fixture con "0" (cerrado) / "1" (abierto).
@@ -78,7 +78,7 @@ private:
     bool m_lastOpen = false;
 };
 
-// ── F-10: Gestor de conectividad celular M2M ────────────────────────────────
+// ── Gestor de conectividad celular M2M ─────────────────────────────────────
 
 struct CellularStatus {
     bool interfaceUp = false;     // operstate == up
@@ -106,15 +106,15 @@ private:
     std::string readOperstate();
 };
 
-// ── F-06/F-13: recolector de telemetría del nodo ─────────────────────────────
+// ── Recolector de telemetría del nodo ────────────────────────────────────────
 
 struct NodeMetrics {
     int    clock_drift_s = 0;     // |local - servidor| segundos (set externo)
     int    disk_free_mb  = -1;    // statvfs del directorio de la BD
     int    pending_events = 0;    // audit_trail synced=0
-    int    dlq_count      = 0;    // audit_trail synced=-1 (F-13)
-    int    cpu_temp_c     = -1;   // thermal_zone0 (F-12 obs., sin ventilador)
-    bool   tamper_open    = false; // V-333: apertura física del gabinete
+    int    dlq_count      = 0;    // audit_trail synced=-1
+    int    cpu_temp_c     = -1;   // thermal_zone0 (sin ventilador)
+    bool   tamper_open    = false; // apertura física del gabinete
     PowerState    power_state = PowerState::UNKNOWN;
     CellularStatus cell;
 };

@@ -44,7 +44,7 @@ if ($cleanPath === '/groups') {
         $currentYear = (int)date('Y');
 
         if ($teacherOnly && $isTeacher) {
-            // FIX: usar teacher_group_access en lugar de schedules.
+            // Usar teacher_group_access en lugar de schedules.
             // schedules modela horarios reales (aula+materia+día+bloque) y puede
             // estar vacío tras onboarding. teacher_group_access es la fuente de
             // verdad para "qué grupos puede ver este docente".

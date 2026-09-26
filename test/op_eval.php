@@ -48,7 +48,7 @@ foreach ($set['single'] as $idx => $t) {
     $rawIntent = $cls['intent']; $conf = $cls['confidence'] ?? 0;
     if (in_array($rawIntent, $t['expect'], true)) $S['raw_ok']++;
     // el sistema real resuelve single-turn por nxDialogueResolve (ctx null):
-    // rerank semántico + coverage — es la ruta que corre producción
+    // resolución contextual del DSM (herencia, coverage) — la ruta de producción
     $interp = nxDialogueResolve($cls, null, nxNorm($t['text']));
     $intent = $interp['resolved']['intent'];
     $perCat[$cat]['n'] = ($perCat[$cat]['n'] ?? 0) + 1;

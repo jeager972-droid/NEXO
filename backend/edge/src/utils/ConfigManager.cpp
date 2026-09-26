@@ -16,7 +16,7 @@
 bool ConfigManager::loadConfig(const std::string& path) {
     std::ifstream file(path);
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_configPath = path;  // FIX C2: guardar path para saveConfig
+    m_configPath = path;  // guardar path para saveConfig
     if (!file.is_open()) {
         LOG_WARN("Config file '{}' not found, using defaults", path);
         m_config = nlohmann::json::object();
@@ -33,7 +33,7 @@ bool ConfigManager::loadConfig(const std::string& path) {
     }
 }
 
-// FIX C2: Persistir config en disco (escritura atómica temp->rename)
+// Persistir config en disco (escritura atómica temp->rename)
 bool ConfigManager::saveConfig(const std::string& path) {
     std::lock_guard<std::mutex> lock(m_mutex);
     std::string outPath = path.empty() ? m_configPath : path;
@@ -63,7 +63,7 @@ bool ConfigManager::saveConfig(const std::string& path) {
     return true;
 }
 
-// FIX C2: Actualizar un valor en memoria y opcionalmente persistirlo
+// Actualizar un valor en memoria y opcionalmente persistirlo
 bool ConfigManager::setValue(const std::string& key, const std::string& value, bool persist) {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -73,7 +73,7 @@ bool ConfigManager::setValue(const std::string& key, const std::string& value, b
     return true;
 }
 
-// FIX C2: Valida formato UUID v4 (lo que la API espera)
+// Valida formato UUID v4 (lo que la API espera)
 bool ConfigManager::isValidUuidV4(const std::string& id) {
     if (id.empty()) return false;
     // Regex UUID v4: 8-4-4-4-12 hex, versión 4, variante 8/9/a/b

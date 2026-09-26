@@ -110,7 +110,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) return;
     if (isTokenExpired(token)) {
-      // VF-009: Intentar refresh antes de logout
+      // Intentar refresh antes de logout
       const refreshToken = getRefreshToken();
       if (refreshToken) {
         try {
@@ -135,7 +135,7 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     if (!isTokenExpiringSoon(token, 10)) return;
-    // VF-009: Token próximo a expirar — usar refresh en lugar de getMe
+    // Token próximo a expirar — usar refresh en lugar de getMe
     const refreshToken = getRefreshToken();
     if (refreshToken) {
       try {

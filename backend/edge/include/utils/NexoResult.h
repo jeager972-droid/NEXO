@@ -24,7 +24,7 @@ enum class NexoError {
     CryptoError,
     InvalidInput,
     PermissionDenied,
-    Cancelled,  // FIX C6: Captura cancelada por cancelCapture()
+    Cancelled,  // Captura cancelada por cancelCapture()
     Unknown
 };
 

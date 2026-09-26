@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * integration_test.php — Test de integración estático (Etapa 5).
+ * integration_test.php — Test de integración estático.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Ejecuta pruebas estáticas de consistencia SQL↔PHP sin necesidad de
@@ -15,7 +15,7 @@
  *   - Uso de UUID para primary keys.
  *
  * USO:
- *   php tests/integration_test.php
+ *   php test/runners/integration_test.php
  */
 
 $passed = 0;

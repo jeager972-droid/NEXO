@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * workers/contingency_lib.php — Librería de contingencia operativa (F-04/F-05).
+ * workers/contingency_lib.php — Librería de contingencia operativa.
  * =============================================================================
  *
  * RESPONSABILIDAD
@@ -19,8 +19,8 @@
  *   dispositivo asignado (edge_devices.group_id) Y TODOS sus dispositivos
  *   asignados están offline (last_ping NULL o más viejo que el umbral).
  *   Un grupo SIN dispositivo asignado NO se suprime: no hay forma de saber
- *   si tiene cobertura, así que el comportamiento previo se conserva
- *   (aproximación por group_id hasta que F-01 modele aula↔nodo completo).
+ *   si tiene cobertura, así que se conserva la aproximación por group_id
+ *   (TODO: modelar aula↔nodo completo).
  *
  * FLAGS (variables de entorno)
  * ----------------------------
@@ -217,7 +217,7 @@ function ctMarkNoNodeData($conn, string $schoolId, string $groupId, string $grou
 }
 
 /**
- * F-02: Registra presencia manual — inserta el evento INGRESO_MANUAL (cuenta
+ * Registra presencia manual — inserta el evento INGRESO_MANUAL (cuenta
  * como presencia porque matchea event_type LIKE 'INGRESO_%') y el incidente
  * REGISTRO_MANUAL para trazabilidad. Ambas escrituras en una sola llamada
  * (dentro de la transacción/RLS context del caller).
@@ -234,7 +234,7 @@ function ctRegisterManualPresence($conn, string $schoolId, string $studentId, st
     ")->execute([$schoolId, $studentId, $metaJson]);
 }
 
-// ──────────────────────────── F-06/F-09/F-10/F-13: telemetría del nodo ─────
+// ──────────────────────────── Telemetría del nodo ───────────────────────────
 // Contrato de telemetría (edge → /devices/ping → ctProcessTelemetry):
 //   clock_drift_s, disk_free_mb, pending_events, dlq_count, cpu_temp_c,
 //   power_state (MAINS|BATTERY|LOW_BATTERY|CRITICAL|UNKNOWN),

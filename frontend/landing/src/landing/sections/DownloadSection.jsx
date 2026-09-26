@@ -20,9 +20,9 @@ import AnimatedDownloadButton from '../components/DownloadButton'
 import gsap from 'gsap'
 
 // MODULE 08 — APP DOWNLOAD
-// CAMBIO 4: Eliminado mockup de la app. Íconos al doble de tamaño.
+// Íconos de plataforma a doble tamaño.
 // GSAP magnetic/tilt + scale hover por plataforma con glow representativo.
-// CAMBIO 6: Sticky scroll
+// Sticky scroll
 
 const PWA_URL = 'https://nexo-eight-xi.vercel.app/app/instalar'
 

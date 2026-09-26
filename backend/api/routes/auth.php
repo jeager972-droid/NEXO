@@ -34,7 +34,7 @@
  *   - $conn : conexión PDO.
  *
  * Es utilizado por:
- *   - Frontend: Login.jsx, App.jsx para validación de sesión.
+ *   - Frontend PWA: Login.jsx, App.jsx para validación de sesión.
  */
 
 global $cleanPath, $conn, $input, $method;
@@ -171,7 +171,7 @@ if ($cleanPath === '/auth/login') {
             $updateStmt->execute([$user['user_id']]);
 
             $normalizedRole = normalizeRole($user['role_name']);
-            // VF-009: Access token TTL corto (15 min por defecto) + refresh token (7 días)
+            // Access token TTL corto (15 min por defecto) + refresh token (7 días)
             $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
             $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800); // 7 días
 
@@ -229,7 +229,7 @@ if ($cleanPath === '/auth/login') {
                 'exp' => time() + $tokenTtlSeconds
             ]);
 
-            // VF-009: Generar refresh token y persistir su hash en user_sessions
+            // Generar refresh token y persistir su hash en user_sessions
             $refreshToken = bin2hex(random_bytes(32));
             $refreshTokenHash = hash('sha256', $refreshToken);
             $refreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
@@ -379,7 +379,7 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
         $mark->execute([$codeRow['code_id']]);
 
         $normalizedRole = normalizeRole($user['role_name']);
-        // VF-009: Access token TTL corto + refresh token
+        // Access token TTL corto + refresh token
         $tokenTtlSeconds = (int)(getenv('JWT_ACCESS_TTL_SECONDS') ?: 900);
         $refreshTtlSeconds = (int)(getenv('JWT_REFRESH_TTL_SECONDS') ?: 604800);
         $token = issueJwtToken([
@@ -390,7 +390,7 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
             'exp' => time() + $tokenTtlSeconds
         ]);
 
-        // VF-009: Generar refresh token
+        // Generar refresh token
         $refreshToken = bin2hex(random_bytes(32));
         $refreshTokenHash = hash('sha256', $refreshToken);
         $refreshExpiresAt = date('Y-m-d H:i:s', time() + $refreshTtlSeconds);
@@ -467,7 +467,7 @@ if ($cleanPath === '/auth/logout' && $method === 'POST') {
         }
     }
 
-    // VF-009: Revocar refresh token si está presente
+    // Revocar refresh token si está presente
     $refreshToken = $_COOKIE['refresh_token'] ?? '';
     if ($refreshToken !== '') {
         try {
@@ -524,7 +524,7 @@ if ($cleanPath === '/auth/me') {
 
 // ============================================================================
 // POST /auth/refresh — Renueva el access token usando el refresh token.
-// VF-009: Implementa rotación de refresh tokens (cada uso invalida el anterior).
+// Implementa rotación de refresh tokens (cada uso invalida el anterior).
 // ============================================================================
 if ($cleanPath === '/auth/refresh' && $method === 'POST') {
     // El refresh token puede venir del body (ITP workaround) o de la cookie HttpOnly

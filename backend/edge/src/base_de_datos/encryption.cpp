@@ -104,7 +104,7 @@ bool Encryption::initialize() {
 
 bool Encryption::saveKeyToFile(const std::string& key) {
     if (key.size() != 32) return false;
-    // FIX C5: Cifrar la clave antes de guardarla en disco (binding a hardware)
+    // Cifrar la clave antes de guardarla en disco (binding a hardware)
     // Si el cifrado falla (ej: no es RPi), fallback a texto plano con chmod 600
     if (saveKeyToFileEncrypted(key)) {
         return true;
@@ -131,7 +131,7 @@ bool Encryption::saveKeyToFile(const std::string& key) {
 }
 
 bool Encryption::loadKeyFromFile(std::string& key) {
-    // FIX C5: Intentar cargar cifrado primero, fallback a texto plano (compatibilidad)
+    // Intentar cargar cifrado primero, fallback a texto plano (compatibilidad)
     if (loadKeyFromFileEncrypted(key)) {
         return true;
     }
@@ -280,7 +280,7 @@ std::string Encryption::decrypt(const std::string& b64Ciphertext) {
 }
 
 // ============================================================================
-// FIX C5: Hardware-bound encryption — cifrar clave AES en disco
+// Hardware-bound encryption — cifrar clave AES en disco
 // ============================================================================
 // Deriva una clave de cifrado del CPU serial de la RPi (/proc/cpuinfo).
 // Esto significa que si extraen la SD card y la ponen en otra RPi, no pueden
@@ -468,7 +468,7 @@ bool Encryption::loadKeyFromFileEncrypted(std::string& key) {
     return true;
 }
 
-// ── V-243: hash con clave para campos-busqueda (determinístico) ────────────
+// ── Hash con clave para campos-busqueda (determinístico) ──────────────────
 // HMAC-SHA256 sobre "dockey|" + plaintext con la clave AES del dispositivo.
 // Determinístico → sirve como PK/join sin exponer el valor real en reposo.
 std::string Encryption::keyedHash(const std::string& plaintext) {

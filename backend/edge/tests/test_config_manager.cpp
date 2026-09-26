@@ -92,8 +92,7 @@ TEST_CASE("ConfigManager returns defaults for missing keys", "[config]") {
         REQUIRE(cfg.getDbPath() == "nexo_edge.db");
         REQUIRE(cfg.getLogPath() == "nexo-edge.log");
         REQUIRE(cfg.getLogLevel() == "info");
-        // FIX C2: device_id default changed from "NEXO-EDGE-001" to "" (empty)
-        // to force explicit UUID v4 configuration
+        // device_id default es "" (empty) para forzar configuración UUID v4 explícita
         REQUIRE(cfg.getDeviceId() == "");
         REQUIRE(cfg.getMatchThreshold() == 45);
     }

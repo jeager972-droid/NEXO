@@ -41,7 +41,7 @@ bool SqliteManager::initialize(const std::string& dbPath) {
         sqlite3_close(db);
         db = nullptr;
 
-        // FIX: Si es base de datos corrupta, renombrar y recrear
+        // Si es base de datos corrupta, renombrar y recrear
         if (rc == SQLITE_CORRUPT || rc == SQLITE_NOTADB) {
             LOG_WARN("DB appears corrupt. Renaming to .bak and creating fresh DB.");
             std::string bakPath = dbPath + ".bak";
@@ -81,7 +81,7 @@ bool SqliteManager::createTables() {
         CREATE TABLE IF NOT EXISTS inasistencias (documento TEXT PRIMARY KEY, fecha TEXT DEFAULT (date('now')));
         CREATE TABLE IF NOT EXISTS audit_trail (id INTEGER PRIMARY KEY AUTOINCREMENT, documento TEXT NOT NULL, event TEXT NOT NULL, fecha TEXT DEFAULT (datetime('now')), synced INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
-        -- F-03: multi-huella — hasta 2 dedos por estudiante. estudiantes.huella_id
+        -- Multi-huella — hasta 2 dedos por estudiante. estudiantes.huella_id
         -- se mantiene como compat (dedo 1); estudiante_huellas es la fuente normalizada.
         CREATE TABLE IF NOT EXISTS estudiante_huellas (
             documento TEXT NOT NULL,
@@ -111,7 +111,7 @@ void SqliteManager::migrateSchema() {
     sqlite3_exec(db, "ALTER TABLE estudiantes ADD COLUMN school_id TEXT;", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE estudiantes ADD COLUMN documento_enc TEXT;", nullptr, nullptr, nullptr);
 
-    // V-243: migración de documentos en claro → clave seudonimizada + valor
+    // Migración de documentos en claro → clave seudonimizada + valor
     // cifrado. Solo corre cuando hay clave provisionada (keyedHash no vacío);
     // idempotente: los documentos ya derivados tienen 64 hex y se saltan.
     if (!Encryption::getInstance().isKeyProvisioned()) return;
@@ -166,9 +166,9 @@ void SqliteManager::migrateSchema() {
     migrateTable("inasistencias", false);
 }
 
-// ── F-11: cifrado a nivel de campo para PII en reposo ──────────────────────
+// ── Cifrado a nivel de campo para PII en reposo ──────────────────────────
 // Formato: "enc:v1:" + base64(IV|ct|tag) (mismo esquema que template_huella).
-// Sin clave provisionada → plaintext (degradado, igual que antes de F-11).
+// Sin clave provisionada → plaintext (modo degradado).
 // decField: si el valor no lleva prefijo → se trata como plaintext legacy
 // (migración gradual de bases existentes).
 static std::string encField(const std::string& plain) {
@@ -194,7 +194,7 @@ static std::string decField(const std::string& stored) {
     return d;
 }
 
-// ── V-243: clave de búsqueda seudonimizada para `documento` ────────────────
+// ── Clave de búsqueda seudonimizada para `documento` ─────────────────────
 // El documento en reposo ya no es legible: todas las tablas guardan
 // docKey = HMAC-SHA256(documento) (64 hex, determinístico → PK/join intactos)
 // y el valor real queda en estudiantes.documento_enc (AES-GCM). Sin clave
@@ -226,14 +226,14 @@ int executeWithRetry(sqlite3_stmt* stmt) {
 bool SqliteManager::saveEstudiante(const Estudiante& est) {
     const char* sql = "INSERT OR REPLACE INTO estudiantes (documento, documento_enc, nombre, telefono_acudiente, nombre_acudiente, huella_id, template_huella, school_id) VALUES (?,?,?,?,?,?,?,?);";
     sqlite3_stmt* stmt;
-    // FIX: Uso de prepare_v3 con flag 0 (evita fuga de memoria con SQLITE_PREPARE_PERSISTENT)
+    // prepare_v3 con flag 0 (evita fuga de memoria con SQLITE_PREPARE_PERSISTENT)
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
-    // V-243: la PK es la clave seudonimizada (HMAC); el documento real va cifrado
+    // La PK es la clave seudonimizada (HMAC); el documento real va cifrado
     std::string key = docKey(est.documento);
     std::string encDoc = encField(est.documento);
     sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 2, encDoc.c_str(), -1, SQLITE_TRANSIENT);
-    // F-11: PII cifrada en reposo (nombre/teléfonos/documento).
+    // PII cifrada en reposo (nombre/teléfonos/documento).
     std::string encNombre  = encField(est.nombre);
     std::string encTel     = encField(est.telefono_acudiente);
     std::string encNomAcud = encField(est.nombre_acudiente);
@@ -241,11 +241,11 @@ bool SqliteManager::saveEstudiante(const Estudiante& est) {
     sqlite3_bind_text(stmt, 4, encTel.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 5, encNomAcud.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 6, static_cast<int>(est.huella_id));
-    // FIX: IV aleatorio de 12 bytes (RAND_bytes), concatenado al ciphertext en base64
+    // IV aleatorio de 12 bytes (RAND_bytes), concatenado al ciphertext en base64
     std::string rawTemplate(est.template_huella.begin(), est.template_huella.end());
     std::vector<uint8_t> iv(12);
     if (RAND_bytes(iv.data(), static_cast<int>(iv.size())) != 1) {
-        // FIX 1: Si RAND_bytes falla, NO continuar con IV no inicializado — retornar error inmediatamente
+        // Si RAND_bytes falla, NO continuar con IV no inicializado — retornar error inmediatamente
         LOG_ERROR("RAND_bytes failed for IV generation — abortando saveEstudiante por seguridad");
         sqlite3_finalize(stmt);
         return false;
@@ -265,7 +265,7 @@ bool SqliteManager::saveEstudiante(const Estudiante& est) {
 }
 
 bool SqliteManager::getEstudianteByDocumento(const std::string& doc, Estudiante& est) {
-    // V-243: doc puede ser el documento real (se deriva a clave) o la clave
+    // doc puede ser el documento real (se deriva a clave) o la clave
     // almacenada (viene de estudiante_huellas) — no se re-deriva. El OR con el
     // valor crudo cubre filas legacy en claro no migradas aún.
     std::string key = isKeyedDoc(doc) ? doc : docKey(doc);
@@ -288,7 +288,7 @@ bool SqliteManager::getEstudianteByDocumento(const std::string& doc, Estudiante&
         const char* nom = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
         est.nombre_acudiente = nom ? decField(nom) : "";
         est.huella_id = static_cast<uint32_t>(sqlite3_column_int(stmt, 4));
-        // FIX: El base64 almacenado contiene IV(12) + ciphertext + tag(16); decrypt extrae el IV
+        // El base64 almacenado contiene IV(12) + ciphertext + tag(16); decrypt extrae el IV
         const char* encryptedTemplate = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
         if (encryptedTemplate) {
             std::string decrypted = Encryption::getInstance().decrypt(encryptedTemplate);
@@ -306,8 +306,8 @@ bool SqliteManager::getEstudianteByDocumento(const std::string& doc, Estudiante&
 }
 
 bool SqliteManager::getEstudianteByHuellaID(uint32_t huellaId, Estudiante& est) {
-    // F-03: buscar primero en estudiante_huellas (multi-dedo); si está, el
-    // documento (ya seudonimizado, V-243) resuelve el estudiante sin re-derivar.
+    // Buscar primero en estudiante_huellas (multi-dedo); si está, el
+    // documento (ya seudonimizado) resuelve el estudiante sin re-derivar.
     const char* sqlNew = "SELECT documento FROM estudiante_huellas WHERE huella_id = ?;";
     sqlite3_stmt* stmtNew;
     if (sqlite3_prepare_v3(db, sqlNew, -1, 0, &stmtNew, nullptr) == SQLITE_OK) {
@@ -336,7 +336,7 @@ bool SqliteManager::getEstudianteByHuellaID(uint32_t huellaId, Estudiante& est) 
         const char* nom = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
         est.nombre_acudiente = nom ? decField(nom) : "";
         est.huella_id = static_cast<uint32_t>(sqlite3_column_int(stmt, 5));
-        // FIX: El base64 almacenado contiene IV(12) + ciphertext + tag(16); decrypt extrae el IV
+        // El base64 almacenado contiene IV(12) + ciphertext + tag(16); decrypt extrae el IV
         const char* encryptedTemplate = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
         if (encryptedTemplate) {
             std::string decrypted = Encryption::getInstance().decrypt(encryptedTemplate);
@@ -354,8 +354,8 @@ bool SqliteManager::getEstudianteByHuellaID(uint32_t huellaId, Estudiante& est) 
 }
 
 bool SqliteManager::deleteEstudiante(const std::string& doc) {
-    // F-03: eliminar también las huellas multi-dedo (mismo caller, misma unidad lógica)
-    std::string key = isKeyedDoc(doc) ? doc : docKey(doc); // V-243
+    // Eliminar también las huellas multi-dedo (mismo caller, misma unidad lógica)
+    std::string key = isKeyedDoc(doc) ? doc : docKey(doc);
     const char* sqlH = "DELETE FROM estudiante_huellas WHERE documento = ?;";
     sqlite3_stmt* stmtH;
     if (sqlite3_prepare_v3(db, sqlH, -1, 0, &stmtH, nullptr) == SQLITE_OK) {
@@ -372,7 +372,7 @@ bool SqliteManager::deleteEstudiante(const std::string& doc) {
     return ok;
 }
 
-// ── F-03: multi-huella ─────────────────────────────────────────────────────
+// ── Multi-huella ────────────────────────────────────────────────────────────
 
 bool SqliteManager::saveHuella(const std::string& doc, int fingerSlot, uint32_t huellaId,
                                const std::vector<uint8_t>& tpl, const std::string& schoolId) {
@@ -380,7 +380,7 @@ bool SqliteManager::saveHuella(const std::string& doc, int fingerSlot, uint32_t 
     const char* sql = "INSERT OR REPLACE INTO estudiante_huellas (documento, finger_slot, huella_id, template_huella, school_id) VALUES (?,?,?,?,?);";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
-    std::string key = isKeyedDoc(doc) ? doc : docKey(doc); // V-243
+    std::string key = isKeyedDoc(doc) ? doc : docKey(doc);
     sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 2, fingerSlot);
     sqlite3_bind_int(stmt, 3, static_cast<int>(huellaId));
@@ -403,7 +403,7 @@ bool SqliteManager::saveHuella(const std::string& doc, int fingerSlot, uint32_t 
 
 int SqliteManager::getHuellaCount(const std::string& doc) {
     int count = 0;
-    std::string key = isKeyedDoc(doc) ? doc : docKey(doc); // V-243
+    std::string key = isKeyedDoc(doc) ? doc : docKey(doc);
     const char* sql = "SELECT COUNT(*) FROM estudiante_huellas WHERE documento = ?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) == SQLITE_OK) {
@@ -426,7 +426,7 @@ int SqliteManager::getHuellaCount(const std::string& doc) {
 
 bool SqliteManager::getHuellaIdsByDocumento(const std::string& doc, std::vector<uint32_t>& idsOut) {
     idsOut.clear();
-    std::string key = isKeyedDoc(doc) ? doc : docKey(doc); // V-243
+    std::string key = isKeyedDoc(doc) ? doc : docKey(doc);
     const char* sql = "SELECT huella_id FROM estudiante_huellas WHERE documento = ?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) == SQLITE_OK) {
@@ -456,7 +456,7 @@ bool SqliteManager::huellaSlotExists(const std::string& doc, int fingerSlot) {
     const char* sql = "SELECT 1 FROM estudiante_huellas WHERE documento = ? AND finger_slot = ? LIMIT 1;";
     sqlite3_stmt* stmt;
     bool exists = false;
-    std::string key = isKeyedDoc(doc) ? doc : docKey(doc); // V-243
+    std::string key = isKeyedDoc(doc) ? doc : docKey(doc);
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 2, fingerSlot);
@@ -467,7 +467,7 @@ bool SqliteManager::huellaSlotExists(const std::string& doc, int fingerSlot) {
 }
 
 uint32_t SqliteManager::getNextHuellaID() {
-    // F-03: huella_id es global — el máximo debe cubrir ambas tablas
+    // huella_id es global — el máximo debe cubrir ambas tablas
     const char* sql = "SELECT COALESCE(MAX(h), 0) + 1 FROM (SELECT huella_id AS h FROM estudiantes UNION ALL SELECT huella_id AS h FROM estudiante_huellas);";
     sqlite3_stmt* stmt;
     uint32_t next = 1;
@@ -479,7 +479,7 @@ uint32_t SqliteManager::getNextHuellaID() {
 }
 
 bool SqliteManager::updatePattern(const std::string& documento, bool temprano, bool tarde) {
-    std::string key = isKeyedDoc(documento) ? documento : docKey(documento); // V-243
+    std::string key = isKeyedDoc(documento) ? documento : docKey(documento);
     const char* sql = "INSERT INTO patrones (documento, ingresos_temprano, ingresos_tarde, asistencia_total) VALUES (?, ?, ?, 1) ON CONFLICT(documento) DO UPDATE SET asistencia_total = asistencia_total + 1, ingresos_temprano = ingresos_temprano + ?, ingresos_tarde = ingresos_tarde + ?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
@@ -495,11 +495,11 @@ bool SqliteManager::saveAudit(const std::string& documento, const std::string& e
     const char* sql = "INSERT INTO audit_trail (documento, event) VALUES (?, ?);";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v3(db, sql, -1, 0, &stmt, nullptr) != SQLITE_OK) return false;
-    // F-11: documento del estudiante cifrado en reposo en la cola de sync.
+    // Documento del estudiante cifrado en reposo en la cola de sync.
     // (getPendingAudits lo descifra antes de resolver el estudiante).
     std::string encDoc = encField(documento);
     sqlite3_bind_text(stmt, 1, encDoc.c_str(), -1, SQLITE_TRANSIENT);
-    // V-245: el tipo de evento también queda cifrado en reposo
+    // El tipo de evento también queda cifrado en reposo
     std::string encEvt = encField(event);
     sqlite3_bind_text(stmt, 2, encEvt.c_str(), -1, SQLITE_TRANSIENT);
     bool ok = (executeWithRetry(stmt) == SQLITE_DONE);
@@ -538,7 +538,7 @@ bool SqliteManager::clearAudit(int id) {
 }
 
 bool SqliteManager::clearAudit(const std::string& documento, const std::string& event) {
-    // V-243/V-245: con documento y event cifrados (IV aleatorio) no existe
+    // Con documento y event cifrados (IV aleatorio) no existe
     // igualdad directa en SQL — se comparan los pendientes ya descifrados.
     std::vector<AuditRecord> pend;
     if (!getPendingAudits(pend)) return false;
@@ -632,7 +632,7 @@ bool SqliteManager::getAllEstudiantesConTemplate(std::vector<Estudiante>& estudi
     return true;
 }
 
-// FIX C3: Purgar registros antiguos de audit_trail para evitar llenar la SD card.
+// Purgar registros antiguos de audit_trail para evitar llenar la SD card.
 // - synced=1 (enviados OK): borrar tras `daysSynced` días (default 30)
 // - synced=-1 (DLQ): borrar tras `daysDlq` días (default 90, más conservador)
 // Retorna el número total de filas eliminadas.
@@ -674,7 +674,7 @@ int SqliteManager::purgeOldAuditTrail(int daysSynced, int daysDlq) {
     return totalDeleted;
 }
 
-// F-06/F-13: métricas de cola para telemetría
+// Métricas de cola para telemetría
 int SqliteManager::getPendingAuditCount() {
     const char* sql = "SELECT COUNT(*) FROM audit_trail WHERE synced = 0;";
     sqlite3_stmt* stmt;
@@ -697,7 +697,7 @@ int SqliteManager::getDlqCount() {
     return n;
 }
 
-// F-13: reintento de largo plazo — reactiva hasta `limit` registros de la DLQ.
+// Reintento de largo plazo — reactiva hasta `limit` registros de la DLQ.
 int SqliteManager::requeueDlqItems(int limit) {
     const char* sql = "UPDATE audit_trail SET synced = 0, attempts = 0 WHERE id IN (SELECT id FROM audit_trail WHERE synced = -1 ORDER BY id LIMIT ?);";
     sqlite3_stmt* stmt;
@@ -709,7 +709,7 @@ int SqliteManager::requeueDlqItems(int limit) {
     return n;
 }
 
-// FIX C3: VACUUM para reclamar espacio físico tras purgado
+// VACUUM para reclamar espacio físico tras purgado
 bool SqliteManager::vacuum() {
     // VACUUM no puede ejecutarse dentro de transacción
     int rc = sqlite3_exec(db, "VACUUM;", nullptr, nullptr, nullptr);

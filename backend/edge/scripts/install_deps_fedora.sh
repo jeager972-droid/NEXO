@@ -59,7 +59,7 @@ sudo dnf install -y \
 sudo dnf install -y \
     spdlog-devel
 
-# MQTT (libmosquitto) — FIX C1: faltaba en el script de instalación
+# MQTT (libmosquitto)
 sudo dnf install -y \
     mosquitto-devel
 

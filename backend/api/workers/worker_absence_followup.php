@@ -2,9 +2,9 @@
 /**
  * =============================================================================
  * workers/worker_absence_followup.php — Seguimiento de inasistencias sin
- * respuesta del acudiente (Bloque C — Twilio).
+ * respuesta del acudiente.
  * =============================================================================
- * Flujo (documento: "sin respuesta → reintento/escalación configurable"):
+ * Flujo (sin respuesta → reintento/escalación configurable):
  *   1. attendance_incidents INASISTENCIA sin guardian_response en metadata y
  *      detected_at > ABSENCE_FOLLOWUP_MINUTES → reenvía el menú WhatsApp al
  *      acudiente (máx ABSENCE_FOLLOWUP_MAX recordatorios, espaciados
@@ -12,7 +12,7 @@
  *   2. Si agotó recordatorios y detected_at > ABSENCE_ESCALATE_MINUTES →
  *      notificación interna a las rutas ABSENCE_NO_REPLY (default
  *      COORDINATOR+RECTOR) + metadata escalated=true.
- *   3. Incidentes pending_context (anomalía grupal F-05) NO se siguen aquí:
+ *   3. Incidentes pending_context (anomalía grupal) NO se siguen aquí:
  *      esperan triaje humano, no WhatsApp.
  * =============================================================================
  */

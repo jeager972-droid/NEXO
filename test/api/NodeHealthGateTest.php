@@ -10,7 +10,7 @@
  * ítem exige (umbral temporal, ping nulo, cobertura múltiple, dispositivos
  * inactivos/sin asignar, flapping, cluster de anomalía, dedup de marcadores).
  *
- * Corre contra simulaciones/nodo/NodeSimulator.php — sin hardware ni BD real
+ * Corre contra test/simulaciones/nodo/NodeSimulator.php — sin hardware ni BD real
  * (las helpers BD se ejercitan con un FakePDO scriptado).
  * =============================================================================
  */

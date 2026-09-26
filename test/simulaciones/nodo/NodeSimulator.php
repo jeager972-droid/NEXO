@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/nodo/NodeSimulator.php — Simulador de salud de nodos edge.
+ * test/simulaciones/nodo/NodeSimulator.php — Simulador de salud de nodos edge.
  * =============================================================================
  *
  * PROPÓSITO (regla transversal hardware/firmware/físico)

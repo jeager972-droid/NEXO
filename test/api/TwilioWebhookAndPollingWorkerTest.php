@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 16_TwilioWebhookAndPollingWorkerTest.php
+ * TwilioWebhookAndPollingWorkerTest.php
  * =============================================================================
  * RESPONSABILIDAD:
  *   VF-028: Tests estáticos del webhook de Twilio (twilio_delivery.php).

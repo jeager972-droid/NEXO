@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 05_TriggerTest.php — Test de triggers y funciones SQL.
+ * TriggerTest.php — Test de triggers y funciones SQL.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica en sql/schema.sql la existencia de:

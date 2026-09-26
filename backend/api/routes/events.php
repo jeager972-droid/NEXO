@@ -1,6 +1,6 @@
 <?php
 /**
- * routes/events.php — SSE: stream de notificaciones en tiempo real (V-110).
+ * routes/events.php — SSE: stream de notificaciones en tiempo real.
  *
  *   GET /events/stream (Authorization: Bearer)
  *

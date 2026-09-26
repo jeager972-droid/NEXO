@@ -2,14 +2,14 @@
  * =============================================================================
  * node_monitor.cpp — Implementación del monitoreo físico del nodo edge.
  * =============================================================================
- * F-09 (UPS): PowerMonitor lee el power_supply del UPS HAT por sysfs. Fuentes
+ * PowerMonitor (UPS): lee el power_supply del UPS HAT por sysfs. Fuentes
  * soportadas: cualquier driver que exponga status+capacity (PiSugar, UPS HAT
  * EP0114 vía fuel gauge I2C, o systemd-logind). Si la ruta no existe → UNKNOWN.
  *
- * F-10 (M2M): CellularManager lee operstate del interfaz wwan y parsea mmcli.
+ * CellularManager (M2M): lee operstate del interfaz wwan y parsea mmcli.
  * El parser es puro para test con fixtures reales de mmcli.
  *
- * F-06/F-13: NodeTelemetry agrega métricas de reloj, disco, cola, DLQ,
+ * NodeTelemetry: agrega métricas de reloj, disco, cola, DLQ,
  * temperatura del SoC y estado eléctrico/celular para el ping.
  * =============================================================================
  */

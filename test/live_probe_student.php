@@ -1,8 +1,8 @@
 <?php
 /**
- * live_probe_student.php — sonda quirúrgica post-fixes del pipeline.
- * Reproduce los fallos de la transcripción real 2026-09-24 con
- * estudiantes del fixture local:
+ * live_probe_student.php — sonda quirúrgica del pipeline conversacional.
+ * Reproduce los fallos observados en la transcripción real 2026-09-24
+ * con estudiantes del fixture local:
  *  - filtro de estudiante en inasistencias (bug: devolvía 400 filas del colegio)
  *  - «y sus <módulo>?» hereda estudiante + rango
  *  - filtro justified (excusa) vía risk_justifications

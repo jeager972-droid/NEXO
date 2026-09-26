@@ -17,7 +17,7 @@
  *      ├── SQLite / Encryption / Security provisioning
  *      ├── HAL: sensor biométrico, display, notificaciones (stub/real)
  *      ├── SyncWorker.start()  -> cola audit_trail -> CloudManager
- *      ├── MqttCommandWorker.start() (opcional, V2)
+ *      ├── MqttCommandWorker.start() (opcional)
  *      ├── HealthMonitor.start() (monitorea SyncWorker/MQTT)
  *      ├── HardwareWatchdog
  *      │
@@ -74,7 +74,7 @@
 #include "interoperabilidad/audit_trail.h"
 #include "interoperabilidad/ota_manager.h"
 
-// FIX C8: Hardware real condicional — OLED SSD1306 + GPIO LEDs/buzzer
+// Hardware real condicional — OLED SSD1306 + GPIO LEDs/buzzer
 #if defined(HAS_REAL_DISPLAY)
 #include "hardware/real/RealOledDisplay.h"
 #endif
@@ -112,7 +112,7 @@ void signalHandler(int signal) {
 bool readLineNonBlocking(std::string& out, int timeoutMs = 500) {
     out.clear();
     
-    // FIX: Si el proceso es un servicio de systemd, no intentar leer STDIN.
+    // Si el proceso es un servicio de systemd, no intentar leer STDIN.
     if (!isatty(STDIN_FILENO)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
         return false;
@@ -128,7 +128,7 @@ bool readLineNonBlocking(std::string& out, int timeoutMs = 500) {
             if (errno == EINTR) continue;
             return false;
         }
-        if (ret == 0) return false;  // FIX: timeout sin input → retornar false para que el main loop procese comandos
+        if (ret == 0) return false;  // timeout sin input → retornar false para que el main loop procese comandos
         if (pfd.revents & POLLIN) {
             char buf[256];
             ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
@@ -169,7 +169,7 @@ public:
 
     void nudge() { m_cv.notify_all(); }
 
-    // FIX (SRE-2): Timestamp de última actividad para HealthMonitor
+    // Timestamp de última actividad para HealthMonitor
     std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
     std::chrono::steady_clock::time_point lastActivity() const { return m_lastActivity.load(std::memory_order_acquire); }
 
@@ -181,16 +181,16 @@ private:
 
     void run() {
         LOG_INFO("[SyncWorker] Cloud sync thread started");
-        // FIX C3: Contador para purgar audit_trail una vez al día (~2880 ciclos de 30s)
+        // Contador para purgar audit_trail una vez al día (~2880 ciclos de 30s)
         int cycleCount = 0;
         while (!m_stop.load(std::memory_order_acquire)) {
             m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
             syncBatch();
-            // FIX C3: Purgar registros antiguos cada ~24h (2880 ciclos × 30s)
+            // Purgar registros antiguos cada ~24h (2880 ciclos × 30s)
             if (++cycleCount >= 2880) {
                 cycleCount = 0;
                 auto& db = SqliteManager::getInstance();
-                // V-427: retenciones configurables vía config.json
+                // Retenciones configurables vía config.json
                 // (retention_days_synced / retention_days_dlq; defaults 30/90)
                 auto& cfg = ConfigManager::getInstance();
                 int daysSynced = cfg.getInt("retention_days_synced", 30);
@@ -200,7 +200,7 @@ private:
                     db.vacuum();  // Reclamar espacio físico solo si hubo purgado
                 }
             }
-            // F-13: DLQ — reintento de largo plazo cada ~1h (120 ciclos × 30s).
+            // DLQ — reintento de largo plazo cada ~1h (120 ciclos × 30s).
             // Registros synced=-1 reactivan con attempts=0 para un nuevo ciclo;
             // si el fallo era transitorio (red, central caído) se sincronizan.
             if (cycleCount % 120 == 0) {
@@ -218,7 +218,7 @@ private:
         LOG_INFO("[SyncWorker] Cloud sync thread stopped");
     }
 
-    // PILAR 4.1: Generador de request_id simple (hex)
+    // Generador de request_id simple (hex)
     std::string generateRequestId() {
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -230,7 +230,7 @@ private:
 
     void syncBatch() {
         m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
-        std::vector<AuditRecord> audits; // <-- ACTUALIZADO
+        std::vector<AuditRecord> audits;
         auto& db = SqliteManager::getInstance();
         if (!db.getPendingAudits(audits) || audits.empty()) return;
 
@@ -241,7 +241,7 @@ private:
         std::uniform_real_distribution<> jitter(-0.3, 0.3);
         static std::atomic<uint64_t> nonceCounter{0};
 
-        for (auto& record : audits) { // <-- ACTUALIZADO
+        for (auto& record : audits) {
             m_lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
             if (m_stop.load(std::memory_order_acquire)) break;
 
@@ -253,35 +253,35 @@ private:
 
             Estudiante est;
             if (!db.getEstudianteByDocumento(record.documento, est)) {
-                // FIX: Evita el bucle infinito al limpiar huérfanos
+                // Evita el bucle infinito al limpiar huérfanos
                 LOG_WARN("[SyncWorker] Registro huerfano para doc {}. Limpiando cola.", record.documento);
                 db.clearAudit(record.id);
                 continue;
             }
 
-            // FIX: Añadir timestamp REAL, nonce único y request_id para evitar Replay y trazabilidad
+            // Timestamp real, nonce único y request_id para evitar replay y dar trazabilidad
             nlohmann::json j;
             j["action"] = "SYNC_ATTENDANCE";
             j["doc"] = est.documento;
-            j["event"] = record.event; // <-- ACTUALIZADO
+            j["event"] = record.event;
             j["parent_tel"] = est.telefono_acudiente;
-            j["captured_at"] = record.timestamp; // <-- ¡LA MAGIA OCURRE AQUÍ!
+            j["captured_at"] = record.timestamp;
             j["device_token"] = Encryption::getInstance().getToken();
             j["device_id"] = ConfigManager::getInstance().getDeviceId();
             uint64_t micro = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
             j["nonce"] = std::to_string(micro) + "_" + est.documento + "_" + std::to_string(nonceCounter.fetch_add(1));
-            j["request_id"] = generateRequestId(); // PILAR 4.1
+            j["request_id"] = generateRequestId();
             std::string payload = j.dump();
 
             if (CloudManager::getInstance().syncRecord(payload)) {
-                db.clearAudit(record.id); // <-- ACTUALIZADO a usar ID
+                db.clearAudit(record.id);
                 ++synced;
                 delayMs = 1000; // Resetear delay al exito
             } else {
                 ++failed;
                 db.incrementAuditAttempt(record.id);
-                // PILAR 1.2: Exponential Backoff con Jitter (±30%)
+                // Exponential backoff con jitter (±30%)
                 double j_val = 1.0 + jitter(gen);
                 int sleepMs = static_cast<int>(delayMs * j_val);
                 if (sleepMs < 500) sleepMs = 500;
@@ -298,14 +298,14 @@ private:
 // =============================================================================
 // Command Worker (M2M — recibe comandos desde la nube via HTTP polling)
 // =============================================================================
-// (V1) Hilo que cada 30s consulta /devices/commands por HTTP. En V2 este rol
-// es desempeñado por MqttCommandWorker; esta clase queda como fallback.
+// Hilo que cada 30s consulta /devices/commands por HTTP. Este rol lo desempeña
+// principalmente MqttCommandWorker; esta clase queda como fallback.
 
-// FIX C7: HeartbeatWorker — envía POST /devices/ping cada 30s siempre,
+// HeartbeatWorker — envía POST /devices/ping cada 30s siempre,
 // incluso cuando MQTT está habilitado. Esto asegura que el edge aparezca
 // online en el dashboard de health check del RECTOR.
 
-// V-493/V-495: definida más abajo — resincronización NTP forzada por el central.
+// Definida más abajo — resincronización NTP forzada por el central.
 void forceTimeResync();
 
 class HeartbeatWorker {
@@ -327,11 +327,11 @@ private:
     std::atomic<bool> m_stop{false};
     std::string m_apiBase, m_deviceToken, m_deviceId;
     std::atomic<std::chrono::steady_clock::time_point> m_lastActivity{std::chrono::steady_clock::now()};
-    // F-06/F-09/F-10/F-13: monitores físicos del nodo
+    // Monitores físicos del nodo
     PowerMonitor m_power{"/sys/class/power_supply/nexo_ups"};
     CellularManager m_cell{getenv("NEXO_CELL_IFACE") ? getenv("NEXO_CELL_IFACE") : "wwan0"};
     NodeTelemetry m_telemetry{".", "/sys/class/thermal/thermal_zone0/temp"};
-    // V-333: microswitch de apertura del gabinete (GPIO inyectable por env)
+    // Microswitch de apertura del gabinete (GPIO inyectable por env)
     TamperMonitor m_tamper{getenv("NEXO_TAMPER_GPIO_VALUE") ? getenv("NEXO_TAMPER_GPIO_VALUE") : ""};
     long m_lastServerTs = 0;
 
@@ -361,7 +361,7 @@ private:
 
         std::string url = m_apiBase + "/devices/ping";
 
-        // F-06: telemetría operativa del nodo (disco, cola, DLQ, temperatura,
+        // Telemetría operativa del nodo (disco, cola, DLQ, temperatura,
         // energía, celular, deriva de reloj). El central la persiste y genera
         // incidentes por umbral — ver ctProcessTelemetry en contingency_lib.
         NodeMetrics metrics;
@@ -415,15 +415,15 @@ private:
         if (res != CURLE_OK || (httpCode != 200 && httpCode != 202)) {
             LOG_WARN("[HeartbeatWorker] Ping failed: HTTP {} | {}", httpCode, curl_easy_strerror(res));
         } else {
-            // F-06: guardar el timestamp del servidor para medir clock_drift_s
+            // Guardar el timestamp del servidor para medir clock_drift_s
             try {
                 auto rj = nlohmann::json::parse(readBuffer);
                 if (rj.contains("received_at")) m_lastServerTs = rj["received_at"].get<long>();
-                // V-493/V-495: resync ordenado por el central ante drift excesivo
+                // Resync ordenado por el central ante drift excesivo
                 if (rj.value("resync_required", false)) {
                     forceTimeResync();
                 }
-                // V-183/V-196: el central publica las franjas horarias de la
+                // El central publica las franjas horarias de la
                 // jornada del nodo; se persisten para clasificación en origen.
                 if (rj.contains("schedule") && rj["schedule"].is_object()) {
                     auto& cfg = ConfigManager::getInstance();
@@ -459,7 +459,7 @@ public:
         if (m_thread.joinable()) m_thread.join();
     }
 
-    // V2: Cola de comandos para que el main loop los procese con acceso a sensor/display/sync
+    // Cola de comandos para que el main loop los procese con acceso a sensor/display/sync
     bool hasPendingCommand() {
         std::lock_guard<std::mutex> lock(m_queueMutex);
         return !m_commandQueue.empty();
@@ -539,12 +539,12 @@ private:
                 for (const auto& cmd : json["data"]) {
                     std::string command = cmd.value("command", "");
                     LOG_INFO("[CommandWorker] Received command: {}", command);
-                    // V2: Encolar TODOS los comandos para que el main loop los procese
+                    // Encolar TODOS los comandos para que el main loop los procese
                     // con acceso a biometricSensor, display, syncWorker, enrollStudentOnDevice.
                     // Los comandos simples (RELOAD_CONFIG, FORCE_SYNC) se procesan inline;
                     // los que necesitan hardware (ENROLL_REQUEST, AUTHORIZE_EXIT) van a la cola.
                     if (command == "REBOOT") {
-                        // FIX A6: REBOOT real — sync graceful + system("reboot")
+                        // REBOOT — sync graceful + system("reboot")
                         // CommandWorker no tiene acceso a syncWorker, pero el REBOOT
                         // también llega por MQTT donde sí se hace sync. Aquí solo reboot.
                         LOG_WARN("[CommandWorker] REBOOT ordered by cloud. Rebooting...");
@@ -590,10 +590,10 @@ LocalTime getLocalTimeBogota() {
     return {tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, true};
 }
 
-// V-183/V-196: las franjas de clasificación ya no son constantes — leen la
-// configuración del colegio que el central envía en la respuesta de
-// /devices/ping (clave "schedule"). Los defaults reproducen el comportamiento
-// previo (jornada mañana 6:40-16:00) cuando el nodo aún no ha sincronizado.
+// Las franjas de clasificación se leen de la configuración del colegio que el
+// central envía en la respuesta de /devices/ping (clave "schedule"). Los
+// defaults corresponden a una jornada de mañana 6:40-16:00 y aplican cuando el
+// nodo aún no ha sincronizado.
 std::string checkLateStatus() {
     auto t = getLocalTimeBogota();
     if (!t.valid) return "ERROR_TIME";
@@ -678,7 +678,7 @@ bool checkNtpSync() {
     return true;
 }
 
-// V-493/V-495: el central puede ordenar resincronización forzada cuando el
+// El central puede ordenar resincronización forzada cuando el
 // drift reportado en /devices/ping excede el umbral (resync_required=true).
 // Intenta chronyc makestep → ntpdate → reinicio de chronyd/timesyncd.
 void forceTimeResync() {
@@ -743,7 +743,7 @@ bool runSecurityProvisioning() {
     const std::string provisionPath = ConfigManager::getInstance().getString("provision_file", "/boot/nexo_provision.json");
 
     while (!crypto.isKeyProvisioned() || !crypto.isTokenProvisioned()) {
-        // FIX (SRE-3): Auto-provision from staging file injected via USB/MicroSD.
+        // Auto-provision from staging file injected via USB/MicroSD.
         if (std::filesystem::exists(provisionPath)) {
             try {
                 std::ifstream f(provisionPath);
@@ -771,7 +771,7 @@ bool runSecurityProvisioning() {
                     throw std::runtime_error("Failed to provision API token from file");
                 }
 
-                // FIX C2: Auto-update device_id desde provision file si es UUID v4 válido
+                // Auto-update device_id desde provision file si es UUID v4 válido
                 if (!provisionDeviceId.empty() && ConfigManager::isValidUuidV4(provisionDeviceId)) {
                     ConfigManager::getInstance().setValue("device_id", provisionDeviceId, true);
                     LOG_INFO("device_id auto-updated from provision file: {}", provisionDeviceId);
@@ -935,14 +935,14 @@ void handleBiometricMatch(uint32_t huellaId,
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", t.hour, t.min);
 
-    // FIX: Ocultar PII en logs
+    // Ocultar PII en logs
     std::string maskedDoc = est.documento;
     if (maskedDoc.length() > 4) {
         maskedDoc.replace(0, maskedDoc.length() - 4, maskedDoc.length() - 4, '*');
     }
     LOG_INFO("Match: id_{} doc={} status={} time={}", est.huella_id, maskedDoc, status, timeBuf);
 
-    // FIX (SRE-3): Verificar persistencia local ANTES de permitir el acceso.
+    // Verificar persistencia local ANTES de permitir el acceso.
     // Si SQLite falla (disco lleno, SD corrupta, RO), NO se permite el ingreso
     // para evitar responsabilidad legal por pérdida de datos.
     std::string eventType = "INGRESO_" + status;
@@ -1028,7 +1028,7 @@ void reprintMenu() {
 // Captura la huella vía sensor y persiste en SQLite ANTES de actualizar la
 // cache del sensor. La transacción explícita permite rollback completo.
 // Devuelve true solo si el estudiante queda persistido y en cache.
-// F-03: fingerSlot ∈ {1,2} — cada dedo ocupa un huella_id (slot de sensor)
+// fingerSlot ∈ {1,2} — cada dedo ocupa un huella_id (slot de sensor)
 // distinto; ambos resuelven al mismo estudiante en la identificación.
 bool enrollStudentOnDevice(IBiometricSensor* sensor, const std::string& doc,
                            const std::string& nombre, const std::string& tel,
@@ -1144,7 +1144,7 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             std::string err;
             if (enrollStudentOnDevice(sensor, doc, nombre, tel, err)) {
                 printEvent("ENROLL", "✓ Estudiante enrolado exitosamente", "green");
-                // F-03: ofrecer segundo dedo (respaldo ante fallo de lectura)
+                // Ofrecer segundo dedo (respaldo ante fallo de lectura)
                 if (db.getHuellaCount(doc) == 1) {
                     std::cout << "  ¿Registrar un segundo dedo de respaldo? [s/N]: ";
                     std::cout.flush();
@@ -1169,7 +1169,7 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
             if (!readLineNonBlocking(doc, 30000)) break;
             Estudiante est;
             if (db.getEstudianteByDocumento(doc, est)) {
-                // F-03: purgar TODOS los dedos del caché del sensor
+                // Purgar TODOS los dedos del caché del sensor
                 std::vector<uint32_t> huellaIds;
                 db.getHuellaIdsByDocumento(doc, huellaIds);
                 if (huellaIds.empty()) huellaIds.push_back(est.huella_id);
@@ -1199,14 +1199,14 @@ void modoSecretaria(IBiometricSensor* sensor, SyncWorker& syncWorker) {
 // Punto de entrada: inicializa subsistemas, arranca workers, configura
 // señales, instancia watchdog y entra al menú/bucle principal.
 int main() {
-    // FIX: Previene Errores de segmentación en libcurl para hilos múltiples
+    // Requerido por libcurl antes de usarlo desde hilos múltiples
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     ConfigManager::getInstance().loadConfig();
     Logger::initialize();
     LOG_INFO("NEXO EDGE starting...");
 
-    // FIX C2: Validar que device_id sea UUID v4 (lo que la API exige).
+    // Validar que device_id sea UUID v4 (lo que la API exige).
     // Si no lo es, el edge no puede sincronizar — bloquear con mensaje claro.
     std::string deviceId = ConfigManager::getInstance().getDeviceId();
     if (!ConfigManager::isValidUuidV4(deviceId)) {
@@ -1223,7 +1223,7 @@ int main() {
         // El operador verá el error en logs y display.
     }
 
-    // FIX: Verificar sincronización de reloj antes de procesar eventos con timestamp
+    // Verificar sincronización de reloj antes de procesar eventos con timestamp
     if (!checkNtpSync() || !checkSystemClock()) {
         g_clockValid.store(false, std::memory_order_release);
         LOG_CRITICAL("System clock invalid. ENTERING LOCK STATE. Biometric reads disabled.");
@@ -1247,7 +1247,7 @@ int main() {
         return 1;
     }
 
-    // OTA M2M (Bloque D): resolver estado pendiente de actualización tras
+    // OTA M2M: resolver estado pendiente de actualización tras
     // arranque (confirmación de binario nuevo o detección de rollback).
     OtaManager::getInstance().onBoot();
 
@@ -1293,7 +1293,7 @@ int main() {
             return 1;
         }
     }
-    // FIX C8: Instanciar hardware real (OLED + GPIO) cuando esté compilado.
+    // Instanciar hardware real (OLED + GPIO) cuando esté compilado.
     // Si el hardware físico no está disponible (ej: /dev/i2c-1 no existe),
     // el constructor del display real hace fallback silencioso y los
     // mensajes se ignoran. Siempre se compila DevStub como fallback final.
@@ -1319,7 +1319,7 @@ int main() {
 #endif
     LOG_INFO("HAL initialized");
 
-    // FIX: Si el reloj es inválido, mostrar error en OLED y bloquear lecturas biométricas
+    // Si el reloj es inválido, mostrar error en OLED y bloquear lecturas biométricas
     if (!g_clockValid.load(std::memory_order_acquire)) {
         display->showMessage("ERROR", "HORA NO SINCRONIZADA");
     }
@@ -1328,7 +1328,7 @@ int main() {
     syncWorker.start();
     LOG_INFO("Cloud sync worker started (background thread)");
 
-    // OTA M2M (Bloque D): hilo que consulta al central y avanza la máquina
+    // OTA M2M: hilo que consulta al central y avanza la máquina
     // de estados persistente cada ota_check_interval_s (default 30 min).
     std::thread otaThread([] {
         int interval = ConfigManager::getInstance().getInt("ota_check_interval_s", 1800);
@@ -1343,19 +1343,19 @@ int main() {
     otaThread.detach();
     LOG_INFO("OTA update worker started (background thread)");
 
-    // V2: MqttCommandWorker — conexión persistente MQTT en vez de polling HTTP cada 30s
+    // MqttCommandWorker — conexión persistente MQTT en vez de polling HTTP cada 30s
     std::unique_ptr<MqttCommandWorker> mqttWorker;
     std::string mqttHost = ConfigManager::getInstance().getString("mqtt_host", "");
     int mqttPort = ConfigManager::getInstance().getInt("mqtt_port", 1883);
-    // deviceId ya declarado arriba (validación C2)
+    // deviceId ya declarado arriba
     std::string mqttUser = ConfigManager::getInstance().getString("mqtt_user", "");
     std::string mqttPass = ConfigManager::getInstance().getString("mqtt_pass", "");
-    // FIX C4: Configuración TLS para MQTT
+    // Configuración TLS para MQTT
     std::string mqttCaCert = ConfigManager::getInstance().getString("mqtt_ca_cert", "");
     bool mqttUseTls = ConfigManager::getInstance().getBool("mqtt_use_tls", false);
 
     if (!mqttHost.empty()) {
-        // FIX C4: Auto-habilitar TLS si el puerto es 8883
+        // Auto-habilitar TLS si el puerto es 8883
         if (mqttPort == 8883 && !mqttUseTls) {
             mqttUseTls = true;
             LOG_INFO("[MQTT] Port 8883 detected — auto-enabling TLS");
@@ -1371,7 +1371,7 @@ int main() {
         LOG_WARN("mqtt_host not configured. Skipping MqttCommandWorker. Add mqtt_host to config.json for V2.");
     }
 
-    // Fallback V1: CommandWorker — polling HTTP cada 30s cuando no hay MQTT
+    // Fallback: CommandWorker — polling HTTP cada 30s cuando no hay MQTT
     std::unique_ptr<CommandWorker> commandWorker;
     if (mqttHost.empty()) {
         std::string apiBase = ConfigManager::getInstance().getString("api_url", "");
@@ -1381,7 +1381,7 @@ int main() {
         LOG_INFO("[Main] CommandWorker started (HTTP polling fallback, 30s interval)");
     }
 
-    // FIX C7: HeartbeatWorker — siempre activo, envía POST /devices/ping cada 30s
+    // HeartbeatWorker — siempre activo, envía POST /devices/ping cada 30s
     // incluso cuando MQTT está habilitado. Esto asegura que el edge aparezca
     // online en el dashboard de health check del RECTOR.
     HeartbeatWorker heartbeatWorker;
@@ -1392,7 +1392,7 @@ int main() {
         LOG_INFO("[Main] HeartbeatWorker started (POST /devices/ping every 30s)");
     }
 
-    // FIX (SRE-2): HealthMonitor — detecta threads muertos (Sync/MQTT) que el
+    // HealthMonitor — detecta threads muertos (Sync/MQTT) que el
     // hardware watchdog no ve, y fuerza exit(1) para que systemd reinicie.
     HealthMonitor healthMonitor(syncWorker, mqttWorker.get());
     healthMonitor.start();
@@ -1412,7 +1412,7 @@ int main() {
     while (!g_shutdownRequested.load(std::memory_order_acquire)) {
         if (watchdog.isOpen()) watchdog.pat();
 
-        // F-09: monitoreo de energía — transición de fuente → evento + sync
+        // Monitoreo de energía — transición de fuente → evento + sync
         {
             static PowerMonitor powerMon("/sys/class/power_supply/nexo_ups");
             static int powerTick = 0;
@@ -1424,7 +1424,7 @@ int main() {
                     AuditTrail::logEvent("SYSTEM", ev);
                     syncWorker.nudge();
                     LOG_WARN("[PowerMonitor] Transición de energía → {}", ev);
-                    // V-515: señal luminosa/sonora del estado energético
+                    // Señal luminosa/sonora del estado energético
                     if (notification) notification->notifyPowerState(static_cast<int>(ps));
                     if (ps == PowerState::LOW_BATTERY || ps == PowerState::CRITICAL) {
                         display->showMessage("ENERGIA", "BATERIA BAJA");
@@ -1440,7 +1440,7 @@ int main() {
                     // tiene permisos, 'poweroff' ocurre al agotar grace period.
                 }
 
-                // V-333/397/398: apertura física del gabinete → evento de
+                // Apertura física del gabinete → evento de
                 // seguridad + sync inmediato (el central genera TAMPER_OPEN
                 // vía telemetría del próximo ping; el evento local queda en
                 // el audit trail aunque el nodo quede offline).
@@ -1452,7 +1452,7 @@ int main() {
                     if (display) display->showMessage("ALERTA", "GABINETE ABIERTO");
                 }
 
-                // V-310: ventilación activa por temperatura del SoC con
+                // Ventilación activa por temperatura del SoC con
                 // histéresis (encender >fan_on_temp_c, apagar <fan_off_temp_c).
                 static NodeTelemetry thermMon(".", "/sys/class/thermal/thermal_zone0/temp");
                 static bool fanOn = false;
@@ -1476,7 +1476,7 @@ int main() {
             }
         }
 
-        // V2: Safe MQTT command consumption — main thread only. Callback solo pushea a queue.
+        // Consumo seguro de comandos MQTT — main thread only. El callback solo pushea a queue.
         if (mqttWorker && mqttWorker->hasPendingCommand()) {
             std::string rawCmd = mqttWorker->popCommand();
             if (!rawCmd.empty()) {
@@ -1485,7 +1485,7 @@ int main() {
                     std::string cmd = j.value("command", "");
                     LOG_INFO("[Main] Executing MQTT command: {}", cmd);
                     if (cmd == "REBOOT") {
-                        // FIX A6: REBOOT real — sync graceful + system("reboot")
+                        // REBOOT — sync graceful + system("reboot")
                         LOG_WARN("[Main] REBOOT ordered by cloud. Flushing and rebooting...");
                         display->showMessage("REBOOT", "Orden cloud");
                         syncWorker.nudge();
@@ -1505,7 +1505,7 @@ int main() {
                         std::string doc = p.value("doc", "");
                         std::string nombre = p.value("nombre", "");
                         std::string tel = p.value("tel", p.value("parent_tel", ""));
-                        // F-03: dedo a enrolar (1=principal, 2=secundario)
+                        // Dedo a enrolar (1=principal, 2=secundario)
                         int fingerSlot = p.value("finger_slot", 1);
                         if (fingerSlot < 1 || fingerSlot > 2) fingerSlot = 1;
                         if (doc.empty() || nombre.empty()) {
@@ -1635,7 +1635,7 @@ int main() {
             }
         }
 
-        // V2: Procesar comandos del CommandWorker (HTTP polling fallback)
+        // Procesar comandos del CommandWorker (HTTP polling fallback)
         // Mismo procesamiento que el MQTT worker pero para comandos recibidos via polling.
         if (commandWorker && commandWorker->hasPendingCommand()) {
             std::string rawCmd = commandWorker->popCommand();
@@ -1649,7 +1649,7 @@ int main() {
                         std::string doc = p.value("doc", "");
                         std::string nombre = p.value("nombre", "");
                         std::string tel = p.value("tel", p.value("parent_tel", ""));
-                        // F-03: dedo a enrolar (1=principal, 2=secundario)
+                        // Dedo a enrolar (1=principal, 2=secundario)
                         int fingerSlot = p.value("finger_slot", 1);
                         if (fingerSlot < 1 || fingerSlot > 2) fingerSlot = 1;
                         if (doc.empty() || nombre.empty()) {
@@ -1781,33 +1781,7 @@ int main() {
             }
         }
 
-        // FIX: En systemd (sin TTY), auto-ejecutar modo de escaneo biométrico para simulación
-        // DISABLED: Transformado a Panel de Control Interactivo
-        // if (!isatty(STDIN_FILENO)) {
-        //     // Auto-Poblar SQLite con el estudiante para simulación
-        //     auto& db = SqliteManager::getInstance();
-        //     Estudiante est{"100000001", "Jhon Edison", "+573243607948", "Acudiente Prueba", 1, std::vector<uint8_t>(256, 0)};
-        //     db.saveEstudiante(est);
-        //
-        //     // Bloquear lecturas biométricas si el reloj no está sincronizado
-        //     if (!g_clockValid.load(std::memory_order_acquire)) {
-        //         std::this_thread::sleep_for(std::chrono::seconds(15));
-        //         continue;
-        //     }
-        //
-        //     // Simular lectura biométrica periódica para pruebas automatizadas
-        //     std::this_thread::sleep_for(std::chrono::seconds(15));
-        //     std::vector<uint8_t> mockTpl(256, 0);
-        //     uint32_t uid = 1; // ID de prueba
-        //     float score = 95.0f;
-        //     auto res = biometricSensor->searchUser(mockTpl, uid, score);
-        //     if (res) {
-        //         handleBiometricMatch(uid, display.get(), notification.get(), syncWorker);
-        //     }
-        //     continue;
-        // }
-
-        // FIX: No reimprimir el menú en cada iteración. El menú se imprime
+        // No reimprimir el menú en cada iteración. El menú se imprime
         // una sola vez al inicio o después de procesar un evento. Aquí solo
         // esperamos input del usuario con un timeout largo (2s) para no spamear.
         std::string choice;
@@ -1830,7 +1804,7 @@ int main() {
 
         switch (choice[0]) {
             case '1': {
-                // FIX: Bloquear lecturas biométricas si el reloj no está sincronizado
+                // Bloquear lecturas biométricas si el reloj no está sincronizado
                 if (!g_clockValid.load(std::memory_order_acquire)) {
                     LOG_WARN("Biometric reads blocked: clock not synchronized");
                     display->showMessage("ERROR", "HORA NO SINCRONIZADA");
@@ -1887,7 +1861,7 @@ int main() {
     healthMonitor.stop();
     LOG_INFO("HealthMonitor stopped");
 
-    // FIX C7: Detener HeartbeatWorker
+    // Detener HeartbeatWorker
     heartbeatWorker.requestStop();
     heartbeatWorker.join();
     LOG_INFO("HeartbeatWorker stopped");

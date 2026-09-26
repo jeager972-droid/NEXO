@@ -23,8 +23,8 @@ import { useStickyScroll } from '../components/useStickyScroll'
 // gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 10 — FINAL CTA
-// CAMBIO 5: CTA → "Quiero que NEXO llegue a mi institución" + modal
-// CAMBIO 6: Sticky scroll, materialización carácter a carácter (scale:0.8 + opacity:0 -> natural) y stagger de botones
+// CTA → "Quiero que NEXO llegue a mi institución" + modal
+// Sticky scroll, materialización carácter a carácter (scale:0.8 + opacity:0 -> natural) y stagger de botones
 
 export default function FinalCTASection() {
   const wrapperRef  = useRef()
@@ -45,7 +45,7 @@ export default function FinalCTASection() {
     const wrapper = wrapperRef.current
     if (!wrapper) return
 
-    // CAMBIO 6: El título entra carácter a carácter (materialización)
+    // El título entra carácter a carácter (materialización)
     // Descomponemos el título en spans de carácter para el stagger
     const titleEl = titleRef.current
     const isMobile = window.innerWidth <= 768
@@ -72,7 +72,7 @@ export default function FinalCTASection() {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger:  wrapper,
-        start:    'top 75%', // Bug 4: content trigger at 75%
+        start:    'top 75%', // content trigger at 75%
         toggleActions: 'play none none none',
       },
     })
@@ -118,7 +118,7 @@ export default function FinalCTASection() {
 
   return (
     <>
-      {/* CAMBIO 5: Modal */}
+      {/* Modal */}
       {modalOpen && <ContactModal onClose={() => setModalOpen(false)} />}
       {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
 

@@ -7,8 +7,8 @@
  *   un Raspberry Pi 4. Abre gpiochip4, configura líneas 17 (verde), 27 (rojo)
  *   y 22 (buzzer) como salidas. Emite patrones de beep/LED según el estado.
  *
- * FIX C8: Refactorizado para usar header dedicado (RealGpioManager.h).
- * FIX M9: Verifica retorno de gpiod_line_request_output.
+ * Verifica el retorno de gpiod_line_request_output; líneas fallidas quedan
+ * como nullptr y las operaciones sobre ellas son no-op.
  */
 
 #include "hardware/real/RealGpioManager.h"
@@ -28,7 +28,7 @@ RealGpioManager::RealGpioManager()
     m_ledRed = gpiod_chip_get_line(m_chip, 27);
     m_buzzer = gpiod_chip_get_line(m_chip, 22);
 
-    // FIX M9: Verificar éxito de gpiod_line_request_output
+    // Verificar éxito de gpiod_line_request_output
     if (m_ledGreen && gpiod_line_request_output(m_ledGreen, "NEXO", 0) != 0) {
         LOG_ERROR("[GPIO] Failed to request LED green line 17");
         m_ledGreen = nullptr;
@@ -42,7 +42,7 @@ RealGpioManager::RealGpioManager()
         m_buzzer = nullptr;
     }
 
-    // V-310: ventilador en GPIO 23 (activación térmica por software)
+    // Ventilador en GPIO 23 (activación térmica por software)
     m_fan = gpiod_chip_get_line(m_chip, 23);
     if (m_fan && gpiod_line_request_output(m_fan, "NEXO-FAN", 0) != 0) {
         LOG_ERROR("[GPIO] Failed to request fan line 23");
@@ -77,7 +77,7 @@ void RealGpioManager::notifyWarning() {
     beep(100);
 }
 
-// V-515: patrones por estado energético
+// Patrones por estado energético
 //   0=MAINS        → verde fijo breve (confirmación visual de red eléctrica)
 //   1=BATTERY      → verde+rojo alternos (operando en respaldo)
 //   2=LOW_BATTERY  → rojo parpadeante + beep corto
@@ -124,7 +124,7 @@ void RealGpioManager::notifyPowerState(int state) {
     }
 }
 
-// V-310: ventilación activa controlada por software (histéresis la aplica main)
+// Ventilación activa controlada por software (histéresis la aplica main)
 void RealGpioManager::setFan(bool on) {
     if (!m_fan) return;
     gpiod_line_set_value(m_fan, on ? 1 : 0);

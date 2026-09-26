@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 15_ProductionReadinessTest.php — Test de preparación para producción.
+ * ProductionReadinessTest.php — Test de preparación para producción.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica características críticas para producción:

@@ -29,7 +29,7 @@ function nxToday(int $minusDays = 0): string {
 }
 
 /* ---------------------------------------------------------------------------
- * Normalización (idéntica a la del pipeline Python)
+ * Normalización de texto
  * ------------------------------------------------------------------------- */
 function nxNorm(string $t): string {
     $t = mb_strtolower(trim($t), 'UTF-8');
@@ -95,8 +95,7 @@ function nxIsForeign(string $r): bool {
 }
 
 /* ---------------------------------------------------------------------------
- * Clasificación — parser LLM (nexus_llm.php). No existe clasificador local:
- * el stack TF-IDF+LR se retiró (ver auditoria/AUDITORIA_NLU_VEREDICTO_*.md).
+ * Clasificación — parser LLM (nexus_llm.php).
  * Sin NLU_LLM_KEY o con el proveedor caído → null → out_of_scope honesto.
  * ------------------------------------------------------------------------- */
 /** Clasificación de un solo texto.
@@ -252,7 +251,7 @@ function nxSlots(string $q): array {
             || preg_match('/\b(?:en|el|al)\s+(sexto|septimo|octavo|noveno|decimo|once|undecimo)\b(?!\s+(?:de|del|en|a|por|para|lugar|puesto|posicion|dia|mes|semana|ano)\b)/u', $q, $mo)) {
             $s['group'] = ($ord[$mo[1]] ?? $ord[preg_replace('/a$/u','o',$mo[1])] ?? '1')
                 . (isset($mo[2]) && $mo[2] !== '' ? strtoupper($mo[2]) : '');
-            $s['_group_src'] = $mo[0];   // paridad Python — distingue ordinal de dígito
+            $s['_group_src'] = $mo[0];   // distingue ordinal textual de dígito
         }
     }
     // «mi(s) grupo(s)/curso(s)/estudiantes» — scope RBAC del usuario, no
@@ -434,8 +433,8 @@ function nxStudentStopwords(): array {
         'proximo','proxima','proximos','proximas','siguiente','siguientes',
         'actual','actuales','reciente','recientes','vigente','venidero',
         'venidera','entrante','corriente',
-        // conectores/demostrativos/temporales sueltos — Fase 13: limpieza de
-        // candidatos «camila del», «maria manana», «mismo juan»
+        // conectores/demostrativos/temporales sueltos — evita candidatos
+        // espurios como «camila del», «maria manana», «mismo juan»
         'del','de','manana','mismo','misma','mismos','mismas',
         'ese','esa','esos','esas','otro','otra','propio','propia',
         'aquel','aquella','aquellos','aquellas','tambien',
@@ -573,7 +572,7 @@ function nxFieldSynonyms(): array {
 
 /* ---------------------------------------------------------------------------
  * Catálogo smalltalk (respuestas con variación) — el intent lo decide el
- * clasificador estadístico; aquí solo vive el repertorio.
+ * parser LLM; aquí solo vive el repertorio.
  * ------------------------------------------------------------------------- */
 const NX_JOKES = [
     '— Profe, ¿me pone cero? — ¿Por qué? — Porque es lo único que me falta para completar la colección.',
@@ -786,7 +785,7 @@ function nxSmalltalk(string $intent, array $vars = []): string {
     return $pool[array_rand($pool)];
 }
 
-/* Permisos por intent (matriz RBAC del documento CHATBOT_NLP.md) */
+/* Permisos por intent — matriz RBAC del chat */
 function nxIntentRoles(): array {
     static $r = null;
     if ($r) return $r;
@@ -1238,7 +1237,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             $turnType = 'context_modify';
         }
         // «¿y cuántos son en total?» — conteo desnudo sobre el set activo.
-        // Sin sustantivo el clasificador cae a oos/list_events; el universo
+        // Sin sustantivo el parser cae a oos/list_events; el universo
         // lo define el contexto: nómina → conteo del grupo, módulo/eventos
         // → count_events del rango
         if (in_array($intent, ['out_of_scope','list_events','count_events'], true)
@@ -1317,7 +1316,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 $slots['group'] = $ctxEntities['group']; $inherited[] = 'group';
             }
             // el rango completo se hereda — «y llegadas tarde?» tras «últimos
-            // 15 días» NO debe reiniciar a «hoy» (bug visto en producción)
+            // 15 días» NO debe reiniciar a «hoy»
             if (($slots['days'] ?? null) === null && isset($ctxEntities['days'])) {
                 $slots['days'] = $ctxEntities['days']; $inherited[] = 'days';
             }
@@ -1560,9 +1559,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             $turnType = 'context_modify';
         }
         // ── 4. Modificación contextual (genéricos) — «¿y las de hoy?» ──
-        // Guardias: coverage override exento; y un mensaje con
-        // cuantificador+métrica propia («y cuántas tardanzas») NO es
-        // modificación deíctica — el intent propio es el correcto.
+        // Guardias: una resolución ya fijada ($coverageHit) queda exenta;
+        // y un mensaje con cuantificador+métrica propia («y cuántas
+        // tardanzas») NO es modificación deíctica — el intent propio es
+        // el correcto.
         // «ahora las tardanzas» (sin cuantificador) SÍ modifica la cadena.
         $ownCount = (bool)(preg_match('/\b(cuant[oa]s?|que numero|cuanto)\b/u', $q0)
             && (preg_match('/\b(tardanza|inasist|falt|evasion|permiso|citacion|seguim|evento|incident|notif|salid|ingres|ausen|presente|estudiant|alumn)/u', $q0)
@@ -1690,8 +1690,8 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         $newCtx['entities'] = $ctxEntities;
 
     // §17 self-check — evidencia de la interpretación final:
-    // strong = modelo confiado / evidencia léxica+módulo;
-    // borderline = rerank por margen fino; abstained = sin evidencia (oos)
+    // strong = parser confiado / evidencia léxica+módulo;
+    // borderline = confianza ajustada; abstained = sin evidencia (oos)
     $selfcheck = 'strong';
     if ($intent === 'out_of_scope') $selfcheck = 'abstained';
     elseif (($cls['top3'][0][1] ?? 0) < 0.65 && $conf < 0.80) $selfcheck = 'borderline';

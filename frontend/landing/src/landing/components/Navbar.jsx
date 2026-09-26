@@ -11,7 +11,7 @@
  * =============================================================================
  */
 
-// CAMBIO 1: Navbar limpio — solo logo + links internos. Sin CTAs.
+// Navbar limpio — solo logo + links internos. Sin CTAs.
 export default function Navbar() {
   return (
     <nav className="nx-navbar" aria-label="Navegación principal">

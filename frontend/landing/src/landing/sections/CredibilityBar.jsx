@@ -70,7 +70,7 @@ export default function CredibilityBar() {
   useEffect(() => {
     const trigger = ScrollTrigger.create({
       trigger: wrapperRef.current,
-      start: 'top 75%', // Bug 4: content trigger at 75%
+      start: 'top 75%', // content trigger at 75%
       onEnter: () => setActive(true),
       once: true
     })

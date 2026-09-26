@@ -3,8 +3,8 @@
  * =============================================================================
  * attendance_reconcile.php — Reconciliación INASISTENCIA ↔ ingreso tardío.
  * =============================================================================
- * V-530/V-531/V-574: un INGRESO_* posterior a una INASISTENCIA abierta del día
- * no puede dejar al estudiante marcado como ausente. Esta función:
+ * Un INGRESO_* posterior a una INASISTENCIA abierta del día no puede dejar al
+ * estudiante marcado como ausente. Esta función:
  *   1. Resuelve (resolved=TRUE) las inasistencias abiertas del día del
  *      estudiante, anotando en metadata_json el evento que la reconcilió y el
  *      espacio (classroom/schedule) donde reapareció.

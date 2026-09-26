@@ -112,7 +112,7 @@ else
     echo "✅ Logs directory already exists"
 fi
 
-# FIX A7: Crear directorio de despliegue /opt/nexo
+# Crear directorio de despliegue /opt/nexo
 echo "📁 Creating deployment directory: /opt/nexo"
 if [[ ! -d "/opt/nexo" ]]; then
     sudo mkdir -p /opt/nexo
@@ -122,7 +122,7 @@ else
     echo "✅ Deployment directory already exists"
 fi
 
-# FIX A7: Instalar systemd service para auto-start y auto-restart
+# Instalar systemd service para auto-start y auto-restart
 echo "⚙️  Installing systemd service..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/nexo-edge.service" ]]; then

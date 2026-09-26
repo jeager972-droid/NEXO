@@ -120,12 +120,10 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     $detected = 0;
     $today = (new DateTime('now', new DateTimeZone('America/Bogota')))->format('Y-m-d');
 
-    // FIX (RLS): Toda la lógica de processSchool va dentro de UNA sola transacción
+    // Toda la lógica de processSchool va dentro de UNA sola transacción
     // con RLS context seteado. Esto garantiza que el check de dedup
     // (attendance_incidents) y todas las queries sobre students, biometric_events,
     // class_exit_authorizations vean los datos de la escuela correcta.
-    // Antes, el RLS context se perdía tras COMMIT, causando que el check de dedup
-    // no viera filas insertadas → re-inserción infinita → flood de Twilio.
     $conn->exec("BEGIN");
     $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote($schoolId) . ", true)");
     $conn->exec("SELECT set_config('app.current_role', 'SYSTEM_WORKER', true)");
@@ -149,7 +147,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
     $groupsStmt->execute([$schoolId]);
     $groups = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // F-04: grupos cuyo nodo asignado está caído (sin cobertura de datos).
+    // Grupos cuyo nodo asignado está caído (sin cobertura de datos).
     // Un grupo sin dispositivo asignado NO se suprime (no hay forma de saber
     // si tiene cobertura) — regla documentada en contingency_lib.php.
     $offlineGroups = ctGateEnabled() ? ctGetOfflineGroupIds($conn, $schoolId, ctOfflineSeconds()) : [];
@@ -190,7 +188,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         $groupName = $group['group_name'];
         $expectedEntry = $group['expected_entry_time'];
 
-        // F-04 gate: nodo del grupo caído → no hay datos para decidir ausencia.
+        // Gate de salud de nodo: grupo sin cobertura → no hay datos para decidir ausencia.
         if (isset($offlineGroups[$groupId])) {
             if (ctMarkNoNodeData($conn, $schoolId, $groupId, $groupName, 'absence_gate')) {
                 logA('NO_NODE_DATA', "school=$schoolId group=$groupName — detección de ausencias suspendida (nodo offline)");
@@ -320,18 +318,18 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         $now = new DateTime('now', new DateTimeZone('America/Bogota'));
         $currentMinutes = (int)$now->format('H') * 60 + (int)$now->format('i');
 
-        // F-05: fase 1 — recolectar candidatos a ausente (todas las reglas de
-        // exclusión intactas). La decisión cluster se toma antes de insertar
-        // para no convertir una condición externa en N WhatsApps falsos.
+        // Fase 1: recolectar candidatos a ausente. La decisión cluster se toma
+        // antes de insertar para no convertir una condición externa en
+        // N WhatsApps falsos.
         $absentees = [];
         foreach ($students as $student) {
             $studentId = $student['student_id'];
 
-            // F-02: estudiante exento de biometría — la falta de huella no
+            // Estudiante exento de biometría — la falta de huella no
             // implica ausencia (su presencia se registra por vía manual).
             if (!empty($student['biometric_exempt'])) continue;
 
-            // Doc §9.6: registro manual pendiente → suspender detección temporal
+            // Registro manual pendiente → suspender detección temporal
             if (!empty($student['manual_pending_until']) && strtotime($student['manual_pending_until']) > time()) continue;
 
             // Si ya marcó ingreso, no es ausente
@@ -354,7 +352,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             if ($permisoStmt->fetchColumn()) continue; // Tiene permiso activo, no es inasistencia
 
             // Salida pedagógica autorizada en curso → ausencia legítima grupal,
-            // no se marca inasistencia individual (Bloque C — 'pedagogica').
+            // no se marca inasistencia individual.
             $tripStmt = $conn->prepare("
                 SELECT 1 FROM pedagogical_trip_authorizations
                 WHERE school_id = ? AND student_id = ?
@@ -397,8 +395,8 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             if ($currentMinutes < $limitMinutes) continue;
 
             // 5. Verificar si ya existe un incidente de inasistencia hoy
-            // FIX (RLS): Ahora este check corre DENTRO de la transacción con RLS
-            // context, así puede ver las filas insertadas en iteraciones anteriores.
+            // (corre dentro de la transacción con RLS context, así ve las
+            // filas insertadas en iteraciones anteriores).
             $checkStmt = $conn->prepare("
                 SELECT 1 FROM attendance_incidents
                 WHERE student_id = ? AND school_id = ?
@@ -415,7 +413,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             $absentees[] = $student;
         }
 
-        // F-05: fase 2 — si las ausencias nuevas superan el umbral de cluster,
+        // Fase 2: si las ausencias nuevas superan el umbral de cluster,
         // es una condición externa probable (nodo caído, evento institucional):
         // se crea ANOMALIA_OPERATIVA y las individuales quedan pending_context
         // (sin WhatsApp al acudiente) hasta que un actor confirme.

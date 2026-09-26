@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 07_PartitionTest.php — Test de particionamiento por rango.
+ * PartitionTest.php — Test de particionamiento por rango.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica en sql/schema.sql que:

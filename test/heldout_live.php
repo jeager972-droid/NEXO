@@ -4,7 +4,7 @@
  * Conversaciones NUEVAS, no derivadas del transcript ni del corpus:
  * sin tildes, typos, jerga colombiana, abreviaturas, frases incompletas,
  * pronombres, correcciones, cambios de alcance/tiempo, multi-goal, ambiguas,
- * cortas/largas y veto mutativo. Nada de esto se usa para entrenar.
+ * cortas/largas y veto mutativo. Nada de esto se usa para ajustar el parser.
  *
  * Uso: php test/heldout_live.php   (stack nexo-test en :18080)
  * ========================================================================== */

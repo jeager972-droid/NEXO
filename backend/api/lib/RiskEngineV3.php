@@ -264,7 +264,7 @@ class RiskEngineV3
             // Insertar reglas por nivel (validando rangos protegidos)
             foreach (($config['rules'] ?? []) as $rule) {
                 self::validateRuleRanges($rule);
-                // FIX: PDO con EMULATE_PREPARES convierte false de PHP a string
+                // PDO con EMULATE_PREPARES convierte false de PHP a string
                 // vacío, y PostgreSQL rechaza ''::boolean. Convertir a 'true'/'false'.
                 $singleOcc = !empty($rule['single_occurrence']) ? 'true' : 'false';
                 $humanReview = !empty($rule['requires_human_review']) ? 'true' : 'false';
@@ -601,8 +601,8 @@ class RiskEngineV3
                 $reason
             ]);
 
-            // V-069/V-151: una alerta escalada a SEGUIMIENTO instancia el caso
-            // de seguimiento (derivación automática a coordinación).
+            // Una alerta escalada a SEGUIMIENTO instancia el caso de
+            // seguimiento (derivación automática a coordinación).
             if ($newState === self::STATE_SEGUIMIENTO) {
                 $chk = $conn->prepare("
                     SELECT 1 FROM student_tracking

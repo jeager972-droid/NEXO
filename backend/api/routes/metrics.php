@@ -33,7 +33,7 @@ global $cleanPath;
 if ($cleanPath === '/metrics') {
     $metricsKey = getenv('METRICS_SECRET_KEY') ?: '';
     $providedKey = $_SERVER['HTTP_X_METRICS_KEY'] ?? ($_GET['key'] ?? '');
-    // VF-014: Auth obligatoria — si no hay METRICS_SECRET_KEY configurada, denegar acceso
+    // Auth obligatoria — si no hay METRICS_SECRET_KEY configurada, denegar acceso
     if ($metricsKey === '' || !hash_equals($metricsKey, $providedKey)) {
         http_response_code(401);
         header('Content-Type: text/plain; charset=utf-8');

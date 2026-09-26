@@ -37,7 +37,7 @@ if (strpos($cleanPath, '/users/') !== 0) {
 
 $authUser = requireAuth();
 $schoolId = $authUser['school_id'];
-$userId   = $authUser['id']; // FIX: requireAuth retorna 'id', no 'user_id'
+$userId   = $authUser['id']; // requireAuth retorna 'id', no 'user_id'
 
 /**
  * Emite respuesta JSON y termina la ejecución.
@@ -221,7 +221,7 @@ if ($cleanPath === '/users/upload-photo' && $method === 'POST') {
 
         $file = $_FILES['photo'];
         $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-        // VF-026: Validar MIME real del contenido, no del header HTTP (que puede ser spoofed)
+        // Validar MIME real del contenido, no del header HTTP (que puede ser spoofed)
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $realMime = finfo_file($finfo, $file['tmp_name']);
         finfo_close($finfo);
@@ -458,7 +458,7 @@ if ($cleanPath === '/users/delete-field' && $method === 'POST') {
             usersJson(['status' => 'error', 'message' => 'field no válido'], 400);
         }
 
-        // VF-027: Re-verificación de password para prevenir account takeover
+        // Re-verificación de password para prevenir account takeover
         $password = (string)($input['password'] ?? '');
         if ($password === '') {
             usersJson(['status' => 'error', 'message' => 'Se requiere contraseña para eliminar campos'], 403);
@@ -506,8 +506,6 @@ if ($cleanPath === '/users/change-password' && $method === 'POST') {
         if (!$row || !password_verify($current, $row['password_hash'])) {
             usersJson(['status' => 'error', 'message' => 'Contraseña actual incorrecta'], 401);
         }
-
-        // (bloque OTP eliminado)
 
         $newHash = password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]);
         try {

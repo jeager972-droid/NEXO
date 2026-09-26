@@ -22,8 +22,8 @@ import { useStickyScroll } from '../components/useStickyScroll'
 // NOTE: gsap.registerPlugin called once globally in LandingPage.jsx
 
 // MODULE 01 — HERO
-// CAMBIO 5: CTA → "Quiero que NEXO llegue a mi institución" + modal
-// CAMBIO 6: GSAP entrada cinematográfica y Scroll sticky
+// CTA → "Quiero que NEXO llegue a mi institución" + modal
+// GSAP entrada cinematográfica y Scroll sticky
 
 export default function HeroSection() {
   const wrapperRef  = useRef()
@@ -94,7 +94,7 @@ export default function HeroSection() {
 
   return (
     <>
-      {/* CAMBIO 5: Modal de contacto */}
+      {/* Modal de contacto */}
       {modalOpen && <ContactModal onClose={() => setModalOpen(false)} />}
 
       <div ref={wrapperRef} className="section-wrapper" id="hero">
@@ -221,7 +221,7 @@ export default function HeroSection() {
 
               {/* CTAs */}
               <div ref={ctaRef} style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-                {/* CAMBIO 5: Nuevo CTA — abre modal */}
+                {/* CTA — abre modal */}
                 <button
                   id="hero-cta-primary"
                   className="nx-btn-primary"

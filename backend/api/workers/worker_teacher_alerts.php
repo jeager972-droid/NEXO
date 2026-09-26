@@ -3,7 +3,7 @@
  * =============================================================================
  * workers/worker_teacher_alerts.php — Evaluador de criterios de aviso docente.
  * =============================================================================
- * F-18 / Documento §4.5-§9.9: el docente configura "N eventos en M días" por
+ * El docente configura "N eventos en M días" por
  * grupo/estudiante (o todos los suyos). Este worker evalúa las reglas activas
  * cada TEACHER_ALERTS_INTERVAL segundos y crea una notificación interna al
  * docente cuando un estudiante alcanza el umbral — dedup por regla+estudiante+día.

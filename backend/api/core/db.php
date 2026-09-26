@@ -65,7 +65,7 @@ try {
         $stmt->execute([$hmacSecret]);
     }
 
-    // FIX C4: statement_timeout para evitar que queries lentas agoten el pool.
+    // statement_timeout para evitar que queries lentas agoten el pool.
     // PgBouncer query_timeout=30000 (30s) protege a nivel de pool; esto protege
     // a nivel de PostgreSQL. En modo transaction pooling, SET LOCAL no persiste
     // entre conexiones, así que se ejecuta en cada nueva conexión PDO.

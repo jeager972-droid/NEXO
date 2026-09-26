@@ -679,7 +679,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
   const [searchQuery, setSearchQuery] = useState('');
   const [localData, setLocalData] = useState([]);
   const navigate = useNavigate();
-  // BUG-07 FIX: ref para limpiar el timeout si el componente se desmonta antes de que expire
+  // Ref para limpiar el timeout si el componente se desmonta antes de que expire
   const successTimerRef = useRef(null);
 
   useEffect(() => {
@@ -727,7 +727,7 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
       if (res.status === 'ok') {
         // Show success mini-modal
         setSuccessModal({ studentName });
-        // BUG-07 FIX: guardar ref del timer para poder cancelarlo al desmontar
+        // Guardar ref del timer para poder cancelarlo al desmontar
         successTimerRef.current = setTimeout(() => {
           setLocalData(prev => prev.filter(r => r.student_id !== studentId));
         }, 1500);

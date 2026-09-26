@@ -25,7 +25,7 @@ $tables = $conn->query(
 )->fetchAll(PDO::FETCH_COLUMN);
 
 // mapeo entidad-conversacional → tabla(s) real(es) — verificado contra
-// sql/schema.sql (2026-09-22): nombres corregidos donde divergían
+// sql/schema.sql
 $entityTables = [
     'students'    => ['students','student_group_assignments'],
     'guardians'   => ['guardians','guardian_student_relationships'],

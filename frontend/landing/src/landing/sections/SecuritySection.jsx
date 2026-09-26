@@ -19,7 +19,7 @@ import { useStickyScroll } from '../components/useStickyScroll'
 
 // MODULE 09 — SECURITY & TRUST
 // Psychological trigger: fear elimination + regulatory authority (Colombian MEN / SIC)
-// CAMBIO 6: Sticky scroll
+// Sticky scroll
 
 const TRUST_POINTS = [
   {

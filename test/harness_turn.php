@@ -1,7 +1,8 @@
 <?php
 /**
  * test/harness_turn.php — simulateTurn compartido.
- * Extraído de chat_forensic_harness.php para reutilizar en op_eval.php.
+ * Lo usan las suites conversacionales (forense, op_eval, dsm_units,
+ * resilience…) para replicar el flujo de /chat/message sin servidor.
  * Requiere: nexus_nlu.php + routes/chat.php cargados, const ROLE, $TRACES global.
  */
 
@@ -25,7 +26,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     $tr['10_ctx_recibido'] = $ctx;
     $tr['11_last_intent_previo'] = $ctx['last_intent'] ?? null;
 
-    /* ── follow-up «dame otro» — chat.php:263-277 ── */
+    /* ── follow-up «dame otro» — paridad chat.php (seguimiento contextual) ── */
     if (preg_match('/^(dame |dime )?(otro|otra|uno mas|una mas|mas|siguiente|otra vez|y otro|y otra|de nuevo|dame mas|dime mas|continua|sigue|y eso|y ese|y esa)[.! ]*$/u', $q0)) {
         $tr['followup_detectado'] = true;
         $tr['last_payload_db'] = $lastPayload;
@@ -41,7 +42,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     }
     $tr['followup_detectado'] = false;
 
-    /* ── clasificación — chat.php:279 (fixture→llm→none) ── */
+    /* ── clasificación — paridad chat.php (fixture→llm→none) ── */
     $cls = nxClassify($text);
     $tr['3_partes_multi'] = array_map(fn($p) => ['text' => $p['text'] ?? null,
         'intent' => $p['intent'], 'conf' => $p['confidence'] ?? null], $cls['parts'] ?? []);

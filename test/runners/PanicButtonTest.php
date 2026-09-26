@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * tests/PanicButtonTest.php — Test del botón de pánico y revocación de JWT.
+ * test/runners/PanicButtonTest.php — Test del botón de pánico y revocación de JWT.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Simula el modo de emergencia (panic mode) con un MockRedis e injecta

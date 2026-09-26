@@ -38,9 +38,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # ============================================================
 # EDGE SOURCE FILES — self-contained under edge/
-# After demolition of legacy src/ and include/, all production
-# source must live inside edge/. Files marked TODO must be
-# recreated here before the edge can compile.
+# All production source must live inside edge/.
 # ============================================================
 
 # Include directories (edge-local)
@@ -68,7 +66,7 @@ add_executable(nexo-edge
 target_include_directories(nexo-edge PRIVATE ${EDGE_INCLUDE_DIR})
 
 # ============================================================
-# FIX C8: Hardware real (OLED + GPIO) — incluido condicionalmente
+# Hardware real (OLED + GPIO) — incluido condicionalmente
 # Solo se compila si el hardware está disponible en el target.
 # HAS_GPIOD se define más abajo si libgpiod está instalada.
 # HAS_I2C se define si /dev/i2c-1 está accesible (Linux ARM64).
@@ -141,7 +139,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# FIX: Buscar y enlazar librería de ZKTeco
+# Buscar y enlazar librería de ZKTeco
 find_library(ZKFP_LIB NAMES zkfp zkfptype PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib /usr/local/lib /usr/lib)
 find_path(ZKFP_INCLUDE_DIR NAMES libzkfp.h libzkfptype.h PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib ${CMAKE_CURRENT_SOURCE_DIR}/include)
 if(ZKFP_LIB AND ZKFP_INCLUDE_DIR)

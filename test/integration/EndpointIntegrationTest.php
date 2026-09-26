@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * tests/EndpointIntegrationTest.php — Tests de integración de endpoints API
+ * test/integration/EndpointIntegrationTest.php — Tests de integración de endpoints API
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica que todos los endpoints principales de la API respondan
@@ -9,7 +9,7 @@
  *   consultations, devices, students, tracking, behavior, metrics.
  *
  *   Requiere: backend corriendo (local o Render) y seed aplicado.
- *   Ejecutar: php tests/EndpointIntegrationTest.php
+ *   Ejecutar: php test/integration/EndpointIntegrationTest.php
  *
  * CONFIGURACIÓN:
  *   Setear API_BASE_URL env var o usar default http://localhost:8080

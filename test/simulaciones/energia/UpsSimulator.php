@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/energia/UpsSimulator.php — Simulador de UPS/energía (F-09).
+ * test/simulaciones/energia/UpsSimulator.php — Simulador de UPS/energía (F-09).
  * =============================================================================
  * Modela la máquina de estados eléctrica del nodo edge con UPS real:
  *   MAINS → (corte) BATTERY → (drenaje) LOW_BATTERY → CRITICAL → apagado

@@ -96,7 +96,6 @@ BEGIN
     END IF;
 
     -- Dispositivo edge (token conocido: nexo-test-device-token → bcrypt)
-    -- Dispositivo edge (token conocido: nexo-test-device-token → bcrypt)
     INSERT INTO edge_devices(device_id, school_id, group_id, device_name, public_key, active, configured, token_hash, ota_key, app_version, last_ping)
     VALUES (v_dev, v_school, v_group, 'Nodo Test Principal', 'test-key', TRUE, TRUE,
             '$2y$12$.RETGVgmlOvtgnNnnMTIeu6fxudueOZwco4mZsh3zqqo.jcl9GIja',

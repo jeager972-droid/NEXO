@@ -4,7 +4,7 @@
  * lib/nexus_semantic.php — Capa semántica de Nexus (IR + planner + presentación)
  * =============================================================================
  *
- * Sustituye el modelo «frase → intent → plantilla» por composición:
+ * Del mensaje al resultado por composición estructural:
  *
  *   mensaje → señales → plan IR verificable → validación → RBAC → SQL real
  *           → presentación (scalar|list|table|summary|comparison|detail|count)
@@ -31,7 +31,7 @@
  * --------------------------------------------------------------------------
  * Cada entrada describe una capacidad REAL del ecosistema NEXO — no un intent.
  * `exec`: nombre de ejecutor en este archivo | 'intent:<intent>' = lo ejecuta
- * el pipeline clásico | 'ui' = capacidad mutativa: el chat solo navega.
+ * el pipeline de intents | 'ui' = capacidad mutativa: el chat solo navega.
  * ========================================================================== */
 function nxCapabilityRegistry(): array {
     static $r = null;
@@ -896,7 +896,7 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
     $cap = nxCapabilityRegistry()[$plan['capability']] ?? null;
     if (!$cap) return null;
     foreach ($cap['required_parameters'] ?? [] as $req)
-        if (empty($f[$req])) return null; // falta parámetro → aclaración del pipeline clásico
+        if (empty($f[$req])) return null; // falta parámetro → aclaración del pipeline de intents
 
     // ── score final ───────────────────────────────────────────────────────
     if (!empty($f['group'])) $score += 0.05;
@@ -972,8 +972,7 @@ function nxSemSplitCompound(string $q0): array {
     // «y» entre sustantivos de DETALLE es enumeración de columnas de la
     // misma petición («fechas y motivo», «cantidad y aumento», «nombre y
     // apellido») — NO una cláusula nueva. Sin esta guardia, «motivo los
-    // últimos 15 días» se convertía en una consulta fantasma (bug real:
-    // doble respuesta «No hay permisos» + «¿Frecuencia de qué?»).
+    // últimos 15 días» se partiría en una consulta fantasma.
     $detailNoun = '/^(la |las |el |los |su |sus |un |una |unos |unas )?(fecha|fechas|motivo|motivos|cantidad|aumento|disminucion|nombre|nombres|apellido|apellidos|hora|horas|documento|telefono|celular|estado|autorizado|autorizad[oa]s?|total|totales|porcentaje|promedio|conteo|nota|notas|edad|grado|jornada|dia|dias|mes|meses|semana|semanas|excusa|excusas|justificacion)\b/u';
     foreach ($parts as $c) {
         $c = trim($c);

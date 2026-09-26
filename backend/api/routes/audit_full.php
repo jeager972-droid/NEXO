@@ -9,7 +9,7 @@
  * Expone decenas de endpoints bajo /audit/* organizados por categorías:
  * asistencia, disciplina, permisos, mensajería, actividad docente, seguridad,
  * SOS, históricos, reportes consolidados y metadatos. Cada endpoint retorna
- * JSON tabulado para el grid de Audit.jsx del frontend.
+ * JSON tabulado para el grid del módulo de Auditoría de la PWA.
  *
  * DEPENDENCIAS
  * ------------
@@ -18,7 +18,7 @@
  *   - $conn : conexión PDO.
  *
  * Es utilizado por:
- *   - Frontend: módulo de Auditoría (Audit.jsx).
+ *   - Frontend PWA: módulo de Auditoría (src/api/audit.js).
  */
 
 global $cleanPath, $conn, $method, $input;

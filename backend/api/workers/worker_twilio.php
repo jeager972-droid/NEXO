@@ -145,7 +145,7 @@ function sendTwilioWhatsAppRequest($payload) {
  *
  * @param string $to Número destino.
  * @param string $body Cuerpo del mensaje.
- * @param string $typeCode Código de tipo (no usado directamente, legacy).
+ * @param string $typeCode Código de tipo (no usado directamente).
  * @return array Resultado del envío.
  */
 function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
@@ -174,8 +174,8 @@ function sendTwilioWhatsAppSmart($to, $body, $typeCode = 'OUTBOUND') {
         }
     }
 
-    // 3) Fallback SMS (documento §9.8: "cuando el canal preferente no está
-    //    disponible, NEXO puede utilizar SMS"). Requiere TWILIO_SMS_FROM.
+    // 3) Fallback SMS: cuando el canal preferente (WhatsApp) no está
+    //    disponible, NEXO puede utilizar SMS. Requiere TWILIO_SMS_FROM.
     if (!$send['ok']) {
         $sms = sendTwilioSms($to, $body);
         if ($sms['ok']) {
@@ -247,7 +247,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         // pooling, set_config(..., false) se pierde entre conexiones.
     }
 
-    // FIX: Dedup por número+contenido en ventana de 30s para evitar envenenamiento de cola
+    // Dedup por número+contenido en ventana de 30s para evitar envenenamiento de cola
     $dedupKey = 'twilio:dedup:' . md5($to . '|' . $body);
     try {
         if ($redis && $redis->get($dedupKey)) {
@@ -256,7 +256,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         }
     } catch (Exception $e) {}
 
-    // FIX C5: Límite diario por número de teléfono para controlar costo económico.
+    // Límite diario por número de teléfono para controlar costo económico.
     // Máximo 10 SMS/día por destinatario. Configurable vía TWILIO_MAX_DAILY_PER_PHONE.
     $maxDailyPerPhone = (int)(getenv('TWILIO_MAX_DAILY_PER_PHONE') ?: 10);
     $todayKey = 'twilio:daily:' . $to . ':' . date('Ymd');
@@ -270,7 +270,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         }
     } catch (Exception $e) {}
 
-    // FIX: Leaky Bucket rate limiter para no exceder límites de Twilio
+    // Leaky Bucket rate limiter para no exceder límites de Twilio
     $now = microtime(true);
     $timeSinceLast = $now - $lastSend;
     if ($timeSinceLast < $sendDelay) {
@@ -284,11 +284,11 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         // Marcar dedup para evitar duplicados por 30 segundos
         $redis->setex($dedupKey, 30, '1');
 
-        // FIX C5: Incrementar contador diario por número (expira a medianoche)
+        // Incrementar contador diario por número (expira a medianoche)
         $ttl = strtotime('tomorrow') - time();
         $redis->setex($todayKey, max(1, $ttl), (string)($dailyCount + 1));
 
-        // FIX (PgBouncer): SET LOCAL dentro de transacción para RLS
+        // SET LOCAL dentro de transacción para RLS (PgBouncer pooling)
         try {
             $conn->exec("BEGIN");
             if ($schoolId) {
@@ -332,7 +332,7 @@ function processJob($job, $conn, $redis, $delayQueue, &$lastSend, $sendDelay) {
         } catch (Exception $e) {}
         securityLog('TWILIO_WORKER_RETRY', "To: $to Retry: {$job['retries']} Delay: {$delayMs}ms Error: {$send['error']}");
     } else {
-        // FIX (PgBouncer): SET LOCAL dentro de transacción para RLS
+        // SET LOCAL dentro de transacción para RLS (PgBouncer pooling)
         try {
             $conn->exec("BEGIN");
             if ($schoolId) {
@@ -372,7 +372,7 @@ try {
     securityLog('WORKER_ROLE_SET_SKIP', $e->getMessage());
 }
 
-// FIX: Redis es opcional. Si no está disponible, el worker entra en modo
+// Redis es opcional. Si no está disponible, el worker entra en modo
 // PG fallback: hace polling de twilio_messages WHERE delivery_status='QUEUED'
 // cada 5 segundos. Esto permite que el sistema funcione sin Redis.
 $redis = null;
@@ -390,17 +390,17 @@ try {
 $mainQueue   = 'queue:twilio';
 $delayQueue  = 'queue:twilio:delayed';
 
-// FIX: Leaky Bucket rate limiter config
+// Leaky Bucket rate limiter config
 $rateLimit = max(1, (int)(getenv('TWILIO_RATE_LIMIT') ?: 10)); // mensajes por segundo
 $sendDelay = 1.0 / $rateLimit;
 $lastSend = microtime(true) - $sendDelay;
 
-// FIX (CIRCUIT BREAKER): Límite absoluto de envíos por hora para prevenir
+// Circuit breaker: límite absoluto de envíos por hora para prevenir
 // flood runaway. Si se supera, el worker entra en modo "tripped": deja de
 // procesar jobs, espera a la siguiente ventana horaria, y resetea. Los jobs
 // quedan en la cola (no se pierden) y se procesan en la siguiente ventana.
 // Configurable vía TWILIO_MAX_SENDS_PER_HOUR (default: 500).
-// VF-022: Contador distribuido en Redis para que múltiples instancias
+// Contador distribuido en Redis para que múltiples instancias
 // respeten el límite global, no por-instancia.
 // En modo PG fallback, el contador se lleva en memoria.
 $maxSendsPerHour = max(1, (int)(getenv('TWILIO_MAX_SENDS_PER_HOUR') ?: 500));
@@ -426,8 +426,8 @@ while (!$shutdown) {
         if ($pgFallbackMode) {
             // ── MODO PG FALLBACK: polling de twilio_messages WHERE QUEUED ──
             // Re-sondear Redis periódicamente: si vuelve, salir de fallback y
-            // reanudar la cola (antes el worker quedaba atrapado en PG para
-            // siempre y /health lo reportaba caído por falta de heartbeat).
+            // reanudar la cola (sin esto el worker quedaría atrapado en PG
+            // y /health lo reportaría caído por falta de heartbeat).
             static $lastRedisProbe = 0;
             if (time() - $lastRedisProbe >= 60) {
                 $lastRedisProbe = time();
@@ -492,14 +492,14 @@ while (!$shutdown) {
         }
 
         // ── MODO REDIS (normal) ──────────────────────────────────────────
-        // VF-022: Circuit breaker distribuido via Redis
+        // Circuit breaker distribuido via Redis
         $currentHourKey = 'twilio:sends:hour:' . date('YmdH');
         // Resetear clave si cambió la hora
         if ($currentHourKey !== $redisHourKey) {
             $redisHourKey = $currentHourKey;
         }
 
-        // VF-022: Verificar límite global en Redis
+        // Verificar límite global en Redis
         $globalSends = (int)$redis->get($redisHourKey);
         if ($globalSends >= $maxSendsPerHour) {
             securityLog('TWILIO_CIRCUIT_BREAKER_TRIPPED', "global_sends={$globalSends} >= max={$maxSendsPerHour}. Pausing 60s.");
@@ -516,7 +516,7 @@ while (!$shutdown) {
             $job = json_decode($jobJson, true);
             if ($job) {
                 processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
-                // VF-022: Incrementar contador distribuido en Redis (atómico)
+                // Incrementar contador distribuido en Redis (atómico)
                 $newCount = $redis->incr($redisHourKey);
                 if ($newCount === 1) $redis->expire($redisHourKey, 7200); // TTL 2h
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
@@ -525,7 +525,7 @@ while (!$shutdown) {
         }
 
         // Heartbeat independiente de trabajos — un worker ocioso no debe
-        // aparecer como caído en /health (bloque A: stack real lo evidenció).
+        // aparecer como caído en /health.
         static $lastHb = 0;
         if (time() - $lastHb >= 10) {
             try { $redis->set('worker:twilio:last_heartbeat', time(), 600); } catch (Throwable $e) {}
@@ -538,7 +538,7 @@ while (!$shutdown) {
             $job = json_decode($result[1], true);
             if ($job) {
                 processJob($job, $conn, $redis, $delayQueue, $lastSend, $sendDelay);
-                // VF-022: Incrementar contador distribuido en Redis (atómico)
+                // Incrementar contador distribuido en Redis (atómico)
                 $newCount = $redis->incr($redisHourKey);
                 if ($newCount === 1) $redis->expire($redisHourKey, 7200); // TTL 2h
                 $redis->set('worker:twilio:last_heartbeat', time(), 600);
@@ -563,7 +563,7 @@ while (!$shutdown) {
         continue;
     }
 
-    // FIX: Forzar GC y monitorear memoria en vez de matar el proceso
+    // GC y monitoreo de memoria: reinicio graceful si supera el límite
     if (++$iterations % 1000 === 0) {
         gc_collect_cycles();
         $memPeak = memory_get_peak_usage(true) / 1024 / 1024;

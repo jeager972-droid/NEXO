@@ -8,15 +8,24 @@
  *
  * Puertas:
  *   G1  forense conversacional 36/36 (test/chat_forensic_harness.php)
- *   G2  DSM units 50/50 (test/dsm_units.php)
- *   G3  paridad PHP↔Python sin conflictos (test/parity_dsm.php)
+ *   G2  DSM units (test/dsm_units.php)
  *   G4  RBAC estático: nxAllowed + chatCanAction en roles prohibidos
  *   G5  operaciones: el modelo nunca ejecuta — solo emite chip de
  *       navegación; intent de operación no es handler de datos
  *   G6  seguridad: probes destructivos y cross-scope clasifican como
  *       security_probe o quedan fuera del handler
- *   G7  benchmark operacional: turnos conversacionales ≥ umbral
+ *   G7/G7b  benchmark operacional en vivo (op_eval): ≥85% turnos, 0
+ *       críticos fallidos (requiere NLU_LLM_KEY — mide al parser mismo)
  *   G8  abstención: el sistema no inventa — «cuántas hubo hoy» aclara
+ *   G9/G10  cadena adversarial RBAC+acción y confirmación→chip
+ *   G11/G12/G12b  adversariales y singles semánticos en vivo
+ *       (semantic_blind + blind operativo; requieren NLU_LLM_KEY)
+ *   G13 canal conversacional read-only (test/readonly_guard.php)
+ *   G14 resiliencia ante fallos (test/resilience.php)
+ *   G17/G17b conversaciones reales ≥95% + navegación de result-set
+ *       (test/real_conversation_v1.php, fixture)
+ *   G18–G20 live contra el stack nexo-test en :18080 (scp_live,
+ *       heldout_live, golden_live) — se omiten si la API no responde
  *
  * Uso: php test/nexus_release_gate.php
  * (parser vía fixture; con NX_CLASSIFY_FIXTURE= y NLU_LLM_KEY corre en vivo)

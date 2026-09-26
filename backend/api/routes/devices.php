@@ -91,7 +91,7 @@ if ($conn && strpos($cleanPath, '/devices') === 0) {
             $devName = $devInfo ? $devInfo['device_name'] : 'Sensor';
             $devLocation = $devInfo ? $devInfo['location'] : '';
 
-            // FIX: Eliminar la revocación ANTES del device para evitar FK violation (23503).
+            // Eliminar la revocación ANTES del device para evitar FK violation (23503).
             // Sin ON DELETE CASCADE, no se puede borrar edge_devices mientras sensor_revocation_requests lo referencia.
             $conn->prepare("DELETE FROM sensor_revocation_requests WHERE revocation_id = ?")
                 ->execute([$revId]);
@@ -223,7 +223,7 @@ if ($cleanPath === '/devices' && $method === 'POST') {
 
         $rawToken = bin2hex(random_bytes(32));
         $tokenHash = password_hash($rawToken, PASSWORD_BCRYPT);
-        $otaKey   = bin2hex(random_bytes(32)); // clave OTA por-dispositivo (Bloque D)
+        $otaKey   = bin2hex(random_bytes(32)); // clave OTA por-dispositivo
 
         // Sensores registrados manualmente nacen configurados (tienen token).
         // Solo los sensores auto-creados por grupos nacen sin configurar.
@@ -413,7 +413,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)$#', $cleanPath, $matches) && $method
         $userName = $authUser['nombre'] ?? $authUser['email'];
         $userRole = strtoupper($authUser['role'] ?? '');
 
-        // FIX: Eliminar revocaciones pendientes antes del device para evitar FK violation (23503)
+        // Eliminar revocaciones pendientes antes del device para evitar FK violation (23503)
         $conn->prepare("DELETE FROM sensor_revocation_requests WHERE device_id = ? AND school_id = ?")
             ->execute([$deviceId, $authUser['school_id']]);
 
@@ -787,7 +787,7 @@ if ($cleanPath === '/devices/by-role' && $method === 'GET') {
         $stmt->execute([$authUser['school_id'], $authUser['id']]);
         $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // FIX: is_online viene como string de PostgreSQL, convertir a bool
+        // is_online viene como string de PostgreSQL, convertir a bool
         if ($device) {
             $device['is_online'] = filter_var($device['is_online'] ?? false, FILTER_VALIDATE_BOOLEAN);
         }
@@ -894,7 +894,7 @@ if ($cleanPath === '/devices/commands' && $method === 'GET') {
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
 
-    // FIX (PgBouncer): Supabase pierde conexiones del pool intermitentemente.
+    // PgBouncer: Supabase pierde conexiones del pool intermitentemente.
     // Retry hasta 3 veces para manejar "AUTH failed while reconnecting".
     $maxRetries = 3;
     $lastError = null;
@@ -1025,7 +1025,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
         exit(json_encode(['status' => 'error', 'message' => 'X-Device-Token requerido']));
     }
 
-    // FIX (PgBouncer): Retry hasta 3 veces para manejar "AUTH failed while reconnecting"
+    // PgBouncer: retry hasta 3 veces para manejar "AUTH failed while reconnecting"
     $maxRetries = 3;
     $lastError = null;
 
@@ -1067,7 +1067,7 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
                 exit(json_encode(['status' => 'error', 'message' => 'Dispositivo no encontrado']));
             }
 
-            // F-06/F-09/F-10/F-13: telemetría del nodo — persistir + evaluar umbrales.
+            // Telemetría del nodo — persistir + evaluar umbrales.
             // Nunca bloquea el ping: un error de telemetría no debe tumbar el heartbeat.
             $telemetry = $input['telemetry'] ?? null;
             if (is_array($telemetry) && !empty($telemetry)) {
@@ -1078,8 +1078,8 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
                 }
             }
 
-            // V-493/V-494/V-495: comparar el reloj reportado por el nodo con la
-            // hora del servidor y ordenar resincronización si excede el umbral.
+            // Comparar el reloj reportado por el nodo con la hora del servidor
+            // y ordenar resincronización si excede el umbral.
             $nowTs = time();
             $drift = abs($nowTs - (int)$timestamp);
             if (is_array($telemetry) && isset($telemetry['clock_drift_s'])) {
@@ -1093,9 +1093,9 @@ if ($cleanPath === '/devices/ping' && $method === 'POST') {
                 securityLog('DEVICE_CLOCK_DRIFT', "Device $deviceId drift={$drift}s > {$resyncThreshold}s — resync ordenado");
             }
 
-            // V-183/V-196: publicar las franjas horarias de la jornada del nodo
-            // para que el edge clasifique PUNTUAL/MANANA/TARDE con la config
-            // real del colegio, no con constantes.
+            // Publicar las franjas horarias de la jornada del nodo para que el
+            // edge clasifique PUNTUAL/MANANA/TARDE con la config real del
+            // colegio, no con constantes.
             try {
                 $schedStmt = $conn->prepare("
                     SELECT ssc.entry_time, ssc.exit_time
@@ -1162,7 +1162,7 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
     $doc = trim($input['doc'] ?? '');
     $nombre = trim($input['nombre'] ?? '');
     $huellaId = isset($input['huella_id']) ? (int)$input['huella_id'] : null;
-    // F-03: dedo enrolado (1=principal, 2=respaldo). Default 1 para compat.
+    // Dedo enrolado (1=principal, 2=respaldo). Default 1 para compat.
     $fingerSlot = isset($input['finger_slot']) ? (int)$input['finger_slot'] : 1;
     if (!in_array($fingerSlot, [1, 2], true)) $fingerSlot = 1;
 
@@ -1188,7 +1188,7 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
         $conn->exec("SELECT set_config('app.current_role', 'EDGE_NODE', true)");
 
         // Upsert student y marcar biometric_hash.
-        // FIX: No sobreescribir first_name/last_name si el estudiante ya existe
+        // No sobreescribir first_name/last_name si el estudiante ya existe
         // (fue creado via POST /students con nombre split correcto).
         // Solo setear biometric_hash y reactivar.
         $biometricHash = $huellaId !== null ? 'fp_' . $huellaId : 'fp_local';
@@ -1202,7 +1202,7 @@ if ($cleanPath === '/devices/enroll-confirm' && $method === 'POST') {
         $upStmt->execute([$schoolId, $doc, $nombre, $biometricHash]);
         $studentId = $upStmt->fetchColumn();
 
-        // F-03: registrar el slot de dedo en la tabla normalizada
+        // Registrar el slot de dedo en la tabla normalizada
         $fpStmt = $conn->prepare("
             INSERT INTO student_fingerprints (student_id, school_id, finger_slot, edge_huella_id, device_id)
             VALUES (?, ?, ?, ?, ?::uuid)
@@ -1348,7 +1348,7 @@ if (preg_match('#^/devices/([0-9a-fA-F\-]+)/reconfigure$#', $cleanPath, $matches
 }
 
 // ============================================================================
-// OTA M2M (Bloque D) — Actualización remota firmada por dispositivo.
+// OTA M2M — Actualización remota firmada por dispositivo.
 // ============================================================================
 require_once __DIR__ . '/../lib/ota.php';
 
@@ -1506,7 +1506,7 @@ if ($cleanPath === '/devices/ota/revoke' && $method === 'POST') {
     exit;
 }
 
-// ── POST /devices/reassign — V-523/V-526/V-527: reubicación de nodo ─────────
+// ── POST /devices/reassign — reubicación de nodo ────────────────────────────
 // Cuando un nodo se reubica físicamente (otra aula, otro grupo), el contexto
 // espacial debe actualizarse para que los eventos se interpreten correctamente.
 if ($cleanPath === '/devices/reassign' && $method === 'POST') {
@@ -1561,7 +1561,7 @@ if ($cleanPath === '/devices/reassign' && $method === 'POST') {
     exit;
 }
 
-// ── POST /devices/reprovision — V-534/V-535: recuperación de nodo averiado ──
+// ── POST /devices/reprovision — recuperación de nodo averiado ───────────────
 // Marca el nodo averiado como inactivo y rota su token para el reemplazo.
 // Devuelve el nuevo token una sola vez; el operador lo instala en el nodo nuevo.
 if ($cleanPath === '/devices/reprovision' && $method === 'POST') {

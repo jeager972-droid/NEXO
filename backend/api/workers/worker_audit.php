@@ -242,7 +242,7 @@ while (!$shutdown) {
         if (!empty($batch)) {
             try {
                 insertBatch($conn, $batch);
-                // FIX: Heartbeat para health check
+                // Heartbeat para health check
                 $redis->set('worker:audit:last_heartbeat', time(), 600);
             } catch (Exception $e) {
                 logWorker('BATCH_ERROR', $e->getMessage());
@@ -274,7 +274,7 @@ while (!$shutdown) {
     // Pequeña pausa para no saturar CPU
     usleep(10000); // 10ms
 
-    // FIX: Forzar GC y monitorear memoria en vez de matar el proceso
+    // GC y monitoreo de memoria: reinicio graceful si supera el límite
     if (++$iterations % 1000 === 0) {
         gc_collect_cycles();
         $memPeak = memory_get_peak_usage(true) / 1024 / 1024;

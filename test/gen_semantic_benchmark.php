@@ -1,8 +1,8 @@
 <?php
 /* test/gen_semantic_benchmark.php — generador del benchmark semántico (§23).
  * 1000 singles + 260 conversaciones (~2500 turnos) + 500 adversariales.
- * Semilla fija → artefacto reproducible e INDEPENDIENTE del entrenamiento:
- * los templates se escriben aquí, nunca se copian del blind operativo.
+ * Semilla fija → artefacto reproducible e INDEPENDIENTE del blind operativo:
+ * los templates se escriben aquí, nunca se copian de él.
  * Uso: php test/gen_semantic_benchmark.php  → test/fixtures/semantic_blind.json
  */
 mt_srand(20260921);

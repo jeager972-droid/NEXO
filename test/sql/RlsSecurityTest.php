@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 06_RlsSecurityTest.php — Test de Row-Level Security (RLS).
+ * RlsSecurityTest.php — Test de Row-Level Security (RLS).
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica en sql/schema.sql que:

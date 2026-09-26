@@ -25,7 +25,7 @@ const SLOW_TIMEOUT = 30000;
 const client = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'X-Requested-With': 'XMLHttpRequest', // FIX: CSRF protection header
+    'X-Requested-With': 'XMLHttpRequest', // CSRF protection header
   },
   timeout: DEFAULT_TIMEOUT,
   withCredentials: true, // PILAR 2.2: Enviar cookies HttpOnly automáticamente
@@ -77,7 +77,7 @@ function emitLatency(config, status) {
 }
 
 // Interceptor de response: telemetría de latencia + manejo de errores globales
-// VF-009: Auto-refresh en 401 antes de dispatch logout
+// Auto-refresh en 401 antes de dispatch logout
 let isRefreshing = false;
 let refreshSubscribers = [];
 

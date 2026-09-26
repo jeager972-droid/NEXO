@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 13_RegressionTest.php — Test de regresión.
+ * RegressionTest.php — Test de regresión.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica estáticamente que errores previos no vuelvan:

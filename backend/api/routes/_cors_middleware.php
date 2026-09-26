@@ -120,8 +120,6 @@ if ($isAllowed && $origin) {
 // INTERCEPTAR PETICIONES OPTIONS (Preflight CORS)
 // Esto evita que lleguen al _auth_middleware y devuelvan 401
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // VF-042: Simplificado — ambas ramas del if/else original enviaban el
-    // mismo header, por lo que la condición era redundante.
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');
 
     if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {

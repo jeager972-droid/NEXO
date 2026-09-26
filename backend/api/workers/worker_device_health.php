@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * workers/worker_device_health.php — Monitor de salud de nodos edge (F-04).
+ * workers/worker_device_health.php — Monitor de salud de nodos edge.
  * =============================================================================
  *
  * RESPONSABILIDAD

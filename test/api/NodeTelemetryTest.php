@@ -10,8 +10,8 @@
  * Multidimensional: térmico, disco, reloj, DLQ, energía (4 estados), celular
  * (interfaz caída / señal débil / sana), combinaciones, sensores ausentes.
  *
- * Simuladores: simulaciones/{termico,energia,m2m,almacenamiento}/.
- * Edge C++ cubierto por tests/test_node_monitor.cpp (tag [power]/[cellular]/
+ * Simuladores: test/simulaciones/{termico,energia,m2m,almacenamiento}/.
+ * Edge C++ cubierto por backend/edge/tests/test_node_monitor.cpp (tag [power]/[cellular]/
  * [telemetry]/[dlq]) — mismos escenarios, capa física.
  * =============================================================================
  */

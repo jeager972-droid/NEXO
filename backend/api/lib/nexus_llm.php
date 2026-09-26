@@ -5,9 +5,9 @@
  * =============================================================================
  *
  * El LLM NO responde al usuario ni toca la BD: traduce texto libre → intent de
- * la taxonomía existente + entidades. La salida entra al mismo pipeline de
- * siempre (DSM → SCP → planner → RBAC → SQL read-only), así que un parseo
- * errado nunca puede escribir ni saltarse autorización.
+ * la taxonomía + entidades. La salida entra al pipeline de intents (DSM → SCP →
+ * planner → RBAC → SQL read-only), así que un parseo errado nunca puede
+ * escribir ni saltarse autorización.
  *
  * Proveedor agnóstico vía env:
  *   NLU_LLM_URL    base URL OpenAI-compatible (default https://api.groq.com/openai/v1)
@@ -15,8 +15,7 @@
  *   NLU_LLM_MODEL  modelo (default qwen/qwen3.8-27b — Groq free 1k req/día,
  *                  8k tokens/min; alternativas en la cuenta: openai/gpt-oss-20b,
  *                  openai/gpt-oss-120b)
- *   NLU_LLM_MODE   off | on  (el LLM es EL parser: no existe clasificador
- *                  local; 'primary'/'fallback' se aceptan como 'on' por
+ *   NLU_LLM_MODE   off | on  ('primary'/'fallback' se aceptan como 'on' por
  *                  compatibilidad de env)
  *   NLU_LLM_TIMEOUT_MS  (default 6000)
  */

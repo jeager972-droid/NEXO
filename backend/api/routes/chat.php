@@ -561,7 +561,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $interp['resolved']['slots']  = $slots;
     }
 
-    // ── SCP — Semantic Conversational Parsing (§CAMBIO ARQUITECTÓNICO) ──
+    // ── SCP — Semantic Conversational Parsing ──
     // Interpretar → validar → planificar → ejecutar. El frame normaliza el
     // significado del turno contra el estado conversacional; NO ejecuta ni
     // inventa datos. Salidas: (a) correcciones que actualizan el contexto,
@@ -786,7 +786,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
 
     // ── navegación sobre el result-set guardado («dame otro», «el primero»,
     // «los demás», «su nombre») — consulta informativa sobre contexto,
-    // no requiere nuevo intent ni clasificador.
+    // no requiere nuevo intent ni parser.
     // Salvo: si el turno nombra un GRUPO distinto al activo, la posición se
     // resuelve contra ese grupo (consulta nueva), no contra el set viejo.
     $rsGroup = $ds['last_result']['_filters']['group'] ?? ($ds['entities']['group'] ?? null);
@@ -1123,8 +1123,8 @@ function nxVaryClean(string $what, string $where, string $seed): string {
 /** Estado conversacional persistido — leído del último payload del asistente. */
 function chatLoadDs(PDO $conn, string $userId, string $sessionId): ?array {
     // Sin latch de fallo: un error transitorio (BD aún no lista al boot del
-    // contenedor) NO debe desactivar la memoria para siempre — el static
-    // anterior envenenaba al worker php-fpm para todas sus requests.
+    // contenedor) NO debe desactivar la memoria para siempre — un static
+    // latch envenenaría al worker php-fpm para todas sus requests.
     try {
         $st = $conn->prepare("SELECT payload_json FROM chat_messages
             WHERE user_id=? AND session_id=? AND role='assistant' AND jsonb_exists(payload_json, '_ds')
@@ -1479,7 +1479,7 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
         return ['reply'=>"En esa consulta hay 0 {$lbl} — no trajo ninguno.",
                 'intent'=>'result_nav', '_result_nav'=>'count'];
     // set vacío o ya consumido — respuesta honesta, nunca caer al
-    // clasificador con un deíctico («los demás» ≠ consulta nueva)
+    // parser con un deíctico («los demás» ≠ consulta nueva)
     if ($n === 0)
         return ['reply'=>"La consulta anterior no trajo {$lbl} — no hay nada que navegar. ¿Quieres otra lista?",
                 'intent'=>'result_nav', '_result_nav'=>'empty'];
@@ -1631,7 +1631,7 @@ function chatDispatch(PDO $conn, array $authUser, string $intent, array $slots, 
         }
         return ['reply' => nxSmalltalk($intent, $vars), 'intent'=>$intent];
     }
-    // alias: el intent del corpus no siempre coincide 1:1 con el handler
+    // alias: el intent del parser no siempre coincide 1:1 con el handler
     $handlerMap = ['notifications_unread'=>'chat_notifications','audit_query'=>'chat_audit'];
     $handler = $handlerMap[$intent] ?? ('chat_' . $intent);
     if (!function_exists($handler))
@@ -2148,8 +2148,7 @@ function chat_trackings(PDO $conn, array $u, array $s, array $v): array {
 function chat_permissions(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
     // historial cuando hay rango/estudiante/status=all — «activos ahora»
-    // solo si no se pidió rango ni estudiante (bug prod: pedir el historial
-    // de un estudiante respondía «no hay activos ahora»)
+    // solo si no se pidió rango ni estudiante
     $hist = ($s['status'] ?? null) === 'all'
         || !empty($s['student']) || isset($s['days']) || !empty($s['from']) || !empty($s['range_label']);
     $w = ['x.school_id = ?']; $p = [$u['school_id']];
@@ -2641,7 +2640,7 @@ function chat_date(PDO $conn, array $u, array $s, array $v): array {
     return ['reply'=>'Hoy es '.$dias[date('w')].' '.date('d/m/Y').' — son las '.date('H:i').'.'];
 }
 
-/* ══ Nuevos intents: aleatorios, staff, operaciones, conteos ═══════════════ */
+/* ══ Intents de utilidad: aleatorios, staff, operaciones, conteos ══════════ */
 
 /** Estudiante aleatorio — acotado al scope del rol (docente solo sus grupos). */
 function chat_random_student(PDO $conn, array $u, array $s, array $v): array {
@@ -2767,7 +2766,7 @@ function chat_random_number(PDO $conn, array $u, array $s, array $v): array {
     return ['reply'=>'Tu número: *'.random_int($lo,$hi)."* (entre {$lo} y {$hi}). ¿Otro?"];
 }
 
-/* ══ Segunda ola — intents de capacidad real del sistema ═══════════════════ */
+/* ══ Intents de capacidad real del sistema ════════════════════════════════ */
 
 /** Ranking de estudiantes por incidentes — top N real del rango/scope. */
 function chat_top_offenders(PDO $conn, array $u, array $s, array $v): array {

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * test_multi_finger.cpp — Tests Catch2 para multi-huella (F-03).
+ * test_multi_finger.cpp — Tests Catch2 para multi-huella.
  * =============================================================================
  * Verifica la capa de persistencia del enrolamiento de dos dedos por estudiante:
  *   - estudiante_huellas guarda slot 1 y slot 2 como huella_ids distintos.

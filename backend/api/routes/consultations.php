@@ -12,7 +12,8 @@
  * personal, métricas institucionales, auditoría, etc.
  *
  * Restricciones de rol:
- *   - Los docentes/psicoorientadores deben tener el grupo asignado en schedules.
+ *   - Los docentes/psicoorientadores deben tener el grupo asignado en
+ *     teacher_group_access.
  *   - Si no envían group_name, se fuerza a filtrar por sus grupos propios.
  *
  * DEPENDENCIAS
@@ -22,7 +23,7 @@
  *   - $conn : conexión PDO.
  *
  * Es utilizado por:
- *   - Frontend: tablas dinámicas y reportes (ConsultationViewer, etc.).
+ *   - Frontend PWA: tablas dinámicas y reportes (Consultation.jsx).
  */
 
 global $cleanPath, $conn, $input, $method;
@@ -58,8 +59,7 @@ if ($cleanPath === '/consultations/query') {
     $hasGlobalView = in_array('consultations.global_view', $authUser['permissions'] ?? []);
     $isTeacher = in_array('consultations.teacher_view', $authUser['permissions'] ?? [])
         && !$hasGlobalView;
-    // FIX auditoría: el endpoint requiere permiso de consultas — sin él, 403.
-    // (Antes cualquier rol autenticado, p. ej. GUARDIAN, podía ejecutar módulos).
+    // El endpoint requiere permiso de consultas — sin él, 403.
     if (!$hasGlobalView && !$isTeacher) {
         http_response_code(403);
         exit(json_encode(['status' => 'error', 'message' => 'Sin permiso para consultas institucionales']));
@@ -79,7 +79,7 @@ if ($cleanPath === '/consultations/query') {
                 exit(json_encode(['status' => 'error', 'message' => 'No tienes acceso a este grupo.']));
             }
         } else {
-            // FIX: Si el docente NO envía grupo, forzamos que solo vea estudiantes de sus propios grupos
+            // Si el docente NO envía grupo, forzamos que solo vea estudiantes de sus propios grupos
             // $userId viene del JWT (UUID); se valida formato antes de interpolar (defensa en profundidad).
             if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', (string)$userId)) {
                 http_response_code(403);
@@ -249,7 +249,7 @@ if ($cleanPath === '/consultations/query') {
                 break;
 
             case 'incidents':
-                // Filtros opcionales (antes ignorados): grupo/estudiante/grado
+                // Filtros opcionales: grupo/estudiante/grado
                 $incGroup   = $groupName  ? " AND ag.group_name = ?" : "";
                 $incStudent = $studentId  ? " AND s.student_id = ?"  : "";
                 $incGrade   = $grade      ? " AND ag.grade_level = ?" : "";
@@ -449,8 +449,9 @@ if ($cleanPath === '/consultations/query') {
                 break;
 
             case 'pedagogical_trips':
-                // Consulta user_commands tipo PEDAGOGICA (el nuevo flujo ya no inserta en
-                // pedagogical_trip_authorizations sino que notifica vía WhatsApp directamente)
+                // Consulta user_commands tipo PEDAGOGICA — las salidas pedagógicas se
+                // registran como comandos ejecutados (la autorización asociada vive en
+                // pedagogical_trip_authorizations y la notificación va por WhatsApp).
                 $stmt = $conn->prepare("
                     SELECT uc.executed_at,
                            uc.command_payload,
@@ -507,7 +508,7 @@ if ($cleanPath === '/consultations/query') {
                 break;
 
             case 'all_students':
-                // FIX: Cursor pagination (keyset) con UUID (usando created_at y student_id como desempate)
+                // Cursor pagination (keyset) con UUID (usando created_at y student_id como desempate)
                 $lastCreatedAt = $input['last_created_at'] ?? null;
                 $lastStudentId = $input['last_student_id'] ?? null;
                 $pageSize = 100;

@@ -2,8 +2,18 @@
 
 ## Nexus
 
-Leer NEXUS_LONGRUN_STATE.md y los otros seis NEXUS_* de la raíz antes de continuar el trabajo conversacional.
-El baseline funcional está en ee12db93aa24bb2e068aceae4111c239b73e8bad; trabajo en nexus-longrun-20260922.
+La documentación canónica del sistema conversacional es `docs/nexus/NEXUS.md`;
+la de cada componente vive en su README (`backend/api/`, `backend/edge/`,
+`frontend/`, `frontend/pwa/`, `frontend/landing/`, `sql/`, `test/`).
+
+La memoria de trabajo NEXUS_*.md de la raíz fue archivada en
+`_cuarentena/memoria_nexus/` (reorganización 2026-09-26, commit 9b30742…)
+pendiente de veredicto de borrado — leerla solo si se necesita historial
+de decisiones/métricas de ciclos anteriores; sus cifras describen stacks
+retirados. Para continuidad de sesión, el estado vigente lo dan los READMEs
++ `git log`.
+
+El baseline funcional está en ee12db93aa24bb2e068aceae4111c239b73e8bad.
 No declarar READY con suites simuladas; registrar fallos y limitaciones de ejecución.
 
 ## Restricciones de trabajo verificadas

@@ -306,7 +306,7 @@ const CommandForm = ({ command, groups, students, preselect, onClose, fetchError
       setResult({ variant: 'success', message: result?.message || 'Operación exitosa' });
       if (result?.message_ids?.length) pollTwilio(result.message_ids);
 
-      // La integración edge para autorizar_salida ahora la maneja el backend:
+      // La integración edge para autorizar_salida la maneja el backend:
       // el API crea la autorización PENDING_FINGERPRINT y envía WAIT_EXIT_FINGERPRINT
       // al sensor de coordinación. El estudiante debe poner su huella allí.
     } catch (error) {

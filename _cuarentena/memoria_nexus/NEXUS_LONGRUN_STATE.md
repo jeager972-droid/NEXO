@@ -1,5 +1,16 @@
 # Nexus — memoria persistente de ejecución
 
+⚠️ 2026-09-26 — REORGANIZACIÓN ESTRUCTURAL (commit 9b30742): `PWA/`→`frontend/pwa/`,
+`landing/`→`frontend/landing/`, `pruebas/prototipos/`→`frontend/prototipos/`,
+`documentation/`→`docs/` (+`SYSTEM DESIGN PHILOSOPHY`→`frontend/design-philosophy/`),
+`documento_final.txt`→`docs/`, `simulaciones/`→`test/simulaciones/`, JSON de datos
+→`test/fixtures/`, `deploy_db.sh`→`sql/`, repomix→`tools/`. `_cuarentena/` recibe
+material pendiente de veredicto de borrado (tener_en_cuenta.md, imagenbot.png raíz
+=dup de pwa/public, wipe_db_test.php —contiene credencial Railway hardcodeada,
+ROTAR—, JSONs huérfanos, residuos NLU no trackeados). En curso: documentación
+exhaustiva por componente + barrido de comentarios legacy (subagentes). Rutas de
+AGENTS.md ya actualizadas (PWA→frontend/pwa).
+
 ⚠️ 2026-09-23 — ARQUITECTURA CAMBIADA: el clasificador TF-IDF+LR (servicio
 Python, modelo PHP, overrides/reranker) fue RETIRADO. El parser del chat es el
 LLM (`lib/nexus_llm.php`, `NLU_LLM_*`); sin key → out_of_scope. Suites sirven

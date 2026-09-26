@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * simulaciones/termico/ThermalSimulator.php — Curva térmica del SoC (F-06/F-12).
+ * test/simulaciones/termico/ThermalSimulator.php — Curva térmica del SoC (F-06/F-12).
  * =============================================================================
  * Modela la temperatura del SoC del nodo (disipación pasiva, sin ventilador —
  * veredicto F-12). Solo observabilidad: el central alerta por umbral; el nodo

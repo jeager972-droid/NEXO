@@ -9,7 +9,7 @@
  * Multidimensional: dedo 1, dedo 2, dedo desconocido, slot duplicado
  * (re-enrol), slot inválido, revocación parcial/total, cola offline→sync.
  *
- * Simulador: simulaciones/biometria/FingerprintSimulator.php (en memoria).
+ * Simulador: test/simulaciones/biometria/FingerprintSimulator.php (en memoria).
  * Edge C++: backend/edge/tests/test_multi_finger.cpp cubre la persistencia
  * real (nexo-tests, tag [multifinger]).
  * =============================================================================

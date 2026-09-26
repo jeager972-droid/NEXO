@@ -48,7 +48,7 @@ public:
     std::string encrypt(const std::string& plaintext, const std::vector<uint8_t>& iv);
     std::string decrypt(const std::string& ciphertext);
 
-    // V-243: hash con clave (HMAC-SHA256 hex, determinístico) para campos que
+    // Hash con clave (HMAC-SHA256 hex, determinístico) para campos que
     // sirven como clave de búsqueda (p.ej. documento). Devuelve "" si no hay
     // clave provisionada — el llamador decide el degradado.
     std::string keyedHash(const std::string& plaintext);
@@ -66,7 +66,7 @@ private:
     bool saveKeyToFile(const std::string& key);
     bool loadKeyFromFile(std::string& key);
 
-    // FIX C5: Binding a hardware — cifrar clave AES en disco con clave derivada del CPU serial
+    // Binding a hardware — cifrar clave AES en disco con clave derivada del CPU serial
     std::string getHardwareBoundKey();  // Deriva clave de /proc/cpuinfo (Serial + Revision)
     bool saveKeyToFileEncrypted(const std::string& key);
     bool loadKeyFromFileEncrypted(std::string& key);

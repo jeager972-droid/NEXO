@@ -37,11 +37,11 @@ if ($cleanPath === '/students') {
         $firstName  = trim($input['first_name'] ?? '');
         $lastName   = trim($input['last_name']  ?? '');
         $document   = trim($input['document']   ?? '');
-        // FIX: El frontend envía 'group' (nombre del grupo, ej "6A") y 'grade' (grado, ej "6°").
+        // El frontend envía 'group' (nombre del grupo, ej "6A") y 'grade' (grado, ej "6°").
         // Usar 'group' para buscar en academic_groups.group_name.
         $groupName  = trim($input['group'] ?? $input['grade'] ?? '');
         $workShift  = trim($input['work_shift'] ?? 'mañana');
-        // F-02: exención biométrica (condición física/médica) — motivo obligatorio
+        // Exención biométrica (condición física/médica) — motivo obligatorio
         $biometricExempt = !empty($input['biometric_exempt']);
         $exemptionReason = trim((string)($input['exemption_reason'] ?? ''));
 
@@ -55,7 +55,7 @@ if ($cleanPath === '/students') {
         }
 
         try {
-            // FIX (PgBouncer): requireAuth() ya inició una transacción.
+            // PgBouncer: requireAuth() ya inició una transacción.
             // Usamos savepoint para rollback parcial sin romper la transacción principal.
             $useSavepoint = $conn->inTransaction();
             $sp = 'sp_student_' . uniqid();
@@ -300,8 +300,8 @@ if ($cleanPath === '/students') {
 //
 // Endpoint de recuperación post-onboarding: permite al RECTOR/SECRETARY
 // reasignar estudiantes que quedaron sin grupo (o mal asignados) tras un
-// onboarding. Útil cuando la migración 2026-36 no pudo inferir el grado
-// (students.grade_level era NULL).
+// onboarding. Útil cuando el grado no pudo inferirse durante el
+// onboarding (students.grade_level NULL).
 //
 // Payload: { group_id, student_ids: [uuid,...] }
 // ============================================================================
@@ -430,7 +430,7 @@ if (preg_match('#^/students/([0-9a-fA-F\-]{36})$#', $cleanPath, $matches) && $me
 
 // ============================================================================
 // POST /students/{id}/consent — Registro de consentimiento del tratamiento de
-// datos biométricos (habeas data / V-342/V-344).
+// datos biométricos (habeas data).
 //   Body: {status: OTORGADO|REVOCADO|NO_APLICA|PENDIENTE, channel?, document_ref?,
 //          reason?}
 //   REVOCADO marca biometric_exempt=TRUE automáticamente — el estudiante deja

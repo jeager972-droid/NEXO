@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 08_SeedDataTest.php — Test de consistencia del seed data.
+ * SeedDataTest.php — Test de consistencia del seed data.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica en sql/schema.sql que:

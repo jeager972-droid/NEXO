@@ -11,8 +11,7 @@
  *   - /dev/i2c-1 y permisos I2C.
  *   - linux/i2c-dev.h
  *
- * FIX C8: Refactorizado para usar header dedicado (RealOledDisplay.h).
- * FIX B5: Auto-limpieza del display tras 10s sin actualización.
+ * Auto-limpieza del display tras 10s sin actualización.
  */
 
 #include "hardware/real/RealOledDisplay.h"

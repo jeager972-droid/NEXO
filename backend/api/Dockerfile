@@ -1,11 +1,10 @@
 # PHP API Dockerfile
 FROM php:8.2-fpm
-# CORS fix applied - nginx catch-all → api.php - v3.0
 
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# nginx — sin apache2, sin MPM, sin conflictos
+# nginx como servidor web frontal de php-fpm
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx git unzip net-tools curl wget mosquitto mosquitto-clients \
     && rm -rf /var/lib/apt/lists/* \

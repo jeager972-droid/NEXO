@@ -1,6 +1,6 @@
 <?php
 /**
- * corpus_semantic_gen — generador MASIVO por espacio semántico (FASE 4).
+ * corpus_semantic_gen — generador MASIVO por espacio semántico.
  *
  * No evalúa intents: evalúa que el enunciado produzca el plan correcto.
  * Cubre el producto cartesiano de:

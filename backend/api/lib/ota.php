@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * lib/ota.php — Soporte OTA M2M (Bloque D).
+ * lib/ota.php — Soporte OTA M2M.
  * =============================================================================
  * Actualización remota de nodos por el canal M2M:
  *   - Manifiesto firmado por HMAC-SHA256 con la clave OTA por-dispositivo

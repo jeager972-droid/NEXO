@@ -22,7 +22,7 @@ import { useStickyScroll } from '../components/useStickyScroll'
 
 // MODULE 04 — HOW IT WORKS
 // Psychological trigger: cognitive clarity — the user feels they already know how to use it
-// CAMBIO 6: Sticky scroll, SVG de línea dibujado con scrub:1, y pasos que entran con toggleActions
+// Sticky scroll, SVG de línea dibujado con scrub:1, y pasos que entran con toggleActions
 
 const STEPS = [
   {
@@ -138,18 +138,18 @@ export default function HowItWorksSection() {
         {
           opacity: 1,
           y: 0,
-          duration: 0.85,    // Bug 4: subtítulos 0.85s
-          stagger: 0.15,     // Bug 4: stagger 0.15s
+          duration: 0.85,    // subtítulos 0.85s
+          stagger: 0.15,     // stagger 0.15s
           ease: 'power3.out',
           scrollTrigger: {
             trigger: wrapper,
-            start: 'top 75%', // Bug 4: content trigger at 75%
+            start: 'top 75%', // content trigger at 75%
             toggleActions: 'play none none none',
           }
         }
       )
 
-      // Bug 4: Línea SVG con scrub rápido
+      // Línea SVG con scrub rápido
       gsap.to(line, {
         strokeDashoffset: 0,
         ease: 'none',

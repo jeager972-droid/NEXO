@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * 03_ConstraintTest.php — Test de constraints del esquema SQL.
+ * ConstraintTest.php — Test de constraints del esquema SQL.
  * =============================================================================
  * RESPONSABILIDAD:
  *   Verifica en sql/schema.sql la existencia de:
