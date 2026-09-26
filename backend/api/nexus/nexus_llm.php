@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * lib/nexus_llm.php — Parser semántico LLM (API compatible-OpenAI).
+ * nexus/nexus_llm.php — Parser semántico LLM (API compatible-OpenAI).
  * =============================================================================
  *
  * El LLM NO responde al usuario ni toca la BD: traduce texto libre → intent de

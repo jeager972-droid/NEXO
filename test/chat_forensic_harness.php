@@ -20,7 +20,7 @@
  * Salida: stdout + /tmp/forensic_traces.json
  */
 
-require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 require __DIR__ . '/../backend/api/routes/chat.php';   // solo define funciones — sin $cleanPath no enruta
 
 const ROLE = 'TEACHER';   // rol simulado — configurable

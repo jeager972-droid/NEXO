@@ -11,7 +11,7 @@
  * que importa es la columna impresa: intent/conf/fuente por frase.
  */
 define('ROLE', 'RECTOR');
-require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require_once __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 
 $PHRASES = [
     /* [frase natural, intent esperado aproximado] */

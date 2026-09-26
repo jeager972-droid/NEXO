@@ -7,10 +7,10 @@
  *
  * Uso: php test/scp_regression.php
  * ========================================================================== */
-require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
-require __DIR__ . '/../backend/api/lib/nexus_semantic.php';
-require __DIR__ . '/../backend/api/lib/nexus_scp.php';
+require __DIR__ . '/../backend/api/nexus/nexus_semantic.php';
+require __DIR__ . '/../backend/api/nexus/nexus_scp.php';
 
 /* estado conversacional simulado — espejo del _ds real tras la tabla 10-A
  * (cursor sobre el último elemento mostrado) + contexto de conteo */

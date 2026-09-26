@@ -1,8 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../backend/api/vendor/autoload.php';
-require_once __DIR__ . '/../../backend/api/lib/nexus_nlu.php';
-require_once __DIR__ . '/../../backend/api/lib/nexus_semantic.php';
+require_once __DIR__ . '/../../backend/api/nexus/nexus_nlu.php';
+require_once __DIR__ . '/../../backend/api/nexus/nexus_semantic.php';
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

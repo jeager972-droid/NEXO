@@ -2,7 +2,7 @@
 
 ## Nexus
 
-La documentación canónica del sistema conversacional es `docs/nexus/NEXUS.md`;
+La documentación canónica del sistema conversacional es `backend/api/nexus/README.md`;
 la de cada componente vive en su README (`backend/api/`, `backend/edge/`,
 `frontend/`, `frontend/pwa/`, `frontend/landing/`, `sql/`, `test/`).
 
@@ -38,7 +38,7 @@ backend/api/vendor/bin/phpunit --configuration test/phpunit.xml --testsuite 'API
 ```
 
 El clasificador TF-IDF+LR (servicio Python + modelo PHP) se retiró: el parser
-del chat es el LLM (lib/nexus_llm.php). Para las suites, las respuestas del
+del chat es el LLM (nexus/nexus_llm.php). Para las suites, las respuestas del
 parser se sirven del snapshot `test/fixtures/llm_intents.json`
 (NX_CLASSIFY_FIXTURE lo activan los propios entry points; `= ` vacío fuerza
 el path real y gasta cuota API).
@@ -62,7 +62,7 @@ real_conversation_v1.php es una simulación NLU/DSM; no prueba SQL, API HTTP ni 
 
 ## Estructura del repositorio (reorganización 2026-09-26)
 
-- `backend/` — `api/` (PHP: rutas, lib Nexus, workers) y `edge/` (nodo C++).
+- `backend/` — `api/` (PHP: rutas, `nexus/` = IA conversacional, lib, workers) y `edge/` (nodo C++).
 - `frontend/` — `pwa/` (SPA principal), `landing/`, `prototipos/`, `design-philosophy/`.
 - `docs/` — documentación canónica (la vieja `documentation/` se fundió aquí).
 - `sql/` — schema, seeds, `deploy_db.sh`.

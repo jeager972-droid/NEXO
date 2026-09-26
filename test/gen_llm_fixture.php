@@ -15,7 +15,7 @@
  *
  * Uso: NLU_LLM_KEY=... php test/gen_llm_fixture.php <phrases.txt> [salida.json]
  */
-require __DIR__ . '/../backend/api/lib/nexus_llm.php';
+require __DIR__ . '/../backend/api/nexus/nexus_llm.php';
 
 $in  = $argv[1] ?? null;
 $out = $argv[2] ?? __DIR__ . '/fixtures/llm_intents.json';

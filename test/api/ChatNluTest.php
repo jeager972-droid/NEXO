@@ -6,7 +6,7 @@
  * presente + replay de fixture, sin SQL libre.
  */
 require_once __DIR__ . '/../../backend/api/vendor/autoload.php';
-require_once __DIR__ . '/../../backend/api/lib/nexus_nlu.php';
+require_once __DIR__ . '/../../backend/api/nexus/nexus_nlu.php';
 
 class ChatNluTest extends PHPUnit\Framework\TestCase
 {
@@ -69,7 +69,7 @@ class ChatNluTest extends PHPUnit\Framework\TestCase
     public function testParserLlmPresenteYFixtureReproduce(): void
     {
         // el parser real es el LLM — el cliente existe y la taxonomía no está vacía
-        $this->assertFileExists(__DIR__ . '/../../backend/api/lib/nexus_llm.php');
+        $this->assertFileExists(__DIR__ . '/../../backend/api/nexus/nexus_llm.php');
         $this->assertNotEmpty(NX_LLM_FORMAL);
         $this->assertNotEmpty(NX_LLM_INFORMAL);
         // sin proveedor → out_of_scope honesto (phpunit no exporta NLU_LLM_KEY)

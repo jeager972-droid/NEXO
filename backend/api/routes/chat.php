@@ -25,9 +25,9 @@
 
 global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
-require_once __DIR__ . '/../lib/nexus_nlu.php';
-require_once __DIR__ . '/../lib/nexus_semantic.php';
-require_once __DIR__ . '/../lib/nexus_scp.php';
+require_once __DIR__ . '/../nexus/nexus_nlu.php';
+require_once __DIR__ . '/../nexus/nexus_semantic.php';
+require_once __DIR__ . '/../nexus/nexus_scp.php';
 require_once __DIR__ . '/../lib/kb_colombia.php';
 require_once __DIR__ . '/../lib/calculator.php';
 

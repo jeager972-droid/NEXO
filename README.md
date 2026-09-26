@@ -26,12 +26,12 @@ consultar todo el sistema en lenguaje natural.
         │   backend/edge/          ┌───────────────────────────┐      │
         │   C++20 · SQLite local   │ api.php (entry único)     │      │
         │   huella (UareU/ZK9500)  │ routes/  25 archivos      │      │
-        │   OLED/GPIO · MQTT       │ lib/     lógica dominio   │      │
-        │   OTA · watchdog         │  └─ nexus_*  IA convers.  │      │
+        │   OLED/GPIO · MQTT       │ nexus/   IA conversacional│      │
+        │   OTA · watchdog         │ lib/     lógica dominio   │      │
         │          │               │ workers/ 11 daemons       │      │
-        │          │ AES-256-GCM   │ core/    db/redis/mqtt    │      │
-        │          └──────────────►└─────┬─────────────┬───────┘      │
-        │                                │             │              │
+        │          │               │ core/    db/redis/mqtt    │      │
+        │          │ AES-256-GCM   └─────┬─────────────┬───────┘      │
+        │          └──────────────►      │             │              │
         │                          PgBouncer:6432   Redis             │
         │                                │          (colas, dedup,    │
         │                                ▼           cache, rate-lim) │
@@ -41,55 +41,108 @@ consultar todo el sistema en lenguaje natural.
         └────────────────────────────────────────────────────────────┘
 ```
 
-Cada componente tiene documentación exhaustiva en su propio README:
+## Componentes
 
-| Componente | Directorio | Documentación |
-|---|---|---|
-| **API / Backend PHP** | `backend/api/` | [backend/api/README.md](backend/api/README.md) |
-| **Nodo edge biométrico** | `backend/edge/` | [backend/edge/README.md](backend/edge/README.md) |
-| **IA conversacional (Nexus)** | `backend/api/lib/nexus_*` + `routes/chat.php` | [docs/nexus/NEXUS.md](docs/nexus/NEXUS.md) |
-| **PWA (app principal)** | `frontend/pwa/` | [frontend/pwa/README.md](frontend/pwa/README.md) |
-| **Landing** | `frontend/landing/` | [frontend/landing/README.md](frontend/landing/README.md) |
-| **Frontend global + diseño** | `frontend/` | [frontend/README.md](frontend/README.md) · [design-philosophy/](frontend/design-philosophy/) |
-| **Base de datos** | `sql/` | [sql/README.md](sql/README.md) |
-| **Pruebas (suites + stack)** | `test/` · `pruebas/` | [test/README.md](test/README.md) · [pruebas/README.md](pruebas/README.md) |
-| **Despliegue** | — | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| **Seguridad** | transversal | [docs/SECURITY.md](docs/SECURITY.md) |
-| **Utilidades de repo** | `tools/` | repomix (empaquetado del código) |
+Cada componente tiene documentación exhaustiva en su propio README
+(escrito contra el código vigente, no contra reportes históricos):
+
+| Componente | Directorio | Líneas doc | Documentación |
+|---|---|---|---|
+| **IA conversacional (Nexus)** | `backend/api/nexus/` + `routes/chat.php` | ~1.020 | [backend/api/nexus/README.md](backend/api/nexus/README.md) |
+| **API / Backend PHP** | `backend/api/` | ~800 | [backend/api/README.md](backend/api/README.md) |
+| **Nodo edge biométrico** | `backend/edge/` | ~684 | [backend/edge/README.md](backend/edge/README.md) |
+| **Base de datos** | `sql/` | ~783 | [sql/README.md](sql/README.md) |
+| **PWA (app principal)** | `frontend/pwa/` | ~427 | [frontend/pwa/README.md](frontend/pwa/README.md) |
+| **Landing** | `frontend/landing/` | ~241 | [frontend/landing/README.md](frontend/landing/README.md) |
+| **Frontend global + diseño** | `frontend/` | ~118 | [frontend/README.md](frontend/README.md) · [design-philosophy/](frontend/design-philosophy/) |
+| **Pruebas (suites + stack)** | `test/` · `pruebas/` | ~360 | [test/README.md](test/README.md) · [pruebas/README.md](pruebas/README.md) |
+| **Despliegue** | `docs/DEPLOYMENT.md` | — | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+| **Seguridad** | transversal | — | [docs/SECURITY.md](docs/SECURITY.md) |
+| **Utilidades de repo** | `tools/` | — | repomix (empaquetado del código para IA) |
 
 ## Qué hace cada pieza
 
-- **`backend/edge/`** — Daemon C++20 en cada punto de control físico
-  (Raspberry Pi embebido). Captura huellas, identifica estudiantes
-  *localmente* (los templates biométricos nunca salen del dispositivo),
-  encola eventos en SQLite y los sincroniza cifrados (AES-256-GCM) con la
-  API. Resiste cortes de red/energía; recibe comandos por MQTT y se
-  actualiza por OTA con rollback.
+### `backend/edge/` — captura en campo (C++20, Raspberry Pi)
 
-- **`backend/api/`** — API PHP 8 (nginx + php-fpm). Entry único `api.php`
-  con dos canales: REST+JWT para la PWA y canal cifrado para el edge.
-  25 archivos de rutas, motor de riesgo V3, 11 workers daemon (Twilio,
-  auditoría, biométricos, ausencias, evasiones, permisos, salud de nodos),
-  Redis para colas/dedup/rate-limit.
+Daemon que corre en cada punto de acceso del colegio (portería, aula).
+Identifica estudiantes **localmente** por huella (los templates biométricos
+nunca salen del dispositivo — a la nube solo viaja un `huella_id` entero),
+persiste eventos en SQLite local y los sincroniza cifrados (AES-256-GCM) con
+la API. **Offline-first**: sigue registrando asistencia sin red y reintenta.
+Capa HAL que desacopla sensores reales (U.are.U 5300, ZK9500) de stubs de
+desarrollo; OLED/GPIO por libgpiod; comandos remotos por MQTT; OTA firmado
+con rollback automático; watchdog + supervisor de threads.
 
-- **Nexus** (`docs/nexus/NEXUS.md`) — El chat institucional. El LLM
-  interpreta lenguaje natural a intents+entidades (jamás toca datos ni
-  decide permisos); capas deterministas (DSM → frame semántico SCP →
-  planner → RBAC → executors SQL read-only → validación de resultado)
-  garantizan que toda respuesta sale de datos verificados del colegio.
-  Soporta referencias («el primero», «su acudiente», «todos»), correcciones,
-  multi-goal y navegación de resultados, con memoria de conversación en el
-  servidor.
+### `backend/api/` — núcleo (PHP 8, nginx + php-fpm)
 
-- **`sql/`** — PostgreSQL 15, multi-tenant por `school_id` con RLS.
-  `schema.sql` consolidado e idempotente; despliegue con
-  `sql/deploy_db.sh` (`DATABASE_URL=... ./sql/deploy_db.sh`).
+Entry único `api.php` con dos canales: REST+JWT para la PWA y canal cifrado
+para los nodos edge. 25 archivos de rutas, motor de riesgo V3, y **11
+workers daemon** que hacen el trabajo asíncrono: envío Twilio (con
+contingencia a BD), auditoría con cadena HMAC, enrolamiento biométrico,
+detección de ausencias/evasiones, permisos, salud de nodos, recálculo de
+métricas. Redis para colas, deduplicación, rate-limiting y cache — con
+degradación honesta cuando no está disponible.
 
-- **`frontend/`** — La PWA institucional (React 18 + Vite + Tailwind, los
-  7 roles), la landing pública, la filosofía de diseño completa
-  (`design-philosophy/` = fuente de verdad UX) y prototipos HTML.
+### `backend/api/nexus/` — Nexus, la IA conversacional
 
-## Verificación rápida (local, sin cuota LLM)
+El chat institucional («Pregúntale a Nexus»). Arquitectura **LLM híbrido**:
+el modelo interpreta lenguaje natural a intents+entidades — jamás escribe
+SQL, decide permisos ni toca datos. Cuatro capas deterministas conservan la
+autoridad: DSM (estado de diálogo, referencias «el primero»/«su acudiente»,
+correcciones, multi-goal), frame semántico SCP, planner + registro de 39
+capacidades, RBAC y executors SQL **read-only**, y validación del resultado.
+Sin clave LLM o con el proveedor caído, el sistema degrada a
+`out_of_scope` honesto + caminos deterministas — nunca inventa.
+
+> Regla rectora: el LLM interpreta y expresa; NEXO decide la verdad.
+
+### `sql/` — PostgreSQL 15 multi-tenant
+
+68 tablas + particiones mensuales dinámicas, ~90 FKs, 23 funciones, RLS por
+`school_id` en 53 tablas (los datos de un colegio son invisibles para otro,
+incluso con un bug en la API). Acceso vía PgBouncer (`transaction` pooling →
+el contexto RLS se fija por transacción, no por sesión). `schema.sql` es
+autocontenido e idempotente; despliegue con `sql/deploy_db.sh`.
+
+### `frontend/` — PWA, landing, diseño y prototipos
+
+- **`pwa/`** — React 18 + Vite + Tailwind + PWA instalable. Los 7 roles
+  (rector, coordinador, docente, secretaría, portero, auxiliar,
+  psicoorientador) con rutas protegidas, chat Nexus, operaciones,
+  notificaciones, enrolamiento. Spec de diseño: `design-philosophy/`.
+- **`landing/`** — sitio público/marketing con formulario de contacto y
+  consentimiento de datos.
+- **`prototipos/`** — mockups HTML estáticos.
+- **`design-philosophy/`** — fuente de verdad UX/DES: filosofía, tokens,
+  patrones, guía de implementación.
+
+## Flujo de datos de extremo a extremo
+
+```
+Dedo del estudiante
+  → sensor edge (identificación 1:N local, en RAM)
+  → SQLite local (audit_trail, WAL, retry)
+  → HTTPS AES-256-GCM → api.php /ingest
+  → PostgreSQL biometric_events (RLS school_id)
+  → workers: detección tardanza/ausencia/evasión → notifications
+  → worker_twilio: WhatsApp al acudiente
+  → PWA: el rol consulta «¿quién llegó tarde hoy?» → Nexus → cards verificadas
+```
+
+## Seguridad (resumen)
+
+- **Multi-tenant RLS** por `school_id` — defensa en profundidad a nivel BD.
+- **Biometría**: templates cifrados AES-GCM solo en el edge; la nube ve IDs.
+- **JWT + refresh** con blocklist y sesiones revocables; 2FA por OTP.
+- **Edge**: llave maestra por escuela (bcrypt), token por dispositivo, OTA
+  firmado HMAC, revocación con countdown.
+- **Nexus**: el LLM no decide — whitelist de intents, RBAC por intent,
+  compuerta `safety`, executors read-only, auditoría `CHAT_QUERY`.
+- **Auditoría**: `global_audit_logs` con cadena HMAC-SHA256 inmutable.
+
+Detalle completo: [docs/SECURITY.md](docs/SECURITY.md).
+
+## Verificación local (sin cuota LLM)
 
 ```bash
 php test/dsm_units.php
@@ -99,19 +152,33 @@ php test/readonly_guard.php
 php test/resilience.php
 backend/api/vendor/bin/phpunit --configuration test/phpunit.xml \
     --testsuite 'API Unit Tests' --do-not-cache-result
-cd frontend/pwa && npm test        # Vitest
+cd frontend/pwa && npm test        # Vitest (563 pruebas)
 ```
 
-Las suites sirven intents del snapshot `test/fixtures/llm_intents.json`.
-Las suites *live* (`continuity_50`, `scp_live`, `golden_live`,
-`heldout_live`, `live_probe*`) requieren el stack Docker de `pruebas/` y
-gastan cuota del parser LLM — ver [test/README.md](test/README.md).
+Las suites sirven intents del snapshot `test/fixtures/llm_intents.json` —
+prueban el pipeline determinista completo menos la llamada al LLM. Las
+suites *live* (`continuity_50`, `scp_live`, `golden_live`, `heldout_live`,
+`live_probe*`, `blind_eval`, `op_eval`, `semantic_eval`) requieren el stack
+Docker de `pruebas/` o API/BD reales y gastan cuota del parser — ver
+[test/README.md](test/README.md) y AGENTS.md para cuándo correr cada una.
 
-## Convenciones del repo
+## Estructura del repo
+
+```
+├── backend/    api/ (PHP: rutas, nexus/, lib, workers) · edge/ (C++)
+├── frontend/   pwa/ · landing/ · prototipos/ · design-philosophy/
+├── docs/       DEPLOYMENT.md · SECURITY.md · documento_final.txt
+├── sql/        schema.sql · seed.sql · factory_reset.sql · deploy_db.sh
+├── test/       suites PHP + fixtures/ + simulaciones/ + api/ + runners/
+├── pruebas/    stack Docker de integración (api+db+redis+nodo)
+├── tools/      repomix (empaquetado del código)
+└── _cuarentena/ material retirado pendiente de veredicto — no es fuente
+```
+
+## Convenciones
 
 - Reglas para agentes y verificación local: [AGENTS.md](AGENTS.md).
-- Documento técnico-narrativo histórico del sistema:
-  [docs/documento_final.txt](docs/documento_final.txt).
-- `_cuarentena/` contiene material retirado pendiente de veredicto de
-  borrado — **no es fuente de verdad**.
+- Documento técnico-narrativo histórico: [docs/documento_final.txt](docs/documento_final.txt).
 - Commits pequeños con pruebas; no se hace push sin autorización.
+- `_cuarentena/` está pendiente de tu veredicto de borrado — ver
+  [_cuarentena/LEEME.md](_cuarentena/LEEME.md).

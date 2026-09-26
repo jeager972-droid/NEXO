@@ -12,7 +12,7 @@ de verificación, del más barato al más real:
 
 ## 1. Filosofía
 
-- **El parser del chat es el LLM** (`backend/api/lib/nexus_llm.php`). El viejo
+- **El parser del chat es el LLM** (`backend/api/nexus/nexus_llm.php`). El viejo
   clasificador TF-IDF+LR se retiró. Para que las suites sean deterministas y
   no gasten cuota, `nxClassifyCore` sirve respuestas grabadas del fixture
   (`NX_CLASSIFY_FIXTURE`); ver §4.
@@ -95,7 +95,7 @@ Tipos: `unit` = lógica aislada · `sim` = simulación pipeline real con fixture
 (~80 KB). La clave es el texto ya normalizado por `nxNorm` (minúsculas, sin
 tildes, etc.).
 
-**Activación.** En `nxClassifyCore` (`backend/api/lib/nexus_nlu.php` ~l.109):
+**Activación.** En `nxClassifyCore` (`backend/api/nexus/nexus_nlu.php` ~l.109):
 
 1. `NX_CLASSIFY_FIXTURE=<ruta>` → si la frase normalizada existe en el mapa,
    responde del snapshot con `source: 'fixture'`; si no existe, cae al path real.

@@ -1,10 +1,10 @@
 <?php
 /**
  * =============================================================================
- * lib/nexus_nlu.php — Puente NLU de Nexus.
+ * nexus/nexus_nlu.php — Puente NLU de Nexus.
  * =============================================================================
  *
- * La interpretación es del LLM (lib/nexus_llm.php — parser semántico sobre
+ * La interpretación es del LLM (nexus/nexus_llm.php — parser semántico sobre
  * API compatible-OpenAI). Este archivo conserva solo la maquinaria
  * determinista: normalización, slot-filling (nxSlots), smalltalk, RBAC
  * (nxAllowed) y el DSM conversacional (nxDialogueResolve).

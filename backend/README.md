@@ -16,5 +16,5 @@ nodo edge (colegio) ──AES-256-GCM──► api.php ──► PostgreSQL (RLS
 El edge captura y verifica huellas **localmente** (la biometría no sale del
 dispositivo) y sincroniza eventos cifrados; la API procesa, detecta
 situaciones y notifica. El subsistema conversacional Nexus vive dentro de
-la API (`api/lib/nexus_*.php` + `api/routes/chat.php`) — su documento es
-[../docs/nexus/NEXUS.md](../docs/nexus/NEXUS.md).
+la API (`api/nexus/` — 4 librerías — más `api/routes/chat.php` como entry
+HTTP); su documento es [api/nexus/README.md](api/nexus/README.md).

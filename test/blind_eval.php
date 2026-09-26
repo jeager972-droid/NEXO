@@ -5,7 +5,7 @@
  * fixture test/fixtures/llm_intents.json salvo NX_CLASSIFY_FIXTURE= vacío).
  * Read-only. Uso: php test/blind_eval.php  → /tmp/blind_eval.json
  */
-require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 $set = json_decode(file_get_contents(__DIR__ . '/fixtures/blind_set.json'), true);

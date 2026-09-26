@@ -21,7 +21,7 @@
  * Uso: php test/real_conversation_v1.php [--json]
  */
 define('ROLE', 'TEACHER');
-require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 /** Réplica del flujo de /chat/message: clasifica → nxDialogueResolve

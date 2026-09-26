@@ -8,7 +8,7 @@
  * Uso: php test/dsm_units.php
  */
 define('ROLE', 'TEACHER');
-require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require_once __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 require_once __DIR__ . '/../backend/api/routes/chat.php';
 require_once __DIR__ . '/harness_turn.php';
 

@@ -1,9 +1,15 @@
-# NEXUS — Documento maestro del sistema conversacional
+# NEXUS — IA conversacional de NEXO
 
 > **Nexus** es el parser semántico + motor conversacional del chat de NEXO
 > (asistente institucional escolar). Este documento describe la arquitectura
 > **vigente** verificada contra el código en `HEAD`, no contra documentos
 > históricos.
+
+**Componente:** `backend/api/nexus/` (4 librerías PHP) +
+`backend/api/routes/chat.php` (entry HTTP). Nexus **no es un servicio
+independiente**: corre dentro del proceso PHP-FPM de la API y comparte su
+bootstrap, pool PostgreSQL, Redis y contexto RBAC. La única dependencia
+externa es el proveedor LLM (HTTP saliente, compatible-OpenAI).
 
 **Arquitectura vigente:** LLM híbrido — el parser es un LLM vía API
 (compatible-OpenAI, Groq por defecto) **+ capas deterministas** (normalización,
@@ -32,8 +38,8 @@ El modelo de lenguaje **sí puede**:
 - reformular respuestas ya verificadas (composer) sin alterar cifras.
 
 Fuentes de verdad usadas para este documento: `backend/api/routes/chat.php`,
-`backend/api/lib/nexus_llm.php`, `backend/api/lib/nexus_nlu.php`,
-`backend/api/lib/nexus_scp.php`, `backend/api/lib/nexus_semantic.php`,
+`backend/api/nexus/nexus_llm.php`, `backend/api/nexus/nexus_nlu.php`,
+`backend/api/nexus/nexus_scp.php`, `backend/api/nexus/nexus_semantic.php`,
 `backend/api/lib/kb_colombia.php`, `frontend/pwa/src/pages/Chat.jsx`,
 `frontend/pwa/src/components/patterns/NexoChat.jsx`,
 `frontend/pwa/src/api/chat.js`, `frontend/pwa/src/lib/chatContext.js`,
@@ -118,10 +124,10 @@ tablas, memoria de result-sets y read-only.
 | Archivo | Rol |
 |---|---|
 | `backend/api/routes/chat.php` | Endpoint `/chat/*`, orquestación del turno, handlers SQL, navegación de result-sets, políticas, auditoría (~3060 líneas) |
-| `backend/api/lib/nexus_llm.php` | Parser LLM, composer de respuestas, chat informal, whitelists, saneamiento de entidades, config `NLU_LLM_*` |
-| `backend/api/lib/nexus_nlu.php` | `nxNorm`, `nxSlots`, `nxExtractStudent`, sinónimos, smalltalk, matriz RBAC `nxAllowed`, DSM `nxDialogueResolve` (~1716 líneas) |
-| `backend/api/lib/nexus_scp.php` | Semantic Conversational Parsing: `nxScpFrame`, `nxScpValidate`, `nxScpToSlots`, `nxScpToPlan`, trazas `NEXO_SCP_TRACE` |
-| `backend/api/lib/nexus_semantic.php` | Registry de 39 capacidades, `nxSemanticCompose`, `nxPlanValidate`, `nxPlanAllowed`, `nxPlanExecute`, `nxResultValidate`, executors (~2030 líneas) |
+| `backend/api/nexus/nexus_llm.php` | Parser LLM, composer de respuestas, chat informal, whitelists, saneamiento de entidades, config `NLU_LLM_*` |
+| `backend/api/nexus/nexus_nlu.php` | `nxNorm`, `nxSlots`, `nxExtractStudent`, sinónimos, smalltalk, matriz RBAC `nxAllowed`, DSM `nxDialogueResolve` (~1716 líneas) |
+| `backend/api/nexus/nexus_scp.php` | Semantic Conversational Parsing: `nxScpFrame`, `nxScpValidate`, `nxScpToSlots`, `nxScpToPlan`, trazas `NEXO_SCP_TRACE` |
+| `backend/api/nexus/nexus_semantic.php` | Registry de 39 capacidades, `nxSemanticCompose`, `nxPlanValidate`, `nxPlanAllowed`, `nxPlanExecute`, `nxResultValidate`, executors (~2030 líneas) |
 | `backend/api/lib/kb_colombia.php` | KB determinista de cultura colombiana (departamentos, presidentes, geografía, historia) |
 | `backend/api/lib/calculator.php` | `math_operation` determinista |
 | `frontend/pwa/src/pages/Chat.jsx` | UI principal: envío, cards, paginación, acciones, exportación, sesiones |
@@ -925,7 +931,38 @@ permitida. Los denegados de intent son 200 con `denied:true`.
   cifras de acierto miden al parser **de su momento** — se citan como
   evidencia histórica, no como garantía de la versión actual.
 
-## 19. Limitaciones y gaps comprobados
+## 19. Extender Nexus: añadir una capacidad
+
+Añadir una consulta nueva al chat toca **cinco puntos del pipeline** (en
+orden del flujo):
+
+1. **Intent** — declararlo en la whitelist `NX_LLM_FORMAL`
+   (`nexus_llm.php:45`). Si el LLM emite un intent ausente, se convierte en
+   `out_of_scope`. Para intents conversacionales usar `NX_LLM_INFORMAL`.
+2. **Slots y sinónimos** — si el intent necesita entidades nuevas
+   (p. ej. un módulo o un tipo de fecha), ampliar `nxSlots` / los mapas de
+   sinónimos de `nexus_nlu.php` y las frases del prompt del parser.
+3. **RBAC** — añadir la entrada en `nxIntentRoles` (`nexus_nlu.php:789`):
+   qué roles pueden usarlo. La matriz rol × política de escuela
+   (`NX_CHAT_POLICY_MAP`, `chat.php:110`) puede además apagarlo por colegio.
+4. **Capacidad semántica** — registrar el capability en
+   `nxCapabilityRegistry` (`nexus_semantic.php:36`): `filters`,
+   `required_parameters`, `time_scope`, `related`/`nearby` (para
+   composición y sugerencias), `rbac`, `exec` (executor) e
+   `intent_equiv` (puente intent→capability). `nxPlanValidate` aplicará
+   los `required_parameters`; `nxPlanAllowed` el `rbac`.
+5. **Executor** — el `exec` apunta a un handler en `nexus_semantic.php` o
+   a un `chat_*` en `chat.php`. Regla absoluta: **SQL read-only** —
+   `test/readonly_guard.php` escanea los handlers y falla si aparece
+   escritura. La presentación (card/tabla) la decide
+   `response_shape`+`presentation`; el composer reformula el texto.
+
+Después: añadir frases a las suites (`test/dsm_units.php`,
+`test/nexus_capability_eval_v1.php`, `test/real_conversation_v1.php`) y
+regenerar el fixture si el intent pasa por el parser
+(`NX_CLASSIFY_LOG` + `test/gen_llm_fixture.php`, ver AGENTS.md).
+
+## 20. Limitaciones y gaps comprobados
 
 - Sin `NLU_LLM_KEY` o con el proveedor caído, toda clasificación de
   lenguaje libre termina en `out_of_scope` (honesto pero degradado).
@@ -944,7 +981,7 @@ permitida. Los denegados de intent son 200 con `denied:true`.
   HTTP+BD+LLM de extremo a extremo en el alcance local.
 - Redis caído desactiva silenciosamente el rate limit.
 
-## 20. Historia breve: el stack retirado
+## 21. Historia breve: el stack retirado
 
 La primera versión del NLU fue un clasificador estadístico **TF-IDF +
 regresión logística** servido por un microservicio Python (`NEXO_NLU_URL`,
@@ -958,7 +995,7 @@ sus métricas miden al clasificador viejo, no al parser actual. La taxonomía
 de intents y las lecciones de normalización/DSM se conservaron; la
 clasificación estadística, no.
 
-## 21. Glosario
+## 22. Glosario
 
 | Término | Significado |
 |---|---|

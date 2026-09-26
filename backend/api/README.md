@@ -4,7 +4,7 @@ Documentación exhaustiva del backend PHP 8 de NEXO (`backend/api/`). Toda la
 información aquí se deriva del código fuente real; documentos complementarios:
 [docs/SECURITY.md](../../docs/SECURITY.md),
 [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md) y
-[docs/nexus/NEXUS.md](../../docs/nexus/NEXUS.md) (subsistema conversacional,
+[backend/api/nexus/README.md](../../backend/api/nexus/README.md) (subsistema conversacional,
 fuera del alcance de este documento salvo su entry point HTTP).
 
 ---
@@ -443,8 +443,8 @@ Tipos soportados (`case` en `consultations.php:119-799`): `group_students`,
 ### `routes/chat.php` — entry point del asistente Nexus
 
 Solo la capa HTTP; la lógica conversacional (LLM parser, NLU, semántica, SCP)
-está documentada en [docs/nexus/NEXUS.md](../../docs/nexus/NEXUS.md) y vive en
-`lib/nexus_*.php`.
+está documentada en [backend/api/nexus/README.md](../../backend/api/nexus/README.md) y vive en
+`nexus/nexus_*.php`.
 
 | Método | Endpoint | Rol | Propósito |
 |---|---|---|---|
@@ -475,7 +475,7 @@ está documentada en [docs/nexus/NEXUS.md](../../docs/nexus/NEXUS.md) y vive en
 | `ota.php` | OTA de nodos edge: comparación semver con anti-rollback (`min_version`), manifiesto firmado `HMAC-SHA256("nexo-ota|ver|sha256|url")` con clave OTA por dispositivo (hex 32 B), auditoría en `ota_deployments` |
 | `twilio.php` | Helpers Twilio/WhatsApp: `normalizeWhatsAppPhone`, `getTwilioStatusCallbackUrl`, `sendTwilioDirect` (texto libre con fallback a template fuera de ventana 24 h), `_twilioHttpPost`, `logTwilioMessage` |
 | `kb_colombia.php` | Base de conocimiento estática de Colombia (departamentos/capitales/regiones, presidentes) para el chatbot |
-| `nexus_*.php` | Subsistema conversacional (LLM parser, NLU, semántica, SCP) — **documentado aparte** en [docs/nexus/NEXUS.md](../../docs/nexus/NEXUS.md) |
+| `nexus_*.php` | Subsistema conversacional (LLM parser, NLU, semántica, SCP) — **documentado aparte** en [backend/api/nexus/README.md](../../backend/api/nexus/README.md) |
 
 ---
 
@@ -698,7 +698,7 @@ o `JWT_SECRET`).
 
 `NLU_LLM_KEY`, `NLU_LLM_MODE` — el parser del chat es un LLM; sin clave el
 health reporta `llm:false` y cae a 503. Detalles en
-[docs/nexus/NEXUS.md](../../docs/nexus/NEXUS.md).
+[backend/api/nexus/README.md](../../backend/api/nexus/README.md).
 
 ---
 
@@ -781,7 +781,13 @@ backend/api/
 │   ├── ota.php                OTA edge (manifiesto HMAC, semver, anti-rollback)
 │   ├── twilio.php             Helpers Twilio/WhatsApp
 │   ├── kb_colombia.php        KB estática de Colombia (chatbot)
-│   └── nexus_*.php            Subsistema Nexus → docs/nexus/NEXUS.md
+│   └── …
+├── nexus/                     Subsistema Nexus (IA conversacional)
+│   ├── README.md              Documento maestro (~1000 líneas)
+│   ├── nexus_llm.php          Parser LLM + composer + chat informal
+│   ├── nexus_nlu.php          nxNorm, nxSlots, nxClassify, DSM, RBAC intents
+│   ├── nexus_scp.php          Frame semántico SCP + validación
+│   └── nexus_semantic.php     Registry de capacidades, planner, executors
 ├── workers/                   10 workers + contingency_lib.php (ver §6)
 ├── infra/
 │   ├── pgbouncer/             Dockerfile, entrypoint.sh, pgbouncer.ini

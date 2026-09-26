@@ -11,7 +11,7 @@
  * Uso: php test/chat_context_sim.php
  * Exit 0 si la herencia funciona.
  */
-require __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 if (!getenv('NX_CLASSIFY_FIXTURE')) putenv('NX_CLASSIFY_FIXTURE=' . __DIR__ . '/fixtures/llm_intents.json');
 
 echo "╔══════════════════════════════════════════════════════════════╗\n";

@@ -4,7 +4,7 @@
  * nunca rellena huecos con suposiciones ni se cuelga.
  */
 define('ROLE', 'TEACHER');
-require_once __DIR__ . '/../backend/api/lib/nexus_nlu.php';
+require_once __DIR__ . '/../backend/api/nexus/nexus_nlu.php';
 require_once __DIR__ . '/../backend/api/routes/chat.php';
 require_once __DIR__ . '/harness_turn.php';
 
