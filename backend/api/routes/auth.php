@@ -42,6 +42,16 @@ global $cleanPath, $conn, $input, $method;
 require_once __DIR__ . '/_auth_middleware.php';
 
 /**
+ * Versión vigente de los Términos y Condiciones de la PWA.
+ * Debe mantenerse sincronizada con TERMS_VERSION en
+ * frontend/pwa/src/config/legal.js. Al publicarse una versión nueva,
+ * los usuarios vuelven a ver el aviso de aceptación en el próximo login.
+ */
+if (!defined('NEXO_TERMS_VERSION')) {
+    define('NEXO_TERMS_VERSION', '2026.09');
+}
+
+/**
  * Verifica si un intento de login debe ser bloqueado por exceso de intentos.
  *
  * @param string $email Correo del usuario que intenta iniciar sesión.
@@ -132,7 +142,7 @@ if ($cleanPath === '/auth/login') {
 
         $stmt = $conn->prepare("
             SELECT u.user_id, u.email, u.password_hash, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
-                   u.profile_photo_url, u.work_shift, u.phone, u.phone_verified,
+                   u.profile_photo_url, u.work_shift, u.phone, u.phone_verified, u.terms_version,
                    r.role_name, s.school_id, s.school_name
             FROM users u
             INNER JOIN roles r ON u.role_id = r.role_id
@@ -276,7 +286,9 @@ if ($cleanPath === '/auth/login') {
                     'school_id' => $user['school_id'],
                     'school_name' => $user['school_name'],
                     'profile_photo_url' => $user['profile_photo_url'] ?? null,
-                    'work_shift' => $user['work_shift'] ?? null
+                    'work_shift' => $user['work_shift'] ?? null,
+                    'terms_version' => $user['terms_version'] ?? null,
+                    'terms_accepted' => ($user['terms_version'] ?? '') === NEXO_TERMS_VERSION
                 ]
             ]);
         } else {
@@ -319,7 +331,7 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
 
         $userStmt = $conn->prepare("
             SELECT u.user_id, u.email, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
-                   u.profile_photo_url, u.work_shift,
+                   u.profile_photo_url, u.work_shift, u.terms_version,
                    r.role_name, s.school_id, s.school_name
             FROM users u
             INNER JOIN roles r ON u.role_id = r.role_id
@@ -436,7 +448,9 @@ if ($cleanPath === '/auth/verify-2fa' && $method === 'POST') {
                 'school_id' => $user['school_id'],
                 'school_name' => $user['school_name'],
                 'profile_photo_url' => $user['profile_photo_url'] ?? null,
-                'work_shift' => $user['work_shift'] ?? null
+                'work_shift' => $user['work_shift'] ?? null,
+                'terms_version' => $user['terms_version'] ?? null,
+                'terms_accepted' => ($user['terms_version'] ?? '') === NEXO_TERMS_VERSION
             ]
         ]);
     } catch (Throwable $e) {
@@ -516,9 +530,51 @@ if ($cleanPath === '/auth/me') {
             'school_id' => $authUser['school_id'],
             'school_name' => $authUser['school_name'],
             'profile_photo_url' => $authUser['profile_photo_url'] ?? null,
-            'work_shift' => $authUser['work_shift'] ?? null
+            'work_shift' => $authUser['work_shift'] ?? null,
+            'terms_version' => $authUser['terms_version'] ?? null,
+            'terms_accepted' => ($authUser['terms_version'] ?? '') === NEXO_TERMS_VERSION
         ]
     ]);
+    exit;
+}
+
+// ============================================================================
+// POST /auth/accept-terms — Registra la aceptación de Términos y Condiciones.
+// Persiste versión + fecha en users (auditoría legal por usuario).
+// ============================================================================
+if ($cleanPath === '/auth/accept-terms' && $method === 'POST') {
+    $authUser = requireAuth();
+
+    $version = trim((string)($input['version'] ?? ''));
+    if ($version === '' || strlen($version) > 20) {
+        http_response_code(400);
+        exit(json_encode(['status' => 'error', 'message' => 'Versión de términos requerida']));
+    }
+    // Solo se registra la versión vigente: no se permite "aceptar" textos antiguos.
+    if ($version !== NEXO_TERMS_VERSION) {
+        http_response_code(409);
+        exit(json_encode(['status' => 'error', 'message' => 'La versión de los términos no es la vigente', 'terms_version' => NEXO_TERMS_VERSION]));
+    }
+
+    try {
+        $stmt = $conn->prepare("
+            UPDATE users
+            SET terms_version = ?, terms_accepted_at = NOW()
+            WHERE user_id = ?
+        ");
+        $stmt->execute([$version, $authUser['id']]);
+        securityLog('TERMS_ACCEPTED', "User {$authUser['id']} accepted terms v{$version}", $authUser['id'], $authUser['school_id']);
+
+        echo json_encode([
+            'status' => 'ok',
+            'terms_version' => $version,
+            'terms_accepted' => true
+        ]);
+    } catch (Throwable $e) {
+        securityLog('TERMS_ACCEPT_ERROR', $e->getMessage(), $authUser['id'], $authUser['school_id'] ?? null);
+        http_response_code(500);
+        exit(json_encode(['status' => 'error', 'message' => 'No se pudo registrar la aceptación']));
+    }
     exit;
 }
 
@@ -545,7 +601,7 @@ if ($cleanPath === '/auth/refresh' && $method === 'POST') {
             SELECT us.session_id, us.user_id, us.expires_at, us.revoked,
                    u.email, r.role_name, u.school_id, u.first_name, u.last_name,
                    u.profile_photo_url, u.work_shift, u.active as user_active,
-                   s.school_name
+                   u.terms_version, s.school_name
             FROM user_sessions us
             JOIN users u ON u.user_id = us.user_id
             INNER JOIN roles r ON u.role_id = r.role_id
@@ -625,7 +681,9 @@ if ($cleanPath === '/auth/refresh' && $method === 'POST') {
                 'school_id' => $session['school_id'],
                 'school_name' => $session['school_name'],
                 'profile_photo_url' => $session['profile_photo_url'] ?? null,
-                'work_shift' => $session['work_shift'] ?? null
+                'work_shift' => $session['work_shift'] ?? null,
+                'terms_version' => $session['terms_version'] ?? null,
+                'terms_accepted' => ($session['terms_version'] ?? '') === NEXO_TERMS_VERSION
             ]
         ]);
     } catch (Throwable $e) {

@@ -1,0 +1,8 @@
+Day 1 proves:
+- The global main entrypoint of NEXO starts in a school: a student put his finger into the sensor. Which wake-up the node daemon and makes an 1:N validation of the fingerprint. Then, extracts the id from the student and send it to api.php by HTTPS. Here theworkers are who process and classify the event, generating in the DB the corresponding action into the system and get available to be consulted in the App by the endpoints, depends of the worker definition of the event, it can feed the risk engine or end up as a record.
+an absence is identified by who didn't register in a time-lapse, the worker send it to PGbouncer or list to Redis the event for Twilio by another HTTP query. The workers obtains by database the data of the students, his guardian, his phonenumber (which is normalized) and twilio by JSON get that data and send to the guardian the absence. Guardian can response the message, and twilio get back it as a JSON and sent it back to api.php who proccess if just store that and send to the guardian another response like (entendido, recuerde ponerse al dia con las actividades y traer excusa) or escale it to coordination as an alert.
+
+git show 1b36423, what does change and why?
+that commit makes a cleanup of legacy functions of the NLU model, which got integrate an LLM as parser/composer. Deleting the sintatic clasifier examples, with the porpuse of deleting a unnecesary and obsolet layer and prevent anomalous behaviors of the model.
+
+Day 2 proves:

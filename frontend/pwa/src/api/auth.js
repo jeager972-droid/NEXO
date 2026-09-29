@@ -33,4 +33,9 @@ export const authApi = {
     const response = await client.post('/auth/refresh', { refresh_token: refreshToken });
     return response.data;
   },
+  // Registra la aceptación de Términos y Condiciones (users.terms_version)
+  acceptTerms: async (version) => {
+    const response = await client.post('/auth/accept-terms', { version });
+    return response.data;
+  },
 };

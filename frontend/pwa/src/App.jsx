@@ -7,6 +7,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { NotificationProvider } from './context/NotificationContext';
 import { initTelemetry } from './api/telemetry';
+import { COOKIE_CONSENT_KEY } from './config/legal';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Layout from './layout/Layout';
 import { ROLES } from './config/roles';
@@ -50,9 +51,24 @@ function App() {
     };
   }, []);
 
+  // La telemetría (analítica/diagnóstico) solo corre con consentimiento:
+  // arranca si ya fue otorgado o al aceptarla en el aviso de cookies.
   useEffect(() => {
-    const stopTelemetry = initTelemetry();
-    return () => { if (typeof stopTelemetry === 'function') stopTelemetry(); };
+    let stop;
+    const analyticsAllowed = () => {
+      try {
+        return JSON.parse(localStorage.getItem(COOKIE_CONSENT_KEY))?.categories?.analytics === true;
+      } catch { return false; }
+    };
+    const tryStart = () => {
+      if (!stop && analyticsAllowed()) stop = initTelemetry();
+    };
+    tryStart();
+    window.addEventListener('nexo:cookie-consent', tryStart);
+    return () => {
+      window.removeEventListener('nexo:cookie-consent', tryStart);
+      if (typeof stop === 'function') stop();
+    };
   }, []);
 
   return (

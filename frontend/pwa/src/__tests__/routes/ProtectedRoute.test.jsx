@@ -1,8 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ProtectedRoute from '../../routes/ProtectedRoute';
 import { AuthContext } from '../../context/AuthContext';
+import { COOKIE_CONSENT_KEY, TERMS_VERSION } from '../../config/legal';
+
+// Usuario que ya resolvió el gate legal: consentimiento de cookies en
+// localStorage + Términos vigentes aceptados en el servidor.
+const seedCookieConsent = () => {
+  localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify({
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+  }));
+};
+const legalUser = (extra = {}) => ({ email: 'admin@nexo.edu', role: 'RECTOR', terms_version: TERMS_VERSION, terms_accepted: true, ...extra });
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 const renderWithAuth = (authValue, { initialPath = '/' } = {}) => {
   return render(
@@ -33,12 +49,22 @@ describe('ProtectedRoute', () => {
     expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument();
   });
 
-  it('renders protected content when user is authenticated', () => {
+  it('renders protected content when user is authenticated and legal gate is resolved', () => {
+    seedCookieConsent();
     renderWithAuth({
-      user: { email: 'admin@nexo.edu', role: 'RECTOR' },
+      user: legalUser(),
       loading: false,
     });
     expect(screen.getByTestId('protected-content')).toBeInTheDocument();
+  });
+
+  it('shows the legal gate (cookies) when the authenticated user has not consented', () => {
+    renderWithAuth({
+      user: legalUser(),
+      loading: false,
+    });
+    expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument();
+    expect(screen.getByText('Uso de cookies y almacenamiento local')).toBeInTheDocument();
   });
 });
 
@@ -77,8 +103,9 @@ describe('ProtectedRoute with allowedRoles', () => {
   });
 
   it('allows any authenticated user when allowedRoles is not provided', () => {
+    seedCookieConsent();
     renderWithRoles(
-      { user: { role: 'SECURITY' }, loading: false },
+      { user: legalUser({ role: 'SECURITY' }), loading: false },
       undefined
     );
     expect(screen.getByTestId('protected-content')).toBeInTheDocument();

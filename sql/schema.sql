@@ -1094,6 +1094,14 @@ COMMENT ON COLUMN teacher_alert_rules.event_kind IS 'LATE=llegada tarde (INGRESO
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;
 COMMENT ON COLUMN users.onboarding_completed IS 'TRUE cuando el usuario completó su onboarding personal (p.ej. docente configuró criterios de aviso o los omitió explícitamente)';
 
+-- Aceptación de Términos y Condiciones de la PWA — gate post-login.
+-- La aceptación queda auditada en el servidor (versión + fecha), no solo en
+-- el dispositivo: es un acto legal por usuario.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+COMMENT ON COLUMN users.terms_version IS 'Versión de los Términos y Condiciones aceptada por el usuario (ej. 2026.09). NULL = aún no acepta.';
+COMMENT ON COLUMN users.terms_accepted_at IS 'Fecha y hora (UTC) en que el usuario aceptó los Términos vigentes.';
+
 -- =============================================================================
 -- Enrutamiento configurable de notificaciones/escalaciones (documento §4.5:
 -- "qué actores deben conocerlas y bajo qué condiciones"). Por defecto las

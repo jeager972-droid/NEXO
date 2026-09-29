@@ -628,7 +628,7 @@ if (!function_exists('requireAuth')) {
             $stmt = $conn->prepare("
                 WITH u AS (
                     SELECT u.user_id, u.email, u.first_name, u.last_name, (u.deleted_at IS NULL) AS active,
-                           u.profile_photo_url, u.work_shift,
+                           u.profile_photo_url, u.work_shift, u.terms_version,
                            u.role_id, r.role_name, s.school_id, s.school_name
                     FROM users u
                     INNER JOIN roles r ON u.role_id = r.role_id
@@ -691,6 +691,7 @@ if (!function_exists('requireAuth')) {
                 'school_name' => $user['school_name'],
                 'profile_photo_url' => $user['profile_photo_url'] ?? null,
                 'work_shift' => $user['work_shift'] ?? null,
+                'terms_version' => $user['terms_version'] ?? null,
                 'claims' => $claims,
                 'permissions' => $permissions
             ];
