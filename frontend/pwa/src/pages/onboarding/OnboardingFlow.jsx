@@ -78,6 +78,11 @@ const SCRIPTS = {
     { text: 'Por ejemplo: «avísame cuando un estudiante acumule 3 llegadas tarde en 30 días». Yo detecto, tú decides.' },
     { text: 'Son solo para ti. Sin reglas propias, recibes los avisos generales de la institución.' },
   ],
+  chatpol: [
+    { text: 'Aquí decides <b>qué capacidades del asistente</b> están activas para cada rol. Son interruptores: se encienden y apagan cuando quieras.' },
+    { text: 'El docente siempre queda <b>acotado a sus propios grupos</b> — eso no cambia. Lo que ajustas es qué puede consultar y qué acciones le propongo.' },
+    { text: 'Si una capacidad no aplica para tu institución, apágala y guarda — puedes volver a activarla cuando la necesites.' },
+  ],
 };
 
 /* ── helpers ── */
@@ -166,22 +171,26 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
   const isTeacher = role === ROLES.DOCENTE;
   const isRector = role === ROLES.RECTOR;
 
-  // secuencia de pasos según rol + lo que falta
+  // secuencia de pasos según rol + lo que falta.
+  // 'welcome' solo existe en modo inicial: en actualización el flujo
+  // arranca directo en el paso que el usuario vino a editar — una
+  // bienvenida genérica antes de "Paso 1 de 1" no aporta.
   const steps = useMemo(() => {
-    if (isTeacher) return ['welcome', 'rules', 'done'];
-    const s = ['welcome'];
+    if (isTeacher) return isUpdate ? ['rules', 'done'] : ['welcome', 'rules', 'done'];
+    const s = isUpdate ? [] : ['welcome'];
     if (missing.schedule) s.push('schedule');
     if (missing.groups) s.push(isRector ? 'groups' : 'groupsPending');
     if (missing.risk) s.push('risk');
     if (missing.chat) s.push('chatpol');
     s.push('done');
     return s;
-  }, [isTeacher, isRector, missing.schedule, missing.groups, missing.risk, missing.chat]);
+  }, [isTeacher, isRector, isUpdate, missing.schedule, missing.groups, missing.risk, missing.chat]);
 
   const [stepIdx, setStepIdx] = useState(0);
   const step = steps[stepIdx];
-  const totalReal = steps.length - 2; // sin welcome ni done
-  const realIdx = Math.min(Math.max(stepIdx, 0), steps.length - 2);
+  const firstRealIdx = steps[0] === 'welcome' ? 1 : 0;
+  const totalReal = Math.max(steps.length - 1 - firstRealIdx, 0); // sin 'done' (ni 'welcome' si existe)
+  const realIdx = Math.min(Math.max(stepIdx - firstRealIdx + 1, 1), Math.max(totalReal, 1));
 
   const next = () => setStepIdx((i) => Math.min(i + 1, steps.length - 1));
   const done = () => onAllDone?.();
@@ -698,9 +707,12 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
   );
 
   const saveChatPol = async () => {
+    if (simulate) return fakeSave();
     setError(''); setSaving(true);
-    try { await chatApi.savePolicies(chatPol); next(); }
-    catch (e) { setError(humanizeError(e, 'No se pudieron guardar las políticas.')); }
+    try {
+      await chatApi.savePolicies(chatPol);
+      next(); // solo avanza si el guardado tuvo éxito — el error queda visible en el paso
+    } catch (e) { setError(humanizeError(e, 'No se pudieron guardar las políticas del asistente.')); }
     finally { setSaving(false); }
   };
 
@@ -708,7 +720,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     { key: 'chat.teacher.risk_students',   t: 'Docentes ven estudiantes en riesgo',        d: 'Siempre acotado a sus propios grupos — nunca los de otros docentes' },
     { key: 'chat.teacher.student_fields',  t: 'Docentes consultan datos de estudiante',    d: 'Documento, contacto del acudiente, edad — solo de sus grupos' },
     { key: 'chat.teacher.aggregates',      t: 'Docentes ven resúmenes y agregados',        d: 'Resumen de jornada, faltas del día, seguimientos — con su scope' },
-    { key: 'chat.teacher.derive_actions',  t: 'Docentes reciben acciones derivadas',       d: 'Chips «Derivar a seguimiento» / «Citar acudiente» cuando un dato cruza umbral' },
+    { key: 'chat.teacher.derive_actions',  t: 'El asistente propone acciones en el chat de los docentes', d: 'Cuando una respuesta lo amerita, el docente ve botones como «Derivar a seguimiento» o «Citar acudiente» — apagado, el asistente solo informa, sin sugerir acciones' },
     { key: 'chat.smalltalk.enabled',       t: 'Conversación cotidiana habilitada',         d: 'Chistes, saludos, charla — si se apaga, el bot solo responde datos' },
   ];
 

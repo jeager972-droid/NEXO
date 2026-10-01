@@ -29,7 +29,14 @@ const formatChatTime = (ts) => {
   try {
     const date = new Date(ts);
     if (!isNaN(date.getTime())) {
-      return date.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const time = date.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', hour12: true });
+      // contexto de día discreto: hoy solo la hora; ayer y antes lo dicen
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      if (date.toDateString() === now.toDateString()) return time;
+      if (date.toDateString() === yesterday.toDateString()) return `Ayer · ${time}`;
+      return `${date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })} · ${time}`;
     }
   } catch { /* fallthrough */ }
   if (typeof ts === 'string' && ts.includes(':')) {
@@ -187,7 +194,9 @@ const NotifBubble = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRea
             <Button variant="secondary" size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
           )}
           {!notif.read && (
-            <Button variant="ghost" size="sm" onClick={onMarkRead}>Ignorar</Button>
+            // «Ignorar» (= marcar leída) se aparta a la derecha: quiet y
+            // separado de los CTAs para que no compita con «Revisar»
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={onMarkRead}>Ignorar</Button>
           )}
         </>
       }
@@ -197,7 +206,7 @@ const NotifBubble = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRea
 
 const Notifications = () => {
   const { user } = useAuth();
-  const { notifications, markRead, markAllRead, refreshNotifications, clearNotifications } = useNotifications();
+  const { notifications, notifCount, markRead, markAllRead, refreshNotifications, clearNotifications } = useNotifications();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
@@ -325,21 +334,28 @@ const Notifications = () => {
   return (
     <div className="space-y-5">
       {notifications.length > 0 && (
-        <div className="flex items-center justify-end gap-4">
-          <button
-            onClick={markAllRead}
-            className="text-[13px] font-medium text-[var(--nx-accent)] hover:underline"
-          >
-            Marcar todo leído
-          </button>
-          <button
-            onClick={handleClear}
-            disabled={clearing}
-            className="flex items-center gap-1 text-[13px] font-medium text-[var(--nx-danger)] hover:underline disabled:opacity-45"
-          >
-            <Trash2 size={14} />
-            Vaciar
-          </button>
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-caption text-[var(--nx-text-muted)]" aria-live="polite">
+            {notifCount > 0 ? `${notifCount} sin leer` : 'Todo leído'}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={markAllRead}
+              className="rounded-control px-2.5 py-1.5 text-[13px] font-medium text-[var(--nx-accent)] transition-colors hover:bg-[var(--nx-subtle-bg-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-accent)]"
+            >
+              Marcar todo leído
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={clearing}
+              className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-[13px] font-medium text-[var(--nx-danger)] transition-colors hover:bg-[var(--nx-subtle-bg-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nx-danger)] disabled:opacity-45"
+            >
+              <Trash2 size={14} />
+              Vaciar
+            </button>
+          </div>
         </div>
       )}
 
@@ -348,7 +364,7 @@ const Notifications = () => {
           <NexoChatBubble message="¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí." />
         </Surface>
       ) : (
-        <Surface className="space-y-6 p-5">
+        <Surface className="space-y-5 p-4 sm:p-5" role="feed" aria-label="Notificaciones de Nexus">
           {notifications.map((notif, i) => {
             const meta = parseMeta(notif.metadata_json);
             const action = meta?.action;

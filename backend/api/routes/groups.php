@@ -54,7 +54,7 @@ if ($cleanPath === '/groups') {
                 JOIN academic_groups ag ON ag.group_id = tga.group_id
                 WHERE tga.teacher_user_id = ? AND tga.academic_year = ?
                 GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.work_shift
-                ORDER BY ag.grade_level::INT, ag.group_name
+                ORDER BY CASE WHEN ag.grade_level ~ '^\d+$' THEN ag.grade_level::INT ELSE 999 END, ag.grade_level, ag.group_name
             ");
             $stmt->execute([$authUser['id'], $currentYear]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -68,7 +68,7 @@ if ($cleanPath === '/groups') {
                 LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
                 WHERE ag.school_id = ? AND ag.academic_year = ?
                 GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
-                ORDER BY ag.grade_level::INT, ag.group_name
+                ORDER BY CASE WHEN ag.grade_level ~ '^\d+$' THEN ag.grade_level::INT ELSE 999 END, ag.grade_level, ag.group_name
             ");
             $stmt->execute([$schoolId, $currentYear]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -81,7 +81,7 @@ if ($cleanPath === '/groups') {
                 LEFT JOIN student_group_assignments sga ON ag.group_id = sga.group_id AND sga.active = TRUE
                 WHERE ag.school_id = ? AND ag.academic_year = ?
                 GROUP BY ag.group_id, ag.group_name, ag.grade_level, ag.academic_year, ag.work_shift
-                ORDER BY ag.grade_level::INT, ag.group_name
+                ORDER BY CASE WHEN ag.grade_level ~ '^\d+$' THEN ag.grade_level::INT ELSE 999 END, ag.grade_level, ag.group_name
             ");
             $stmt->execute([$schoolId, $currentYear]);
             $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);

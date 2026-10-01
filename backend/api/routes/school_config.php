@@ -547,7 +547,7 @@ if ($cleanPath === '/school/groups-onboarding' && $method === 'GET') {
             SELECT ag.group_id, ag.group_name, ag.grade_level, ag.work_shift
             FROM academic_groups ag
             WHERE ag.school_id = ? AND ag.academic_year = ?
-            ORDER BY ag.grade_level::INT, ag.group_name
+            ORDER BY CASE WHEN ag.grade_level ~ '^\d+$' THEN ag.grade_level::INT ELSE 999 END, ag.grade_level, ag.group_name
         ");
         $groupsStmt->execute([$schoolId, $currentYear]);
         $groupRows = $groupsStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1277,7 +1277,7 @@ if ($cleanPath === '/school/technical-modality' && $method === 'GET') {
                    days_of_week, entry_time, exit_time, academic_year
             FROM technical_modality_config
             WHERE school_id = ? AND academic_year = ?
-            ORDER BY grade_level::INT, work_shift
+            ORDER BY CASE WHEN grade_level ~ '^\d+$' THEN grade_level::INT ELSE 999 END, work_shift
         ");
         $stmt->execute([$schoolId, $currentYear]);
         $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);

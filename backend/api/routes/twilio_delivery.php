@@ -38,7 +38,9 @@ if ($cleanPath === '/webhooks/twilio/status' && $method === 'POST') {
     error_log("[TWILIO_STATUS] Webhook received. SID: " . ($_POST['MessageSid'] ?? 'N/A') . " Status: " . ($_POST['MessageStatus'] ?? 'N/A'));
     error_log("[TWILIO_STATUS] Full POST data: " . json_encode($_POST));
     
-    if (function_exists('verifyTwilioSignature') && !verifyTwilioSignature()) {
+    // Fail-closed: si el verificador no está cargado (orden de requires),
+    // la petición no pasa — un webhook sin firma verificable no es confiable.
+    if (!function_exists('verifyTwilioSignature') || !verifyTwilioSignature()) {
         error_log("[TWILIO_STATUS] Signature verification FAILED. Rejecting request.");
         securityLog('TWILIO_WEBHOOK_REJECTED', 'Firma inválida en status callback');
         http_response_code(403);

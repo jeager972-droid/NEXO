@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { studentsApi } from '../api/students';
 import { devicesApi } from '../api/devices';
 import { ROLES } from '../config/roles';
-import { UserPlus, Search, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Sparkles, Loader2, AlertCircle, Trash2 } from 'lucide-react';
+import { UserPlus, Search, SearchX, X, ChevronLeft, ChevronRight, Check, Fingerprint, Phone, Hash, GraduationCap, User, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Surface } from '../components/ui/Surface';
 import { Input, Textarea } from '../components/ui/Input';
@@ -17,7 +17,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Skeleton, SkeletonRows, SkeletonCards } from '../components/ui/Skeleton';
+import { Skeleton, SkeletonCards } from '../components/ui/Skeleton';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { Stepper } from '../components/ui/Stepper';
 import { Drawer } from '../components/ui/Overlay';
@@ -666,10 +666,10 @@ const Enrollment = () => {
 
           <button
             onClick={() => { setView('search'); }}
-            className="flex flex-col p-5 rounded-panel border bg-[var(--nx-surface-success)] border-[var(--nx-success)] hover:shadow-medium transition-all duration-fast text-left"
+            className="flex flex-col p-5 rounded-panel border bg-[var(--nx-surface)] border-[var(--nx-border)] hover:shadow-medium transition-all duration-fast text-left"
           >
             <div className="flex items-start justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-icon-bg-success)] text-[color-mix(in_oklch,var(--nx-success)_72%,var(--nx-icon-mix))]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[var(--nx-surface-subtle)] text-[var(--nx-text-muted)]">
                 <Search size={20} />
               </div>
               <ChevronRight size={18} className="text-[var(--nx-text-muted)]" />
@@ -720,7 +720,7 @@ const Enrollment = () => {
       {!selectedGroup && !selectedGrade && !debouncedSearch ? (
         <Surface>
           <EmptyState
-            icon={<Search size={32} className="text-[var(--nx-success)]" />}
+            icon={<Search size={32} className="text-[var(--nx-text-muted)]" />}
             title="No hay nada para mostrar."
             description="Elige un grupo o busca un estudiante para ver los resultados aquí."
           />
@@ -729,7 +729,7 @@ const Enrollment = () => {
         <SkeletonCards count={6} />
       ) : sortedStudents.length === 0 ? (
         <Surface>
-          <EmptyState icon={<Sparkles size={32} className="text-[var(--nx-success)]" />} title="No hay nada para mostrar." description="No se encontraron estudiantes con los filtros actuales." />
+          <EmptyState icon={<SearchX size={32} className="text-[var(--nx-text-muted)]" />} title="No hay nada para mostrar." description="No se encontraron estudiantes con los filtros actuales." />
         </Surface>
       ) : (
         <>

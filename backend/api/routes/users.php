@@ -466,7 +466,11 @@ if ($cleanPath === '/users/delete-field' && $method === 'POST') {
         $pwdStmt = $conn->prepare("SELECT password_hash, password_salt FROM users WHERE user_id = ?");
         $pwdStmt->execute([$userId]);
         $userRow = $pwdStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$userRow || !password_verify($password . $userRow['password_salt'], $userRow['password_hash'])) {
+        // El esquema vigente es password_verify($password, $hash) — como en
+        // login y change-password. password_salt es vestigial (los rehash lo
+        // ponen en NULL); concatenarlo rompe la verificación para cuentas
+        // legacy cuyo hash nunca usó salt.
+        if (!$userRow || !password_verify($password, $userRow['password_hash'])) {
             securityLog('DELETE_FIELD_AUTH_FAIL', "User: $userId, Field: $field");
             usersJson(['status' => 'error', 'message' => 'Contraseña incorrecta'], 403);
         }

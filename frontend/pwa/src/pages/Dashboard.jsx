@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, X, CheckCircle2, FileText, Sparkles, ClipboardCheck, Clock
+  Search, SearchX, X, CheckCircle2, FileText, ClipboardCheck, Clock, Inbox
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
@@ -35,7 +35,7 @@ const EMPTY_STATS = {
   groupStats: { present: 0, absent: 0, alerts: 0, permisos: 0, late: 0, outside: 0 },
 };
 
-const TasksEmptyState = ({ loading }) => {
+const TasksEmptyState = ({ loading, error }) => {
   if (loading) {
     return (
       <Surface className="p-6">
@@ -44,6 +44,17 @@ const TasksEmptyState = ({ loading }) => {
           <Skeleton className="h-6 w-48" />
           <Skeleton className="h-4 w-64" />
         </div>
+      </Surface>
+    );
+  }
+  if (error) {
+    return (
+      <Surface className="p-6">
+        <EmptyState
+          variant="error"
+          title="No se pudieron cargar las tareas"
+          description={error}
+        />
       </Surface>
     );
   }
@@ -62,6 +73,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,7 +84,11 @@ const Dashboard = () => {
         if (!signal.aborted) setStats({ ...EMPTY_STATS, ...(data || {}) });
       }
       catch (e) {
-        if (!signal.aborted) { console.error(e); setStats(EMPTY_STATS); }
+        if (!signal.aborted) {
+          console.error(e);
+          setStats(EMPTY_STATS);
+          setLoadError(humanizeError(e, 'No se pudo cargar el resumen del día.'));
+        }
       }
       finally {
         if (!signal.aborted) setLoading(false);
@@ -85,16 +101,16 @@ const Dashboard = () => {
   switch (user?.role) {
     case ROLES.RECTOR:
     case ROLES.COORDINADOR:
-      return <AdminDashboard stats={stats} loading={loading} />;
+      return <AdminDashboard stats={stats} loading={loading} error={loadError} />;
     case ROLES.SECRETARIA:
-      return <SecretaryDashboard stats={stats} loading={loading} />;
+      return <SecretaryDashboard stats={stats} loading={loading} error={loadError} />;
     case ROLES.PSICORIENTADOR:
-      return <CounselorDashboard stats={stats} loading={loading} />;
+      return <CounselorDashboard stats={stats} loading={loading} error={loadError} />;
     case ROLES.DOCENTE:
-      return <TeacherDashboard stats={stats} loading={loading} />;
+      return <TeacherDashboard stats={stats} loading={loading} error={loadError} />;
     case ROLES.PORTERO:
     case ROLES.AUXILIAR:
-      return <StaffDashboard stats={stats} loading={loading} />;
+      return <StaffDashboard stats={stats} loading={loading} error={loadError} />;
     default:
       return (
         <EmptyState
@@ -107,7 +123,7 @@ const Dashboard = () => {
 
 // ── Command Center — Admin / Rector / Coordinador ─────────────────────────────
 
-const AdminDashboard = ({ stats, loading }) => {
+const AdminDashboard = ({ stats, loading, error }) => {
   const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData] = useState([]);
@@ -144,7 +160,7 @@ const AdminDashboard = ({ stats, loading }) => {
 
   const kpis = [
     // Bloque 1: Azul (presentes + permisos)
-    { key: 'present',  label: 'Presentes',      value: stats.presentCount, icon: <CheckCircle2 size={18} strokeWidth={1.75} />, tone: 'accent',  statusText: stats.presentCount === 0 ? 'Sin ingresos registrados' : 'En clase ahora' },
+    { key: 'present',  label: 'Presentes',      value: stats.presentCount, icon: <Users size={18} strokeWidth={1.75} />, tone: 'accent',  statusText: stats.presentCount === 0 ? 'Sin ingresos registrados' : 'En clase ahora' },
     { key: 'permiso',  label: 'Permisos',       value: stats.permCount,    icon: <FileText size={18} strokeWidth={1.75} />,    tone: 'accent',  statusText: stats.permCount === 0 && stats.presentCount === 0 ? 'No hay estudiantes' : 'Permisos activos hoy' },
     // Bloque 2: Naranja (inasistentes + tardanzas)
     { key: 'absent',   label: 'Inasistentes',   value: stats.absentCount,  icon: <UserMinus size={18} strokeWidth={1.75} />,  tone: 'warning', statusText: stats.absentCount === 0 ? 'Sin inasistencias' : 'No registraron ingreso' },
@@ -158,7 +174,15 @@ const AdminDashboard = ({ stats, loading }) => {
       {showScheduleTask && (
         <ScheduleTask onDismiss={() => setShowScheduleTask(false)} />
       )}
-      {loading ? (
+      {error ? (
+        <Surface className="p-6">
+          <EmptyState
+            variant="error"
+            title="No se pudo cargar el resumen del día"
+            description={error}
+          />
+        </Surface>
+      ) : loading ? (
         <SkeletonKpis5 />
       ) : (
         <div className="space-y-4">          {/* PC: todas en una fila */}
@@ -260,11 +284,11 @@ const SkeletonKpis5 = () => (
 
 // ── Secretaria ────────────────────────────────────────────────────────────────
 
-const SecretaryDashboard = ({ loading: parentLoading }) => {
+const SecretaryDashboard = ({ loading: parentLoading, error }) => {
   return (
     <div className="space-y-8">
       <BlockTitle>Tareas pendientes</BlockTitle>
-      <TasksEmptyState loading={parentLoading} />
+      <TasksEmptyState loading={parentLoading} error={error} />
       <NexusInsights />
     </div>
   );
@@ -272,11 +296,19 @@ const SecretaryDashboard = ({ loading: parentLoading }) => {
 
 // ── Psicorientador ────────────────────────────────────────────────────────────
 
-const CounselorDashboard = ({ stats, loading: parentLoading }) => {
+const CounselorDashboard = ({ stats, loading: parentLoading, error }) => {
 
   return (
     <div className="space-y-8">      {parentLoading ? (
         <SkeletonMetrics count={4} />
+      ) : error ? (
+        <Surface className="p-6">
+          <EmptyState
+            variant="error"
+            title="No se pudo cargar el resumen del día"
+            description={error}
+          />
+        </Surface>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard icon={<Users size={18} strokeWidth={1.75} />} label="Estudiantes" value={Object.keys(stats?.studentsByGroup || {}).length} tone="accent" />
@@ -297,7 +329,7 @@ const CATEGORY_LABELS = {
   absent:   { label: 'Inasistentes',   accent: 'var(--nx-accent)', icon: UserMinus },
   late:     { label: 'Llegadas tarde', accent: 'var(--nx-warning)', icon: Clock },
   alert:    { label: 'Alertas',        accent: 'var(--nx-danger)', icon: AlertTriangle },
-  permiso:  { label: 'Permisos',       accent: 'var(--nx-accent)', icon: Activity },
+  permiso:  { label: 'Permisos',       accent: 'var(--nx-accent)', icon: FileText },
 };
 
 // Helper: fecha local en formato YYYY-MM-DD (timezone-safe, no UTC shift)
@@ -310,12 +342,13 @@ const localDateStr = (date = new Date()) => {
 
 const GROUP_KEY = 'nexo:teacher:selected-group';
 
-const TeacherDashboard = ({ stats, loading: parentLoading }) => {
+const TeacherDashboard = ({ stats, loading: parentLoading, error }) => {
   const [selectedGroup, setSelectedGroup] = useState(() => {
     try { return localStorage.getItem(GROUP_KEY) || ''; } catch { return ''; }
   });
   const [groupStats, setGroupStats]       = useState(null);
   const [groupLoading, setGroupLoading]   = useState(false);
+  const [groupError, setGroupError]       = useState('');
 
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailData, setDetailData]         = useState([]);
@@ -355,16 +388,25 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   useEffect(() => {
     if (!selectedGroup) {
       setGroupStats(null);
+      setGroupError('');
       return;
     }
     setGroupLoading(true);
+    setGroupError('');
     dashboardApi.getStats(selectedGroup)
       .then(res => {
         if (res?.status === 'ok') {
           setGroupStats(res.groupStats || EMPTY_STATS.groupStats);
+        } else {
+          setGroupStats(null);
+          setGroupError('No se pudieron cargar las métricas del grupo.');
         }
       })
-      .catch(err => console.error('Error fetching group stats', err))
+      .catch(err => {
+        console.error('Error fetching group stats', err);
+        setGroupStats(null);
+        setGroupError(humanizeError(err, 'No se pudieron cargar las métricas del grupo.'));
+      })
       .finally(() => setGroupLoading(false));
   }, [selectedGroup]);
 
@@ -389,7 +431,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
   const cards = [
     // Bloque 1: Azul (presentes + permisos)
     { key: 'present',  label: 'Presentes',    value: groupStats?.present  ?? 0, icon: <Users size={18} strokeWidth={1.75} />,         tone: 'accent',  statusText: 'Alumnos en clase' },
-    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <Activity size={18} strokeWidth={1.75} />,      tone: 'accent',  statusText: !hasActivity ? 'No hay estudiantes' : undefined },
+    { key: 'permiso',  label: 'Permisos',     value: groupStats?.permisos ?? 0, icon: <FileText size={18} strokeWidth={1.75} />,      tone: 'accent',  statusText: !hasActivity ? 'No hay estudiantes' : undefined },
     // Bloque 2: Naranja (inasistentes + tardanzas)
     { key: 'absent',   label: 'Inasistentes', value: groupStats?.absent   ?? 0, icon: <UserMinus size={18} strokeWidth={1.75} />,     tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : undefined },
     { key: 'late',     label: 'Llegadas tarde', value: groupStats?.late   ?? 0, icon: <Clock size={18} strokeWidth={1.75} />,         tone: 'warning', statusText: !hasActivity ? 'No hay estudiantes' : (groupStats?.late ? 'Ingresos después de hora' : undefined) },
@@ -408,6 +450,14 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
             </div>
             <Skeleton className="h-5 w-5 rounded-control" />
           </div>
+        </Surface>
+      ) : error ? (
+        <Surface className="p-6">
+          <EmptyState
+            variant="error"
+            title="No se pudo cargar la asistencia del día"
+            description={error}
+          />
         </Surface>
       ) : (
         <>
@@ -480,6 +530,14 @@ const TeacherDashboard = ({ stats, loading: parentLoading }) => {
           {selectedGroup && (
             groupLoading ? (
               <SkeletonKpis5 />
+            ) : groupError ? (
+              <Surface className="p-6">
+                <EmptyState
+                  variant="error"
+                  title="No se pudieron cargar las métricas del grupo"
+                  description={groupError}
+                />
+              </Surface>
             ) : (
               <div className="space-y-4">                {/* PC: todas en una fila */}
                 <div className="hidden md:grid md:grid-cols-5 gap-4">
@@ -826,7 +884,13 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
             </div>
           ) : (
             <EmptyState
-              icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
+              icon={
+                searchQuery
+                  ? <SearchX size={32} className="text-[var(--nx-text-muted)]" />
+                  : emptyWarning
+                    ? <AlertTriangle size={32} className="text-[var(--nx-warning)]" />
+                    : <Inbox size={32} className="text-[var(--nx-text-muted)]" />
+              }
               title={searchQuery ? 'Sin coincidencias' : emptyWarning ? 'Atención' : 'No hay nada para mostrar.'}
               description={
                 searchQuery
@@ -952,11 +1016,11 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 
 // ── Portero / Auxiliar ────────────────────────────────────────────────────────
 
-const StaffDashboard = ({ loading: parentLoading }) => {
+const StaffDashboard = ({ loading: parentLoading, error }) => {
   return (
     <div className="space-y-8">
       <BlockTitle>Tareas pendientes</BlockTitle>
-      <TasksEmptyState loading={parentLoading} />
+      <TasksEmptyState loading={parentLoading} error={error} />
       <NexusInsights />
     </div>
   );

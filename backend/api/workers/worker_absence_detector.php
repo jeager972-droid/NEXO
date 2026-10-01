@@ -57,7 +57,7 @@ function logA(string $e, string $m = ''): void {
  * Envía una notificación WhatsApp de inasistencia al acudiente.
  * Usa enqueueTwilioJob (con fallback a PG si Redis no está disponible).
  */
-function enqueueAbsenceNotification($redis, string $phone, string $studentName, string $groupName, string $schoolId, string $studentId, string $userId, string $incidentId = null): void {
+function enqueueAbsenceNotification($redis, string $phone, string $studentName, string $groupName, string $schoolId, string $studentId, ?string $userId, string $incidentId = null): void {
     if (empty($phone)) return;
     $msg = "📋 *NEXO — Inasistencia Detectada*\n\n"
          . "Estudiante: {$studentName}\n"
@@ -477,6 +477,10 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
             // 7. Notificar al acudiente — omitido cuando el incidente queda
             // pendiente de contexto (anomalía): esperar confirmación humana.
             if (!$isAnomaly && !empty($student['guardian_phone'])) {
+                // sender_user_id = NULL: el remitente es el sistema, no un
+                // usuario — 'SYSTEM' rompía el INSERT a twilio_messages
+                // (columna UUID) y abortaba la transacción de processSchool,
+                // lo que re-disparaba las notificaciones cada ciclo.
                 enqueueAbsenceNotification(
                     $redis,
                     $student['guardian_phone'],
@@ -484,7 +488,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
                     $groupName,
                     $schoolId,
                     $studentId,
-                    'SYSTEM',
+                    null,
                     $incidentId
                 );
             }

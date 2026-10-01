@@ -3240,9 +3240,11 @@ CREATE TABLE IF NOT EXISTS school_chat_policies (
     policy_key  VARCHAR(80) NOT NULL,
     enabled     BOOLEAN NOT NULL DEFAULT TRUE,
     updated_by  UUID REFERENCES users(user_id),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(school_id, policy_key)
 );
+ALTER TABLE school_chat_policies ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- chat_messages: solo el dueño y administradores de su escuela ven el historial
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;

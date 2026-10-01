@@ -628,8 +628,11 @@ const Profile = () => {
         <Toast toast={actionToast} />
       </Card>
 
-      {/* ── Docente: criterios de aviso (re-edición) ── */}
-      {(user?.role === ROLES.DOCENTE || user?.role === ROLES.PSICORIENTADOR) && (
+      {/* ── Docente: criterios de aviso (re-edición) ──
+          Solo DOCENTE: los endpoints /teacher/alert-rules y
+          /teacher/onboarding son exclusivos de ese rol — un
+          psicoorientador recibiría 403 al guardar. ── */}
+      {user?.role === ROLES.DOCENTE && (
         <Card className="p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -811,6 +814,7 @@ const Profile = () => {
               groups: onboardingScope === 'groups',
               risk: onboardingScope === 'risk',
               chat: onboardingScope === 'chat',
+              rules: onboardingScope === 'rules',
             }}
             mode="update"
             onCancel={() => setOnboardingScope(null)}

@@ -5,11 +5,14 @@
 import { clsx } from 'clsx';
 import { Badge } from '../ui/Badge';
 
+// Misma escala semántica que formatCellValue (risk_level): bajo/normal son
+// evaluaciones verificadas sin hallazgos (success), medio requiere atención
+// (warning), alto y crítico son estados de riesgo real (danger).
 const levelToScheme = {
-  bajo: 'warning',
-  normal: 'warning',
+  bajo: 'success',
+  normal: 'success',
   medio: 'warning',
-  alto: 'warning',
+  alto: 'danger',
   critico: 'danger',
   crítico: 'danger',
 };

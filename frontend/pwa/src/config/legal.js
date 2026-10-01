@@ -244,6 +244,9 @@ export const TERMS_NOTICE = {
           'crítica antes de actuar.',
         'No ingreses en el chat contraseñas, códigos de verificación ni datos sensibles ajenos a la consulta.',
         'Las conversaciones pueden ser auditadas por la institución y por NEXO con fines de seguridad y mejora.',
+        'El dictado por voz del chat utiliza el reconocimiento de voz del navegador o del ' +
+          'dispositivo del usuario: el audio no se almacena en los servidores de NEXO y la ' +
+          'transcripción la presta el proveedor del navegador conforme a sus propias políticas.',
       ],
     },
     {

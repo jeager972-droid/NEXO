@@ -210,8 +210,15 @@ class SchemaIntegrityTest extends PHPUnit\Framework\TestCase
         $lines = [];
         $current = '';
         $depth = 0;
-        $chars = str_split($body);
-        foreach ($chars as $char) {
+        $len = strlen($body);
+        for ($i = 0; $i < $len; $i++) {
+            $char = $body[$i];
+            // Comentario de línea: ignorar hasta el \n — un comentario con
+            // comas (ej. "-- {intent, confidence}") no debe partir columnas.
+            if ($char === '-' && $i + 1 < $len && $body[$i + 1] === '-') {
+                while ($i < $len && $body[$i] !== "\n") $i++;
+                continue;
+            }
             if ($char === '(') {
                 $depth++;
                 $current .= $char;

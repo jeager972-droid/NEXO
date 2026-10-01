@@ -148,6 +148,44 @@ if ($cleanPath === '/devices' && $method === 'GET') {
     $authUser = requireAuth(['RECTOR', 'COORDINATOR']);
     $currentYear = (int)date('Y');
     try {
+        // Auto-provisionamiento lazy: cada grupo del año en curso debe tener su
+        // sensor, más los de secretaría y coordinación. Si los grupos se
+        // crearon por otra vía (seed/importación), el onboarding de grupos no
+        // corrió y la sección quedaría vacía — aquí se cierra esa brecha.
+        // Es idempotente (solo inserta lo que falta) y nace configured=FALSE,
+        // igual que en /school/groups-onboarding.
+        try {
+            $groupsNeedingSensor = $conn->prepare("
+                SELECT ag.group_id, ag.group_name
+                FROM academic_groups ag
+                WHERE ag.school_id = ? AND ag.academic_year = ?
+                  AND NOT EXISTS (
+                    SELECT 1 FROM edge_devices ed
+                    WHERE ed.school_id = ag.school_id
+                      AND ed.group_id = ag.group_id
+                      AND ed.active = TRUE
+                  )
+            ");
+            $groupsNeedingSensor->execute([$authUser['school_id'], $currentYear]);
+            $sensorInsert = $conn->prepare("
+                INSERT INTO edge_devices (school_id, device_name, location, group_id, configured, active, token_hash)
+                VALUES (?, ?, ?, ?, FALSE, TRUE, NULL)
+            ");
+            foreach ($groupsNeedingSensor->fetchAll(PDO::FETCH_ASSOC) as $g) {
+                $sensorInsert->execute([$authUser['school_id'], 'Sensor ' . $g['group_name'], 'Aula ' . $g['group_name'], $g['group_id']]);
+            }
+            foreach (['Sensor Secretaría' => 'Secretaría', 'Sensor Coordinación' => 'Coordinación'] as $fixedName => $fixedLoc) {
+                $fx = $conn->prepare("SELECT 1 FROM edge_devices WHERE school_id = ? AND device_name = ? AND active = TRUE");
+                $fx->execute([$authUser['school_id'], $fixedName]);
+                if (!$fx->fetchColumn()) {
+                    $sensorInsert->execute([$authUser['school_id'], $fixedName, $fixedLoc, null]);
+                }
+            }
+        } catch (Throwable $provEx) {
+            // Nunca bloquear el listado por el aprovisionamiento.
+            error_log("[DEVICES] Sensor auto-provision error: " . $provEx->getMessage());
+        }
+
         // Mostrar todos los sensores activos de la escuela (incluye manuales y auto-creados)
         $stmt = $conn->prepare("
             SELECT ed.device_id, ed.device_name, ed.location, ed.active, ed.configured,
@@ -164,7 +202,7 @@ if ($cleanPath === '/devices' && $method === 'GET') {
             WHERE ed.school_id = ?
               AND ed.active = TRUE
             ORDER BY ed.configured ASC,
-                     CASE WHEN ag.grade_level IS NULL THEN 99 ELSE ag.grade_level::INT END ASC,
+                     CASE WHEN ag.grade_level ~ '^\d+$' THEN ag.grade_level::INT ELSE 999 END ASC,
                      ag.group_name ASC, ed.created_at DESC
         ");
         $stmt->execute([$authUser['school_id']]);

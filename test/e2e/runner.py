@@ -279,12 +279,19 @@ def sc_absence():
     ping()
     info("forzando horario: entrada = ahora-30min (para que el detector marque)")
     past = datetime.now().strftime("%H:%M")
-    psql(f"UPDATE daily_schedule_config SET expected_entry_time = (NOW() - INTERVAL '30 minutes')::time "
+    psql(f"UPDATE daily_schedule_config SET expected_entry_time = "
+         f"((NOW() AT TIME ZONE 'America/Bogota') - INTERVAL '30 minutes')::time "
          f"WHERE group_id='33333333-3333-4333-8333-333333333333' AND config_date=CURRENT_DATE")
     info("esperando ciclo del worker_absence_detector (intervalo 10s)…")
-    got = wait_for(lambda: int(psql_scalar(
-        "SELECT COUNT(*) FROM attendance_incidents WHERE incident_type IN ('INASISTENCIA','INASISTENCIA_NO_JUSTIFICADA') "
-        "AND detected_at::date = CURRENT_DATE")) > 0, timeout=120, poll=3)
+    # NODE_OFFLINE_SECONDS=15 en test: un solo ping no mantiene el nodo vivo
+    # durante la espera — hay que re-pinear en cada poll o el gate F-04
+    # suspende la detección a los pocos segundos.
+    def _absent_marked():
+        ping()
+        return int(psql_scalar(
+            "SELECT COUNT(*) FROM attendance_incidents WHERE incident_type IN ('INASISTENCIA','INASISTENCIA_NO_JUSTIFICADA') "
+            "AND detected_at::date = CURRENT_DATE")) > 0
+    got = wait_for(_absent_marked, timeout=120, poll=3)
     record("INASISTENCIA detectada por worker", got)
     if got:
         n = int(psql_scalar("SELECT COUNT(*) FROM attendance_incidents WHERE detected_at::date=CURRENT_DATE"))

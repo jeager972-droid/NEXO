@@ -51,8 +51,11 @@ if ($cleanPath === '/dashboard/stats') {
         exit(json_encode(['status' => 'error', 'message' => 'ID de institución requerido']));
     }
 
-    // Caché agresivo de toda la respuesta (TTL 30s) para evitar queries repetidas
-    $cacheKey = "dashboard:stats:{$schoolId}:{$userRole}:{$groupName}";
+    // Caché agresivo de toda la respuesta (TTL 30s) para evitar queries repetidas.
+    // El user id va en la clave porque las stats de docente/psicoorientador se
+    // filtran por teacher_group_access: sin él, dos docentes del mismo colegio
+    // recibirían el agregado del otro durante la ventana de caché.
+    $cacheKey = "dashboard:stats:{$schoolId}:{$userRole}:{$groupName}:{$authUser['id']}";
     try {
         $redis = getRedisConnection();
         if ($redis) {

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, CalendarDays, Sparkles, AlertTriangle } from 'lucide-react';
+import { Search, SearchX, CalendarDays, Inbox, AlertTriangle, RefreshCw } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
 import { TrackingModal } from './TrackingModal';
@@ -13,7 +13,9 @@ import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
+import { Button } from '../components/ui/Button';
 import { formatGroupName } from '../utils/groupFormat';
+import { humanizeError } from '../utils/messages';
 
 export default function Casos() {
   const [searchParams] = useSearchParams();
@@ -22,15 +24,18 @@ export default function Casos() {
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [error, setError] = useState('');
 
   const fetchTrackings = async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await trackingApi.getActive();
       setTrackings(res?.status === 'ok' ? res.trackings || [] : []);
     } catch (e) {
       console.error(e);
       setTrackings([]);
+      setError(humanizeError(e, 'No pudimos cargar los casos en seguimiento.'));
     } finally {
       setLoading(false);
     }
@@ -72,11 +77,22 @@ export default function Casos() {
 
       {loading ? (
         <Surface><SkeletonRows count={4} /></Surface>
+      ) : error ? (
+        <Surface>
+          <EmptyState
+            variant="error"
+            title="No pudimos cargar los casos"
+            description={error}
+            action={<Button variant="secondary" leftIcon={<RefreshCw size={16} />} onClick={fetchTrackings}>Reintentar</Button>}
+          />
+        </Surface>
       ) : filtered.length === 0 ? (
         <Surface>
           <EmptyState
-            icon={<Sparkles size={32} className="text-[var(--nx-success)]" />}
-            title="No hay nada para mostrar."
+            icon={searchQuery
+              ? <SearchX size={32} className="text-[var(--nx-text-muted)]" />
+              : <Inbox size={32} className="text-[var(--nx-text-muted)]" />}
+            title={searchQuery ? 'Sin coincidencias' : 'No hay nada para mostrar.'}
             description={searchQuery ? 'Ningún estudiante coincide con la búsqueda.' : 'No hay estudiantes en seguimiento en este momento.'}
           />
         </Surface>

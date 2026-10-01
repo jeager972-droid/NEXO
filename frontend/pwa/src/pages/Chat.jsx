@@ -1,28 +1,32 @@
 /**
- * SCR-CHAT-01 Pregúntale a Nexus
+ * SCR-CHAT-01 Pregúntale a Nexus — chat puro, estilo ChatGPT.
  * Chatbot intent-based con NLU estadístico (TF-IDF + regresión logística en
  * backend). Cada respuesta viene del backend con intent + confianza + cards +
  * actions — el texto libre nunca ejecuta operaciones; las acciones navegan a
  * /operacion con el formulario precargado y su confirmación propia.
+ *
+ * Layout: el hilo se monta en un frame `fixed` vía portal a document.body,
+ * no en el flujo de <main>. Motivo: <main> scrollea con padding propio y el
+ * motion.div de la transición de ruta aplica transform — un hijo `fixed`
+ * dentro quedaría anclado al div animado (salto visible al montar) y un alto
+ * calculado dependería de paddings internos del layout que pueden cambiar.
+ * El portal deja al chat ocupando exactamente el hueco entre la topbar (72px)
+ * y la barra inferior: sin scroll-escape, sin saltos, sin cuentas de padding.
  */
 import { useState, useEffect, useRef, useCallback, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Send, Sparkles, ArrowRight, RotateCcw, MessageSquare, X } from 'lucide-react';
+import { Send, ArrowRight, RotateCcw, Mic, MicOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { chatApi } from '../api/chat';
-import { saveCtx, injectCtx } from '../lib/chatContext';
+import { saveCtx, injectCtx, takePendingPrompt } from '../lib/chatContext';
 import { NexoAvatar } from '../components/patterns/NexoChat';
-import { Surface } from '../components/ui/Surface';
 import { EXPORT_FORMATS } from '../utils/exporters';
+import { useSpeechInput } from '../hooks/useSpeechInput';
+import { useAuth } from '../hooks/useAuth';
+import { ROLES } from '../config/roles';
 
 const EASE = [0.22, 1, 0.36, 1];
-
-const SUGGESTIONS = [
-  '¿Cómo va la jornada?',
-  '¿Quiénes llegaron tarde hoy?',
-  '¿Hay estudiantes en riesgo?',
-  'Cuéntame un chiste',
-];
 
 /** Render markdown-lite del bot: **negrilla**, saltos de línea, • listas. */
 const RichText = ({ text }) => {
@@ -48,7 +52,7 @@ const RichText = ({ text }) => {
 
 const UserBubble = ({ children }) => (
   <div className="flex justify-end">
-    <div className="max-w-[82%] rounded-surface rounded-br-xs bg-[var(--nx-accent)] px-4 py-3 text-body-sm text-[var(--nx-on-solid,white)] shadow-[var(--nx-shadow-low)]">
+    <div className="max-w-[85%] rounded-surface rounded-br-xs bg-[var(--nx-accent)] px-4 py-3 text-body-sm text-[var(--nx-on-solid,white)] shadow-[var(--nx-shadow-low)] sm:max-w-[75%]">
       {children}
     </div>
   </div>
@@ -155,7 +159,7 @@ export const DataCard = ({ card }) => {
 
 const BotBubble = ({ msg, onAction }) => (
   <div className="flex items-start gap-3">
-    <NexoAvatar size={36} />
+    <NexoAvatar size={32} />
     <div className="min-w-0 flex-1">
       <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3 shadow-[var(--nx-shadow-low)]">
         <p className="text-body-sm leading-relaxed text-[var(--nx-text)]"><RichText text={msg.text} /></p>
@@ -181,14 +185,13 @@ const BotBubble = ({ msg, onAction }) => (
 );
 
 const Typing = () => (
-  <div className="flex items-start gap-3">
-    <NexoAvatar size={36} />
+  <div className="flex items-start gap-3" aria-label="Nexus está escribiendo">
+    <NexoAvatar size={32} />
     <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
-      <span className="flex items-center gap-1">
+      <span className="flex items-center gap-1" aria-hidden="true">
         {[0, 1, 2].map((d) => (
           <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--nx-accent)]" style={{ animationDelay: `${d * 0.15}s` }} />
         ))}
-        <span className="ml-1 inline-block h-[13px] w-[6px] animate-pulse rounded-[2px] bg-[var(--nx-accent)]" />
       </span>
     </div>
   </div>
@@ -196,47 +199,57 @@ const Typing = () => (
 
 const WELCOME = {
   from: 'bot',
-  text: 'Hola — soy Nexus, el sistema de tu institución. Puedo contarte la jornada, buscar estudiantes, darte conteos por grupo o por días, avisarte de riesgos… o simplemente charlar. ¿Qué necesitas?',
+  text: 'Hola, soy Nexus — ¿qué necesitas saber de la jornada?',
 };
 
 const newSession = () => crypto.randomUUID();
 
+// El hilo vive en sessionStorage (no localStorage): sobrevive a cambiar de
+// sección dentro de la misma pestaña y desaparece al cerrar la app — es la
+// conversación en curso, no un historial.
+const SESSION_KEY = 'nx:chat:session';
+
+const readSaved = () => {
+  try {
+    const data = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+    const msgs = Array.isArray(data?.messages)
+      ? data.messages.filter((m) => m && (m.from === 'bot' || m.from === 'user') && typeof m.text === 'string')
+      : [];
+    if (!msgs.length) return null;
+    return {
+      session_id: typeof data.session_id === 'string' ? data.session_id : newSession(),
+      messages: msgs,
+    };
+  } catch { return null; }
+};
+
+// Layout.jsx: estos roles usan la barra inferior como única navegación — se
+// muestra en TODOS los tamaños (sin lg:hidden) y nunca tienen sidebar.
+const NAV_ALWAYS = [ROLES.DOCENTE, ROLES.PORTERO, ROLES.AUXILIAR];
+
 const Chat = () => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([WELCOME]);
+  const { user } = useAuth();
+  // Restaura el hilo una sola vez — useState con función = lazy initializer
+  const [saved] = useState(readSaved);
+  const [messages, setMessages] = useState(() => saved?.messages ?? [WELCOME]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [sessionId, setSessionId] = useState(newSession);
-  const [sessions, setSessions] = useState([]);
-  const [drawer, setDrawer] = useState(false);
+  const [sessionId, setSessionId] = useState(() => saved?.session_id ?? newSession());
   const scrollRef = useRef(null);
 
-  useEffect(() => {
-    // la sesión más reciente reanuda el hilo; el resto vive en la barra lateral
-    chatApi.sessions()
-      .then((rows) => {
-        setSessions(rows);
-        if (rows.length) {
-          setSessionId(rows[0].session_id);
-          return chatApi.history(rows[0].session_id);
-        }
-        return [];
-      })
-      .then((rows) => { if (rows.length) setMessages(rows.map((r) => ({ from: r.from, text: r.text, cards: r.cards, actions: r.actions }))); })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
+  // Dictado → el texto cae al input para revisión antes de enviar. La base
+  // se fija al empezar la sesión de voz para no pisar lo ya escrito a mano.
+  const dictationBase = useRef('');
+  const speech = useSpeechInput({
+    onResult: (t) => setInput(dictationBase.current ? `${dictationBase.current} ${t}` : t),
+  });
 
-  const openSession = (sid) => {
-    setDrawer(false);
-    if (sid === sessionId) return;
-    setSessionId(sid);
-    setMessages([WELCOME]);
-    chatApi.history(sid)
-      .then((rows) => { if (rows.length) setMessages(rows.map((r) => ({ from: r.from, text: r.text, cards: r.cards, actions: r.actions }))); })
-      .catch(() => {});
-  };
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ session_id: sessionId, messages, saved_at: Date.now() }));
+    } catch { /* storage lleno/bloqueado — el hilo sigue vivo en memoria */ }
+  }, [messages, sessionId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -245,6 +258,7 @@ const Chat = () => {
   const send = useCallback(async (text) => {
     const t = (text ?? input).trim();
     if (!t || thinking) return;
+    speech.stop(); // un dictado abierto no debe seguir escribiendo tras el envío
     setInput('');
     setMessages((m) => [...m, { from: 'user', text: t }]);
     setThinking(true);
@@ -253,51 +267,62 @@ const Chat = () => {
       saveCtx(res);
       if (res.session_id && res.session_id !== sessionId) setSessionId(res.session_id);
       setMessages((m) => [...m, { from: 'bot', text: res.reply, cards: res.cards, actions: res.actions, denied: res.denied }]);
-      chatApi.sessions().then(setSessions).catch(() => {});
     } catch {
       setMessages((m) => [...m, { from: 'bot', text: 'No pude procesar eso ahora — intenta de nuevo en un momento.' }]);
     } finally {
       setThinking(false);
     }
-  }, [input, thinking, sessionId]);
+  }, [input, thinking, sessionId, speech]);
+
+  // Prompt pendiente de un deep-link (p.ej. «Ver grupo 8A» en Insights
+  // escribe la pregunta y abre /chat). Se consume UNA sola vez al montar:
+  // entra como mensaje nuevo sobre el hilo restaurado — nunca lo reemplaza.
+  // El ref evita re-envíos cuando `send` se recrea (thinking/input cambian).
+  const pendingConsumed = useRef(false);
+  useEffect(() => {
+    if (pendingConsumed.current) return;
+    pendingConsumed.current = true;
+    const pending = takePendingPrompt();
+    if (pending) send(pending);
+  }, [send]);
+
+  const reset = () => {
+    speech.stop();
+    setInput('');
+    setMessages([WELCOME]);
+    setSessionId(newSession());
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* sin storage */ }
+  };
 
   const onAction = (a, msg) => {
     if (a.kind === 'nav' && a.to) navigate(a.to);
     if (a.kind === 'export') runExportAction(a, msg);
   };
 
-  return (
-    <div className="flex h-[calc(100dvh-180px)] flex-col">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <NexoAvatar size={40} />
-          <div>
-            <h1 className="text-heading font-semibold text-[var(--nx-text)]">Pregúntale a Nexus</h1>
-            <p className="text-caption text-[var(--nx-text-muted)]">Lenguaje natural · datos reales · nada inventado</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setDrawer(true)}
-            className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border)] px-3 py-1.5 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)]"
-          >
-            <MessageSquare size={12} /> Conversaciones
-          </button>
-          {loaded && messages.length > 1 && (
-            <button
-              type="button"
-              onClick={() => { setMessages([WELCOME]); setSessionId(newSession()); }}
-              className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border)] px-3 py-1.5 text-caption font-medium text-[var(--nx-text-muted)] transition-colors hover:text-[var(--nx-text)]"
-            >
-              <RotateCcw size={12} /> Nueva
-            </button>
-          )}
-        </div>
-      </div>
+  const toggleMic = () => {
+    if (!speech.listening) dictationBase.current = input.trim();
+    speech.toggle();
+  };
 
-      <Surface className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
+  // NAV_ALWAYS: barra inferior en todos los tamaños y nunca sidebar (Layout).
+  // 68px ≈ alto real de la barra (icono 22 + caption + paddings) — el
+  // composer nace justo encima y nunca queda tapado.
+  const navAlways = NAV_ALWAYS.includes(user?.role);
+  const frame = navAlways
+    ? 'fixed inset-x-0 top-[72px] bottom-[68px] z-20'
+    : 'fixed inset-x-0 top-[72px] bottom-[68px] z-20 lg:bottom-0 lg:left-[220px]';
+
+  return createPortal(
+    <div className={`flex flex-col bg-[var(--nx-canvas)] ${frame}`}>
+      {/* Hilo — scrollea solo él; overscroll-contain corta el encadenado
+          de scroll hacia los ancestros (el antiguo "salirse del chat"). */}
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-label="Conversación con Nexus"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      >
+        <div className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:space-y-5 sm:px-4 lg:py-6">
           <AnimatePresence initial={false}>
             {messages.map((m, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: EASE }}>
@@ -307,80 +332,67 @@ const Chat = () => {
           </AnimatePresence>
           {thinking && <Typing />}
         </div>
+      </div>
 
-        <div className="shrink-0 border-t border-[var(--nx-border)] p-4">
-          {messages.length <= 2 && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => send(s)}
-                  className="flex items-center gap-1.5 rounded-full border border-[var(--nx-border-accent)] bg-[var(--nx-subtle-bg-accent)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--nx-accent)] transition-colors hover:bg-[var(--nx-surface-accent)]"
-                >
-                  <Sparkles size={12} /> {s}
-                </button>
-              ))}
-            </div>
-          )}
-          <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-3">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Pregúntale a Nexus…"
-              maxLength={500}
-              aria-label="Mensaje para Nexus"
-              className="flex-1 rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-2.5 text-body-sm text-[var(--nx-text)] placeholder:text-[var(--nx-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--nx-ring)]"
-            />
+      {/* Composer pill — anclado al fondo del frame, centrado como el hilo */}
+      <div className="shrink-0 px-3 pb-3 pt-2 sm:px-4 lg:pb-6">
+        <form
+          onSubmit={(e) => { e.preventDefault(); send(); }}
+          className="mx-auto flex w-full max-w-3xl items-center gap-1 rounded-full border border-[var(--nx-border)] bg-[var(--nx-surface)] py-1.5 pl-4 pr-1.5 shadow-[var(--nx-shadow-low)] transition-[border-color,box-shadow] duration-fast focus-within:border-[var(--nx-accent)] focus-within:shadow-[var(--nx-ring)]"
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={speech.listening ? 'Escuchando…' : 'Pregúntale a Nexus…'}
+            maxLength={500}
+            enterKeyHint="send"
+            aria-label="Mensaje para Nexus"
+            className="min-w-0 flex-1 bg-transparent py-2 text-body-sm text-[var(--nx-text)] placeholder:text-[var(--nx-text-muted)] focus:outline-none"
+          />
+          {speech.supported && (
             <button
-              type="submit"
-              disabled={!input.trim() || thinking}
-              aria-label="Enviar"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-[var(--nx-accent)] text-white transition-opacity disabled:opacity-40"
+              type="button"
+              onClick={toggleMic}
+              aria-label={speech.listening ? 'Detener dictado' : 'Dictar por voz'}
+              aria-pressed={speech.listening}
+              title={speech.listening ? 'Detener dictado' : 'Dictar por voz'}
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors duration-fast ${
+                speech.listening
+                  ? 'animate-pulse bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)]'
+                  : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] hover:text-[var(--nx-text)]'
+              }`}
             >
-              <Send size={17} />
+              {speech.listening ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
-          </form>
-        </div>
-      </Surface>
+          )}
+          <button
+            type="submit"
+            disabled={!input.trim() || thinking}
+            aria-label="Enviar"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--nx-accent)] text-[var(--nx-on-solid,white)] transition-opacity duration-fast disabled:opacity-40"
+          >
+            <Send size={15} />
+          </button>
+        </form>
+        <p className="mx-auto mt-2 w-full max-w-3xl px-2 text-center text-caption text-[var(--nx-text-muted)]">
+          Nexus responde con datos del sistema — verifica lo crítico antes de actuar.
+        </p>
+      </div>
 
-      {/* Barra de conversaciones */}
-      <AnimatePresence>
-        {drawer && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/30" onClick={() => setDrawer(false)} />
-            <motion.aside
-              initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-              className="fixed inset-y-0 left-0 z-50 w-72 border-r border-[var(--nx-border)] bg-[var(--nx-surface)] p-4"
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-body-sm font-semibold text-[var(--nx-text)]">Conversaciones</h2>
-                <button onClick={() => setDrawer(false)} className="p-1 text-[var(--nx-text-muted)]" aria-label="Cerrar"><X size={16} /></button>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setDrawer(false); setMessages([WELCOME]); setSessionId(newSession()); }}
-                className="mb-3 flex w-full items-center gap-2 rounded-control border border-dashed border-[var(--nx-border-accent)] px-3 py-2 text-caption font-medium text-[var(--nx-accent)]"
-              >
-                <RotateCcw size={12} /> Nueva conversación
-              </button>
-              <div className="space-y-1 overflow-y-auto">
-                {sessions.map((s) => (
-                  <button key={s.session_id} type="button" onClick={() => openSession(s.session_id)}
-                    className={`block w-full truncate rounded-control px-3 py-2 text-left text-[13px] transition-colors ${s.session_id === sessionId ? 'bg-[var(--nx-subtle-bg-accent)] text-[var(--nx-accent)] font-medium' : 'text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]'}`}
-                  >
-                    {s.first_msg?.slice(0, 48) || 'Conversación'}
-                    <span className="block text-[11px] opacity-60">{new Date(s.last_at).toLocaleDateString()} · {s.n} mensajes</span>
-                  </button>
-                ))}
-                {!sessions.length && <p className="px-3 py-2 text-caption text-[var(--nx-text-muted)]">Sin conversaciones anteriores.</p>}
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
+      {/* Nueva conversación — único control, discreto, solo cuando hay hilo */}
+      {messages.length > 1 && (
+        <button
+          type="button"
+          onClick={reset}
+          aria-label="Nueva conversación"
+          title="Nueva conversación"
+          className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-[var(--nx-border)] bg-[var(--nx-surface)] text-[var(--nx-text-muted)] shadow-[var(--nx-shadow-low)] transition-colors duration-fast hover:text-[var(--nx-text)] lg:right-5 lg:top-5"
+        >
+          <RotateCcw size={15} />
+        </button>
+      )}
+    </div>,
+    document.body
   );
 };
 

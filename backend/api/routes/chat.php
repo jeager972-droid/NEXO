@@ -1735,9 +1735,15 @@ if ($cleanPath === '/chat/policies' && $method === 'GET') {
     }
     $keys = array_merge(array_values(NX_CHAT_POLICY_MAP), ['chat.smalltalk.enabled']);
     $keys = array_values(array_unique($keys));
-    $st = $conn->prepare("SELECT policy_key, enabled FROM school_chat_policies WHERE school_id=?");
-    $st->execute([$authUser['school_id']]);
-    $rows = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+    try {
+        $st = $conn->prepare("SELECT policy_key, enabled FROM school_chat_policies WHERE school_id=?");
+        $st->execute([$authUser['school_id']]);
+        $rows = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+    } catch (Throwable $e) {
+        // Tabla ausente en despliegues antiguos → mismos defaults que
+        // chatPolicyEnabled(): todo habilitado, sin romper la pantalla.
+        $rows = [];
+    }
     $out = [];
     foreach ($keys as $k) $out[$k] = array_key_exists($k,$rows) ? (bool)$rows[$k] : true;
     exit(json_encode(['status'=>'ok','data'=>$out]));
@@ -1752,12 +1758,26 @@ if ($cleanPath === '/chat/policies' && $method === 'POST') {
     $allowed = array_values(array_unique(array_merge(array_values(NX_CHAT_POLICY_MAP), ['chat.smalltalk.enabled'])));
     $policies = $input['policies'] ?? [];
     if (!is_array($policies)) { http_response_code(400); exit(json_encode(['status'=>'error','message'=>'policies requerido'])); }
-    $up = $conn->prepare("INSERT INTO school_chat_policies (school_id,policy_key,enabled,updated_by)
-        VALUES (?,?,?,?)
-        ON CONFLICT (school_id,policy_key) DO UPDATE SET enabled=EXCLUDED.enabled, updated_by=EXCLUDED.updated_by, updated_at=NOW()");
-    foreach ($policies as $k=>$v) {
-        if (!in_array($k,$allowed,true)) continue;
-        $up->execute([$authUser['school_id'],$k,(bool)$v,$authUser['id']]);
+    try {
+        $up = $conn->prepare("INSERT INTO school_chat_policies (school_id,policy_key,enabled,updated_by)
+            VALUES (?,?,?,?)
+            ON CONFLICT (school_id,policy_key) DO UPDATE SET enabled=EXCLUDED.enabled, updated_by=EXCLUDED.updated_by, updated_at=NOW()");
+        foreach ($policies as $k=>$v) {
+            if (!in_array($k,$allowed,true)) continue;
+            // PARAM_BOOL explícito: execute([...]) bindea false como '' y
+            // PostgreSQL lo rechaza ("invalid input syntax for type boolean").
+            // Esto volvía imposible APAGAR cualquier interruptor — solo
+            // prendidos pasaban. Era el motivo real del 500 de coordinación.
+            $up->bindValue(1, $authUser['school_id']);
+            $up->bindValue(2, $k);
+            $up->bindValue(3, (bool)$v, PDO::PARAM_BOOL);
+            $up->bindValue(4, $authUser['id']);
+            $up->execute();
+        }
+    } catch (Throwable $e) {
+        error_log("[CHAT] save policies error: " . $e->getMessage());
+        http_response_code(500);
+        exit(json_encode(['status'=>'error','message'=>'No se pudieron guardar las políticas. Verifica que la base de datos esté actualizada.']));
     }
     $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,created_at)
         VALUES (uuid_generate_v4(),?,?,'CHAT_POLICIES_UPDATED',?,NOW())")

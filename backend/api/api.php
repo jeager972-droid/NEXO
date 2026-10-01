@@ -236,7 +236,10 @@ $routeMap = [
     'contacto' => 'misc.php',
     'notifications' => 'misc.php',
     'reports' => 'misc.php',
-    'webhooks' => ['twilio_delivery.php', 'misc.php'],
+    // misc.php primero: twilio_delivery.php usa verifyTwilioSignature() que
+    // vive ahí — si cargara después, function_exists() sería falso y el
+    // webhook de estado quedaría sin verificación de firma.
+    'webhooks' => ['misc.php', 'twilio_delivery.php'],
     'operations' => 'operations.php',
     'devices' => 'devices.php',
     'audit' => 'audit_full.php',

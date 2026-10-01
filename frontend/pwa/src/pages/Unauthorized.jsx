@@ -3,7 +3,6 @@
  * Acceso denegado. Explica por qué y ofrece ruta de salida.
  */
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 
@@ -13,7 +12,7 @@ const Unauthorized = () => {
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">
       <EmptyState
-        icon={<ShieldAlert size={48} className="text-[var(--nx-warning)]" />}
+        variant="denied"
         title="No tienes permiso para ver esta sección"
         description="Tu rol no está autorizado a acceder aquí. Si crees que es un error, contacta al administrador."
         action={

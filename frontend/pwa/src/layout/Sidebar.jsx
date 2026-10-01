@@ -118,7 +118,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-caption font-medium text-[var(--nx-text)] truncate">{user?.nombre}</p>
-              <p className="text-[10px] text-[var(--nx-success)] truncate">{roleDisplay}</p>
+              <p className="text-[10px] text-[var(--nx-text-muted)] truncate">{roleDisplay}</p>
             </div>
             <button
               onClick={logout}
