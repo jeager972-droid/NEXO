@@ -494,10 +494,19 @@ function nxScpToSlots(array $frame): array {
 
         case 'count':
             // conteo de PERSONAS en un grupo («los pelados de 6A cuántos
-            // son») — dominio students, sin módulo de eventos
-            if ($frame['domain'] === 'students' && !empty($slots['group'])
-                && empty($slots['module']) && empty($frame['subject']['name']))
-                return ['group_student_count', $slots, true];
+            // son») — dominio students, sin módulo de eventos. Un sujeto
+            // HEREDADO no lo vuelve métrica individual: «cuántos alumnos
+            // hay en 10A» pregunta por la población del grupo aunque el
+            // turno anterior tratara de un estudiante.
+            $subjExplicit = !empty($frame['subject']['name'])
+                && ($frame['subject']['source'] ?? 'none') !== 'inherited';
+            if ($frame['domain'] === 'students' && empty($slots['module']) && !$subjExplicit) {
+                unset($slots['student']);
+                if (!empty($slots['group']))
+                    return ['group_student_count', $slots, true];
+                if (empty($frame['subject']['name']))
+                    return ['students_count', $slots, true];
+            }
             // métrica de UNA persona («cuánto ha faltado Juan…»)
             if (!empty($frame['subject']['name']) && $frame['subject']['entity'] === 'student') {
                 $slots['student'] = $frame['subject']['name'];

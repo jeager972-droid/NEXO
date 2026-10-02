@@ -21,8 +21,12 @@ putenv('NLU_LLM_KEY=');         // sin key → proveedor deshabilitado
 $t0 = microtime(true);
 $c = nxClassify('cuantas tardanzas hubo hoy');
 $dt = (microtime(true) - $t0) * 1000;
-ok($c['intent'] === 'out_of_scope', 'sin parser → out_of_scope: ' . $c['intent']);
-ok(($c['source'] ?? '') === 'none' || ($c['fallback'] ?? false), 'marcado como fallback');
+// Sin LLM vale out_of_scope honesto o una clasificación REGLADA
+// (determinista, marcada como tal) — lo que no puede pasar es inventar.
+$ruleSrc = in_array($c['source'] ?? '', ['rules','rules_fallback','rules_rescue','none'], true);
+ok($c['intent'] === 'out_of_scope' || $ruleSrc,
+   'sin parser → honesto/reglado: ' . $c['intent'] . ' (' . ($c['source'] ?? '?') . ')');
+ok($ruleSrc || ($c['fallback'] ?? false), 'marcado como regla/fallback: ' . ($c['source'] ?? '?'));
 ok($dt < 3000, "sin espera de red ({$dt}ms < 3000)");
 // con parser caído, un sustantivo de módulo recupera determinista el intent
 // de su consulta («cuántas tardanzas» → count_events) — eso es resiliencia

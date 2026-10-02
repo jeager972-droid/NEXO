@@ -843,6 +843,21 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
              'conf'=>0.0,'evidence'=>$sig['evidence'],'_src'=>'semantic'];
     $score = 0.0;
 
+    // Intent resuelto que ES el ejecutor de una capacidad («quien falta más»
+    // → top_offenders → students.top). Sin él, el nombre de módulo del texto
+    // arrastra el plan a incidents.list y se pierde el ranking.
+    $directCap = null;
+    // ejecutores compartidos (list_events, student_field…) sirven a varias
+    // capacidades — el atajo solo aplica a intents dedicados (top_offenders…)
+    $genericExec = ['list_events','count_events','student_field','student_summary',
+                    'students_in_group','group_summary','attendance_today','late_today'];
+    if (!in_array($intent, $genericExec, true)
+        && $sig['position'] === null && !isset($sig['slice'])
+        && $sig['op'] !== 'compare' && empty($f['group2'])) {
+        foreach (nxCapabilityRegistry() as $cid => $cc)
+            if (($cc['exec'] ?? '') === "intent:{$intent}") { $directCap = $cid; break; }
+    }
+
     // ── reglas de composición (más específicas primero) ───────────────────
     if ($rel === 'students_of_guardian') {
         $plan['capability']='students.of_guardian'; $plan['op']='list'; $score=0.85;
@@ -856,6 +871,12 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
         $plan['entity']='groups';
         $plan['capability']= !empty($f['group2']) ? 'groups.compare' : 'groups.rank';
         $plan['op']= !empty($f['group2']) ? 'compare' : 'rank'; $score=0.8;
+    } elseif ($directCap !== null) {
+        $plan['capability'] = $directCap;
+        $plan['op'] = (string)(nxCapabilityRegistry()[$directCap]['action_type'] ?? 'list');
+        if ($plan['op'] === '' ) $plan['op'] = 'list';
+        $score = 0.85;
+        $plan['evidence'][] = 'intent:exec_direct';
     } elseif ($ent === 'students') {
         if (!$sig['op'] && (!empty($f['group']) || !empty($f['grade']) || !empty($f['search']) || !empty($f['status'])))
             { $sig['op']='list'; $plan['op']='list'; $sig['evidence'][]='op:implicit_list'; }
@@ -1278,8 +1299,13 @@ function nxPlanExecute(PDO $conn, array $u, array $plan, array $vars): array {
 
 function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array {
     try {
-        // paso delegado a un intent existente (guardian.of_student → student_field)
-        if (str_starts_with((string)($plan['exec'] ?? ''), 'intent:') || !empty($plan['_delegate_intent'])) {
+        // paso delegado a un intent existente (guardian.of_student → student_field).
+        // Si el plan no fijó exec, se usa el declarado por la capacidad —
+        // students.top/risk.students llegan sin exec y deben delegar igual.
+        $planExec = (string)($plan['exec'] ?? '');
+        if ($planExec === '' && ($plan['capability'] ?? null))
+            $planExec = (string)(nxCapabilityRegistry()[$plan['capability']]['exec'] ?? '');
+        if (str_starts_with($planExec, 'intent:') || !empty($plan['_delegate_intent'])) {
             // intents declarados por la capacidad: exec «intent:a|b» + intent_equiv
             $cap = nxCapabilityRegistry()[$plan['capability'] ?? ''] ?? [];
             $declared = [];
@@ -1302,9 +1328,12 @@ function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array
             // propia matriz RBAC/política — re-verificar antes de despachar
             if (!chatAllowed($conn, $u, $intent, $u['role'] ?? 'TEACHER'))
                 return ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$intent,'denied'=>true];
-            $slots = ['student'=>$plan['filters']['student'] ?? null,
-                      'field'=>$plan['filters']['field'] ?? null,
-                      'group'=>$plan['filters']['group'] ?? null];
+            // TODOS los filtros del plan viajan como slots — recortar a
+            // student/field/group perdía el rango, el módulo y la excusa
+            // («cuántas inasistencias el MES PASADO» ejecutaba «hoy»)
+            $slots = $plan['filters'] ?? [];
+            foreach (['position','presentation','op'] as $k)
+                if (isset($plan[$k]) && !isset($slots[$k])) $slots[$k] = $plan[$k];
             return chatDispatch($conn, $u, $intent, $slots, $vars, $u['role'] ?? 'TEACHER');
         }
         switch ($plan['capability']) {
@@ -1315,7 +1344,11 @@ function nxPlanExecuteStep(PDO $conn, array $u, array $plan, array $vars): array
             case 'students.of_guardian': return nxExecStudentsOfGuardian($conn, $u, $plan, $vars);
             case 'teachers.of_group':    return nxExecTeachersOfGroup($conn, $u, $plan, $vars);
             case 'schedule.of_group':    return nxExecGroupSchedule($conn, $u, $plan, $vars);
-            case 'incidents.list': case 'incidents.position':
+            case 'incidents.list':
+                // una sola implementación de listas: el handler de chat
+                // (total real, excusa, grupo por asignación, hora local)
+                return chatDispatch($conn, $u, 'list_events', $plan['filters'] ?? [], $vars, $u['role'] ?? 'TEACHER');
+            case 'incidents.position':
                 return nxExecIncidents($conn, $u, $plan, $vars);
             case 'groups.compare':       return nxExecGroupsCompare($conn, $u, $plan, $vars);
             case 'groups.rank':          return nxExecGroupsRank($conn, $u, $plan, $vars);
@@ -1340,6 +1373,13 @@ function nxSemGroupId(PDO $conn, array $u, ?string $g): ?array {
     if (!$g) return null;
     $row = chatResolveGroup($conn, $u, $g);
     return $row ?: null;
+}
+
+/** timestamp almacenado en UTC → 'YYYY-MM-DD HH:MI' hora institucional. */
+function nxSemLocal($ts): string {
+    if (!$ts) return '—';
+    try { return (new DateTimeImmutable((string)$ts))->setTimezone(new DateTimeZone('America/Bogota'))->format('Y-m-d H:i'); }
+    catch (Throwable $e) { return substr((string)$ts, 0, 16); }
 }
 
 /** students — el ejecutor central del espacio semántico. */
@@ -1387,18 +1427,18 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
         // ejecutor debe cubrir también las variantes justificadas
         $w[] = "s.student_id IN (SELECT ai.student_id FROM attendance_incidents ai
                 WHERE ai.school_id = :sid2 AND ai.incident_type IN ('INASISTENCIA','UNAUTHORIZED_ABSENCE','INASISTENCIA_JUSTIFICADA','INASISTENCIA_NO_JUSTIFICADA')
-                  AND ai.detected_at >= :from::date AND ai.detected_at < (:to::date + INTERVAL '1 day'))";
+                  AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN :from AND :to)";
         $p[':sid2']=$u['school_id']; $p[':from']=$from; $p[':to']=$to;
     } elseif ($st === 'present') {
         $w[] = "s.student_id IN (SELECT be.student_id FROM biometric_events be
                 WHERE be.school_id = :sid2 AND be.event_type LIKE 'INGRESO%'
-                  AND be.event_timestamp >= :from::date AND be.event_timestamp < (:to::date + INTERVAL '1 day'))";
+                  AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN :from AND :to)";
         $p[':sid2']=$u['school_id']; $p[':from']=$from; $p[':to']=$to;
     } elseif ($st === 'late' || $st === 'evasion') {
         $typ = $st==='late' ? 'LATE_ARRIVAL' : 'EVASION_INTERNA';
         $w[] = "s.student_id IN (SELECT ai.student_id FROM attendance_incidents ai
                 WHERE ai.school_id = :sid2 AND ai.incident_type = :typ
-                  AND ai.detected_at >= :from::date AND ai.detected_at < (:to::date + INTERVAL '1 day'))";
+                  AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN :from AND :to)";
         $p[':sid2']=$u['school_id']; $p[':from']=$from; $p[':to']=$to; $p[':typ']=$typ;
     } elseif ($st === 'permission') {
         $w[] = "s.student_id IN (SELECT c.student_id FROM class_exit_authorizations c
@@ -1421,7 +1461,7 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
     if (!empty($f['module']) && !$st && in_array($f['module'], ['PERMISO','CITACION','SOS','DAÑO'], true)) {
         $w[] = "s.student_id IN (SELECT ai.student_id FROM attendance_incidents ai
                 WHERE ai.school_id = :sid2 AND ai.incident_type = :typ
-                  AND ai.detected_at >= :from::date AND ai.detected_at < (:to::date + INTERVAL '1 day'))";
+                  AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN :from AND :to)";
         $p[':sid2']=$u['school_id']; $p[':from']=$from; $p[':to']=$to; $p[':typ']=$f['module'];
     }
     if (!empty($f['shift'])) { $w[] = 's.work_shift = :shift'; $p[':shift'] = $f['shift']; }
@@ -1447,7 +1487,7 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
         $q = "SELECT be.student_id, MIN(be.event_timestamp) AS first_ts
               FROM biometric_events be JOIN students s ON s.student_id=be.student_id AND s.deleted_at IS NULL
               WHERE be.school_id=? AND be.event_type LIKE 'INGRESO%'
-                AND be.event_timestamp >= ?::date AND be.event_timestamp < (?::date + INTERVAL '1 day')
+                AND (be.event_timestamp AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ?
               GROUP BY be.student_id ORDER BY first_ts ASC LIMIT 400";
         $stq = $conn->prepare($q);
         $stq->execute([$u['school_id'],$af,$at]);
@@ -1588,7 +1628,7 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
     $show = array_slice($rs['items'], 0, 12);
     $nameOnly = ($plan['projection'] ?? null) === ['name'];
     $lines = array_map(fn($it)=>'• '.$it['label'].(!$nameOnly && !empty($it['sub'])?' — '.$it['sub']:''), $show);
-    $reply = "Estudiantes {$where}{$rl} ({$n}):
+    $reply = "{$n} estudiantes {$where}{$rl}:
 " . implode("
 ", $lines) . ($n > 12 ? "
 
@@ -1817,7 +1857,7 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
     $w = ['ai.school_id = :sid'];
     $p = [':sid' => $u['school_id']];
     [$from,$to] = nxSemRange($f);
-    $w[] = "ai.detected_at >= :from::date AND ai.detected_at < (:to::date + INTERVAL '1 day')";
+    $w[] = "(ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN :from AND :to";
     $p[':from']=$from; $p[':to']=$to;
     // «INCIDENTE» genérico = todos los tipos reales — no filtra
     if (!empty($f['module']) && $f['module']!=='INCIDENTE') { $w[]='ai.incident_type = :typ'; $p[':typ']=$f['module']; }
@@ -1851,7 +1891,7 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
     } elseif (!empty($f['module']) && $f['module'] !== 'INCIDENTE') {
         $justCol = ", (SELECT rj2.reason FROM risk_justifications rj2
             WHERE rj2.student_id = ai.student_id AND rj2.incident_type = ai.incident_type
-              AND rj2.incident_date = ai.detected_at::date AND rj2.school_id = ai.school_id
+              AND rj2.incident_date = (ai.detected_at AT TIME ZONE 'America/Bogota')::date AND rj2.school_id = ai.school_id
             LIMIT 1) AS excuse";
     }
     $sql = "SELECT ai.incident_id, ai.incident_type, ai.detected_at,
@@ -1862,9 +1902,9 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
             LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
             LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
             " . (!empty($f['justified']) && $f['justified']==='yes'
-                ? "JOIN risk_justifications rj ON rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date AND rj.school_id=ai.school_id"
+                ? "JOIN risk_justifications rj ON rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=(ai.detected_at AT TIME ZONE 'America/Bogota')::date AND rj.school_id=ai.school_id"
                 : ($hasJJoin
-                    ? "LEFT JOIN risk_justifications rj ON rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=ai.detected_at::date AND rj.school_id=ai.school_id"
+                    ? "LEFT JOIN risk_justifications rj ON rj.student_id=ai.student_id AND rj.incident_type=ai.incident_type AND rj.incident_date=(ai.detected_at AT TIME ZONE 'America/Bogota')::date AND rj.school_id=ai.school_id"
                     : '')) . "
             WHERE " . implode(' AND ', $w) . " {$scope['sql']}
             ORDER BY ai.detected_at ASC LIMIT 400";
@@ -1892,14 +1932,14 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
     $rs = ['type'=>'incidents','label'=>$typLbl,'entity'=>'incidents','order'=>'fecha (antiguo→reciente)',
         'count'=>$n,'columns'=>$cols,
         'items'=>array_map(fn($r)=>['id'=>$r['incident_id'],'label'=>$r['sname'],
-            'sub'=>$typLbl.' · '.substr($r['detected_at'],0,16)],$rows),
+            'sub'=>$typLbl.' · '.nxSemLocal($r['detected_at'])],$rows),
         'rows'=>array_map(function($i,$r) use ($withExcuse,$typLbl){
-            $row=[$i+1,$r['sname'],$r['group_name']?:'—',$typLbl,substr($r['detected_at'],0,16)];
+            $row=[$i+1,$r['sname'],$r['group_name']?:'—',$typLbl,nxSemLocal($r['detected_at'])];
             if ($withExcuse) $row[] = !empty($r['excuse']) ? $r['excuse'] : 'Sin excusa';
             return $row;
         },array_keys($rows),$rows)];
     if ($plan['op']==='count')
-        return ['reply'=>nxVary(["Se registran {$n} {$typLbl} en el rango.","Hay {$n} {$typLbl} en el rango.","El conteo da {$n} {$typLbl}."], $u['id'].$typLbl),
+        return ['reply'=>"Hay {$n} {$typLbl} en el período.",'_natural'=>true,
                 'intent'=>'incidents.count','entities'=>array_filter(['group'=>$plan['_group_name']??null,'module'=>$f['module']??null]),
                 '_result_set'=>$rs,'_plan'=>$plan];
     if ($plan['op']==='position' || $plan['position']!==null) {
@@ -1910,7 +1950,7 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
         $idx = is_int($pos) ? $pos-1
              : ($pos==='last' ? $avail-1
              : (is_string($pos) && str_starts_with($pos,'last-') ? $avail-1-(int)substr($pos,5) : null));
-        if ($avail===0) return ['reply'=>"No hay {$typLbl} en ese rango.",'intent'=>'incidents.position','_result_set'=>$rs,'_plan'=>$plan];
+        if ($avail===0) return ['reply'=>"No hay {$typLbl} en ese período.",'intent'=>'incidents.position','_result_set'=>$rs,'_plan'=>$plan];
         if ($idx===null || $idx<0 || $idx>=$avail)
             return ['reply'=>"Solo puedo navegar las primeras {$avail} {$typLbl} del rango — esa posición no existe en la ventana.",
                     'intent'=>'incidents.position','_result_set'=>$rs,'_plan'=>$plan];
@@ -1918,10 +1958,10 @@ function nxExecIncidents(PDO $conn, array $u, array $plan, array $vars): array {
         return ['reply'=>ucfirst($typLbl)." · posición ".($idx+1)." de {$n}: *{$it['label']}* — {$it['sub']}.",
                 'intent'=>'incidents.position','_result_set'=>$rs,'_result_cursor'=>$idx,'_plan'=>$plan];
     }
-    if ($n===0) return ['reply'=>nxVaryClean($typLbl,'en el rango',$u['id'].$typLbl),
+    if ($n===0) return ['reply'=>"No hay {$typLbl} registradas en ese período.",
                         'intent'=>'incidents.list','_result_set'=>$rs,'_plan'=>$plan];
     if (($plan['presentation'] ?? null)==='table' || $plan['cardinality']==='all')
-        return ['reply'=>"{$typLbl} del rango ({$n}) — tabla completa:",
+        return ['reply'=>"{$n} {$typLbl} en el período — tabla completa.",'_natural'=>true,
                 'cards'=>[['title'=>ucfirst($typLbl),"columns"=>$rs['columns'],'rows'=>$rs['rows']]],
                 'intent'=>'incidents.list','entities'=>array_filter(['group'=>$plan['_group_name']??null,'module'=>$f['module']??null]),
                 '_result_set'=>$rs,'_plan'=>$plan];
@@ -1966,7 +2006,7 @@ function nxExecGroupsCompare(PDO $conn, array $u, array $plan, array $vars): arr
           JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
           JOIN academic_groups ag ON ag.group_id=sga.group_id
           WHERE ai.school_id=? AND ag.group_id IN (?,?)
-            AND ai.detected_at >= ?::date AND ai.detected_at < (?::date + INTERVAL '1 day') {$modSql}
+            AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ? {$modSql}
           GROUP BY ag.group_name";
     $st = $conn->prepare($q);
     $st->execute(array_filter([$u['school_id'],$g1['group_id'],$g2['group_id'],$from,$to,$mod], fn($v)=>$v!==null));
@@ -2012,7 +2052,7 @@ function nxExecGroupsRank(PDO $conn, array $u, array $plan, array $vars): array 
         JOIN students s ON s.student_id=ai.student_id AND s.deleted_at IS NULL
         JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
         JOIN academic_groups ag ON ag.group_id=sga.group_id
-        WHERE ai.school_id=? AND ai.detected_at >= ?::date AND ai.detected_at < (?::date + INTERVAL '1 day') {$modSql}{$scopeSql}
+        WHERE ai.school_id=? AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ? {$modSql}{$scopeSql}
         GROUP BY ag.group_name ORDER BY n {$dir} LIMIT 12");
     $q = array_merge([$u['school_id'],$from,$to], [$mod], $allowed ?? []);
     // array_values: array_filter conserva llaves — PDO posicional exige 0..N

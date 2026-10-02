@@ -118,11 +118,28 @@ function nxClassifyCore(string $text, ?array $ctx = null): ?array {
         @file_put_contents($log, nxNorm($text) . "\n", FILE_APPEND);
     }
     $r = null;
+    $norm = nxNorm($text);
     if ($fxMap) {
-        $k = nxNorm($text);
-        if (isset($fxMap[$k])) $r = $fxMap[$k] + ['source' => 'fixture'];
+        if (isset($fxMap[$norm])) $r = $fxMap[$norm] + ['source' => 'fixture'];
     }
-    if (!$r) $r = nxLlmClassify($text, $ctx);
+    if (!$r) {
+        // Capa determinista: patrones inequívocos no gastan cuota del LLM
+        // (Groq: 8K tokens/min). Con nombre propio o frase larga manda el LLM
+        // — extrae personas y matices mejor. Si el LLM no responde (429,
+        // timeout, sin cuota) la regla sostiene el turno en vez de un
+        // out_of_scope ciego.
+        $rule = nxRuleClassify($norm);
+        $long = str_word_count($norm, 0, 'áéíóúñü0123456789') > 14;
+        if ($rule && !empty($rule['strong']) && !$long) {
+            $r = $rule + ['source' => 'rules'];
+        } else {
+            $r = nxLlmClassify($text, $ctx);
+            if (!$r && $rule) $r = $rule + ['source' => 'rules_fallback'];
+            elseif ($r && ($r['intent'] ?? '') === 'out_of_scope' && $rule && ($rule['domain'] ?? '') === 'formal'
+                    && $rule['confidence'] >= 0.85)
+                $r = $rule + ['source' => 'rules_rescue'];
+        }
+    }
     if ($r) {
         $r['entities'] = array_merge(
             $r['entities'] ?? [],
@@ -135,7 +152,9 @@ function nxClassifyCore(string $text, ?array $ctx = null): ?array {
 function nxClassify(string $text, ?array $ctx = null): array {
     // multi-intención — cada segmento se clasifica por separado
     $norm = nxNorm($text);
-    $segments = array_values(array_filter(preg_split('/\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*/u', $norm), fn($s)=>mb_strlen(trim($s))>2));
+    // «/» con espacios también separa consultas («tardanzas por día / evasiones
+    // por grupo»); sin espacios es fecha («24/09») y no parte nada
+    $segments = array_values(array_filter(preg_split('/\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*|\s+\/\s+/u', $norm), fn($s)=>mb_strlen(trim($s))>2));
     if (count($segments) > 1) {
         $parts = [];
         foreach (array_slice($segments,0,4) as $seg) {
@@ -184,6 +203,9 @@ function nxClassify(string $text, ?array $ctx = null): array {
         && ($r['entities']['group'] ?? null) === $r['entities']['_except'])
         unset($r['entities']['group']);
     if ($r['confidence'] < NX_NLU_THRESHOLD) {
+        // la propuesta del parser NO se tira: el DSM la usa cuando el turno
+        // es un fragmento dependiente que copió el tema del contexto
+        if ($r['intent'] !== 'out_of_scope') $r['proposed_intent'] = $r['intent'];
         $r['intent'] = 'out_of_scope';
         $r['fallback'] = true;
     }
@@ -193,39 +215,268 @@ function nxClassify(string $text, ?array $ctx = null): array {
 /* ---------------------------------------------------------------------------
  * Slot-filling PHP — extracción determinista de entidades/fechas.
  * ------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+ * Rangos temporales — calendario civil de la institución (America/Bogota).
+ * «ayer» es SOLO ayer, «la semana pasada» es lunes–domingo anterior, «el mes
+ * pasado» es el mes calendario anterior. `days` se conserva como pista de
+ * amplitud (compatibilidad con el DSM/herencia); la ventana real es from/to.
+ * ------------------------------------------------------------------------- */
+const NX_MONTHS = ['enero'=>1,'febrero'=>2,'marzo'=>3,'abril'=>4,'mayo'=>5,'junio'=>6,'julio'=>7,
+    'agosto'=>8,'septiembre'=>9,'setiembre'=>9,'octubre'=>10,'noviembre'=>11,'diciembre'=>12];
+const NX_WEEKDAYS = ['lunes'=>1,'martes'=>2,'miercoles'=>3,'jueves'=>4,'viernes'=>5,'sabado'=>6,'domingo'=>7];
+const NX_MONTH_NAMES = [1=>'enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+    'septiembre','octubre','noviembre','diciembre'];
+
+function nxTodayDt(): DateTimeImmutable {
+    return new DateTimeImmutable('today', new DateTimeZone('America/Bogota'));
+}
+
+/** Fecha explícita «24 de septiembre» → la más reciente no futura. */
+function nxDateOf(int $day, int $month, ?int $year = null): ?DateTimeImmutable {
+    $today = nxTodayDt();
+    $y = $year ?? (int)$today->format('Y');
+    if (!checkdate($month, $day, $y)) return null;
+    $d = $today->setDate($y, $month, $day);
+    if ($year === null && $d > $today) $d = $d->modify('-1 year');
+    return $d;
+}
+
+function nxRangeOut(DateTimeImmutable $from, DateTimeImmutable $to, int $days, string $label): array {
+    return ['days' => $days, 'from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d'), 'range_label' => $label];
+}
+
+/**
+ * Patrones temporales en orden de especificidad. Cada uno devuelve el rango
+ * o null. Compartido por nxTimeRange (el primero que aplica) y por
+ * nxTimeRanges (todos los mencionados — comparaciones «ayer vs hoy»).
+ */
+function nxTimePatterns(): array {
+    $wd = implode('|', array_keys(NX_WEEKDAYS));
+    $mo = implode('|', array_keys(NX_MONTHS));
+    return [
+        // «del 1 al 15 de septiembre», «entre el 3 y el 10 de agosto»
+        ['/\b(?:del|desde el|entre el)\s+(\d{1,2})\s+(?:al|hasta el|y el)\s+(\d{1,2})\s+de\s+(' . $mo . ')(?:\s+(?:de|del)\s+(\d{4}))?\b/u',
+            function ($m) {
+                $mon = NX_MONTHS[$m[3]]; $yr = !empty($m[4]) ? (int)$m[4] : null;
+                $a = nxDateOf((int)$m[1], $mon, $yr); $b = nxDateOf((int)$m[2], $mon, $yr);
+                if (!$a || !$b) return null;
+                if ($a > $b) [$a, $b] = [$b, $a];
+                $days = (int)$a->diff($b)->days + 1;
+                return nxRangeOut($a, $b, $days, "del {$m[1]} al {$m[2]} de {$m[3]}");
+            }],
+        // «desde el 15 de septiembre»
+        ['/\bdesde el\s+(\d{1,2})\s+de\s+(' . $mo . ')\b/u',
+            function ($m) {
+                $a = nxDateOf((int)$m[1], NX_MONTHS[$m[2]]); if (!$a) return null;
+                $t = nxTodayDt();
+                return nxRangeOut($a, $t, (int)$a->diff($t)->days, "desde el {$m[1]} de {$m[2]}");
+            }],
+        // «el 24 de septiembre»
+        ['/\b(\d{1,2})\s+de\s+(' . $mo . ')(?:\s+(?:de|del)\s+(\d{4}))?\b/u',
+            function ($m) {
+                $d = nxDateOf((int)$m[1], NX_MONTHS[$m[2]], !empty($m[3]) ? (int)$m[3] : null);
+                if (!$d) return null;
+                $days = (int)$d->diff(nxTodayDt())->days;
+                return nxRangeOut($d, $d, $days, "el {$m[1]} de {$m[2]}");
+            }],
+        // «24/09», «24/09/2026»
+        ['/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/u',
+            function ($m) {
+                $yr = !empty($m[3]) ? ((int)$m[3] < 100 ? 2000 + (int)$m[3] : (int)$m[3]) : null;
+                $d = nxDateOf((int)$m[1], (int)$m[2], $yr); if (!$d) return null;
+                return nxRangeOut($d, $d, (int)$d->diff(nxTodayDt())->days, $d->format('d/m/Y'));
+            }],
+        ['/\b(anteayer|antier|antes de ayer)\b/u',
+            fn($m) => nxRangeOut(nxTodayDt()->modify('-2 days'), nxTodayDt()->modify('-2 days'), 2, 'anteayer')],
+        ['/\bdesde ayer\b/u',
+            fn($m) => nxRangeOut(nxTodayDt()->modify('-1 day'), nxTodayDt(), 1, 'desde ayer')],
+        ['/\bayer\b/u',
+            fn($m) => nxRangeOut(nxTodayDt()->modify('-1 day'), nxTodayDt()->modify('-1 day'), 1, 'ayer')],
+        ['/\b(hoy|este dia|dia de hoy|lo que va del dia|en el dia de hoy)\b/u',
+            fn($m) => nxRangeOut(nxTodayDt(), nxTodayDt(), 0, 'hoy')],
+        // «el lunes», «el viernes pasado» — la ocurrencia más reciente
+        ['/\b(?:el|del|este|ese)\s+(' . $wd . ')(\s+pasado)?\b/u',
+            function ($m) {
+                $t = nxTodayDt(); $dow = (int)$t->format('N'); $want = NX_WEEKDAYS[$m[1]];
+                $back = ($dow - $want + 7) % 7;
+                if (!empty($m[2]) && $back === 0) $back = 7;
+                $d = $t->modify("-{$back} days");
+                return nxRangeOut($d, $d, $back, "el {$m[1]} " . (int)$d->format('j') . ' de ' . NX_MONTH_NAMES[(int)$d->format('n')]);
+            }],
+        ['/\b(semana pasada|semana anterior|la otra semana|semana antepasada)\b/u',
+            function ($m) {
+                $t = nxTodayDt(); $mon = $t->modify('-' . ((int)$t->format('N') - 1) . ' days');
+                $back = $m[1] === 'semana antepasada' ? 14 : 7;
+                return nxRangeOut($mon->modify("-{$back} days"), $mon->modify('-' . ($back - 6) . ' days'), 14,
+                    $back === 14 ? 'la semana antepasada' : 'la semana pasada');
+            }],
+        // «hace 3 días» = ese día puntual; «últimos 3 días» = ventana
+        ['/\bhace\s+(\d{1,3}|dos|tres|cuatro|cinco)\s+dias?\b|\b(\d{1,3})\s+dias?\s+atras\b/u',
+            function ($m) {
+                $n = ['dos'=>2,'tres'=>3,'cuatro'=>4,'cinco'=>5][$m[1] ?? ''] ?? max(1, (int)(($m[1] ?? '') !== '' ? $m[1] : $m[2]));
+                $d = nxTodayDt()->modify("-{$n} days");
+                return nxRangeOut($d, $d, $n, "hace {$n} días");
+            }],
+        ['/\b(?:ultimos?|ultimas?|los|las|en los|en las|durante los)\s+(\d{1,3})\s+dias?\b/u',
+            function ($m) {
+                $n = max(1, (int)$m[1]); $t = nxTodayDt();
+                return nxRangeOut($t->modify('-' . ($n - 1) . ' days'), $t, $n, "últimos {$n} días");
+            }],
+        ['/\b(?:ultimas?|las|en las)\s+(\d{1,2}|dos|tres|cuatro)\s+semanas?\b/u',
+            function ($m) {
+                $n = ['dos'=>2,'tres'=>3,'cuatro'=>4][$m[1]] ?? max(1, (int)$m[1]); $t = nxTodayDt();
+                return nxRangeOut($t->modify('-' . ($n * 7 - 1) . ' days'), $t, $n * 7, "últimas {$n} semanas");
+            }],
+        ['/\b(ultima semana|ultimos siete dias|semana completa)\b/u',
+            fn($m) => nxRangeOut(nxTodayDt()->modify('-6 days'), nxTodayDt(), 7, 'últimos 7 días')],
+        ['/\b(esta semana|en la semana|de la semana|lo que va de la semana|semana actual|la semana)\b/u',
+            function ($m) {
+                $t = nxTodayDt();
+                return nxRangeOut($t->modify('-' . ((int)$t->format('N') - 1) . ' days'), $t, 7, 'esta semana');
+            }],
+        ['/\b(esta quincena|la quincena)\b/u',
+            function ($m) {
+                $t = nxTodayDt(); $d = (int)$t->format('j');
+                return nxRangeOut($t->setDate((int)$t->format('Y'), (int)$t->format('n'), $d <= 15 ? 1 : 16), $t, 15, 'esta quincena');
+            }],
+        ['/\b(ultima quincena)\b/u',
+            fn($m) => nxRangeOut(nxTodayDt()->modify('-14 days'), nxTodayDt(), 15, 'últimos 15 días')],
+        ['/\b(mes pasado|mes anterior|el otro mes)\b/u',
+            function ($m) {
+                $first = nxTodayDt()->modify('first day of last month');
+                return nxRangeOut($first, $first->modify('last day of this month'), 60, 'el mes pasado ('
+                    . NX_MONTH_NAMES[(int)$first->format('n')] . ')');
+            }],
+        ['/\b(?:ultimos?|ultimas?|los)\s+(\d{1,2}|dos|tres|seis)\s+meses\b/u',
+            function ($m) {
+                $n = ['dos'=>2,'tres'=>3,'seis'=>6][$m[1]] ?? max(1, (int)$m[1]); $t = nxTodayDt();
+                return nxRangeOut($t->modify("-{$n} months")->modify('+1 day'), $t, $n * 30, "últimos {$n} meses");
+            }],
+        ['/\b(ultimo mes|ultimos treinta dias)\b/u',
+            fn($m) => nxRangeOut(nxTodayDt()->modify('-29 days'), nxTodayDt(), 30, 'últimos 30 días')],
+        ['/\b(este mes|en el mes|del mes|lo que va del mes|lo corrido del mes|mes actual|de este mes|el mes)\b/u',
+            function ($m) {
+                $t = nxTodayDt();
+                return nxRangeOut($t->modify('first day of this month'), $t, 30, 'este mes ('
+                    . NX_MONTH_NAMES[(int)$t->format('n')] . ')');
+            }],
+        ['/\b(en (?:el mes de )?(' . $mo . '))\b/u',
+            function ($m) {
+                $mon = NX_MONTHS[$m[2]]; $t = nxTodayDt(); $y = (int)$t->format('Y');
+                $first = $t->setDate($y, $mon, 1);
+                if ($first > $t) $first = $first->modify('-1 year');
+                $last = $first->modify('last day of this month');
+                if ($last > $t) $last = $t;
+                return nxRangeOut($first, $last, 30, "en {$m[2]}");
+            }],
+        ['/\b(ano pasado|ano anterior)\b/u',
+            function ($m) {
+                $y = (int)nxTodayDt()->format('Y') - 1; $t = nxTodayDt();
+                return nxRangeOut($t->setDate($y, 1, 1), $t->setDate($y, 12, 31), 365, "el año {$y}");
+            }],
+        ['/\b(este ano|del ano|en el ano|lo que va del ano|ano escolar|en lo que va del ano)\b/u',
+            function ($m) {
+                $t = nxTodayDt();
+                return nxRangeOut($t->setDate((int)$t->format('Y'), 1, 1), $t, 365, 'este año');
+            }],
+    ];
+}
+
+/** «por día de la semana» / «fin de semana» son ejes, no rangos. */
+function nxTimePrep(string $q): string {
+    return preg_replace('/\b(dias? de la semana|fin(es)? de semana|por semana|por mes|cada semana|cada mes|cada dia)\b/u', ' _eje_ ', $q);
+}
+
+/** El rango temporal más específico mencionado (o null). */
+function nxTimeRange(string $q): ?array {
+    $q = nxTimePrep($q);
+    foreach (nxTimePatterns() as [$re, $fn]) {
+        if (preg_match($re, $q, $m)) {
+            $r = $fn($m);
+            if ($r) return $r;
+        }
+    }
+    return null;
+}
+
+/**
+ * Todos los rangos mencionados, en orden de aparición — «compara ayer con
+ * hoy», «esta semana comparada con la pasada». Elipsis «la pasada/anterior»
+ * tras «semana»/«mes» se resuelve al período previo del mismo tipo.
+ */
+function nxTimeRanges(string $q): array {
+    $q = nxTimePrep($q);
+    $hits = [];
+    foreach (nxTimePatterns() as [$re, $fn]) {
+        if (preg_match_all($re, $q, $all, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+            foreach ($all as $mm) {
+                $pos = $mm[0][1]; $end = $pos + strlen($mm[0][0]);
+                // patrones más específicos ganan: un tramo ya cubierto
+                // («la semana pasada») no se re-lee como «la semana»
+                foreach ($hits as $h) if ($pos < $h['end'] && $end > $h['pos']) continue 2;
+                $m = array_map(fn($x) => is_array($x) ? $x[0] : $x, $mm);
+                $r = $fn($m);
+                if ($r) $hits[] = ['pos' => $pos, 'end' => $end, 'range' => $r];
+            }
+        }
+    }
+    if (preg_match('/\b(?:la|el|con la|con el|vs|versus|y la|y el|frente a la|frente al)\s+(pasada|anterior)\b/u', $q, $e, PREG_OFFSET_CAPTURE)) {
+        $kinds = array_map(fn($h) => $h['range']['range_label'], $hits);
+        if (in_array('esta semana', $kinds, true) && !in_array('la semana pasada', $kinds, true))
+            $hits[] = ['pos' => $e[0][1], 'end' => $e[0][1] + 1, 'range' => nxTimeRange('semana pasada')];
+        elseif (preg_grep('/^este mes/u', $kinds) && !preg_grep('/^el mes pasado/u', $kinds))
+            $hits[] = ['pos' => $e[0][1], 'end' => $e[0][1] + 1, 'range' => nxTimeRange('mes pasado')];
+    }
+    usort($hits, fn($a, $b) => $a['pos'] <=> $b['pos']);
+    $out = []; $seen = [];
+    foreach ($hits as $h) {
+        $k = $h['range']['from'] . '|' . $h['range']['to'];
+        if (isset($seen[$k])) continue;
+        $seen[$k] = true; $out[] = $h['range'];
+    }
+    return $out;
+}
+
+/**
+ * ¿El turno es SOLO un modificador temporal? («en el mes», «y la última
+ * semana», «y los últimos 15 días», «¿y ayer?») — tras quitar conectores,
+ * artículos y expresiones de tiempo no queda contenido propio.
+ */
+function nxIsTemporalFragment(string $q0): bool {
+    if (!nxTimeRange($q0)) return false;
+    $rest = nxTimePrep($q0);
+    if (str_contains($rest, '_eje_')) return false;
+    foreach (nxTimePatterns() as [$re]) $rest = preg_replace($re, ' ', $rest);
+    $rest = preg_replace('/\b(y|e|pero|ahora|entonces|o sea|tambien|bueno|ok|vale|que tal|como|en|de|del|la|el|los|las|lo|al|a|durante|para|desde|hasta|hace|sobre|que|va|van|iban|fueron|hubo|hay|pasado|pasada|anterior|corrido|todo|toda|eso|esos|esas|mismo|misma|igual|y en|y de|cuantas|cuantos|cuanto|cuanta|y que)\b/u', ' ', $rest);
+    return trim(preg_replace('/\s+/', ' ', $rest)) === '';
+}
+
+/** «y en todo el colegio», «en general», «en total» — quitar el filtro de grupo/estudiante. */
+function nxIsScopeWidening(string $q0): bool {
+    return (bool)preg_match('/^(y |pero |ahora |entonces |y que tal |que tal )?(en |de |para |a nivel de |del )?(todo el colegio|toda la institucion|todo el plantel|el colegio|la institucion|el plantel|general|total|todos los grupos|todos|todo|el resto del colegio|todo el instituto)( en total| en general)?$/u', $q0);
+}
+
+/**
+ * Turnos de reparación — no son consultas nuevas: piden verificar,
+ * repetir o reclaman la respuesta anterior. Se resuelven sin el parser.
+ *   verify    «¿seguro?», «como que no», «verifica», «no puede ser»
+ *   complaint «no te pregunté eso», «no era eso», «no entendiste»
+ *   repeat    «repite», «repítelo», «otra vez lo último»
+ */
+function nxRepairKind(string $q0): ?string {
+    $words = str_word_count($q0, 0, 'áéíóúñü0123456789');
+    if ($words <= 7 && preg_match('/^(y |pero |oye |a ver )?(repite|repitelo|repitemelo|repitelo por favor|puedes repetir|podrias repetir|repetir|otra vez lo (ultimo|mismo|que dijiste)|lo de antes|vuelve a decir\w*|dilo otra vez|dimelo otra vez|que dijiste)\b/u', $q0))
+        return 'repeat';
+    if (preg_match('/\b(no te pregunte (eso|por eso|eso)|eso no (fue|es) lo que (te )?(pregunte|pedi|dije)|no (era|es) eso|no me (respondiste|contestaste)( lo que)?|no entendiste|te pregunte (otra cosa|algo distinto)|no es lo que (pregunte|pedi)|no te pedi eso|eso no te lo pedi|no te dije (eso|fechas|rangos))\b/u', $q0))
+        return 'complaint';
+    if ($words <= 7 && preg_match('/^(y |pero |oye |a ver )?(seguro|segura|estas segur[oa]|esta segur[oa]|en serio|de verdad|verifica\w*|revisa\w*( bien| otra vez| de nuevo)?|confirmal[oa]|confirma eso|como (asi|que no|que si|que cero|que ninguno|que nadie)|no puede ser|eso no es (cierto|asi|verdad|correcto)|imposible|no creo|mentira|falso|estas equivocad[oa]|te equivocaste|chequea\w*|vuelve a (revisar|mirar|contar))\b/u', $q0))
+        return 'verify';
+    return null;
+}
+
 function nxSlots(string $q): array {
     $s = [];
-    // Períodos pasados específicos PRIMERO — «del mes pasado» no es «del mes»
-    if (preg_match('/mes pasado|mes anterior/u', $q)) {
-        $s['days'] = 60;
-    } elseif (preg_match('/semana pasada|semana anterior/u', $q)) {
-        $s['days'] = 14;
-    } elseif (preg_match('/ano pasado|ano anterior/u', $q)) {
-        $s['days'] = 365;
-    } elseif (preg_match('/ultimos? (\d+) dias?|en (?:los )?(\d+) dias?|(\d+) dias? atras/u', $q, $m)) {
-        $s['days'] = (int)($m[1] ?: $m[2] ?: $m[3]);
-    } elseif (preg_match('/(\d+) semanas?/u', $q, $m)) {
-        $s['days'] = (int)$m[1] * 7;
-    } elseif (preg_match('/\bhoy\b|este dia|dia de hoy/u', $q)) {
-        $s['days'] = 0;
-    } elseif (preg_match('/\bayer\b/u', $q)) {
-        $s['days'] = 1;
-    } elseif (preg_match('/esta semana|de la semana|en la semana/u', $q)) {
-        $s['days'] = 7;
-    } elseif (preg_match('/este mes|del mes|en el mes|ultimo mes|al mes|de este mes/u', $q)) {
-        $s['days'] = 30;
-    } elseif (preg_match('/mes pasado/u', $q)) {
-        $s['days'] = 60;
-    } elseif (preg_match('/semana pasada|semana anterior/u', $q)) {
-        $s['days'] = 14;
-    } elseif (preg_match('/este ano|del ano|en el ano/u', $q)) {
-        $s['days'] = 365;
-    }
-    if (isset($s['days'])) {
-        $s['to'] = nxToday();
-        $s['from'] = nxToday($s['days']);
-        $s['range_label'] = $s['days'] === 0 ? 'hoy' : ($s['days'] === 1 ? 'ayer' : "últimos {$s['days']} días");
-    }
+    if ($tr = nxTimeRange($q)) $s = $tr;
 
     if (preg_match('/\b(?:grupo|salon|del|de|en|al|el)\s+(\d{1,2}\s?[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|prescolar|jardin|transicion|kinder)\b/u', $q, $m)
         || preg_match('/\b(\d{1,2}[a-z]|\d{1,2}-\d{1,2}|\d{1,2}-[a-z]|\d{1,2}\.\d{1,2}|\d{1,2} \d{1,2})\b/u', $q, $m)) {
@@ -278,6 +529,14 @@ function nxSlots(string $q): array {
             }
         }
     }
+    // «permiso» como derecho de acceso («aunque no tenga permiso», «sin
+    // permiso para verlo») es habla meta sobre autorización — NO es el
+    // módulo de salidas autorizadas. El módulo solo cuenta si la palabra
+    // aparece fuera de esa construcción.
+    if (($s['module'] ?? null) === 'PERMISO'
+        && preg_match('/\b(?:no\s+)?(tengo|tiene|tenga|tienen|tener|tuviera|tenemos|darme|me\s+de[sn])\s+permiso\b|\bpermiso\s+(?:para|de)\s+(ver|acceder|entrar|mirar|consultar|saber|descargar)\b/u', $q)
+        && !preg_match('/\bpermisos?\s+(de salida|del colegio|para salir|activos?|emitidos?|otorgados?|pedagogicos?|de clase|al bano|medicos?)\b/u', $q))
+        unset($s['module']);
     // campo de estudiante
     foreach (nxFieldSynonyms() as $field => $syns) {
         foreach ($syns as $syn) {
@@ -355,6 +614,13 @@ function nxStudentStopwords(): array {
         'tenido','tuvo','fue','son','ser','nexus','nexo','favor','porfa','porfavor',
         'acudiente','acudientes','papa','mama','padre','madre','documento','cedula',
         'celular','telefono','whatsapp','numero','contacto','datos','informacion',
+        // verbos de acción — «daniel y exporta todo»: «exporta» no es
+        // apellido, es la cláusula siguiente pegada al nombre
+        'exporta','exportar','exportalo','exportala','descarga','descargar',
+        'muestra','mostrar','muestrame','genera','generar','crea','crear',
+        'registra','registrar','borra','borrar','elimina','eliminar',
+        'compara','comparar','usa','usar','entra','entrar','pasa','pasar',
+        'imprimir','imprime','copiar','copia','envia','enviar','manda',
         'edad','nacimiento','permiso','permisos','seguimiento','citacion','caso','incidente',
         'estudiantes','estudiante','alumnos','alumnas','alumno','alumna',
         'ninos','ninas','docentes','docente','profesores','profesor','profesora',
@@ -388,6 +654,10 @@ function nxStudentStopwords(): array {
         'pintas','puente','materia','clase','leccion','recreo','descanso',
         'primero','segundo','tercero','cuarto','quinto','sexto','septimo',
         'octavo','noveno','decimo','once','primera','segunda','tercera',
+        // días y tiempos — «el paseo del viernes» no es un estudiante
+        'lunes','martes','miercoles','jueves','viernes','sabado','sabados',
+        'domingo','domingos','manana','tarde','noche','madrugada','feriado',
+        'festivo','puente festivo','paseo','paseos','pasantia','pedagogica',
         // colectivos genéricos — «chicos del 7-B» es el grupo, no una persona
         'chico','chicos','chica','chicas','muchacho','muchachos','muchacha',
         'muchachas','pelado','pelados','pelada','peladas','menor','menores',
@@ -535,20 +805,24 @@ function nxExtractStudent(string $q): ?string {
 
 function nxModuleSynonyms(): array {
     return [
-        'LATE_ARRIVAL'      => ['llegadas tarde','llegada tarde','tardanzas','tardanza','tarde','llego tarde','llegaron tarde','tardes'],
-        'INASISTENCIA'      => ['inasistencias','inasistencia','inasistieron','inasistio','inasistió','inasiste','faltas','falta','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente','no llegaron','no llego','no entraron','no entro','no asistieron','no asistio','no se presentaron','no se presento','se ausentaron','se ausento'],
+        'LATE_ARRIVAL'      => ['llegadas tarde','llegada tarde','tardanzas','tardanza','tarde','llego tarde','llegaron tarde','tardes',
+            'entradas tardias','entrada tardia','entradas tardia','llegadas tardias','llegada tardia','tardias','tardia',
+            'impuntualidad','impuntualidades','impuntual','impuntuales','retrasos','retraso','demoras','demora','tardeo','tardeos'],
+        'INASISTENCIA'      => ['inasistencias','inasistencia','inasistieron','inasistio','inasistió','inasiste','faltas','falta','faltado','faltando','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente','no llegaron','no llego','no entraron','no entro','no asistieron','no asistio','no se presentaron','no se presento','se ausentaron','se ausento'],
         'INASISTENCIA_JUSTIFICADA'    => ['inasistencias justificadas','justificadas','faltas justificadas'],
         'INASISTENCIA_NO_JUSTIFICADA' => ['inasistencias no justificadas','sin justificar','injustificadas'],
-        'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono','se volaron','se volo','se la volaron','se la volo','tiraron','se tiraron','tajaron','se tajaron','caparon','se caparon','evasores','se fueron','se fueron de clase','se fueron del salon','abandono durante','abandonaron el aula'],
-        'PERMISO'           => ['permisos','permiso','salidas autorizadas','autorizaciones','autorizacion','autorizados','autorizadas','salidas autorizadas'],
+        'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono','se volaron','se volo','se la volaron','se la volo','tiraron','se tiraron','tajaron','se tajaron','caparon','se caparon','evasores','se fueron','se fueron de clase','se fueron del salon','abandonaron la clase','abandonaron el salon','abandonan','abandonan la clase','abandonan clases','abandono durante','abandonaron el aula','no regresaron','no regreso','no volvieron','no volvio',
+            'salida no autorizada','salidas no autorizadas','salida sin autorizacion','salidas sin autorizacion'],
+        'PERMISO'           => ['permisos','permiso','salidas autorizadas','autorizaciones','autorizacion','autorizados','autorizadas','salidas autorizadas',
+            'excusa','excusas','justificacion','justificaciones','soporte medico','incapacidad','incapacidades'],
         'SALIDA_BAÑO'       => ['salidas al bano','bano','banos','salidas de bano'],
         'SALIDA_COLEGIO'    => ['salidas del colegio','salida del colegio','salidas anticipadas','salio del colegio'],
         'SOS'               => ['sos','alertas sos','panico','emergencias','emergencia'],
-        'CITACION'          => ['citaciones','citacion','citas a acudientes','mensajes a acudientes'],
-        'SEGUIMIENTO'       => ['seguimientos','seguimiento','casos','caso','derivaciones'],
-        'INCIDENTE'         => ['incidentes','incidente','reportes disciplinarios','disciplina','situaciones criticas','situacion critica'],
+        'CITACION'          => ['citaciones','citacion','citas a acudientes','mensajes a acudientes','citados','llamados','convocados','citas programadas','reuniones con padres','citas'],
+        'SEGUIMIENTO'       => ['seguimientos','seguimiento','derivaciones','acompanamientos','acompanamiento','procesos de mejora','proceso de mejora','bajo observacion','en observacion','bajo seguimiento'],
+        'INCIDENTE'         => ['incidentes','incidente','incidencias','incidencia','reportes disciplinarios','disciplina','situaciones criticas','situacion critica','novedades','novedad'],
         'DAÑO'              => ['danos','dano','danios reportados'],
-        'INGRESO'           => ['ingresos','entradas','entraron','entro','ingresaron','ingreso','entradas del dia','vinieron','llegaron','asistieron','vino','llego','asistio'],
+        'INGRESO'           => ['ingresos','entradas','entraron','entro','ingresaron','ingreso','entradas del dia','vinieron','llegaron','asistieron','vino','llego','asistio','se presentaron','se presento','presentaron','presento'],
         'SALIDA_PEDAGOGICA' => ['salidas pedagogicas','salida pedagogica','paseos','excursiones'],
     ];
 }
@@ -556,7 +830,7 @@ function nxModuleSynonyms(): array {
 function nxFieldSynonyms(): array {
     return [
         'documento'  => ['documento','cedula','ti','tarjeta de identidad','numero de documento','identificacion'],
-        'celular'    => ['celular','telefono','whatsapp','movil','numero de celular'],
+        'celular'    => ['celular','telefono','whatsapp','movil','numero de celular','contacto','numero de contacto','como contactar'],
         'acudiente'  => ['acudiente','acudientes','papa','mama','padre','madre','responsable','familiar','quien lo recoge','quien la recoge',
             // paráfrasis relacionales — «quién responde por él», «a nombre
             // de quién está», «la persona que lo representa»
@@ -565,8 +839,11 @@ function nxFieldSynonyms(): array {
             'figura como','a nombre de quien','persona a cargo','adulto a cargo','tutor legal','adulto responsable'],
         'grupo'      => ['grupo','salon','curso'],
         'jornada'    => ['jornada','turno'],
-        'nacimiento' => ['nacimiento','edad','cuando nacio','anos tiene','fecha de nacimiento','cumpleanos'],
+        'nacimiento' => ['nacimiento','edad','cuando nacio','anos tiene','cuantos anos tiene','que edad tiene','fecha de nacimiento','cumpleanos'],
         'estado'     => ['estado','activo','retirado','matriculado'],
+        'correo'     => ['correo','correo electronico','email','e-mail','mail'],
+        'direccion'  => ['direccion','direccion de residencia','donde vive','barrio','residencia','vivienda'],
+        'eps'        => ['eps','aseguradora','entidad de salud','seguro medico'],
     ];
 }
 
@@ -824,6 +1101,7 @@ function nxIntentRoles(): array {
         'frequency_table' => $STAFF,
         'pending_returns' => $STAFF,
         'sos_alerts' => ['RECTOR','COORDINATOR','SECURITY'],
+        'system_incidents' => ['RECTOR','COORDINATOR','SECURITY'],
         'biometric_spam' => ['RECTOR','COORDINATOR','SECURITY'],
         'group_student_count' => $STAFF,
         'students_in_group'   => $STAFF,
@@ -835,6 +1113,7 @@ function nxIntentRoles(): array {
         'session_summary' => $ALL,
         'pending_tasks' => $ALL,
         'whatsapp_status' => ['RECTOR','COORDINATOR','SECRETARY'],
+        'guardian_replies' => $STAFF,
         'about_me' => $ALL,
         'time' => $ALL, 'date' => $ALL,
         // smalltalk y meta: todos
@@ -875,12 +1154,359 @@ const NX_QUERY_INTENTS = ['list_events','count_events','trackings','permissions'
     'student_field','student_summary','group_summary','top_offenders','pending_returns',
     'attendance_ranking','group_student_count','students_count','devices_status',
     'notifications_unread','audit_query','sos_alerts','biometric_spam','birthdays_today',
+    'system_incidents','guardian_replies',
     'failed_messages','whatsapp_status','my_activity','pending_tasks','schedule_info',
     'risk_students','export_data','students_in_group','result_nav','frequency_table',
     // consultas de datos adicionales — también pueden ser tema activo
-    'attendance_today','late_today','count_present','day_summary'];
+    'attendance_today','late_today','count_present','day_summary','staff_lookup'];
 
 const NX_GENERIC_INTENTS = ['day_summary','attendance_today','late_today','count_present'];
+
+/** Módulos que viven en attendance_incidents (los demás tienen tabla propia). */
+const NX_INCIDENT_MODULES = ['LATE_ARRIVAL','INASISTENCIA','INASISTENCIA_JUSTIFICADA',
+    'INASISTENCIA_NO_JUSTIFICADA','EVASION_INTERNA','SALIDA_BAÑO','SALIDA_COLEGIO','INCIDENTE','DAÑO'];
+
+/**
+ * Clasificador determinista de ALTA PRECISIÓN — capa de resiliencia del
+ * parser. El LLM sigue siendo el intérprete principal; esto cubre:
+ *   1. LLM caído / sin cuota (Groq 8K tokens/min, 1K req/día): sin esta capa
+ *      todo cae a out_of_scope y el chat queda inútil.
+ *   2. Patrones inequívocos (strong=true) que no necesitan al LLM — ahorran
+ *      cuota para las frases que sí lo requieren.
+ *   3. Fragmentos de contexto/reparación: los resuelve el DSM, no el LLM.
+ * Devuelve ['intent','confidence','entities','strong'] o null.
+ */
+function nxRuleClassify(string $q0, ?array $slots = null): ?array {
+    $s = $slots ?? nxSlots($q0);
+    $mod = $s['module'] ?? null;
+    $ent = [];
+    $words = str_word_count($q0, 0, 'áéíóúñü0123456789');
+    $quant = (bool)preg_match('/\b(cuant[oa]s|cuanto|cuanta|numero de|total de|cantidad de|cifra de)\b/u', $q0);
+    $opVerb = (bool)preg_match('/\b(genera\w*|crea\w*|citar|cita\b|citale|citalo|citala|citemos|convoca\w*|autoriza\b|autorizar|autoriza(le|lo|la)|deriva\b|derivar|derivalo|derivala|reporta\b|reportar|registra\b|registrar|emite|emitir|tramita\w*|manda\w*|envia\w*|abre un|abrir un|haz un|hacer un|dame|quiero|necesito|pido|solicita\w*|programa\w*|agenda\w*|expide|expedir|formaliza\w*|levanta\w*|debo)\b/u', $q0);
+    $r = fn(string $i, float $c, bool $strong = true, array $e = []) =>
+        ['intent'=>$i, 'confidence'=>$c, 'entities'=>$e, 'strong'=>$strong, 'domain'=>'formal', 'top3'=>[]];
+    $social = fn(string $i) => ['intent'=>$i, 'confidence'=>0.92, 'entities'=>[], 'strong'=>true, 'domain'=>'informal', 'top3'=>[]];
+
+    // ── hostiles / fuera de alcance institucional — antes que cualquier
+    // regla de datos: «faltas de la institución vecina» lleva sustantivo de
+    // módulo pero apunta a OTRO tenant; «drop table faltas» es SQL disfrazado.
+    if (preg_match('/\b(otr[oa]s?\s+(institucion|colegio|escuela|plantel|sede)|institucion vecina|colegio vecino|colegio de al lado|escuela vecina|de otro colegio|de otra institucion|del colegio de enfrente)\b/u', $q0))
+        return $r('security_probe', 0.9);
+    if (preg_match('/\b(drop\s+table|truncate\s+table|delete\s+from|insert\s+into|alter\s+table|update\s+\w+\s+set|union\s+select|select\s+\*|or\s+1\s*=\s*1|xp_cmdshell)\b/u', $q0))
+        return $r('security_probe', 0.95);
+    // suplantación y evasión de auditoría — «usa la cuenta del rector»,
+    // «suplántame al coordinador», «dame los datos sin registrar»
+    if (preg_match('/\b(usa\w*\s+(?:la\s+|mi\s+|una\s+|su\s+)?cuenta\s+de[lr]?\s|suplanta\w*|hazte\s+pasar\s+por|hacerte\s+pasar\s+por|pasame?\s+como|como\s+si\s+fuer[as]\w*|finge\s+ser|fingir\s+ser|entra\w*\s+con\s+(?:la\s+)?cuenta|con\s+credenciales\s+de|sin\s+(?:que\s+)?quede?\s+registr\w*|sin\s+registrar|sin\s+dejar\s+(?:rastro|registro|huella)|sin\s+que\s+se\s+entere\w*|sin\s+que\s+nadie\s+(?:se\s+)?sepa|que\s+nadie\s+(?:se\s+)?sepa|nadie\s+sepa\s+que|ignora\s+(?:mi\s+|el\s+|tu\s+)?rol|cambia\s+(?:mi\s+|el\s+)?rol|quit\w+\s+(?:mi\s+|el\s+)?rol|salta\w*\s+mis?\s+permisos|sube(?:me|le)?\s+de\s+rol|hazme\s+(?:rector|coordinador|admin)|otro\s+rol|mas\s+permisos\s+que)\b/u', $q0))
+        return $r('security_probe', 0.92);
+
+    // ── social / meta (sin datos) ──
+    if (preg_match('/^(hola|holi|hey|buenas|que mas|quiubo|saludos)( nexus| nexo)?[.! ]*$/u', $q0)) return $social('greeting');
+    if (preg_match('/^(buenos dias|buenas tardes|buenas noches)( nexus| nexo)?[.! ]*$/u', $q0)) return $social('greeting_time');
+    if (preg_match('/^(muchas |mil |ok |listo |vale )?gracias\b.{0,25}$/u', $q0)) return $social('thanks');
+    if (preg_match('/^(chao|adios|hasta luego|hasta manana|nos vemos|bye)\b.{0,20}$/u', $q0)) return $social('goodbye');
+    if (preg_match('/^(que hora es|me dices la hora|la hora|a que hora estamos|a que hora son|que hora son)\b.{0,10}$/u', $q0)) return $social('time');
+    // cierre conversacional corto — «ok vale», «eso era todo», «de acuerdo»
+    if (preg_match('/^(ok|vale|listo|dale|de acuerdo|ya esta|eso era todo|eso es todo|entendido|perfecto|bueno|asi es|asi era|esta bien|si senor|muy bien|era eso|con eso|era todo|nada mas|todo bien|entiendo|comprendido|ya entendi|ok vale|listo gracias)\b[.!, ]*$/u', $q0))
+        return $social('thanks');
+    if (preg_match('/\b(chiste|chistes|dato curioso|curiosidad|adivinanza)\b/u', $q0)
+        && preg_match('/\b(cuenta|cuenta(?:me)?|dime|dime un|uno|un|otra|otro|sabes|conoces|tienes|hazme|di)\b/u', $q0)
+        && $words <= 9) return $social('joke');
+    if (preg_match('/\b(quien te creo|quien te hizo|quien te desarrollo|quien te programo|creador|fabricante|de donde eres|de donde saliste|quienes te hicieron)\b/u', $q0)) return $social('creator');
+    if (preg_match('/^(que fecha es( hoy)?|que dia es hoy|a cuantos estamos|en que fecha estamos|que dia es)\b.{0,10}$/u', $q0)) return $social('date');
+    if (preg_match('/\b(quien te (creo|hizo|desarrollo|programo)|quien es tu creador|quienes te crearon)\b/u', $q0)) return $social('creator');
+    if (preg_match('/\b(que significa tu nombre|por que te llamas|de donde viene tu nombre)\b/u', $q0)) return $social('name_meaning');
+    if (preg_match('/^(quien eres|que eres|presentate)\b.{0,15}$/u', $q0)) return $social('about_nexus');
+    // reacción positiva sobre lo anterior («excelente noticia eso»,
+    // «genial», «eso sí») — reconocimiento breve, no oos crudo
+    if ($words <= 8
+        && preg_match('/\b(excelente|genial|perfect[oa]|brutal|espectacular|magnific[oa]|estupend[oa]|que bueno|que bien|buena noticia|gran noticia|me alegra|me encanta|super|ch[eé]vere|bacan\w*|eso s[ií]|bravo|uy que bien|bendito)\b/u', $q0)
+        && !preg_match('/\b(cuant|muestra|muestrame|lista|dame|dime|exporta|genera|crea|busca|compara)\b/u', $q0))
+        return $social('compliment');
+    if (preg_match('/\b(que puedes hacer|que sabes hacer|en que me (puedes )?ayudar|como te uso|que cosas haces|ayuda)\b/u', $q0) && $words <= 8)
+        return $r('capabilities', 0.92);
+
+    // ── operación explícita → chip a formulario (nunca consulta) ──
+    // el verbo debe PRECEDER al sustantivo operativo — «citas programadas»
+    // es una consulta (citas como sustantivo), no un mandato de crear.
+    if ($opVerb && preg_match('/\b(?:genera\w*|crea\w*|citar|citemos|citan|cite|convoca\w*|autoriza\w*|deriva\w*|reporta\w*|reportar|registra\w*|registrar|emite|emitir|tramita\w*|manda\w*|envia\w*|abre|abrir|haz|hacer|dame|quiero|necesito|pido|solicita\w*|programa\w*|agenda\w*|expide|formaliza\w*|levanta\w*|debo)\b\s+(?:un[ae]?s?\s+|el\s+|la\s+|los\s+|las\s+|al\s+|del\s+|de\s+|para\s+|a\s+|otra\s+|nuevo\s+|nueva\s+|mis?\s+)?\w{0,10}?\s*(permiso|citacion|citatorio|cita\b|seguimiento|incidente|salida|solicitud|reporte|autorizacion|excusa)\b/u', $q0)
+        && !preg_match('/\b(cuant|cuales|quienes|lista|listado|hubo|ha tenido|han tenido|se han|emitidos|emitidas|registrad|estan|hay|tiene|tienen|programad\w*|vigentes?|activos?|pendientes?)\w*/u', $q0))
+        return $r('derive_action', 0.9, empty($s['student']));
+
+    // consulta de persona nombrada como cláusula primaria — fuerte para
+    // que «y exporta todo» a la cola no arrastre el intent a exportación
+    if (!empty($s['student'])
+        && preg_match('/^\s*(muestra|muestrame|dame|dime|trae|traeme|busca|buscame|pasame|quiero ver|ver|consulta|necesito)\b.{0,50}\b(datos|ficha|perfil|informacion|info|documento|celular|acudiente)\b/u', $q0))
+        return $r('student_summary', 0.9, true, array_filter(['student'=>$s['student']]));
+
+    // ── exportación ──
+    // «muestra los datos de daniel, y exporta todo» — el verbo de consulta
+    // es la cláusula primaria; el «exporta» suelto al final no la convierte
+    // en exportación (además «todo» sin filtro es sospechoso, no un formato)
+    if ((preg_match('/\b(exporta\w*|descarga\w*|bajame|pasame (a|en)|saca\w* (un|el) (excel|pdf|reporte))\b/u', $q0)
+        && !preg_match('/^\s*(muestra|muestrame|dame|dime|trae|traeme|busca|pasame|quiero ver|ver|consulta)\b.{0,60}\b(datos|ficha|perfil|informacion|info)\b.{0,20}(y|,|;)\s+exporta/u', $q0))
+        || ($mod && preg_match('/\ben (excel|pdf|word|csv)\b/u', $q0))) {
+        if (preg_match('/\b(excel|xlsx|hoja de calculo)\b/u', $q0)) $ent['export_format'] = 'excel';
+        elseif (preg_match('/\bpdf\b/u', $q0)) $ent['export_format'] = 'pdf';
+        elseif (preg_match('/\bword\b/u', $q0)) $ent['export_format'] = 'word';
+        elseif (preg_match('/\bcsv\b/u', $q0)) $ent['export_format'] = 'csv';
+        return $r('export_data', 0.9, empty($s['student']), $ent);
+    }
+
+    // ── jornada / conteos institucionales ──
+    if (preg_match('/\b(como va|como vamos|como esta|como anda|como van|resumen|balance|panorama|estado)\b.{0,20}\b(la jornada|el dia|hoy|el colegio|la institucion)\b/u', $q0)
+        && empty($s['group']) && empty($s['student']) && !$mod)
+        return $r('day_summary', 0.93);
+    if (preg_match('/\b(cuant[oa]s|numero de|total de|cantidad de)\s+(estudiantes|alumnos|alumnas|matriculados|ninos|muchachos)\b|\bmatriculad[oa]s\b/u', $q0)
+        && !$mod && !preg_match('/\b(faltaron|llegaron|vinieron|ingresaron|asistieron|tarde|riesgo|seguimiento|permiso)\b/u', $q0))
+        return !empty($s['group']) ? $r('group_student_count', 0.92) : $r('students_count', 0.93);
+    if (preg_match('/\b(cuant[oa]s)\b.{0,25}\b(ingresaron|entraron|llegaron|vinieron|asistieron|presentes|marcaron)\b/u', $q0)
+        && (!$mod || $mod === 'INGRESO') && !preg_match('/\btarde\b/u', $q0))
+        return $r('count_present', 0.9);
+
+    // ── infraestructura / sistema ──
+    if (preg_match('/\b(anomalias?|incidencias? del sistema|fallas? del sistema|nodos? caidos?|alertas? del sistema)\b/u', $q0)) return $r('system_incidents', 0.92);
+    if (preg_match('/\b(spam|rechazad\w*|intentos? fallidos?|huellas? no reconocidas?)\b/u', $q0)
+        && preg_match('/\b(biometr\w*|huellas?|lectores?|sensores?|escaner\w*|marcaciones?)\b/u', $q0)) return $r('biometric_spam', 0.92);
+    if (preg_match('/\b(sensores?|dispositivos?|nodos?|escaneres?|huelleros?|lectores? biometricos?|lectores?|lector|biometric\w*|marcacion\w*|marcaciones)\b/u', $q0)
+        && !preg_match('/\b(spam|rechaz)/u', $q0)) return $r('devices_status', 0.9);
+    if (preg_match('/\b(sos|panico|boton de panico|alertas? de emergencia|emergencias?|alertas?)\b/u', $q0) && !$opVerb)
+        return $r('sos_alerts', 0.9);
+
+    // «sin excusa» = ausencia sin justificar — no el módulo de permisos
+    // («excusa» es sinónimo PERMISO; el matiz «sin» invierte el sentido)
+    if (preg_match('/\b(sin excusa\w*|sin excusas|faltan? excusas?|excusas? pendientes?|no trajeron excusas?|no mandaron excusas?|faltas? sin justificar|sin justificar|injustificad\w*)\b/u', $q0))
+        return $r('count_events', 0.88, true, ['module'=>'INASISTENCIA','_unjustified'=>true]);
+
+    // «mis permisos / mi rol / qué puedo hacer» = mi alcance (about_me),
+    // no el módulo de permisos escolares — intercepta antes del dispatch.
+    // PERO «ignora/cambia/quita mi rol» = escalación de privilegios → probe
+    if (preg_match('/\b(mis permisos|que permisos tengo|cuales son mis permisos|mi rol|mis roles|que rol tengo|mi perfil|quien soy|a que tengo acceso|que puedo ver|que puedo hacer|que alcance tengo|mi cuenta|mi acceso)\b/u', $q0)
+        && empty($s['student'])
+        && !preg_match('/\b(ignora|cambia|cambiar|quita|quitar|elimina|borra|modifica|salta|omit\w*|resetea|escala|sube|dame mas|mas permisos|otro rol|rol de)\b/u', $q0))
+        return $r('about_me', 0.92);
+
+    // ── mensajería / acudientes / notificaciones ──
+    if (preg_match('/\b(acudientes?|padres|papas|familias?)\b/u', $q0)
+        && preg_match('/\b(respond\w*|contest\w*|respuestas?|justificaron|han dicho)\b/u', $q0))
+        return $r('guardian_replies', 0.92);
+    if (preg_match('/\b(mensajes?|whatsapps?|envios?|citaciones?)\s+(fallid\w*|que fallaron|con error|no enviad\w*|rebotad\w*|no entregad\w*)\b/u', $q0))
+        return $r('failed_messages', 0.92);
+    // «el whatsapp de santiago» = campo de persona (student_field), no el
+    // canal — el guarda es por SUJETO, no por campo: «whatsapp» también es
+    // sinónimo de 'celular', así que field solo no descarta el intent
+    if (preg_match('/\b(whatsapp|mensajeria|cola de mensajes|twilio)\b/u', $q0)
+        && empty($s['student'])) return $r('whatsapp_status', 0.9);
+    if (preg_match('/\b(notificaciones|avisos|notificacion)\b/u', $q0)) {
+        if (preg_match('/\b(resumen|resume|clasific\w*|categor\w*|patron\w*|agrupa\w*|analiza\w*|organiza\w*|tipos?)\b/u', $q0))
+            $ent['_summary'] = true;
+        return $r('notifications_unread', 0.92, true, $ent);
+    }
+    if (preg_match('/\b(que tengo pendiente|mis pendientes|que me falta|tareas pendientes|que hay pendiente|tengo algo pendiente|que tengo por hacer)\b/u', $q0))
+        return $r('pending_tasks', 0.93);
+    if (preg_match('/\b(que he hecho|mi actividad|que hice|lo que he hecho|que consulte|que he consultado|que mire|que he revisado)\b/u', $q0)
+        && !preg_match('/\b(que nadie|sin que|nadie sepa|sin registro|sin dejar|borra|elimina)\b/u', $q0))
+        return $r('my_activity', 0.93);
+    if (preg_match('/\bcumple\w*\b/u', $q0)) return $r('birthdays_today', 0.93);
+
+    // ── personal / organización ──
+    if (preg_match('/\b(que|cuales|lista de|listado de|cuantos|los)\s+(docentes|profesores|profes|maestros)\b/u', $q0) && empty($s['group']))
+        return $r('teachers_list', 0.9);
+    if (preg_match('/\b(coordinador\w*|rector\w*|psicoorientador\w*|orientador\w*|psicolog\w*|secretari\w*|porter\w*|celador\w*|personal directivo)\b/u', $q0)
+        && !$mod) return $r('staff_lookup', 0.85, false);
+    if (preg_match('/\bhorarios?\b/u', $q0)) {
+        if (preg_match('/\btodos (los )?grupos\b|\bcada grupo\b/u', $q0)) $ent['_all_groups'] = true;
+        return $r('schedule_info', 0.88, empty($s['group']), $ent);
+    }
+    if (preg_match('/\b(en riesgo|riesgo (alto|critico|activo)|superaron el umbral|alertas? de riesgo|estudiantes? de riesgo)\b/u', $q0))
+        return $r('risk_students', 0.92);
+    if (preg_match('/\b(que|cuales|cuantos|lista de|listado de|todos los)\s+grupos\b/u', $q0) && !$mod
+        && !preg_match('/\b(mas|menos|compar|ranking)\b/u', $q0))
+        return $r('groups_list', 0.9);
+
+    // ── seguimientos / permisos / citaciones (tabla propia) ──
+    if (($mod === 'SEGUIMIENTO' || preg_match('/\bseguimientos?\b/u', $q0)) && !$opVerb) {
+        if (preg_match('/\b(abiert\w*|activ\w*|en proceso|vigentes?)\b/u', $q0)) $ent['status'] = 'active';
+        elseif (preg_match('/\b(cerrad\w*|resuelt\w*|terminad\w*)\b/u', $q0)) $ent['status'] = 'completed';
+        return $quant && empty($s['student']) ? $r('count_trackings', 0.9, true, $ent) : $r('trackings', 0.88, empty($s['student']), $ent);
+    }
+    if (preg_match('/\b(salidas? pedagogicas?|paseos?|pasantias?|salidas? de campo|excursion\w*)\b/u', $q0) && !$opVerb)
+        return $r('permissions', 0.9, true, ['status'=>'all']);
+    if (preg_match('/\b(permisos?|autorizaciones?|salidas autorizadas|autorizados?|autorizadas?|excusas?|justificaciones?)\b/u', $q0) && !$opVerb
+        // «permiso» meta-acceso («aunque no tenga permiso») no es el módulo
+        && !preg_match('/\b(?:no\s+)?(tengo|tiene|tenga|tienen|tener|tuviera|tenemos|darme|me\s+de[sn])\s+permiso\b|\bpermiso\s+(?:para|de)\s+(ver|acceder|entrar|mirar|consultar|saber|descargar)\b/u', $q0)) {
+        if (preg_match('/\b(activ\w*|vigentes?|ahora|en este momento|fuera)\b/u', $q0) && empty($s['from'])) $ent['status'] = 'active';
+        return $r('permissions', 0.88, empty($s['student']), $ent);
+    }
+    if (preg_match('/\b(citaciones?|citas?|citados?|llamados?|convocados?|reuniones? con padres|acudientes citados|citas? programadas?|citatorios?)\b/u', $q0) && !$opVerb
+        && !preg_match('/\bpermiso|excusa|autoriz/u', $q0))
+        return $r('citations', 0.88, empty($s['student']));
+
+    // ── cobertura de paráfrasis frecuentes (fixture §singles) ──
+    // reglas de dominio inequívocas que no caben en las familias anteriores
+
+    // campo o ficha de persona nombrada — «el correo de pedro», «la eps de
+    // andrés», «quien es luciana», «resumen de diego»
+    if (!empty($s['student']) && !empty($s['field']) && !$mod)
+        return $r('student_field', 0.88, true);
+    if (!empty($s['student'])
+        && preg_match('/^(quien es|quienes son|resumen de|ficha de|datos de|perfil de|que sabes de|cuentame de|hablame de|que me dices de|informacion de|info de)\b/u', $q0)
+        && !$mod)
+        return $r('student_summary', 0.9, true);
+
+    // resumen/panorama diario institucional
+    if (preg_match('/\b(resumen|panorama|balance|estado|como cerro|como termino|como cerro|que tal va|como va|como esta|como amanecio)\b.{0,20}\b(del dia|general|del colegio|de la institucion|institucional|de hoy|de la jornada|del plantel|hoy)\b|^estado del colegio$|^panorama general$|^resumen del dia$|^como cerro el dia$|^que tal va el colegio$/u', $q0)
+        && empty($s['group']) && empty($s['student']) && !$mod)
+        return $r('day_summary', 0.9);
+
+    // pendientes operativos del usuario
+    if (preg_match('/\b(que tengo pendiente|mis pendientes|que me falta|tareas? pendientes?|que hay pendiente|tengo algo pendiente|que tengo por hacer|que debo revisar|trabajos? sin completar|pendientes? de hoy|cosas pendientes|que me falta por hacer|lo pendiente|pendientes? por)\b/u', $q0))
+        return $r('pending_tasks', 0.92);
+
+    // estudiante al azar / selección aleatoria
+    if (preg_match('/\b(aleatori\w*|al azar|azar)\b/u', $q0)
+        || (preg_match('/\b(estudiante|alumno|pelado|nino|muchacho)\b/u', $q0)
+            && preg_match('/\b(cualquiera|uno cualquiera|el que sea|dime uno|dame uno|muestrame uno)\b/u', $q0)))
+        return $r('random_student', 0.9);
+
+    // auditoría — «quién consultó a maría», «trazabilidad», «registro de accesos»
+    if (preg_match('/\b(auditoria|trazabilidad|registro de accesos|registros? de acceso|quien (consulto|vio|mire|modifico|entro|exporto|descargo|accedio)|log de|bitacora|historial de accesos)\b/u', $q0))
+        return $r('audit_query', 0.9);
+
+    // mensajería fallida — «mensajes que no llegaron», «quedaron sin enviar»
+    if (preg_match('/\b(mensajes?|whatsapps?|correos?|envios?)\b.{0,25}\b(no llegaron|sin enviar|no enviados?|quedaron sin|no salieron|fallaron|fallidos?|rebotad\w*|no entregad\w*)\b|\b(no llegaron|fallaron|rebotaron|no salieron)\w*\b.{0,25}\b(mensajes?|padres|acudientes)\b|\bmensajes? que no\b/u', $q0))
+        return $r('failed_messages', 0.9);
+    // buzón propio — «tengo mensajes», «mensajes sin leer», «hay correos»
+    if (preg_match('/\b(tengo|hay|me llegaron|nuevos|sin leer|sin revisar)\w*\s+(mensajes?|notificaciones|avisos|correos)\b|\b(mensajes?|avisos|correos)\s+(nuevos|sin leer|pendientes|para mi)\b|\bmis mensajes\b|\bmi bandeja\b|\bmensajes? nuevos\b|\bhay mensajes\b/u', $q0))
+        return $r('notifications_unread', 0.88);
+
+    // riesgo estudiantil / deserción / umbrales
+    if (preg_match('/\b(riesgo|desercion|umbral\w*|abandono (escolar|academico)|probabilidad de abandono|alerta temprana)\b/u', $q0)
+        && $mod !== 'SEGUIMIENTO')
+        return $r('risk_students', 0.9);
+
+    // docente por materia — «el de matemáticas», «quién enseña ciencias»
+    if (preg_match('/\b(?:quien|quienes)\s+(ensen\w+|dicta|dictan|da|dan|imparte|imparten|mira|ve)\s+(\w{3,})/u', $q0, $mm)
+        || preg_match('/^(?:el|la|los|las)\s+de\s+(\w{3,})/u', $q0, $mm)
+        || preg_match('/\b(?:profesor[ae]?s?|docentes?|maestr[oa]s?|profe)\s+de\s+(\w{3,})/u', $q0, $mm)) {
+        $sub = mb_strtolower($mm[count($mm) - 1]);
+        if (!in_array($sub, ['la','el','los','las','que','quien','es','son','hoy','ayer','grado','grupo','clase','turno','salida','entrada','datos','ficha'], true))
+            return $r('staff_lookup', 0.86, true, ['subject' => $sub]);
+    }
+    // planta docente / personal institucional
+    if (preg_match('/\b(planta docente|cuerpo docente|personal (del|de la) (colegio|institucion|planta|administrativo)|empleados|directivos|todo el personal|el personal|quien trabaja|trabajadores|funcionarios)\b/u', $q0)
+        && empty($s['group']))
+        return $r('teachers_list', 0.88);
+
+    // oferta de grados/grupos — «cuántos grados hay», «lista de cursos»
+    if (preg_match('/\b(cuantos grados|que grados|grados (hay|existen|ofrece|ofrecen|tiene|hay disponibles)|lista de cursos|cursos (del colegio|hay|ofrecidos|existentes)|que cursos|grados ofrecidos|niveles educativos|que niveles)\b/u', $q0)
+        && empty($s['group']))
+        return $r('groups_list', 0.88);
+
+    // horarios / bloques / recreo — «a qué hora es el recreo», «qué bloque sigue»
+    if (preg_match('/\b(a que hora (es|empieza|termina|sale|entra|arranca)|que bloque|que periodo|recreo|descanso|receso|almuerzo|hora de (entrada|salida|receso|clase|almuerzo)|clase de \w+|siguiente bloque|proximo bloque|a que hora)\b/u', $q0)
+        && !$mod
+        && !preg_match('/\ba que hora (estamos|son)\b/u', $q0))
+        return $r('schedule_info', 0.85, empty($s['group']));
+
+    // «casos» sueltos = incidentes (no seguimientos) — sentido coloquial
+    if (preg_match('/\bcasos?\b/u', $q0) && !$mod)
+        return $quant ? $r('count_events', 0.82, true) : $r('list_events', 0.8, true);
+
+    // asistencia por posición — «todos menos los del 8a», «todos salvo…»
+    if (preg_match('/\btodos? (menos|excepto|salvo|menos los|excepto los|salvo los)\b/u', $q0))
+        return $r('attendance_today', 0.85);
+
+    // presencia — «los presentes del 9a», «los que asistieron», «vinieron»
+    if (preg_match('/\b(presentes|asistentes|asistieron|vinieron|entraron|ingresaron|se presentaron|presentaron|llegaron)\b/u', $q0)
+        && !$mod
+        && !preg_match('/\b(no|sin|falt\w*|tarde|retraso)\b/u', $q0))
+        return $quant ? $r('count_present', 0.88) : $r('attendance_today', 0.85);
+
+    // rankings / comparativas de asistencia
+    if (preg_match('/\b(los? que mas|mas (faltan|evaden|reinciden|impuntuales)|record de|los peores|mas (tardanzas|inasistencias|faltas|evasiones|ausencias)|comparativ\w+|promedio de .{0,20}por grupo|ranking)\b/u', $q0)
+        && empty($s['student']))
+        return $r(empty($s['group']) ? 'top_offenders' : 'attendance_ranking', 0.88, true,
+            preg_match('/\btop\s+(\d{1,2})\b|\bsolo\s+(\d{1,2})\b|\blos\s+(\d{1,2})\s+(primeros|mas)/u', $q0, $tk) ? ['_rank_limit'=>(int)($tk[1] ?: ($tk[2] ?: $tk[3]))] : []);
+
+    // población/resumen de grupo — «población del 7b», «cómo va el sexto»
+    if (!empty($s['group']) && !$mod) {
+        if (preg_match('/\b(poblacion|cuantos (estudiantes|alumnos|pelados|muchachos|ninos|van)|matricula|censo del)\b/u', $q0))
+            return $r('group_student_count', 0.9);
+        if (preg_match('/\b(como va|como esta|como va el|estado|resumen|panorama|balance|que tal|como le va|como esta el)\b/u', $q0))
+            return $r('group_summary', 0.88, true);
+    }
+
+    // censo institucional
+    if (preg_match('/\b(censo|poblacion estudiantil|total de estudiantes|cuantos estudiantes hay|matricula total|cuanta gente|cuantos alumnos hay)\b/u', $q0)
+        && empty($s['group']) && !$mod)
+        return $r('students_count', 0.9);
+
+    // ── incidentes de asistencia ──
+    $incident = $mod && in_array($mod, NX_INCIDENT_MODULES, true);
+    if ($incident) {
+        if (preg_match('/\bpor (dias? de la semana|dia|fecha|estudiante|alumno|grupo|curso|salon|mes)\b/u', $q0, $gb)) {
+            $by = str_starts_with($gb[1], 'dia de') || str_starts_with($gb[1], 'dias de') ? 'weekday'
+                : (in_array($gb[1], ['dia','fecha'], true) ? 'day'
+                : (in_array($gb[1], ['estudiante','alumno'], true) ? 'student'
+                : ($gb[1] === 'mes' ? 'month' : 'group')));
+            return $r('frequency_table', 0.9, empty($s['student']), ['group_by'=>$by]);
+        }
+        if (preg_match('/\b(estudiantes?|alumnos?|quienes|quien|los que)\b.{0,25}\b(con mas|que mas|mas|mayor numero de)\b/u', $q0)
+            || preg_match('/\b(top|ranking|reincidentes?)\b/u', $q0) && !preg_match('/\bgrupos?\b/u', $q0)) {
+            $ent = [];
+            if (preg_match('/\btop\s+(\d{1,2})\b|\bsolo\s+(\d{1,2})\b|\blos\s+(\d{1,2})\s+(primeros|mas)/u', $q0, $tk))
+                $ent['_rank_limit'] = (int)($tk[1] ?: ($tk[2] ?: $tk[3]));
+            return $r('top_offenders', 0.9, true, $ent);
+        }
+        if (preg_match('/\b(grupos?|cursos?|salones?|grados?)\b.{0,30}\b(con mas|mas|menos|ranking|top|compar\w*)\b|\bcomo van los grupos\b/u', $q0))
+            return $r('attendance_ranking', 0.88, true, preg_match('/\bdecim\w*/u', $q0) ? ['grade'=>'10'] : []);
+        // «esta semana comparada con la pasada», «hoy vs ayer» → conteo con
+        // comparación de períodos (el handler calcula ambos lados)
+        if (preg_match('/\b(compar\w*|vs|versus|frente a|respecto a|respecto al|contra)\b/u', $q0)
+            && !preg_match('/\bgrupos?\b|\b\d{1,2}\s*-?\s*[a-d]\s+(y|con|vs)\s+\d/u', $q0))
+            return $r('count_events', 0.9, empty($s['student']), ['trend'=>true]);
+        if ($quant)
+            return $r('count_events', 0.9, empty($s['student']));
+        if (preg_match('/^(quienes|quien|lista\w*|muestra\w*|dame|ver|cuales|nombres|dime)\b/u', $q0)
+            || $words <= 6)
+            return $r('list_events', $words <= 6 ? 0.85 : 0.9, empty($s['student']) && $words <= 6);
+        // interrogativo en medio de la frase («cuales muchachos llegaron
+        // tarde», «necesito saber quiénes faltaron») — sigue siendo listado
+        if (preg_match('/\b(cuales|quienes|que muchachos|los que|muchos|muchachos|estudiantes|alumnos|necesito|quiero|muestra|dime|dame|traeme|ver|lista)\b/u', $q0))
+            return $r('list_events', 0.82, empty($s['student']));
+    }
+    if (preg_match('/\b(como va|como esta|resumen|estado)\b.{0,12}\b(el|del)?\s*(grupo|curso)?\s*\d{1,2}\s*-?\s*[a-z]\b/u', $q0)
+        && !empty($s['group']) && !$mod)
+        return $r('group_summary', 0.88, true);
+    if (preg_match('/\b(ficha|perfil|historial|hoja de vida|datos|informacion|info|detalles|todo|que sabes|que tienes|como va|como le va)\b/u', $q0) && !empty($s['student']))
+        return $r('student_summary', 0.85, false);
+    if (!empty($s['field']) && empty($s['module']) && empty($s['group'])
+        && str_word_count($q0, 0, 'áéíóúñü0123456789') <= 4
+        && in_array($s['field'], ['acudiente','documento','celular','telefono','grupo','jornada','nacimiento','nombre','documento_acudiente','celular_acudiente','nombre_acudiente'], true))
+        return $r('student_field', 0.86, true);
+    return null;
+}
+
+/**
+ * Rescate determinista de dominio — cuando el parser cae a out_of_scope pero
+ * el texto nombra sin ambigüedad un dominio cubierto («sensores del colegio»,
+ * «los nodos», «anomalías del sistema», «salidas pedagógicas»), la consulta
+ * SÍ es respondible: lo informal (nxLlmChat) no debe improvisar capacidades
+ * ni el usuario recibir un "no sé" sobre datos que existen.
+ * Solo sustantivos inequívocos — nada que pueda significar otra cosa.
+ */
+function nxDomainRescue(string $q0): ?string {
+    static $map = null;
+    $map ??= [
+        'devices_status'    => '/\b(sensor|sensores|dispositivo|dispositivos|nodo|nodos|escaner|escáneres?|huellero|huelleros|lector biometrico)\b/u',
+        'system_incidents'  => '/\b(anomalias?|incidencias? del sistema|fallas? del sistema|nodos? caidos?)\b/u',
+        'permissions'       => '/\b(salidas? pedagogicas?|paseos?|pasantias?|salidas? de campo)\b/u',
+    ];
+    foreach ($map as $intent => $re) {
+        if (preg_match($re, $q0)) return $intent;
+    }
+    return null;
+}
 
 /** Smalltalk/meta — un turno de cortesía no cambia el tema conversacional. */
 const NX_SMALLTALK_INTENTS = ['greeting','greeting_time','wellbeing','wellbeing_reply','joke',
@@ -945,6 +1571,12 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $ctxEntities = is_array($ctx['entities'] ?? null) ? $ctx['entities'] : [];
     $lastIntent  = is_string($ctx['last_intent'] ?? null) ? $ctx['last_intent'] : null;
     $inheritable = $lastIntent && in_array($lastIntent, NX_QUERY_INTENTS, true);
+    // fragmentos puros: «en el mes», «y la última semana», «y en todo el
+    // colegio» — no traen tema propio; el tema es el del turno anterior
+    $temporalFrag = nxIsTemporalFragment($q0);
+    $scopeWiden   = nxIsScopeWidening($q0);
+    // propuesta del parser bajo umbral (fragmento que copió el tema)
+    $proposed = is_string($cls['proposed_intent'] ?? null) ? $cls['proposed_intent'] : null;
 
     $hasNewEntity = false;
     foreach (['student','group','module','days','field'] as $k)
@@ -977,6 +1609,10 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         $bareNoun = (bool)(str_word_count($q0, 0, 'áéíóúñü') <= 4
             && preg_match('/\b(documento|telefono|celular|acudiente|contacto|direccion|correo|ficha|datos|perfil|resumen|horario|grupo|salon|papa|mama|padre|madre|familiar|edad|cumpleanos|numero|whatsapp|cedula|identificacion)\b/u', $q0));
         $dependent = $followupMark || $correctionWeak || $deicticVerb || $interrogDep || $bareNoun
+            || $temporalFrag || $scopeWiden
+            // enclítico anafórico: «compáralas», «muéstramelas», «expórtalos»
+            || (bool)preg_match('/\b\w+(?:ar|er|ir|a|e)(?:las|los|melas|melos|selas|selos)\b/u', $q0)
+                && (bool)preg_match('/\b(compar|muestr|export|descarg|pas|dam|list|orden|filtr)\w*/u', $q0)
             // deícticos espaciales/demostrativos — «este/esta» EXCLUIDO:
             // «esta semana», «este mes» son temporales, no referenciales
             || (bool)preg_match('/\b(ahi|alli|alla|aca|ahi mismo|ahi dentro|alli dentro|en ese|en esa|esos|esas|del mismo|de la misma|el mismo|la misma|del tal|ese|esa)\\b/u', $q0);
@@ -1003,9 +1639,15 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // sobre un resultado vacío es nav honesta («no hay nada»), no
         // una consulta nueva; el handler decide la respuesta
         $hasResult = isset($dsState['last_result']);
+        // «todos» exacto con set activo = expandir ESE set (nav=all), no
+        // ampliar el alcance a toda la institución — el exact-match gana
+        $allSetExact = $hasResult && !empty($dsState['last_result']['items'])
+            && (bool)preg_match('/^(y |ahora |dame |dime |muestra(?:me)? |muestrame |trae(?:me)? )?(todos|todas|todo|todos ellos|todas ellas|el listado completo|la lista completa|la lista entera|la nomina completa)[.! ]*$/u', $q0);
         // «dame otro / el siguiente / el primero / los demás / su nombre»
-        // sobre el result-set anterior — consulta informativa, nunca op
-        if ($hasResult) {
+        // sobre el result-set anterior — consulta informativa, nunca op.
+        // Un fragmento temporal («la última semana», «los últimos 15 días»)
+        // NO es navegación posicional aunque diga «último».
+        if ($hasResult && !$temporalFrag && !($scopeWiden && !$allSetExact)) {
             $nav = null;
             // ── transformaciones sobre el set activo (§12-13): proyección,
             // orden, slice, goto — antes de los ordinales sueltos ──
@@ -1190,6 +1832,18 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 $intent = 'student_field'; $turnType = 'context_modify';
             }
         }
+        // «¿cuántas evasiones los últimos 30 días?» tras una ficha de
+        // estudiante — el sujeto activo es ESA persona: la consulta de
+        // eventos hereda el referente (la persona no se repite porque se
+        // entiende). Ámbito explícito («en el colegio») sí lo rompe.
+        if (empty($slots['student']) && empty($slots['group']) && empty($slots['person'])
+            && !empty($ctxEntities['student'])
+            && !preg_match('/\b(colegio|institucion|plantel|en general|en total|todos los grupos|todo el)\b/u', $q0)
+            && in_array($intent, ['count_events','list_events','attendance_today','late_today','frequency_table','permissions','citations','trackings'], true)
+            && in_array($lastIntent, ['student_field','student_summary','derive_action','start_operation','random_student'], true)) {
+            $slots['student'] = $ctxEntities['student']; $inherited[] = 'student';
+            $turnType = 'context_modify';
+        }
         // «volvamos a X / vuelve a X» — retorno explícito al tema.
         // El nombre termina en ':', '?' o la primera palabra interrogativa.
         if (preg_match('/\b(vol(?:vamos|ve|ver|vamos) a|retomemos|de nuevo con|regresemos a|pasemos a)\s+([a-záéíóú]+(?:\s+[a-záéíóú]+){0,3})/u', $q0, $mv)) {
@@ -1208,10 +1862,16 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             // «y ayer / y la semana pasada / y del último mes» — solo
             // cambia el tiempo. Un turno 100% temporal no puede ser
             // «posición»: «último mes» es rango, no ordinal de la lista.
-            if (preg_match('/^(y |pero |ahora |entonces |o sea )?(del |de la |de |en |sobre )?(ayer|anteayer|hoy|esta semana|la semana pasada|este mes|el mes pasado|mes pasado|la semana|del mes|de hoy|de ayer|el otro dia|ese dia|esa semana|ese mes|semana pasada|semana anterior|mes anterior|ano pasado|ultimos? \d+ dias?|\d+ dias?|ultimo mes|ultima semana|ultimo ano|la quincena|el bimestre pasado|bimestre pasado|lo que va del mes|lo que va de la semana|lo corrido del mes)\b[.!? ]*$/u', $q0)
-                && in_array($intent, ['foreign_culture','out_of_scope','smalltalk','greeting','yes','no','audit_query','about_nexus','deictic','students.position','incidents.position','students_in_group','list_events','count_events','birthdays_today','random_student','student_summary','group_summary','attendance_today','count_present','late_today','permissions','day_summary','trackings'], true)) {
+            // nxIsTemporalFragment cubre las formas con artículo/conector
+            // («en el mes», «y la última semana», «y los últimos 15 días»)
+            // que la regex literal no alcanzaba — el turno es 100% tiempo:
+            // la consulta anterior se repite con el rango nuevo.
+            if ($temporalFrag
+                || (preg_match('/^(y |pero |ahora |entonces |o sea )?(del |de la |de |en |sobre )?(ayer|anteayer|hoy|esta semana|la semana pasada|este mes|el mes pasado|mes pasado|la semana|del mes|de hoy|de ayer|el otro dia|ese dia|esa semana|ese mes|semana pasada|semana anterior|mes anterior|ano pasado|ultimos? \d+ dias?|\d+ dias?|ultimo mes|ultima semana|ultimo ano|la quincena|el bimestre pasado|bimestre pasado|lo que va del mes|lo que va de la semana|lo corrido del mes)\b[.!? ]*$/u', $q0)
+                    && in_array($intent, ['foreign_culture','out_of_scope','smalltalk','greeting','yes','no','audit_query','about_nexus','deictic','students.position','incidents.position','students_in_group','list_events','count_events','birthdays_today','random_student','student_summary','group_summary','attendance_today','count_present','late_today','permissions','day_summary','trackings'], true))) {
                 $intent = $lastIntent; $inherited[] = 'intent';
                 $turnType = 'context_modify';
+                $coverageHit = true;
             }
             // «qué pasó con él/ese» — ficha del referente activo, no audit
             elseif (preg_match('/\b(que paso|como va|como esta|como le fue|que tiene)\s+(el|ella|ese|esa|este|esta|el estudiante|ese estudiante|con el|con ella)\b/u', $q0)
@@ -1227,11 +1887,83 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 }
             }
         }
+        // «y en todo el colegio / en general / en total» — misma consulta sin
+        // el filtro de grupo/estudiante del turno anterior
+        if ($scopeWiden && $inheritable && !$coverageHit && !$allSetExact) {
+            $widen = ['group_student_count'=>'students_count','students_in_group'=>'students_count',
+                      'group_summary'=>'day_summary'];
+            $intent = $widen[$lastIntent] ?? $lastIntent;
+            unset($slots['group'], $slots['student'], $slots['_ref'], $slots['person']);
+            $inherited = array_values(array_diff($inherited, ['group','student']));
+            $slots['_scope_all'] = true;
+            $inherited[] = 'intent';
+            $turnType = 'context_modify';
+            $coverageHit = true;
+        }
+        // «compáralas con las de hoy», «comparado con la semana pasada»,
+        // «¿qué día tuvo más?» — la métrica del turno anterior en DOS rangos
+        if ($inheritable && !$coverageHit
+            && in_array($lastIntent, ['count_events','list_events','frequency_table','late_today','attendance_today','top_offenders','permissions','citations','trackings','count_trackings','pending_returns','sos_alerts','guardian_replies','notifications_unread','biometric_spam'], true)
+            && (preg_match('/\b(compar\w*|vs|versus|frente a|respecto a|respecto al|contra)\b/u', $q0)
+                || preg_match('/\bque dia (tuvo|hubo|fue|tiene|hay)\b|\bcual (dia|fue el dia) (tuvo|hubo)\b/u', $q0))
+            && !preg_match('/\b(grupos?|cursos?)\b|\b\d{1,2}\s*-?\s*[a-d]\s+(y|con|vs)\s+\d/u', $q0)) {
+            $ranges = nxTimeRanges($q0);
+            $ctxR = (!empty($ctxEntities['from']) && !empty($ctxEntities['to']))
+                ? ['from'=>$ctxEntities['from'],'to'=>$ctxEntities['to'],
+                   'range_label'=>$ctxEntities['range_label'] ?? "{$ctxEntities['from']} a {$ctxEntities['to']}",
+                   'days'=>$ctxEntities['days'] ?? null] : null;
+            $cmp = null;
+            if (count($ranges) >= 2) $cmp = array_slice($ranges, 0, 4);
+            elseif (count($ranges) === 1 && $ctxR && ($ctxR['from'] . $ctxR['to']) !== ($ranges[0]['from'] . $ranges[0]['to']))
+                $cmp = [$ctxR, $ranges[0]];
+            if ($cmp) $slots['_compare_ranges'] = $cmp;
+            else $slots['trend'] = true;
+            foreach (['module','student','group'] as $k)
+                if (empty($slots[$k]) && !empty($ctxEntities[$k])) { $slots[$k] = $ctxEntities[$k]; $inherited[] = $k; }
+            if (!$cmp && $ctxR) foreach (['from','to','range_label','days'] as $k)
+                if (isset($ctxR[$k])) $slots[$k] = $ctxR[$k];
+            $intent = 'count_events'; $inherited[] = 'intent';
+            $turnType = 'context_modify';
+            $coverageHit = true;
+        }
+        // «¿alguno asistió o todos faltaron?», «¿cuántos vinieron?» con grupo
+        // activo — asistencia DEL grupo (presentes vs ausentes), no la lista
+        // institucional de inasistencias
+        if (!$coverageHit
+            && preg_match('/\b(alguno|algun estudiante|alguien|nadie|ninguno|todos|todas|cuantos|cuantas)\b/u', $q0)
+            && preg_match('/\b(asisti\w*|vino|vinieron|llego|llegaron|entro|entraron|ingres\w*|falt\w*|inasisti\w*|presentes?|ausentes?)\b/u', $q0)
+            && !preg_match('/\b(colegio|institucion|plantel|todos los grupos|en general|en total)\b/u', $q0)
+            // el grupo es del texto, o el turno es anafórico sobre el grupo activo
+            && (!empty($slots['group'])
+                || (!empty($ctxEntities['group'])
+                    && ($followupMark || preg_match('/\b(alguno|alguien|nadie|ninguno|todos|todas)\b/u', $q0))))
+            && empty($slots['student'])
+            && in_array($intent, ['out_of_scope','list_events','count_events','attendance_today','count_present','late_today','students_in_group','group_summary','smalltalk','deictic'], true)) {
+            if (empty($slots['group'])) { $slots['group'] = $ctxEntities['group']; $inherited[] = 'group'; }
+            if (empty($slots['from']) && !empty($ctxEntities['from'])) {
+                foreach (['from','to','range_label','days'] as $k)
+                    if (isset($ctxEntities[$k])) $slots[$k] = $ctxEntities[$k];
+            }
+            $slots['_attendance_q'] = true;
+            $intent = 'group_summary';
+            $turnType = 'context_modify';
+            $coverageHit = true;
+        }
         // «cuántos son en total» con grupo activo → conteo DEL grupo
-        // (el inherit genérico ya pudo llenar slots.group — igual aplica)
+        // (el inherit genérico ya pudo llenar slots.group — igual aplica).
+        // Una pregunta COMPLETA por el total («¿cuántos estudiantes hay
+        // matriculados?») es institucional aunque el turno previo fuera de
+        // un grupo — solo el conteo desnudo/anafórico hereda el grupo.
+        $bareCount = (bool)preg_match('/^(y |y en |pero )?(cuantos|cuantas)( son| hay| eran| tiene| tienen)?( en total)?[?. ]*$/u', $q0)
+            || ($followupMark && !preg_match('/\b(estudiantes|alumnos|matriculad)/u', $q0));
+        if ($intent === 'students_count' && empty($slots['group'])
+            && !$bareCount && !empty($ctxEntities['group'])) {
+            unset($slots['group']);
+            $inherited = array_values(array_diff($inherited, ['group']));
+        }
         if ($intent === 'students_count'
-            && !preg_match('/\b(en el colegio|del colegio|de la institucion|de todo el plantel|en total del colegio|matriculados en total)\b/u', $q0)
-            && (!empty($ctxEntities['group']) || !empty($slots['group']))) {
+            && !preg_match('/\b(en el colegio|del colegio|de la institucion|de todo el plantel|en total del colegio|matriculados en total|todo el colegio|toda la institucion)\b/u', $q0)
+            && (!empty($slots['group']) || ($bareCount && !empty($ctxEntities['group'])))) {
             if (empty($slots['group'])) { $slots['group'] = $ctxEntities['group']; $inherited[] = 'group'; }
             $intent = 'group_student_count';
             $turnType = 'context_modify';
@@ -1241,7 +1973,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // lo define el contexto: nómina → conteo del grupo, módulo/eventos
         // → count_events del rango
         if (in_array($intent, ['out_of_scope','list_events','count_events'], true)
-            && preg_match('/\b(cuantos|cuantas)\s+(son|hay|en total|somos|en el grupo|quedan)\b/u', $q0)
+            && preg_match('/\b(cuantos|cuantas)\s+(\w+\s+){0,3}?(son|hay|en total|somos|en el grupo|quedan)\b/u', $q0)
             && !preg_match('/\b(en el colegio|del colegio|de la institucion|matriculados en total)\b/u', $q0)
             && (!empty($slots['group']) || !empty($ctxEntities['group']))) {
             $studentsSet = (($dsState['last_result']['type'] ?? null) === 'students')
@@ -1420,16 +2152,24 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // «¿alguno tiene excusa? / ¿cuáles están justificadas?» — filtro de
         // excusa sobre la consulta activa; hereda intent+rango y fija
         // justified según la polaridad («con excusa» vs «sin justificar»)
-        if (in_array($intent, ['out_of_scope','smalltalk','deictic','yes','random_student','list_events','incidents.list','count_events'], true)
+        if (in_array($intent, ['out_of_scope','smalltalk','deictic','yes','random_student','list_events','incidents.list','count_events',
+                'student_field','students.list','incidents.count','attendance_today','late_today','students_in_group','top_offenders'], true)
             && $inheritable
-            && preg_match('/\b(excusa\w*|justificad\w*)\b/u', $q0)) {
+            && preg_match('/\b(excusa\w*|justificad\w*|justificacion\w*|justificaron|soporte)\b/u', $q0)) {
             $slots['justified'] = (!empty($slots['_unjustified'])
-                || preg_match('/\b(sin excusa|sin justificar|injustificad|no justificad|ningun\w*\s+excusa|no tienen excusa|sin una excusa)\b/u', $q0))
+                || preg_match('/\b(sin excusa|sin justificar|injustificad|no justificad|ningun\w*\s+excusa|no tienen excusa|sin una excusa|no han justificado)\b/u', $q0))
                 ? 'no' : 'yes';
-            if (in_array($intent, ['out_of_scope','smalltalk','deictic','yes','random_student'], true)) {
-                $intent = $lastIntent; $inherited[] = 'intent';
-            }
+            // el filtro va sobre la métrica activa: módulo/rango/grupo del tema
+            foreach (['module','group','student','from','to','range_label','days'] as $k)
+                if (empty($slots[$k]) && isset($ctxEntities[$k]) && $ctxEntities[$k] !== null && $ctxEntities[$k] !== '') {
+                    $slots[$k] = $ctxEntities[$k]; $inherited[] = $k;
+                }
+            if (empty($slots['module'])) $slots['module'] = 'INASISTENCIA';
+            $wantCount = (bool)preg_match('/\b(cuant[oa]s)\b/u', $q0);
+            $intent = $wantCount ? 'count_events' : 'list_events';
+            $inherited[] = 'intent';
             $turnType = 'context_modify';
+            $coverageHit = true;
         }
         // «los grupos que tengo a mi cargo / mis grupos» — alcance del
         // docente, nunca un estudiante. Gana sobre la herencia de tema:
@@ -1438,6 +2178,8 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         if (!empty($slots['_my_scope'])
             && preg_match('/\b(grupos?|cursos?|salones?)\b/u', $q0)
             && !preg_match('/\b(tardanza|llegada|inasist|falt|ausen|evasion|fuga|permiso|citacion|incidente|evento|alerta|seguim|sos\b)/u', $q0)
+            // «llegaron tarde / entran tarde» — evento, no jornada de tarde
+            && !preg_match('/\b(lleg\w+|entr\w+|vin\w+|asisti\w+|marca\w+)\s+tarde\b|\btarde\s+(hoy|ayer|esta semana|el lunes|esta manana|en la manana|en punto)\b|\bimpuntual\w*\b/u', $q0)
             && in_array($intent, ['out_of_scope','smalltalk','deictic','student_field','students_in_group','group_summary','random_student','list_events','incidents.list','count_events','attendance_today','late_today','students.list'], true)) {
             $intent = 'groups_list'; $turnType = 'context_modify';
         }
@@ -1551,6 +2293,14 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // la herencia no pisa un reroute de operación: «ahora quiero citar
         // a su acudiente» ya fue resuelto a derive_action por el verbo —
         // volver al lastIntent lo degradaría a consulta fantasma
+        // propuesta del parser bajo umbral SIN tema heredable pero con soporte
+        // estructural propio (módulo/estudiante/grupo) — consulta autónoma
+        // que el modelo dudó; el slot-filling determinista la respalda
+        if ($intent === 'out_of_scope' && $proposed && !$inheritable && !$coverageHit
+            && in_array($proposed, NX_LLM_FORMAL, true)
+            && (!empty($slots['module']) || !empty($slots['student']) || !empty($slots['group']))) {
+            $intent = $proposed;
+        }
         if (($intent === 'out_of_scope' || $conf < NX_NLU_THRESHOLD)
             && !in_array($intent, ['derive_action','start_operation','repeat_op','confirm_op','security_probe'], true)
             && $inheritable && $dependent && !$hasOpNoun && !$coverageHit) {

@@ -41,6 +41,105 @@ function nxLlmEnabled(): bool {
     return $c['key'] !== '' && $c['mode'] !== 'off';
 }
 
+/* ============================================================================
+ * Transporte compartido — presupuesto de cuota.
+ * ----------------------------------------------------------------------------
+ * Groq free: 8.000 tokens/min y 1.000 req/día POR CLAVE (compartida por todos
+ * los usuarios de la institución). Un 429 no se reintenta a ciegas: se
+ * espera el Retry-After solo si es corto (parser) y se abre un cooldown en
+ * Redis para que los turnos siguientes vayan directo al respaldo
+ * determinista en vez de chocar otra vez contra el límite.
+ * ========================================================================== */
+function nxLlmRedis() {
+    static $r = false;
+    if ($r !== false) return $r;
+    $r = null;
+    try { if (function_exists('getRedisConnection')) $r = getRedisConnection(); } catch (Throwable $e) { $r = null; }
+    return $r;
+}
+
+function nxLlmCooling(): bool {
+    static $localUntil = 0;
+    if (getenv('NX_LLM_IGNORE_COOLDOWN') === '1') return false;
+    if (time() < $localUntil) return true;
+    try {
+        $rd = nxLlmRedis();
+        $until = $rd ? (int)$rd->get('nx:llm:cooldown_until') : 0;
+        if ($until > time()) { $localUntil = $until; return true; }
+    } catch (Throwable $e) {}
+    return false;
+}
+
+function nxLlmSetCooldown(int $secs): void {
+    $until = time() + max(2, min(90, $secs));
+    try { $rd = nxLlmRedis(); if ($rd) $rd->setex('nx:llm:cooldown_until', max(2, min(90, $secs)), (string)$until); } catch (Throwable $e) {}
+}
+
+/** Última falla del proveedor — diagnóstico en traza (sin datos sensibles). */
+function nxLlmLastError(?string $set = null): ?string {
+    static $last = null;
+    if ($set !== null) $last = $set;
+    return $last;
+}
+
+/**
+ * POST /chat/completions → arreglo decodificado o null.
+ * $retry429: un reintento si el proveedor pide esperar ≤ 2.5 s.
+ */
+function nxLlmPost(array $payload, bool $retry429 = false): ?array {
+    if (!nxLlmEnabled()) { nxLlmLastError('disabled'); return null; }
+    if (nxLlmCooling()) { nxLlmLastError('cooldown'); return null; }
+    $c = nxLlmCfg();
+    for ($attempt = 0; $attempt < ($retry429 ? 2 : 1); $attempt++) {
+        $hdr = [];
+        $ch = curl_init($c['url'] . '/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $c['key']],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            CURLOPT_TIMEOUT_MS => $c['ms'],
+            CURLOPT_CONNECTTIMEOUT_MS => min(1500, $c['ms']),
+            CURLOPT_HEADERFUNCTION => function ($ch, $line) use (&$hdr) {
+                $p = strpos($line, ':');
+                if ($p !== false) $hdr[strtolower(trim(substr($line, 0, $p)))] = trim(substr($line, $p + 1));
+                return strlen($line);
+            },
+        ]);
+        $res = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($res !== false && $code === 200) {
+            $d = json_decode((string)$res, true);
+            return is_array($d) ? $d : null;
+        }
+        if ($code === 429) {
+            $ra = (float)($hdr['retry-after'] ?? 0);
+            if ($ra <= 0 && is_string($res) && preg_match('/try again in ([\d.]+)(ms|s)/i', $res, $m))
+                $ra = $m[2] === 'ms' ? (float)$m[1] / 1000 : (float)$m[1];
+            if ($retry429 && $attempt === 0 && $ra > 0 && $ra <= 2.5) { usleep((int)($ra * 1e6) + 150000); continue; }
+            nxLlmSetCooldown((int)ceil($ra > 0 ? $ra : 12));
+            nxLlmLastError('429');
+            return null;
+        }
+        nxLlmLastError($res === false ? 'timeout' : "http_{$code}");
+        return null;
+    }
+    return null;
+}
+
+/** Contenido JSON del mensaje del asistente (o null). */
+function nxLlmJsonContent(?array $d): ?array {
+    $content = $d['choices'][0]['message']['content'] ?? '';
+    if (!is_string($content) || $content === '') return null;
+    // algunos modelos envuelven el JSON en ```json … ``` o anteponen <think>
+    $content = preg_replace('/^.*?<\/think>/s', '', $content);
+    $content = trim(preg_replace('/^```(?:json)?|```$/m', '', $content));
+    $j = json_decode($content, true);
+    if (!is_array($j) && preg_match('/\{.*\}/s', $content, $m)) $j = json_decode($m[0], true);
+    return is_array($j) ? $j : null;
+}
+
 /* Taxonomía de intents del chat — whitelist que valida la salida del LLM. */
 const NX_LLM_FORMAL = [
     'day_summary','attendance_today','late_today','count_events','list_events',
@@ -54,6 +153,7 @@ const NX_LLM_FORMAL = [
     'sos_alerts','biometric_spam','group_student_count','birthdays_today',
     'my_activity','failed_messages','risk_config','attendance_ranking',
     'session_summary','pending_tasks','whatsapp_status','frequency_table',
+    'system_incidents','guardian_replies',
 ];
 const NX_LLM_INFORMAL = [
     'greeting','greeting_time','wellbeing','wellbeing_reply','joke','fun_fact',
@@ -85,111 +185,136 @@ function nxLlmComposeMode(): string {
 
 function nxLlmComposerPrompt(): string {
     return <<<'PROMPT'
-Eres el compositor de respuestas de NEXO (sistema escolar). Recibes la petición del usuario y la RESPUESTA VERIFICADA del sistema — esa es la verdad absoluta. La reescribes en español colombiano natural y devuelves {"reply":"..."}.
-
-REGLAS DURAS:
-- NUNCA inventes datos, nombres, números, fechas ni entidades ausentes en verified_reply.
-- NUNCA alteres cifras ni contradigas verified_reply.
-- NUNCA juzgues ni valores ("excelente noticia", "qué bueno/malo") salvo que el usuario lo pida.
-- Si es aclaración o error, reformúlalo conservando opciones y datos exactos.
-- Responde primero la pregunta; puedes cerrar con un siguiente paso útil y breve.
-- Conciso: 1-3 frases. Sin jerga de endpoint ("registro(s)", "N entradas", paréntesis técnicos).
-- Si verified_reply ya suena natural, mejóralo solo si aporta claridad real.
-- Si meta.recent trae turnos previos, úsalos para mantener coherencia de tema — nunca repitas datos que el usuario no volvió a pedir.
-- SOLO el JSON, sin texto extra.
+Eres el compositor de respuestas de Nexus (asistente del sistema escolar NEXO). Recibes la pregunta del usuario, la RESPUESTA VERIFICADA del sistema (verdad absoluta) y "facts" con lo que el usuario ve en las tablas. Reescríbela en español colombiano natural y breve. Devuelve {"reply":"..."}.
+REGLAS:
+- Conserva TODAS las cifras, nombres y fechas de verified_reply. No agregues cifras, nombres ni fechas que no estén en verified_reply o facts.
+- Si facts.rows > 0, NUNCA digas que no hay datos, que no tienes la información o que no se registró nada.
+- No inventes causas, explicaciones ni contexto (nada de "el día apenas empieza", "falló la red", "aún no").
+- No hagas preguntas ni ofrezcas acciones, salvo si facts.offer existe: entonces cierra preguntando exactamente eso.
+- Sin juicios de valor ("excelente", "buena noticia", "tranquilo", "todo en orden") ni tratamientos ("profe").
+- Sin jerga técnica ("registros", "rango", "periodo", "contexto anterior", "result set"); nombra el período como lo dijo el usuario.
+- 1 a 3 frases. Si verified_reply ya es claro y natural, devuélvelo casi igual.
+Solo el JSON.
 PROMPT;
+}
+
+/** Hechos visibles para el composer: lo que el usuario ve en la card. */
+function nxLlmComposeFacts(array $out): array {
+    $facts = ['rows' => 0];
+    foreach (($out['cards'] ?? []) ?: [] as $i => $card) {
+        $n = count($card['rows'] ?? []);
+        $facts['rows'] += $n;
+        if ($i === 0 && $n) {
+            $facts['table'] = [
+                'title'   => (string)($card['title'] ?? ''),
+                'columns' => array_slice((array)($card['columns'] ?? []), 0, 8),
+                'first_rows' => array_map(fn($r) => array_map(fn($c) => mb_substr((string)$c, 0, 40), array_slice((array)$r, 0, 8)),
+                    array_slice((array)$card['rows'], 0, 4)),
+            ];
+        }
+    }
+    if (!empty($out['_offer']['label'])) $facts['offer'] = (string)$out['_offer']['label'];
+    if (!empty($out['denied'])) $facts['status'] = 'denied';
+    return $facts;
+}
+
+/**
+ * Guarda post-generación: el composer NO puede contradecir ni inflar la
+ * verdad verificada. Rechaza (→ reply original) si:
+ *   · aparece una cifra ausente de verified_reply/facts/pregunta,
+ *   · niega datos cuando la tabla trae filas,
+ *   · pregunta/ofrece algo sin oferta real,
+ *   · mete juicios de valor o causas inventadas.
+ */
+function nxLlmComposeGuard(string $new, string $verified, array $facts, string $userText): bool {
+    $norm = fn($t) => function_exists('nxNorm') ? nxNorm($t) : mb_strtolower($t);
+    $hay = $norm($verified . ' ' . json_encode($facts, JSON_UNESCAPED_UNICODE) . ' ' . $userText);
+    preg_match_all('/\d+(?:[.,]\d+)?/u', $new, $nums);
+    preg_match_all('/\d+(?:[.,]\d+)?/u', $hay, $known);
+    $knownSet = array_flip(array_map(fn($x) => str_replace(',', '.', $x), $known[0]));
+    foreach ($nums[0] as $n) {
+        $n2 = str_replace(',', '.', $n);
+        if (!isset($knownSet[$n2]) && !isset($knownSet[rtrim(rtrim($n2, '0'), '.')])) return false;
+    }
+    $nn = $norm($new); $nv = $norm($verified);
+    $denial = '/\b(no (hay|tengo|cuento|encontr\w*|se (registr|encontr)\w*|existen|aparece\w*)|sin (datos|informacion|registros)|ningun[oa]?|aun no|todavia no)\b/u';
+    if (($facts['rows'] ?? 0) > 0 && preg_match($denial, $nn) && !preg_match($denial, $nv)) return false;
+    if (empty($facts['offer']) && str_contains($new, '?') && !str_contains($verified, '?')) return false;
+    if (preg_match('/\b(buena noticia|excelente|tranquil\w*|todo en orden|todo limpio|profe\b|apenas (empieza|arranca|comienza)|la red|travesur\w*|no se cargo)\b/u', $nn)
+        && !preg_match('/\b(buena noticia|excelente|tranquil\w*|todo en orden|todo limpio|profe\b)\b/u', $nv)) return false;
+    return true;
 }
 
 /**
  * Reformula $out['reply'] vía el composer. Devuelve el texto nuevo o null
- * (deshabilitado / no aplica / LLM caído → el caller conserva el original).
+ * (deshabilitado / no aplica / LLM caído / guarda rechazó → el caller
+ * conserva el original).
  */
 function nxLlmComposeReply(string $userText, array $out): ?string {
     $mode = nxLlmComposeMode();
     if ($mode === 'off' || !nxLlmEnabled()) return null;
+    // respuestas deterministas ya redactadas en lenguaje natural no gastan
+    // cuota — la cuota del parser (entender) vale más que pulir el tono
+    if (!empty($out['_natural'])) return null;
     $intent = (string)($out['intent'] ?? '');
     if ($mode === 'data'
         && !in_array($intent, NX_LLM_FORMAL, true)
-        && !in_array($intent, ['clarify','composed_chat','plan_failure','out_of_scope'], true)) return null;
+        && !in_array($intent, ['clarify','composed_chat','plan_failure','out_of_scope'], true)
+        && !str_contains($intent, '.')) return null;
     $reply = trim((string)($out['reply'] ?? ''));
-    if ($reply === '' || mb_strlen($reply) > 1800) return null;
+    if ($reply === '' || mb_strlen($reply) > 1500) return null;
 
-    // contexto verificado mínimo: conteos de tarjetas/result-set — el modelo
-    // puede mencionar "N resultados" porque NEXO ya los calculó
-    $meta = [];
-    if (isset($out['cards']) && is_array($out['cards'])) {
-        $rows = 0;
-        foreach ($out['cards'] as $card) $rows += count($card['rows'] ?? []);
-        if ($rows) $meta['rows_in_cards'] = $rows;
-    }
-    if (isset($out['result_set']['items']) && is_array($out['result_set']['items']))
-        $meta['result_set_count'] = count($out['result_set']['items']);
-    if (!empty($out['denied'])) $meta['status'] = 'denied';
-    // coherencia conversacional: últimos turnos reales (máx. 2) — el composer
-    // ve de qué se venía hablando sin que pueda alterar los datos
-    if (!empty($out['_recent']) && is_array($out['_recent'])) {
-        $meta['recent'] = array_map(fn($t) => [
-            'u' => mb_substr((string)($t['u'] ?? ''), 0, 140),
-            'a' => mb_substr((string)($t['a'] ?? ''), 0, 140)], $out['_recent']);
-    }
-
+    $facts = nxLlmComposeFacts($out);
     $c = nxLlmCfg();
-    $payload = [
+    $d = nxLlmPost([
         'model' => $c['model'],
         'temperature' => 0.2,
-        'max_tokens' => 160,
+        'max_tokens' => 170,
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => nxLlmComposerPrompt()],
             ['role' => 'user', 'content' => json_encode([
-                'user_text' => $userText,
-                'intent' => $intent,
+                'user_text' => mb_substr($userText, 0, 300),
                 'verified_reply' => $reply,
-                'meta' => $meta,
+                'facts' => $facts,
             ], JSON_UNESCAPED_UNICODE)],
         ],
-    ];
-    $ch = curl_init($c['url'] . '/chat/completions');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $c['key'],
-        ],
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-        CURLOPT_TIMEOUT_MS => $c['ms'],
-        CURLOPT_CONNECTTIMEOUT_MS => min(1500, $c['ms']),
     ]);
-    $res = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($res === false || $code !== 200) return null;
-    $d = json_decode((string)$res, true);
-    $content = $d['choices'][0]['message']['content'] ?? '';
-    if (!is_string($content) || $content === '') return null;
-    $j = json_decode($content, true);
+    $j = nxLlmJsonContent($d);
     $new = is_array($j) ? trim((string)($j['reply'] ?? '')) : '';
-    return $new !== '' ? mb_substr($new, 0, 2000) : null;
+    if ($new === '') return null;
+    if (!nxLlmComposeGuard($new, $reply, $facts, $userText)) { nxLlmLastError('composer_guard'); return null; }
+    return mb_substr($new, 0, 2000);
+}
+
+/** Versión del prompt — invalida la caché del parser cuando cambia. */
+function nxLlmPromptVersion(): string {
+    static $v = null;
+    return $v ??= substr(sha1(nxLlmSystemPrompt() . nxLlmCfg()['model']), 0, 10);
 }
 
 function nxLlmSystemPrompt(): string {
-    // Compacto a propósito: Groq free limita a ~8K tokens/min; este prompt
-    // (~750 tok) deja ~9 llamadas/min sostenidas. Mantener sincronizado
-    // con NX_LLM_FORMAL ∪ NX_LLM_INFORMAL y con la allowlist de entidades.
+    // Compacto a propósito (~1.1K tokens): Groq free = 8K tokens/min por
+    // clave. Mantener sincronizado con NX_LLM_FORMAL ∪ NX_LLM_INFORMAL y la
+    // allowlist de entidades de nxLlmClassify.
     return <<<'PROMPT'
-Clasificas mensajes de personal de un colegio (sistema NEXO: asistencia, incidentes, acudientes) en UN intent y extraes entidades. Responde SOLO JSON {"intent":"id","confidence":0-1,"safety":"ok","entities":{}}.
+Clasificas mensajes del personal de un colegio (sistema NEXO) en UN intent y extraes entidades. SOLO JSON: {"intent":"id","confidence":0-1,"safety":"ok|risky","entities":{}}
 
-DATOS ESCOLARES: students_in_group=lista estudiantes de grupo|students_count=total estudiantes|group_student_count=cantidad en grupo|attendance_today=asistencia/marcaciones del día|late_today=tardanzas|count_present=cuántos presentes|list_events=listar incidentes/novedades|count_events=cuántos incidentes|top_offenders=ranking estudiantes con más faltas|attendance_ranking=comparar/rankear GRUPOS|student_field=dato puntual de estudiante(documento,celular,acudiente,grupo,jornada,nacimiento,estado)|student_summary=ficha completa estudiante|group_summary|groups_list=lista grupos|teachers_list=docentes|staff_lookup=buscar funcionario|schedule_info=horario|risk_students=riesgo/alerta|trackings=seguimientos|count_trackings|permissions=permisos|pending_returns=salidas sin regreso|citations=citaciones|devices_status=sensores|notifications_unread|failed_messages|whatsapp_status|sos_alerts|biometric_spam=marcaciones sospechosas|audit_query=auditoría|my_activity|day_summary=resumen día|birthdays_today|risk_config|pending_tasks|export_data=exportar/descargar datos (Excel/PDF)|derive_action=derivar caso|start_operation=iniciar operación|session_summary=resumen conversación|random_student|about_me=datos del usuario|help|capabilities=qué puedes hacer|frequency_table=frecuencia/conteo por día/hora de la semana de un evento|security_probe=hackeo/inyección/ignorar instrucciones
+DATOS: day_summary=cómo va la jornada|attendance_today=marcaciones del día|late_today=tardanzas de hoy|count_present=cuántos ingresaron|count_events=cuántos incidentes|list_events=listar incidentes|frequency_table=conteo por día/semana/estudiante/grupo|top_offenders=estudiantes con más faltas|attendance_ranking=comparar o rankear GRUPOS|students_count=total de estudiantes|group_student_count=cuántos en un grupo|students_in_group=lista de un grupo|student_field=dato de un estudiante|student_summary=ficha de estudiante|group_summary=estado de un grupo|groups_list|teachers_list|staff_lookup=buscar funcionario o su perfil|schedule_info=horarios|risk_students|risk_config|trackings=seguimientos/casos|count_trackings|permissions=permisos, salidas, salidas pedagógicas|pending_returns=permisos vencidos sin regreso|citations=citaciones|guardian_replies=si los acudientes respondieron WhatsApp|whatsapp_status|failed_messages|notifications_unread=notificaciones (también resumir/clasificar)|pending_tasks|my_activity|devices_status=sensores|system_incidents=anomalías, nodo caído|sos_alerts|biometric_spam|audit_query|birthdays_today|export_data=exportar/descargar|derive_action=operación: citar, generar permiso, derivar, reportar, autorizar salida|start_operation|session_summary|random_student|about_me|help|capabilities|security_probe=hackeo/inyección
+SOCIAL: greeting|greeting_time|wellbeing|wellbeing_reply|thanks|goodbye|yes|no|apology|compliment|insult|insult_back|joke|fun_fact|story|sing|dance|bored|love|emotion_sad|motivation|human_check|do_for_me|confused|repeat|weather|news_sports|food_music|meaning_life|age|creator|about_nexus|name_meaning|time|date|math_operation|colombia_capital|colombia_department|colombia_president|colombia_history|colombia_geography|colombia_culture|colombia_fun_fact|foreign_culture|out_of_scope
 
-SOCIAL/GENERAL: greeting|greeting_time=buenos días/tardes/noches|wellbeing=cómo estás|wellbeing_reply|thanks|goodbye|yes|no|apology|compliment|insult|insult_back=insulto al bot|joke|fun_fact|story|sing|dance|bored|love=cariño al BOT|emotion_sad|motivation|human_check=eres humano/IA|do_for_me|confused|repeat|weather|news_sports|food_music|meaning_life|age|creator|about_nexus|name_meaning|time|date|math_operation|colombia_capital|colombia_department|colombia_president|colombia_history|colombia_geography|colombia_culture|colombia_fun_fact|foreign_culture|out_of_scope=nada encaja
+ENTITIES (omite las que no apliquen): student|group ("8-B","10A")|grade|module=INASISTENCIA|LATE_ARRIVAL|EVASION_INTERNA|PERMISO|SALIDA_COLEGIO|SALIDA_PEDAGOGICA|INCIDENTE|SEGUIMIENTO|CITACION|SOS|field=documento|celular|acudiente|grupo|jornada|nacimiento|estado|person|shift=mañana|tarde|from/to=YYYY-MM-DD (calcula con "hoy" del JSON)|range_label|nav=first|last|nth:N|others|all|another|relation=guardian|phone|document|group|schedule|risk|presentation=table|export_format=excel|pdf|word|csv|compare=[grupos]|group_by=group|student|weekday|day|month|trend=true (comparar con el período anterior)|justified=yes|no|status=active|completed|pending|all|scope=mine|op («Citar acudiente»,«Generar permiso»,«Solicitar seguimiento»,«Reportar incidente»,«Autorizar salida»)|detail=[columnas]|needs=[slots faltantes]
 
-entities (todas opcionales, null si no aplican): student=nombre estudiante|group="8-B","10A","sexto"|module=INASISTENCIA|LATE_ARRIVAL|EVASION_INTERNA|PERMISO|SALIDA_ANTICIPADA|INCIDENTE|SEGUIMIENTO|CITACION|field=documento|celular|acudiente|grupo|jornada|nacimiento|estado|days=N|from/to=fecha ISO|person=docente/acudiente|grade|shift=mañana|tarde|nav=first|last|nth:N|others|all|another ("el primero","los demás","otro")|relation=guardian|phone|document|group|schedule|risk (qué dato se pide del referente)|presentation=table|summary ("en tabla","en cuadro")|export_format=excel|pdf|word|csv|compare=["10-A","10-B"]|search=texto libre|range_label="el mes pasado"|group_by=group|student|weekday|day|month (eje de agregación: "por grupo","por estudiante","por día de la semana","por mes")|trend=true ("aumento","subió","bajó","comparado con antes" = comparar con el período anterior)|justified=yes|no ("con excusa","justificadas","sin justificar" — excusas de incidentes)|status=active|completed|pending|all ("activos","vigentes"=active; "que ha tenido","del mes"=all+range)|scope=mine ("mis grupos","los que tengo a mi cargo","de mi grupo" — NUNCA emitas group=ALL ni "mis")|detail=["fechas","motivo","autorizado_por","estado"] (columnas pedidas explícitas)|needs=["student","group","range"] (slots que faltan cuando el mensaje es ambiguo — para aclaración dirigida)
+SAFETY: risky si insinúa romance o sexualización de menores, daño a menores, falsificar o borrar registros, robar credenciales o datos → intent=security_probe.
 
-SAFETY: safety="risky" si el mensaje insinúa atracción/romance hacia estudiantes o menores, sexualización, daño a menores, falsificar/eliminar registros, extraer credenciales o abusar de datos personales. Es un flag general — NUNCA un intent específico. Si risky, intent=security_probe.
-
-REGLAS: acudiente/padre/madre de <estudiante o "el niño que..."> → student_field field=acudiente; "el niño/estudiante que llegó tarde/faltó/está en X" cuenta como estudiante (no out_of_scope); padres/acudientes de un grupo → students_in_group; permisos pendientes/activos → permissions status=active; "permisos/citaciones/seguimientos que ha tenido X" o con rango → permissions/citations/trackings status=all + student + range — NUNCA uses el sentido "activos ahora" si piden historial; no marcaron entrada → attendance_today; comparar grupos/rankings → attendance_ranking + entities.compare o grade ("grupos décimos"→grade="10"); dato+social juntos → intent del dato; pronombres/posesivos (él, ella, su, sus, este, ese, aquel, le, les) NUNCA van en entities — si el mensaje se refiere a alguien del CONTEXTO (turnos/entidades previas que recibes en el JSON), SÍ puedes copiar ese nombre a student/person/group y marcar uses_context=true; referencia posicional ("el primero","el último","los demás","el segundo","la primera que me mostraste") → nav; cuando emites nav/position NO copies student del contexto — el nav ES el sujeto; «<incidente> de <persona>» sin verbo → count_events; «los que <verbo>» → list_events; "con excusa/sin excusa/justificadas" → justified=yes|no en list_events; pedir tabla/formato → presentation=table SIN cambiar el intent de datos; exportar/descargar → export_data + export_format; verbos de OPERACIÓN (citar, convocar, generar permiso, derivar, reportar, registrar salida, autorizar salida) → derive_action con entities.op («Citar acudiente», «Generar permiso», «Solicitar seguimiento», «Reportar incidente», «Autorizar salida»…) — NUNCA student_field aunque mencione acudiente/estudiante; frecuencia por día de la semana/por fecha → frequency_table + group_by=weekday|student|group|day; "cantidad y aumento"/"comparado"/"subió o bajó" → trend=true; nombres de evento (tardanzas, llegadas, inasistencias, evasiones, permisos) NUNCA son student; fragmentos de seguimiento («y del mes», «y ayer», «y los del 8B», «y sus X») → copia el tema del contexto, confidence≤0.5; ambiguo real → confidence<0.6 + needs con los slots faltantes. Solo JSON.
+REGLAS: nombres de evento (tardanzas, faltas, inasistencias, permisos) nunca son student; pronombres nunca van en entities — si se refieren a alguien del contexto copia su nombre y pon uses_context=true; acudiente de X → student_field field=acudiente; acudientes de un grupo → students_in_group; "que ha tenido X" o con rango → status=all + rango (historial, no "activos"); activos/vigentes → status=active; comparar grupos → attendance_ranking (grupos décimos → grade="10"); estudiantes con más X → top_offenders; por día/estudiante/grupo → frequency_table + group_by; cantidad y aumento, comparado, subió → trend=true; "en tabla" → presentation=table sin cambiar el intent; exportar → export_data + export_format; verbos de operación → derive_action con op (nunca student_field); "¿los acudientes respondieron?" → guardian_replies; resumir/clasificar notificaciones → notifications_unread; perfil o jornada de un funcionario → staff_lookup + person; fragmento de seguimiento ("y del mes", "y ayer", "y en 8B") → intent del tema del contexto con confidence≤0.5; dato+saludo → intent del dato; ambiguo → confidence<0.6 + needs.
 PROMPT;
+}
+
+/** ¿El turno depende del contexto? (no cacheable — su parseo cambia por sesión) */
+function nxLlmIsContextual(string $norm): bool {
+    return (bool)preg_match('/^(y|pero|ahora|entonces|tambien|ademas|o sea|de|del|en|para|las|los|esas|esos|sus?)\b/u', $norm)
+        || (bool)preg_match('/\b(el|ella|ellos|ellas|ese|esa|esos|esas|este|esta|su|sus|le|les|lo|la|los|las) (mismo|misma|primero|primera|ultimo|ultima|otro|otra)\b|\b(su|sus|ese|esa|esos|esas|aquel|aquella|el mismo|la misma)\b/u', $norm);
 }
 
 /**
@@ -200,57 +325,54 @@ PROMPT;
 function nxLlmClassify(string $text, ?array $ctx = null): ?array {
     $c = nxLlmCfg();
     if (!nxLlmEnabled()) return null;
-    // El parser recibe la SESIÓN COMPLETA resumida (§7.4): hasta N turnos
-    // recientes + entidades activas + descriptor del result-set — el LLM
-    // sostiene el hilo («y sus inasistencias», «de la primera») sin depender
-    // solo del DSM. Nunca filas crudas: solo nombres/etiquetas.
-    // NLU_LLM_CTX_TURNS controla la ventana (default 20 ≈ 40 mensajes).
-    $userMsg = ['text' => $text];
+    $norm = function_exists('nxNorm') ? nxNorm($text) : mb_strtolower(trim($text));
+    // caché de parseos autónomos (sin anáfora ni nombres): «cómo va la
+    // jornada» de 20 docentes cuesta UNA llamada al día, no veinte
+    $cacheKey = null;
+    if (!nxLlmIsContextual($norm) && getenv('NX_LLM_NO_CACHE') !== '1') {
+        $cacheKey = 'nx:parse:' . nxLlmPromptVersion() . ':' . sha1($norm);
+        try {
+            $rd = nxLlmRedis();
+            $hit = $rd ? $rd->get($cacheKey) : null;
+            if (is_string($hit) && $hit !== '') {
+                $j = json_decode($hit, true);
+                if (is_array($j) && !empty($j['intent'])) return $j + ['source' => 'llm_cache'];
+            }
+        } catch (Throwable $e) {}
+    }
+    // Contexto COMPACTO (§7.4): últimos turnos + entidades activas + set
+    // activo. La memoria larga la sostiene el DSM server-side; mandar 40
+    // mensajes por turno agotaba los 8K tokens/min en dos preguntas.
+    $tz = new DateTimeZone('America/Bogota');
+    $now = new DateTimeImmutable('now', $tz);
+    $dias = [1=>'lunes','martes','miércoles','jueves','viernes','sábado','domingo'];
+    $userMsg = ['hoy' => $now->format('Y-m-d') . ' (' . $dias[(int)$now->format('N')] . ')', 'text' => $text];
     if ($ctx) {
         $cx = [];
-        $maxTurns = max(3, min(40, (int)(getenv('NLU_LLM_CTX_TURNS') ?: 20)));
+        $maxTurns = max(2, min(8, (int)(getenv('NLU_LLM_CTX_TURNS') ?: 4)));
         foreach (array_slice($ctx['turns'] ?? [], -$maxTurns) as $t) {
-            $cx['turns'][] = ['u' => mb_substr((string)($t['u'] ?? ''), 0, 120),
-                              'a' => mb_substr((string)($t['a'] ?? ''), 0, 120)];
+            $cx['turns'][] = ['u' => mb_substr((string)($t['u'] ?? ''), 0, 90),
+                              'a' => mb_substr((string)($t['a'] ?? ''), 0, 90)];
         }
         foreach (['student','group','person','module','range_label'] as $k)
-            if (!empty($ctx['entities'][$k])) $cx['entities'][$k] = $ctx['entities'][$k];
+            if (!empty($ctx['entities'][$k]) && is_scalar($ctx['entities'][$k])) $cx['entities'][$k] = $ctx['entities'][$k];
         if (!empty($ctx['last_result']))
             $cx['last_result'] = ['type'=>$ctx['last_result']['type'] ?? null,
                 'label'=>$ctx['last_result']['label'] ?? null,
                 'count'=>$ctx['last_result']['count'] ?? null];
         if ($cx) $userMsg['contexto'] = $cx;
     }
-    $payload = [
+    $d = nxLlmPost([
         'model' => $c['model'],
         'temperature' => 0,
-        'max_tokens' => 220,
+        'max_tokens' => 170,
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => nxLlmSystemPrompt()],
             ['role' => 'user', 'content' => json_encode($userMsg, JSON_UNESCAPED_UNICODE)],
         ],
-    ];
-    $ch = curl_init($c['url'] . '/chat/completions');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $c['key'],
-        ],
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-        CURLOPT_TIMEOUT_MS => $c['ms'],
-        CURLOPT_CONNECTTIMEOUT_MS => min(1500, $c['ms']),
-    ]);
-    $res = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($res === false || $code !== 200) return null;
-    $d = json_decode((string)$res, true);
-    $content = $d['choices'][0]['message']['content'] ?? '';
-    if (!is_string($content) || $content === '') return null;
-    $j = json_decode($content, true);
+    ], true);
+    $j = nxLlmJsonContent($d);
     if (!is_array($j) || empty($j['intent']) || !is_string($j['intent'])) return null;
 
     $intent = trim($j['intent']);
@@ -286,6 +408,13 @@ function nxLlmClassify(string $text, ?array $ctx = null): ?array {
         $v = mb_substr(trim((string)$v), 0, 120);
         // enums cerrados: valor fuera de dominio → se descarta, no se inventa
         if (isset($enums[$k]) && !in_array(strtolower($v), $enums[$k], true)) continue;
+        // fechas: ISO estricto, nunca futuras ni de hace más de 3 años — un
+        // modelo que no sabe qué día es no puede mover el rango a 2024
+        if ($k === 'from' || $k === 'to') {
+            $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $v, new DateTimeZone('America/Bogota'));
+            $today = new DateTimeImmutable('today', new DateTimeZone('America/Bogota'));
+            if (!$dt || $dt->format('Y-m-d') !== $v || $dt > $today || $dt < $today->modify('-3 years')) continue;
+        }
         // group jamás puede ser un literal de alcance («ALL», «mis», «todos»)
         if ($k === 'group' && preg_match('/^(all|todos|todas|mis|ninguno|ninguna|cada)$/iu', $v)) continue;
         // student/person: el LLM a veces pega vocabulario de dominio como
@@ -303,7 +432,7 @@ function nxLlmClassify(string $text, ?array $ctx = null): ?array {
     }
     if (!empty($j['uses_context'])) $ent['_uses_context'] = true;
     $safety = (isset($j['safety']) && $j['safety'] === 'risky') ? 'risky' : 'ok';
-    return [
+    $res = [
         'domain' => in_array($intent, NX_LLM_FORMAL, true) ? 'formal' : 'informal',
         'intent' => $intent,
         'confidence' => round($conf, 4),
@@ -312,6 +441,13 @@ function nxLlmClassify(string $text, ?array $ctx = null): ?array {
         'safety' => $safety,
         'source' => 'llm',
     ];
+    // solo parseos autónomos, seguros y sin fechas absolutas/nombres
+    // (los rangos relativos los recalcula nxSlots cada día)
+    if ($cacheKey && $conf >= 0.8 && $safety === 'ok' && empty($ent['_uses_context'])
+        && empty($ent['student']) && empty($ent['person']) && empty($ent['from']) && empty($ent['to'])) {
+        try { $rd = nxLlmRedis(); if ($rd) $rd->setex($cacheKey, 6 * 3600, json_encode($res, JSON_UNESCAPED_UNICODE)); } catch (Throwable $e) {}
+    }
+    return $res;
 }
 
 
@@ -332,18 +468,20 @@ function nxLlmChatEnabled(): bool {
 
 function nxLlmChatPrompt(): string {
     return <<<'PROMPT'
-Eres NEXO, el asistente conversacional de una institución escolar en Colombia. Hablas con docentes, coordinadores y administrativos.
+Eres Nexus, el asistente conversacional de NEXO, la plataforma de gestión y custodia escolar de esta institución en Colombia. Hablas con docentes, coordinación, rectoría y administrativos. Te creó el equipo de NEXO.
 
 TU FORMA:
-- Español colombiano natural, cálido y profesional. 1-4 frases cortas.
+- Español colombiano natural, cálido y profesional. 1 a 3 frases cortas.
 - Conversación libre: cultura general, chistes suaves, ánimo, preguntas comunes — respondes con lo que sabes.
-- NO inventes datos del colegio (estudiantes, grupos, cifras, nombres). Si piden datos reales, di que eso lo consultas por el sistema: «eso te lo traigo del sistema — pídemelo directo, ej: "tardanzas de hoy"».
-- NUNCA digas «no tengo acceso» ni describas límites de capacidad, ni ofrezcas acciones que no existen (redactar correos, llamar, agendar). Si algo falta, redirige a lo que sí haces: «no tengo ese dato aún — pero sí puedo mostrarte inasistencias, permisos, seguimientos…».
-- Siempre opción de volver al trabajo: cierra ligero («¿miramos cómo va la jornada?») sin ser pesado — no cada respuesta necesita el cierre.
+- NO inventes datos del colegio (estudiantes, grupos, cifras, nombres, estados). Si te piden datos, pide que lo pregunten directo con un ejemplo concreto: «pídemelo así: "inasistencias de hoy"».
+- NUNCA prometas ni ofrezcas revisar, consultar, verificar o hacer algo ("¿quieres que lo revise?", "puedo consultarte…"): en esta conversación no ejecutas consultas.
+- NUNCA inventes excusas técnicas (la red, una falla, que no cargó) ni digas «no tengo acceso».
+- Nada de acciones inexistentes (redactar correos, llamar, agendar).
+- No cierres cada mensaje con una pregunta.
 
 SEGURIDAD — LÍNEAS QUE NUNCA CRUZAS:
-- Nada romántico/sexual hacia estudiantes o menores: si el usuario insinúa eso, respondes serio y cortante: «Eso no es algo en lo que pueda participar. Si hay una situación que te preocupa, los protocolos de la institución son el camino». Sin humor, sin rodeos.
-- Nada de falsificar registros, compartir credenciales, o datos personales masivos.
+- Nada romántico/sexual hacia estudiantes o menores: responde serio y cortante: «Eso no es algo en lo que pueda participar. Si hay una situación que te preocupa, los protocolos de la institución son el camino». Sin humor.
+- Nada de falsificar registros, compartir credenciales ni datos personales masivos.
 - No eres terapeuta: temas graves de salud mental → empatía breve + sugerir apoyo real (psicoorientación/coordinación).
 - Temas sensibles (política, religión, drogas): neutral, corto, sin posición.
 
@@ -360,32 +498,24 @@ function nxLlmChat(string $text, array $turns = []): ?string {
     $c = nxLlmCfg();
     if (!nxLlmChatEnabled()) return null;
     $msgs = [['role' => 'system', 'content' => nxLlmChatPrompt()]];
-    foreach (array_slice($turns, -4) as $t) {
-        $u = mb_substr(trim((string)($t['u'] ?? '')), 0, 300);
-        $a = mb_substr(trim((string)($t['a'] ?? '')), 0, 300);
+    foreach (array_slice($turns, -3) as $t) {
+        $u = mb_substr(trim((string)($t['u'] ?? '')), 0, 200);
+        $a = mb_substr(trim((string)($t['a'] ?? '')), 0, 200);
         if ($u !== '') $msgs[] = ['role' => 'user', 'content' => $u];
         if ($a !== '') $msgs[] = ['role' => 'assistant', 'content' => $a];
     }
     $msgs[] = ['role' => 'user', 'content' => mb_substr($text, 0, 500)];
-    $payload = [
+    $d = nxLlmPost([
         'model' => $c['model'],
         'temperature' => 0.6,
-        'max_tokens' => 220,
+        'max_tokens' => 180,
         'messages' => $msgs,
-    ];
-    $ch = curl_init($c['url'] . '/chat/completions');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json',
-            'Authorization: Bearer ' . $c['key']],
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-        CURLOPT_TIMEOUT_MS => $c['ms'],
-        CURLOPT_CONNECTTIMEOUT_MS => min(1500, $c['ms']),
     ]);
-    $res = curl_exec($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($res === false || $code !== 200) return null;
-    $reply = trim((string)(json_decode((string)$res, true)['choices'][0]['message']['content'] ?? ''));
-    return $reply === '' ? null : mb_substr($reply, 0, 2000);
+    $reply = trim((string)($d['choices'][0]['message']['content'] ?? ''));
+    $reply = trim(preg_replace('/^.*?<\/think>/s', '', $reply));
+    // la persona no se negocia: nada de ofrecer consultas ni excusas técnicas
+    $n = function_exists('nxNorm') ? nxNorm($reply) : mb_strtolower($reply);
+    if (preg_match('/\b(quieres que (lo |la |te )?(revise|consulte|verifique|busque)|puedo (consultar|revisar|verificar)te|la red|no se cargo|travesur\w*|no tengo acceso)\b/u', $n))
+        return null;
+    return $reply === '' ? null : mb_substr($reply, 0, 1200);
 }

@@ -923,6 +923,16 @@ permitida. Los denegados de intent son 200 con `denied:true`.
   `heldout_live.php`, `live_probe*.php`, `scp_live.php`,
   `llm_probe.php`. Las eval grandes miden al parser: correrlas contra el
   fixture es circular.
+- **Puerta de release** `test/nexus_release_gate.php` — ~20 gates
+  (forense, DSM, RBAC, read-only, adversariales, singles, live).
+  Último resultado verificado: **READY FOR CONTROLLED PRODUCTION**.
+  Las puertas LLM (G7/G7b/G11/G12/G12b) se omiten sin `NLU_LLM_KEY` en
+  el proceso del gate — propagarla para ejecutarlas de verdad.
+- **Estado de cobertura semántica** (verificado con
+  `semantic_eval.php` + stack live): singles 96.7% resuelto,
+  adversariales 533/533 sin escapes, convos 95.5% turnos, golden 9/9,
+  held-out 53/53. Análisis de gaps y ruta al 100%:
+  [varios/docs/nexus/INVESTIGACION_CHATBOT.md](../../../varios/docs/nexus/INVESTIGACION_CHATBOT.md).
 - `continuity_50.php` usa API/BD real y escribe historial — fuera del
   alcance local.
 - Auditorías y reportes `NEXUS_*.md` de ciclos anteriores documentan
@@ -963,8 +973,10 @@ regenerar el fixture si el intent pasa por el parser
 
 ## 20. Limitaciones y gaps comprobados
 
-- Sin `NLU_LLM_KEY` o con el proveedor caído, toda clasificación de
-  lenguaje libre termina en `out_of_scope` (honesto pero degradado).
+- Sin `NLU_LLM_KEY` o con el proveedor caído, el clasificador
+  **determinista de respaldo** (`nxRuleClassify`) cubre el grueso del
+  dominio (~97% del fixture `semantic_blind`); lo que no tiene regla
+  inequívoca sí termina en `out_of_scope` (honesto pero degradado).
 - La extracción de estudiante es por nombre difuso; ambigüedad (>1
   candidato) → el handler pregunta en vez de elegir.
 - `nxClassify` parte en «y» de forma ingenua; la reparación de
@@ -974,10 +986,14 @@ regenerar el fixture si el intent pasa por el parser
 - El composer informal puede ser desactivado; sin él el repertorio
   determinista de `nxSmalltalk` es la única voz social.
 - `chat.php` concentra orquestación + ~40 handlers en un archivo
-  (~3060 líneas) — deuda estructural conocida.
-- La evidencia de calidad proviene de suites con fixture (offline,
-  deterministas) y de evals live históricas; no hay una suite que cubra
-  HTTP+BD+LLM de extremo a extremo en el alcance local.
+  — deuda estructural conocida.
+- `harness_turn.php` no ejecuta handlers: `ctx._ds.last_result` queda
+  vacío, así que los patrones de navegación sobre result-set («dame sus
+  nombres», «dame la lista») solo se verifican en vivo — techo
+  artificial en el % de convos del fixture.
+- La cobertura anafórica residual (~5% de turnos) y el blind operativo
+  (59.2% → meta ≥80%) están catalogados en
+  `varios/docs/nexus/INVESTIGACION_CHATBOT.md` §3.
 - Redis caído desactiva silenciosamente el rate limit.
 
 ## 21. Historia breve: el stack retirado

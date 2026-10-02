@@ -3,7 +3,9 @@
 ## Nexus
 
 La documentación canónica del sistema conversacional es `backend/api/nexus/README.md`;
-la de cada componente vive en su README (`backend/api/`, `backend/edge/`,
+el estado verificado del chatbot, los gaps restantes y la ruta al 100% están en
+`varios/docs/nexus/INVESTIGACION_CHATBOT.md` (auditoría por transcript real +
+suites). La de cada componente vive en su README (`backend/api/`, `backend/edge/`,
 `frontend/`, `frontend/pwa/`, `frontend/landing/`, `sql/`, `test/`).
 
 La memoria de trabajo histórica (NEXUS_*.md de raíz, auditorías, material
