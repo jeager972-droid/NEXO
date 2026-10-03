@@ -43,7 +43,11 @@ function nxNorm(string $t): string {
         'inasistensia'=>'inasistencia','inasistencais'=>'inasistencias','estudaintes'=>'estudiantes',
         'alumons'=>'alumnos','tardansas'=>'tardanzas','evacione'=>'evasion','evasioness'=>'evasiones',
         'permisso'=>'permiso','documneto'=>'documento','docuemnto'=>'documento','ceduala'=>'cedula',
-        'acudinte'=>'acudiente','acudietne'=>'acudiente','citasion'=>'citacion','segumiento'=>'seguimiento'];
+        'acudinte'=>'acudiente','acudietne'=>'acudiente','citasion'=>'citacion','segumiento'=>'seguimiento',
+        'citasiones'=>'citaciones','citacione'=>'citaciones','permisoss'=>'permisos','permisoses'=>'permisos',
+        'estudinates'=>'estudiantes','estudiantes'=>'estudiantes','evasioness'=>'evasiones','justifcada'=>'justificada',
+        'acudintes'=>'acudientes','citasion'=>'citacion','asitencia'=>'asistencia','evasio'=>'evasion',
+        'evacioens'=>'evasiones','faltason'=>'faltaron','llagaron'=>'llegaron','tardansaz'=>'tardanzas'];
     $t = strtr(' ' . $t . ' ', array_combine(
         array_map(fn($k) => ' ' . $k . ' ', array_keys($fix)),
         array_map(fn($v) => ' ' . $v . ' ', $fix)));
@@ -1529,7 +1533,7 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     // marcadores de autoreparación al final — «los que faltan digo»,
     // «los de ayer o sea» — se despojan para clasificar el contenido real
     $q0 = (string)preg_replace('/[\s,;]+(digo|perdon|o sea|osea|mejor dicho|quiero decir|es decir|o mejor|perdoname|corrijo)\s*[.!?¡¿]*\s*$/u', '', $q0);
-    $opVerb = (bool)preg_match('/\b(genera\w*|crea\w*|citar|cita\b|citale|citalo|citala|citemos|convoca\w*|autoriza\b|autorizar|autoriza(le|lo|la)|deriva\b|derivar|derivalo|derivala|reporta\b|reportar|registra\b|registrar|emite|emitir|tramita\w*|manda\w*|envia\w*|abre un|abrir un|haz un|hacer un|dame|quiero|necesito|pido|solicita\w*|programa\w*|agenda\w*|expide|expedir|formaliza\w*|levanta\w*|debo)\b/u', $q0);
+    $opVerb = (bool)preg_match('/\b(genera\w*|crea\w*|citar|cita\b|citale|citalo|citala|citemos|convoca\w*|autoriza\b|autorizar|autoriza(le|lo|la)|deriva\b|derivar|derivalo|derivala|reporta\b|reportar|registra\b|registrar|emite|emitir|tramita\w*|manda\w*|envia\w*|abre un|abrir un|haz un|hacer un|dame|quiero|necesito|pido|solicita\w*|programa\w*|agenda\w*|expide|expedir|formaliza\w*|levanta\w*|debo|hay que|llamar\s+a\s+(citaci\w*|los padres|acudientes|una citacion))\b/u', $q0);
     // frase operativa REAL: verbo precede al sustantivo operativo —
     // «permisos por cita» y «citas programadas» llevan la palabra verbo
     // pero como SUSTANTIVO (participio/entidad), no como mandato: las
@@ -1604,7 +1608,11 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     // veto interrogativo: una interrogación inicial («quién autorizó…»,
     // «qué mensajes enviaron…») pide DATO, no ejecución — nunca operación
     $opWh = (bool)preg_match('/^\s*(que|quien|quienes|cual|cuales|cuando|cuant[oa]s?|como|donde|a que|por ?que|para que|de que|en que)\b|\b(quien|quienes|cuando|donde|que dia|a que hora)\s+(autoriz|emiti|envio|mando|genero|resolvi|registro|cit|convoc|aprobo|firmo|cerro|atendio)/u', $q0);
-    if (!$opPhrase && !$opWh && !preg_match('/\b(cuant|cuales|quienes|quien|lista|listado|hubo|ha tenido|han tenido|se han|estan|hay|tienen|vigentes?|activos?|pendientes?|vencidos?)\w*/u', $q0)
+    // «hay un incidente con el equipo», «hay una pelea en el patio» —
+    // reporte existencial = derivar a operación, no consulta de eventos
+    if (preg_match('/^\s*hay\s+(un|una)\s+(incidente|incidencia|problema|emergencia|novedad|pelea|altercado|dano|situacion|accidente|caso|riña|rinya|agresion|riña|bronca)\b.{0,25}\b(con|en|de|del|entre)\b/u', $q0))
+        return $r('derive_action', 0.86);
+    if (!$opPhrase && !$opWh && !preg_match('/\b(cuant|cuales|quienes|quien|lista|listado|hubo|ha tenido|han tenido|se han|estan|hay(?!\s+que)|tienen|vigentes?|activos?|pendientes?|vencidos?)\w*/u', $q0)
         && (preg_match('/\b(reporta\w*|registra\w*|deja\w*|levanta\w*|formaliza\w*|documenta\w*|poner|radica\w*|hay que|quiero|necesito|queremos)\b.{0,30}\b(pelea|agresion|bullying|dano|danado|vidrio|problema|incidente|altercado|rompi\w*|estrope\w+|quebr\w+|proyector|puerta|ventana)\b/u', $q0)
             || preg_match('/\b(dar|da|autoriz(?:a|o|e|en|emos|ar|aria|arian|aba|aban|aste|aron|an|ando|ame)\b|autorizar|permitir|permite|aprueba\w*|aprobar|retira\w*)\b.{0,25}\b(salida|salga|retire|retir\w+|salir|retiro|anticipada|temprano|temprana)\b/u', $q0)
             || preg_match('/\b(manda\w*|envia\w*|eleva\w*|radica\w*|presenta\w*|dirige\w*|lleva\w*|solicita\w*|hacer|pedir|pido)\b.{0,30}\b(solicitud|peticion|tramite|requerimiento|pqrs|oficio|material|soporte)\b/u', $q0)
@@ -1615,7 +1623,7 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
         return $r($opKnown ? 'start_operation' : 'derive_action', 0.9, empty($s['student']), $opKnown ? ['_op'=>$opKnown] : []);
     }
     if ($opPhrase && !$opWh
-        && !preg_match('/\b(cuant|cuales|quienes|quien|lista|listado|hubo|ha tenido|han tenido|se han|emitidos|emitidas|registrad|estan|hay|tiene|tienen|programad\w*|vigentes?|activos?|pendientes?)\w*/u', $q0)) {
+        && !preg_match('/\b(cuant|cuales|quienes|quien|lista|listado|hubo|ha tenido|han tenido|se han|emitidos|emitidas|registrad|estan|hay(?!\s+que)|tiene|tienen|programad\w*|vigentes?|activos?|pendientes?)\w*/u', $q0)) {
         $opKnown = nxOpKnown($q0);
         return $r($opKnown ? 'start_operation' : 'derive_action', 0.9, empty($s['student']), $opKnown ? ['_op'=>$opKnown] : []);
     }
@@ -2096,6 +2104,18 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
         return $r('count_events', 0.85, true, ['module'=>'LATE_ARRIVAL']);
     if (preg_match('/\b(los|quienes|estudiantes)\s+(de siempre\s+)?(llegando|que llegan|llegan)\s+tarde\b|\bde siempre.*tarde\b/u', $q0))
         return $r('top_offenders', 0.82, true, ['module'=>'LATE_ARRIVAL']);
+
+    // colectivo + verbo coloquial — «los pelados que se volaron», «los
+    // chinos que se tajaron», «los chicos que no entraron». Los sustantivos
+    // de jerga (pelados/chinos/pelaos/cuchos) no están en los patrones
+    // formales y los verbos coloquiales solo existían en plural selecto
+    $slangSubj = '(?:los|las|estos|estas|esos|esas|mis|quienes)\s+(?:estudiantes|alumnos|alumnas|pelados|peladas|peladitos|chinos|chinas|chicos|chicas|muchachos|muchachas|ninos|ninas|cuchos|pelaos|cipotes|jovenes|menores)';
+    if (preg_match('/\b' . $slangSubj . '\s+que\s+se\s+(volo|volaron|tiro|tiraron|tajo|tajaron|capo|caparon|pinto|pintaron|rajo|rajaron|pianto|piantaron|salto|saltaron|fugo|fugaron|escapo|escaparon|fue|fueron|largo|largaron|pico|picaron|echo|echaron|jalaron|pelaron)\b/u', $q0))
+        return $quant ? $r('count_events', 0.85, true, ['module'=>'EVASION_INTERNA'])
+            : $r('list_events', 0.85, true, ['module'=>'EVASION_INTERNA']);
+    if (preg_match('/\b' . $slangSubj . '\s+que\s+(?:no\s+(?:entro|entraron|vino|vinieron|asistio|asistieron|llego|llegaron|fue|fueron|se presento|se presentaron|falto|faltaron|aparecio|aparecieron|se reporto|se reportaron)|faltaron|falto|estuvieron ausentes|no asistieron)\b/u', $q0))
+        return $quant ? $r('count_events', 0.85, true, ['module'=>'INASISTENCIA'])
+            : $r('list_events', 0.85, true, ['module'=>'INASISTENCIA']);
 
     // evasión / salida no autorizada — vocabulario amplio
     if (preg_match('/\b(abandonaron|abandona|se fueron|salieron|salen|saliendo|fugaron|escaparon|se escaparon|se volaron|volaron|se saltaron|saltaron|se picaron|picaron|piantaron|escondieron|esconden|escondidas|escondidas|conejo|hicieron conejo|sin permiso del aula|salidas? del aula|salidas? del salon|salieron del salon|puerta trasera|puerta de atras|por la ventana|a escondidas|sin autorizacion|no autorizad\w*|salida\w* no autorizad\w*|se retiraron|se largaron|largaron|abandon\w*)\b/u', $q0)
