@@ -88,6 +88,17 @@ services:
       NLU_LLM_MODEL: "${NLU_LLM_MODEL:-qwen/qwen3.8-27b}"
       NLU_LLM_MODE: "${NLU_LLM_MODE:-on}"
       NLU_LLM_COMPOSE: "${NLU_LLM_COMPOSE:-data}"
+      NLU_LLM_REASONING_EFFORT: "${NLU_LLM_REASONING_EFFORT:-}"
+      # ── TEMPORAL — SOLO DESARROLLO — BORRAR ANTES DE PRODUCCIÓN ──────────
+      # Alternativa cuando se agota la cuota de Groq: Ollama en la máquina
+      # del desarrollador (ver AGENTS.md § «LLM local temporal»). Se activa
+      # exportando las variables al levantar el stack; los valores de abajo
+      # son la referencia, no el default — Groq sigue siendo el proveedor.
+      #   NLU_LLM_URL=http://172.17.0.1:11434/v1  NLU_LLM_KEY=ollama
+      #   NLU_LLM_MODEL=qwen3:8b  NLU_LLM_REASONING_EFFORT=none
+      #   NLU_LLM_TIMEOUT_MS=55000  NLU_LLM_COMPOSE=off
+      NLU_LLM_TIMEOUT_MS: "${NLU_LLM_TIMEOUT_MS:-6000}"
+      # ── FIN TEMPORAL ─────────────────────────────────────────────────────
       REDISHOST: redis
       REDISPORT: 6379
       REDIS_PASSWORD: nexo_test_redis

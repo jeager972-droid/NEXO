@@ -1,0 +1,94 @@
+{
+  "_doc": "Evaluación honesta (AGENTS.md F8). Cada turno declara la RESPUESTA esperada: intent aceptable(s), entidades del estado (ds.entities) que deben estar o NO estar, y frases que la respuesta debe/no debe contener. Datos del fixture nexo-test. REGLA: 'test' está congelado — se corrige mirando 'dev' y se REPORTA 'test'. Prohibido editar expectativas para que coincidan con la salida; si una expectativa resulta mal escrita, se corrige con justificación en el commit.",
+  "conversations": [
+    {
+      "split": "dev",
+      "name": "conversación real del usuario (03-oct-2026)",
+      "turns": [
+        {"u": "hola nexus como estas", "intent": ["greeting", "wellbeing", "greeting_time"]},
+        {"u": "que grupos tengo en esta institucion", "intent": ["groups_list"]},
+        {"u": "como estan los decimos", "intent": ["group_summary", "day_summary", "attendance_ranking"], "ent": {"grade": "10"}, "not_ent": ["group"]},
+        {"u": "como van los grupos de decimo", "intent": ["group_summary", "day_summary", "attendance_ranking"], "ent": {"grade": "10"}, "not_ent": ["group"], "reply_not": ["10-A ("]},
+        {"u": "pero todos los decimos en general, como les esta yendo hoy", "intent": ["group_summary", "day_summary", "attendance_ranking"], "ent": {"grade": "10"}, "not_ent": ["group"]},
+        {"u": "como van los grupos 10 hoy", "intent": ["group_summary", "day_summary", "attendance_ranking"], "ent": {"grade": "10"}, "not_ent": ["group"]},
+        {"u": "clasifica y ordena mis notificaciones", "intent": ["notifications_unread"]},
+        {"u": "detalles de la notificacion de 10A?", "intent": ["notifications_unread"], "not_ent": ["student"]},
+        {"u": "muestrame el grupo 10A", "intent": ["students_in_group", "group_summary"], "ent": {"group": "10-A"}},
+        {"u": "quien de estos es el que mas ha evadido clase los ultimos 15 dias", "intent": ["top_offenders"], "ent": {"module": "EVASION_INTERNA"}, "reply_not": ["de la lista"]},
+        {"u": "quien es el acudiente de tomas castaño gutierrez", "intent": ["student_field"], "reply_any": ["acudiente"]},
+        {"u": "el de 10A", "intent": ["student_field", "clarify"], "reply_not": ["Personal directivo"]},
+        {"u": "eres un inutil", "intent": ["insult", "insult_back", "apology"]},
+        {"u": "entre los grupos del grado decimo, que grupo acumula mas inasistencias", "intent": ["attendance_ranking"], "ent": {"grade": "10", "module": "INASISTENCIA"}},
+        {"u": "y evasiones?", "intent": ["attendance_ranking"], "ent": {"grade": "10", "module": "EVASION_INTERNA"}},
+        {"u": "del grado decimo cual ha tenido mas llegadas tarde los ultimos 15 dias", "intent": ["attendance_ranking"], "ent": {"grade": "10", "module": "LATE_ARRIVAL"}, "reply_not": ["jornada"]}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "grado y elipsis",
+      "turns": [
+        {"u": "cuántos estudiantes hay en décimo", "intent": ["group_student_count", "students_count"], "ent": {"grade": "10"}, "not_ent": ["group"]},
+        {"u": "y cuántos faltaron esta semana", "intent": ["count_events", "list_events", "group_summary"], "ent": {"grade": "10", "module": "INASISTENCIA"}},
+        {"u": "cuál de los grupos de décimo tiene más tardanzas este mes", "intent": ["attendance_ranking"], "ent": {"grade": "10", "module": "LATE_ARRIVAL"}},
+        {"u": "y en sexto?", "intent": ["attendance_ranking"], "ent": {"grade": "6"}},
+        {"u": "dame la lista de los de 10B", "intent": ["students_in_group"], "ent": {"group": "10-B"}, "not_ent": ["grade"]}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "lista y referencias",
+      "turns": [
+        {"u": "estudiantes del 10A", "intent": ["students_in_group"], "ent": {"group": "10-A"}},
+        {"u": "el tercero", "intent": ["result_nav", "students_in_group"], "reply_any": ["Lucía"]},
+        {"u": "de esos, quién tiene más inasistencias este mes", "intent": ["top_offenders"], "ent": {"module": "INASISTENCIA"}, "reply_not": ["de la lista"]},
+        {"u": "y el que más llega tarde", "intent": ["top_offenders"], "ent": {"module": "LATE_ARRIVAL"}}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "aclaración pendiente",
+      "turns": [
+        {"u": "cuál es el acudiente de castaño", "intent": ["student_field", "clarify"], "reply_any": ["Encontré varios", "¿Cuál"]},
+        {"u": "el de gutiérrez", "intent": ["student_field"], "reply_any": ["Tomás"]},
+        {"u": "y su documento", "intent": ["student_field"], "reply_any": ["8101"]}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "operación y derivación",
+      "turns": [
+        {"u": "hay que citar al acudiente de juan camilo ospina", "intent": ["derive_action", "start_operation"]},
+        {"u": "cuántas inasistencias tiene juan camilo este mes", "intent": ["count_events", "student_summary"], "ent": {"module": "INASISTENCIA"}, "ent_contains": {"student": "juan camilo"}},
+        {"u": "y evasiones?", "intent": ["count_events", "list_events"], "ent": {"module": "EVASION_INTERNA"}, "ent_contains": {"student": "juan camilo"}}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "jerga y errores de tipeo",
+      "turns": [
+        {"u": "los pelados del 10a que se volaron esta semana", "intent": ["list_events", "count_events"], "ent": {"module": "EVASION_INTERNA", "group": "10-A"}},
+        {"u": "cuantas tardansas van hoy en decimo", "intent": ["count_events", "late_today", "group_summary"], "ent": {"module": "LATE_ARRIVAL", "grade": "10"}},
+        {"u": "y ayer?", "intent": ["count_events", "late_today", "group_summary"], "ent": {"range_label": "ayer"}}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "social mezclado con datos",
+      "turns": [
+        {"u": "gracias nexus", "intent": ["thanks"]},
+        {"u": "buenas tardes, cómo va la jornada", "intent": ["day_summary"]},
+        {"u": "quién emitió la última alerta sos", "intent": ["sos_detail", "sos_alerts"]},
+        {"u": "qué sensores no están reportando", "intent": ["devices_status", "device_detail", "system_incidents"]}
+      ]
+    },
+    {
+      "split": "test",
+      "name": "comparación",
+      "turns": [
+        {"u": "compara 10A con 10B en inasistencias este mes", "intent": ["attendance_ranking"], "ent": {"module": "INASISTENCIA"}},
+        {"u": "y en tardanzas?", "intent": ["attendance_ranking"], "ent": {"module": "LATE_ARRIVAL"}},
+        {"u": "cuál mejoró más respecto al mes pasado", "intent": ["attendance_trend", "attendance_ranking", "top_offenders"]}
+      ]
+    }
+  ]
+}

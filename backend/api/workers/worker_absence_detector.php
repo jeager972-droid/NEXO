@@ -181,6 +181,42 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         }
     }
 
+    // Compuerta a nivel colegio (F9): CERO ingresos en TODO el plantel con
+    // dispositivos activos = captura caída, no ausentismo masivo. Sin ella
+    // cada grupo cae en «anomalía» por separado y se insertan cientos de
+    // inasistencias pending_context que contaminan los conteos del chat.
+    // Se registra UN SIN_DATOS_NODO escolar por día y se suspende el ciclo.
+    $devStmt = $conn->prepare("SELECT COUNT(*) FROM edge_devices WHERE school_id = ? AND active = TRUE");
+    $devStmt->execute([$schoolId]);
+    $devCount = (int)$devStmt->fetchColumn();
+    if ($devCount > 0) {
+        $ingStmt = $conn->prepare("SELECT COUNT(*) FROM biometric_events
+            WHERE school_id = ? AND event_type LIKE 'INGRESO_%'
+              AND event_timestamp >= ?::date AND event_timestamp < (?::date + INTERVAL '1 day')");
+        $ingStmt->execute([$schoolId, $today]);
+        if ((int)$ingStmt->fetchColumn() === 0) {
+            $dup = $conn->prepare("SELECT 1 FROM security_incidents
+                WHERE school_id = ? AND incident_type = 'SIN_DATOS_NODO' AND resolved = FALSE
+                  AND (detected_at AT TIME ZONE 'America/Bogota')::date
+                      = (NOW() AT TIME ZONE 'America/Bogota')::date
+                  AND metadata_json->>'school_wide' = 'true' LIMIT 1");
+            $dup->execute([$schoolId]);
+            if (!$dup->fetchColumn()) {
+                ctCreateSecurityIncident($conn, $schoolId, 'SIN_DATOS_NODO', 'HIGH',
+                    "Ningún estudiante registró ingreso hoy en toda la institución — los sensores no están reportando. Detección de ausencias suspendida por hoy.",
+                    ['school_wide' => true, 'reason' => 'zero_entries_schoolwide']);
+                ctNotifyCoordinators($conn, $schoolId,
+                    'Sensores sin datos: asistencia suspendida',
+                    "Hoy no hay ingresos registrados en ningún grupo. Lo más probable es que los nodos biométricos estén caídos — no se marcaron inasistencias.",
+                    ['kind' => 'SIN_DATOS_NODO', 'school_wide' => true],
+                    'NO_DATA:' . $schoolId . ':' . $today);
+            }
+            logA('NO_SCHOOL_DATA', "school=$schoolId — 0 ingresos escolares con $devCount dispositivos activos; ciclo suspendido");
+            $conn->exec("COMMIT");
+            return 0;
+        }
+    }
+
     foreach ($groups as $group) {
         if (!$group['has_classes']) continue;
 

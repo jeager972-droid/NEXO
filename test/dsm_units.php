@@ -157,7 +157,8 @@ chk('K1 cuantas hubo hoy→clarifica', $t['intent'] === 'clarify' || $t['turn'] 
 $ctx = null;
 turn('los seguimientos abiertos', $ctx);
 $t = turn('los del noveno', $ctx);
-chk('L1 los del noveno→group=9', ($t['slots']['group'] ?? '') === '9', "group=" . var_export($t['slots']['group'] ?? null, true));
+// «del noveno» sin sección es el GRADO entero (todos sus grupos), no un grupo «9»
+chk('L1 los del noveno→grade=9', ($t['slots']['grade'] ?? '') === '9' && empty($t['slots']['group']), "grade=" . var_export($t['slots']['grade'] ?? null, true) . " group=" . var_export($t['slots']['group'] ?? null, true));
 
 /* ── M. Extracción de estudiantes limpia ───────────────────────────────── */
 $extractCases = [

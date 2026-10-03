@@ -864,7 +864,9 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     }
     if ($gs) { $sig['filters']['group']=$gs[0]; if (isset($gs[1])) $sig['filters']['group2']=$gs[1]; }
     if (preg_match('/\b(mañana|manana|jornada manana|de la manana|por la manana)\b/u', $q0)) $sig['filters']['shift']='mañana';
+    // «llegadas tarde / llegó tarde / tardanza» es el MÓDULO, no la jornada
     elseif (preg_match('/\b(tarde|jornada tarde|de la tarde|por la tarde)\b/u', $q0)
+        && !preg_match('/\b(lleg\w*|entr\w*|ingres\w*|vin\w*)\s+(muy\s+|mas\s+)?tarde\b/u', $q0)
         && !isset($sig['filters']['status']) ) $sig['filters']['shift']='tarde';
     elseif (preg_match('/\b(jornada unica|unica jornada)\b/u', $q0)) $sig['filters']['shift']='única';
     if (preg_match('/\bgrado\s+(\d{1,2})\b/u', $q0, $mm) && empty($sig['filters']['group'])) $sig['filters']['grade']=$mm[1];

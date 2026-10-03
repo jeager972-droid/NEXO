@@ -186,7 +186,8 @@ function chatRangeLabel(array $s): string {
 /** «en 10-A» / «para Ana Pérez» — sujeto legible del filtro aplicado. */
 function chatWho(?array $student, ?array $group): string {
     if ($student) return " de {$student['first_name']} {$student['last_name']}";
-    if ($group) return " en {$group['group_name']}";
+    if ($group && !empty($group['_set'])) return " entre {$group['group_name']}";
+    if ($group) return !empty($group['_grade']) ? " en el grado {$group['_grade']}" : " en {$group['group_name']}";
     return '';
 }
 
@@ -209,6 +210,9 @@ function chatResolveGroup(PDO $conn, array $u, ?string $g): ?array {
     $stmt->execute([$u['school_id'], $g, $g, $g, $g]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($row) return $row;
+    // «10» sin letra es un GRADO, no un grupo: el LIKE '%10%' devolvía 10-A
+    // y la respuesta hablaba de un solo grupo — chatGroupScope lo expande
+    if (preg_match('/^\d{1,2}$/', $g)) return null;
     // fallback LIKE
     $stmt = $conn->prepare("
         SELECT group_id, group_name, grade_level FROM academic_groups
@@ -216,6 +220,33 @@ function chatResolveGroup(PDO $conn, array $u, ?string $g): ?array {
     ");
     $stmt->execute([$u['school_id'], '%' . $g . '%']);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+/**
+ * Alcance de grupo o GRADO → filtro SQL sobre la columna de grupo $col.
+ *   group  → ese grupo · grade (o un «grupo» sin letra: «10») → todos sus grupos.
+ * null = sin filtro · ['error'=>texto] = se pidió un alcance que no existe.
+ * Un único lugar para que todo handler entienda «los décimos» igual.
+ */
+function chatGroupScope(PDO $conn, array $u, array $s, string $col): ?array {
+    $gname = trim((string)($s['group'] ?? ''));
+    $grade = trim((string)($s['grade'] ?? ''));
+    if (preg_match('/^\d{1,2}$/', $gname)) { $grade = $grade !== '' ? $grade : $gname; $gname = ''; }
+    if ($gname !== '' && $gname !== '*mine*') {
+        $g = chatResolveGroup($conn, $u, $gname);
+        if (!$g) return ['error' => "No encuentro el grupo «{$gname}» en la institución."];
+        return ['sql' => " AND {$col} = ?", 'params' => [$g['group_id']], 'label' => $g['group_name'], 'groups' => [$g], 'grade' => null];
+    }
+    if ($grade !== '' && preg_match('/^\d{1,2}$/', $grade)) {
+        $st = $conn->prepare("SELECT group_id, group_name, grade_level FROM academic_groups
+            WHERE school_id = ? AND (grade_level = ? OR group_name ~ ?) ORDER BY group_name");
+        $st->execute([$u['school_id'], $grade, '^' . $grade . '[- ]?[A-Za-z]$']);
+        $gs = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$gs) return ['error' => "No hay grupos de grado {$grade} registrados en la institución."];
+        return ['sql' => " AND {$col} IN (" . implode(',', array_fill(0, count($gs), '?')) . ")",
+                'params' => array_column($gs, 'group_id'), 'label' => "grado {$grade}", 'groups' => $gs, 'grade' => $grade];
+    }
+    return null;
 }
 
 /**
@@ -498,6 +529,93 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
 
     // ── Turnos conversacionales que no necesitan al parser ─────────────
     // Deterministas: 0 cuota de LLM y sin margen de interpretación.
+
+    // (a0) respuesta a una aclaración pendiente («¿cuál Tomás?» → «el de
+    // 10A»): se elige el candidato y se re-despacha la consulta ORIGINAL con
+    // su documento (clave exacta, ya no ambigua)
+    $pendingPick = $dsPre['pending_pick'] ?? null;
+    if (is_array($pendingPick) && !empty($pendingPick['intent'])
+        && ($cand = chatPickCandidate($q0, $pendingPick['candidates'] ?? []))) {
+        $pIntent = (string)$pendingPick['intent'];
+        $pSlots = is_array($pendingPick['slots'] ?? null) ? $pendingPick['slots'] : [];
+        $pSlots['student'] = $cand['doc'] !== '' ? $cand['doc'] : $cand['name'];
+        unset($pSlots['group'], $pSlots['grade']);
+        if (!chatAllowed($conn, $authUser, $pIntent, $role)) {
+            $out = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$pIntent,'denied'=>true,
+                    'confidence'=>1.0,'session_id'=>$sessionId];
+            if ($dsPre) $out['_ds'] = $dsPre;
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+        $out = chatDispatch($conn, $authUser, $pIntent, $pSlots, $vars, $role);
+        $out = nxPlanResponse($out, $pIntent, 'clarify:' . $pIntent);
+        $out['intent'] = $pIntent; $out['confidence'] = 1.0; $out['session_id'] = $sessionId;
+        $out['_ds'] = chatBuildDs(['resolved'=>['intent'=>$pIntent,'slots'=>$pSlots],
+            'turn_type'=>'context_modify'], $out, $dsPre);
+        chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+        exit(json_encode(['status'=>'ok','data'=>$out]));
+    }
+
+    // (a0b) «el de 10A» SIN aclaración pendiente: el referente previo era
+    // una persona (o una lista de estudiantes) — se resuelve DENTRO del
+    // grupo, no como una consulta nueva de personal. 1 candidato →
+    // re-despacha la consulta previa con su documento; varios → aclaración
+    // con nombres; ninguno → aclaración honesta con la nómina.
+    if (preg_match('/^(?:el|la|los|las)\s+de\s+(?:l[oa]s?\s+)?(\d{1,2})\s*-?\s*([a-z])?$/u', $q0, $mgp)
+        && $dsPre && ($prevSt = ($dsPre['entities']['student'] ?? null) ?: ($dsPre['last_result']['type'] ?? null) === 'students')) {
+        $gRef = $mgp[1] . (!empty($mgp[2]) ? '-' . strtoupper($mgp[2]) : '');
+        $gScope = chatGroupScope($conn, $authUser, ['group' => $gRef], 'sga.group_id');
+        if ($gScope && empty($gScope['error'])) {
+            $scope = chatScope($conn, $authUser);
+            $rq = $conn->prepare("SELECT s.first_name, s.last_name, s.document_number, ag.group_name
+                FROM students s
+                JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
+                JOIN academic_groups ag ON ag.group_id=sga.group_id
+                WHERE s.school_id=? {$gScope['sql']} AND s.deleted_at IS NULL {$scope['sql']}
+                ORDER BY s.last_name, s.first_name LIMIT 60");
+            $rq->execute(array_merge([$schoolId], $gScope['params'], $scope['params'] ?? []));
+            $roster = $rq->fetchAll(PDO::FETCH_ASSOC);
+            $prevName = nxNorm((string)($dsPre['entities']['student'] ?? ''));
+            $cands = $roster;
+            if ($prevName !== '') {
+                $toks = array_filter(explode(' ', $prevName), fn($t) => mb_strlen($t) > 2);
+                $hit = array_values(array_filter($roster, function ($r) use ($toks) {
+                    $nm = nxNorm($r['first_name'] . ' ' . $r['last_name']);
+                    foreach ($toks as $t) if (!str_contains($nm, $t)) return false;
+                    return true;
+                }));
+                if ($hit) $cands = $hit;
+            }
+            $pIntent = in_array($dsPre['intent'] ?? '', NX_QUERY_INTENTS, true)
+                ? $dsPre['intent'] : 'student_field';
+            if (count($cands) === 1) {
+                $c = $cands[0];
+                $pSlots = ['student' => $c['document_number'] !== '' ? $c['document_number']
+                            : trim($c['first_name'] . ' ' . $c['last_name'])];
+                foreach (['field','module'] as $k)
+                    if (!empty($dsPre['entities'][$k])) $pSlots[$k] = $dsPre['entities'][$k];
+                if (chatAllowed($conn, $authUser, $pIntent, $role)) {
+                    $out = chatDispatch($conn, $authUser, $pIntent, $pSlots, $vars, $role);
+                    $out = nxPlanResponse($out, $pIntent, 'fragment:' . $pIntent);
+                    $out['intent'] = $pIntent; $out['confidence'] = 0.9; $out['session_id'] = $sessionId;
+                    $out['_ds'] = chatBuildDs(['resolved'=>['intent'=>$pIntent,'slots'=>$pSlots],
+                        'turn_type'=>'context_modify'], $out, $dsPre);
+                    chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+                    exit(json_encode(['status'=>'ok','data'=>$out]));
+                }
+            }
+            // 0 o varios → aclaración honesta con candidatos (pending_pick
+            // se arma en chatBuildDs — el siguiente turno elige)
+            $out = chatAmbiguous($cands ?: $roster);
+            $out['intent'] = 'clarify'; $out['confidence'] = 0.7; $out['session_id'] = $sessionId;
+            // el ds conserva la consulta ORIGINAL como pendiente: «el de
+            // 9B» del siguiente turno elige candidato y la re-despacha
+            $out['_ds'] = chatBuildDs(['resolved'=>['intent'=>$pIntent,'slots'=>['group'=>$gRef]],
+                'turn_type'=>'context_modify'], $out, $dsPre);
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
+    }
 
     // (a) oferta del turno anterior + afirmación → ejecutar lo ofrecido
     $pendingOffer = $dsPre['offer'] ?? null;
@@ -802,7 +920,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // Dos detectores independientes: flag `safety` del parser LLM +
     // backstop determinista. Ninguno es un intent de tema — es un flag
     // transversal que bloquea con una respuesta seria fija.
-    if (($cls['safety'] ?? 'ok') === 'risky' || nxSafetyScreen($q0)
+    // un insulto AL ASISTENTE no es contenido riesgoso: el flag del LLM
+    // sobre un intent insult/insult_back se ignora (el backstop PHP sigue)
+    $llmRisky = ($cls['safety'] ?? 'ok') === 'risky' && !in_array($cls['intent'] ?? '', ['insult', 'insult_back'], true);
+    if ($llmRisky || nxSafetyScreen($q0)
         || (!empty($cls['parts']) && array_filter($cls['parts'], fn($p) => ($p['safety'] ?? 'ok') === 'risky'))) {
         securityLog('CHAT_SAFETY_GUARD', mb_substr($q0,0,200) . ' | user ' . $userId);
         $out = ['reply'=>'Eso no es algo en lo que pueda ayudarte. Si hay una situación que te preocupa, los canales y protocolos de la institución son el camino — y si necesitas reportar algo, coordinación está para eso.',
@@ -841,12 +962,95 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $interp['resolved']['slots']['_q'] = $q0;
     if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
 
+    // LLM PRIMERO (AGENTS.md F3): cuando el LLM entendió el turno con
+    // confianza, ESE es el significado. DSM, frame SCP y compositor semántico
+    // enriquecen slots (contexto, fechas, alcance) pero no reescriben el
+    // intent — antes tres capas podían pisarlo y un «eres un inútil» acababa
+    // en una lista de estudiantes. Con confianza baja (fragmento ambiguo) el
+    // DSM conserva su resolución por contexto.
+    $llmLocked = in_array($cls['source'] ?? '', ['llm', 'llm_cache'], true)
+        && (float)($cls['confidence'] ?? 0) >= 0.75
+        && !in_array($cls['intent'] ?? '', ['out_of_scope', 'clarify'], true);
+    // nombre canónico: el LLM a veces emite capability punteada
+    // («incidents.list») que sin normalizar pierde las reglas del DSM
+    $clsIntent = nxCapToIntent($cls['intent'] ?? null) ?? ($cls['intent'] ?? null);
+    // excepción deliberada: si el DSM resolvió el turno como FRAGMENTO
+    // contextual («y evasiones?», «y en sexto?») heredando el intent del
+    // tema activo, su resolución manda — el LLM clasificó el fragmento
+    // como si fuera consulta nueva
+    $dsmInherited = in_array('intent', $interp['resolved']['inherited'] ?? [], true);
+    if ($llmLocked && $intent !== $clsIntent
+        && !in_array($intent, ['confirm_op', 'cancel', 'repeat_op', 'security_probe', 'clarify'], true)
+        && !$dsmInherited) {
+        $intent = $clsIntent;
+        $interp['resolved']['intent'] = $intent;
+    }
+
+    // traza de procedencia (F8): qué capa decidió el intent y qué llevaba
+    // el parseo — sin ella un «result_nav» final no dice quién lo pidió
+    $nluTrace = [
+        'cls_source' => $cls['source'] ?? null,
+        'cls_intent' => $cls['intent'] ?? null,
+        'cls_conf'   => $cls['confidence'] ?? null,
+        'llm_error'  => function_exists('nxLlmLastError') ? nxLlmLastError() : null,
+        'llm_locked' => $llmLocked,
+        'ds_intent'  => $ds['intent'] ?? null,
+        'nav'        => $slots['_nav'] ?? null,
+    ];
+
+    // set_ref: «quién DE ESTOS…», «entre ellos», «de esa lista» — la pregunta
+    // nueva se acota al set de estudiantes activo (filtro por IDs), en vez
+    // de navegarlo («era el último de la lista») o ignorarlo (el colegio)
+    $lrSet = is_array($ds) ? ($ds['last_result'] ?? null) : null;
+    if (preg_match('/\b(de|entre)\s+(estos|estas|esos|esas|ellos|ellas|aquellos)\b|\b(de|en)\s+(esa|esta|la)\s+lista\b/u', $q0)
+        && ($lrSet['type'] ?? '') === 'students' && !empty($lrSet['items'])) {
+        $ids = array_values(array_filter(array_column($lrSet['items'], 'id')));
+        if ($ids) {
+            $lf = $lrSet['_filters'] ?? [];
+            $slots['_set_ids'] = array_slice($ids, 0, 400);
+            $slots['_set_label'] = !empty($lf['group']) ? "los estudiantes de {$lf['group']}"
+                : (!empty($lf['grade']) ? "los estudiantes del grado {$lf['grade']}" : ($lrSet['label'] ?? 'esa lista'));
+            // el set ya ES el alcance: un grupo/grado heredado o un
+            // pronombre leído como nombre no deben recortarlo de nuevo
+            unset($slots['group'], $slots['grade']);
+            if (!empty($slots['student']) && preg_match('/^(estos|estas|esos|esas|ellos|ellas|de estos|de esos)$/u', nxNorm((string)$slots['student'])))
+                unset($slots['student']);
+        }
+    }
+
     // Rescate de dominio: «sensores del colegio», «los nodos», «anomalías»
     // caen a out_of_scope en el parser pese a ser datos consultables — un
     // sustantivo inequívoco del dominio reencauza al intent correcto antes
     // de que el canal informal improvise una respuesta.
     if ($intent === 'out_of_scope' && ($resc = nxDomainRescue($q0))) {
         $intent = $resc;
+        $interp['resolved']['intent'] = $intent;
+    }
+
+    // nombre a secas («pedro», «castaño»): sin verbo el parser lo descarta
+    // como out_of_scope, pero si resuelve a estudiante(s) de la escuela es
+    // una consulta de ficha. Máx. 3 palabras para no tragar frases largas.
+    if ($intent === 'out_of_scope' && str_word_count($q0) <= 3
+        && preg_match('/^[a-záéíóúñü\s]+$/u', $q0)) {
+        $found = chatResolveStudent($conn, $u, $q0);
+        if ($found) {
+            $intent = 'student_field';
+            $slots['student'] = $q0;
+            $interp['resolved']['intent'] = $intent;
+            $nluTrace['name_rescue'] = $q0;
+        }
+    }
+
+    // veto de sujeto/operación (F5): un sustantivo inequívoco del dominio
+    // manda sobre la inercia del LLM — «mis notificaciones» tras un ranking
+    // de asistencia NO es asistencia. También degrada intents que exigen
+    // cue ausente (ranking sin «más/peor», frecuencia sin «por»).
+    if ($veto = nxIntentVeto($q0, $intent, $slots)) {
+        if ($veto !== $intent) {
+            $nluTrace['veto'] = [$intent, $veto];
+            $intent = $veto;
+            $interp['resolved']['intent'] = $intent;
+        }
     }
 
     // ── verbo de operación + op del parser → ES una operación, no una
@@ -928,8 +1132,13 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                     'tracking_detail','citations_by','alert_resolution','enrollment_stats',
                     'reports_log','sos_detail','guardian_messages','device_detail',
                     'attendance_trend'], true);
-                $slots = array_merge($slots, $cSlots);
-                if (!empty($scpFrame['subject']['name']) && in_array($scpFrame['task'], ['relation','count'], true))
+                // el alcance que ya trae el turno (grado, set «de estos») no
+                // lo recorta un grupo que el frame heredó del contexto
+                if (!empty($slots['grade']) || !empty($slots['_set_ids'])) unset($cSlots['group']);
+                if (!empty($slots['_set_ids'])) unset($cSlots['grade'], $cSlots['student']);
+                // con intent del LLM, el frame solo completa lo que falta
+                $slots = $llmLocked ? $slots + $cSlots : array_merge($slots, $cSlots);
+                if (!$llmLocked && !empty($scpFrame['subject']['name']) && in_array($scpFrame['task'], ['relation','count'], true))
                     $slots['student'] = $scpFrame['subject']['name'];
                 // la referencia materializada por el frame es de ENTIDAD —
                 // un nav posicional («la primera», «el último») aún debe
@@ -938,7 +1147,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                     && !(preg_match('/^(nth:\d+|first)$/', (string)$slots['_nav'])
                          && !empty($ds['last_result']['items'])))
                     unset($slots['_nav']);
-                if (!($opResolved && $downgradeToQuery)) $intent = $cIntent;
+                if (!($opResolved && $downgradeToQuery) && !$llmLocked) $intent = $cIntent;
                 $interp['resolved']['intent'] = $intent;
                 $interp['resolved']['slots'] = $slots;
                 $interp['requires_clarification'] = false;
@@ -1126,15 +1335,18 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // verbo de evento / sustantivo de serie / slice-N en el enunciado →
     // consulta NUEVA, no navegación del set: «quién llegó primero»,
     // «el primer incidente», «los cinco primeros de 6-A» ≠ «el primero»
-    $navEventVerb = (bool)preg_match('/\b(llego|llegaron|entro|entraron|falto|faltaron|marco|marcaron|salio|salieron|registro|registraron|asistio|asistieron|vino|vinieron)\b/u', $q0)
+    $navEventVerb = (bool)preg_match('/\b(llego|llegaron|entro|entraron|falto|faltaron|marco|marcaron|salio|salieron|registro|registraron|asistio|asistieron|vino|vinieron|evadi\w*|escap\w*|fug\w*|evade|evaden)\b/u', $q0)
         || preg_match('/\b(incidente|incidentes|tardanza|tardanzas|inasistencia|inasistencias|evasion|evasiones|evento|eventos|registro|registros|novedad|novedades)\b/u', $q0)
         || (preg_match('/\b(?:los|las)\s+(\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(primer[oa]?s?|ultim[oa]s?)\b/u', $q0)
             // con grupo/ámbito explícito = consulta nueva; sin él = transform
             // del set activo («dame los tres últimos» después de ordenar)
             && preg_match('/\b(?:de|del|en|grupo|salon)\s+[\da-z]/u', $q0));
+    // una pregunta de dominio («quién ha evadido más los ÚLTIMOS 15 días»)
+    // nunca se lee como posición del set activo — es consulta nueva
+    $domainAsk = nxHasDomainAsk($q0);
     // position emitido por el parser sin nav → nav posicional, usando el
     // conteo del set activo para resolver «último»
-    if (empty($slots['_nav']) && !empty($slots['position'])
+    if (empty($slots['_nav']) && !empty($slots['position']) && !$domainAsk
         && $ds && !empty($ds['last_result']['items'])) {
         $nPos = count($ds['last_result']['items']);
         $p = $slots['position'];
@@ -1158,7 +1370,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // «segundo puesto», «último día» = consulta nueva, no nav).
     if (empty($slots['_nav']) && empty($slots['position'])
         && $ds && !empty($ds['last_result']['items'])
-        && preg_match('/\b(?:del|de la|de los|de las|el|la|los|las)\s+(primer[oa]s?|segund[oa]s?|tercer[oa]s?|cuart[oa]s?|quint[oa]s?|últim[oa]s?|ultim[oa]s?|penúltim[oa]s?|penultim[oa]s?)\b(?!\s*(?:tardanza|inasistencia|evasi[oó]n|evento|incidente|falta|llegada|nota|semana|d[ií]a|mes|vez|parte|mitad|puesto|lugar|grado|hora|clase|periodo|per[ií]odo|quincena|año|anio)\b)/u', $q0, $om)) {
+        && preg_match('/\b(?:del|de la|de los|de las|el|la|los|las)\s+(primer[oa]s?|segund[oa]s?|tercer[oa]s?|cuart[oa]s?|quint[oa]s?|últim[oa]s?|ultim[oa]s?|penúltim[oa]s?|penultim[oa]s?)\b(?!\s*(?:\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|quince|treinta|veinte)\b)(?!\s*(?:tardanza|inasistencia|evasi[oó]n|evento|incidente|falta|llegada|nota|semana|d[ií]a|mes|vez|parte|mitad|puesto|lugar|grado|hora|clase|periodo|per[ií]odo|quincena|año|anio)(?:e?s)?\b)/u', $q0, $om)) {
         $ord = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,
                 'tercero'=>3,'tercera'=>3,'tercer'=>3,'cuarto'=>4,'cuarta'=>4,
                 'quinto'=>5,'quinta'=>5,'primeros'=>1,'primeras'=>1];
@@ -1260,7 +1472,11 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         }
     }
 
-    if (!empty($slots['_nav']) && $ds && isset($ds['last_result']) && !$navGroupClash && !$navEventVerb) {
+    // una pregunta de dominio NUNCA es cursor: «quién de estos ha evadido
+    // más» pide un ranking sobre el set, no el último ítem de la lista
+    if (!empty($slots['_nav']) && nxHasDomainAsk($q0)) unset($slots['_nav'], $slots['position']);
+    if (!empty($slots['_nav']) && $ds && isset($ds['last_result']) && !$navGroupClash && !$navEventVerb
+        && !nxHasDomainAsk($q0)) {
         // «tabla de esos datos / todos» tras un escalar (count/resumen): el
         // set guardado es de OTRA consulta — el referente real es la oferta
         // del turno («¿ver el detalle?» → list_events con los mismos filtros)
@@ -1286,6 +1502,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         }
         $out = chatResultNav($ds, $slots['_nav'], $vars);
         $out['session_id'] = $sessionId;
+        if (isset($nluTrace)) { $nluTrace['nav_final'] = $slots['_nav']; $nluTrace['final_intent'] = $intent; $out['_interpretation']['nlu'] = $nluTrace; }
         $out['_ds'] = chatBuildDs($interp, $out, $ds);
         chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
         exit(json_encode(['status'=>'ok','data'=>$out]));
@@ -1339,7 +1556,10 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // cada cláusula compone su propio plan; las referencias posicionales
     // («del primero», «de esos») enlazan el paso al result-set anterior.
     $plan = null;
-    $clauses = nxSemSplitCompound($q0);
+    // con intent del LLM el mensaje ya se entendió COMPLETO: partirlo en
+    // cláusulas re-clasificaba cada parte (una llamada más por cláusula) y
+    // armaba un plan compuesto que pisaba el significado del turno
+    $clauses = $llmLocked ? [$q0] : nxSemSplitCompound($q0);
     $scpChatter = []; $scpPendingTargets = [];
     if (count($clauses) > 1) {
         $steps = []; $okAll = true;
@@ -1415,7 +1635,9 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // tiene capability para ellas y degradaría la petición a una lista
     // genérica («exporta tardanzas» → incidents.list, «citaciones de X» →
     // incidents.list sin filas reales de citación).
-    $chatNative = in_array($intent, ['export_data','derive_action','start_operation',
+    // intent del LLM confiado = despacho directo al handler dedicado: el
+    // plan genérico del frame/compositor no lo sustituye
+    $chatNative = $llmLocked || in_array($intent, ['export_data','derive_action','start_operation',
         'permissions','citations','trackings','groups_list','attendance_ranking',
         'pending_returns',
         // conteo/lista con slots estructurales propios (_compare_ranges,
@@ -1537,6 +1759,11 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $out['_ds'] = chatBuildDs($interp, $out, $ds);
     if (isset($out['_interpretation']['timing_ms']))
         $out['_interpretation']['timing_ms']['dispatch'] = round($tDisp * 1000, 2);
+    if (isset($nluTrace)) {
+        $nluTrace['nav_final'] = $slots['_nav'] ?? null;
+        $nluTrace['final_intent'] = $intent;
+        $out['_interpretation']['nlu'] = $nluTrace;
+    }
     // traza SCP — el frame viaja con el turno para diagnóstico por capa
     if (isset($scpFrame)) $out['_interpretation']['scp'] = [
         'task'=>$scpFrame['task'], 'domain'=>$scpFrame['domain'],
@@ -1653,7 +1880,9 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     if ($isCont || $noiseIntent || ($noNewSubject && !$collectiveQ)) {
         // field NO se hereda: es de la frase, no del tema («y cuántas
         // evasiones tiene» no debe arrastrar el documento del turno previo)
-        foreach (['student','group','module','days','from','to','range_label','person'] as $k) {
+        foreach (['student','group','grade','module','days','from','to','range_label','person'] as $k) {
+            // grupo y grado son alcances excluyentes: uno nuevo no hereda el otro
+            if (($k === 'grade' && !empty($merged['group'])) || ($k === 'group' && !empty($merged['grade']))) continue;
             if (empty($merged[$k]) && !empty($prev['entities'][$k])) $merged[$k] = $prev['entities'][$k];
         }
     } elseif ($collectiveQ && !$isCont) {
@@ -1733,7 +1962,7 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         'last_result' => !empty($out['_result_set'])
             ? ($out['_result_set'] + ['_intent' => $dsIntent])
             : ($prev['last_result'] ?? null),
-        'cursor'      => $out['_result_set'] ? 0
+        'cursor'      => !empty($out['_result_set']) ? 0
                         : ($out['_result_cursor'] ?? ($prev['cursor'] ?? 0)),
         'pending_op'  => $slots['_op'] ?? ($prev['pending_op'] ?? null),
         // objetivos compuestos sin entregar («te faltó lo otro» los recupera)
@@ -1743,6 +1972,13 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         // Sobrevive a ruido (out_of_scope/clarify/denied); una consulta nueva
         // la reemplaza.
         'offer'       => $out['_offer'] ?? ($noiseIntent ? ($prev['offer'] ?? null) : null),
+        // aclaración pendiente («¿cuál Tomás?») — la consulta original y sus
+        // candidatos; el turno siguiente que elija uno la re-despacha
+        'pending_pick' => !empty($out['_clarify']['candidates'])
+            ? ['intent' => $resolvedIntent ?? $outIntent, 'kind' => $out['_clarify']['kind'] ?? 'student',
+               'slots' => array_filter($slots, fn($k) => !str_starts_with((string)$k, '_'), ARRAY_FILTER_USE_KEY),
+               'candidates' => array_slice($out['_clarify']['candidates'], 0, 6)]
+            : null,
     ];
     // ── estado tipado (§4) — el ds no es solo last_intent+slots: tarea,
     // entidad, colección, resultado, relación, campo, filtros, alcance,
@@ -1974,7 +2210,9 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
     $items = $rs['items'] ?? [];
     $n    = count($items);
     $cur  = (int)($ds['cursor'] ?? 0);
-    $lbl  = $rs['label'] ?? 'resultados';
+    // el label del ranking puede empezar con «más» («más evasiones…») —
+    // «no hay más más X» sería un doble; lo saneo una sola vez
+    $lbl  = preg_replace('/^m[aá]s\s+/u', '', (string)($rs['label'] ?? 'resultados'));
     $one  = fn($i) => $items[$i]['label'] . (!empty($items[$i]['sub']) ? ' — ' . $items[$i]['sub'] : '');
 
     // «cuántos son/hay» sobre un set vacío — el cero ES la respuesta
@@ -2379,6 +2617,10 @@ function chatHelp(string $role): string {
  * ========================================================================== */
 
 function chat_day_summary(PDO $conn, array $u, array $s, array $v): array {
+    // «cómo van los décimos hoy», «cómo va el 8B» — la jornada acotada a un
+    // grupo o grado es el resumen de ese alcance, no el del colegio entero
+    if (!empty($s['grade']) || (!empty($s['group']) && $s['group'] !== '*mine*'))
+        return chat_group_summary($conn, $u, $s, $v);
     $scope = chatScope($conn, $u);
     $today = nxToday();
     $safe = function (callable $f) { try { return $f(); } catch (Throwable $e) { return null; } };
@@ -2472,12 +2714,22 @@ function chatIncidentFilter(PDO $conn, array $u, array $s, bool $withModule = tr
         if (count($found) > 1) return ['err' => chatAmbiguous($found)];
         $student = $found[0];
         $w[] = 'ai.student_id = ?'; $p[] = $student['student_id'];
-    } elseif (!empty($s['group'])) {
-        $group = chatResolveGroup($conn, $u, $s['group']);
-        if (!$group) return ['err' => ['reply' => "No encuentro el grupo «{$s['group']}» en la institución.", '_natural' => true]];
-        $w[] = chatIncGroupCol() . ' = ?'; $p[] = $group['group_id'];
-    } elseif (!empty($s['grade'])) {
-        $w[] = 'ag.grade_level = ?'; $p[] = (string)$s['grade'];
+    } elseif ($gsc = chatGroupScope($conn, $u, $s, chatIncGroupCol())) {
+        if (isset($gsc['error'])) return ['err' => ['reply' => $gsc['error'], '_natural' => true]];
+        $w[] = preg_replace('/^\s*AND\s+/', '', $gsc['sql']); $p = array_merge($p, $gsc['params']);
+        // grado: etiqueta para la respuesta («en el grado 10»), pero la
+        // entidad que se hereda es grade — nunca un group «grado 10»
+        $group = $gsc['grade'] === null ? $gsc['groups'][0] : ['group_name' => $gsc['label'], 'group_id' => null, '_grade' => $gsc['grade']];
+    }
+    // set_ref — «quién de ESTOS…»: el universo es el set activo de la
+    // conversación (IDs materializados del último resultado), no el colegio
+    if (!$student && !empty($s['_set_ids']) && is_array($s['_set_ids'])) {
+        $ids = array_values(array_filter($s['_set_ids'], fn($x) => is_string($x) && preg_match('/^[0-9a-f-]{36}$/i', $x)));
+        if ($ids) {
+            $w[] = 'ai.student_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';
+            $p = array_merge($p, $ids);
+            $group = ['group_name' => (string)($s['_set_label'] ?? 'esa lista'), 'group_id' => null, '_set' => true];
+        }
     }
     if (!empty($s['justified'])) $w[] = ltrim(chatJustifiedSql((string)$s['justified']), ' AND');
     return ['where' => implode(' AND ', $w) . ' ' . $scope['sql'], 'params' => array_merge($p, $scope['params']),
@@ -2556,7 +2808,8 @@ function chat_count_events(PDO $conn, array $u, array $s, array $v): array {
     };
     $ent = array_filter(['module' => $module,
         'student' => $f['student'] ? mb_strtolower($f['student']['first_name'] . ' ' . $f['student']['last_name']) : null,
-        'group' => $f['group']['group_name'] ?? ($f['student']['group_name'] ?? null)]);
+        'group' => !empty($f['group']['group_id']) ? $f['group']['group_name'] : ($f['student']['group_name'] ?? null),
+        'grade' => $f['group']['_grade'] ?? null]);
 
     // ── comparación de períodos («ayer vs hoy», «esta semana vs la pasada») ──
     $periods = [];
@@ -2645,14 +2898,16 @@ function chat_list_events(PDO $conn, array $u, array $s, array $v): array {
     $ent = array_filter(['module' => $module, 'range_label' => $s['range_label'] ?? null, 'days' => $s['days'] ?? null,
         'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null,
         'student' => $f['student'] ? mb_strtolower($f['student']['first_name'] . ' ' . $f['student']['last_name']) : null,
-        'group' => $f['group']['group_name'] ?? null, 'justified' => $s['justified'] ?? null], fn($x) => $x !== null);
+        'group' => !empty($f['group']['group_id']) ? $f['group']['group_name'] : null,
+        'grade' => $f['group']['_grade'] ?? null, 'justified' => $s['justified'] ?? null], fn($x) => $x !== null);
     if ($total === 0) {
         $out = ['reply' => "No hay {$mlabel}{$just} registradas{$who} {$rl}.", 'entities' => $ent, '_natural' => true];
         if ($o = chatShortRangeOffer($s, 'list_events')) $out['_offer'] = $o;
         return $out;
     }
     $st = $conn->prepare("SELECT s.first_name || ' ' || s.last_name AS name, ag.group_name,
-            " . chatTs('ai.detected_at') . " AS ts, " . chatExcuseExpr() . " AS excuse
+            " . chatTs('ai.detected_at') . " AS ts, " . chatExcuseExpr() . " AS excuse,
+            ai.metadata_json->>'pending_context' AS pend
         {$f['from']} WHERE {$f['where']}{$dateW}
         ORDER BY ai.detected_at DESC, s.last_name LIMIT 500");
     $st->execute($params);
@@ -2664,6 +2919,17 @@ function chat_list_events(PDO $conn, array $u, array $s, array $v): array {
         $single ? substr((string)$r['ts'], 11, 5) : (string)$r['ts'],
         $r['excuse'] ? mb_strimwidth((string)$r['excuse'], 0, 50, '…') : 'Sin excusa'], array_keys($rows), $rows);
     $reply = ucfirst(trim("{$rl}: {$total} {$mlabel}{$just}{$who}"));
+    // inasistencias masivas sin ingresos = captura caída, no ausentismo real:
+    // si TODO lo listado quedó pending_context, decirlo antes de la tabla
+    $allPend = $module === 'INASISTENCIA' && $rows && count(array_filter($rows, fn($r) => ($r['pend'] ?? 'false') === 'true')) === count($rows);
+    if ($allPend) {
+        $pres = $conn->prepare("SELECT COUNT(DISTINCT be.student_id) FROM biometric_events be
+            WHERE be.school_id = ? AND be.event_type LIKE 'INGRESO%' AND " . chatD('be.event_timestamp') . " BETWEEN ? AND ?");
+        $pres->execute([$u['school_id'], $from, $to]);
+        if ((int)$pres->fetchColumn() === 0)
+            $reply = ucfirst(trim("{$rl}: {$total} inasistencias{$who}, pero ningún estudiante registró ingreso — "
+                . "lo más probable es que los sensores no estén reportando, así que estas faltas están sin verificar"));
+    }
     // listas grandes: el patrón importa más que los nombres
     if ($total > 25 && !$f['student'] && !$f['group']) {
         $gq = $conn->prepare("SELECT COALESCE(ag.group_name, 'Sin grupo') g, COUNT(*) c {$f['from']} WHERE {$f['where']}{$dateW}
@@ -2766,12 +3032,114 @@ function chat_student_summary(PDO $conn, array $u, array $s, array $v): array {
 
 function chatAmbiguous(array $found): array {
     $opts=array_map(fn($r)=>"{$r['first_name']} {$r['last_name']} ({$r['group_name']})",$found);
-    return ['reply'=>"Encontré varios: " . implode(' · ',$opts) . ". ¿Cuál? Dime el nombre completo o el grupo."];
+    // _clarify: la pregunta queda PENDIENTE en el ds — «el de 10A», «el
+    // segundo» o «el Gutiérrez» del turno siguiente elige el candidato y se
+    // re-despacha la consulta original (antes se interpretaba desde cero)
+    return ['reply'=>"Encontré varios: " . implode(' · ',$opts) . ". ¿Cuál? Dime el nombre completo o el grupo.",
+        '_clarify'=>['kind'=>'student','candidates'=>array_map(fn($r)=>[
+            'name'=>trim(($r['first_name'] ?? '').' '.($r['last_name'] ?? '')),
+            'group'=>(string)($r['group_name'] ?? ''), 'doc'=>(string)($r['document_number'] ?? '')], $found)]];
+}
+
+/**
+ * Elige UN candidato de una aclaración pendiente según la respuesta:
+ * grupo («el de 10A», «del 9-A»), grado si solo uno lo cumple («el de
+ * décimo»), ordinal («el segundo») o palabra del nombre que solo uno tiene
+ * («el Gutiérrez»). null si no discrimina — el turno sigue su curso normal.
+ */
+function chatPickCandidate(string $q0, array $cands): ?array {
+    if (!$cands || mb_strlen($q0) > 80) return null;
+    $norm = fn($x) => strtoupper(str_replace(['-', ' '], '', (string)$x));
+    $sl = nxSlots($q0);
+    if (!empty($sl['group'])) {
+        $hit = array_values(array_filter($cands, fn($c) => $norm($c['group']) === $norm($sl['group'])));
+        if (count($hit) === 1) return $hit[0];
+    }
+    if (!empty($sl['grade'])) {
+        $hit = array_values(array_filter($cands, fn($c) => preg_match('/^' . preg_quote($sl['grade'], '/') . '\D/', (string)$c['group'])));
+        if (count($hit) === 1) return $hit[0];
+    }
+    $ord = ['primero'=>0,'primera'=>0,'segundo'=>1,'segunda'=>1,'tercero'=>2,'tercera'=>2,'ultimo'=>count($cands)-1,'ultima'=>count($cands)-1];
+    if (preg_match('/^(?:el |la )?(primero|primera|segundo|segunda|tercero|tercera|ultimo|ultima)\b/u', $q0, $m) && isset($cands[$ord[$m[1]]]))
+        return $cands[$ord[$m[1]]];
+    $words = array_filter(preg_split('/\s+/u', $q0), fn($w) => mb_strlen($w) >= 4);
+    foreach ($words as $w) {
+        $hit = array_values(array_filter($cands, fn($c) => preg_match('/\b' . preg_quote($w, '/') . '\b/u', nxNorm($c['name']))));
+        if (count($hit) === 1 && count($cands) > 1) return $hit[0];
+    }
+    return null;
+}
+
+/**
+ * Estado de VARIOS grupos (un grado entero): presentes, inasistencias,
+ * tardanzas y evasiones por grupo + total. Tres consultas agregadas, no N.
+ */
+function chatGradeSummary(PDO $conn, array $u, array $s, array $gsc): array {
+    $groups = $gsc['groups'];
+    if (in_array($u['role'], ['TEACHER', 'COUNSELOR'], true)) {
+        $acc = $conn->prepare("SELECT group_id FROM teacher_group_access WHERE teacher_user_id = ?");
+        $acc->execute([$u['id']]); $mine = $acc->fetchAll(PDO::FETCH_COLUMN);
+        $groups = array_values(array_filter($groups, fn($g) => in_array($g['group_id'], $mine, true)));
+        if (!$groups) return ['reply' => "Ningún grupo del {$gsc['label']} está en tu alcance.", '_natural' => true];
+    }
+    $ids = array_column($groups, 'group_id');
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    [$from, $to] = chatRange($s);
+    $rl = chatRangeLabel($s);
+    $single = $from === $to;
+    $tot = $conn->prepare("SELECT sga.group_id, COUNT(*) FROM student_group_assignments sga
+        JOIN students s ON s.student_id = sga.student_id AND s.deleted_at IS NULL
+        WHERE sga.active = TRUE AND sga.group_id IN ({$ph}) GROUP BY 1");
+    $tot->execute($ids); $total = $tot->fetchAll(PDO::FETCH_KEY_PAIR);
+    $inc = $conn->prepare("SELECT " . chatIncGroupCol() . " AS gid, ai.incident_type, COUNT(*) c
+        FROM attendance_incidents ai " . chatIncGroupJoin() . "
+        WHERE ai.school_id = ? AND " . chatIncGroupCol() . " IN ({$ph}) AND " . chatD('ai.detected_at') . " BETWEEN ? AND ?
+        GROUP BY 1, 2");
+    $inc->execute(array_merge([$u['school_id']], $ids, [$from, $to]));
+    $by = [];
+    foreach ($inc->fetchAll(PDO::FETCH_ASSOC) as $r) $by[$r['gid']][$r['incident_type']] = (int)$r['c'];
+    $pres = [];
+    if ($single) {
+        $pr = $conn->prepare("SELECT sga.group_id, COUNT(DISTINCT be.student_id) FROM biometric_events be
+            JOIN student_group_assignments sga ON sga.student_id = be.student_id AND sga.active = TRUE AND sga.group_id IN ({$ph})
+            WHERE be.school_id = ? AND be.event_type LIKE 'INGRESO%' AND " . chatD('be.event_timestamp') . " BETWEEN ? AND ? GROUP BY 1");
+        $pr->execute(array_merge($ids, [$u['school_id'], $from, $to])); $pres = $pr->fetchAll(PDO::FETCH_KEY_PAIR);
+    }
+    $rows = []; $sum = ['n' => 0, 'p' => 0, 'a' => 0, 'l' => 0, 'e' => 0]; $worst = null;
+    foreach ($groups as $g) {
+        $id = $g['group_id']; $b = $by[$id] ?? [];
+        $n = (int)($total[$id] ?? 0); $p = (int)($pres[$id] ?? 0);
+        $a = $b['INASISTENCIA'] ?? 0; $l = $b['LATE_ARRIVAL'] ?? 0; $e = $b['EVASION_INTERNA'] ?? 0;
+        $rows[] = $single ? [$g['group_name'], $n, $p, $a, $l, $e] : [$g['group_name'], $n, $a, $l, $e];
+        foreach (['n' => $n, 'p' => $p, 'a' => $a, 'l' => $l, 'e' => $e] as $k => $x) $sum[$k] += $x;
+        if ($a > 0 && (!$worst || $a > $worst[1])) $worst = [$g['group_name'], $a];
+    }
+    $rows[] = $single ? ['Total', $sum['n'], $sum['p'], $sum['a'], $sum['l'], $sum['e']] : ['Total', $sum['n'], $sum['a'], $sum['l'], $sum['e']];
+    $label = ucfirst($gsc['label']);
+    $reply = "{$label} {$rl} (" . count($groups) . " grupos, {$sum['n']} estudiantes): "
+        . ($single ? "{$sum['p']} presentes, " : '') . "{$sum['a']} inasistencias, {$sum['l']} llegadas tarde y {$sum['e']} evasiones.";
+    if ($worst) $reply .= " Más inasistencias: {$worst[0]} con {$worst[1]}.";
+    if ($single && $sum['p'] === 0 && $sum['n'] > 0 && $sum['a'] >= $sum['n'])
+        $reply .= ' Ningún ingreso registrado y todos aparecen ausentes — lo más probable es que los sensores no estén reportando.';
+    $cols = $single ? ['Grupo', 'Estudiantes', 'Presentes', 'Inasistencias', 'Tardanzas', 'Evasiones']
+                    : ['Grupo', 'Estudiantes', 'Inasistencias', 'Tardanzas', 'Evasiones'];
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "{$label} — {$rl}", 'columns' => $cols, 'rows' => $rows]],
+        'entities' => array_filter(['grade' => $gsc['grade'], 'range_label' => $s['range_label'] ?? null,
+            'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null]),
+        '_facts' => ['alcance' => $gsc['label'], 'periodo' => $rl, 'grupos' => count($groups), 'estudiantes' => $sum['n'],
+            'presentes' => $single ? $sum['p'] : null, 'inasistencias' => $sum['a'], 'tardanzas' => $sum['l'], 'evasiones' => $sum['e'],
+            'grupo_mas_inasistencias' => $worst[0] ?? null],
+        '_offer' => $sum['a'] > 0 ? chatOffer("¿Quieres ver quiénes faltaron en el {$gsc['label']}?", 'list_events',
+            ['module' => 'INASISTENCIA', 'grade' => $gsc['grade'], 'from' => $from, 'to' => $to, 'range_label' => $s['range_label'] ?? $rl]) : null];
 }
 
 function chat_group_summary(PDO $conn, array $u, array $s, array $v): array {
-    $g = chatResolveGroup($conn, $u, $s['group'] ?? '');
-    if (!$g) return ['reply' => '¿Qué grupo? Por ejemplo: «¿cómo va el 7A?».', '_natural' => true];
+    $gsc = chatGroupScope($conn, $u, $s, 'ag.group_id');
+    if ($gsc && isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+    if ($gsc && $gsc['grade'] !== null) return chatGradeSummary($conn, $u, $s, $gsc);
+    $g = $gsc['groups'][0] ?? null;
+    if (!$g) return ['reply' => '¿Qué grupo o grado? Por ejemplo: «¿cómo va el 7A?» o «¿cómo van los décimos?».', '_natural' => true];
     if (in_array($u['role'], ['TEACHER', 'COUNSELOR'], true)) {
         $chk = $conn->prepare("SELECT 1 FROM teacher_group_access WHERE teacher_user_id = ? AND group_id = ? LIMIT 1");
         $chk->execute([$u['id'], $g['group_id']]);
@@ -2828,18 +3196,17 @@ function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
     $scope=chatScope($conn,$u);
     // filtro de grupo explícito («estudiantes de 10A pasaron el umbral») —
     // el umbral del motor de riesgo no se degrada a «todos del grupo»
-    $groupFilter = '';
-    if (!empty($s['group']) && ($g = chatResolveGroup($conn, $u, $s['group']))) {
-        $groupFilter = ' AND sga.group_id=' . $conn->quote($g['group_id']);
-    }
+    $gsc = chatGroupScope($conn, $u, $s, 'sga.group_id');
+    if ($gsc && isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+    $groupFilter = $gsc['sql'] ?? '';
     $st=$conn->prepare("SELECT s.student_id, s.first_name||' '||s.last_name AS name, ag.group_name, bm.risk_level, bm.risk_score
         FROM student_behavior_metrics bm JOIN students s ON s.student_id=bm.student_id
         LEFT JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
         LEFT JOIN academic_groups ag ON ag.group_id=sga.group_id
         WHERE bm.school_id=? AND bm.risk_level IN ('HIGH','CRITICAL') {$scope['sql']}{$groupFilter}
         ORDER BY bm.risk_score DESC LIMIT 12");
-    $st->execute([$u['school_id']]); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
-    $gLabel = !empty($s['group']) ? " en {$s['group']}" : '';
+    $st->execute(array_merge([$u['school_id']], $scope['params'] ?? [], $gsc['params'] ?? [])); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
+    $gLabel = $gsc ? " en {$gsc['label']}" : '';
     if(!$rows) return ['reply'=>"El motor de riesgo no tiene alertas activas{$gLabel} — ningún patrón supera los umbrales configurados."];
     return ['reply'=>count($rows)." estudiante(s) que superaron el umbral de alerta{$gLabel}:",
         'cards'=>[['title'=>'Riesgo activo','columns'=>['Estudiante','Grupo','Nivel','Score'],
@@ -2864,7 +3231,10 @@ function chat_trackings(PDO $conn, array $u, array $s, array $v): array {
         // con estudiante, el historial completo importa más que solo lo abierto
         if (!isset($s['status'])) array_pop($w);
     }
-    if (!empty($s['group']) && !$stu && ($g = chatResolveGroup($conn, $u, $s['group']))) { $w[] = 'ag.group_id = ?'; $p[] = $g['group_id']; }
+    if (!$stu && ($gsc = chatGroupScope($conn, $u, $s, 'ag.group_id'))) {
+        if (isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+        $w[] = preg_replace('/^\s*AND\s+/', '', $gsc['sql']); $p = array_merge($p, $gsc['params']);
+    }
     $st = $conn->prepare("SELECT t.tracking_id, s.first_name || ' ' || s.last_name AS name, ag.group_name, t.dependency, t.status,
             t.origin_type, " . chatTs('t.created_at') . " AS since, " . chatTs('t.updated_at') . " AS upd,
             ua.first_name || ' ' || ua.last_name AS assigned
@@ -2929,7 +3299,10 @@ function chat_permissions(PDO $conn, array $u, array $s, array $v): array {
     if ($hist) { $w[] = chatD('x.exit_time') . ' BETWEEN ? AND ?'; $p[] = $from; $p[] = $to; }
     elseif (($s['status'] ?? null) !== 'all') { $w[] = "x.status = 'ACTIVE'"; }
     if (($s['status'] ?? null) === 'completed') { $w[] = "x.status <> 'ACTIVE'"; }
-    if (!empty($s['group']) && !$stu && ($g = chatResolveGroup($conn, $u, $s['group']))) { $w[] = 'ag.group_id = ?'; $p[] = $g['group_id']; }
+    if (!$stu && ($gsc = chatGroupScope($conn, $u, $s, 'ag.group_id'))) {
+        if (isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+        $w[] = preg_replace('/^\s*AND\s+/', '', $gsc['sql']); $p = array_merge($p, $gsc['params']);
+    }
     $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
     // union: salidas de clase (con retorno) + salidas del colegio
     $from_sql = "FROM (
@@ -3072,6 +3445,44 @@ function chat_notifications(PDO $conn, array $u, array $s, array $v): array {
     $tc = $conn->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL");
     $tc->execute([$u['id']]); $total = (int)$tc->fetchColumn();
     if ($total === 0) return ['reply' => 'No tienes notificaciones sin leer.', '_natural' => true];
+    // DETALLE — «detalles de la notificación de 10A», «cuáles son las de
+    // décimo», «muéstrame mis notificaciones»: los avisos reales, filtrados
+    // por grupo/grado (el grupo vive en el texto del aviso: «Grupo 10-A: …»)
+    $gsc = (!empty($s['group']) || !empty($s['grade'])) ? chatGroupScope($conn, $u, $s, 'sga.group_id') : null;
+    if ($gsc && isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+    $wantDetail = $gsc || preg_match('/\b(detalle|detalles|cuales son|muestra\w*|listame|lista de|que dicen|que dice|leeme|lee\w*)\b/u', (string)($v['_q'] ?? ''));
+    if ($wantDetail && empty($s['_priority'])) {
+        $w = 'user_id = ? AND read_at IS NULL'; $p = [$u['id']];
+        if ($gsc) {
+            // el aviso nombra el grupo («Grupo 10-A: …») o a un estudiante
+            // del grupo («Tomás Castaño acumula…»): ambos son del alcance
+            $likes = [];
+            foreach (array_column($gsc['groups'], 'group_name') as $gn) { $likes[] = 'message ILIKE ?'; $p[] = '%' . $gn . '%'; }
+            $sn = $conn->prepare("SELECT DISTINCT s.first_name || ' ' || s.last_name FROM students s
+                JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                WHERE s.deleted_at IS NULL" . $gsc['sql'] . " LIMIT 150");
+            $sn->execute($gsc['params']);
+            foreach ($sn->fetchAll(PDO::FETCH_COLUMN) as $nm) { $likes[] = 'message ILIKE ?'; $p[] = '%' . $nm . '%'; }
+            $w .= ' AND (' . implode(' OR ', $likes) . ')';
+        }
+        $st = $conn->prepare("SELECT notification_id, title, message, type, " . chatTs('created_at') . " AS created
+            FROM notifications WHERE {$w} ORDER BY created_at DESC LIMIT 100");
+        $st->execute($p); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $about = $gsc ? " sobre {$gsc['label']}" : '';
+        if (!$rows) return ['reply' => "No tienes notificaciones sin leer{$about}.", '_natural' => true,
+            'entities' => $gsc ? ($gsc['grade'] !== null ? ['grade' => $gsc['grade']] : ['group' => $gsc['label']]) : []];
+        $typeEs = ['ALERT' => 'Alerta', 'WARNING' => 'Advertencia', 'INFO' => 'Informativa', 'SUCCESS' => 'Confirmación', 'URGENT' => 'Urgente'];
+        $n = count($rows); $r0 = $rows[0];
+        $reply = "Tienes {$n} notificación" . ($n === 1 ? '' : 'es') . " sin leer{$about}. La más reciente ({$r0['created']}): «{$r0['title']}» — {$r0['message']}";
+        return ['reply' => $reply, '_natural' => true,
+            'cards' => [['title' => 'Notificaciones sin leer' . $about, 'columns' => ['Notificación', 'Detalle', 'Tipo', 'Recibida'],
+                'rows' => array_map(fn($r) => [$r['title'] ?: '—', (string)$r['message'], $typeEs[strtoupper((string)$r['type'])] ?? $r['type'], $r['created']], $rows)]],
+            'entities' => $gsc ? ($gsc['grade'] !== null ? ['grade' => $gsc['grade']] : ['group' => $gsc['label']]) : [],
+            '_facts' => ['notificaciones' => $n, 'alcance' => $gsc['label'] ?? 'todas', 'mas_reciente' => $r0['title']],
+            '_result_set' => ['type' => 'notifications', 'label' => 'notificaciones' . $about, 'entity' => 'notification',
+                'items' => array_map(fn($r) => ['id' => $r['notification_id'], 'label' => $r['title'] ?: '—'], $rows), 'count' => $n],
+            'actions' => [['kind' => 'nav', 'label' => 'Ver todas', 'to' => '/notificaciones']]];
+    }
     // «analiza mis notificaciones y dime a cuáles dar prioridad alta,
     // media y baja» — clasificación ítem a ítem de TODA la bandeja:
     // la tabla lleva cada aviso, nunca un subconjunto truncado.
@@ -3384,7 +3795,8 @@ function chat_frequency_table(PDO $conn, array $u, array $s, array $v): array {
     $reply = ucfirst("{$mlabel} {$axis}{$who} ({$rl}): {$sum} en total; el pico es {$top[0]['k']} con {$top[0]['c']}.");
     return ['reply' => $reply, '_natural' => true,
         'cards' => [['title' => ucfirst("{$mlabel} {$axis} — {$rl}"), 'columns' => $cols, 'rows' => array_map(fn($r) => [(string)$r['k'], (int)$r['c']], $rows)]],
-        'entities' => array_filter(['module' => $module, 'group' => $f['group']['group_name'] ?? null, 'range_label' => $s['range_label'] ?? null,
+        'entities' => array_filter(['module' => $module, 'group' => !empty($f['group']['group_id']) ? $f['group']['group_name'] : null,
+            'grade' => $f['group']['_grade'] ?? null, 'range_label' => $s['range_label'] ?? null,
             'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null, 'days' => $s['days'] ?? null]),
         '_result_set' => ['type' => 'frequency', 'label' => "{$mlabel} {$axis}",
             'items' => array_map(fn($r) => ['id' => null, 'label' => (string)$r['k'], 'sub' => "{$r['c']}"], $rows), 'count' => count($rows)]];
@@ -3679,7 +4091,11 @@ function chat_start_operation(PDO $conn, array $u, array $s, array $v): array {
 function chat_count_present(PDO $conn, array $u, array $s, array $v): array {
     $scope = chatScope($conn, $u); [$from, $to] = chatRange($s);
     $params = [$u['school_id'], $from, $to]; $extra = ''; $g = null;
-    if (!empty($s['group']) && ($g = chatResolveGroup($conn, $u, $s['group']))) { $extra = ' AND sga.group_id = ?'; $params[] = $g['group_id']; }
+    if ($gsc = chatGroupScope($conn, $u, $s, 'sga.group_id')) {
+        if (isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+        $extra = $gsc['sql']; $params = array_merge($params, $gsc['params']);
+        $g = ['group_name' => $gsc['label']];
+    }
     $st = $conn->prepare("SELECT COUNT(DISTINCT be.student_id) FROM biometric_events be
         JOIN students s ON s.student_id = be.student_id
         LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
@@ -3688,7 +4104,7 @@ function chat_count_present(PDO $conn, array $u, array $s, array $v): array {
     $rl = chatRangeLabel($s);
     $who = $g ? " en {$g['group_name']}" : ($scope['sql'] ? ' en tus grupos' : '');
     return ['reply' => $n ? ucfirst("{$rl} ingresaron {$n} estudiantes{$who}.") : ucfirst("{$rl} no hay ingresos registrados{$who}."), '_natural' => true,
-        'entities' => array_filter(['group' => $g['group_name'] ?? null])];
+        'entities' => array_filter(['group' => ($gsc['grade'] ?? null) === null ? ($g['group_name'] ?? null) : null, 'grade' => $gsc['grade'] ?? null])];
 }
 
 /** Conteo de seguimientos — abiertos por defecto; «resueltos/cerrados» filtra. */
@@ -3914,44 +4330,70 @@ function chat_biometric_spam(PDO $conn, array $u, array $s, array $v): array {
 /** «qué estudiantes hay en el 6-A» — lista real + result-set navegable. */
 function chat_students_in_group(PDO $conn, array $u, array $s, array $v): array {
     $scope = chatScope($conn, $u);
-    $g = !empty($s['group']) ? chatResolveGroup($conn, $u, $s['group']) : null;
-    if (!$g) return ['reply'=>"¿De qué grupo hablas? Por ejemplo: «estudiantes del 8A»."];
-    $st = $conn->prepare("SELECT s.student_id, s.first_name, s.last_name, s.document_number
+    $gsc = chatGroupScope($conn, $u, $s, 'sga.group_id');
+    if (!$gsc) return ['reply'=>"¿De qué grupo o grado? Por ejemplo: «estudiantes del 8A» o «los de décimo»."];
+    if (isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+    $lbl = $gsc['grade'] !== null ? "El {$gsc['label']}" : $gsc['label'];
+    $ent = $gsc['grade'] !== null ? ['grade' => $gsc['grade']] : ['group' => $gsc['label']];
+    $st = $conn->prepare("SELECT s.student_id, s.first_name, s.last_name, s.document_number, ag.group_name
         FROM students s
         JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
-        WHERE s.school_id=? AND sga.group_id=? AND s.deleted_at IS NULL {$scope['sql']}
-        ORDER BY s.last_name, s.first_name LIMIT 60");
-    $st->execute([$u['school_id'],$g['group_id']]);
+        JOIN academic_groups ag ON ag.group_id = sga.group_id
+        WHERE s.school_id=? {$gsc['sql']} AND s.deleted_at IS NULL {$scope['sql']}
+        ORDER BY ag.group_name, s.last_name, s.first_name LIMIT 400");
+    $st->execute(array_merge([$u['school_id']], $gsc['params'], $scope['params'] ?? []));
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-    if (!$rows) return ['reply'=>"No encontré estudiantes en {$g['group_name']} dentro de tu alcance.",
-                        'entities'=>['group'=>$g['group_name']]];
+    // orden español natural: la collation de bytes pone 'Diez' antes de
+    // 'Décima' — «el tercero» debe dar el que el usuario vería tercero
+    usort($rows, fn($a, $b) => [nxNorm($a['group_name']), nxNorm($a['last_name']), nxNorm($a['first_name'])]
+                          <=> [nxNorm($b['group_name']), nxNorm($b['last_name']), nxNorm($b['first_name'])]);
+    if (!$rows) return ['reply'=>"No encontré estudiantes en {$gsc['label']} dentro de tu alcance.", 'entities'=>$ent];
     $items = array_map(fn($r)=>['id'=>$r['student_id'],
         'label'=>trim($r['first_name'].' '.$r['last_name']),
         'sub'=>'doc '.$r['document_number'],
-        'group'=>$g['group_name'],
+        'group'=>$r['group_name'],
         // campos materializados — proyección/navegación sobre el set
         // sin reconsultar (paridad con el result-set del plan semántico)
         'f'=>['sid'=>$r['student_id'],'fn'=>$r['first_name'],'ln'=>$r['last_name'],
-              'doc'=>$r['document_number'],'grp'=>$g['group_name']]], $rows);
+              'doc'=>$r['document_number'],'grp'=>$r['group_name']]], $rows);
     $n = count($items);
+    $ng = count(array_unique(array_column($rows, 'group_name')));
     // la tabla de abajo lleva TODAS las filas — el texto no enumera ni
     // promete «los demás»: duplicaría la card y mentiría sobre datos
     // ocultos. «los demás» sigue siendo navegable si el usuario lo pide.
     $reply = $n === 1
-        ? "{$g['group_name']} tiene 1 estudiante: {$items[0]['label']} ({$items[0]['sub']})."
-        : "{$g['group_name']} tiene {$n} estudiantes — la lista completa está en la tabla.";
+        ? "{$lbl} tiene 1 estudiante: {$items[0]['label']} ({$items[0]['sub']})."
+        : "{$lbl} tiene {$n} estudiantes" . ($ng > 1 ? " en {$ng} grupos" : '') . " — la lista completa está en la tabla.";
     return ['reply'=>$reply,
-            'entities'=>['group'=>$g['group_name']],
+            'entities'=>$ent,
             '_result_set'=>['type'=>'students','label'=>'estudiantes','items'=>$items,'count'=>$n,
                 'columns'=>['#','Estudiante','Documento','Grupo'],
-                'rows'=>array_map(fn($i,$r)=>[$i+1,trim($r['first_name'].' '.$r['last_name']),$r['document_number'],$g['group_name']],
+                'rows'=>array_map(fn($i,$r)=>[$i+1,trim($r['first_name'].' '.$r['last_name']),$r['document_number'],$r['group_name']],
                                   array_keys($rows),$rows),
-                '_filters'=>['group'=>$g['group_name']]]];
+                '_filters'=>$ent]];
 }
 
 function chat_group_student_count(PDO $conn, array $u, array $s, array $v): array {
-    $g=chatResolveGroup($conn,$u,$s['group']??'');
-    if(!$g) return ['reply'=>'¿Qué grupo? Dime algo como «8A» u «octavo B».'];
+    $gsc = chatGroupScope($conn, $u, $s, 'sga.group_id');
+    if ($gsc && isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+    if ($gsc && $gsc['grade'] !== null) {
+        $scope = chatScope($conn, $u);
+        $st = $conn->prepare("SELECT ag.group_name, COUNT(*) c FROM student_group_assignments sga
+            JOIN students s ON s.student_id = sga.student_id AND s.deleted_at IS NULL
+            JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE sga.active = TRUE {$gsc['sql']} {$scope['sql']} GROUP BY 1 ORDER BY 1");
+        $st->execute(array_merge($gsc['params'], $scope['params'] ?? []));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $tot = array_sum(array_map(fn($r) => (int)$r['c'], $rows));
+        $det = implode(', ', array_map(fn($r) => "{$r['group_name']} ({$r['c']})", $rows));
+        return ['reply' => "El {$gsc['label']} tiene *{$tot} estudiante(s)*" . ($rows ? ": {$det}." : '.'), '_natural' => true,
+            'cards' => [['title' => "Estudiantes — {$gsc['label']}", 'columns' => ['Grupo', 'Estudiantes'],
+                'rows' => array_merge(array_map(fn($r) => [$r['group_name'], (int)$r['c']], $rows), [['Total', $tot]])]],
+            'entities' => ['grade' => $gsc['grade']],
+            '_facts' => ['alcance' => $gsc['label'], 'estudiantes' => $tot, 'grupos' => count($rows)]];
+    }
+    $g = $gsc['groups'][0] ?? null;
+    if(!$g) return ['reply'=>'¿Qué grupo o grado? Dime algo como «8A», «octavo B» o «los décimos».'];
     if (in_array($u['role'],['TEACHER','COUNSELOR'],true)) {
         $chk=$conn->prepare("SELECT 1 FROM teacher_group_access WHERE teacher_user_id=? AND group_id=? LIMIT 1");
         $chk->execute([$u['id'],$g['group_id']]);
@@ -4195,7 +4637,10 @@ function chat_guardian_replies(PDO $conn, array $u, array $s, array $v): array {
     $w = "ai.school_id = ? AND ai.incident_type = 'INASISTENCIA' AND " . chatD('ai.detected_at') . " BETWEEN ? AND ? {$scope['sql']}";
     $p = array_merge([$u['school_id'], $from, $to], $scope['params']);
     $gf = '';
-    if (!empty($s['group']) && ($g = chatResolveGroup($conn, $u, $s['group']))) { $gf = ' AND ' . chatIncGroupCol() . ' = ?'; $p[] = $g['group_id']; }
+    if ($gsc = chatGroupScope($conn, $u, $s, chatIncGroupCol())) {
+        if (isset($gsc['error'])) return ['reply' => $gsc['error'], '_natural' => true];
+        $gf = $gsc['sql']; $p = array_merge($p, $gsc['params']); $g = ['group_name' => $gsc['label']];
+    }
     $notified = "EXISTS (SELECT 1 FROM twilio_messages tm WHERE tm.school_id = ai.school_id AND tm.student_id = ai.student_id
                     AND tm.type_code = 'INASISTENCIA' AND tm.direction = 'OUTBOUND'
                     AND " . chatD('tm.sent_at') . " = " . chatD('ai.detected_at') . ")";

@@ -102,6 +102,28 @@ function nxIsForeign(string $r): bool {
  * Clasificación — parser LLM (nexus_llm.php).
  * Sin NLU_LLM_KEY o con el proveedor caído → null → out_of_scope honesto.
  * ------------------------------------------------------------------------- */
+/**
+ * ¿El turno pide un dato de dominio (métrica, objeto, superlativo)?
+ * Separa una pregunta NUEVA de una transformación del set activo:
+ * «ordena mis notificaciones» o «quién de estos es el que más ha evadido»
+ * nombran objeto/métrica → consulta; «ordénalos por apellido», «el último»,
+ * «en tabla» no nombran nada nuevo → navegación.
+ */
+function nxHasDomainAsk(string $q0): bool {
+    return (bool)preg_match('/\b(inasist\w*|falt(a|an|o|aron|ado|ando|as)\b|tardanz\w*|llegad\w* tarde|llega\w* tarde|evad\w*|evasi\w*|fug\w*|se volaron|permis\w*|salidas?\b|citaci\w*|cito\b|citaron|seguimient\w*|riesgo|notificaci\w*|alertas?\b|sos\b|sensor\w*|nodos?\b|dispositiv\w*|acudient\w*|mensaj\w*|whatsapp|excusa\w*|justific\w*|horario\w*|materias?\b|docentes?\b|profesor\w*|reportes?\b|calendario|festiv\w*|matricul\w*|consentimient\w*|biometr\w*|spam|incidente\w*|asistencia|ausenci\w*|presentes?\b)/u', $q0)
+        || (bool)preg_match('/\b(el|la|los|las|quien|quienes|cual|cuales)\s+(que\s+)?(mas|menos)\b|\b(mas|menos)\s+(ha|han|tiene|tienen|falta|faltan|llega|llegan)\b/u', $q0);
+}
+
+/**
+ * Navegación PURA sobre el set activo — corta, sin objeto ni métrica nueva.
+ * Solo estas frases evitan al LLM: no hay nada que entender, hay que
+ * mover el cursor («siguiente», «el primero», «en tabla», «los demás»).
+ */
+function nxIsPureNav(string $q0): bool {
+    if (str_word_count($q0, 0, 'áéíóúñü0123456789') > 7 || nxHasDomainAsk($q0)) return false;
+    return (bool)preg_match('/^(y |ahora |dame |dime |muestra(?:me)? |trae(?:me)? |pasame )?(el |la |los |las )?(siguiente|otro|otra|uno mas|una mas|anterior|primer[oa]?|segund[oa]|tercer[oa]?|ultim[oa]|penultim[oa]|los demas|las demas|el resto|todos|todas|en tabla|en una tabla|como tabla|la tabla|ordenal[oa]s? por (apellido|nombre|documento|grupo)|solo (los |sus )?nombres|sus nombres|mas|sigue|continua)[.!? ]*$/u', $q0);
+}
+
 /** Clasificación de un solo texto.
  *  1. Fixture replay (NX_CLASSIFY_FIXTURE): snapshot JSON de respuestas del
  *     LLM — suites deterministas offline sin gastar cuota (ver
@@ -127,21 +149,27 @@ function nxClassifyCore(string $text, ?array $ctx = null): ?array {
         if (isset($fxMap[$norm])) $r = $fxMap[$norm] + ['source' => 'fixture'];
     }
     if (!$r) {
-        // Capa determinista: patrones inequívocos no gastan cuota del LLM
-        // (Groq: 8K tokens/min). Con nombre propio o frase larga manda el LLM
-        // — extrae personas y matices mejor. Si el LLM no responde (429,
-        // timeout, sin cuota) la regla sostiene el turno en vez de un
-        // out_of_scope ciego.
+        // LLM PRIMERO: el LLM es el parser — entiende la frase completa con
+        // su contexto. Las reglas deterministas quedan para lo que hacen
+        // mejor que un modelo: (1) veto de seguridad, (2) navegación pura
+        // sobre el set activo («siguiente», «en tabla»), (3) respaldo cuando
+        // el LLM no responde (429, timeout, sin cuota) y (4) rescate cuando
+        // el LLM tira out_of_scope o duda sobre un patrón inequívoco.
+        // Antes las reglas `strong` cortocircuitaban al LLM: una regla
+        // equivocada con seguridad no tenía quién la corrigiera.
         $rule = nxRuleClassify($norm);
-        $long = str_word_count($norm, 0, 'áéíóúñü0123456789') > 14;
-        if ($rule && !empty($rule['strong']) && !$long) {
+        $llmOn = function_exists('nxLlmEnabled') && nxLlmEnabled()
+            && !(function_exists('nxLlmCooling') && nxLlmCooling());
+        if ($rule && (($rule['intent'] ?? '') === 'security_probe' || nxIsPureNav($norm))) {
             $r = $rule + ['source' => 'rules'];
-        } else {
+        } elseif ($llmOn) {
             $r = nxLlmClassify($text, $ctx);
-            if (!$r && $rule) $r = $rule + ['source' => 'rules_fallback'];
-            elseif ($r && ($r['intent'] ?? '') === 'out_of_scope' && $rule && ($rule['domain'] ?? '') === 'formal'
-                    && $rule['confidence'] >= 0.85)
+            if (!$r && $rule) $r = $rule + ['source' => 'rules_fallback', 'degraded' => true];
+            elseif ($r && $rule && ($rule['domain'] ?? '') === 'formal' && $rule['confidence'] >= 0.85
+                    && (($r['intent'] ?? '') === 'out_of_scope' || ($r['confidence'] ?? 0) < 0.6))
                 $r = $rule + ['source' => 'rules_rescue'];
+        } else {
+            $r = $rule ? $rule + ['source' => 'rules_fallback', 'degraded' => true] : null;
         }
     }
     if ($r) {
@@ -183,6 +211,12 @@ function nxClassify(string $text, ?array $ctx = null): array {
     // «/» con espacios también separa consultas («tardanzas por día / evasiones
     // por grupo»); sin espacios es fecha («24/09») y no parte nada
     $segments = array_values(array_filter(preg_split('/\s+(?:y|ademas|además|tambien|también|e)\s+|,\s*|\s+\/\s+/u', $norm), fn($s)=>mb_strlen(trim($s))>2));
+    // Con LLM el mensaje se parsea COMPLETO: partir por comas/«y» rompía
+    // frases de una sola intención («entre los grupos de décimo, ¿cuál…?»)
+    // y multiplicaba las llamadas. La segmentación queda para el modo
+    // determinista (LLM caído), donde cada regla ve una cláusula.
+    if (function_exists('nxLlmEnabled') && nxLlmEnabled()
+        && !(function_exists('nxLlmCooling') && nxLlmCooling())) $segments = [$norm];
     // «de 10A y 6A», «entre sexto y octavo» — el conector une dos GRUPOS
     // de una misma comparación, no dos turnos: se re-anexa al segmento
     $grpSeg = '(?:\d{1,2}\s*[a-e]|[a-e]\s*\d{1,2}|sexto|septimo|octavo|noveno|decimo|undecimo|primero|segundo|tercero|cuarto|quinto|transicion|jardin|kinder|preescolar|primaria|bachillerato|media)';
@@ -224,6 +258,24 @@ function nxClassify(string $text, ?array $ctx = null): array {
     $r['entities'] = array_merge(nxSlots($norm), $r['entities'] ?? []);
     // contrato amplio del parser → slots internos del motor
     $e =& $r['entities'];
+    // nav/position del parser solo valen si el turno no pide un dato nuevo
+    // («los últimos 15 días» no es «el último de la lista»)
+    if (nxHasDomainAsk($norm)) unset($e['nav'], $e['position']);
+    // grado canónico: dígitos. «grupo 10» sin letra es el grado entero;
+    // el LLM puede devolver «décimo», «10°» o «grado 10»
+    static $gradeW = ['sexto'=>'6','septimo'=>'7','octavo'=>'8','noveno'=>'9','decimo'=>'10','once'=>'11','undecimo'=>'11',
+                      'primero'=>'1','segundo'=>'2','tercero'=>'3','cuarto'=>'4','quinto'=>'5'];
+    if (!empty($e['grade'])) {
+        $gw = preg_replace('/^grado\s*|[°º\s]/u', '', nxNorm((string)$e['grade']));
+        $gw = $gradeW[preg_replace('/s$/u', '', $gw)] ?? $gw;
+        if (preg_match('/^\d{1,2}$/', $gw)) $e['grade'] = ltrim($gw, '0'); else unset($e['grade']);
+    }
+    if (!empty($e['group'])) {
+        // «10», «noveno», «grado 10», «décimos» sin letra de sección = grado
+        $gg = preg_replace('/^(grado|grupo)\s*|[°º]/u', '', nxNorm((string)$e['group']));
+        $gg = $gradeW[preg_replace('/s$/u', '', $gg)] ?? $gg;
+        if (preg_match('/^\d{1,2}$/', $gg)) { $e['grade'] = $e['grade'] ?? ltrim($gg, '0'); unset($e['group']); }
+    }
     if (!empty($e['nav']) && empty($e['_nav'])) {
         // 'last' no es nav directo: el DSM lo resuelve a nth:N con el conteo
         // del set activo; 'others/another' mapean al vocabulario del motor
@@ -564,6 +616,26 @@ function nxSlots(string $q): array {
     if (preg_match('/\b(mis grupos|mis cursos|los grupos que tengo|los cursos que tengo|los grupos a mi cargo|a mi cargo|que tengo asignados|mis estudiantes|los estudiantes que tengo|mis pelados|mis muchachos)\b/u', $q))
         $s['_my_scope'] = true;
 
+    // GRADO — todos los grupos de un nivel. «los décimos», «grupos de
+    // décimo», «grado 10», «los grupos 10», «del décimo»: no existe un grupo
+    // «10» — un grupo sin letra es el grado entero. Antes «10» caía en un
+    // LIKE '%10%' y respondía solo por 10-A.
+    $gOrd = ['sexto'=>'6','septimo'=>'7','octavo'=>'8','noveno'=>'9','decimo'=>'10','once'=>'11',
+             'onceavo'=>'11','undecimo'=>'11','primero'=>'1','segundo'=>'2','tercero'=>'3','cuarto'=>'4','quinto'=>'5'];
+    $gPl  = ['sextos'=>'6','septimos'=>'7','octavos'=>'8','novenos'=>'9','decimos'=>'10','undecimos'=>'11',
+             'sextas'=>'6','septimas'=>'7','octavas'=>'8','novenas'=>'9','decimas'=>'10'];
+    $gAlt = implode('|', array_keys($gOrd));
+    // «las onces» es la merienda colombiana — solo «los onces» es grado
+    if (preg_match('/\b(' . implode('|', array_keys($gPl)) . ')\b|\blos\s+(onces)\b/u', $q, $mg))
+        $s['grade'] = !empty($mg[2]) ? '11' : $gPl[$mg[1]];
+    elseif (preg_match('/\b(?:grados?|grupos|cursos|salones)\s+(?:de\s+|del\s+)?(\d{1,2}|' . $gAlt . ')\b(?!\s*-?\s*[a-e]\b)/u', $q, $mg))
+        $s['grade'] = $gOrd[$mg[1]] ?? ltrim($mg[1], '0');
+    elseif (!empty($s['group']) && preg_match('/^\d{1,2}$/', (string)$s['group']))
+        $s['grade'] = $s['group'];
+    if (!empty($s['grade']) && (empty($s['group']) || preg_match('/^\d{1,2}$/', (string)$s['group']))) {
+        unset($s['group'], $s['_group_src']);
+    }
+
     // módulo por sinónimos — «tarde/tardes» no es tardanza si es saludo
     // o franja horaria («buenas tardes», «en la tarde», «por la tarde»)
     $greetTime = (bool)preg_match('/\b(buenas tardes|buenas noches|por la tarde|en la tarde|de la tarde|la tarde de|tarde de)\b/u', $q);
@@ -689,7 +761,9 @@ function nxSlots(string $q): array {
  * del parser LLM (nexus_llm.php) para rechazar «llegadas», «fechas»… que el
  * modelo pegue como student. */
 function nxStudentStopwords(): array {
-    return ['grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
+    return ['notificacion','notificaciones','aviso','avisos','alerta','alertas','categoria','categorias',
+        'detalle','detalles','sensor','sensores','nodo','nodos','dispositivo','dispositivos','reporte','reportes',
+        'grupo','salon','colegio','escuela','jornada','hoy','ayer','semana',
         'mes','ano','dias','dia','el','la','los','las','un','una','este','esta','esto',
         'eso','mi','tu','su','mis','tus','sus','que','cual','cuales','cuanto','cuanta',
         'cuantos','cuantas','dime','dame','muestrame','ver','hay','tiene','tienen',
@@ -1525,6 +1599,10 @@ const NX_INCIDENT_MODULES = ['LATE_ARRIVAL','INASISTENCIA','INASISTENCIA_JUSTIFI
  */
 function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     $s = $slots ?? nxSlots($q0);
+    // para CLASIFICAR, un grado es un alcance de grupo («cómo va el séptimo»
+    // = group_summary): las reglas ven group=«7»; la entidad que viaja sigue
+    // siendo grade (nxClassify normaliza el grupo sin letra de vuelta)
+    if (empty($s['group']) && !empty($s['grade'])) $s['group'] = (string)$s['grade'];
     $mod = $s['module'] ?? null;
     $ent = [];
     $words = str_word_count($q0, 0, 'áéíóúñü0123456789');
@@ -2401,6 +2479,119 @@ function nxDomainRescue(string $q0): ?string {
     return null;
 }
 
+/**
+ * Veto de sujeto/operación (F3+F5): el LLM a veces repite el intent del
+ * turno anterior aunque el texto traiga un sustantivo inequívoco de OTRO
+ * tema («clasifica mis notificaciones» después de un ranking de
+ * asistencia). También corrige operación: «cuántos faltaron» no es
+ * frequency_table, y un ranking sin cue de ranking («más», «peor») sobre
+ * un grupo explícito es la nómina/resumen del grupo, no un ranking.
+ * Devuelve el intent corregido o null.
+ */
+function nxIntentVeto(string $q0, string $intent, array $slots): ?string {
+    // operaciones y meta nunca se vetan: el sustantivo es el OBJETO de la
+    // acción («cita al acudiente de X» tiene «acudiente» pero es citar)
+    static $never = ['derive_action','start_operation','confirm_op','cancel',
+        'repeat_op','security_probe','clarify','result_nav','help','capabilities'];
+    if (in_array($intent, $never, true) || !empty($slots['_op'])) return null;
+    // intent heredado por el DSM (fragmento contextual «y en tardanzas?»):
+    // la ausencia de «cue» en la frase es precisamente lo que la hace
+    // fragmento — vetarlo desharía la herencia correcta
+    if (in_array('intent', $slots['_inherited'] ?? [], true)) return null;
+
+    // — vetos de operación (más específicos, van primero) —
+    // «los pelados del 10A que se volaron» — grupo + verbo de incidente es
+    // una LISTA de eventos del grupo, ni nómina ni ranking. Va PRIMERO: el
+    // verbo de incidente pesa más que la ausencia de cue de ranking.
+    $incVerb = (bool)preg_match('/\b(volaron|fugaron|evadieron|caparon|tajaron|faltaron|llegaron tarde|salieron|cometieron|acumulan|hicieron)\b/u', $q0);
+    if (in_array($intent, ['students_in_group','group_summary','group_student_count','attendance_ranking'], true)
+        && $incVerb
+        && !empty($slots['module'] ?? nxSlots($q0)['module'] ?? null))
+        return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
+    $rankCue = (bool)preg_match('/\b(mas|mayor\w*|menos|menor\w*|top|peor\w*|mejor\w*|ranking|orden\w*|compar\w*|lidera|encabeza|acumula|reinciden?|frecuent\w*)\b/u', $q0);
+    if ($intent === 'attendance_ranking' && !$rankCue) {
+        if (!empty($slots['group'])) return 'students_in_group';
+        if (!empty($slots['grade'])) return 'group_summary';
+    }
+    if ($intent === 'frequency_table'
+        && !preg_match('/\bpor\s+(dia|día|semana|mes|estudiante|alumno|grupo|fecha|docente)\b/u', $q0))
+        return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
+    if ($intent === 'group_summary'
+        && preg_match('/\b(estudiantes|alumnos|pelados|pelaos|muchachos|lista|nomina|nómina)\b/u', $q0)
+        && !preg_match('/\b(como|estado|resumen|andan|van)\b/u', $q0))
+        return 'students_in_group';
+    // «cómo están los décimos» puede salir out_of_scope del parser aunque
+    // trae el grado claro — un ordinal + cómo/van/están es el resumen del grado
+    if ($intent === 'out_of_scope' && !empty($slots['grade'])
+        && preg_match('/\b(como|estan|van|andan|iba|iban|quedo|fueron|les fue|le fue|les ha ido)\b/u', $q0))
+        return 'group_summary';
+    // «cómo va la jornada / cómo va todo» es el panorama del día — el LLM
+    // a veces lo degrada a un listado de módulo por inercia contextual
+    if (!in_array($intent, ['day_summary','greeting','greeting_time'], true)
+        && preg_match('/\b(como va|como esta|como esta(?:n)?|que tal va|como le fue)\b.{0,25}\b(jornada|colegio|dia|institucion|todo)\b|\b(c[óo]mo|qu[ée] tal) va la jornada\b/u', $q0)
+        && !preg_match('/\b(tardanz|inasist|falt|evasi|permiso|citaci|seguim|notific|sensor|nodo|grupo|grado)\b/u', $q0))
+        return 'day_summary';
+    // «cuál mejoró/empeoró respecto al período anterior» = tendencia
+    // comparativa — un conteo suelto no responde eso
+    if (in_array($intent, ['count_events','list_events','attendance_ranking','top_offenders'], true)
+        && preg_match('/\b(mejor[oó]|empeor[oó]|mejora|empeora|respecto|en comparaci[óo]n|comparado|subi[oó]|baj[oó]|aument[oó]|disminuy[oó])\b/u', $q0)
+        && preg_match('/\b(semana|mes|periodo|per[ií]odo|pasad[oa]|anterior|ayer|hoy)\b/u', $q0))
+        return 'attendance_trend';
+
+    // — veto de sujeto por sustantivo inequívoco —
+    static $fam = [
+        'notifications' => ['notifications_unread'],
+        'devices'       => ['devices_status','device_detail','system_incidents'],
+        'citations'     => ['citations','citations_by'],
+        'permissions'   => ['permissions','pending_returns','exit_detail','trip_info'],
+        'trackings'     => ['trackings','tracking_detail','count_trackings'],
+        'calendar'      => ['school_calendar'],
+        'enrollment'    => ['enrollment_stats'],
+        'attendance'    => ['day_summary','attendance_today','late_today','count_present','count_events','list_events','frequency_table','top_offenders','attendance_ranking','attendance_trend','group_summary','incident_excuses','students_in_group','groups_compare'],
+        'students'      => ['students_in_group','student_field','student_summary','random_student','students_count','group_student_count','top_offenders','frequency_table','attendance_ranking','risk_students','count_events','list_events','birthdays_today','group_summary','tracking_detail','incident_excuses','groups_compare'],
+        'groups'        => ['group_summary','groups_list','students_in_group','attendance_ranking','group_student_count','groups_compare','count_events','list_events','frequency_table'],
+        'staff'         => ['staff_lookup','staff_contact','teachers_list','teacher_schedule','schedule_info'],
+        'guardians'     => ['guardian_replies','guardian_messages','student_field','whatsapp_status','failed_messages'],
+    ];
+    static $nouns = [
+        'notifications' => '/\bnotificacion\w*|\bavisos?\s+(del|de|sin)\b/u',
+        'devices'       => '/\b(sensores?|nodos?|dispositivos?|lectores?|escaner\w*|hueller\w*)\b/u',
+        'citations'     => '/\bcitaci\w*|\bcitados?\b/u',
+        'permissions'   => '/\b(permisos?|paseos?|salidas?\s+pedagogic\w*|salidas?\s+autorizadas?)\b/u',
+        'trackings'     => '/\bseguimientos?\b/u',
+        'calendar'      => '/\b(calendario|festivos?|dias?\s+lectivos?|hay\s+clases)\b/u',
+        'enrollment'    => '/\b(matricul\w*|estudiantes?\s+(nuevos?|retirados?))\b/u',
+        'guardians'     => '/\bacudientes?\s+(respond|contesta|le[yií]|recib|leer)/u',
+        'staff'         => '/\b(docentes?|profesores?|profes\b|directivos?|funcionarios?|coordinador\w*|rector\w*|psicoorient\w*|secretari[oa]s?|porteros?|vigilantes?)\b/u',
+        'students'      => '/\b(estudiantes|alumnos|pelados|pelaos|muchachos)\s+(del|de|en)\b/u',
+    ];
+    foreach ($nouns as $f => $re) {
+        if (!preg_match($re, $q0)) continue;
+        if (in_array($intent, $fam[$f], true)) return null;   // ya cubierto
+        // el intent resuelto tiene su propio sustantivo en el texto → gana
+        $supported = false;
+        foreach ($nouns as $f2 => $re2) {
+            if ($f2 === $f || !in_array($intent, $fam[$f2], true)) continue;
+            if (preg_match($re2, $q0)) { $supported = true; break; }
+        }
+        if ($supported) continue;
+        return match ($f) {
+            'notifications' => 'notifications_unread',
+            'devices'       => 'devices_status',
+            'citations'     => 'citations',
+            'permissions'   => 'permissions',
+            'trackings'     => 'trackings',
+            'calendar'      => 'school_calendar',
+            'enrollment'    => 'enrollment_stats',
+            'guardians'     => 'guardian_replies',
+            'staff'         => preg_match('/\b(docentes?|profesores?|profes\b)\b/u', $q0) ? 'teachers_list' : 'staff_lookup',
+            'students'      => (!empty($slots['group']) || !empty($slots['grade'])) ? 'students_in_group' : null,
+            default         => null,
+        };
+    }
+    return null;
+}
+
 /** Smalltalk/meta — un turno de cortesía no cambia el tema conversacional. */
 const NX_SMALLTALK_INTENTS = ['greeting','greeting_time','wellbeing','wellbeing_reply','joke',
     'fun_fact','about_nexus','name_meaning','creator','age','thanks','goodbye',
@@ -2427,8 +2618,14 @@ function nxPlanResponse(array $out, string $intent, string $handlerUsed): array 
 
 function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $intent = $cls['intent'];
+    // capability punteada del parser («incidents.list») → nombre canónico;
+    // las reglas de este resolvedor solo conocen nombres canónicos
+    if (str_contains((string)$intent, '.') && function_exists('nxCapToIntent')) {
+        $intent = nxCapToIntent($intent) ?? $intent;
+    }
     $conf   = $cls['confidence'] ?? 0;
     $slots  = $cls['entities'] ?? [];
+    $ownSlots = $slots; // slots del propio turno — la herencia los muta
     $coverageHit = false;
     $inherited = []; $newSlots = [];
     $turnType = 'new_request';
@@ -2475,7 +2672,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     $proposed = is_string($cls['proposed_intent'] ?? null) ? $cls['proposed_intent'] : null;
 
     $hasNewEntity = false;
-    foreach (['student','group','module','days','field'] as $k)
+    foreach (['student','group','grade','module','days','field'] as $k)
         if (!empty($slots[$k])) { $hasNewEntity = true; break; }
     $correctionMark = $correctionStrong || ($correctionWeak && $hasNewEntity);
     // la cola compartida consulta $dependent aunque el turno entró por
@@ -2487,7 +2684,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         $turnType = 'correction';
         // el intent previo se mantiene; el slot nuevo (student/group/days/field)
         // REEMPLAZA al heredado — no se acumula.
-        foreach (['student','group','module','days','from','to','range_label','field'] as $k) {
+        foreach (['student','group','grade','module','days','from','to','range_label','field'] as $k) {
             if (!empty($slots[$k])) { $newSlots[] = $k; }
             elseif (!empty($ctxEntities[$k])) { $slots[$k] = $ctxEntities[$k]; $inherited[] = $k; }
         }
@@ -2534,7 +2731,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         if ($ctxEntities && $dependent) {
             // 'field' excluido: el campo pedido es de la frase, no del tema —
             // «y cuántas evasiones tiene» no debe arrastrar 'documento'
-            foreach (['student','group','module','days','from','to','range_label'] as $k) {
+            foreach (['student','group','grade','module','days','from','to','range_label'] as $k) {
                 // days=0 («hoy») es un valor válido — isset, no empty
                 $absent = $k === 'days' ? !isset($slots[$k]) : empty($slots[$k]);
                 $ctxHas = array_key_exists($k, $ctxEntities) && $ctxEntities[$k] !== null;
@@ -2562,7 +2759,12 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
         // sobre el result-set anterior — consulta informativa, nunca op.
         // Un fragmento temporal («la última semana», «los últimos 15 días»)
         // NO es navegación posicional aunque diga «último».
-        if ($hasResult && !$temporalFrag && !($scopeWiden && !$allSetExact)) {
+        // Un turno que nombra objeto o métrica nueva («ordena mis
+        // notificaciones», «quién de estos más ha evadido») es CONSULTA
+        // nueva — las transformaciones del set activo no lo secuestran.
+        // «de estos» viaja como set_ref (filtro), no como cursor.
+        $domainAsk = nxHasDomainAsk($q0);
+        if ($hasResult && !$temporalFrag && !($scopeWiden && !$allSetExact) && !$domainAsk) {
             $nav = null;
             // ── transformaciones sobre el set activo (§12-13): proyección,
             // orden, slice, goto — antes de los ordinales sueltos ──
@@ -2956,7 +3158,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 $cmp = [$ctxR, $ranges[0]];
             if ($cmp) $slots['_compare_ranges'] = $cmp;
             else $slots['trend'] = true;
-            foreach (['module','student','group'] as $k)
+            foreach (['module','student','group','grade'] as $k)
                 if (empty($slots[$k]) && !empty($ctxEntities[$k])) { $slots[$k] = $ctxEntities[$k]; $inherited[] = $k; }
             if (!$cmp && $ctxR) foreach (['from','to','range_label','days'] as $k)
                 if (isset($ctxR[$k])) $slots[$k] = $ctxR[$k];
@@ -3059,19 +3261,36 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
             $slots['group'] = $ctxEntities['group']; $inherited[] = 'group';
             $turnType = 'context_modify';
         }
-        // «y en el <grupo> / y del <grupo>» — misma consulta sobre otro grupo
-        if (preg_match('/^(y |pero |ahora |entonces )?(en |del |de la |de |sobre )?(el |la )?[\w. -]{0,12}$/u', $q0)
-            && !empty($slots['group']) && $inheritable
-            && in_array($intent, ['math_operation','out_of_scope','random_number','deictic','yes','smalltalk','foreign_culture'], true)
-            && in_array($lastIntent, ['group_summary','group_student_count','students_in_group','list_events','count_events','count_present','attendance_today','late_today','day_summary'], true)) {
+        // «y en el <grupo> / y del <grupo> / y en sexto» — misma consulta
+        // sobre otro alcance. El fragmento desnudo no trae verbo ni métrica:
+        // cualquier intent que el parser le haya asignado es una suposición —
+        // se hereda el del tema activo (menos operaciones/seguridad) y solo
+        // cambia el slot de alcance.
+        // $own2 = lo que el TEXTO extrajo de verdad (nxSlots puro) — el LLM
+        // copia entidades del contexto a entities y ensuciaría la medida
+        $own2 = nxSlots($q0);
+        if (preg_match('/^(y |pero |ahora |entonces |tambien )?(en |del |de la |de |sobre |para )?(el |la |los |las |grado |los de |las de |alumnos de |pelados de )?[\w. -]{0,14}$/u', $q0)
+            && (!empty($own2['group']) || !empty($own2['grade']))
+            && empty($own2['student']) && empty($own2['module']) && $inheritable
+            && !in_array($intent, ['derive_action','start_operation','confirm_op','cancel','security_probe','repeat_op'], true)) {
             $intent = $lastIntent; $inherited[] = 'intent';
+            // el resto del tema también se hereda — «y en sexto» tras un
+            // ranking con módulo+rango conserva ambos
+            foreach (['module','from','to','range_label'] as $k)
+                if (empty($slots[$k]) && !empty($ctxEntities[$k])) { $slots[$k] = $ctxEntities[$k]; $inherited[] = $k; }
+            if (($slots['days'] ?? null) === null && isset($ctxEntities['days'])) {
+                $slots['days'] = $ctxEntities['days']; $inherited[] = 'days';
+            }
             $turnType = 'context_modify';
         }
         // «y las/los <módulo>» — la MISMA consulta con otro módulo:
-        // hereda intent, estudiante y rango; solo cambia el módulo
-        if (preg_match('/^(y |y las |y los |y sus |y su |las |los |sus |tambien |ahora )?(tardanzas?|llegadas? tardes?|inasistencias?|faltas?|ausencias?|evasiones?|fugas?|permisos?|citaciones?|citas?|eventos?|incidentes?|alertas?|seguimientos?)\b[.!? ]*$/u', $q0, $mm)
+        // hereda intent, estudiante y rango; solo cambia el módulo.
+        // El parser puede asignarle cualquier intent al fragmento suelto —
+        // un sustantivo de módulo sin verbo no lleva tema propio; siempre
+        // se hereda el del turno anterior (menos operaciones/seguridad).
+        if (preg_match('/^(y en |y |en |y las |y los |y sus |y su |las |los |sus |tambien |ahora |cuales fueron las |cuales las )?(tardanzas?|llegadas? tardes?|inasistencias?|faltas?|ausencias?|evasiones?|fugas?|permisos?|citaciones?|citas?|eventos?|incidentes?|alertas?|seguimientos?)\b[.!? ]*$/u', $q0, $mm)
             && $inheritable
-            && in_array($intent, ['sos_alerts','out_of_scope','random_number','random_student','math_operation','deictic','yes','smalltalk','foreign_culture','count_events','list_events','attendance_today','late_today','trackings','permissions','citations'], true)) {
+            && !in_array($intent, ['derive_action','start_operation','confirm_op','cancel','security_probe','repeat_op'], true)) {
             $w3 = $mm[count($mm)-1];
             $mod = preg_match('/tardanza|llegada/', $w3) ? 'LATE_ARRIVAL'
                  : (preg_match('/inasist|falt|ausen/', $w3) ? 'INASISTENCIA'
@@ -3198,7 +3417,7 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
                 || preg_match('/\b(sin excusa|sin justificar|injustificad|no justificad|ningun\w*\s+excusa|no tienen excusa|sin una excusa|no han justificado)\b/u', $q0))
                 ? 'no' : 'yes';
             // el filtro va sobre la métrica activa: módulo/rango/grupo del tema
-            foreach (['module','group','student','from','to','range_label','days'] as $k)
+            foreach (['module','group','grade','student','from','to','range_label','days'] as $k)
                 if (empty($slots[$k]) && isset($ctxEntities[$k]) && $ctxEntities[$k] !== null && $ctxEntities[$k] !== '') {
                     $slots[$k] = $ctxEntities[$k]; $inherited[] = $k;
                 }
@@ -3539,6 +3758,26 @@ function nxDialogueResolve(array $cls, ?array $ctx, string $q0): array {
     if ($intent === 'notifications_unread'
         && preg_match('/\b(prioriz\w*|prioridad|prioridades|urgente|urgentes|importante|importantes|a cuales? (les? )?(debo|doy|le doy|le debo|conviene|toca)|orden de atencion|por importancia|que atiendo primero|que atiendo urgente|atender primero|atiendo primero)\b/u', $q0))
         $slots['_priority'] = true;
+
+    // grupo y grado son alcances excluyentes: lo que dijo la frase gana
+    // sobre lo heredado («y en sexto» tras un ranking del 10-B manda el
+    // grado, no el grupo); a igual origen, una sección con letra («10-B»)
+    // subsume el grado.
+    if (!empty($slots['group']) && !empty($slots['grade'])) {
+        // el turno dijo solo uno: nxSlots del texto es la vista limpia —
+        // el otro (heredado o copiado por el parser del contexto) sobra
+        $own = nxSlots($q0);
+        $ownG  = !empty($own['group']);
+        $ownGr = !empty($own['grade']);
+        $gInh  = in_array('group', $inherited, true);
+        $grInh = in_array('grade', $inherited, true);
+        if ($ownGr && !$ownG) unset($slots['group']);
+        elseif ($ownG && !$ownGr) unset($slots['grade']);
+        elseif ($gInh && !$grInh) unset($slots['group']);
+        elseif ($grInh && !$gInh) unset($slots['grade']);
+        elseif (preg_match('/[a-z]/i', (string)$slots['group'])) unset($slots['grade']);
+        elseif ($gInh) unset($slots['group']);
+    }
 
     // §17 self-check — evidencia de la interpretación final:
     // strong = parser confiado / evidencia léxica+módulo;
