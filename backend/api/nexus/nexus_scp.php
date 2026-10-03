@@ -384,9 +384,14 @@ function nxScpFrame(string $q0, array $cls, array $interp, ?array $ds, ?array $s
         + ($timeRange ? 0.1 : 0) + ($scope['kind'] !== 'school' ? 0.1 : 0));
     $frameConf = round($nluConf * 0.5 + $signalSupport * 0.5, 3);
 
+    // flags de control («_priority», «_summary», «_ref») no son filtros de
+    // entidad pero deben viajar al handler — la whitelist de keys los
+    // descartaba y «a cuáles dar prioridad» ejecutaba la rama estándar
+    $flagSlots = array_filter($slots, fn($k) => str_starts_with((string)$k, '_'), ARRAY_FILTER_USE_KEY);
     $frameFilters = array_filter(array_merge(
         is_array($sig['filters'] ?? null) ? $sig['filters'] : [],
-        array_intersect_key($slots, array_flip(['group','grade','module','status','student','search']))
+        array_intersect_key($slots, array_flip(['group','grade','module','status','student','search'])),
+        $flagSlots
     ), fn($v) => $v !== null && $v !== '' && $v !== []);
     if (isset($frameFilters['group'])) $frameFilters['group'] = $normGroup($frameFilters['group']);
     if (isset($frameFilters['group2'])) $frameFilters['group2'] = $normGroup($frameFilters['group2']);

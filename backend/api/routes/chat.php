@@ -701,27 +701,36 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         // reglas de cobertura y el downgrade destructivo→security_probe
         // apliquen igual que en la vía principal (una cláusula mutativa
         // nunca se despacha como intent de datos)
-        $outs = []; $seenPart = []; $prevPartSlots = null;
+        $outs = []; $seenPart = []; $prevPartSlots = null; $prevPartIntent = null;
+        $buckets = []; $seq = [];
         foreach ($cls['parts'] as $p) {
             $pN = nxNorm($p['text'] ?? '');
             // segmento repetido («X y X» tras un split por «/» o conector) —
             // una sola respuesta, no dos cards iguales
             if (isset($seenPart[$pN . '|' . ($p['intent'] ?? '')])) continue;
             $seenPart[$pN . '|' . ($p['intent'] ?? '')] = true;
+            // contexto rodante: la cláusula previa del MISMO turno es tema
+            // activo («analiza mis avisos y dime su prioridad» — la 2ª
+            // cláusula hereda el buzón, no el ds del turno anterior)
+            $pCtx = $dsPre2 ? ['entities'=>$dsPre2['entities'] ?? [],
+                             'last_intent'=>$dsPre2['intent'] ?? null,'_ds'=>$dsPre2] : null;
+            if ($prevPartIntent !== null) {
+                $pCtx = ['entities'=>array_merge($dsPre2['entities'] ?? [], $prevPartSlots ?? []),
+                         'last_intent'=>$prevPartIntent,'_ds'=>$dsPre2];
+            }
             $pIp = nxDialogueResolve(
                 ['intent'=>$p['intent'],'confidence'=>$p['confidence'] ?? 0,
                  'entities'=>$p['entities'] ?? [],'top3'=>$p['top3'] ?? [],
                  'domain'=>$p['domain'] ?? null],
-                $dsPre2 ? ['entities'=>$dsPre2['entities'] ?? [],
-                           'last_intent'=>$dsPre2['intent'] ?? null,'_ds'=>$dsPre2] : null,
+                $pCtx,
                 $pN);
             $pIntent = $pIp['resolved']['intent'];
             if (!empty($pIp['requires_clarification'])) {
-                $outs[] = ['reply'=>$pIp['clarify'],'intent'=>'clarify'];
+                $seq[] = ['out'=>['reply'=>$pIp['clarify'],'intent'=>'clarify']];
                 continue;
             }
             if (!chatAllowed($conn, $authUser, $pIntent, $role)) {
-                $outs[] = ['reply'=>nxSmalltalk('denied',$vars),'intent'=>$pIntent,'denied'=>true];
+                $seq[] = ['out'=>['reply'=>nxSmalltalk('denied',$vars),'intent'=>$pIntent,'denied'=>true]];
                 continue;
             }
             // slots por segmento: nxSlots completa module/field/dates que el parser no extrae
@@ -734,11 +743,28 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
             if ($prevPartSlots && empty($pslots['from']) && !isset($pslots['days']))
                 foreach (['from','to','range_label','days'] as $fk)
                     if (isset($prevPartSlots[$fk])) $pslots[$fk] = $prevPartSlots[$fk];
-            $outs[] = chatDispatch($conn, $authUser, $pIntent, $pslots, $vars, $role);
+            // misma consulta con palabras distintas («analiza mis avisos» +
+            // «dime su prioridad» → mismo intent+mismos filtros): se
+            // agrupa — las flags de presentación de ambas cláusulas se
+            // fusionan en un ÚNICO dispatch, nunca dos outs idénticos
+            $sig = $pIntent . '|' . json_encode(array_intersect_key($pslots,
+                array_flip(['group','module','student','field','days','from','to','status','_mine'])));
+            if (!isset($buckets[$sig])) {
+                $buckets[$sig] = ['intent'=>$pIntent,'slots'=>$pslots];
+                $seq[] = ['sig'=>$sig];
+            } else {
+                $buckets[$sig]['slots'] += array_filter($pslots,
+                    fn($v) => $v !== null && $v !== '' && $v !== false);
+            }
             $prevPartSlots = $pslots;
+            $prevPartIntent = $pIntent;
         }
-        // la misma card dos veces (partes que resolvieron igual) no se pinta
-        $outs = array_values($outs);
+        foreach ($seq as $e) {
+            $o = isset($e['out']) ? $e['out']
+                : chatDispatch($conn, $authUser, $buckets[$e['sig']]['intent'], $buckets[$e['sig']]['slots'], $vars, $role);
+            $o += ['intent' => $e['out']['intent'] ?? $buckets[$e['sig']]['intent'] ?? null];
+            $outs[] = $o;
+        }
         $out = [
             'reply' => implode("\n\n—\n\n", array_column($outs,'reply')),
             'cards' => array_merge(...array_map(fn($o)=>$o['cards']??[], $outs)) ?: null,
@@ -1543,10 +1569,19 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     $outIntent = $out['intent'] ?? null;
     $isNoiseIntent = fn($i) => $i === null || in_array($i,
         ['out_of_scope','clarify','confirm_op','cancel','repeat_op','security_probe','result_nav'], true);
+    // el intent de tema es el REALMENTE despachado (out.intent = capability
+    // del plan ejecutado): el resolved puede discrepar cuando el LLM
+    // clasificó mal pero el compose semántico eligió la capacidad correcta
+    // — guardar el intent del NLU envenena la corrección del próximo turno.
+    // Solo capabilities simples mapeables ganan; intents compuestos («a+b»)
+    // o clásicos conservan el resolved.
+    $outConv = is_string($outIntent) && !str_contains($outIntent, '+')
+        ? nxCapToIntent($outIntent) : null;
     $dsIntent = !empty($slots['_nav']) || !empty($out['_result_nav'])
         ? ($prev['intent'] ?? $resolvedIntent ?? $outIntent)
-        : (!$isNoiseIntent($resolvedIntent) ? $resolvedIntent
-            : (!$isNoiseIntent($outIntent) ? $outIntent : ($resolvedIntent ?? $outIntent)));
+        : ($outConv ?? (!$isNoiseIntent($resolvedIntent) ? $resolvedIntent
+            : (!$isNoiseIntent($outIntent) ? $outIntent
+                : ($resolvedIntent ?? $outIntent))));
     // el plan semántico nombra el resultado por capability («incidents.list»);
     // _ds.intent debe conservar el intent conversacional para que la herencia
     // de NX_QUERY_INTENTS siga funcionando («y llegadas tarde?» tras una lista)
@@ -2140,7 +2175,8 @@ function chatLog(PDO $conn, string $schoolId, string $userId, string $text, arra
     // Todo conjunto de datos se entrega como tabla: si el handler materializó
     // un _result_set (columns+rows) pero no emitió card, la UI la recibe aquí
     // — la sección de consultas vive en el chat, nunca como texto plano.
-    if (empty($out['cards']) && !empty($out['_result_set']['columns']) && !empty($out['_result_set']['rows'])) {
+    if (empty($out['cards']) && empty($out['_result_set']['_silent'])
+        && !empty($out['_result_set']['columns']) && !empty($out['_result_set']['rows'])) {
         $rs = $out['_result_set'];
         $out['cards'] = [[
             'title'   => ucfirst($rs['label'] ?? 'Resultados'),
@@ -2901,6 +2937,57 @@ function chat_notifications(PDO $conn, array $u, array $s, array $v): array {
     $tc = $conn->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL");
     $tc->execute([$u['id']]); $total = (int)$tc->fetchColumn();
     if ($total === 0) return ['reply' => 'No tienes notificaciones sin leer.', '_natural' => true];
+    // «analiza mis notificaciones y dime a cuáles dar prioridad alta,
+    // media y baja» — clasificación ítem a ítem de TODA la bandeja:
+    // la tabla lleva cada aviso, nunca un subconjunto truncado.
+    if (!empty($s['_priority'])) {
+        $st = $conn->prepare("SELECT notification_id, title, message, type, created_at
+            FROM notifications WHERE user_id = ? AND read_at IS NULL ORDER BY created_at ASC LIMIT 200");
+        $st->execute([$u['id']]);
+        $notifs = $st->fetchAll(PDO::FETCH_ASSOC);
+        $prio = ['alta' => [], 'media' => [], 'baja' => []];
+        $now = time();
+        foreach ($notifs as $n) {
+            $txt = mb_strtolower(($n['title'] ?? '') . ' ' . ($n['message'] ?? ''));
+            $type = strtoupper((string)$n['type']);
+            $ageH = ($now - strtotime((string)$n['created_at'])) / 3600;
+            // alta: emergencia, seguridad del estudiante, escalaciones sin
+            // respuesta, anomalías operativas
+            $p = 'baja';
+            if ($type === 'URGENT'
+                || preg_match('/\b(sos|panico|emergencia|urgente|critico|evasion|salio sin permiso|no autorizada|accidente|lesion|altercado|pelea|agresion|amenaza|anomalia|concentrad\w*|sin respuesta|no responde|sin atender|escalad\w*|reincid\w*)\b/u', $txt))
+                $p = 'alta';
+            // media: operación que requiere gestión — tardanzas, faltas,
+            // citaciones, permisos, dispositivos caídos, entregas fallidas
+            elseif ($type === 'WARNING' || $type === 'ALERT'
+                || preg_match('/\b(tardanza|inasistencia|falta|ausencia|citacion|permiso|riesgo|seguimiento|incidente|fallo|rechazo|devolucion|no entregado|sin reportar|offline|caid\w*|desconectad\w*|no reporta)\b/u', $txt))
+                $p = 'media';
+            // un aviso de recuperación/resuelto/informativo baja aunque el
+            // tipo sea ALERT — no exige acción
+            if (preg_match('/\b(recuperad\w*|restablecid\w*|resuelt\w*|volvio a reportar|solucionad\w*|normalizad\w*|informativ\w*|recordatorio|bienvenida|confirmacion|exito|completad\w*)\b/u', $txt)
+                && $p !== 'alta')
+                $p = 'baja';
+            // envejecimiento: lo que lleva >3 días sin atender sube un nivel
+            if ($ageH > 72 && $p === 'baja') $p = 'media';
+            $prio[$p][] = $n;
+        }
+        $typeEs = ['ALERT'=>'Alerta','WARNING'=>'Advertencia','INFO'=>'Informativa','SUCCESS'=>'Confirmación','URGENT'=>'Urgente'];
+        $rows = [];
+        $order = ['alta','media','baja'];
+        foreach ($order as $p) foreach ($prio[$p] as $n)
+            $rows[] = [ucfirst($p), $n['title'] ?: '—',
+                mb_strlen((string)$n['message']) > 90 ? mb_substr((string)$n['message'], 0, 87) . '…' : (string)$n['message'],
+                $typeEs[$n['type']] ?? $n['type'], (string)$n['created_at']];
+        $na = count($prio['alta']); $nm = count($prio['media']); $nb = count($prio['baja']);
+        $reply = "Analicé tus {$total} notificaciones sin leer: {$na} de prioridad **alta**, {$nm} **media** y {$nb} **baja** — la tabla completa está abajo.";
+        if ($na) $reply .= ' Las urgentes conviene atenderlas primero.';
+        return ['reply' => $reply, '_natural' => true,
+            'cards' => [['title' => 'Notificaciones por prioridad', 'columns' => ['Prioridad','Notificación','Detalle','Tipo','Recibida'], 'rows' => $rows]],
+            '_result_set' => ['type' => 'notifications', 'label' => 'notificaciones', 'entity' => 'notification',
+                'items' => array_map(fn($n) => ['id' => $n['notification_id'], 'label' => $n['title'] ?: '—'], $notifs),
+                'count' => count($notifs)],
+            'actions' => [['kind' => 'nav', 'label' => 'Ver todas', 'to' => '/notificaciones']]];
+    }
     // categorías = mismo título (el patrón real del aviso) + tipo
     $st = $conn->prepare("SELECT title, type, COUNT(*) c, " . chatTs('MIN(created_at)') . " AS first, " . chatTs('MAX(created_at)') . " AS last
         FROM notifications WHERE user_id = ? AND read_at IS NULL
@@ -3657,18 +3744,12 @@ function chat_students_in_group(PDO $conn, array $u, array $s, array $v): array 
         'f'=>['sid'=>$r['student_id'],'fn'=>$r['first_name'],'ln'=>$r['last_name'],
               'doc'=>$r['document_number'],'grp'=>$g['group_name']]], $rows);
     $n = count($items);
-    $show = array_slice($items, 0, 5);
-    $reply = "{$g['group_name']} tiene {$n} estudiante" . ($n === 1 ? '' : 's') . ":";
-    if ($n === 1) {
-        $it = $items[0];
-        $reply .= " {$it['label']} ({$it['sub']}).";
-    } else {
-        $reply .= "
-" . implode("
-", array_map(fn($i)=>'• '.$i['label'], $show))
-                . ($n > 5 ? "
-… y " . ($n - 5) . " más — dime «los demás» para verlos." : '');
-    }
+    // la tabla de abajo lleva TODAS las filas — el texto no enumera ni
+    // promete «los demás»: duplicaría la card y mentiría sobre datos
+    // ocultos. «los demás» sigue siendo navegable si el usuario lo pide.
+    $reply = $n === 1
+        ? "{$g['group_name']} tiene 1 estudiante: {$items[0]['label']} ({$items[0]['sub']})."
+        : "{$g['group_name']} tiene {$n} estudiantes — la lista completa está en la tabla.";
     return ['reply'=>$reply,
             'entities'=>['group'=>$g['group_name']],
             '_result_set'=>['type'=>'students','label'=>'estudiantes','items'=>$items,'count'=>$n,
@@ -3688,7 +3769,30 @@ function chat_group_student_count(PDO $conn, array $u, array $s, array $v): arra
     }
     $n=$conn->prepare("SELECT COUNT(*) FROM student_group_assignments WHERE group_id=? AND active=TRUE");
     $n->execute([$g['group_id']]); $c=(int)$n->fetchColumn();
-    return ['reply'=>"{$g['group_name']} tiene *{$c} estudiante(s)* activos."];
+    // «el primero / el segundo / su doc» tras el conteo navega sobre el
+    // grupo: el set de miembros se materializa aunque el reply sea número
+    $ms=$conn->prepare("SELECT s.student_id, s.first_name, s.last_name, s.document_number
+        FROM students s JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
+        WHERE s.school_id=? AND sga.group_id=? AND s.deleted_at IS NULL AND s.active=TRUE
+        ORDER BY s.last_name, s.first_name LIMIT 60");
+    $ms->execute([$u['school_id'],$g['group_id']]);
+    $members=$ms->fetchAll(PDO::FETCH_ASSOC);
+    $out=['reply'=>"{$g['group_name']} tiene *{$c} estudiante(s)* activos.",
+          'entities'=>['group'=>$g['group_name']]];
+    if ($members) $out['_result_set']=['type'=>'students','label'=>"estudiantes de {$g['group_name']}",
+        // _silent: el set existe para navegación («el primero», «su doc»)
+        // pero no materializa card — el usuario pidió un número, no la tabla
+        '_silent'=>true,
+        'items'=>array_map(fn($r)=>['id'=>$r['student_id'],
+            'label'=>trim($r['first_name'].' '.$r['last_name']),
+            'sub'=>'doc '.$r['document_number'],'group'=>$g['group_name'],
+            'f'=>['sid'=>$r['student_id'],'fn'=>$r['first_name'],'ln'=>$r['last_name'],
+                  'doc'=>$r['document_number'],'grp'=>$g['group_name']]],$members),
+        'count'=>count($members),
+        'columns'=>['#','Estudiante','Documento','Grupo'],
+        'rows'=>array_map(fn($i,$r)=>[$i+1,trim($r['first_name'].' '.$r['last_name']),$r['document_number'],$g['group_name']],array_keys($members),$members),
+        '_filters'=>['group'=>$g['group_name']]];
+    return $out;
 }
 
 /** Cumpleaños de estudiantes — hoy o esta semana. */

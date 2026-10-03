@@ -566,6 +566,13 @@ if (!function_exists('extractBearerToken')) {
     }
 }
 
+// Versión vigente de los Términos y Condiciones — fuente de verdad del
+// gate legal (requireAuth) y de /auth/accept-terms. Sincronizada con
+// TERMS_VERSION en frontend/pwa/src/config/legal.js.
+if (!defined('NEXO_TERMS_VERSION')) {
+    define('NEXO_TERMS_VERSION', '2026.09');
+}
+
 if (!function_exists('requireAuth')) {
     /**
      * Requiere autenticación JWT y opcionalmente un rol permitido.
@@ -681,7 +688,7 @@ if (!function_exists('requireAuth')) {
                 });
             }
 
-            return [
+            $out = [
                 'id' => $user['user_id'],
                 'email' => $user['email'],
                 'nombre' => trim($user['first_name'] . ' ' . $user['last_name']),
@@ -695,6 +702,29 @@ if (!function_exists('requireAuth')) {
                 'claims' => $claims,
                 'permissions' => $permissions
             ];
+
+            // ── Gate legal: sin Términos vigentes aceptados no hay API ──
+            // La UI lo muestra como pantalla obligatoria; aquí se hace
+            // cumplir de verdad — un usuario autenticado pero sin aceptar
+            // no puede leer datos institucionales saltándose el front.
+            // Exentas: /auth/* (login, accept-terms, me, refresh, logout)
+            // y /health — son el flujo que permite aceptar.
+            $path = '/' . trim(urldecode(preg_replace('/^\/(v1|api\.php)/i', '',
+                parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH))), '/');
+            if (!preg_match('#^/(auth|health)(/|$)#', $path)
+                && defined('NEXO_TERMS_VERSION')
+                && ($user['terms_version'] ?? '') !== NEXO_TERMS_VERSION) {
+                http_response_code(428);
+                securityLog('TERMS_GATE_BLOCK', "User {$user['user_id']} hit {$path} without accepted terms",
+                    $user['user_id'], $user['school_id'] ?? null);
+                exit(json_encode([
+                    'status' => 'terms_required',
+                    'message' => 'Debes aceptar los Términos y Condiciones vigentes antes de usar la plataforma.',
+                    'terms_version' => NEXO_TERMS_VERSION,
+                ]));
+            }
+
+            return $out;
         } catch (Exception $e) {
             securityLog('AUTH_REQUIRED_FAILED', $e->getMessage());
             http_response_code(401);

@@ -98,6 +98,12 @@ BEGIN
     ON CONFLICT (user_id) DO NOTHING;
 END $$;
 
+-- Los usuarios del fixture representan cuentas que YA pasaron el gate legal:
+-- sin la versión aceptada, requireAuth respondería 428 terms_required a
+-- todas las suites live (teach@, coord@, guard@, rector@test…).
+UPDATE users SET terms_version = '2026.09', terms_accepted_at = NOW()
+WHERE email LIKE '%@test.nexo' AND (terms_version IS NULL OR terms_version <> '2026.09');
+
 -- =============================================================================
 -- Bloque 2 — casos SCP (transcript real): María Fernanda, Juan Camilo,
 -- 8-C para comparación, ranking diferenciado de faltas, umbral de riesgo.
@@ -207,6 +213,19 @@ BEGIN
     INSERT INTO attendance_incidents(incident_id, school_id, student_id, group_id, incident_type, detected_at)
     SELECT uuid_generate_v4(), v_school, v_jc, v_g10a, 'LATE_ARRIVAL', NOW() - INTERVAL '3 days'
     WHERE NOT EXISTS (SELECT 1 FROM attendance_incidents WHERE student_id=v_jc AND incident_type='LATE_ARRIVAL');
+
+    -- ── 5º infractor (caso E: «top 5… últimos 30 días» exige ≥5 filas) ──
+    -- Pedro Diez Tercero (10-A): una inasistencia hace ~8 días — sin ella
+    -- el ranking de faltas solo tiene 4 filas distintas en el mes.
+    DELETE FROM attendance_incidents
+    WHERE student_id='66666666-6666-4666-8666-6666666600a3'
+      AND incident_type='INASISTENCIA';
+    INSERT INTO attendance_incidents(incident_id, school_id, student_id, group_id, incident_type, detected_at)
+    SELECT uuid_generate_v4(), v_school, '66666666-6666-4666-8666-6666666600a3', v_g10a,
+           'INASISTENCIA', NOW() - INTERVAL '8 days'
+    WHERE NOT EXISTS (SELECT 1 FROM attendance_incidents WHERE student_id='66666666-6666-4666-8666-6666666600a3'
+                      AND incident_type='INASISTENCIA'
+                      AND detected_at::date = (NOW() - INTERVAL '8 days')::date);
 
     -- ── Umbral de riesgo (caso I: «pasado mi umbral de alerta») ─────────
     INSERT INTO student_behavior_metrics(school_id, student_id, late_count, absence_count, total_events, risk_score, risk_level, calculation_window_days)

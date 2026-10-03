@@ -56,6 +56,9 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
 
     /* ── Dialogue State Manager — fuente única nxDialogueResolve (paridad
        con chat.php por construcción: mismo código) ── */
+    /* chat.php:792 fusiona el _ds del server dentro del ctx antes del DSM;
+       el ctx resultante (front) NO lo trae — se conserva por fuera. */
+    $serverDs = is_array($ctx) ? ($ctx['_ds'] ?? null) : null;
     $interp = nxDialogueResolve($cls, $ctx, $q0);
     $intent = $interp['resolved']['intent'];
     $slots  = $interp['resolved']['slots'];
@@ -74,6 +77,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
         $tr['5_intent_final'] = 'clarify';
         $tr['17_handler'] = 'nxClarify';
         $ctx = $interp['ctx'];
+        if ($serverDs) $ctx['_ds'] = $serverDs;
         $TRACES[] = $tr;
         return ['intent' => 'clarify', 'trace' => $tr, 'operation' => null];
     }
@@ -85,6 +89,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
         $tr['17_handler'] = 'confirm_op(chip)';
         $tr['9_slots_finales'] = $slots;
         $ctx = $interp['ctx'];
+        if ($serverDs) $ctx['_ds'] = $serverDs;
         $TRACES[] = $tr;
         return ['intent'=>'confirm_op','trace'=>$tr,'operation'=>$pendingOp,'slots'=>$slots];
     }
@@ -92,6 +97,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
         $tr['5_intent_final'] = 'cancel';
         $tr['17_handler'] = 'cancel';
         $ctx = $interp['ctx'];
+        if ($serverDs) $ctx['_ds'] = $serverDs;
         unset($ctx['entities']['_op']);
         $TRACES[] = $tr;
         return ['intent'=>'cancel','trace'=>$tr,'operation'=>null];
@@ -102,6 +108,7 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
         $tr['17_handler'] = 'repeat_op(chip)';
         $tr['9_slots_finales'] = $slots;
         $ctx = $interp['ctx'];
+        if ($serverDs) $ctx['_ds'] = $serverDs;
         if (is_array($ctx['entities'] ?? null)) $ctx['entities']['_op'] = $pendingOp;
         $TRACES[] = $tr;
         return ['intent'=>'repeat_op','trace'=>$tr,'operation'=>$pendingOp,'slots'=>$slots];
@@ -136,11 +143,47 @@ function simulateTurn(string $text, ?array &$ctx, ?array $lastPayload): array {
     elseif (function_exists('chat_' . $intent)) $tr['17_handler'] = 'chat_' . $intent;
     else $tr['17_handler'] = 'nxSmalltalk(out_of_scope) [sin handler]';
 
+    /* ── _nav → result_nav — paridad chat.php/chatDispatch: un _nav
+       resuelto sobre set activo se despacha a chatResultNav aunque el
+       intent clasificado sea ruido («dame sus nombres» → proj:name) ── */
+    if (!empty($slots['_nav'])
+        && in_array($intent, ['out_of_scope','confused','smalltalk','deictic','clarify'], true)) {
+        $tr['5_intent_final'] = 'result_nav';
+        $tr['17_handler'] = 'chatResultNav(' . $slots['_nav'] . ')';
+        $tr['9_slots_finales'] = $slots;
+        $ctx = $interp['ctx'];
+        if ($serverDs) $ctx['_ds'] = $serverDs;
+        $TRACES[] = $tr;
+        return ['intent' => 'result_nav', 'trace' => $tr, 'operation' => null];
+    }
+
     /* ── ctx resultante (saveCtx del front) — lo entrega el DSM;
        si el turno resolvió operación, el _op persistido también viaja ── */
     $ctx = $interp['ctx'];
+    if ($serverDs) $ctx['_ds'] = $serverDs;
     if (isset($slots['_op']) && is_array($ctx['entities'] ?? null))
         $ctx['entities']['_op'] = $slots['_op'];
+    /* _ds con paridad chatBuildDs (server-side): el DSM devuelve solo el
+       ctx de front (last_intent+entities); el _ds vive aparte.
+       last_result PERSISTE hasta que un handler emita _result_set nuevo
+       (un count/nav no lo pisa). intent registra el último de tema —
+       ruido (oos/clarify/nav) no lo envenena. */
+    $RESULT_INTENTS = ['list_events','attendance_today','late_today','top_offenders',
+        'students_in_group','trackings','permissions','citations','staff_lookup',
+        'teachers_list','groups_list','pending_returns','guardian_replies',
+        'notifications_unread','risk_students','sos_alerts','frequency_table',
+        'attendance_ranking','biometric_spam','students.list','incidents.list',
+        'failed_messages','system_incidents'];
+    $NOISE = ['out_of_scope','clarify','confirm_op','cancel','repeat_op',
+        'security_probe','result_nav','confused'];
+    if (in_array($intent, $RESULT_INTENTS, true)) {
+        $ctx['_ds']['last_result'] = ['type' => 'list', 'count' => 3,
+            'items' => [['id'=>1,'label'=>'Ítem 1'],['id'=>2,'label'=>'Ítem 2'],['id'=>3,'label'=>'Ítem 3']]];
+        $ctx['_ds']['intent'] = $intent;
+    } elseif (!in_array($intent, $NOISE, true)) {
+        $ctx['_ds']['intent'] = $intent;
+    }
+    $ctx['_ds']['entities'] = $ctx['entities'] ?? [];
     $tr['15_ctx_resultante'] = $ctx;
 
     $TRACES[] = $tr;

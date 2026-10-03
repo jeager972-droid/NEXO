@@ -455,7 +455,7 @@ foreach ($CONVOS as $cv) {
         $ref = $res['slots']['_ref'] ?? null;
         $refCovers = in_array($ref, ['student_group','group_of_student'], true) ? ['group'] : [];
         foreach (($res['inherited'] ?? []) as $k) {
-            if ($k === 'intent' || $k === 'intent_ctx_generic') continue;
+            if (in_array($k, ['intent','intent_ctx_generic','intent_corrected'], true)) continue;
             if (isset($ctx['entities'][$k])) continue;
             if (in_array($k, $refCovers, true) && isset($ctx['entities']['student'])) continue;
             $cOk = false; break;

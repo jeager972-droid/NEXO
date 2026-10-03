@@ -836,6 +836,10 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
         $sig['filters'] = $f;
     }
 
+    // flags de control («_priority», «_summary», «_ref»): son señales del
+    // turno, no filtros de entidad — deben llegar al handler por el plan
+    $f += array_filter($slots, fn($k) => str_starts_with((string)$k, '_'), ARRAY_FILTER_USE_KEY);
+
     $plan = ['capability'=>null,'entity'=>$ent,'op'=>$sig['op'] ?? 'list','relation'=>$rel,
              'target'=>$sig['target'],'filters'=>$f,'sort'=>$sig['sort'],
              'position'=>$sig['position'],'cardinality'=>$sig['cardinality'],
@@ -1000,6 +1004,17 @@ function nxSemSplitCompound(string $q0): array {
         if ($c === '') continue;
         // no partir «6-A y 7-B» — enumeración de grupos es UN solo filtro
         if (preg_match('/^\d{1,2}[-\s]?[a-z]$/u', $c) && $out) { $out[count($out)-1] .= ' y ' . $c; continue; }
+        // ni «…de 10a y 6a de hoy» — el conector junta dos grupos de la
+        // misma comparación; la parte no arranca cláusula nueva
+        if ($out && preg_match('/^(?:\d{1,2}[-\s]?[a-e]|[a-e]\s*\d{1,2})\b/u', $c)
+            && preg_match('/\b(?:de|del|en|los|las)\s+\d{1,2}[-\s]?[a-e]\s*$/u', $out[count($out)-1])) {
+            $out[count($out)-1] .= ' y ' . $c; continue;
+        }
+        // ni «alta, media y baja» — cola de enumeración coordinada, no
+        // cláusula nueva: cualidad/ordinal suelto se re-anexa al segmento
+        if ($out && preg_match('/^(?:baj[oa]s?|alt[oa]s?|medi[oa]s?|primer[oa]s?|segund[oa]s?|tercer[oa]s?|cuart[oa]s?|quint[oa]s?|últim[oa]s?|ultim[oa]s?|penúltim[oa]s?|penultim[oa]s?|resto|demás|demas)\b/u', $c)) {
+            $out[count($out)-1] .= ' y ' . $c; continue;
+        }
         // ni ordinales coordinados («primero y segundo» = misma posición)
         if (preg_match('/^(primer|segund|tercer|ultim|penultim|anterior|siguiente)[oa]?\b/u', $c) && $out) { $out[count($out)-1] .= ' y ' . $c; continue; }
         // ni pares de sustantivos de detalle coordinados

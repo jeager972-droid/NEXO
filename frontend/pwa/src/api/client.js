@@ -161,6 +161,13 @@ client.interceptors.response.use(
       if (!isAuthRequest && !isPublicRoute) {
         window.dispatchEvent(new CustomEvent('nexo:auth-logout'));
       }
+    } else if (status === 428 && error.response?.data?.status === 'terms_required') {
+      // El backend exige aceptar los Términos antes de seguir usando la
+      // API — LegalGate escucha el evento y re-muestra la pantalla sin
+      // esperar al próximo login (rotación de versión a mitad de sesión).
+      window.dispatchEvent(new CustomEvent('nexo:terms-required', {
+        detail: error.response.data,
+      }));
     } else if (status === 403) {
       window.dispatchEvent(new CustomEvent('nexo:forbidden', {
         detail: { url: error.config?.url ?? '', status: 403 },

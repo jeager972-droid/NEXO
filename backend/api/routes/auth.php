@@ -564,6 +564,23 @@ if ($cleanPath === '/auth/accept-terms' && $method === 'POST') {
         ");
         $stmt->execute([$version, $authUser['id']]);
         securityLog('TERMS_ACCEPTED', "User {$authUser['id']} accepted terms v{$version}", $authUser['id'], $authUser['school_id']);
+        // auditoría síncrona: la aceptación de términos es un evento legal
+        // — no puede depender del worker de cola (AUDIT_WORKER_ENABLED)
+        try {
+            $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,ip_address,user_agent,created_at)
+                VALUES (uuid_generate_v4(),?,?,'TERMS_ACCEPTED',?,?::inet,?,NOW())")
+                ->execute([
+                    $authUser['school_id'],
+                    $authUser['id'],
+                    json_encode(['terms_version' => $version], JSON_UNESCAPED_UNICODE),
+                    getRealClientIp() !== '' ? getRealClientIp() : null,
+                    substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500),
+                ]);
+        } catch (Throwable $ae) {
+            // la auditoría no bloquea la aceptación: ya quedó en
+            // users.terms_version + securityLog/stderr
+            file_put_contents('php://stderr', 'TERMS_AUDIT_FAIL: ' . $ae->getMessage() . "\n");
+        }
 
         echo json_encode([
             'status' => 'ok',

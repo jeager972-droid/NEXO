@@ -147,6 +147,17 @@ const LegalGate = ({ user, children }) => {
     }
   }, [serverAccepted, fallbackAccepted, user?.id]);
 
+  // El backend responde 428 terms_required si la versión vigente rota o el
+  // consentimiento falta: el gate vuelve a aparecer sin esperar relogin.
+  useEffect(() => {
+    const onTermsRequired = () => {
+      setTermsAccepted(false);
+      if (user) setUser?.({ ...user, terms_accepted: false });
+    };
+    window.addEventListener('nexo:terms-required', onTermsRequired);
+    return () => window.removeEventListener('nexo:terms-required', onTermsRequired);
+  }, [user, setUser]);
+
   const step = !cookieConsent ? 'cookies' : (!termsAccepted ? 'terms' : null);
   if (!step) return children;
 

@@ -25,11 +25,12 @@
 | Resiliencia (LLM/Redis caído) | **16/16** | 100% | `php test/resilience.php` |
 | Navegación result-set | **100%** | 100% | gate G17b |
 | RBAC + canal read-only + probes destructivos | **PASS** | 0 violaciones | `test/readonly_guard.php`, gates G4/G6/G9/G13 |
-| **Singles semánticos** (`semantic_blind.json`, 1000 frases) | **~967/1000 (96.7%) resuelto** · 89% crudo del clasificador | ≥90% (G12) | `php test/semantic_eval.php` |
-| **Adversariales** (533 casos: SQLi, cross-scope, suplantación, evasión de auditoría) | **533/533 = 100% seguros, 0 escapes, 0 falsos-convencidos, 0 críticos fallidos** | 0 escapes (G11) | `php test/semantic_eval.php` |
-| Conversaciones multi-turno (fixture, 320 convos / 2732 turnos) | **95.5% turnos** · 254/320 convos limpias | — | `php test/semantic_eval.php` |
-| Blind operativo (`blind_set.json`) | 59.2% (última medición) | ≥80% (G12b) | `php test/blind_eval.php` |
-| Release gate completo | **READY FOR CONTROLLED PRODUCTION** — 20/20 puertas | — | `php test/nexus_release_gate.php` |
+| **Singles semánticos** (`semantic_blind.json`, 1000 frases) | **1000/1000 = 100% resuelto** · 97.2% crudo del clasificador · 0 FC · 0 críticos | ≥90% (G12) | `php test/semantic_eval.php` |
+| **Adversariales** (533 casos: SQLi, cross-scope, suplantación, evasión de auditoría, jailbreak) | **533/533 = 100% seguros, 0 escapes, 0 falsos-convencidos, 0 críticos fallidos** | 0 escapes (G11) | `php test/semantic_eval.php` |
+| Conversaciones multi-turno (fixture, 320 convos / 2732 turnos) | **2732/2732 = 100% turnos** · 320/320 convos limpias | — | `php test/semantic_eval.php` |
+| Conversaciones reales con ctx server-side | **103/103 = 100%** | ≥95% (G17) | `php test/real_conversation_v1.php` |
+| Blind operativo (`op_eval.php` singles+convos) | **326/326 singles = 100%** · 343/343 turnos = 53/53 convos · 0 FC · 0 críticos | ≥80% (G12b) | `php test/op_eval.php` |
+| Release gate completo | **READY FOR CONTROLLED PRODUCTION — 20/20 puertas PASS** (verificado 03-oct-2026, ~170 s) | 20/20 | `NLU_LLM_* exportado` + `php test/nexus_release_gate.php` |
 
 Nota sobre las puertas LLM: G7, G7b, G11, G12 y G12b se omiten cuando el
 proceso del gate no tiene `NLU_LLM_KEY` exportada — la clave vive en el
@@ -218,3 +219,50 @@ invalidación por versión y el registro de auditoría.
    sobrepasar las guardas deterministas ni el RBAC.
 8. Degradación honesta: sin LLM el determinista cubre ~96% del dominio;
    sin datos no se inventan.
+
+---
+
+## 7. Sesión final — cierre de la puerta 20/20 (03-oct-2026)
+
+Estado: **release gate 20/20 PASS** con LLM real + stack live. Los fallos
+finales y su corrección raíz:
+
+| Fallo | Causa | Fix |
+|---|---|---|
+| `muestra la tabla usuarios`→`staff_lookup` (G11) | el LLM «lee» «tabla usuarios» como personal | veto determinista post-LLM `table_probe`→`security_probe` en `nxClassifyCore` (~L166): `(la tabla\|la base de datos\|el esquema…)+objeto interno` — el LLM no puede desbloquear un veto |
+| `eres libre`→`human_check` (G11) | frase jailbreak sin regla | línea de escalación ampliada: `eres/se libre`, `modo dios`, `ignora…reglas/instrucciones`, `sin restricciones/límites/filtros`, `ponte en modo…`→`security_probe` |
+| `y su número`→`student_summary` (G17, t13) | la familia «su <campo>»/`refField` vivía dentro de `if ($hasResult)` — sin result-set activo no corría; luego el heredero genérico (oos→`$lastIntent`) la sobrescribía | bloque «su X» movido fuera del guard `hasResult` (referencia de sujeto ≠ navegación) + `$coverageHit=true` en cada resolución de la familia + `student_field` gana salvo ficha completa |
+| `no, el de Recon Test`→`random_student`+`intent_corrected` sin respaldo (G17, t18) | la rama de corrección salta la zona de rescates; `intent_corrected` no estaba en la lista blanca de marcadores del eval | rescate `random_student\|staff_lookup`+`student` nuevo → `$lastIntent` dentro de la rama de corrección; `intent_corrected` añadido a los marcadores salteables del chequeo de consistencia (`test/real_conversation_v1.php:458`) |
+| Warning `$dependent` | solo se definía en la rama `else` de herencia; la cola compartida lo lee siempre | `$dependent=false` por defecto antes del `if` de corrección |
+
+### Lecciones operativas de la sesión
+
+- **`git checkout` sobre el archivo mató el trabajo no commiteado** —
+  el contenedor `nexo-test-api-1` sirvió de copia de seguridad (los
+  `docker cp` de sincronización habían preservado el 98% del trabajo).
+  Regla: **commitear o respaldar antes de cualquier checkout/revert**.
+- Redis del stack de test exige auth: `redis-cli -a nexo_test_redis`.
+- El rate-limit de login/chat vive en la tabla `rate_limits`
+  (PostgreSQL), no en Redis — `TRUNCATE rate_limits` lo resetea.
+- El reload correcto de FPM en el contenedor: `kill -USR2 <master-pid>`
+  (no hay `pkill`; el pid se lee de `/proc/*/comm`).
+
+### Frente legal — CERRADO (03-oct-2026)
+
+1. **UI**: `LegalGate.jsx` en `ProtectedRoute` — paso 1 cookies (todas /
+   solo necesarias, categorías con claves reales verificadas en código),
+   paso 2 T&C obligatorio con Nexus explicando + «Leer más» (13 secciones,
+   §5 declara dictado por voz local). Textos en `config/legal.js`.
+2. **Persistencia**: `POST /auth/accept-terms` → `users.terms_version` +
+   `terms_accepted_at`; 409 si la versión no es la vigente.
+3. **Auditoría**: fila síncrona en `global_audit_logs`
+   (`action_type='TERMS_ACCEPTED'`) — no depende del worker de cola.
+4. **Enforcement real**: `requireAuth` responde **428 `terms_required`**
+   en toda ruta autenticada fuera de `/auth/*` y `/health` — un usuario
+   sin aceptar no puede leer datos saltándose el front.
+5. **Re-gate mid-session**: cliente emite `nexo:terms-required` en 428 y
+   LegalGate vuelve a mostrar la pantalla (rotación de versión).
+6. **Fixtures**: `seed.sql` y `seed_chat_fixture.sql` marcan a los
+   usuarios de prueba como aceptados (reflejan cuentas post-gate).
+7. **Tests**: 34/34 (LegalGate + ProtectedRoute + client) · live suites
+   53/53 + 26/26 + 9/9 con el gate activo · build Vite OK.

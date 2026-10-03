@@ -145,3 +145,9 @@ BEGIN
     VALUES (v_school, v_group, CURRENT_DATE, TRUE, '07:00', '13:00')
     ON CONFLICT (school_id, group_id, config_date) DO NOTHING;
 END $$;
+
+-- Usuarios del fixture con gate legal ya resuelto: representan cuentas que
+-- aceptaron los Términos vigentes (requireAuth exige terms_version en todas
+-- las rutas autenticadas salvo /auth/*).
+UPDATE users SET terms_version = '2026.09', terms_accepted_at = NOW()
+WHERE (terms_version IS NULL OR terms_version <> '2026.09');
