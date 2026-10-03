@@ -162,9 +162,11 @@ class FullSystemAlignmentTest {
 
         // ===== 10. PERMISOS PHP vs SQL =====
         echo "\n━━━ 10. Permisos en PHP existen en SQL ━━━\n";
-        preg_match_all("/'([a-z]+\.[a-z_]+)'/", $this->allPhp, $m);
-        $phpPerms = array_filter($m[1] ?? [], fn($p) => str_contains($p, '_'));
-        $phpPerms = array_unique($phpPerms);
+        // Solo contextos reales de permiso — un regex genérico 'a.b' atrapa
+        // alias SQL ('t.created_at') y capabilities del chat ('guardian.of_student')
+        preg_match_all("/in_array\('([a-z]+\.[a-z_]+)'\s*,\s*\\\$\w+\s*\[\s*'permissions'\s*\]/", $this->allPhp, $m1);
+        preg_match_all("/(?:set_config|current_setting)\('([a-z]+\.[a-z_]+)'/", $this->allPhp, $m2);
+        $phpPerms = array_unique(array_merge($m1[1] ?? [], $m2[1] ?? []));
         $missingPerms = [];
         foreach ($phpPerms as $perm) {
             if (strpos($this->sql, "'$perm'") === false) {
