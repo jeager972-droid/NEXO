@@ -83,6 +83,9 @@ http {
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
             fastcgi_param HTTP_AUTHORIZATION \$http_authorization;
             fastcgi_hide_header X-Powered-By;
+            # FASTCGI_READ_TIMEOUT: para correr contra un LLM local (Ollama en
+            # CPU tarda 15–50 s). Sin definir, nginx usa su default de 60 s.
+            fastcgi_read_timeout ${FASTCGI_READ_TIMEOUT:-60};
         }
 
         location = /health.php {

@@ -95,7 +95,7 @@ Cada fase cierra con sus pruebas en verde y commit. Estado: `[ ]` pendiente · `
 - Alternativa local temporal documentada arriba; Groq sigue siendo el proveedor.
 - `NLU_LLM_REASONING_EFFORT` para modelos con razonamiento.
 
-### F1 — Catálogo de datos y matriz de cobertura `[ ]`
+### F1 — Catálogo de datos y matriz de cobertura `[x]`
 - Catálogo único (`nexus_catalog.php`): por entidad institucional → tabla(s), campos consultables,
   operaciones válidas (`list`, `count`, `detail`, `rank`, `trend`, `compare`, `field`), filtros
   (`grade`, `group`, `student`, `person`, `set_ref`, período, estado) e intent/handler que la atiende.
@@ -132,12 +132,12 @@ Cada fase cierra con sus pruebas en verde y commit. Estado: `[ ]` pendiente · `
 - `grade` de primera clase en todos los handlers que aceptan `group` (helper de alcance compartido).
 - Desambiguar colisiones: `tarde` (llegada vs jornada), sustantivos de dominio nunca son personas.
 
-### F6 — Handlers: cerrar huecos de la matriz `[~]`
+### F6 — Handlers: cerrar huecos de la matriz `[x]`
 - `group_summary` multi-grupo (por grado); notificaciones por grupo/categoría/detalle; lo que F1 marque.
 - Todo handler devuelve: `_facts` (para el composer), `_result_set` (para referencias y navegación),
   estado vacío honesto y `_entities` limpias.
 
-### F7 — Composer `[ ]`
+### F7 — Composer `[x]`
 - Conectado y listo (`NLU_LLM_COMPOSE=data`), alimentado por `_facts`, con guardia anti-alucinación.
 - Apagado en local por CPU; encendido en producción.
 
@@ -148,7 +148,7 @@ Cada fase cierra con sus pruebas en verde y commit. Estado: `[ ]` pendiente · `
   para que coincidan con la salida.
 - Métricas: correcta · aclaración (aceptable) · **incorrecta con seguridad (meta: 0)**.
 
-### F9 — Calidad de datos `[ ]`
+### F9 — Calidad de datos `[x]`
 - El detector de ausencias no marca «ausente» si los sensores no reportan: estado «sin datos».
 
 ### F10 — Cierre `[ ]`

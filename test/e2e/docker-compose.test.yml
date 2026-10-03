@@ -97,7 +97,9 @@ services:
       #   NLU_LLM_URL=http://172.17.0.1:11434/v1  NLU_LLM_KEY=ollama
       #   NLU_LLM_MODEL=qwen3:8b  NLU_LLM_REASONING_EFFORT=none
       #   NLU_LLM_TIMEOUT_MS=55000  NLU_LLM_COMPOSE=off
+      #   FASTCGI_READ_TIMEOUT=120  (nginx default 60 s corta turnos LLM locales)
       NLU_LLM_TIMEOUT_MS: "${NLU_LLM_TIMEOUT_MS:-6000}"
+      FASTCGI_READ_TIMEOUT: "${FASTCGI_READ_TIMEOUT:-60}"
       # ── FIN TEMPORAL ─────────────────────────────────────────────────────
       REDISHOST: redis
       REDISPORT: 6379

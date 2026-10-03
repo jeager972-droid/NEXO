@@ -143,6 +143,15 @@ function chatResolveStudentFuzzy(PDO $conn, array $u, string $name, array $scope
 const NX_TZ_SQL = "'America/Bogota'";
 function chatD(string $col): string { return "({$col} AT TIME ZONE " . NX_TZ_SQL . ")::date"; }
 function chatTs(string $col): string { return "to_char({$col} AT TIME ZONE " . NX_TZ_SQL . ", 'YYYY-MM-DD HH24:MI')"; }
+/** Enums/valores crudos de DB → español natural. Nada raw llega al usuario. */
+function chatEs(string $v, string $kind): string {
+    static $dep = ['coordinacion'=>'coordinación','psicoorientacion'=>'psicoorientación','rectoria'=>'rectoría','docente'=>'el docente','teacher'=>'el docente'];
+    static $st  = ['ACTIVE'=>'en proceso','en proceso'=>'en proceso','OPEN'=>'abierto','PENDING'=>'pendiente','COMPLETED'=>'cerrado','CLOSED'=>'cerrado','RESOLVED'=>'resuelto','ESCALATED'=>'escalado'];
+    static $lvl = ['CRITICAL'=>'crítico','HIGH'=>'alto','MEDIUM'=>'medio','LOW'=>'bajo'];
+    $m = match ($kind) { 'dep' => $dep, 'status' => $st, 'level' => $lvl, default => [] };
+    $k = trim($v);
+    return $m[$k] ?? $m[mb_strtolower($k)] ?? ($k === '' ? '—' : mb_strtolower($k));
+}
 function chatHm(string $col): string { return "to_char({$col} AT TIME ZONE " . NX_TZ_SQL . ", 'HH24:MI')"; }
 
 /**
@@ -3023,8 +3032,8 @@ function chat_student_summary(PDO $conn, array $u, array $s, array $v): array {
     $name="{$st['first_name']} {$st['last_name']}";
     $bits=["{$name} — {$st['group_name']} (grado {$st['grade_level']}, {$st['work_shift']})"];
     $bits[]="Últimos 30 días: " . ($counts ? implode(' · ', array_map(fn($k,$c)=>"$c ".strtolower(NX_MODULE_LABEL[$k]??$k), array_keys($counts), $counts)) : "sin incidentes");
-    if ($rk) $bits[]="Riesgo: *{$rk['risk_level']}* (score {$rk['risk_score']}).";
-    if ($track) $bits[]="Tiene seguimiento activo ({$track['dependency']}).";
+    if ($rk) $bits[]="Riesgo: *".chatEs((string)$rk['risk_level'],'level')."* (score {$rk['risk_score']}).";
+    if ($track) $bits[]="Tiene seguimiento activo (".chatEs((string)$track['dependency'],'dep').").";
     $actions = chatDerivedActions($u,$st,'resumen');
     return ['reply'=>implode(' ',$bits),'actions'=>$actions,
             'entities'=>['student'=>mb_strtolower($name),'group'=>$st['group_name']]];
@@ -3208,11 +3217,12 @@ function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
     $st->execute(array_merge([$u['school_id']], $scope['params'] ?? [], $gsc['params'] ?? [])); $rows=$st->fetchAll(PDO::FETCH_ASSOC);
     $gLabel = $gsc ? " en {$gsc['label']}" : '';
     if(!$rows) return ['reply'=>"El motor de riesgo no tiene alertas activas{$gLabel} — ningún patrón supera los umbrales configurados."];
+    $lv = fn($r) => chatEs((string)$r['risk_level'], 'level');
     return ['reply'=>count($rows)." estudiante(s) que superaron el umbral de alerta{$gLabel}:",
         'cards'=>[['title'=>'Riesgo activo','columns'=>['Estudiante','Grupo','Nivel','Score'],
-        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['risk_level'],$r['risk_score']],$rows)]],
+        'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$lv($r),$r['risk_score']],$rows)]],
         '_result_set'=>['type'=>'students','label'=>"en riesgo{$gLabel}",
-            'items'=>array_map(fn($r)=>['id'=>$r['student_id'],'label'=>$r['name'],'sub'=>($r['group_name']??'—')." · {$r['risk_level']}"],$rows),
+            'items'=>array_map(fn($r)=>['id'=>$r['student_id'],'label'=>$r['name'],'sub'=>($r['group_name']??'—')." · ".$lv($r)],$rows),
             'count'=>count($rows)],
         'actions'=>chatDerivedActions($u,null,'riesgo')];
 }
@@ -3257,12 +3267,12 @@ function chat_trackings(PDO $conn, array $u, array $s, array $v): array {
         $nt->execute($ids); $notes = $nt->fetchAll(PDO::FETCH_ASSOC);
         $c0 = $rows[0];
         $reply = "{$c0['name']} ({$c0['group_name']}) tiene " . count($rows) . ' seguimiento' . (count($rows) === 1 ? '' : 's')
-            . ". El más reciente es de {$c0['dependency']}, " . ($c0['status'] ?? '—') . " desde el " . substr((string)$c0['since'], 0, 10)
+            . ". El más reciente es de ".chatEs((string)$c0['dependency'],'dep').", ".chatEs((string)($c0['status']??''),'status')." desde el " . substr((string)$c0['since'], 0, 10)
             . ($c0['assigned'] ? ", a cargo de {$c0['assigned']}" : '') . '.'
             . ($notes ? ' Última nota (' . substr((string)$notes[0]['ts'], 0, 10) . '): «' . mb_strimwidth((string)$notes[0]['note_text'], 0, 140, '…') . '».'
                       : ' Aún no tiene notas registradas.');
         $cards = [['title' => "Seguimientos{$who}", 'columns' => ['Origen', 'Estado', 'Desde', 'A cargo', 'Última actualización'],
-            'rows' => array_map(fn($r) => [$r['dependency'] ?? '—', $r['status'], substr((string)$r['since'], 0, 10), $r['assigned'] ?? '—', $r['upd'] ?? '—'], $rows)]];
+            'rows' => array_map(fn($r) => [chatEs((string)($r['dependency']??''),'dep'), chatEs((string)($r['status']??''),'status'), substr((string)$r['since'], 0, 10), $r['assigned'] ?? '—', $r['upd'] ?? '—'], $rows)]];
         if ($notes) $cards[] = ['title' => 'Notas del proceso', 'columns' => ['Fecha', 'Autor', 'Nota'],
             'rows' => array_map(fn($n) => [$n['ts'], $n['author'] ?? '—', mb_strimwidth((string)$n['note_text'], 0, 160, '…')], $notes)];
         return ['reply' => $reply, 'cards' => $cards, 'entities' => $ent, '_natural' => true,
@@ -3270,13 +3280,13 @@ function chat_trackings(PDO $conn, array $u, array $s, array $v): array {
     }
     $bySt = array_count_values(array_map(fn($r) => (string)$r['dependency'], $rows));
     arsort($bySt);
-    $orig = implode(', ', array_map(fn($k, $c) => "{$c} de " . ($k ?: 'sin origen'), array_keys($bySt), $bySt));
+    $orig = implode(', ', array_map(fn($k, $c) => "{$c} de " . ($k !== '' ? chatEs($k,'dep') : 'origen no registrado'), array_keys($bySt), $bySt));
     return ['reply' => count($rows) . " seguimientos {$lbl}: {$orig}.", '_natural' => true,
         'cards' => [['title' => 'Seguimientos', 'columns' => ['Estudiante', 'Grupo', 'Origen', 'Estado', 'Desde', 'A cargo'],
-            'rows' => array_map(fn($r) => [$r['name'], $r['group_name'] ?? '—', $r['dependency'] ?? '—', $r['status'] ?? '—', substr((string)$r['since'], 0, 10), $r['assigned'] ?? '—'], $rows)]],
+            'rows' => array_map(fn($r) => [$r['name'], $r['group_name'] ?? '—', chatEs((string)($r['dependency']??''),'dep'), chatEs((string)($r['status']??''),'status'), substr((string)$r['since'], 0, 10), $r['assigned'] ?? '—'], $rows)]],
         'entities' => $ent,
         '_result_set' => ['type' => 'trackings', 'label' => 'seguimientos',
-            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'], 'sub' => ($r['group_name'] ?? '—') . ' · ' . ($r['status'] ?? '')], $rows),
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'], 'sub' => ($r['group_name'] ?? '—') . ' · ' . chatEs((string)($r['status']??''),'status')], $rows),
             'count' => count($rows)]];
 }
 
@@ -4265,9 +4275,12 @@ function chat_system_incidents(PDO $conn, array $u, array $s, array $v): array {
     $open = count(array_filter($rows, fn($r) => empty($r['resolved'])));
     $reply = count($rows)." incidencia(s) del sistema en {$rl}"
         . ($open ? " — {$open} pendiente(s) de resolver" : ' — todas resueltas') . '.';
+    $typEs = ['NODO_OFFLINE'=>'nodo sin reportar','SIN_DATOS_NODO'=>'nodo sin datos',
+        'ANOMALIA_OPERATIVA'=>'anomalía operativa','UNKNOWN_STUDENT'=>'huella no registrada'];
     return ['reply'=>$reply,
         'cards'=>[['title'=>'Incidencias del sistema','columns'=>['Tipo','Severidad','Detalle','Detectada','Estado'],
-        'rows'=>array_map(fn($r)=>[$r['incident_type'],$r['severity_level']??'—',
+        'rows'=>array_map(fn($r)=>[$typEs[$r['incident_type']]??mb_strtolower(str_replace('_',' ',(string)$r['incident_type'])),
+            chatEs((string)($r['severity_level']??''),'level'),
             mb_strimwidth((string)($r['description']??'—'),0,60,'…'),
             $r['detected_at'], $r['resolved']?'Resuelta':'Abierta'],$rows)]]];
 }
@@ -4753,6 +4766,7 @@ function chat_risk_reason(PDO $conn, array $u, array $s, array $v): array {
     $lvl = ['CRITICAL' => 'crítico', 'HIGH' => 'alto', 'MEDIUM' => 'medio', 'LOW' => 'bajo'];
     $typ = ['INASISTENCIA' => 'inasistencias', 'LATE_ARRIVAL' => 'tardanzas', 'EVASION_INTERNA' => 'evasiones',
         'PERMISO' => 'permisos', 'SALIDA_COLEGIO' => 'salidas', 'INCIDENTE' => 'incidentes'];
+    $catEs = fn($c) => ['evasion'=>'evasión','asistencia'=>'asistencia','comportamiento'=>'comportamiento'][(string)$c] ?? mb_strtolower((string)$c);
     $bits = [];
     if ($met) {
         $parts = [];
@@ -4760,24 +4774,24 @@ function chat_risk_reason(PDO $conn, array $u, array $s, array $v): array {
         if ((int)$met['late_count'] > 0)    $parts[] = (int)$met['late_count'] . ' tardanzas';
         $otros = (int)$met['total_events'] - (int)$met['absence_count'] - (int)$met['late_count'];
         if ($otros > 0) $parts[] = "{$otros} eventos más";
-        $bits[] = "score " . number_format((float)$met['risk_score'], 2) . " (nivel " . ($lvl[$met['risk_level']] ?? $met['risk_level']) . ")"
+        $bits[] = "score " . number_format((float)$met['risk_score'], 2) . " (nivel " . chatEs((string)$met['risk_level'],'level') . ")"
             . ($parts ? ' por ' . implode(' + ', $parts) . " en {$days} días" : '');
     }
     if ($alerts) {
-        $cat = array_filter(array_unique(array_map(fn($r) => $r['trigger_category'], $alerts)));
-        $bits[] = "alerta" . (count($alerts) > 1 ? 's' : '') . " " . implode(', ', array_map(fn($r) => $lvl[$r['alert_level']] ?? $r['alert_level'], $alerts))
+        $cat = array_filter(array_unique(array_map(fn($r) => $catEs($r['trigger_category']), $alerts)));
+        $bits[] = "alerta" . (count($alerts) > 1 ? 's' : '') . " " . implode(', ', array_map(fn($r) => chatEs((string)$r['alert_level'],'level'), $alerts))
             . ($cat ? " — categoría " . implode(' y ', $cat) : '');
     }
     $cards = [];
     if ($brk) $cards[] = ['title' => "Eventos que alimentan el riesgo — últimos {$days} días", 'columns' => ['Tipo', 'Eventos'],
         'rows' => array_map(fn($r) => [$typ[$r['incident_type']] ?? $r['incident_type'], (int)$r['c']], $brk)];
     if ($alerts) $cards[] = ['title' => 'Alertas activas', 'columns' => ['Nivel', 'Categoría', 'Regla', 'Score', 'Desde'],
-        'rows' => array_map(fn($r) => [$lvl[$r['alert_level']] ?? $r['alert_level'], $r['trigger_category'] ?? '—',
+        'rows' => array_map(fn($r) => [chatEs((string)$r['alert_level'],'level'), $catEs($r['trigger_category'] ?? '—'),
             mb_strimwidth((string)($r['trigger_rule'] ?? '—'), 0, 50, '…'), $r['trigger_score'] ?? '—', $r['creada']], $alerts)];
     return ['reply' => "{$name} está en riesgo porque " . implode('; ', $bits) . '.', '_natural' => true,
         'cards' => $cards, 'entities' => ['student' => mb_strtolower($name)],
         '_result_set' => ['type' => 'students', 'label' => 'motivo de riesgo',
-            'items' => [['id' => $stu['student_id'], 'label' => $name, 'sub' => $met ? "score {$met['risk_score']} · " . ($lvl[$met['risk_level']] ?? $met['risk_level']) : 'sin métrica']],
+            'items' => [['id' => $stu['student_id'], 'label' => $name, 'sub' => $met ? "score {$met['risk_score']} · " . chatEs((string)$met['risk_level'],'level') : 'sin métrica']],
             'count' => 1]];
 }
 
@@ -5220,13 +5234,12 @@ function chat_tracking_detail(PDO $conn, array $u, array $s, array $v): array {
         FROM student_tracking_notes n LEFT JOIN users ub ON ub.user_id = n.user_id
         WHERE n.tracking_id = ? ORDER BY n.created_at DESC LIMIT 10");
     $n->execute([$cur['tracking_id']]); $notes = $n->fetchAll(PDO::FETCH_ASSOC);
-    $stEs = ['active' => 'en proceso', 'en_proceso' => 'en proceso', 'closed' => 'cerrado', 'completed' => 'cerrado', 'pending' => 'pendiente'];
-    $dep = strtolower(str_replace('_', ' ', (string)$cur['dependency']));
-    $reply = "El seguimiento de {$name} ({$dep}) lo lleva {$cur['encargado']}, " . ($stEs[strtolower((string)$cur['status'])] ?? $cur['status'])
+    $dep = chatEs(str_replace('_', ' ', (string)$cur['dependency']), 'dep');
+    $reply = "El seguimiento de {$name} ({$dep}) lo lleva {$cur['encargado']}, " . chatEs((string)$cur['status'], 'status')
         . " desde {$cur['desde']}"
         . ($notes ? '. Última nota (' . $notes[0]['fecha'] . "): «" . mb_strimwidth($notes[0]['note_text'], 0, 80, '…') . '».' : '.');
     $cards = [['title' => "Seguimientos de {$name}", 'columns' => ['Origen', 'Estado', 'Desde', 'A cargo', 'Última act.'],
-        'rows' => array_map(fn($r) => [strtolower(str_replace('_', ' ', (string)$r['dependency'])), $stEs[strtolower((string)$r['status'])] ?? $r['status'],
+        'rows' => array_map(fn($r) => [chatEs(str_replace('_', ' ', (string)$r['dependency']), 'dep'), chatEs((string)$r['status'], 'status'),
             $r['desde'], $r['encargado'], $r['ult_act']], $rows)]];
     if ($notes) $cards[] = ['title' => 'Notas del proceso', 'columns' => ['Fecha', 'Autor', 'Nota'],
         'rows' => array_map(fn($r) => [$r['fecha'], $r['autor'], mb_strimwidth((string)$r['note_text'], 0, 60, '…')], $notes)];

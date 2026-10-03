@@ -193,7 +193,7 @@ function processSchool(PDO $conn, $redis, string $schoolId): int {
         $ingStmt = $conn->prepare("SELECT COUNT(*) FROM biometric_events
             WHERE school_id = ? AND event_type LIKE 'INGRESO_%'
               AND event_timestamp >= ?::date AND event_timestamp < (?::date + INTERVAL '1 day')");
-        $ingStmt->execute([$schoolId, $today]);
+        $ingStmt->execute([$schoolId, $today, $today]);
         if ((int)$ingStmt->fetchColumn() === 0) {
             $dup = $conn->prepare("SELECT 1 FROM security_incidents
                 WHERE school_id = ? AND incident_type = 'SIN_DATOS_NODO' AND resolved = FALSE

@@ -2496,49 +2496,56 @@ function nxIntentVeto(string $q0, string $intent, array $slots): ?string {
     if (in_array($intent, $never, true) || !empty($slots['_op'])) return null;
     // intent heredado por el DSM (fragmento contextual «y en tardanzas?»):
     // la ausencia de «cue» en la frase es precisamente lo que la hace
-    // fragmento — vetarlo desharía la herencia correcta
-    if (in_array('intent', $slots['_inherited'] ?? [], true)) return null;
+    // fragmento — vetarlo desharía la herencia correcta. Solo protege los
+    // vetos de OPERACIÓN: un sustantivo inequívoco de otra familia en el
+    // texto («qué sensores no están reportando» tras una alerta SOS) no es
+    // fragmento — es cambio de tema explícito y el veto de sujeto sí corre.
+    $inherited = in_array('intent', $slots['_inherited'] ?? [], true);
 
     // — vetos de operación (más específicos, van primero) —
     // «los pelados del 10A que se volaron» — grupo + verbo de incidente es
     // una LISTA de eventos del grupo, ni nómina ni ranking. Va PRIMERO: el
     // verbo de incidente pesa más que la ausencia de cue de ranking.
     $incVerb = (bool)preg_match('/\b(volaron|fugaron|evadieron|caparon|tajaron|faltaron|llegaron tarde|salieron|cometieron|acumulan|hicieron)\b/u', $q0);
-    if (in_array($intent, ['students_in_group','group_summary','group_student_count','attendance_ranking'], true)
-        && $incVerb
-        && !empty($slots['module'] ?? nxSlots($q0)['module'] ?? null))
-        return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
     $rankCue = (bool)preg_match('/\b(mas|mayor\w*|menos|menor\w*|top|peor\w*|mejor\w*|ranking|orden\w*|compar\w*|lidera|encabeza|acumula|reinciden?|frecuent\w*)\b/u', $q0);
-    if ($intent === 'attendance_ranking' && !$rankCue) {
-        if (!empty($slots['group'])) return 'students_in_group';
-        if (!empty($slots['grade'])) return 'group_summary';
+    if (!$inherited) {
+        if (in_array($intent, ['students_in_group','group_summary','group_student_count','attendance_ranking'], true)
+            && $incVerb
+            && !empty($slots['module'] ?? nxSlots($q0)['module'] ?? null))
+            return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
+        if ($intent === 'attendance_ranking' && !$rankCue) {
+            if (!empty($slots['group'])) return 'students_in_group';
+            if (!empty($slots['grade'])) return 'group_summary';
+        }
+        if ($intent === 'frequency_table'
+            && !preg_match('/\bpor\s+(dia|día|semana|mes|estudiante|alumno|grupo|fecha|docente)\b/u', $q0))
+            return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
+        if ($intent === 'group_summary'
+            && preg_match('/\b(estudiantes|alumnos|pelados|pelaos|muchachos|lista|nomina|nómina)\b/u', $q0)
+            && !preg_match('/\b(como|estado|resumen|andan|van)\b/u', $q0))
+            return 'students_in_group';
+        // «cómo están los décimos» puede salir out_of_scope del parser aunque
+        // trae el grado claro — un ordinal + cómo/van/están es el resumen del grado
+        if ($intent === 'out_of_scope' && !empty($slots['grade'])
+            && preg_match('/\b(como|estan|van|andan|iba|iban|quedo|fueron|les fue|le fue|les ha ido)\b/u', $q0))
+            return 'group_summary';
+        // «cómo va la jornada / cómo va todo» es el panorama del día — el LLM
+        // a veces lo degrada a un listado de módulo por inercia contextual
+        if (!in_array($intent, ['day_summary','greeting','greeting_time'], true)
+            && preg_match('/\b(como va|como esta|como esta(?:n)?|que tal va|como le fue)\b.{0,25}\b(jornada|colegio|dia|institucion|todo)\b|\b(c[óo]mo|qu[ée] tal) va la jornada\b/u', $q0)
+            && !preg_match('/\b(tardanz|inasist|falt|evasi|permiso|citaci|seguim|notific|sensor|nodo|grupo|grado)\b/u', $q0))
+            return 'day_summary';
+        // «cuál mejoró/empeoró respecto al período anterior» = tendencia
+        // comparativa — un conteo suelto no responde eso
+        if (in_array($intent, ['count_events','list_events','attendance_ranking','top_offenders'], true)
+            && preg_match('/\b(mejor[oó]|empeor[oó]|mejora|empeora|respecto|en comparaci[óo]n|comparado|subi[oó]|baj[oó]|aument[oó]|disminuy[oó])\b/u', $q0)
+            && preg_match('/\b(semana|mes|periodo|per[ií]odo|pasad[oa]|anterior|ayer|hoy)\b/u', $q0))
+            return 'attendance_trend';
     }
-    if ($intent === 'frequency_table'
-        && !preg_match('/\bpor\s+(dia|día|semana|mes|estudiante|alumno|grupo|fecha|docente)\b/u', $q0))
-        return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
-    if ($intent === 'group_summary'
-        && preg_match('/\b(estudiantes|alumnos|pelados|pelaos|muchachos|lista|nomina|nómina)\b/u', $q0)
-        && !preg_match('/\b(como|estado|resumen|andan|van)\b/u', $q0))
-        return 'students_in_group';
-    // «cómo están los décimos» puede salir out_of_scope del parser aunque
-    // trae el grado claro — un ordinal + cómo/van/están es el resumen del grado
-    if ($intent === 'out_of_scope' && !empty($slots['grade'])
-        && preg_match('/\b(como|estan|van|andan|iba|iban|quedo|fueron|les fue|le fue|les ha ido)\b/u', $q0))
-        return 'group_summary';
-    // «cómo va la jornada / cómo va todo» es el panorama del día — el LLM
-    // a veces lo degrada a un listado de módulo por inercia contextual
-    if (!in_array($intent, ['day_summary','greeting','greeting_time'], true)
-        && preg_match('/\b(como va|como esta|como esta(?:n)?|que tal va|como le fue)\b.{0,25}\b(jornada|colegio|dia|institucion|todo)\b|\b(c[óo]mo|qu[ée] tal) va la jornada\b/u', $q0)
-        && !preg_match('/\b(tardanz|inasist|falt|evasi|permiso|citaci|seguim|notific|sensor|nodo|grupo|grado)\b/u', $q0))
-        return 'day_summary';
-    // «cuál mejoró/empeoró respecto al período anterior» = tendencia
-    // comparativa — un conteo suelto no responde eso
-    if (in_array($intent, ['count_events','list_events','attendance_ranking','top_offenders'], true)
-        && preg_match('/\b(mejor[oó]|empeor[oó]|mejora|empeora|respecto|en comparaci[óo]n|comparado|subi[oó]|baj[oó]|aument[oó]|disminuy[oó])\b/u', $q0)
-        && preg_match('/\b(semana|mes|periodo|per[ií]odo|pasad[oa]|anterior|ayer|hoy)\b/u', $q0))
-        return 'attendance_trend';
 
     // — veto de sujeto por sustantivo inequívoco —
+    // Corre siempre: si el texto nombra otro dominio con claridad, no es un
+    // fragmento — es cambio de tema aunque el DSM haya heredado el intent.
     static $fam = [
         'notifications' => ['notifications_unread'],
         'devices'       => ['devices_status','device_detail','system_incidents'],

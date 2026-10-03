@@ -19,8 +19,10 @@ if (import.meta.env.PROD && !API_BASE_URL.startsWith('https://')) {
 
 // Rutas que pueden tardar más (envío masivo de WhatsApp, reportes, etc.)
 const SLOW_ROUTE_PATTERNS = ['/operations/', '/reports/'];
-const DEFAULT_TIMEOUT = 12000;
-const SLOW_TIMEOUT = 30000;
+// VITE_CHAT_TIMEOUT_MS: override para correr contra un LLM local (Ollama en
+// CPU tarda 15–50 s por turno). Sin definir, producción usa estos defaults.
+const DEFAULT_TIMEOUT = Number(import.meta.env.VITE_CHAT_TIMEOUT_MS) || 12000;
+const SLOW_TIMEOUT = Number(import.meta.env.VITE_CHAT_TIMEOUT_MS) || 30000;
 
 const client = axios.create({
   baseURL: API_BASE_URL,
