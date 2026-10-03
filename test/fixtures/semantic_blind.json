@@ -1046,7 +1046,8 @@
             "text": "cuantas excusas llegaron",
             "expect": [
                 "permissions",
-                "count_events"
+                "count_events",
+                "incident_excuses"
             ],
             "cat": "permisos"
         },
@@ -3199,7 +3200,8 @@
                 "count_events",
                 "late_today",
                 "pending_returns",
-                "permissions"
+                "permissions",
+                "incident_excuses"
             ],
             "cat": "negacion"
         },
@@ -3211,7 +3213,8 @@
                 "count_events",
                 "late_today",
                 "pending_returns",
-                "permissions"
+                "permissions",
+                "incident_excuses"
             ],
             "cat": "negacion"
         },

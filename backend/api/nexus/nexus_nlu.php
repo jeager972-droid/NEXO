@@ -1665,9 +1665,11 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     if (preg_match('/\b(alertas?|avisos?)\b.{0,30}\b(sin resolver|pendientes? de resolucion|resuelt\w+|cerrad\w+|atendid\w+)\b|\b(quien|quienes)\b.{0,20}\b(resolvi\w*|cerro|cerraron|atendio|atendieron|descarto|gestiono|gestionaron)\b.{0,25}\b(alertas?|avisos?)\b|\b(resolvi\w*|cerro|atendio)\s+(la|el|esa|las|los)\s+alerta\b/u', $q0)
         && !preg_match('/\b(sos|panico|emergencia|biometric\w*|del lector|del sensor|del aula|salon|sonaron|saltaron)\b/u', $q0))
         return $r('alert_resolution', 0.9);
-    // detalle de SOS — «quién emitió el sos», «de qué aula», «sin resolver»
+    // detalle de SOS — «quién emitió el sos», «de qué aula», «la sos de X».
+    // «sos sin resolver/pendientes» es un filtro de listado, no un detalle
     if (preg_match('/\b(sos|panico|boton de panico|emergencias?)\b/u', $q0)
-        && preg_match('/\b(quien|quienes|emitio|emitieron|de que aula|de que salon|en que aula|aula|salon|donde|resolv\w*|sin resolver|pendientes?|detalle|quien lo|quien la|fue el|fue la)\b/u', $q0))
+        && preg_match('/\b(quien|quienes|emitio|emitieron|de que aula|de que salon|en que aula|aula|salon|donde|resolv\w*|detalle|quien lo|quien la|fue el|fue la)\b/u', $q0)
+        && !preg_match('/\bsos\s+(sin resolver|pendientes?|abiert\w*|activ\w*|sin atender|hoy|de hoy|del dia|de ayer|del mes|de la semana)\s*$/u', $q0))
         return $r('sos_detail', 0.9);
 
     // razón del riesgo — «por qué está en riesgo», «motivo del riesgo»,
@@ -1681,8 +1683,15 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     if (preg_match('/\b(excusas?|justific\w+)\b/u', $q0)
         && !preg_match('/\bpermisos?\b|\bsalidas?\b|\bautorizaci\w*\b/u', $q0)
         && !preg_match('/\b(genera\w*|crea\w*|hacer|quiero|necesito|dame|tramita\w*|registrar|registra|subir|adjuntar|cargar|poner|presentar|debo)\b/u', $q0)
-        && preg_match('/\b(que|cuales?|cuantas?|trajeron|trajo|pusieron|mandaron|mand\w+|dieron|registr\w+|motivos?|razones?|tienen|tiene|traen|hay|hubo|de que|por que|porque|quien|dice|decia|adjunt\w+|certific\w+|incapacidad|medica|esta|estan|fue|fueron|ya|queda|aparece|algun[ao]s?|ningun[ao]s?|esas?|esos|sus|les)\b/u', $q0))
-        return $r('incident_excuses', 0.9);
+        && preg_match('/\b(que|cuales?|cuantas?|trajeron|trajo|pusieron|mandaron|mand\w+|dieron|registr\w+|motivos?|razones?|tienen|tiene|traen|hay|hubo|de que|por que|porque|quien|dice|decia|adjunt\w+|certific\w+|incapacidad|medica|esta|estan|fue|fueron|ya|queda|aparece|algun[ao]s?|ningun[ao]s?|esas?|esos|sus|les|sin|llegaron|vinieron)\b/u', $q0)
+        // «se fueron/salieron CON excusa o permiso» = salida autorizada
+        // → el módulo de permisos, no el registro de excusas
+        && !preg_match('/\b(se fueron|salieron|salio|fue|fueron|abandonaron|se retiraron|largaron|retiraron|fue llevad\w+)\b.{0,20}\bcon (excusa|permiso|autorizaci\w*|justificaci\w*)\b/u', $q0)) {
+        $ent = [];
+        if (preg_match('/\b(sin (excusa|justific\w+|permiso|soporte)|no (justific\w+|excusad\w+|han justificado|traen excusa)|injustificad\w*|pendientes? de justificar|falta(n)? (justificar|excusa|soporte)|aun no justific\w*)\b/u', $q0))
+            $ent['_unjust'] = true;
+        return $r('incident_excuses', 0.9, false, $ent);
+    }
 
     // paseo pedagógico — destino, hora, asistentes (antes que permisos)
     if (preg_match('/\b(paseos?|salidas? pedagogicas?|excursion\w*|pasantias?|salidas? de campo)\b/u', $q0)
@@ -1733,8 +1742,14 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     // citó X», «citaciones del profesor X», «quién citó a X»
     if (preg_match('/\bquien\w*\b.{0,15}\b(cito|citamos|convoco|mando|envio|hizo|autorizo|programo|agendo)\b.{0,25}\b(citacion|cita|convocatoria|a esa|a esos|la cito|lo cito)\b|\bquien\w*\s+(lo|la|le|los|les)\s+cito\b|\bquien\w*\s+(?:cito|citamos|convoco|convocamos|mando|mandamos|envio|enviamos|agendo|programo|autorizo|hizo|hicieron)\s+a\s/u', $q0))
         return $r('citations_by', 0.9);
-    if (preg_match('/\b(?:a\s+quien\w*|que\s+estudiant\w*|que\s+alumn\w*|a\s+que\s+estudiant\w*)\s+(?:les?\s+)?(cito|citamos|convoco|mando citacion|envio citacion)\s+(?:a\s+|al\s+)?([a-záéíóúñü]{2,}(?:\s+[a-záéíóúñü]{2,}){0,3})\b|\bcitaciones?\s+(?:del|de la|de|hechas por|mandadas por|enviadas por|emitidas por)\s+(docente\s+|profesor\s+|profe\s+|maestr\w+\s+)?([a-záéíóúñü]{2,}(?:\s+[a-záéíóúñü]{2,}){0,3})\b/u', $q0, $mc))
-        return $r('citations_by', 0.9, true, ['person' => trim($mc[2] !== '' ? $mc[2] : ($mc[4] ?? ''))]);
+    if (preg_match('/\b(?:a\s+quien\w*|que\s+estudiant\w*|que\s+alumn\w*|a\s+que\s+estudiant\w*)\s+(?:les?\s+)?(cito|citamos|convoco|mando citacion|envio citacion)\s+(?:a\s+|al\s+)?([a-záéíóúñü]{2,}(?:\s+[a-záéíóúñü]{2,}){0,3})\b|\bcitaciones?\s+(?:del|de la|de|hechas por|mandadas por|enviadas por|emitidas por)\s+(docente\s+|profesor\s+|profe\s+|maestr\w+\s+)?([a-záéíóúñü]{2,}(?:\s+[a-záéíóúñü]{2,}){0,3})\b/u', $q0, $mc)) {
+        $citWho = trim($mc[2] !== '' ? $mc[2] : ($mc[4] ?? ''));
+        // «citaciones del quinto/octavo/décimo» — el complemento es un
+        // GRADO, no un emisor: lista de citaciones con alcance de grupo
+        if (preg_match('/^(primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo|undecimo|once|onceavo|transicion|kinder|jardin|preescolar|primaria|bachillerato|media|\d{1,2}\s?[a-e]?|colegio|plantel|institucion|mes|meses|semana|semanas|dia|dias|ano|anos|hoy|ayer|anteayer|periodo|bimestre|trimestre|semestre|quincena|jornada|manana|tarde|noche)$/u', $citWho))
+            return $r('citations', 0.88, true, array_filter(['group' => $s['group'] ?? null, 'grade' => $s['grade'] ?? null]));
+        return $r('citations_by', 0.9, true, ['person' => $citWho]);
+    }
     // «cuándo es/tiene la citación (de X|programada)» — fecha, no acción
     if (preg_match('/\bcitacion|citaciones\b/u', $q0)
         && preg_match('/\b(cuando (es|tiene|fue|quedo|esta|sera|seria|va)|que dia (es|tiene|quedo)|a que hora (es|quedo|tiene)|programad\w*|agendad\w*|fecha de|hora de)\b|\bla fecha (de|para) (la|su) citacion\b/u', $q0))
@@ -1744,8 +1759,11 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     if (preg_match('/\b(reportes?|informes?)\b.{0,25}\b(generad\w*|descargad\w*|exportad\w*|emitid\w*|sacad\w*|se hicieron|se generaron|hubo|del sistema|del mes|del dia)\b|\bquien\w*\s+(genero|descargo|exporto|saco|hizo)\b.{0,20}\b(reporte|informe|archivo|excel|pdf)\b|\bexportaciones?\s+(generadas?|hechas|recientes)\b/u', $q0))
         return $r('reports_log', 0.88);
 
-    // matrícula / movimiento de estudiantes — «nuevos», «retirados»
-    if (preg_match('/\b(estudiantes?\s+(nuevos|recien ingresados|recien matriculados|retirados|que se fueron|que salieron|trasladados)|nuevos ingresos|ingresaron (este|en|al|al colegio|nuevos)|se retiraron|dados? de baja|desmatriculad\w*|matriculas?\s+(nuevas|del periodo|recientes)|retiros?\s+(de estudiantes|escolares))\b/u', $q0))
+    // matrícula / movimiento de estudiantes — «nuevos», «retirados».
+    // «que salieron/se fueron» solo cuenta como retiro escolar si el
+    // complemento es institucional: «salieron DEL AULA» es evasión
+    if (preg_match('/\b(estudiantes?\s+(nuevos|recien ingresados|recien matriculados|retirados|que se fueron|que salieron|trasladados)|nuevos ingresos|ingresaron (este|en|al|al colegio|nuevos)|se retiraron|dados? de baja|desmatriculad\w*|matriculas?\s+(nuevas|del periodo|recientes)|retiros?\s+(de estudiantes|escolares))\b/u', $q0)
+        && !preg_match('/\b(salieron|fueron|fue|salio)\b.{0,20}\b(del? aula|de clase|de la clase|del salon|del curso|de materia|del bloque|de la materia|al bano|al recreo)\b/u', $q0))
         return $r('enrollment_stats', 0.86);
 
     // mensajería a un acudiente concreto — «qué se le mandó al acudiente
@@ -1757,7 +1775,10 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     // detalle de dispositivo — «último ping del nodo», «sensor sin
     // configurar», «estado del lector de X»
     if (preg_match('/\b(nodo|nodos|sensor|sensores|dispositivo|lector|lectores|huellero|punto biometrico|equipo)\b/u', $q0)
-        && preg_match('/\b(ping|ultimo reporte|ultimo contacto|ultima conexion|estado|encendido|apagado|sin configurar|desconfigurad\w*|sin reportar|no reporta|no responde|reporta\b|reporto\b|responde\b|responden\b|caid\w+|offline|en linea|senal|bateria|version|firmware|cuando reporto|del aula|del salon|esta vivo|funciona|anda bien|sirve)\b/u', $q0))
+        && preg_match('/\b(ping|ultimo reporte|ultimo contacto|ultima conexion|estado|encendido|apagado|sin configurar|desconfigurad\w*|sin reportar|no reporta|no responde|reporta\b|reporto\b|responde\b|responden\b|caid\w+|offline|en linea|senal|bateria|version|firmware|cuando reporto|del aula|del salon|esta vivo|funciona|anda bien|sirve)\b/u', $q0)
+        // «estado del lector» a secas (sin especificador de aula/sitio)
+        // pregunta por el estado general del parque → devices_status
+        && !preg_match('/\b(estado|como esta|anda|sirve|funciona|esta vivo) (del|de|el|los|las|de los) (lector|lectores|sensor|sensores|dispositivo|dispositivos|huellero|nodo|nodos|equipo|equipos|punto)s?\s*$/u', $q0))
         return $r('device_detail', 0.86);
 
     // salidas autorizadas — «quién autorizó la salida de X», «a qué hora
@@ -1768,7 +1789,8 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     // tendencia de asistencia — «qué día falta más», «promedio»,
     // «mejoró/empeoró», «frente a la semana pasada», «va en aumento»
     if (preg_match('/\b(que dia (faltan|falta|faltaron|hubo|hay) mas|que dia de la semana (faltan|falta) mas|promedio\s+(de|del|diario de|semanal de)|tendencia|va en aumento|viene subiendo|viene bajando|mejoro|empeoro|aumento|aumentaron|disminuyo|disminuyeron|ha mejorado|ha empeorado|compar\w*\s+(esta|la|el|con la|con el)\s+(semana|mes|periodo|dia|jornada|lunes|martes|miercoles|jueves|viernes)|frente a (la semana|el mes|ayer|la pasada|el anterior)|respecto a (la semana|el mes|ayer)|mejor que|peor que|\bvs\.?\b|\bversus\b|\bcontra\b)\b/u', $q0)
-        && preg_match('/\b(inasistenci\w+|faltas?|ausenci\w+|tardanz\w+|evasion\w*|asistencia|llegadas?|fallas?|faltan|mes|semana)\b/u', $q0))
+        && preg_match('/\b(inasistenci\w+|faltas?|ausenci\w+|tardanz\w+|evasion\w*|asistencia|llegadas?|fallas?|faltan|mes|semana)\b/u', $q0)
+        && !preg_match('/\b(por grupo|por salon|por curso|por grado|por seccion)\b/u', $q0))
         return $r('attendance_trend', 0.86);
 
     // «motivo/razón/causa de <persona>» sin la palabra «riesgo» — la
@@ -1779,8 +1801,10 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
         && !preg_match('/\b(salida|retiro|permiso|citacion|cita|excusa|falta|inasistencia|ausencia|tardanza|llegada|riña|pelea|incidente|sancion|llamado)\b/u', $q0))
         return $r('risk_reason', 0.87, true);
 
-    // evasión en gerundio — «hay algún estudiante evadiendo clase ahora»
-    if (preg_match('/\b(evadiendo|evade|evaden|fugando|escapando|volaron|volando|escapandose|saliendose)\b/u', $q0))
+    // evasión en gerundio — «hay algún estudiante evadiendo clase ahora».
+    // El superlativo («los que más evaden») es ranking, no listado
+    if (preg_match('/\b(evadiendo|evade|evaden|fugando|escapando|volaron|volando|escapandose|saliendose)\b/u', $q0)
+        && !preg_match('/\b(mas|mayormente)\s+(evad\w*|falt\w*|llegan?\s+tarde|salen|fugan|incumplen)\b|\b(los|las)\s+mas\s+(faltadores|evasores|impuntuales|reincidentes)\b/u', $q0))
         return $r('list_events', 0.88, true, ['module'=>'EVASION_INTERNA']);
 
     // comparativa institucional de un período contra otro — «cómo va la
@@ -1835,6 +1859,16 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     if (preg_match('/\b(en que|que|por que)\s+(mes|semana|dia|fecha|periodo|momento|ano)\b.{0,30}\b(mas|mayor|hubo|registraron|concentran)\b|\b(mes|semana|dia|fecha)\s+(con|de)\s+mas\s+(inasist|ausen|falt|tardanza|evasion|incidente)\w*\b/u', $q0)
         && preg_match('/\b(inasist|ausen|falt|tardanza|evasion|incidente|permiso|citacion|evento)\w*\b/u', $q0))
         return $r('attendance_trend', 0.87, true);
+
+    // superlativo de eventos por estudiante — «los que más evaden»,
+    // «quiénes más faltan», «los que más llegan tarde»
+    if (preg_match('/\b(los|las|quienes|estudiantes|alumnos|pelados|muchachos)\s+(que\s+)?(mas|mas veces|mayormente)\s+(evaden|evade|faltan|falta|llegan tarde|llega tarde|llegaron tarde|salen|fugan|se fugan|evaden|incumplen)\b|\b(los|las)\s+mas\s+(faltadores|evasores|impuntuales|reincidentes)\b/u', $q0))
+        return $r('top_offenders', 0.87, true);
+
+    // promedio por grupo — «promedio de faltas por grupo»: la métrica
+    // agrupada responde en el ranking, no en la serie temporal
+    if (preg_match('/\b(promedio|media|porcentaje|tasa|nivel)\b.{0,25}\b(inasist|ausen|falt|tardanza|evasion|asistencia|incidente)\w*\b.{0,15}\b(por grupo|por salon|por curso|por grado|por seccion)\b/u', $q0))
+        return $r('attendance_ranking', 0.87, true);
 
     // ranking de citaciones por emisor — «qué profesor ha citado más
     // estudiantes», «quién ha mandado más citaciones»
@@ -2005,6 +2039,34 @@ function nxRuleClassify(string $q0, ?array $slots = null): ?array {
     if (preg_match('/\b(lista|listado|todos|panorama)\b.{0,15}\b(de )?grupos\b|\btodos los grupos del colegio\b|\bgrupos del colegio\b|\blistado completo de grupos\b/u', $q0)
         && !$mod && !preg_match('/\b(de|del)\s+\w/u', $q0) === false)
         return $r('groups_list', 0.88);
+    // «cuántos hay en el 6A», «del 9C cuántos son» — conteo con grupo
+    // explícito, sin módulo ni sustantivo de evento
+    if (preg_match('/\bcuant[oa]s?\b/u', $q0) && !empty($s['group']) && empty($s['student']) && empty($s['module'])
+        && !preg_match('/\b(tardanza|inasist|ausen|falt|evasion|permiso|citacion|incidente|evento|salida|mensaje|alerta|docente|acudiente|cumple|nuev\w*|ping|spam|excusa|seguim|caso)\b/u', $q0))
+        return $r('group_student_count', 0.88, true);
+    // «lista los del once», «quiénes son los del septimo b», «muéstrame
+    // los de 10A» — listado del grupo sin módulo
+    if (preg_match('/\b(lista|listado|listame|muestra|muestrame|dame|dime|ver|quienes son|quienes estan|quienes van|quienes hay|cuales son|integran|conforman|pertenecen)\b/u', $q0)
+        && !empty($s['group']) && empty($s['student']) && empty($s['module'])
+        && !preg_match('/\b(tardanza|inasist|ausen|falt|evasion|permiso|citacion|incidente|evento|salida|mensaje|alerta|excusa|seguim|caso|docente)\b/u', $q0))
+        return $r('students_in_group', 0.87, true);
+    // referencia de grupo desnuda — «los del séptimo b», «el décimo a
+    // quiénes son»: sin módulo ni sustantivo de evento, es el roster
+    if (preg_match('/\b(quienes|cuales|son)\b.{0,12}\b(del|de|en)\b/u', $q0)
+        && !empty($s['group']) && empty($s['student']) && empty($s['module'])
+        && !preg_match('/\b(tardanza|inasist|ausen|falt|evasion|permiso|citacion|incidente|evento|salida|mensaje|alerta|excusa|seguim|caso|docente|acudiente)\b/u', $q0))
+        return $r('students_in_group', 0.84);
+    // «mis grupos», «los grupos que tengo», «grupos a mi cargo», «los
+    // cursos que me tocan» — alcance docente/coordinador
+    if (preg_match('/\b(grupos?|cursos?|salones?|secciones?)\s+(que\s+)?(tengo|me tocan|veo|atiendo|manejo|llevo|dicto|tengo asignados?)\b|\b(mis|los)\s+(grupos?|cursos?|salones?|secciones?)\s+(que\s+(tengo|me tocan|veo|atiendo)|a mi cargo|asignados?|que me tocan)\b|\bgrupos?\s+a mi cargo\b|\bque grupos (tengo|veo|atiendo|me tocan)\b|^mis (grupos?|cursos?|salones?|secciones?)\b/u', $q0))
+        return $r('groups_list', 0.88, true);
+    // «los del séptimo b», «los del once» — referencia desnuda al roster
+    // del grupo cuando no hay verbo ni módulo en la frase
+    if (preg_match('/^(los|las|estudiantes|alumnos|pelados|muchachos|ninos)\s+(del|de|en)\s+\w/u', $q0)
+        && !empty($s['group']) && empty($s['student']) && empty($s['module'])
+        && !preg_match('/\b(tardanza|inasist|ausen|falt|evasion|permiso|citacion|incidente|evento|salida|mensaje|alerta|excusa|seguim|caso|llegaron|vinieron|entraron)\b/u', $q0))
+        return $r('students_in_group', 0.84);
+
     // «estado del undécimo en faltas», «qué tan mal está el décimo» → ficha de grupo
     if ((preg_match('/\b(estado|situacion|como va|como esta|que tan|salud)\b.{0,20}\b(del|de|el|al)?\s*(sexto|septimo|octavo|noveno|decimo|undecimo|primero|segundo|tercero|cuarto|quinto|transicion|kinder|jardin|\d{1,2}\s?[a-e])\b.{0,15}\b(en|con)\s+(faltas?|inasistencias?|evasiones?|tardanzas?|asistencia|disciplina|convivencia)\b/u', $q0)
         || preg_match('/\bcomo va|como esta\b.{0,15}\ben\s+(faltas?|inasistencias?|evasiones?|tardanzas?|asistencia)\b/u', $q0))

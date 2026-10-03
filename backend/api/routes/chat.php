@@ -4340,8 +4340,55 @@ function chat_risk_reason(PDO $conn, array $u, array $s, array $v): array {
 function chat_incident_excuses(PDO $conn, array $u, array $s, array $v): array {
     [$from, $to] = chatRange($s);
     $scope = chatScope($conn, $u);
-    $w = ['j.school_id = ?', 'j.incident_date BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
     $stu = null;
+    // Modo negado: «sin excusa», «llegaron sin justificar», «injustificadas»
+    // → incidentes que NO tienen soporte en risk_justifications ni marca
+    // de justificación del acudiente (chatJustifiedSql cubre ambas vías).
+    $unjust = !empty($s['_unjust'])
+        || preg_match('/\b(sin (excusa|justific\w+|permiso|soporte)|injustificad\w+|no (justific\w+|excusad\w+)|pendientes? de justificar|aun no justific\w*)\b/u', (string)($v['_q'] ?? ''));
+    if ($unjust) {
+        $w = ['ai.school_id = ?', chatD('ai.detected_at') . ' BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
+        if (!empty($s['student'])) {
+            $found = chatResolveStudent($conn, $u, $s['student']);
+            if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+            if (count($found) > 1) return chatAmbiguous($found);
+            $stu = $found[0];
+            $w[] = 'ai.student_id = ?'; $p[] = $stu['student_id'];
+        }
+        // «sin excusa médica» — 'excusa' extrae módulo PERMISO y las
+        // variantes _JUSTIFICADA del léxico no existen como incident_type:
+        // todas significan inasistencia sin soporte
+        $mod = $s['module'] ?? null;
+        if ($mod === 'PERMISO' || str_starts_with((string)$mod, 'INASISTENCIA')) $mod = 'INASISTENCIA';
+        if ($mod) { $w[] = 'ai.incident_type = ?'; $p[] = $mod; }
+        $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
+        $sql = "SELECT st.first_name||' '||st.last_name AS name, ag.group_name,
+                ai.incident_type, " . chatTs('ai.detected_at') . " AS incident_date, ai.metadata_json->>'motivo' AS detalle
+            FROM attendance_incidents ai
+            JOIN students st ON st.student_id = ai.student_id AND st.deleted_at IS NULL
+            LEFT JOIN student_group_assignments sga ON sga.student_id = st.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE " . implode(' AND ', $w) . chatJustifiedSql('no', 'ai') . " {$scopeSql}
+            ORDER BY ai.detected_at DESC LIMIT 200";
+        $st = $conn->prepare($sql); $st->execute(array_merge($p, $scope['params']));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $rl = chatRangeLabel($s); $who = chatWho($stu, null);
+        if (!$rows) {
+            return ['reply' => "No hay incidentes sin justificar{$who} {$rl} — todo lo registrado tiene excusa o soporte del acudiente.", '_natural' => true];
+        }
+        $byT = []; foreach ($rows as $r) $byT[$r['incident_type']] = ($byT[$r['incident_type']] ?? 0) + 1;
+        $det = []; foreach ($byT as $t => $c) $det[] = (NX_MODULE_LABEL[$t] ?? strtolower($t)) . ": {$c}";
+        $lines = array_map(function ($r) {
+            $g = $r['group_name'] ? " ({$r['group_name']})" : '';
+            return "{$r['name']}{$g} — {$r['incident_type']}, {$r['incident_date']}" . ($r['detalle'] ? " — {$r['detalle']}" : '');
+        }, array_slice($rows, 0, 15));
+        $n = count($rows);
+        return ['reply' => "Incidentes sin justificar{$who} {$rl}: {$n} — " . implode(', ', $det) . ".\n" . implode("\n", $lines) . ($n > 15 ? "\n… y " . ($n - 15) . " más." : ''),
+            '_natural' => true,
+            '_entities' => array_filter(['student' => $stu ? mb_strtolower("{$stu['first_name']} {$stu['last_name']}") : null,
+                'module' => $s['module'] ?? null, 'range_label' => $rl])];
+    }
+    $w = ['j.school_id = ?', 'j.incident_date BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
     if (!empty($s['student'])) {
         $found = chatResolveStudent($conn, $u, $s['student']);
         if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
