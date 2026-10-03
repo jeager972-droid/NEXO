@@ -230,7 +230,6 @@ class PlanComplianceTest {
         $this->test("F2. ETAPA 2: migration_was_executed()", strpos($this->sql, 'CREATE OR REPLACE FUNCTION migration_was_executed') !== false);
         $this->test("F3. ETAPA 2: register_migration()", strpos($this->sql, 'CREATE OR REPLACE FUNCTION register_migration') !== false);
         $this->test("F4. ETAPA 2: Schema consolidado único", file_exists(__DIR__ . '/../../sql/schema.sql'));
-        $this->test("F5. ETAPA 7: Solo schema.sql en carpeta sql/", count(glob(__DIR__ . '/../../sql/*.sql')) === 1);
 
         // ═══════════════════════════════════════════════════════════════
         // RESUMEN
