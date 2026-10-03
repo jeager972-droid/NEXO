@@ -19,10 +19,13 @@ if (import.meta.env.PROD && !API_BASE_URL.startsWith('https://')) {
 
 // Rutas que pueden tardar más (envío masivo de WhatsApp, reportes, etc.)
 const SLOW_ROUTE_PATTERNS = ['/operations/', '/reports/'];
-// VITE_CHAT_TIMEOUT_MS: override para correr contra un LLM local (Ollama en
-// CPU tarda 15–50 s por turno). Sin definir, producción usa estos defaults.
-const DEFAULT_TIMEOUT = Number(import.meta.env.VITE_CHAT_TIMEOUT_MS) || 12000;
-const SLOW_TIMEOUT = Number(import.meta.env.VITE_CHAT_TIMEOUT_MS) || 30000;
+const CHAT_ROUTE_PATTERN = '/chat/';
+const DEFAULT_TIMEOUT = 12000;
+const SLOW_TIMEOUT = 30000;
+// VITE_CHAT_TIMEOUT_MS: override SOLO del turno de chat — necesario para
+// correr contra un LLM local (Ollama en CPU tarda 15–50 s por turno).
+// Sin definir, producción usa el default. No sube el timeout del resto.
+const CHAT_TIMEOUT = Number(import.meta.env.VITE_CHAT_TIMEOUT_MS) || SLOW_TIMEOUT;
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -37,7 +40,9 @@ const client = axios.create({
 client.interceptors.request.use(
   (config) => {
     const url = config.url || '';
-    if (SLOW_ROUTE_PATTERNS.some((p) => url.includes(p))) {
+    if (url.includes(CHAT_ROUTE_PATTERN)) {
+      config.timeout = CHAT_TIMEOUT;
+    } else if (SLOW_ROUTE_PATTERNS.some((p) => url.includes(p))) {
       config.timeout = SLOW_TIMEOUT;
     }
     config._t0 = performance.now();

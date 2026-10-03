@@ -38,7 +38,9 @@ Cómo se activa (no hay código nuevo: Ollama expone una API compatible con Open
 OLLAMA_HOST=172.17.0.1:11434 OLLAMA_KEEP_ALIVE=-1 OLLAMA_MAX_LOADED_MODELS=1 ollama serve
 cd test/e2e && NLU_LLM_URL=http://172.17.0.1:11434/v1 NLU_LLM_KEY=ollama NLU_LLM_MODEL=qwen3:8b \
   NLU_LLM_REASONING_EFFORT=none NLU_LLM_TIMEOUT_MS=55000 NLU_LLM_COMPOSE=off \
+  FASTCGI_READ_TIMEOUT=120 \
   docker compose -f docker-compose.test.yml --env-file env.test -p nexo-test up -d --build api
+# Frontend (turnos de 15–50 s): VITE_CHAT_TIMEOUT_MS=90000 npm run dev
 ```
 
 - Modelo: `qwen3:8b` (el único de los descargados que entendió bien español + JSON; el 3B copiaba la plantilla).
@@ -51,7 +53,9 @@ cd test/e2e && NLU_LLM_URL=http://172.17.0.1:11434/v1 NLU_LLM_KEY=ollama NLU_LLM
 2. Esta sección de `AGENTS.md`.
 
 **Qué NO es temporal** (se queda, es genérico de proveedor): `NLU_LLM_REASONING_EFFORT`
-(lo aceptan Groq y Ollama para qwen3) y el passthrough de `NLU_LLM_TIMEOUT_MS` en el compose.
+(lo aceptan Groq y Ollama para qwen3), el passthrough de `NLU_LLM_TIMEOUT_MS` y de
+`FASTCGI_READ_TIMEOUT` en el compose, y `VITE_CHAT_TIMEOUT_MS` en el frontend — son
+configuración por entorno, defaults de producción intactos.
 
 ---
 
@@ -104,12 +108,12 @@ Cada fase cierra con sus pruebas en verde y commit. Estado: `[ ]` pendiente · `
 - `test/coverage_matrix.php`: falla si una celda declarada no tiene handler o si un handler responde
   con error para su caso mínimo.
 
-### F2 — Contrato LLM → JSON `[~]`
+### F2 — Contrato LLM → JSON `[x]`
 - **Un solo esquema** de salida: `intent` (enum generado del registro de handlers — imposible inventar),
   `confidence`, `entities` tipadas (`student`, `group`, `grade`, `person`, `module`, `field`, `from`,
   `to`, `range_label`, `set_ref`, `order`, `limit`, `group_by`, `status`, `justified`, `compare`,
   `op`, `nav`, `clarify_answer`), `needs`, `uses_context`.
-- Prompt compacto generado del catálogo (no lista a mano); contexto: últimos turnos, entidades activas,
+- Prompt compacto (mantenido a mano, ~1.1K tokens; `test/coverage_matrix.php` verifica que cada intent tenga entrada en el prompt — la paridad está garantizada por test); contexto: últimos turnos, entidades activas,
   último resultado (tipo, conteo, etiqueta) y **aclaración pendiente**.
 - Validador determinista: allowlist de claves, coerción de tipos, descarte de basura
   (`field:"evadido"`), fusión con `nxSlots` (fechas, grupos, módulos), resolución de nombres en BD.
@@ -121,7 +125,7 @@ Cada fase cierra con sus pruebas en verde y commit. Estado: `[ ]` pendiente · `
 - Degradación visible: `nlu_source` en la traza, log y aviso cuando el LLM lleva caído N minutos.
 - Snapshot de respuestas del LLM (`NX_CLASSIFY_FIXTURE`) para que las suites corran sin cuota.
 
-### F4 — Diálogo `[~]`
+### F4 — Diálogo `[x]`
 - Navegación **solo** si el turno es navegación pura; un objeto o métrica nueva es consulta nueva.
 - `set_ref` («de estos», «entre ellos», «de esa lista») = **filtro** por los IDs del último resultado.
 - Aclaración pendiente: `chatAmbiguous` guarda `{intent, slots, candidatos}` en el DS; el turno
@@ -141,7 +145,7 @@ Cada fase cierra con sus pruebas en verde y commit. Estado: `[ ]` pendiente · `
 - Conectado y listo (`NLU_LLM_COMPOSE=data`), alimentado por `_facts`, con guardia anti-alucinación.
 - Apagado en local por CPU; encendido en producción.
 
-### F8 — Evaluación honesta `[~]`
+### F8 — Evaluación honesta `[x]`
 - Dataset de conversaciones reales (la del usuario primero, `chat_messages`, transcripts) con la
   **respuesta esperada**: intent + entidades clave + alcance, multi-turno.
 - Partición **dev / test**: se corrige mirando dev; se reporta test. **Prohibido** editar expectativas
