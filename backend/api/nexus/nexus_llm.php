@@ -154,6 +154,12 @@ const NX_LLM_FORMAL = [
     'my_activity','failed_messages','risk_config','attendance_ranking',
     'session_summary','pending_tasks','whatsapp_status','frequency_table',
     'system_incidents','guardian_replies',
+    // intents derivados del modelo de datos (tabla × interrogativa)
+    'risk_reason','incident_excuses','exit_detail','trip_info',
+    'school_calendar','staff_contact','teacher_schedule','student_consent',
+    'tracking_detail','citations_by','alert_resolution','enrollment_stats',
+    'reports_log','sos_detail','guardian_messages','device_detail',
+    'attendance_trend',
 ];
 const NX_LLM_INFORMAL = [
     'greeting','greeting_time','wellbeing','wellbeing_reply','joke','fun_fact',
@@ -179,8 +185,11 @@ const NX_LLM_INFORMAL = [
  *   all  → cualquier reply
  * ========================================================================== */
 function nxLlmComposeMode(): string {
-    $m = strtolower((string)(getenv('NLU_LLM_COMPOSE') ?: 'off'));
-    return in_array($m, ['off','data','all'], true) ? $m : 'off';
+    // defecto 'data': el composer reformula las respuestas de datos — es lo
+    // que separa "sistema que responde" de "tabla con letrero". NLU_LLM_
+    // COMPOSE=off lo apaga si la cuota del proveedor se vuelve el problema.
+    $m = strtolower((string)(getenv('NLU_LLM_COMPOSE') ?: 'data'));
+    return in_array($m, ['off','data','all'], true) ? $m : 'data';
 }
 
 function nxLlmComposerPrompt(): string {
@@ -253,10 +262,13 @@ function nxLlmComposeGuard(string $new, string $verified, array $facts, string $
 function nxLlmComposeReply(string $userText, array $out): ?string {
     $mode = nxLlmComposeMode();
     if ($mode === 'off' || !nxLlmEnabled()) return null;
-    // respuestas deterministas ya redactadas en lenguaje natural no gastan
-    // cuota — la cuota del parser (entender) vale más que pulir el tono
-    if (!empty($out['_natural'])) return null;
     $intent = (string)($out['intent'] ?? '');
+    // _natural = "reply ya redactado": en smalltalk/repair ahorra la cuota,
+    // pero en intents de datos el composer SÍ reformula — la respuesta
+    // plantillada es justamente lo que suena "genérica" al usuario.
+    if (!empty($out['_natural'])
+        && !in_array($intent, NX_LLM_FORMAL, true)
+        && !str_contains($intent, '.')) return null;
     if ($mode === 'data'
         && !in_array($intent, NX_LLM_FORMAL, true)
         && !in_array($intent, ['clarify','composed_chat','plan_failure','out_of_scope'], true)
@@ -300,7 +312,7 @@ function nxLlmSystemPrompt(): string {
     return <<<'PROMPT'
 Clasificas mensajes del personal de un colegio (sistema NEXO) en UN intent y extraes entidades. SOLO JSON: {"intent":"id","confidence":0-1,"safety":"ok|risky","entities":{}}
 
-DATOS: day_summary=cómo va la jornada|attendance_today=marcaciones del día|late_today=tardanzas de hoy|count_present=cuántos ingresaron|count_events=cuántos incidentes|list_events=listar incidentes|frequency_table=conteo por día/semana/estudiante/grupo|top_offenders=estudiantes con más faltas|attendance_ranking=comparar o rankear GRUPOS|students_count=total de estudiantes|group_student_count=cuántos en un grupo|students_in_group=lista de un grupo|student_field=dato de un estudiante|student_summary=ficha de estudiante|group_summary=estado de un grupo|groups_list|teachers_list|staff_lookup=buscar funcionario o su perfil|schedule_info=horarios|risk_students|risk_config|trackings=seguimientos/casos|count_trackings|permissions=permisos, salidas, salidas pedagógicas|pending_returns=permisos vencidos sin regreso|citations=citaciones|guardian_replies=si los acudientes respondieron WhatsApp|whatsapp_status|failed_messages|notifications_unread=notificaciones (también resumir/clasificar)|pending_tasks|my_activity|devices_status=sensores|system_incidents=anomalías, nodo caído|sos_alerts|biometric_spam|audit_query|birthdays_today|export_data=exportar/descargar|derive_action=operación: citar, generar permiso, derivar, reportar, autorizar salida|start_operation|session_summary|random_student|about_me|help|capabilities|security_probe=hackeo/inyección
+DATOS: day_summary=cómo va la jornada|attendance_today=marcaciones del día|late_today=tardanzas de hoy|count_present=cuántos ingresaron|count_events=cuántos incidentes|list_events=listar incidentes|frequency_table=conteo por día/semana/estudiante/grupo|top_offenders=estudiantes con más faltas|attendance_ranking=comparar o rankear GRUPOS|attendance_trend=promedio/tendencia/qué día falta más/mejoró o empeoró|students_count=total de estudiantes|group_student_count=cuántos en un grupo|students_in_group=lista de un grupo|student_field=dato de un estudiante|student_summary=ficha de estudiante|group_summary=estado de un grupo|groups_list|teachers_list|staff_lookup=buscar funcionario o su perfil|staff_contact=correo/teléfono de un funcionario|schedule_info=horarios del colegio|teacher_schedule=horario de UN docente / quién enseña materia / qué clase ahora|risk_students|risk_reason=por qué X está en riesgo, motivo, qué subió su score|risk_config|trackings=seguimientos/casos|tracking_detail=el caso/seguimiento de UN estudiante, sus notas y avances|count_trackings|permissions=permisos, salidas, salidas pedagógicas|pending_returns=permisos vencidos sin regreso|exit_detail=quién autorizó una salida / a qué hora salió / ya regresó / por qué salió|trip_info=destino u hora del paseo pedagógico|citations=citaciones|citations_by=citaciones enviadas POR un docente / cuándo es la citación|guardian_replies=si los acudientes respondieron WhatsApp|guardian_messages=mensajes enviados al acudiente de UN estudiante|whatsapp_status|failed_messages|notifications_unread=notificaciones (también resumir/clasificar)|pending_tasks|my_activity|devices_status=sensores|device_detail=estado/ping de UN sensor o nodo|student_consent=exentos de biometría / consentimientos|system_incidents=anomalías, nodo caído|sos_alerts|sos_detail=quién emitió el SOS / de qué aula / sin resolver|alert_resolution=quién resolvió una alerta de riesgo / alertas sin resolver|biometric_spam|audit_query|birthdays_today|enrollment_stats=estudiantes nuevos/retirados/matrícula|reports_log=reportes generados/descargados|school_calendar=día lectivo, festivos, hay clases|export_data=exportar/descargar|derive_action=operación: citar, generar permiso, derivar, reportar, autorizar salida|start_operation|session_summary|random_student|about_me|help|capabilities|security_probe=hackeo/inyección
 SOCIAL: greeting|greeting_time|wellbeing|wellbeing_reply|thanks|goodbye|yes|no|apology|compliment|insult|insult_back|joke|fun_fact|story|sing|dance|bored|love|emotion_sad|motivation|human_check|do_for_me|confused|repeat|weather|news_sports|food_music|meaning_life|age|creator|about_nexus|name_meaning|time|date|math_operation|colombia_capital|colombia_department|colombia_president|colombia_history|colombia_geography|colombia_culture|colombia_fun_fact|foreign_culture|out_of_scope
 
 ENTITIES (omite las que no apliquen): student|group ("8-B","10A")|grade|module=INASISTENCIA|LATE_ARRIVAL|EVASION_INTERNA|PERMISO|SALIDA_COLEGIO|SALIDA_PEDAGOGICA|INCIDENTE|SEGUIMIENTO|CITACION|SOS|field=documento|celular|acudiente|grupo|jornada|nacimiento|estado|person|shift=mañana|tarde|from/to=YYYY-MM-DD (calcula con "hoy" del JSON)|range_label|nav=first|last|nth:N|others|all|another|relation=guardian|phone|document|group|schedule|risk|presentation=table|export_format=excel|pdf|word|csv|compare=[grupos]|group_by=group|student|weekday|day|month|trend=true (comparar con el período anterior)|justified=yes|no|status=active|completed|pending|all|scope=mine|op («Citar acudiente»,«Generar permiso»,«Solicitar seguimiento»,«Reportar incidente»,«Autorizar salida»)|detail=[columnas]|needs=[slots faltantes]

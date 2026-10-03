@@ -1,0 +1,134 @@
+# === Corpus real: mensajes de producción + transcript del usuario 2026-10-03 ===
+# mensajes autónomos (sin contexto requerido)
+revisa mis notificaciones y clasificalas
+revisa mis notificaciones y clasificalas segun prioridad
+clasificame mis notificaciones y ponles orden de prioridad
+analiza mis notificaciones y dime a cuales le debo dar prioridad alta, media y baja
+alguna de esas inasistencias tiene justificacion?
+me refiero a si tienen excusa
+que estudiantes se les detecto riesgo
+cual es el motivo de Valentina Castaño Diaz?
+porque esta en riesgo
+todos los sensores estan operativos?
+hay algun estudiante evadiendo clase ahora mismo?
+hay algun estudiante con permiso?
+cuantas inasistencias hoy
+quiero una tabla con las inasistencias de hoy
+cual de ellos tienen mas riesgo
+quiero el acudiente de Valentina castaño diaz
+como van los casos activos
+algun avance con valentina duarte ramirez?
+quien es su acudiente? no ha venido?
+y cuando tiene programada la citacion
+han hecho spam a algun nodo?
+valentina duarte ramirez ha hecho spam al sensor los ultimos 7 dias?
+que profesor ha citado mas estudiantes esta semana
+que estudiantes cito german sanchez
+alertas SOS esta semana
+anomalías del sistema
+cuantas citaciones se han hecho esta semana
+cuantas evasiones hubo esta semana
+cuantos alumnos hay en 10A?
+cuantos estudiantes hay matriculados
+cuántas alertas SOS hay
+cuántas tardanzas van hoy
+cuánto ha faltado Juan Camilo Ospina García de 10A los últimos 15 días
+dame una tabla de estudiantes de 10A
+datos de María Fernanda Castaño Muñoz
+hay alertas SOS
+hay anomalías del sistema
+incidencias del sistema
+incidencias pendientes
+lista las evasiones de la semana
+lista los estudiantes del 6A
+los 3 pelados que mas han faltado en mis clases este mes
+los nodos
+los pelados de 6a cuantos son
+muestrame a todos los de 10A
+necesito saber cuales muchachos de los grupos que tengo llegaron tarde hoy
+nodos caídos
+permisos activos ahora
+que grupos estan a mi cargo?
+quien es el acudiente de María Fernanda Castaño Muñoz
+quienes son los docentes de 10A
+quiénes llegaron tarde hoy
+qué estudiantes de 10A han pasado mi umbral de alerta pedagógica?
+qué grupo tiene más evasiones internas: 10A o 8C
+qué incidencias del sistema hay
+qué sensores hay
+qué sensores tenemos
+salidas pedagógicas de hoy
+sensores del colegio
+tardanzas de ayer
+todos los grupos del colegio
+top 5 estudiantes con más faltas en mis clases los últimos 30 días
+¿cuántas evasiones los últimos 30 días?
+# === sondas de cobertura: cada tabla × interrogativas naturales ===
+quien reporto la inasistencia de maria fernanda castaño muñoz?
+que excusa trajeron los que faltaron hoy?
+quien justifico las faltas de ayer?
+cuales inasistencias de esta semana tienen excusa medica?
+por que valentina castaño diaz esta en riesgo critico?
+que hizo que subiera el riesgo de camila montoya?
+quien resolvio la alerta de riesgo de ayer?
+cuando se resolvio la alerta de renata ospina?
+cuantas alertas de riesgo se han resuelto este mes?
+que estudiantes tienen permiso activo ahora?
+quien autorizo la salida de juan camilo ospina?
+a que hora salio tomas castaño ayer?
+ya regreso el que salio con permiso?
+que estudiantes salieron y no han regresado?
+cuantos permisos vencidos hay sin regreso?
+para donde es el paseo del viernes?
+que estudiantes van al paseo?
+a que hora sale el paseo pedagogico?
+quien emitio la alerta SOS de ayer?
+cuantas alertas SOS siguen sin resolver?
+que aula genero la alerta SOS?
+que estudiante hizo mas ping rechazado esta semana?
+cuantos intentos biometricos fallaron hoy?
+que sensor ha detectado mas spam?
+que clases tiene el grupo 8A hoy?
+que materia ve 10A a esta hora?
+quien le enseña matematicas al 7B?
+cual es el horario del docente javier moreno?
+que docentes tiene el grupo 9C?
+quien enseña en el salon de 6B en la mañana?
+cuantos estudiantes tienen excepcion biometrica?
+por que tomas castaño esta exento de biometria?
+que estudiantes no tienen consentimiento biometrico?
+cuantos mensajes de whatsapp se han enviado este mes?
+cuantos mensajes fallaron ayer?
+que acudientes no han respondido los mensajes?
+los acudientes leyeron las citaciones?
+cuando fue el ultimo ping del sensor del aula 01?
+que dispositivos estan desconfigurados?
+hay algun sensor sin reportar?
+cuantos seguimientos estan cerrados?
+que seguimientos abrio coordinacion este mes?
+quien lleva el caso de valentina duarte?
+cuando abrieron el seguimiento de mateo moreno?
+cuantas notas tiene el caso de simon garcia?
+que estudiantes estan en seguimiento por convivencia?
+mañana hay clases?
+que dias festivos hay este mes?
+cuando es el proximo dia no lectivo?
+es dia lectivo el viernes?
+que reportes se han generado este mes?
+quien genero el ultimo reporte exportado?
+cuantos estudiantes nuevos se matricularon este año?
+cuantos docentes hay en la institucion?
+quien es el coordinador de la jornada de la tarde?
+que personal trabaja en la mañana?
+cual es el correo de la rectora?
+quien esta a cargo de psicoorientacion?
+cuantos estudiantes hay por grado?
+que grado tiene mas estudiantes?
+cual grupo tiene mejor asistencia esta semana?
+como va la asistencia del colegio hoy comparado con ayer?
+cuantas tardanzas hay en promedio por dia?
+que dia de la semana hay mas inasistencias?
+en que mes hubo mas evasiones?
+como va octavo comparado con noveno en faltas?
+que estudiantes mejoraron su asistencia este mes?
+quien falta menos en 8A?

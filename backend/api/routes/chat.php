@@ -35,6 +35,12 @@ require_once __DIR__ . '/../lib/calculator.php';
  * Helpers
  * ========================================================================== */
 
+/* Etiquetas ES de roles — a nivel de archivo ARRIBA de todo: `const` es
+ * sentencia runtime y el dispatch hace exit antes de alcanzar líneas
+ * inferiores; declararlo aquí garantiza que exista en cualquier handler. */
+const NX_ROLE_ES = ['RECTOR' => 'rectoría', 'COORDINATOR' => 'coordinación', 'COUNSELOR' => 'psicoorientación',
+    'SECRETARY' => 'secretaría', 'SECURITY' => 'portería', 'AUXILIARY' => 'auxiliar', 'TEACHER' => 'docente'];
+
 /** Scope del rol: docente/psicoorientador ven solo sus grupos. */
 function chatScope(PDO $conn, array $u): array {
     $global = in_array($u['role'], ['RECTOR','COORDINATOR','SECRETARY'], true);
@@ -266,7 +272,11 @@ function chatAllowed(PDO $conn, array $u, string $intent, string $role): bool {
     }
     // smalltalk puede desactivarse globalmente por la escuela
     if ($ok && !chatPolicyEnabled($conn, $u['school_id'], 'chat.smalltalk.enabled')) {
-        $dataIntents = array_merge(array_keys(NX_CHAT_POLICY_MAP), ['count_events','list_events','permissions','notifications_unread','devices_status','audit_query','groups_list','teachers_list','schedule_info','export_data','about_me','time','date','system_incidents','sos_alerts','pending_returns','top_offenders','frequency_table','guardian_replies']);
+        $dataIntents = array_merge(array_keys(NX_CHAT_POLICY_MAP), ['count_events','list_events','permissions','notifications_unread','devices_status','audit_query','groups_list','teachers_list','schedule_info','export_data','about_me','time','date','system_incidents','sos_alerts','pending_returns','top_offenders','frequency_table','guardian_replies',
+            'risk_reason','incident_excuses','exit_detail','trip_info','school_calendar',
+            'staff_contact','teacher_schedule','student_consent','tracking_detail',
+            'citations_by','alert_resolution','enrollment_stats','reports_log',
+            'sos_detail','guardian_messages','device_detail','attendance_trend']);
         if (!in_array($intent, $dataIntents, true) && $intent !== 'out_of_scope') $ok = false;
     }
     // un probe negado también es evidencia — el log no depende del smalltalk
@@ -605,10 +615,14 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // hoy», «vs la semana pasada») — no hay par de grupos explícito ni tema
     // nuevo: es la misma métrica en dos períodos. Sintético, sin LLM.
     $cls = null;
+    // Un solo rango explícito = comparación ANAFÓRICA («vs la pasada») que
+    // toma la métrica del contexto. Dos+ rangos = consulta autocontenida
+    // («este mes vs el mes pasado») → la clasifica el parser, que tiene un
+    // intent dedicado (attendance_trend) para comparación de períodos.
     if ($dsPre && in_array($dsPre['intent'] ?? '', NX_QUERY_INTENTS, true)
         && preg_match('/\b(compar\w*|versus|\bvs\b|frente a|respecto a|respecto al|contra)\b/u', $q0)
         && !preg_match('/\b\d{1,2}\s*-?\s*[a-z]\s+(y|con|e|vs|versus|contra|frente)\s+\d{1,2}\s*-?\s*[a-z]\b/u', $q0)
-        && count(nxTimeRanges($q0)) >= 1) {
+        && count(nxTimeRanges($q0)) === 1) {
         $cls = ['intent'=>'count_events','confidence'=>0.92,'entities'=>[],
                 'domain'=>'formal','top3'=>[],'source'=>'ctx_compare'];
     }
@@ -823,6 +837,8 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     $tDsm = microtime(true) - $tDsm;
     $intent = $interp['resolved']['intent'];
     $slots  = $interp['resolved']['slots'];
+    $slots['_q'] = $q0;
+    $interp['resolved']['slots']['_q'] = $q0;
     if (!empty($interp['resolved']['inherited'])) $slots['_inherited'] = $interp['resolved']['inherited'];
 
     // Rescate de dominio: «sensores del colegio», «los nodos», «anomalías»
@@ -888,13 +904,30 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
                 // el DSM ya resolvió por sustantivo/verbo («cita al
                 // acudiente», «exporta…», «las citaciones de X»). Los slots
                 // sí se fusionan — sujetan el objetivo de la operación.
+                // intents dedicados del modelo de datos — el frame SCP ve
+                // «en riesgo» y propone risk_students genérico, pero la
+                // interrogativa dedicada (motivo/emisor/resolución) ya fue
+                // resuelta por regla inequívoca: no se degrada
                 $opResolved = in_array($intent, ['derive_action','start_operation','export_data',
                     'permissions','citations','trackings','frequency_table',
-                    'groups_list','attendance_ranking','pending_returns'], true)
+                    'groups_list','attendance_ranking','pending_returns',
+                    'risk_reason','incident_excuses','exit_detail','trip_info',
+                    'school_calendar','staff_contact','teacher_schedule','student_consent',
+                    'tracking_detail','citations_by','alert_resolution','enrollment_stats',
+                    'reports_log','sos_detail','guardian_messages','device_detail',
+                    'attendance_trend'], true)
                     && $cIntent !== $intent;
-                $downgradeToQuery = in_array($cIntent, ['student_field','student_summary',
-                    'list_events','count_events','permissions','citations','trackings',
-                    'incidents.list','students.list','incidents.count'], true);
+                // downgrade = el frame propone un intent GENÉRICO (lista/
+                // conteo/ficha) sobre un intent dedicado ya resuelto. Si el
+                // frame también propone dedicado, se permite el override.
+                $downgradeToQuery = !in_array($cIntent, ['derive_action','start_operation',
+                    'export_data','permissions','citations','trackings','frequency_table',
+                    'groups_list','attendance_ranking','pending_returns',
+                    'risk_reason','incident_excuses','exit_detail','trip_info',
+                    'school_calendar','staff_contact','teacher_schedule','student_consent',
+                    'tracking_detail','citations_by','alert_resolution','enrollment_stats',
+                    'reports_log','sos_detail','guardian_messages','device_detail',
+                    'attendance_trend'], true);
                 $slots = array_merge($slots, $cSlots);
                 if (!empty($scpFrame['subject']['name']) && in_array($scpFrame['task'], ['relation','count'], true))
                     $slots['student'] = $scpFrame['subject']['name'];
@@ -1119,6 +1152,21 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $slots['_nav'] = 'nth:' . ($slots['position'] === 'last'
             ? count($ds['last_result']['items']) : (int)$slots['position']);
     }
+    // ordinal PRONOMINAL: «de la primera», «del segundo», «la tercera» — el
+    // ordinal ES la referencia (sin sustantivo de lista explícito). Excluye
+    // ordinales que modifican un sustantivo de dominio («primera tardanza»,
+    // «segundo puesto», «último día» = consulta nueva, no nav).
+    if (empty($slots['_nav']) && empty($slots['position'])
+        && $ds && !empty($ds['last_result']['items'])
+        && preg_match('/\b(?:del|de la|de los|de las|el|la|los|las)\s+(primer[oa]s?|segund[oa]s?|tercer[oa]s?|cuart[oa]s?|quint[oa]s?|últim[oa]s?|ultim[oa]s?|penúltim[oa]s?|penultim[oa]s?)\b(?!\s*(?:tardanza|inasistencia|evasi[oó]n|evento|incidente|falta|llegada|nota|semana|d[ií]a|mes|vez|parte|mitad|puesto|lugar|grado|hora|clase|periodo|per[ií]odo|quincena|año|anio)\b)/u', $q0, $om)) {
+        $ord = ['primero'=>1,'primera'=>1,'primer'=>1,'segundo'=>2,'segunda'=>2,
+                'tercero'=>3,'tercera'=>3,'tercer'=>3,'cuarto'=>4,'cuarta'=>4,
+                'quinto'=>5,'quinta'=>5,'primeros'=>1,'primeras'=>1];
+        $w = mb_strtolower($om[1]);
+        $slots['position'] = preg_match('/ltim/u', $w) ? 'last' : ($ord[$w] ?? 1);
+        $slots['_nav'] = 'nth:' . ($slots['position'] === 'last'
+            ? count($ds['last_result']['items']) : (int)$slots['position']);
+    }
 
     // ── «lo mismo pero con el último» / «para el segundo de la lista» ────
     // Nav posicional sin campo propio pero con intent de estudiante heredado:
@@ -1188,7 +1236,54 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         }
     }
 
+    // «el motivo/la razón del primero/segundo» — la posición resuelve el
+    // SUJETO; la interrogativa causal pide risk_reason sobre él, no el
+    // ítem a secas (caso real: «quiénes están en riesgo» → «el motivo de
+    // la primera»). Solo cuando el set es de personas — en sets de
+    // eventos el label no resuelve estudiante.
+    if (!empty($slots['_nav']) && $ds && !empty($ds['last_result']['items'])
+        && preg_match('/^(nth:\d+|first|last)$/', (string)$slots['_nav'])
+        && in_array($ds['last_result']['type'] ?? '', ['students','risk','alerts','trackings'], true)
+        && preg_match('/\b(motivo|motivos|razon|razones|causa|causas|por ?que|porque|detonante)\b/u', $q0)
+        && !$navGroupClash && !$navEventVerb) {
+        $nav0 = (string)$slots['_nav'];
+        $nIt = count($ds['last_result']['items']);
+        $idx = $nav0 === 'first' ? 0 : ($nav0 === 'last' ? $nIt - 1 : max(0, (int)substr($nav0, 4) - 1));
+        $it = $ds['last_result']['items'][$idx] ?? null;
+        if ($it && !empty($it['label'])) {
+            $slots['student'] = $it['label'];
+            unset($slots['_nav'], $slots['position']);
+            $intent = 'risk_reason';
+            $interp['resolved']['intent'] = $intent;
+            $interp['resolved']['slots']  = $slots;
+            $interp['requires_clarification'] = false;
+        }
+    }
+
     if (!empty($slots['_nav']) && $ds && isset($ds['last_result']) && !$navGroupClash && !$navEventVerb) {
+        // «tabla de esos datos / todos» tras un escalar (count/resumen): el
+        // set guardado es de OTRA consulta — el referente real es la oferta
+        // del turno («¿ver el detalle?» → list_events con los mismos filtros)
+        if (in_array($slots['_nav'], ['table','all'], true)
+            && !empty($ds['offer']['intent'])
+            && ($ds['last_result']['_intent'] ?? null) !== ($ds['intent'] ?? null)
+            && in_array($ds['offer']['intent'], NX_QUERY_INTENTS, true)
+            && chatAllowed($conn, $authUser, $ds['offer']['intent'], $role)) {
+            // el offer manda: sus slots son el filtro exacto de la consulta
+            // original — del DS solo se rellenan huecos temporales/módulo
+            // (un student o grupo heredado de turnos atrás NO debe colarse)
+            $oSlots = $ds['offer']['slots'] ?? [];
+            foreach (['module','from','to','days','range_label'] as $k)
+                if (empty($oSlots[$k]) && !empty($ds['entities'][$k])) $oSlots[$k] = $ds['entities'][$k];
+            $out = chatDispatch($conn, $authUser, $ds['offer']['intent'], $oSlots, $vars, $role);
+            $out['intent'] = $ds['offer']['intent'];
+            $interp['resolved']['intent'] = $ds['offer']['intent'];
+            $interp['resolved']['slots'] = $oSlots;
+            $out['session_id'] = $sessionId;
+            $out['_ds'] = chatBuildDs($interp, $out, $ds);
+            chatLog($conn, $schoolId, $userId, $text, $out, $sessionId);
+            exit(json_encode(['status'=>'ok','data'=>$out]));
+        }
         $out = chatResultNav($ds, $slots['_nav'], $vars);
         $out['session_id'] = $sessionId;
         $out['_ds'] = chatBuildDs($interp, $out, $ds);
@@ -1322,7 +1417,18 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // incidents.list sin filas reales de citación).
     $chatNative = in_array($intent, ['export_data','derive_action','start_operation',
         'permissions','citations','trackings','groups_list','attendance_ranking',
-        'pending_returns'], true);
+        'pending_returns',
+        // conteo/lista con slots estructurales propios (_compare_ranges,
+        // justified, _my_scope): el compose lee la señal «vs» y los degrada
+        // a groups.rank — su capability solo delega de vuelta al handler
+        'count_events','list_events',
+        // intents derivados del modelo de datos — handler dedicado, nunca
+        // degradados a plan genérico por el compositor semántico
+        'risk_reason','incident_excuses','exit_detail','trip_info',
+        'school_calendar','staff_contact','teacher_schedule','student_consent',
+        'tracking_detail','citations_by','alert_resolution','enrollment_stats',
+        'reports_log','sos_detail','guardian_messages','device_detail',
+        'attendance_trend'], true);
     if (!$plan && $scpPlan && !$chatNative) { $plan = $scpPlan; }
     // cuando el frame decidió (rank/filter/count/relation), el compose
     // clásico no lo pisa: el significado normalizado tiene prioridad
@@ -1507,6 +1613,16 @@ function nxCapToIntent(?string $cap): ?string {
         'risk.students' => 'risk_students', 'groups.list' => 'groups_list',
         'groups.compare' => 'attendance_ranking', 'groups.rank' => 'attendance_ranking',
         'system.incidents' => 'system_incidents',
+        // intents derivados del modelo de datos
+        'risk.reason' => 'risk_reason', 'incidents.excuses' => 'incident_excuses',
+        'exits.detail' => 'exit_detail', 'trips.info' => 'trip_info',
+        'calendar.check' => 'school_calendar', 'staff.contact' => 'staff_contact',
+        'schedule.of_teacher' => 'teacher_schedule', 'students.consent' => 'student_consent',
+        'trackings.detail' => 'tracking_detail', 'citations.by' => 'citations_by',
+        'alerts.resolution' => 'alert_resolution', 'students.enrollment' => 'enrollment_stats',
+        'reports.list' => 'reports_log', 'sos.detail' => 'sos_detail',
+        'messages.to_guardian' => 'guardian_messages', 'devices.detail' => 'device_detail',
+        'attendance.trend' => 'attendance_trend',
     ];
     return $cap !== null ? ($m[$cap] ?? null) : null;
 }
@@ -1529,12 +1645,21 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         || !empty($out['denied']);
     $noNewSubject = empty($out['_result_set']) && empty($merged['student'])
         && empty($merged['group']) && empty($merged['person']);
-    if ($isCont || $noiseIntent || $noNewSubject) {
+    // marcador de colectivo («hay ALGÚN estudiante», «QUÉ estudiante»,
+    // «el personal»): la pregunta es sobre el conjunto institucional —
+    // el referente previo no debe re-inyectarse como entidad del tema
+    $collectiveQ = (bool)preg_match('/\b(alguien|algun\w*|quien\w*|que estudiante|estudiantes|alumnos|pelados|muchachos|nadie|ningun\w*|todo el|del colegio|institucion|en general|personal|planta|mejor grupo|que grupo|cuales grupos)\b/u',
+        (string)($slots['_q'] ?? ''));
+    if ($isCont || $noiseIntent || ($noNewSubject && !$collectiveQ)) {
         // field NO se hereda: es de la frase, no del tema («y cuántas
         // evasiones tiene» no debe arrastrar el documento del turno previo)
         foreach (['student','group','module','days','from','to','range_label','person'] as $k) {
             if (empty($merged[$k]) && !empty($prev['entities'][$k])) $merged[$k] = $prev['entities'][$k];
         }
+    } elseif ($collectiveQ && !$isCont) {
+        // conjunto institucional: el rango temporal sí es del turno y
+        // puede completarse desde el contexto, pero student/person no
+        unset($merged['student'], $merged['person']);
     }
     // ── memoria de trabajo (§29): historial de objetos conversacionales ──
     // cada result-set materializado recibe un id R<N> MONOTÓNICO (nunca se
@@ -1589,7 +1714,9 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
     $ds = [
         'intent'      => $dsIntent,
         'prev_intent' => $prev['intent'] ?? null,
-        'entities'    => $merged,
+        // claves internas (_q, _nav, _inherited…) no son entidades del tema —
+        // _op sobrevive: es la operación pendiente que continúa el próximo turno
+        'entities'    => array_filter($merged, fn($k) => !str_starts_with((string)$k, '_') || $k === '_op', ARRAY_FILTER_USE_KEY),
         'goal'        => $goal,
         'current'     => [
             'entity'   => $currentEntity,
@@ -1600,7 +1727,12 @@ function chatBuildDs(array $interp, array $out, ?array $prev): array {
         ],
         'previous'    => $prev['current'] ?? null,
         'objects'     => $objects,
-        'last_result' => $out['_result_set'] ?? ($prev['last_result'] ?? null),
+        // _intent = quién produjo el set — un nav «tabla de esos datos» tras
+        // un count NO debe reutilizar el set de una consulta anterior: si el
+        // productor difiere del intent activo y hay offer, el offer manda
+        'last_result' => !empty($out['_result_set'])
+            ? ($out['_result_set'] + ['_intent' => $dsIntent])
+            : ($prev['last_result'] ?? null),
         'cursor'      => $out['_result_set'] ? 0
                         : ($out['_result_cursor'] ?? ($prev['cursor'] ?? 0)),
         'pending_op'  => $slots['_op'] ?? ($prev['pending_op'] ?? null),
@@ -2556,7 +2688,7 @@ function chat_list_events(PDO $conn, array $u, array $s, array $v): array {
 function chat_student_field(PDO $conn, array $u, array $s, array $v): array {
     $found = chatResolveStudent($conn,$u,$s['student'] ?? null);
     if (!$found) {
-        $sf = chatResolveStaff($conn, $u, (string)($s['student'] ?? ''));
+        $sf = chatResolveStaff($conn, $u, (string)($s['student'] ?? ''), $v['_q'] ?? null);
         if (count($sf) === 1) return chatStaffProfile($conn, $u, $sf[0]);
         return ['reply'=>"¿De qué estudiante hablas? Dame nombre o apellido.",'_natural'=>true];
     }
@@ -2602,7 +2734,7 @@ function chat_student_summary(PDO $conn, array $u, array $s, array $v): array {
     $found=chatResolveStudent($conn,$u,$s['student']??null);
     if(!$found) {
         // puede ser personal de la institución («perfil de Martha Gómez»)
-        $sf = chatResolveStaff($conn, $u, (string)($s['student'] ?? ''));
+        $sf = chatResolveStaff($conn, $u, (string)($s['student'] ?? ''), $v['_q'] ?? null);
         if (count($sf) === 1) return chatStaffProfile($conn, $u, $sf[0]);
         if (count($sf) > 1) return ['reply'=>'No la encuentro como estudiante; como personal hay varias: '
             . implode(' · ', array_map(fn($r)=>"{$r['first_name']} {$r['last_name']} (" . (NX_ROLE_ES[$r['role_name']] ?? $r['role_name']) . ')', $sf)) . '. ¿Cuál?', '_natural'=>true];
@@ -2700,7 +2832,7 @@ function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
     if (!empty($s['group']) && ($g = chatResolveGroup($conn, $u, $s['group']))) {
         $groupFilter = ' AND sga.group_id=' . $conn->quote($g['group_id']);
     }
-    $st=$conn->prepare("SELECT s.first_name||' '||s.last_name AS name, ag.group_name, bm.risk_level, bm.risk_score
+    $st=$conn->prepare("SELECT s.student_id, s.first_name||' '||s.last_name AS name, ag.group_name, bm.risk_level, bm.risk_score
         FROM student_behavior_metrics bm JOIN students s ON s.student_id=bm.student_id
         LEFT JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
         LEFT JOIN academic_groups ag ON ag.group_id=sga.group_id
@@ -2712,6 +2844,9 @@ function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
     return ['reply'=>count($rows)." estudiante(s) que superaron el umbral de alerta{$gLabel}:",
         'cards'=>[['title'=>'Riesgo activo','columns'=>['Estudiante','Grupo','Nivel','Score'],
         'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$r['risk_level'],$r['risk_score']],$rows)]],
+        '_result_set'=>['type'=>'students','label'=>"en riesgo{$gLabel}",
+            'items'=>array_map(fn($r)=>['id'=>$r['student_id'],'label'=>$r['name'],'sub'=>($r['group_name']??'—')." · {$r['risk_level']}"],$rows),
+            'count'=>count($rows)],
         'actions'=>chatDerivedActions($u,null,'riesgo')];
 }
 
@@ -3421,7 +3556,7 @@ function chat_random_student(PDO $conn, array $u, array $s, array $v): array {
 
 /** Quién es el rector/coordinador/psicoorientador… — datos reales de staff. */
 /** Personal (no acudientes) por nombre: LIKE sin acentos + fonético. */
-function chatResolveStaff(PDO $conn, array $u, string $name): array {
+function chatResolveStaff(PDO $conn, array $u, string $name, ?string $q = null): array {
     $like = '%' . mb_strtolower(strtr($name, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n'])) . '%';
     $base = "SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone, u.work_shift, r.role_name
         FROM users u JOIN roles r ON r.role_id = u.role_id
@@ -3431,22 +3566,39 @@ function chatResolveStaff(PDO $conn, array $u, string $name): array {
             OR translate(lower(u.last_name || ' ' || u.first_name),'áéíóúüñ','aeiouun') LIKE ?) ORDER BY u.last_name LIMIT 5");
     $st->execute([$u['school_id'], $like, $like]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-    if ($rows) return $rows;
-    $want = array_values(array_filter(explode(' ', chatPhonetic($name)), fn($w) => strlen($w) >= 3));
-    if (!$want) return [];
-    $all = $conn->prepare($base . " LIMIT 500"); $all->execute([$u['school_id']]);
-    $out = [];
-    foreach ($all->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $have = explode(' ', chatPhonetic($r['first_name'] . ' ' . $r['last_name']));
-        $hit = 0;
-        foreach ($want as $w) foreach ($have as $h) if ($h === $w || (strlen($w) >= 5 && levenshtein($h, $w) <= 1)) { $hit++; break; }
-        if ($hit === count($want)) $out[] = $r;
+    if (!$rows) {
+        $want = array_values(array_filter(explode(' ', chatPhonetic($name)), fn($w) => strlen($w) >= 3));
+        if (!$want) return [];
+        $all = $conn->prepare($base . " LIMIT 500"); $all->execute([$u['school_id']]);
+        $out = [];
+        foreach ($all->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $have = explode(' ', chatPhonetic($r['first_name'] . ' ' . $r['last_name']));
+            $hit = 0;
+            foreach ($want as $w) foreach ($have as $h) if ($h === $w || (strlen($w) >= 5 && levenshtein($h, $w) <= 1)) { $hit++; break; }
+            if ($hit === count($want)) $out[] = $r;
+        }
+        $rows = array_slice($out, 0, 5);
     }
-    return array_slice($out, 0, 5);
+    // hint de rol en la pregunta: «docente prueba» → TEACHER. Desempata
+    // nombres compartidos por varios cargos («Docente Prueba» vs «Coord
+    // Prueba») sin eliminar la ambigüedad cuando no hay compatibles.
+    if (count($rows) > 1 && $q) {
+        static $roleWords = ['docente'=>'TEACHER','profesor'=>'TEACHER','profe'=>'TEACHER','maestr'=>'TEACHER',
+            'coordinador'=>'COORDINATOR','coordinadora'=>'COORDINATOR','coordinacion'=>'COORDINATOR',
+            'rector'=>'RECTOR','rectora'=>'RECTOR','director'=>'RECTOR','directora'=>'RECTOR',
+            'secretaria'=>'SECRETARY','secretario'=>'SECRETARY',
+            'psicologo'=>'COUNSELOR','psicologa'=>'COUNSELOR','orientador'=>'COUNSELOR',
+            'portero'=>'SECURITY','celador'=>'SECURITY','enfermera'=>'NURSE'];
+        $qn = mb_strtolower(strtr($q, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n']));
+        foreach ($roleWords as $w => $role) {
+            if (preg_match('/\b' . preg_quote($w, '/') . '/u', $qn)) {
+                $pref = array_values(array_filter($rows, fn($r) => ($r['role_name'] ?? '') === $role));
+                if ($pref) return $pref;
+            }
+        }
+    }
+    return $rows;
 }
-
-const NX_ROLE_ES = ['RECTOR' => 'rectoría', 'COORDINATOR' => 'coordinación', 'COUNSELOR' => 'psicoorientación',
-    'SECRETARY' => 'secretaría', 'SECURITY' => 'portería', 'AUXILIARY' => 'auxiliar', 'TEACHER' => 'docente'];
 
 function chatStaffProfile(PDO $conn, array $u, array $p): array {
     $name = trim("{$p['first_name']} {$p['last_name']}");
@@ -3472,7 +3624,7 @@ function chat_staff_lookup(PDO $conn, array $u, array $s, array $v): array {
     $q = $v['_q'] ?? '';
     $person = $s['person'] ?? null;
     if ($person && !preg_match('/\b(coordinador|rector|psicolog|orientador|secretari|porter|docente|profesor)\w*$/u', nxNorm($person))) {
-        $found = chatResolveStaff($conn, $u, $person);
+        $found = chatResolveStaff($conn, $u, $person, $v['_q'] ?? $q ?? null);
         if (count($found) === 1) return chatStaffProfile($conn, $u, $found[0]);
         if (count($found) > 1) return ['reply' => 'Encontré varias personas: ' . implode(' · ', array_map(fn($r) => "{$r['first_name']} {$r['last_name']} (" . (NX_ROLE_ES[$r['role_name']] ?? $r['role_name']) . ')', $found)) . '. ¿Cuál?', '_natural' => true];
     }
@@ -3485,7 +3637,9 @@ function chat_staff_lookup(PDO $conn, array $u, array $s, array $v): array {
     if (!$shift && preg_match('/\b(jornada|turno)?\s*(de la )?(manana|tarde|noche)\b/u', $q, $m)) $shift = $m[3] === 'manana' ? 'mañana' : $m[3];
     $w = "u.school_id = ? AND u.deleted_at IS NULL AND u.active = TRUE"; $p = [$u['school_id']];
     if ($role) { $w .= ' AND r.role_name = ?'; $p[] = $role; }
-    else $w .= " AND r.role_name IN ('RECTOR','COORDINATOR','COUNSELOR','SECRETARY')";
+    // «qué personal trabaja en la mañana» — sin rol ni sesgo a directivo:
+    // la jornada aplica a TODA la planta (docentes incluidos)
+    elseif (!$shift) $w .= " AND r.role_name IN ('RECTOR','COORDINATOR','COUNSELOR','SECRETARY')";
     if ($shift) { $w .= " AND translate(lower(COALESCE(u.work_shift,'')),'ñ','n') = ?"; $p[] = $shift === 'mañana' ? 'manana' : $shift; }
     $st = $conn->prepare("SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone, u.work_shift, r.role_name FROM users u
         JOIN roles r ON r.role_id = u.role_id WHERE {$w} ORDER BY r.role_name, u.last_name LIMIT 30");
@@ -3596,20 +3750,56 @@ function chat_top_offenders(PDO $conn, array $u, array $s, array $v): array {
     [$from, $to] = chatRange($s);
     $rl = chatRangeLabel($s);
     $limit = max(3, min(50, (int)($s['_rank_limit'] ?? 15)));
+    // delta de mejora — «qué estudiantes mejoraron su asistencia»: cuenta
+    // el rango vs el período anterior equivalente por estudiante; delta
+    // negativo = mejoró (menos incidentes que antes)
+    if (!empty($s['_improve'])) {
+        [$pf, $pt] = array_slice(array_values(chatPreviousPeriod($from, $to, $s['range_label'] ?? null)), 0, 2);
+        $st = $conn->prepare("SELECT s.student_id, s.first_name || ' ' || s.last_name AS name, ag.group_name,
+                COUNT(*) FILTER (WHERE " . chatD('ai.detected_at') . " BETWEEN ? AND ?) AS cur,
+                COUNT(*) FILTER (WHERE " . chatD('ai.detected_at') . " BETWEEN ? AND ?) AS prev
+            {$f['from']} WHERE {$f['where']} AND " . chatD('ai.detected_at') . " BETWEEN ? AND ?
+            GROUP BY s.student_id, s.first_name, s.last_name, ag.group_name
+            ORDER BY (COUNT(*) FILTER (WHERE " . chatD('ai.detected_at') . " BETWEEN ? AND ?)) -
+                     (COUNT(*) FILTER (WHERE " . chatD('ai.detected_at') . " BETWEEN ? AND ?)) ASC, s.last_name LIMIT {$limit}");
+        $st->execute(array_merge([$from, $to, $pf, $pt], $f['params'], [min($from, $pf), max($to, $pt), $from, $to, $pf, $pt]));
+        $rows = array_values(array_filter($st->fetchAll(PDO::FETCH_ASSOC), fn($r) => (int)$r['prev'] > 0 || (int)$r['cur'] > 0));
+        $mlabel = $module ? (NX_MODULE_LABEL[$module] ?? strtolower($module)) : 'incidentes';
+        $worse = ($s['_improve'] === 'worse');
+        $picked = array_filter($rows, fn($r) => $worse
+            ? ((int)$r['cur'] - (int)$r['prev']) > 0
+            : ((int)$r['cur'] - (int)$r['prev']) < 0);
+        if ($worse) usort($picked, fn($a, $b) => ((int)$b['cur'] - (int)$b['prev']) <=> ((int)$a['cur'] - (int)$a['prev']));
+        if (!$rows || !$picked) return ['reply' => ($worse
+            ? "Nadie aumentó sus {$mlabel} frente al período anterior — los que tienen registro van igual o mejor."
+            : "Nadie redujo sus {$mlabel} frente al período anterior — los que tienen registro van igual o peor."), '_natural' => true];
+        $rows = array_slice(array_values($picked), 0, $limit);
+        $best = $rows[0];
+        $lbl = $worse ? "empeoraron" : "mejoraron";
+        return ['reply' => count($picked) . " estudiantes " . ($worse ? 'aumentaron' : 'redujeron') . " sus {$mlabel} frente al período anterior. Caso más marcado: "
+                . "{$best['name']} ({$best['group_name']}) — de {$best['prev']} a {$best['cur']}.", '_natural' => true,
+            'cards' => [['title' => ucfirst($lbl) . " {$mlabel} — {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Antes', 'Ahora'],
+                'rows' => array_map(fn($r) => [$r['name'], $r['group_name'] ?? '—', (int)$r['prev'], (int)$r['cur']], $rows)]],
+            '_result_set' => ['type' => 'students', 'label' => "{$lbl} {$mlabel}", 'count' => count($rows),
+                'items' => array_map(fn($r) => ['id' => $r['student_id'], 'label' => $r['name'], 'sub' => "{$r['prev']}→{$r['cur']}"] , $rows)],
+            'entities' => array_filter(['module' => $module, 'range_label' => $rl])];
+    }
+    $asc = ($s['_rank_dir'] ?? null) === 'asc';
     $st = $conn->prepare("SELECT s.student_id, s.first_name || ' ' || s.last_name AS name, ag.group_name, COUNT(*) c,
             " . chatTs('MAX(ai.detected_at)') . " AS last
         {$f['from']} WHERE {$f['where']} AND " . chatD('ai.detected_at') . " BETWEEN ? AND ?
-        GROUP BY s.student_id, s.first_name, s.last_name, ag.group_name ORDER BY c DESC, s.last_name LIMIT {$limit}");
+        GROUP BY s.student_id, s.first_name, s.last_name, ag.group_name ORDER BY c " . ($asc ? 'ASC' : 'DESC') . ", s.last_name LIMIT {$limit}");
     $st->execute(array_merge($f['params'], [$from, $to])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     $mlabel = $module ? (NX_MODULE_LABEL[$module] ?? strtolower($module)) : 'incidentes';
     $where = chatWho(null, $f['group']);
     if (!$rows) return ['reply' => "No hay {$mlabel} registradas{$where} {$rl}.", '_natural' => true];
     $max = (int)$rows[0]['c'];
     $ties = count(array_filter($rows, fn($r) => (int)$r['c'] === $max));
-    $reply = "Top de {$mlabel}{$where} — {$rl}: "
+    $reply = ($asc ? "Menor registro de {$mlabel}{$where} — {$rl}: " : "Top de {$mlabel}{$where} — {$rl}: ")
         . ($ties > 1
             ? "{$ties} estudiantes empatan en el primer lugar ({$max} cada uno)."
-            : "{$rows[0]['name']} ({$rows[0]['group_name']}) encabeza con {$max}.");
+            : "{$rows[0]['name']} ({$rows[0]['group_name']}) encabeza con {$max}.")
+        . ($asc ? ' Entre quienes tienen registro.' : '');
     if ($max <= 1 && $from === $to) $reply .= ' En un solo día todos tienen 1 — el ranking no distingue a nadie.';
     $rs = ['type' => 'students', 'entity' => 'students', 'label' => "más {$mlabel} {$rl}",
         'order' => 'frecuencia (desc)', 'count' => count($rows),
@@ -3918,7 +4108,10 @@ function chat_attendance_ranking(PDO $conn, array $u, array $s, array $v): array
     $sizes = array_map('intval', $gq->fetchAll(PDO::FETCH_KEY_PAIR));
     if ($mine && $mineP) $sizes = array_intersect_key($sizes, $cur) ?: $sizes;
     foreach ($sizes as $gname => $_) $cur[$gname] = $cur[$gname] ?? 0;
-    arsort($cur);
+    // ranking inverso — «mejor asistencia», «quién falta menos», «grupo que
+    // menos llega tarde»: el orden ascendente responde la pregunta real
+    $asc = ($s['_rank_dir'] ?? null) === 'asc';
+    $asc ? asort($cur) : arsort($cur);
     $scopeLbl = ($grade ? " de grado {$grade}" : '') . ($mine ? ' a tu cargo' : '');
     if (!$cur || array_sum($cur) === 0) return ['reply' => "No hay {$mlabel} en los grupos{$scopeLbl} {$rl}.", '_natural' => true];
     $trend = !empty($s['trend']) || preg_match('/\b(aumento|subi|baj|increment|comparad|vs\.? anterior|respecto)\b/u', $q);
@@ -3936,7 +4129,7 @@ function chat_attendance_ranking(PDO $conn, array $u, array $s, array $v): array
     }
     $rows = array_map(fn($g) => [$g, $cur[$g], $sizes[$g] ?? '—', isset($sizes[$g]) && $sizes[$g] ? round($cur[$g] * 100 / $sizes[$g]) . '%' : '—'], $names);
     $top = $names[0];
-    $reply = ucfirst("{$mlabel} por grupo{$scopeLbl} {$rl}: el grupo con más es {$top} ({$cur[$top]})");
+    $reply = ucfirst("{$mlabel} por grupo{$scopeLbl} {$rl}: el grupo con " . ($asc ? 'menos' : 'más') . " es {$top} ({$cur[$top]})");
     $zero = array_keys(array_filter($cur, fn($c) => $c === 0));
     $reply .= $zero ? '; sin ' . $mlabel . ': ' . implode(', ', array_slice($zero, 0, 6)) . (count($zero) > 6 ? '…' : '') . '.' : '.';
     return ['reply' => $reply, '_natural' => true,
@@ -4065,4 +4258,884 @@ function chat_whatsapp_status(PDO $conn, array $u, array $s, array $v): array {
         'cards' => [['title' => "WhatsApp — {$rl}", 'columns' => ['Dirección', 'Estado', 'Mensajes'],
             'rows' => array_map(fn($r) => [$r['direction'] === 'INBOUND' ? 'Recibido' : 'Enviado', $stEs[$r['ds']] ?? ucfirst(strtolower($r['ds'])), (int)$r['c']], $rows)]],
         '_offer' => $g['fail'] > 0 ? chatOffer('¿Quieres ver los mensajes fallidos?', 'failed_messages', array_intersect_key($s, array_flip(['from', 'to', 'range_label', 'days']))) : null];
+}
+
+/* ============================================================================
+ * INTENTS DERIVADOS DEL MODELO DE DATOS
+ * ----------------------------------------------------------------------------
+ * Cobertura tabla × interrogativa: por qué / quién / cuándo / estado / causa.
+ * Cada handler responde UNA forma de pregunta concreta con datos reales —
+ * si el dato no existe, lo dice en vez de degradar a una lista genérica.
+ * ========================================================================== */
+
+/** Por qué un estudiante está en riesgo — score, nivel y qué lo detonó. */
+function chat_risk_reason(PDO $conn, array $u, array $s, array $v): array {
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if (!$found) return ['reply' => "No encuentro a «{$s['student']}» entre los estudiantes de tu alcance — revisa el nombre o dime su grupo.", '_natural' => true];
+        if (count($found) > 1) return chatAmbiguous($found);
+        $stu = $found[0];
+    }
+    if (!$stu) return ['reply' => '¿De qué estudiante quieres el motivo del riesgo? Dame nombre o apellido.', '_natural' => true];
+    $name = trim("{$stu['first_name']} {$stu['last_name']}");
+
+    $m = $conn->prepare("SELECT risk_score, risk_level, late_count, absence_count, total_events,
+            calculation_window_days, " . chatTs('calculated_at') . " AS calc
+        FROM student_behavior_metrics WHERE school_id = ? AND student_id = ?
+        ORDER BY calculated_at DESC LIMIT 1");
+    $m->execute([$u['school_id'], $stu['student_id']]);
+    $met = $m->fetch(PDO::FETCH_ASSOC);
+
+    $a = $conn->prepare("SELECT alert_level, trigger_category, trigger_rule, trigger_score, status,
+            " . chatTs('created_at') . " AS creada
+        FROM risk_alerts WHERE school_id = ? AND student_id = ? AND status <> 'RESOLVED'
+        ORDER BY created_at DESC LIMIT 5");
+    $a->execute([$u['school_id'], $stu['student_id']]);
+    $alerts = $a->fetchAll(PDO::FETCH_ASSOC);
+
+    $days = max(1, (int)($met['calculation_window_days'] ?? 30) ?: 30);
+    $i = $conn->prepare("SELECT incident_type, COUNT(*) c FROM attendance_incidents ai
+        WHERE ai.school_id = ? AND ai.student_id = ? AND " . chatD('ai.detected_at') . " >= CURRENT_DATE - INTERVAL '{$days} days'
+        GROUP BY 1 ORDER BY c DESC LIMIT 6");
+    $i->execute([$u['school_id'], $stu['student_id']]);
+    $brk = $i->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$met && !$alerts) {
+        return ['reply' => "{$name} no tiene mediciones de riesgo registradas — el motor aún no la evalúa o está por debajo del umbral.", '_natural' => true,
+            'entities' => ['student' => mb_strtolower($name)]];
+    }
+    $lvl = ['CRITICAL' => 'crítico', 'HIGH' => 'alto', 'MEDIUM' => 'medio', 'LOW' => 'bajo'];
+    $typ = ['INASISTENCIA' => 'inasistencias', 'LATE_ARRIVAL' => 'tardanzas', 'EVASION_INTERNA' => 'evasiones',
+        'PERMISO' => 'permisos', 'SALIDA_COLEGIO' => 'salidas', 'INCIDENTE' => 'incidentes'];
+    $bits = [];
+    if ($met) {
+        $parts = [];
+        if ((int)$met['absence_count'] > 0) $parts[] = (int)$met['absence_count'] . ' inasistencias';
+        if ((int)$met['late_count'] > 0)    $parts[] = (int)$met['late_count'] . ' tardanzas';
+        $otros = (int)$met['total_events'] - (int)$met['absence_count'] - (int)$met['late_count'];
+        if ($otros > 0) $parts[] = "{$otros} eventos más";
+        $bits[] = "score " . number_format((float)$met['risk_score'], 2) . " (nivel " . ($lvl[$met['risk_level']] ?? $met['risk_level']) . ")"
+            . ($parts ? ' por ' . implode(' + ', $parts) . " en {$days} días" : '');
+    }
+    if ($alerts) {
+        $cat = array_filter(array_unique(array_map(fn($r) => $r['trigger_category'], $alerts)));
+        $bits[] = "alerta" . (count($alerts) > 1 ? 's' : '') . " " . implode(', ', array_map(fn($r) => $lvl[$r['alert_level']] ?? $r['alert_level'], $alerts))
+            . ($cat ? " — categoría " . implode(' y ', $cat) : '');
+    }
+    $cards = [];
+    if ($brk) $cards[] = ['title' => "Eventos que alimentan el riesgo — últimos {$days} días", 'columns' => ['Tipo', 'Eventos'],
+        'rows' => array_map(fn($r) => [$typ[$r['incident_type']] ?? $r['incident_type'], (int)$r['c']], $brk)];
+    if ($alerts) $cards[] = ['title' => 'Alertas activas', 'columns' => ['Nivel', 'Categoría', 'Regla', 'Score', 'Desde'],
+        'rows' => array_map(fn($r) => [$lvl[$r['alert_level']] ?? $r['alert_level'], $r['trigger_category'] ?? '—',
+            mb_strimwidth((string)($r['trigger_rule'] ?? '—'), 0, 50, '…'), $r['trigger_score'] ?? '—', $r['creada']], $alerts)];
+    return ['reply' => "{$name} está en riesgo porque " . implode('; ', $bits) . '.', '_natural' => true,
+        'cards' => $cards, 'entities' => ['student' => mb_strtolower($name)],
+        '_result_set' => ['type' => 'students', 'label' => 'motivo de riesgo',
+            'items' => [['id' => $stu['student_id'], 'label' => $name, 'sub' => $met ? "score {$met['risk_score']} · " . ($lvl[$met['risk_level']] ?? $met['risk_level']) : 'sin métrica']],
+            'count' => 1]];
+}
+
+/** Excusas/justificaciones registradas sobre incidentes — quién, motivo, tipo. */
+function chat_incident_excuses(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $scope = chatScope($conn, $u);
+    $w = ['j.school_id = ?', 'j.incident_date BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+        if (count($found) > 1) return chatAmbiguous($found);
+        $stu = $found[0];
+        $w[] = 'j.student_id = ?'; $p[] = $stu['student_id'];
+    }
+    if (!empty($s['module'])) { $w[] = 'j.incident_type = ?'; $p[] = $s['module']; }
+    $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
+    $sql = "SELECT st.first_name||' '||st.last_name AS name, ag.group_name,
+            j.incident_type, j.incident_date, j.justification_type, j.reason,
+            " . chatTs('j.justified_at') . " AS cuando,
+            COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS por
+        FROM risk_justifications j
+        JOIN students st ON st.student_id = j.student_id AND st.deleted_at IS NULL
+        LEFT JOIN student_group_assignments sga ON sga.student_id = st.student_id AND sga.active = TRUE
+        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+        LEFT JOIN users ub ON ub.user_id = j.justified_by
+        WHERE " . implode(' AND ', $w) . " {$scopeSql}
+        ORDER BY j.incident_date DESC LIMIT 200";
+    $st = $conn->prepare($sql); $st->execute(array_merge($p, $scope['params']));
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $rl = chatRangeLabel($s); $who = chatWho($stu, null);
+    $ent = array_filter(['student' => $stu ? mb_strtolower("{$stu['first_name']} {$stu['last_name']}") : null,
+        'module' => $s['module'] ?? 'INASISTENCIA', 'range_label' => $s['range_label'] ?? null, 'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null]);
+    if (!$rows) return ['reply' => "No hay excusas ni justificaciones registradas{$who} {$rl}.", 'entities' => $ent, '_natural' => true];
+    $typ = ['INASISTENCIA' => 'inasistencia', 'LATE_ARRIVAL' => 'tardanza', 'EVASION_INTERNA' => 'evasión',
+        'PERMISO' => 'permiso', 'SALIDA_COLEGIO' => 'salida', 'INCIDENTE' => 'incidente'];
+    $n = count($rows);
+    $razones = array_filter(array_unique(array_map(fn($r) => trim((string)$r['reason']), $rows)));
+    $reply = ucfirst("{$rl}: {$n} " . ($n === 1 ? 'justificación' : 'justificaciones') . "{$who}.")
+        . ($razones ? ' Motivos: ' . implode('; ', array_slice($razones, 0, 4)) . (count($razones) > 4 ? '…' : '') : '');
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "Justificaciones{$who} — {$rl}", 'columns' => ['Fecha', 'Estudiante', 'Grupo', 'Incidente', 'Motivo', 'Tipo', 'Registró'],
+            'rows' => array_map(fn($r) => [$r['incident_date'], $r['name'], $r['group_name'] ?? '—', $typ[$r['incident_type']] ?? $r['incident_type'],
+                mb_strimwidth((string)($r['reason'] ?? '—'), 0, 45, '…'), $r['justification_type'] ?? '—', $r['por']], $rows)]],
+        'entities' => $ent,
+        '_result_set' => ['type' => 'excuses', 'label' => "justificaciones{$who}",
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'], 'sub' => $r['incident_date'] . ' · ' . mb_strimwidth((string)($r['reason'] ?? ''), 0, 40, '…')], $rows),
+            'count' => $n]];
+}
+
+/** Detalle de salidas autorizadas — quién autorizó, hora, motivo, retorno. */
+function chat_exit_detail(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $scope = chatScope($conn, $u);
+    $w = ['x.school_id = ?', chatD('x.exit_time') . ' BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+        if (count($found) > 1) return chatAmbiguous($found);
+        $stu = $found[0];
+        $w[] = 'x.student_id = ?'; $p[] = $stu['student_id'];
+    }
+    $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
+    $fromSql = "FROM (
+        SELECT c.student_id, c.school_id, c.authorization_reason AS reason, c.exit_time,
+               COALESCE(c.actual_return_time, c.return_time) AS return_time, c.actual_return_time, c.status,
+               'de clase' AS kind, COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS issuer
+        FROM class_exit_authorizations c LEFT JOIN users ub ON ub.user_id = c.authorized_by_user_id
+        UNION ALL
+        SELECT se.student_id, se.school_id, se.authorization_reason, se.exit_time,
+               COALESCE(se.actual_return_time, se.expected_return_time), se.actual_return_time, se.status,
+               'del colegio' AS kind, COALESCE(ub.first_name || ' ' || ub.last_name, '—')
+        FROM school_exit_authorizations se LEFT JOIN users ub ON ub.user_id = se.authorized_by_user_id
+    ) x
+    JOIN students st ON st.student_id = x.student_id AND st.deleted_at IS NULL
+    LEFT JOIN student_group_assignments sga ON sga.student_id = st.student_id AND sga.active = TRUE
+    LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+    WHERE " . implode(' AND ', $w) . " {$scopeSql}";
+    $st = $conn->prepare("SELECT x.*, st.first_name, st.last_name, ag.group_name,
+            " . chatTs('x.exit_time') . " AS exit_local, " . chatTs('x.return_time') . " AS return_local,
+            " . chatTs('x.actual_return_time') . " AS actual_local
+        {$fromSql} ORDER BY x.exit_time DESC LIMIT 100");
+    $st->execute(array_merge($p, $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $rl = chatRangeLabel($s); $who = chatWho($stu, null);
+    $ent = array_filter(['student' => $stu ? mb_strtolower("{$stu['first_name']} {$stu['last_name']}") : null,
+        'module' => 'PERMISO', 'range_label' => $s['range_label'] ?? null, 'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null]);
+    if (!$rows) return ['reply' => "No hay salidas autorizadas{$who} {$rl}.", 'entities' => $ent, '_natural' => true];
+    $stEs = ['ACTIVE' => 'Fuera aún', 'COMPLETED' => 'Ya regresó', 'EXPIRED' => 'Venció sin regreso', 'CANCELLED' => 'Cancelada'];
+    $n = count($rows); $latest = $rows[0];
+    $reply = ucfirst("{$rl}: {$n} " . ($n === 1 ? 'salida autorizada' : 'salidas autorizadas') . "{$who}.");
+    if ($stu && $n === 1) {
+        $reply = "{$latest['first_name']} {$latest['last_name']} salió {$latest['kind']} a las {$latest['exit_local']}"
+            . ($latest['reason'] ? " por «" . mb_strimwidth($latest['reason'], 0, 60, '…') . "»" : '')
+            . ". Autorizó {$latest['issuer']} — " . strtolower($stEs[$latest['status']] ?? $latest['status'])
+            . ($latest['actual_local'] ? " (regresó {$latest['actual_local']})" : '') . '.';
+    }
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "Salidas{$who} — {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Tipo', 'Motivo', 'Salió', 'Regreso', 'Estado', 'Autorizó'],
+            'rows' => array_map(fn($r) => ["{$r['first_name']} {$r['last_name']}", $r['group_name'] ?? '—', $r['kind'],
+                mb_strimwidth((string)($r['reason'] ?? '—'), 0, 40, '…'), $r['exit_local'],
+                $r['actual_local'] ?: ($r['return_local'] ?: '—'), $stEs[$r['status']] ?? $r['status'], $r['issuer']], $rows)]],
+        'entities' => $ent,
+        '_result_set' => ['type' => 'exits', 'label' => "salidas{$who}",
+            'items' => array_map(fn($r) => ['id' => null, 'label' => "{$r['first_name']} {$r['last_name']}", 'sub' => $r['exit_local'] . ' · ' . ($stEs[$r['status']] ?? $r['status'])], $rows),
+            'count' => $n]];
+}
+
+/** Paseo pedagógico — destino, hora, quiénes van. */
+function chat_trip_info(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $scope = chatScope($conn, $u);
+    // «para dónde es el paseo» suele ser próximo — sin rango explícito miro
+    // desde hoy-7d hasta +30d; con rango lo respeto
+    $explicit = !empty($s['from']) || !empty($s['range_label']) || isset($s['days']);
+    $w = ['t.school_id = ?']; $p = [$u['school_id']];
+    if ($explicit) { $w[] = chatD('t.departure_time') . ' BETWEEN ? AND ?'; $p[] = $from; $p[] = $to; }
+    else { $w[] = "t.departure_time >= NOW() - INTERVAL '7 days' AND t.departure_time <= NOW() + INTERVAL '30 days'"; }
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+        if (count($found) > 1) return chatAmbiguous($found);
+        $stu = $found[0];
+        $w[] = 't.student_id = ?'; $p[] = $stu['student_id'];
+    }
+    $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
+    $st = $conn->prepare("SELECT t.destination, t.purpose,
+            " . chatTs('t.departure_time') . " AS dep, " . chatTs('t.return_time') . " AS ret,
+            t.metadata_json->>'group_name' AS trip_group,
+            COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS issuer, COUNT(*) AS n
+        FROM pedagogical_trip_authorizations t
+        JOIN students st ON st.student_id = t.student_id AND st.deleted_at IS NULL
+        LEFT JOIN users ub ON ub.user_id = t.authorized_by_user_id
+        WHERE " . implode(' AND ', $w) . " {$scopeSql}
+        GROUP BY t.destination, t.departure_time, t.return_time, t.purpose, trip_group, issuer
+        ORDER BY t.departure_time ASC LIMIT 20");
+    $st->execute(array_merge($p, $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $rl = $explicit ? chatRangeLabel($s) : 'las próximas semanas';
+    $who = chatWho($stu, null);
+    if (!$rows) return ['reply' => "No hay salidas pedagógicas programadas{$who} para {$rl}.", '_natural' => true];
+    $n = count($rows); $next = $rows[0];
+    $reply = $n === 1
+        ? "El paseo es para {$next['destination']} — sale {$next['dep']}" . ($next['ret'] ? " y regresa {$next['ret']}" : '')
+          . ($next['trip_group'] ? ", con {$next['trip_group']} ({$next['n']} estudiantes)" : ", {$next['n']} estudiantes")
+          . ($next['purpose'] ? ". Motivo: " . mb_strimwidth($next['purpose'], 0, 60, '…') : '') . '.'
+        : "{$n} salidas pedagógicas {$rl} — la próxima es {$next['destination']} ({$next['dep']}).";
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => 'Salidas pedagógicas', 'columns' => ['Destino', 'Grupo', 'Estudiantes', 'Sale', 'Regresa', 'Motivo', 'Autorizó'],
+            'rows' => array_map(fn($r) => [mb_strimwidth((string)($r['destination'] ?? '—'), 0, 40, '…'), $r['trip_group'] ?? '—',
+                (int)$r['n'], $r['dep'], $r['ret'] ?: '—', mb_strimwidth((string)($r['purpose'] ?? '—'), 0, 35, '…'), $r['issuer']], $rows)]],
+        '_result_set' => ['type' => 'trips', 'label' => 'salidas pedagógicas',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['destination'], 'sub' => ($r['trip_group'] ?? '—') . ' · ' . $r['dep']], $rows),
+            'count' => $n]];
+}
+
+/** Calendario escolar — día lectivo, festivos, próximo día sin clases. */
+function chat_school_calendar(PDO $conn, array $u, array $s, array $v): array {
+    $q = $v['_q'] ?? '';
+    [$from, $to] = chatRange($s);
+    $specificDay = $from === $to;
+    // «próximo día no lectivo / festivo» — mira adelante, no el rango pasado
+    if (preg_match('/\b(proxim\w+|siguiente|cuando es el|cuando cae|hasta cuando|cuando vuelve)\b.{0,30}\b(festivo|no lectivo|feriado|puente|descanso|sin clases)\b|\b(festivos?|feriados?|puentes?)\s+(proximos?|siguientes|que vienen|del mes|este mes|de este mes|del ano)\b/u', $q)) {
+        $from = nxToday(); $to = date('Y-m-d', strtotime('+90 days'));
+        $specificDay = false;
+    }
+    if (preg_match('/\b(festivos?|feriados?|dias? no lectivos?|puentes?)\b/u', $q)
+        && !preg_match('/\b(hoy|manana|ayer|clases)\b/u', $q)) {
+        $specificDay = false;
+        if ($from === $to) { $from = substr($from, 0, 8) . '01'; $to = date('Y-m-t', strtotime($from)); }
+    }
+    $st = $conn->prepare("SELECT calendar_date, is_lecture_day, COALESCE(reason,'') AS reason
+        FROM school_calendar WHERE school_id = ? AND calendar_date BETWEEN ? AND ?
+        ORDER BY calendar_date LIMIT 90");
+    $st->execute([$u['school_id'], $from, $to]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $fmt = fn(string $d) => (int)date('j', strtotime($d)) . ' de ' . NX_MONTH_NAMES[(int)date('n', strtotime($d))];
+    $dow = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    if ($specificDay) {
+        $hit = null;
+        foreach ($rows as $r) if ($r['calendar_date'] === $from) { $hit = $r; break; }
+        $dayName = $dow[(int)date('w', strtotime($from))];
+        if ($hit === null) {
+            // sin fila = día normal: lectivo si es lunes-viernes (regla del sistema)
+            $isWknd = (int)date('N', strtotime($from)) >= 6;
+            return ['reply' => "El {$dayName} " . $fmt($from) . " no tiene marca en el calendario — " . ($isWknd ? 'es fin de semana, sin jornada.' : 'cuenta como día lectivo normal.'), '_natural' => true];
+        }
+        $lect = (bool)$hit['is_lecture_day'];
+        return ['reply' => "El {$dayName} " . $fmt($from) . ($lect ? ' SÍ es día lectivo — hay jornada normal.' : ' NO es día lectivo' . ($hit['reason'] ? ": {$hit['reason']}." : '.')), '_natural' => true,
+            'entities' => ['from' => $from, 'to' => $to]];
+    }
+    $nonLect = array_values(array_filter($rows, fn($r) => !(bool)$r['is_lecture_day']));
+    if (!$rows || !$nonLect)
+        return ['reply' => 'No hay días marcados como no lectivos en ese período — el calendario registra jornada normal.', '_natural' => true];
+    $next = null;
+    foreach ($nonLect as $r) if ($r['calendar_date'] >= nxToday()) { $next = $r; break; }
+    $reply = count($nonLect) . ' día' . (count($nonLect) === 1 ? '' : 's') . ' no lectivo' . (count($nonLect) === 1 ? '' : 's') . ' en el período.'
+        . ($next ? ' El próximo: ' . $dow[(int)date('w', strtotime($next['calendar_date']))] . ' ' . $fmt($next['calendar_date']) . ($next['reason'] ? " ({$next['reason']})" : '') . '.' : '');
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => 'Días no lectivos', 'columns' => ['Fecha', 'Día', 'Motivo'],
+            'rows' => array_map(fn($r) => [$fmt($r['calendar_date']), ucfirst($dow[(int)date('w', strtotime($r['calendar_date']))]), $r['reason'] ?: '—'], $nonLect)]],
+        '_result_set' => ['type' => 'calendar', 'label' => 'días no lectivos',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $fmt($r['calendar_date']), 'sub' => $r['reason'] ?: '—'], $nonLect),
+            'count' => count($nonLect)]];
+}
+
+/** Contacto de un funcionario — correo/teléfono institucional. */
+function chat_staff_contact(PDO $conn, array $u, array $s, array $v): array {
+    $q = $v['_q'] ?? '';
+    $name = $s['person'] ?? null;
+    // «correo de la enfermera / de coordinación» — rol, no nombre
+    if (!$name) {
+        $roleMap = ['rector' => 'RECTOR', 'director' => 'RECTOR', 'coordinador' => 'COORDINATOR', 'coordinacion' => 'COORDINATOR',
+            'psicolog' => 'COUNSELOR', 'orientador' => 'COUNSELOR', 'psicoorientador' => 'COUNSELOR', 'psicoorientacion' => 'COUNSELOR',
+            'secretari' => 'SECRETARY', 'enfermer' => 'AUXILIARY', 'porter' => 'SECURITY', 'celador' => 'SECURITY'];
+        $role = null;
+        foreach ($roleMap as $k => $r) if (str_contains($q, $k)) { $role = $r; break; }
+        if ($role) {
+            $st = $conn->prepare("SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone, u.work_shift, r.role_name
+                FROM users u JOIN roles r ON r.role_id = u.role_id
+                WHERE u.school_id = ? AND u.deleted_at IS NULL AND u.active = TRUE AND r.role_name = ?
+                ORDER BY u.last_name LIMIT 10");
+            $st->execute([$u['school_id'], $role]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+            if (!$rows) return ['reply' => 'No hay personal registrado en ' . (NX_ROLE_ES[$role] ?? strtolower($role)) . '.', '_natural' => true];
+            if (count($rows) === 1) return chatContactCard($rows[0]);
+            return ['reply' => 'En ' . (NX_ROLE_ES[$role] ?? strtolower($role)) . ' están ' . implode(', ', array_map(fn($r) => "{$r['first_name']} {$r['last_name']}", $rows)) . '. ¿De cuál quieres el contacto?', '_natural' => true,
+                '_result_set' => ['type' => 'staff', 'label' => 'personal', 'count' => count($rows),
+                    'items' => array_map(fn($r) => ['id' => $r['user_id'], 'label' => "{$r['first_name']} {$r['last_name']}", 'sub' => NX_ROLE_ES[$r['role_name']] ?? $r['role_name']], $rows)]];
+        }
+    }
+    // «correo de <nombre>» — puede venir en person o en student (el parser no
+    // sabe si es docente); resolver contra personal PRIMERO
+    if (!$name && !empty($s['student'])) $name = $s['student'];
+    if (!$name) return ['reply' => '¿De quién quieres el contacto? Nómbralo o dime su cargo.', '_natural' => true];
+    $found = chatResolveStaff($conn, $u, $name, $q ?? ($v['_q'] ?? null));
+    if (!$found) return ['reply' => "No encuentro a «{$name}» entre el personal de la institución.", '_natural' => true];
+    if (count($found) > 1) return ['reply' => 'Encontré varias personas: ' . implode(' · ', array_map(fn($r) => "{$r['first_name']} {$r['last_name']} (" . (NX_ROLE_ES[$r['role_name']] ?? $r['role_name']) . ')', $found)) . '. ¿Cuál?', '_natural' => true];
+    return chatContactCard($found[0]);
+}
+
+function chatContactCard(array $p): array {
+    $name = trim("{$p['first_name']} {$p['last_name']}");
+    $role = NX_ROLE_ES[$p['role_name']] ?? strtolower($p['role_name']);
+    $bits = [$role . ($p['work_shift'] ? ", jornada {$p['work_shift']}" : '')];
+    if ($p['email']) $bits[] = "correo {$p['email']}";
+    if ($p['phone']) $bits[] = "teléfono {$p['phone']}";
+    return ['reply' => "{$name} — " . implode(' · ', $bits) . '.', '_natural' => true,
+        'cards' => [['title' => "Contacto — {$name}", 'columns' => ['Nombre', 'Cargo', 'Correo', 'Teléfono'],
+            'rows' => [[$name, ucfirst($role), $p['email'] ?: '—', $p['phone'] ?: '—']]]],
+        'entities' => ['person' => $name]];
+}
+
+/** Horario de un docente / quién enseña una materia / qué clase ahora. */
+function chat_teacher_schedule(PDO $conn, array $u, array $s, array $v): array {
+    $q = $v['_q'] ?? '';
+    $dow = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    // «qué materia ve el 8A ahora» — grupo + bloque actual
+    if (!empty($s['group']) && preg_match('/\b(ahora|este periodo|este bloque|en este momento|que (materia|clase|asignatura))\b/u', $q)) {
+        $g = chatResolveGroup($conn, $u, $s['group']);
+        if (!$g) return ['reply' => "No encuentro el grupo «{$s['group']}».", '_natural' => true];
+        $day = (int)date('N'); // 1=lunes
+        $st = $conn->prepare("SELECT sch.block_number, sch.start_time, sch.end_time, sub.subject_name,
+                u2.first_name || ' ' || u2.last_name AS teacher, cr.classroom_name
+            FROM schedules sch
+            LEFT JOIN subjects sub ON sub.subject_id = sch.subject_id
+            LEFT JOIN users u2 ON u2.user_id = sch.teacher_user_id
+            LEFT JOIN classrooms cr ON cr.classroom_id = sch.classroom_id
+            WHERE sch.group_id = ? AND sch.day_of_week = ? AND sch.start_time <= (NOW() AT TIME ZONE 'America/Bogota')::time
+              AND sch.end_time >= (NOW() AT TIME ZONE 'America/Bogota')::time
+            ORDER BY sch.block_number LIMIT 2");
+        $st->execute([$g['group_id'], $day]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply' => "A esta hora {$g['group_name']} no tiene bloque programado ({$dow[$day % 7]}).", '_natural' => true];
+        $r = $rows[0];
+        return ['reply' => "Ahora {$g['group_name']} está en " . ($r['subject_name'] ?: 'bloque libre') . " con {$r['teacher']} (bloque {$r['block_number']}, {$r['start_time']}–{$r['end_time']}" . ($r['classroom_name'] ? ", {$r['classroom_name']}" : '') . ').', '_natural' => true];
+    }
+    // «quién enseña <materia> (a <grupo>)» — búsqueda por materia
+    if (preg_match('/\b(quien|quienes)\s+(dicta|dictan|enseña|enseñan|imparte|imparten|da|dan|ve|ven)\s+([a-záéíóúñü]{3,})/u', $q, $mm)) {
+        $sub = $mm[3];
+        $g = !empty($s['group']) ? chatResolveGroup($conn, $u, $s['group']) : null;
+        $w = 'sch.group_id IS NOT NULL'; $p = [];
+        if ($g) { $w = 'sch.group_id = ?'; $p[] = $g['group_id']; }
+        $st = $conn->prepare("SELECT DISTINCT u2.first_name || ' ' || u2.last_name AS teacher, sub.subject_name,
+                string_agg(DISTINCT ag.group_name, ', ' ORDER BY ag.group_name) AS groups
+            FROM schedules sch
+            JOIN subjects sub ON sub.subject_id = sch.subject_id
+            JOIN users u2 ON u2.user_id = sch.teacher_user_id
+            JOIN academic_groups ag ON ag.group_id = sch.group_id
+            WHERE {$w} AND u2.school_id = ? AND ag.school_id = ?
+              AND translate(lower(sub.subject_name),'áéíóúüñ','aeiouun') LIKE translate(lower(?),'áéíóúüñ','aeiouun')
+            GROUP BY teacher, sub.subject_name LIMIT 10");
+        $st->execute(array_merge($p, [$u['school_id'], $u['school_id'], '%' . $sub . '%']));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply' => "Nadie tiene «{$sub}» programada en el horario" . ($g ? " de {$g['group_name']}" : '') . '.', '_natural' => true];
+        return ['reply' => implode('; ', array_map(fn($r) => "{$r['teacher']} dicta {$r['subject_name']} ({$r['groups']})", $rows)) . '.', '_natural' => true,
+            'cards' => [['title' => "Docentes de {$sub}", 'columns' => ['Docente', 'Materia', 'Grupos'],
+                'rows' => array_map(fn($r) => [$r['teacher'], $r['subject_name'], $r['groups']], $rows)]]];
+    }
+    // «horario del docente X» — grid semanal de una persona
+    $name = $s['person'] ?? null;
+    if (!$name && !empty($s['student']) && preg_match('/\b(docente|profesor|profe|maestr\w+)\b/u', $q)) $name = $s['student'];
+    if (!$name && !empty($s['student'])) $name = $s['student'];
+    if (!$name) return ['reply' => '¿De qué docente quieres el horario? Nómbralo.', '_natural' => true];
+    $found = chatResolveStaff($conn, $u, $name, $q ?? ($v['_q'] ?? null));
+    if (!$found) return ['reply' => "No encuentro a «{$name}» entre el personal.", '_natural' => true];
+    if (count($found) > 1) return ['reply' => 'Encontré varias personas: ' . implode(' · ', array_map(fn($r) => "{$r['first_name']} {$r['last_name']} (" . (NX_ROLE_ES[$r['role_name']] ?? $r['role_name']) . ')', $found)) . '. ¿Cuál?', '_natural' => true];
+    $p = $found[0];
+    $st = $conn->prepare("SELECT sch.day_of_week, sch.block_number, sch.start_time, sch.end_time,
+            sub.subject_name, ag.group_name, cr.classroom_name
+        FROM schedules sch
+        JOIN academic_groups ag ON ag.group_id = sch.group_id AND ag.school_id = ?
+        LEFT JOIN subjects sub ON sub.subject_id = sch.subject_id
+        LEFT JOIN classrooms cr ON cr.classroom_id = sch.classroom_id
+        WHERE sch.teacher_user_id = ? ORDER BY sch.day_of_week, sch.block_number LIMIT 60");
+    $st->execute([$u['school_id'], $p['user_id']]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $name = trim("{$p['first_name']} {$p['last_name']}");
+    if (!$rows) return ['reply' => "{$name} no tiene bloques programados en el horario.", '_natural' => true];
+    $byDay = [];
+    foreach ($rows as $r) $byDay[(int)$r['day_of_week']][] = $r;
+    $dowFull = [1=>'lunes',2=>'martes',3=>'miércoles',4=>'jueves',5=>'viernes',6=>'sábado',7=>'domingo'];
+    $reply = "{$name}: " . count($rows) . ' bloques semanales — ' . implode(', ', array_map(fn($d) => $dowFull[$d] ?? "día {$d}", array_keys($byDay))) . '.';
+    $cards = [];
+    foreach ($byDay as $d => $rs) {
+        $cards[] = ['title' => ucfirst($dowFull[$d] ?? "día {$d}"), 'columns' => ['Bloque', 'Hora', 'Materia', 'Grupo', 'Salón'],
+            'rows' => array_map(fn($r) => [$r['block_number'], substr($r['start_time'], 0, 5) . '–' . substr($r['end_time'], 0, 5),
+                $r['subject_name'] ?: '—', $r['group_name'], $r['classroom_name'] ?: '—'], $rs)];
+    }
+    return ['reply' => $reply, '_natural' => true, 'cards' => $cards, 'entities' => ['person' => $name]];
+}
+
+/** Exención/consentimiento biométrico — quiénes están exentos y por qué. */
+function chat_student_consent(PDO $conn, array $u, array $s, array $v): array {
+    $scope = chatScope($conn, $u);
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+        if (count($found) > 1) return chatAmbiguous($found);
+        $stu = $found[0];
+    }
+    if ($stu) {
+        $st = $conn->prepare("SELECT s.first_name, s.last_name, s.biometric_exempt, s.exemption_reason,
+                s.consent_status, s.consent_channel, " . chatTs('s.consent_recorded_at') . " AS consent_at,
+                COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS consent_by
+            FROM students s LEFT JOIN users ub ON ub.user_id = s.consent_recorded_by
+            WHERE s.student_id = ? AND s.school_id = ?");
+        $st->execute([$stu['student_id'], $u['school_id']]); $r = $st->fetch(PDO::FETCH_ASSOC);
+        $name = trim("{$r['first_name']} {$r['last_name']}");
+        $cs = ['PENDING' => 'pendiente', 'GRANTED' => 'otorgado', 'DENIED' => 'negado', 'REVOKED' => 'revocado'];
+        $reply = "{$name}: " . ($r['biometric_exempt'] ? "está EXENTO de biometría" . ($r['exemption_reason'] ? " — {$r['exemption_reason']}" : ' (sin motivo registrado)')
+            : 'usa biometría normal')
+            . '. Consentimiento ' . ($cs[strtoupper((string)$r['consent_status'])] ?? strtolower((string)($r['consent_status'] ?: 'sin registrar')))
+            . ($r['consent_at'] ? " (registrado {$r['consent_at']} por {$r['consent_by']})" : '') . '.';
+        return ['reply' => $reply, '_natural' => true, 'entities' => ['student' => mb_strtolower($name)]];
+    }
+    $scopeSql = preg_replace('/\bs\./', 's.', (string)$scope['sql']);
+    $st = $conn->prepare("SELECT s.first_name, s.last_name, s.exemption_reason, ag.group_name, s.consent_status
+        FROM students s
+        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+        WHERE s.school_id = ? AND s.deleted_at IS NULL AND s.biometric_exempt = TRUE {$scopeSql}
+        ORDER BY ag.group_name, s.last_name LIMIT 100");
+    $st->execute(array_merge([$u['school_id']], $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => 'Ningún estudiante está exento de biometría — todos marcan con huella o están pendientes de enrolamiento.', '_natural' => true];
+    $n = count($rows);
+    return ['reply' => "{$n} estudiante" . ($n === 1 ? ' está exento' : 's están exentos') . ' de biometría.', '_natural' => true,
+        'cards' => [['title' => 'Exentos de biometría', 'columns' => ['Estudiante', 'Grupo', 'Motivo', 'Consentimiento'],
+            'rows' => array_map(fn($r) => ["{$r['first_name']} {$r['last_name']}", $r['group_name'] ?? '—',
+                mb_strimwidth((string)($r['exemption_reason'] ?? 'sin motivo'), 0, 45, '…'), strtolower((string)($r['consent_status'] ?? '—'))], $rows)]],
+        '_result_set' => ['type' => 'students', 'label' => 'exentos de biometría',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => "{$r['first_name']} {$r['last_name']}", 'sub' => ($r['group_name'] ?? '—') . ' · ' . mb_strimwidth((string)($r['exemption_reason'] ?? ''), 0, 30, '…')], $rows),
+            'count' => $n]];
+}
+
+/** El caso/seguimiento de UN estudiante — quién lo lleva, desde cuándo, notas. */
+function chat_tracking_detail(PDO $conn, array $u, array $s, array $v): array {
+    if (empty($s['student'])) return ['reply' => '¿De qué estudiante quieres el seguimiento? Dame nombre o apellido.', '_natural' => true];
+    $found = chatResolveStudent($conn, $u, $s['student']);
+    if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+    if (count($found) > 1) return chatAmbiguous($found);
+    $stu = $found[0];
+    $name = trim("{$stu['first_name']} {$stu['last_name']}");
+    $st = $conn->prepare("SELECT t.tracking_id, t.status, t.dependency, t.origin_type,
+            " . chatTs('t.created_at') . " AS desde, " . chatTs('t.updated_at') . " AS ult_act,
+            COALESCE(ub.first_name || ' ' || ub.last_name, 'sin asignar') AS encargado
+        FROM student_tracking t LEFT JOIN users ub ON ub.user_id = t.assigned_to_user_id
+        WHERE t.school_id = ? AND t.student_id = ? ORDER BY t.created_at DESC LIMIT 10");
+    $st->execute([$u['school_id'], $stu['student_id']]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => "{$name} no tiene seguimientos registrados.", '_natural' => true,
+        'entities' => ['student' => mb_strtolower($name)]];
+    $cur = $rows[0];
+    $n = $conn->prepare("SELECT " . chatTs('n.created_at') . " AS fecha, n.note_text,
+            COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS autor
+        FROM student_tracking_notes n LEFT JOIN users ub ON ub.user_id = n.user_id
+        WHERE n.tracking_id = ? ORDER BY n.created_at DESC LIMIT 10");
+    $n->execute([$cur['tracking_id']]); $notes = $n->fetchAll(PDO::FETCH_ASSOC);
+    $stEs = ['active' => 'en proceso', 'en_proceso' => 'en proceso', 'closed' => 'cerrado', 'completed' => 'cerrado', 'pending' => 'pendiente'];
+    $dep = strtolower(str_replace('_', ' ', (string)$cur['dependency']));
+    $reply = "El seguimiento de {$name} ({$dep}) lo lleva {$cur['encargado']}, " . ($stEs[strtolower((string)$cur['status'])] ?? $cur['status'])
+        . " desde {$cur['desde']}"
+        . ($notes ? '. Última nota (' . $notes[0]['fecha'] . "): «" . mb_strimwidth($notes[0]['note_text'], 0, 80, '…') . '».' : '.');
+    $cards = [['title' => "Seguimientos de {$name}", 'columns' => ['Origen', 'Estado', 'Desde', 'A cargo', 'Última act.'],
+        'rows' => array_map(fn($r) => [strtolower(str_replace('_', ' ', (string)$r['dependency'])), $stEs[strtolower((string)$r['status'])] ?? $r['status'],
+            $r['desde'], $r['encargado'], $r['ult_act']], $rows)]];
+    if ($notes) $cards[] = ['title' => 'Notas del proceso', 'columns' => ['Fecha', 'Autor', 'Nota'],
+        'rows' => array_map(fn($r) => [$r['fecha'], $r['autor'], mb_strimwidth((string)$r['note_text'], 0, 60, '…')], $notes)];
+    return ['reply' => $reply, '_natural' => true, 'cards' => $cards,
+        'entities' => ['student' => mb_strtolower($name), 'module' => 'SEGUIMIENTO'],
+        '_result_set' => ['type' => 'trackings', 'label' => "seguimiento de {$name}",
+            'items' => array_map(fn($r) => ['id' => $r['tracking_id'], 'label' => $dep, 'sub' => $r['desde'] . ' · ' . $r['encargado']], $rows),
+            'count' => count($rows)]];
+}
+
+/** Citaciones enviadas POR un docente — o fecha programada de una citación. */
+function chat_citations_by(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $q = $v['_q'] ?? '';
+    $sender = null;
+    $pname = $s['person'] ?? null;
+    if ($pname) {
+        $f = chatResolveStaff($conn, $u, $pname, $v['_q'] ?? null);
+        if (count($f) > 1) return ['reply' => 'Encontré varias personas: ' . implode(' · ', array_map(fn($r) => "{$r['first_name']} {$r['last_name']} (" . (NX_ROLE_ES[$r['role_name']] ?? $r['role_name']) . ')', $f)) . '. ¿Cuál?', '_natural' => true];
+        if ($f) $sender = $f[0];
+        else $s['student'] = $s['student'] ?? $pname;   // no staff — quizá es estudiante
+    }
+    if (!$sender && !empty($s['student']) && preg_match('/\b(cito|citamos|convoco)\b/u', $q)) {
+        // «citó <nombre>» — el nombre puede ser el docente (subject), no el citado
+        $f = chatResolveStaff($conn, $u, $s['student'], $v['_q'] ?? null);
+        if ($f && count($f) === 1) $sender = $f[0];
+    }
+    $stu = null;
+    if (!empty($s['student']) && !$sender) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if ($found && count($found) === 1) $stu = $found[0];
+        elseif ($found) return chatAmbiguous($found);
+    }
+    $scope = chatScope($conn, $u);
+    $scopeSql = preg_replace('/\bs\./', 'st2.', (string)$scope['sql']);
+    // sin emisor ni estudiante + superlativo → ranking POR emisor:
+    // «qué profesor ha citado más estudiantes», «quién ha mandado más
+    // citaciones» — responde quién encabeza, no la lista plana
+    if (!$sender && !$stu && preg_match('/\b(mas|mayor|top|ranking)\b/u', $q)) {
+        $rk = $conn->prepare("SELECT ub.first_name || ' ' || ub.last_name AS sender,
+                COUNT(DISTINCT tm.student_id) AS n_students, COUNT(*) AS n_total
+            FROM twilio_messages tm
+            JOIN users ub ON ub.user_id = tm.sender_user_id
+            LEFT JOIN students st2 ON st2.student_id = tm.student_id
+            WHERE tm.school_id = ? AND tm.type_code = 'CITACION' AND " . chatD('tm.sent_at') . " BETWEEN ? AND ? {$scopeSql}
+            GROUP BY 1 ORDER BY n_students DESC, n_total DESC LIMIT 10");
+        $rk->execute(array_merge([$u['school_id'], $from, $to], $scope['params']));
+        $rkRows = $rk->fetchAll(PDO::FETCH_ASSOC);
+        $rl = chatRangeLabel($s);
+        if (!$rkRows) return ['reply' => "No hay citaciones registradas {$rl}.", '_natural' => true];
+        $topR = $rkRows[0];
+        return ['reply' => "{$rl}: quien más citó es {$topR['sender']} ({$topR['n_students']} estudiantes, {$topR['n_total']} mensajes).",
+            '_natural' => true,
+            'cards' => [['title' => "Citaciones por emisor — {$rl}", 'columns' => ['Emisor', 'Estudiantes', 'Mensajes'],
+                'rows' => array_map(fn($r) => [$r['sender'], (int)$r['n_students'], (int)$r['n_total']], $rkRows)]],
+            '_result_set' => ['type' => 'ranking', 'label' => 'citaciones por emisor',
+                'items' => array_map(fn($r) => ['id' => null, 'label' => $r['sender'], 'sub' => "{$r['n_students']} estudiantes"], $rkRows), 'count' => count($rkRows)],
+            'entities' => array_filter(['module' => 'CITACION', 'range_label' => $s['range_label'] ?? null])];
+    }
+    $w = ["tm.school_id = ?", "tm.type_code = 'CITACION'", chatD('tm.sent_at') . ' BETWEEN ? AND ?'];
+    $p = [$u['school_id'], $from, $to];
+    if ($sender) { $w[] = 'tm.sender_user_id = ?'; $p[] = $sender['user_id']; }
+    if ($stu)    { $w[] = 'tm.student_id = ?';     $p[] = $stu['student_id']; }
+    $st = $conn->prepare("SELECT " . chatTs('tm.sent_at') . " AS d, tm.message_content, tm.delivery_status,
+            st2.first_name || ' ' || st2.last_name AS name, ag.group_name,
+            COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS sender,
+            g2.first_name || ' ' || g2.last_name AS guardian_name
+        FROM twilio_messages tm
+        LEFT JOIN students st2 ON st2.student_id = tm.student_id
+        LEFT JOIN student_group_assignments sga ON sga.student_id = st2.student_id AND sga.active = TRUE
+        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+        LEFT JOIN users ub ON ub.user_id = tm.sender_user_id
+        LEFT JOIN guardians gd ON gd.guardian_id = tm.guardian_id
+        LEFT JOIN users g2 ON g2.user_id = gd.user_id
+        WHERE " . implode(' AND ', $w) . " {$scopeSql}
+        ORDER BY tm.sent_at DESC LIMIT 60");
+    $st->execute(array_merge($p, $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $rl = chatRangeLabel($s);
+    $who = $sender ? " de {$sender['first_name']} {$sender['last_name']}" : ($stu ? " de {$stu['first_name']} {$stu['last_name']}" : '');
+    $ent = array_filter(['person' => $sender ? "{$sender['first_name']} {$sender['last_name']}" : null,
+        'student' => $stu ? mb_strtolower("{$stu['first_name']} {$stu['last_name']}") : null,
+        'module' => 'CITACION', 'range_label' => $s['range_label'] ?? null, 'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null]);
+    if (!$rows) return ['reply' => "No hay citaciones{$who} {$rl}.", 'entities' => $ent, '_natural' => true];
+    $stEs = ['QUEUED' => 'En cola', 'PROCESSING' => 'Enviando', 'SENT' => 'Enviada', 'DELIVERED' => 'Entregada', 'READ' => 'Leída',
+        'FAILED' => 'Falló', 'FAILED_PERMANENT' => 'Falló definitivo', 'UNDELIVERED' => 'No entregada', 'RECEIVED' => 'Respuesta'];
+    $n = count($rows);
+    // fecha programada: la citación suele traer el día en el cuerpo del mensaje
+    $latest = $rows[0];
+    $whenQ = (bool)preg_match('/\b(cuando|que dia|a que hora|fecha|programad\w*|agendad\w*)\b/u', $q);
+    $reply = ucfirst("{$rl}: {$n} " . ($n === 1 ? 'citación' : 'citaciones') . "{$who}.");
+    if ($whenQ && $stu && $n === 1)
+        $reply = "La citación de {$stu['first_name']} {$stu['last_name']} se envió {$latest['d']}"
+            . ($latest['message_content'] ? ' — el mensaje dice: «' . mb_strimwidth($latest['message_content'], 0, 90, '…') . '»' : '') . '.';
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "Citaciones{$who} — {$rl}", 'columns' => ['Fecha', 'Estudiante', 'Grupo', 'Acudiente', 'Mensaje', 'Estado', 'Envió'],
+            'rows' => array_map(fn($r) => [$r['d'], $r['name'] ?? '—', $r['group_name'] ?? '—', $r['guardian_name'] ?? '—',
+                mb_strimwidth((string)($r['message_content'] ?? '—'), 0, 55, '…'), $stEs[strtoupper((string)$r['delivery_status'])] ?? $r['delivery_status'], $r['sender']], $rows)]],
+        'entities' => $ent,
+        '_result_set' => ['type' => 'citations', 'label' => "citaciones{$who}",
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'] ?? '—', 'sub' => $r['d'] . ' · ' . mb_strimwidth((string)($r['message_content'] ?? ''), 0, 35, '…')], $rows),
+            'count' => $n]];
+}
+
+/** Resolución de alertas de riesgo — quién resolvió, cuándo, cuáles siguen. */
+function chat_alert_resolution(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $scope = chatScope($conn, $u);
+    $q = $v['_q'] ?? '';
+    $open = (bool)preg_match('/\b(sin resolver|pendientes?|abiertas?|activas?|sin atender|vigentes?)\b/u', $q);
+    $w = ['a.school_id = ?', chatD('a.created_at') . ' BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
+    $w[] = $open ? "a.status <> 'RESOLVED'" : '1=1';
+    $stu = null;
+    if (!empty($s['student'])) {
+        $found = chatResolveStudent($conn, $u, $s['student']);
+        if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+        if (count($found) > 1) return chatAmbiguous($found);
+        $stu = $found[0];
+        $w[] = 'a.student_id = ?'; $p[] = $stu['student_id'];
+    }
+    $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
+    $st = $conn->prepare("SELECT a.alert_level, a.trigger_category, a.trigger_rule, a.status,
+            " . chatTs('a.created_at') . " AS creada, " . chatTs('a.resolved_at') . " AS resuelta,
+            st.first_name || ' ' || st.last_name AS name, ag.group_name,
+            COALESCE(rb.first_name || ' ' || rb.last_name, '—') AS resolvio,
+            a.resolution_notes
+        FROM risk_alerts a
+        JOIN students st ON st.student_id = a.student_id AND st.deleted_at IS NULL
+        LEFT JOIN student_group_assignments sga ON sga.student_id = st.student_id AND sga.active = TRUE
+        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+        LEFT JOIN users rb ON rb.user_id = a.resolved_by
+        WHERE " . implode(' AND ', $w) . " {$scopeSql}
+        ORDER BY a.created_at DESC LIMIT 60");
+    $st->execute(array_merge($p, $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $rl = chatRangeLabel($s); $who = chatWho($stu, null);
+    $ent = array_filter(['student' => $stu ? mb_strtolower("{$stu['first_name']} {$stu['last_name']}") : null,
+        'range_label' => $s['range_label'] ?? null, 'from' => $s['from'] ?? null, 'to' => $s['to'] ?? null]);
+    if (!$rows) return ['reply' => $open ? "No hay alertas sin resolver{$who} {$rl}." : "No hay alertas registradas{$who} {$rl}.", 'entities' => $ent, '_natural' => true];
+    $stEs = ['ACTIVE' => 'activa', 'ACKNOWLEDGED' => 'vista', 'RESOLVED' => 'resuelta', 'ESCALATED' => 'escalada'];
+    $lvl = ['CRITICAL' => 'crítica', 'HIGH' => 'alta', 'MEDIUM' => 'media', 'LOW' => 'baja'];
+    $resolved = count(array_filter($rows, fn($r) => $r['status'] === 'RESOLVED'));
+    $n = count($rows);
+    $reply = $open
+        ? "{$n} alerta" . ($n === 1 ? ' sigue' : 's siguen') . " sin resolver{$who} {$rl}."
+        : ucfirst("{$rl}: {$n} alertas{$who} — {$resolved} resueltas, " . ($n - $resolved) . ' abiertas.');
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "Alertas{$who} — {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Nivel', 'Categoría', 'Creada', 'Estado', 'Resolvió', 'Cuándo'],
+            'rows' => array_map(fn($r) => [$r['name'], $r['group_name'] ?? '—', $lvl[$r['alert_level']] ?? $r['alert_level'],
+                $r['trigger_category'] ?? '—', $r['creada'], $stEs[$r['status']] ?? $r['status'], $r['resolvio'], $r['resuelta'] ?: '—'], $rows)]],
+        'entities' => $ent,
+        '_result_set' => ['type' => 'alerts', 'label' => "alertas{$who}",
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'], 'sub' => ($lvl[$r['alert_level']] ?? '') . ' · ' . ($stEs[$r['status']] ?? $r['status'])], $rows),
+            'count' => $n]];
+}
+
+/** Movimiento de matrícula — nuevos, retirados, por grado. */
+function chat_enrollment_stats(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $rl = chatRangeLabel($s);
+    $scope = chatScope($conn, $u);
+    $scopeSql = preg_replace('/\bs\./', 's.', (string)$scope['sql']);
+    $q = $v['_q'] ?? '';
+    $withdrawn = (bool)preg_match('/\b(retirad\w*|se fueron|salieron|dados? de baja|desmatriculad\w*|retiros?)\b/u', $q);
+    if ($withdrawn) {
+        $st = $conn->prepare("SELECT s.first_name, s.last_name, ag.group_name,
+                " . chatTs('s.deleted_at') . " AS retiro, " . chatTs('s.updated_at') . " AS act
+            FROM students s
+            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE s.school_id = ? AND s.deleted_at IS NOT NULL
+              AND " . chatD('s.deleted_at') . " BETWEEN ? AND ? {$scopeSql}
+            ORDER BY s.deleted_at DESC LIMIT 100");
+        $st->execute(array_merge([$u['school_id'], $from, $to], $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply' => "No hay estudiantes retirados {$rl}.", '_natural' => true];
+        $n = count($rows);
+        return ['reply' => ucfirst("{$rl}: {$n} estudiante" . ($n === 1 ? ' retirado' : 's retirados') . '.'), '_natural' => true,
+            'cards' => [['title' => "Retiros — {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Retirado'],
+                'rows' => array_map(fn($r) => ["{$r['first_name']} {$r['last_name']}", $r['group_name'] ?? '—', $r['retiro'] ?: $r['act']], $rows)]],
+            '_result_set' => ['type' => 'students', 'label' => 'retirados',
+                'items' => array_map(fn($r) => ['id' => null, 'label' => "{$r['first_name']} {$r['last_name']}", 'sub' => $r['retiro'] ?: ''], $rows), 'count' => $n]];
+    }
+    $st = $conn->prepare("SELECT s.first_name, s.last_name, ag.group_name,
+            " . chatTs('s.created_at') . " AS ingreso, s.grade_level
+        FROM students s
+        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+        WHERE s.school_id = ? AND s.deleted_at IS NULL
+          AND " . chatD('s.created_at') . " BETWEEN ? AND ? {$scopeSql}
+        ORDER BY s.created_at DESC LIMIT 150");
+    $st->execute(array_merge([$u['school_id'], $from, $to], $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => "No ingresaron estudiantes nuevos {$rl}.", '_natural' => true];
+    $n = count($rows);
+    $byGrade = array_count_values(array_map(fn($r) => $r['grade_level'] ?: ($r['group_name'] ?? '?'), $rows));
+    arsort($byGrade);
+    $gb = implode(', ', array_map(fn($g, $c) => "{$g} ({$c})", array_keys($byGrade), $byGrade));
+    return ['reply' => ucfirst("{$rl} ingresaron {$n} estudiante" . ($n === 1 ? '' : 's') . " nuevos — por grado: {$gb}."), '_natural' => true,
+        'cards' => [['title' => "Ingresos — {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Ingresó'],
+            'rows' => array_map(fn($r) => ["{$r['first_name']} {$r['last_name']}", $r['group_name'] ?? '—', $r['ingreso']], array_slice($rows, 0, 30))]],
+        '_result_set' => ['type' => 'students', 'label' => 'ingresos',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => "{$r['first_name']} {$r['last_name']}", 'sub' => $r['ingreso']], $rows), 'count' => $n]];
+}
+
+/** Reportes generados/descargados del sistema. */
+function chat_reports_log(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $rl = chatRangeLabel($s);
+    $st = $conn->prepare("SELECT re.report_type, re.file_format, " . chatTs('re.generated_at') . " AS cuando,
+            COALESCE(ub.first_name || ' ' || ub.last_name, '—') AS por
+        FROM report_exports re LEFT JOIN users ub ON ub.user_id = re.generated_by_user_id
+        WHERE re.school_id = ? AND " . chatD('re.generated_at') . " BETWEEN ? AND ?
+        ORDER BY re.generated_at DESC LIMIT 50");
+    $st->execute([$u['school_id'], $from, $to]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => "No se generaron reportes {$rl}.", '_natural' => true];
+    $n = count($rows);
+    return ['reply' => ucfirst("{$rl} se generaron {$n} reporte" . ($n === 1 ? '' : 's') . '.'), '_natural' => true,
+        'cards' => [['title' => "Reportes — {$rl}", 'columns' => ['Tipo', 'Formato', 'Generado', 'Por'],
+            'rows' => array_map(fn($r) => [str_replace('_', ' ', (string)$r['report_type']), strtoupper((string)$r['file_format']), $r['cuando'], $r['por']], $rows)]],
+        '_result_set' => ['type' => 'reports', 'label' => 'reportes',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['report_type'], 'sub' => $r['cuando'] . ' · ' . $r['por']], $rows), 'count' => $n]];
+}
+
+/** Detalle de alertas SOS — quién emitió, aula, estado de resolución. */
+function chat_sos_detail(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $rl = chatRangeLabel($s);
+    $q = $v['_q'] ?? '';
+    $open = (bool)preg_match('/\b(sin resolver|pendientes?|activas?|sin atender|vigentes?)\b/u', $q);
+    $w = ['a.school_id = ?', chatD('a.emitted_at') . ' BETWEEN ? AND ?']; $p = [$u['school_id'], $from, $to];
+    if ($open) $w[] = 'a.resolved = FALSE';
+    $st = $conn->prepare("SELECT a.alert_type, a.alert_description, a.resolved,
+            " . chatTs('a.emitted_at') . " AS emitida, " . chatTs('a.resolved_at') . " AS resuelta,
+            COALESCE(eb.first_name || ' ' || eb.last_name, '—') AS emisor,
+            COALESCE(rb.first_name || ' ' || rb.last_name, '—') AS resolvio,
+            cr.classroom_name
+        FROM sos_alerts a
+        LEFT JOIN users eb ON eb.user_id = a.emitted_by_user_id
+        LEFT JOIN users rb ON rb.user_id = a.resolved_by_user_id
+        LEFT JOIN classrooms cr ON cr.classroom_id = a.classroom_id
+        WHERE " . implode(' AND ', $w) . " ORDER BY a.emitted_at DESC LIMIT 40");
+    $st->execute($p); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => $open ? "No hay alertas SOS sin resolver {$rl}." : "No hay alertas SOS {$rl}.", '_natural' => true];
+    $n = count($rows); $latest = $rows[0];
+    $reply = ucfirst("{$rl}: {$n} " . ($n === 1 ? 'alerta SOS' : 'alertas SOS') . '.')
+        . " La más reciente la emitió {$latest['emisor']}" . ($latest['classroom_name'] ? " desde {$latest['classroom_name']}" : '')
+        . " ({$latest['emitida']}) — " . ($latest['resolved'] ? "resuelta por {$latest['resolvio']} ({$latest['resuelta']})" : 'aún sin resolver') . '.';
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "Alertas SOS — {$rl}", 'columns' => ['Tipo', 'Emitió', 'Aula', 'Cuándo', 'Estado', 'Resolvió'],
+            'rows' => array_map(fn($r) => [str_replace('_', ' ', (string)($r['alert_type'] ?? 'SOS')), $r['emisor'],
+                $r['classroom_name'] ?: '—', $r['emitida'], $r['resolved'] ? 'Resuelta' : 'Sin resolver', $r['resolvio']], $rows)]],
+        '_result_set' => ['type' => 'sos', 'label' => 'alertas SOS',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['emisor'], 'sub' => $r['emitida'] . ' · ' . ($r['resolved'] ? 'resuelta' : 'abierta')], $rows), 'count' => $n]];
+}
+
+/** Mensajería con el acudiente de UN estudiante — qué se envió, qué respondió. */
+function chat_guardian_messages(PDO $conn, array $u, array $s, array $v): array {
+    if (empty($s['student'])) return ['reply' => '¿De qué estudiante? Dame nombre o apellido y miro los mensajes a su acudiente.', '_natural' => true];
+    $found = chatResolveStudent($conn, $u, $s['student']);
+    if (!$found) return ['reply' => "No encuentro a «{$s['student']}» dentro de tu alcance.", '_natural' => true];
+    if (count($found) > 1) return chatAmbiguous($found);
+    $stu = $found[0];
+    $name = trim("{$stu['first_name']} {$stu['last_name']}");
+    [$from, $to] = chatRange($s);
+    $rl = chatRangeLabel($s);
+    $st = $conn->prepare("SELECT " . chatTs('tm.sent_at') . " AS d, " . chatTs('tm.received_at') . " AS recibida,
+            tm.type_code, tm.direction, tm.delivery_status, tm.message_content,
+            g2.first_name || ' ' || g2.last_name AS guardian_name
+        FROM twilio_messages tm
+        LEFT JOIN guardians gd ON gd.guardian_id = tm.guardian_id
+        LEFT JOIN users g2 ON g2.user_id = gd.user_id
+        WHERE tm.school_id = ? AND tm.student_id = ?
+          AND " . chatD('tm.sent_at') . " BETWEEN ? AND ?
+        ORDER BY tm.sent_at DESC LIMIT 60");
+    $st->execute([$u['school_id'], $stu['student_id'], $from, $to]); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => "No hay mensajes con el acudiente de {$name} {$rl}.", '_natural' => true,
+        'entities' => ['student' => mb_strtolower($name)]];
+    $stEs = ['QUEUED' => 'En cola', 'PROCESSING' => 'Enviando', 'SENT' => 'Enviado', 'DELIVERED' => 'Entregado', 'READ' => 'Leído',
+        'FAILED' => 'Falló', 'FAILED_PERMANENT' => 'Falló definitivo', 'UNDELIVERED' => 'No entregado', 'RECEIVED' => 'Recibido'];
+    $out = count(array_filter($rows, fn($r) => $r['direction'] !== 'INBOUND'));
+    $in  = count(array_filter($rows, fn($r) => $r['direction'] === 'INBOUND'));
+    $guardian = $rows[0]['guardian_name'] ?? 'el acudiente';
+    $reply = ucfirst("{$rl} se le enviaron {$out} mensajes a {$guardian} (acudiente de {$name})")
+        . ($in ? " y respondió {$in}." : ' — aún no ha respondido.') ;
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "Mensajes con {$guardian} — {$rl}", 'columns' => ['Fecha', 'Tipo', 'Vía', 'Mensaje', 'Estado'],
+            'rows' => array_map(fn($r) => [$r['d'], str_replace('_', ' ', (string)$r['type_code']),
+                $r['direction'] === 'INBOUND' ? 'Del acudiente' : 'Del colegio',
+                mb_strimwidth((string)($r['message_content'] ?? '—'), 0, 55, '…'),
+                $stEs[strtoupper((string)$r['delivery_status'])] ?? $r['delivery_status']], $rows)]],
+        'entities' => ['student' => mb_strtolower($name)],
+        '_result_set' => ['type' => 'messages', 'label' => "mensajes a {$guardian}",
+            'items' => array_map(fn($r) => (['id' => null, 'label' => $r['type_code'], 'sub' => $r['d']]), $rows), 'count' => count($rows)]];
+}
+
+/** Estado de un dispositivo concreto — último ping, configuración, aula. */
+function chat_device_detail(PDO $conn, array $u, array $s, array $v): array {
+    $q = $v['_q'] ?? '';
+    $w = ['d.school_id = ?', 'd.active = TRUE']; $p = [$u['school_id']];
+    // «el nodo del aula 4 / sensor de la entrada» — filtrar por nombre/ubicación
+    if (preg_match('/\b(nodo|sensor|lector|dispositivo|huellero|punto)\s+(?:del?|de la|de)\s+([a-záéíóúñü0-9\s]{2,30}?)(?:\s+(no|esta|ultimo|tiene|sin|que|ya)|[.!? ]*$)/u', $q, $md)) {
+        $w[] = "(translate(lower(d.device_name),'áéíóúüñ','aeiouun') LIKE translate(lower(?),'áéíóúüñ','aeiouun')
+              OR translate(lower(COALESCE(d.location,'')),'áéíóúüñ','aeiouun') LIKE translate(lower(?),'áéíóúüñ','aeiouun'))";
+        $like = '%' . trim($md[2]) . '%'; $p[] = $like; $p[] = $like;
+    }
+    $unconf = (bool)preg_match('/\b(sin configurar|desconfigurad\w*|no configurados?|pendientes? de configurar)\b/u', $q);
+    if ($unconf) $w[] = '(d.configured = FALSE OR d.configured IS NULL)';
+    $st = $conn->prepare("SELECT d.device_name, d.location, d.status, d.configured, d.app_version,
+            " . chatTs('d.last_ping') . " AS ping, " . chatTs('d.last_seen_timestamp') . " AS visto,
+            cr.classroom_name, ag.group_name
+        FROM edge_devices d
+        LEFT JOIN classrooms cr ON cr.classroom_id = d.classroom_id
+        LEFT JOIN academic_groups ag ON ag.group_id = d.group_id
+        WHERE " . implode(' AND ', $w) . " ORDER BY d.last_ping ASC NULLS FIRST LIMIT 40");
+    $st->execute($p); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => $unconf ? 'Todos los dispositivos están configurados.' : 'No encuentro ese dispositivo — dime el nombre del nodo o el aula.', '_natural' => true];
+    $n = count($rows);
+    $stEs = ['ONLINE' => 'en línea', 'OFFLINE' => 'sin conexión', 'PENDING' => 'pendiente', 'ERROR' => 'con error'];
+    $reply = "{$n} dispositivo" . ($n === 1 ? '' : 's') . ($unconf ? ' sin configurar' : '') . '.';
+    if ($n === 1) {
+        $r = $rows[0];
+        $reply = "{$r['device_name']}" . ($r['location'] ? " ({$r['location']})" : '') . ": " . ($stEs[strtoupper((string)$r['status'])] ?? strtolower((string)$r['status']))
+            . ($r['ping'] ? ", último ping {$r['ping']}" : ', sin ping registrado')
+            . ($r['configured'] ? '' : ' — pendiente de configuración') . '.';
+    }
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => 'Dispositivos', 'columns' => ['Nombre', 'Ubicación', 'Aula', 'Estado', 'Último ping', 'Configurado'],
+            'rows' => array_map(fn($r) => [$r['device_name'], $r['location'] ?: '—', $r['classroom_name'] ?: ($r['group_name'] ?: '—'),
+                $stEs[strtoupper((string)$r['status'])] ?? $r['status'], $r['ping'] ?: 'nunca', $r['configured'] ? 'sí' : 'no'], $rows)]],
+        '_result_set' => ['type' => 'devices', 'label' => 'dispositivos',
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $r['device_name'], 'sub' => ($stEs[strtoupper((string)$r['status'])] ?? '—') . ' · ' . ($r['ping'] ?: 'sin ping')], $rows), 'count' => $n]];
+}
+
+/** Tendencia de asistencia — día pico, promedio, comparación de períodos. */
+function chat_attendance_trend(PDO $conn, array $u, array $s, array $v): array {
+    [$from, $to] = chatRange($s);
+    $scope = chatScope($conn, $u);
+    $q = $v['_q'] ?? '';
+    $mod = $s['module'] ?? 'INASISTENCIA';
+    $typ = ['INASISTENCIA' => 'inasistencias', 'LATE_ARRIVAL' => 'tardanzas', 'EVASION_INTERNA' => 'evasiones'];
+    $ml = $typ[$mod] ?? 'incidentes';
+    $scopeSql = preg_replace('/\bs\./', 'st.', (string)$scope['sql']);
+    $base = "FROM attendance_incidents ai JOIN students st ON st.student_id = ai.student_id AND st.deleted_at IS NULL " . chatIncGroupJoin();
+    $rl = chatRangeLabel($s);
+    // «qué día de la semana falta más» — agrupa por weekday en el rango;
+    // un rango de UN día no permite argmax (todo empata) — se amplía al
+    // mes móvil cuando la frase no trajo rango propio
+    if (preg_match('/\b(que dia (de la semana )?(faltan|falta|faltaron|hubo|hay) mas|dia de la semana con mas|entre semana|que dia se falta mas)\b/u', $q)) {
+        if (!isset($s['from']) || (strtotime($to) - strtotime($from)) < 14 * 86400) {
+            $from = nxToday(59); $to = nxToday(); $rl = 'los últimos 60 días';
+        }
+        $st = $conn->prepare("SELECT EXTRACT(ISODOW FROM " . chatD('ai.detected_at') . ") AS dw, COUNT(*) c
+            {$base} WHERE ai.school_id = ? AND ai.incident_type = ? AND " . chatD('ai.detected_at') . " BETWEEN ? AND ? {$scopeSql}
+            GROUP BY 1 ORDER BY c DESC LIMIT 7");
+        $st->execute(array_merge([$u['school_id'], $mod, $from, $to], $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply' => "No hay {$ml} registradas {$rl}.", '_natural' => true];
+        $dow = [1=>'lunes',2=>'martes',3=>'miércoles',4=>'jueves',5=>'viernes',6=>'sábado',7=>'domingo'];
+        $top = $rows[0];
+        return ['reply' => "El día con más {$ml} {$rl} es el {$dow[(int)$top['dw']]} ({$top['c']}).", '_natural' => true,
+            'cards' => [['title' => "{$ml} por día de la semana — {$rl}", 'columns' => ['Día', 'Total'],
+                'rows' => array_map(fn($r) => [ucfirst($dow[(int)$r['dw']] ?? $r['dw']), (int)$r['c']], $rows)]]];
+    }
+    // «en qué mes hubo más X» — argmax por bucket mensual. La pregunta no
+    // trae rango propio: un rango corto heredado («ayer») no acota el
+    // argmax — el alcance real es el año escolar
+    if (preg_match('/\b(en que|que|por que)\s+mes\b|por mes|mensual|\bmes (con|de)\s+mas\b/u', $q)) {
+        if (!isset($s['from']) || (strtotime($to) - strtotime($from)) < 60 * 86400) {
+            $from = nxToday(364); $to = nxToday(); $rl = 'los últimos 12 meses';
+        }
+        $st = $conn->prepare("SELECT TO_CHAR(" . chatD('ai.detected_at') . ", 'YYYY-MM') AS ym, COUNT(*) c
+            {$base} WHERE ai.school_id = ? AND ai.incident_type = ? AND " . chatD('ai.detected_at') . " BETWEEN ? AND ? {$scopeSql}
+            GROUP BY 1 ORDER BY c DESC LIMIT 14");
+        $st->execute(array_merge([$u['school_id'], $mod, $from, $to], $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply' => "No hay {$ml} registradas {$rl}.", '_natural' => true];
+        $mn = fn(string $ym) => ucfirst(NX_MONTH_NAMES[(int)substr($ym, 5, 2)] ?? $ym) . ' ' . substr($ym, 0, 4);
+        $top = $rows[0];
+        return ['reply' => "El mes con más {$ml} {$rl} es {$mn($top['ym'])} ({$top['c']}).", '_natural' => true,
+            'cards' => [['title' => "{$ml} por mes — {$rl}", 'columns' => ['Mes', 'Total'],
+                'rows' => array_map(fn($r) => [$mn($r['ym']), (int)$r['c']], $rows)]],
+            '_result_set' => ['type' => 'incidents', 'label' => "{$ml} por mes",
+                'items' => array_map(fn($r) => ['id' => null, 'label' => $mn($r['ym']), 'sub' => "{$r['c']} {$ml}"], $rows), 'count' => count($rows)]];
+    }
+    // serie diaria + promedio + comparación con el período anterior
+    $st = $conn->prepare("SELECT " . chatD('ai.detected_at') . " AS d, COUNT(*) c
+        {$base} WHERE ai.school_id = ? AND ai.incident_type = ? AND " . chatD('ai.detected_at') . " BETWEEN ? AND ? {$scopeSql}
+        GROUP BY 1 ORDER BY c DESC LIMIT 40");
+    $st->execute(array_merge([$u['school_id'], $mod, $from, $to], $scope['params'])); $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return ['reply' => "No hay {$ml} {$rl} — nada que medir.", '_natural' => true];
+    $total = array_sum(array_map(fn($r) => (int)$r['c'], $rows));
+    $daysN = count($rows);
+    $avg = round($total / max(1, $daysN), 1);
+    $peak = $rows[0];
+    $fmt = fn(string $d) => (int)date('j', strtotime($d)) . ' de ' . NX_MONTH_NAMES[(int)date('n', strtotime($d))];
+    // comparar con período anterior equivalente
+    [$pf, $pt, $pl] = array_values(chatPreviousPeriod($from, $to, $s['range_label'] ?? null));
+    $pc = $conn->prepare("SELECT COUNT(*) {$base} WHERE ai.school_id = ? AND ai.incident_type = ? AND " . chatD('ai.detected_at') . " BETWEEN ? AND ? {$scopeSql}");
+    $pc->execute(array_merge([$u['school_id'], $mod, $pf, $pt], $scope['params'])); $prev = (int)$pc->fetchColumn();
+    $delta = $prev > 0 ? round(($total - $prev) / $prev * 100) : null;
+    $reply = ucfirst("{$rl}: {$total} {$ml} (promedio {$avg}/día).")
+        . " El día con más fue {$fmt($peak['d'])} con {$peak['c']}."
+        . ($prev ? ' Frente a ' . $pl . " ({$prev}): " . ($delta !== null ? ($delta >= 0 ? '+' : '') . "{$delta}%" : 'igual') . '.' : " En {$pl} no hubo {$ml}.");
+    return ['reply' => $reply, '_natural' => true,
+        'cards' => [['title' => "{$ml} por día — {$rl}", 'columns' => ['Día', 'Total'],
+            'rows' => array_map(fn($r) => [$fmt($r['d']), (int)$r['c']], array_slice($rows, 0, 15))]],
+        '_result_set' => ['type' => 'incidents', 'label' => $ml,
+            'items' => array_map(fn($r) => ['id' => null, 'label' => $fmt($r['d']), 'sub' => "{$r['c']} {$ml}"], $rows), 'count' => $daysN]];
 }
