@@ -72,9 +72,10 @@ class ChatNluTest extends PHPUnit\Framework\TestCase
         $this->assertFileExists(__DIR__ . '/../../backend/api/nexus/nexus_llm.php');
         $this->assertNotEmpty(NX_LLM_FORMAL);
         $this->assertNotEmpty(NX_LLM_INFORMAL);
-        // sin proveedor → out_of_scope honesto (phpunit no exporta NLU_LLM_KEY)
+        // sin proveedor → out_of_scope honesto (phpunit no exporta NLU_LLM_KEY);
+        // la frase no la cubre la capa determinista ni tendría respuesta LLM
         putenv('NX_CLASSIFY_FIXTURE=');
-        $r = nxClassify('cuantas evasiones tuvo juan perez del 7a en 15 dias');
+        $r = nxClassify('cuantas cosas bonitas hubo en el universo ayer');
         $this->assertSame('out_of_scope', $r['intent']);
         // fixture replay: una respuesta LLM guardada se sirve tal cual
         $fx = tempnam(sys_get_temp_dir(), 'fx');

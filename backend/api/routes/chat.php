@@ -3427,7 +3427,7 @@ function chatResolveStaff(PDO $conn, array $u, string $name): array {
         FROM users u JOIN roles r ON r.role_id = u.role_id
         WHERE u.school_id = ? AND u.deleted_at IS NULL AND u.active = TRUE
           AND r.role_name NOT IN ('GUARDIAN','SUPER_ADMIN','SYSTEM_WORKER')";
-    $st = $conn->prepare($base . " AND (translate(lower(u.first_name || ' ' || u.last_name),'áéíóúüñ','aeiouun') LIKE ?
+    $st = $conn->prepare("{$base} AND (translate(lower(u.first_name || ' ' || u.last_name),'áéíóúüñ','aeiouun') LIKE ?
             OR translate(lower(u.last_name || ' ' || u.first_name),'áéíóúüñ','aeiouun') LIKE ?) ORDER BY u.last_name LIMIT 5");
     $st->execute([$u['school_id'], $like, $like]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
