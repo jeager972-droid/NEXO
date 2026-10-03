@@ -124,11 +124,13 @@ class SchemaPhpAlignmentTest {
             $this->test("Rol '$role' en PHP existe en SQL", strpos($this->sql, "'$role'") !== false);
         }
 
-        // 6. Permisos en PHP existen en SQL
+        // 6. Permisos en PHP existen en SQL — solo contextos reales de permiso:
+        // in_array('mod.accion', …['permissions']) y set_config/current_setting('app.x')
+        // (un regex genérico 'a.b' atrapa alias SQL como 't.created_at' → falsos positivos)
         echo "\n--- 6. Permisos PHP → SQL ---\n";
-        preg_match_all("/'([a-z]+\.[a-z_]+)'/", $this->allPhp, $m);
-        $phpPerms = array_filter($m[1] ?? [], fn($p) => str_contains($p, '_'));
-        $phpPerms = array_unique($phpPerms);
+        preg_match_all("/in_array\('([a-z]+\.[a-z_]+)'\s*,\s*\\\$\w+\s*\[\s*'permissions'\s*\]/", $this->allPhp, $m1);
+        preg_match_all("/(?:set_config|current_setting)\('([a-z]+\.[a-z_]+)'/", $this->allPhp, $m2);
+        $phpPerms = array_unique(array_merge($m1[1] ?? [], $m2[1] ?? []));
         foreach ($phpPerms as $perm) {
             $this->test("Permiso '$perm' en PHP existe en SQL", strpos($this->sql, "'$perm'") !== false);
         }
