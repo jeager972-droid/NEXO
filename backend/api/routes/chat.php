@@ -152,6 +152,13 @@ function chatEs(string $v, string $kind): string {
     $k = trim($v);
     return $m[$k] ?? $m[mb_strtolower($k)] ?? ($k === '' ? '—' : mb_strtolower($k));
 }
+/** ¿Hay un SIN_DATOS_NODO abierto para la fecha? — los sensores no reportan. */
+function chatNoNodeData(PDO $conn, array $u, string $date): bool {
+    $q = $conn->prepare("SELECT 1 FROM security_incidents WHERE school_id = ? AND incident_type = 'SIN_DATOS_NODO'
+        AND resolved = FALSE AND detected_at >= ?::date AND detected_at < (?::date + INTERVAL '1 day') LIMIT 1");
+    $q->execute([$u['school_id'], $date, $date]);
+    return (bool)$q->fetchColumn();
+}
 function chatHm(string $col): string { return "to_char({$col} AT TIME ZONE " . NX_TZ_SQL . ", 'HH24:MI')"; }
 
 /**
@@ -1041,7 +1048,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
     // una consulta de ficha. Máx. 3 palabras para no tragar frases largas.
     if ($intent === 'out_of_scope' && str_word_count($q0) <= 3
         && preg_match('/^[a-záéíóúñü\s]+$/u', $q0)) {
-        $found = chatResolveStudent($conn, $u, $q0);
+        $found = chatResolveStudent($conn, $authUser, $q0);
         if ($found) {
             $intent = 'student_field';
             $slots['student'] = $q0;
@@ -2251,6 +2258,7 @@ function chatResultNav(array $ds, string $nav, array $vars): array {
                     'entities'=>[($rs['type']==='students' ? 'student' : ($rs['type'] ?? 'item')) => $items[0]['label'] ?? null]];
     }
     if ($nav === 'prev') { $nav = 'nth'; $idx = max(0, $cur - 1); }
+    if ($nav === 'penult') { $nav = 'nth'; $idx = max(0, $n - 2); }
     if (preg_match('/^nth:(\d+)$/', $nav, $m)) $idx = max(0, (int)$m[1] - 1);
     if ($nav === 'next') $idx = $cur + 1;
     if ($nav === 'table' || $nav === 'all') {
@@ -3130,6 +3138,11 @@ function chatGradeSummary(PDO $conn, array $u, array $s, array $gsc): array {
     if ($worst) $reply .= " Más inasistencias: {$worst[0]} con {$worst[1]}.";
     if ($single && $sum['p'] === 0 && $sum['n'] > 0 && $sum['a'] >= $sum['n'])
         $reply .= ' Ningún ingreso registrado y todos aparecen ausentes — lo más probable es que los sensores no estén reportando.';
+    // 0 ingresos con sensores caídos (SIN_DATOS_NODO abierto hoy): decir
+    // «0 inasistencias» sonaría a día perfecto cuando en realidad no hay datos
+    elseif ($single && $sum['p'] === 0 && $sum['a'] === 0 && $sum['n'] > 0
+&& chatNoNodeData($conn, $u, $from))
+        $reply .= ' No hay ingresos registrados: los sensores no están reportando, así que no hay datos de asistencia todavía.';
     $cols = $single ? ['Grupo', 'Estudiantes', 'Presentes', 'Inasistencias', 'Tardanzas', 'Evasiones']
                     : ['Grupo', 'Estudiantes', 'Inasistencias', 'Tardanzas', 'Evasiones'];
     return ['reply' => $reply, '_natural' => true,
@@ -3191,6 +3204,9 @@ function chat_group_summary(PDO $conn, array $u, array $s, array $v): array {
         $reply = "{$g['group_name']} ({$total} estudiantes), {$rl}: "
             . ($single ? "{$present} presentes, " : '') . "{$abs} inasistencias, {$late} llegadas tarde y {$eva} evasiones.";
         if ($single && $present === 0 && $abs >= $total && $total > 0) $reply .= ' Todo el grupo aparece ausente — revisa si el sensor del aula está reportando.';
+        elseif ($single && $present === 0 && $abs === 0 && $total > 0
+&& chatNoNodeData($conn, $u, $from))
+            $reply .= ' Sin ingresos registrados — los sensores no están reportando todavía.';
     }
     $cols = $single ? ['Estudiantes', 'Presentes', 'Inasistencias', 'Tardanzas', 'Evasiones'] : ['Estudiantes', 'Inasistencias', 'Tardanzas', 'Evasiones'];
     $row = $single ? [$total, $present, $abs, $late, $eva] : [$total, $abs, $late, $eva];

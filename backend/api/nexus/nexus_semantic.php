@@ -790,6 +790,10 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
     // guardias: «primer dia», «primera semana», «grado primero», «sexto grado» son temporales/grado
     if ($pos !== null && preg_match('/\b(primer|primera|segunda|tercera|sexto|septimo|octavo|noveno|decimo)\s+(dia|semana|mes|ano|grado|clase|periodo|bloque)\b/u', $q0)) $pos = null;
     if ($pos !== null && preg_match('/\bultim[oa]s?\s+(\d+\s+)?(dias?|dia|semanas?|mes|meses|anos?|horas?|minutos?|quincena|bimestre|periodo|corte|semestre|trimestre)\b/u', $q0)) $pos = null; // «últimos 3 días», «del último mes» = rango
+    // la misma guarda para el slice: «los últimos 15 DÍAS» es rango
+    // temporal, no «los 15 últimos ítems» del set
+    if (isset($sig['slice']) && preg_match('/\b(?:los|las)\s+(primer[oa]s?|ultim[oa]s?)\s+\d{1,2}\s+(dias?|semanas?|meses?|anos?|horas?|minutos?|quincena|bimestre|periodo|corte|semestre|trimestre)\b/u', $q0))
+        { unset($sig['slice']); if (($sig['op'] ?? '') === 'slice') unset($sig['op']); }
     if (isset($sig['slice'])) $pos = null; // el slice manda
     if ($pos !== null && preg_match('/\bgrado\s+(primero|segundo|tercero|cuarto|quinto|sexto|septimo|octavo|noveno|decimo)\b/u', $q0)) $pos = null;
     if ($pos !== null) { $sig['position']=$pos; $sig['op']=$sig['op'] ?? 'position'; $e[]='pos:'.$pos; }
@@ -1045,6 +1049,16 @@ function nxSemanticCompose(string $q0, string $intent, float $conf, array $slots
         $plan['capability']='teachers.of_group'; $plan['entity']='teachers'; $score=0.9;
     } elseif ($rel === 'schedule_of_group') {
         $plan['capability']='schedule.of_group'; $plan['entity']='schedules'; $score=0.9;
+    } elseif (in_array($sig['op'] ?? '', ['compare','rank'], true)
+        && !empty($f['_set_ids'])
+        && preg_match('/\b(quien|quiene?s?|cual|cuale?s?|el que|la que|los que|las que)\b/u', $q0)
+        && !preg_match('/\b(grupos?|grados?|seccion|cursos?|jornada)\b/u', $q0)) {
+        // «quién de esos tiene más X» — el superlativo es ranking de
+        // PERSONAS del set, no comparación de grupos («qué grupo tiene
+        // más» sigue a groups.rank por el sustantivo colectivo)
+        $plan['capability']='students.top'; $plan['entity']='students';
+        $plan['op']='rank'; $score=0.85;
+        $plan['evidence'][]='rank:persona_set';
     } elseif ($sig['op']==='compare' || !empty($f['group2'])) {
         $plan['entity']='groups';
         $plan['capability']= !empty($f['group2']) ? 'groups.compare' : 'groups.rank';
@@ -1670,6 +1684,12 @@ function nxExecStudents(PDO $conn, array $u, array $plan, array $vars): array {
     $stmt = $conn->prepare($sql);
     $stmt->execute(array_merge($p, $scope['params']));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // orden español natural — la collation en_US pone 'Diez' antes de
+    // 'Décima' (é>i en bytes): «el tercero» debe dar el mismo ítem que el
+    // handler chat_students_in_group (mismo usort)
+    if (in_array($plan['sort'] ?? 'last_name', ['last_name','group'], true))
+        usort($rows, fn($a, $b) => [nxNorm($a['group_name'] ?? ''), nxNorm($a['last_name']), nxNorm($a['first_name'])]
+                              <=> [nxNorm($b['group_name'] ?? ''), nxNorm($b['last_name']), nxNorm($b['first_name'])]);
     // «quién llegó primero/antes» — reorden temporal por primer INGRESO
     if ($plan['sort']==='time_asc' && ($f['status'] ?? null)==='present' && $rows) {
         [$af,$at] = nxSemRange($f);

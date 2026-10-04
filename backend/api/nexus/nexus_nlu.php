@@ -124,6 +124,40 @@ function nxIsPureNav(string $q0): bool {
     return (bool)preg_match('/^(y |ahora |dame |dime |muestra(?:me)? |trae(?:me)? |pasame )?(el |la |los |las )?(siguiente|otro|otra|uno mas|una mas|anterior|primer[oa]?|segund[oa]|tercer[oa]?|ultim[oa]|penultim[oa]|los demas|las demas|el resto|todos|todas|en tabla|en una tabla|como tabla|la tabla|ordenal[oa]s? por (apellido|nombre|documento|grupo)|solo (los |sus )?nombres|sus nombres|mas|sigue|continua)[.!? ]*$/u', $q0);
 }
 
+/**
+ * Parseo sintético de navegación pura (sin LLM): «siguiente», «el tercero»,
+ * «la tabla», «los demás», «solo nombres», «ordénalos por apellido».
+ * Devuelve el mismo contrato que el parser: entities.nav lo traduce el
+ * mapper a _nav/position y el dispatch mueve el cursor del set activo.
+ */
+function nxPureNavParse(string $q0): ?array {
+    $w = preg_replace('/^(y |ahora |dame |dime |muestra(?:me)? |trae(?:me)? |pasame )?(el |la |los |las )?/u', '', $q0);
+    $w = preg_replace('/[.!? ]+$/u', '', $w);
+    $nav = match (true) {
+        $w === 'siguiente', $w === 'otro', $w === 'otra', $w === 'uno mas',
+        $w === 'una mas', $w === 'mas', $w === 'sigue', $w === 'continua',
+        $w === 'de nuevo' => 'next',
+        $w === 'anterior' => 'prev',
+        $w === 'primero', $w === 'primera' => 'first',
+        $w === 'segundo', $w === 'segunda' => 'nth:2',
+        $w === 'tercero', $w === 'tercera' => 'nth:3',
+        $w === 'ultimo', $w === 'ultima' => 'last',
+        $w === 'penultimo', $w === 'penultima' => 'penult',
+        $w === 'demas', $w === 'los demas', $w === 'las demas',
+        $w === 'resto', $w === 'el resto' => 'rest',
+        $w === 'todos', $w === 'todas' => 'all',
+        str_starts_with($w, 'en tabla'), str_starts_with($w, 'en una tabla'),
+        str_starts_with($w, 'como tabla'), $w === 'tabla', $w === 'la tabla' => 'table',
+        str_starts_with($w, 'ordenal') => 'sort:' . (str_contains($w, 'apellido') ? 'last_name'
+            : (str_contains($w, 'documento') ? 'document' : (str_contains($w, 'grupo') ? 'group' : 'first_name'))),
+        str_starts_with($w, 'solo') || $w === 'sus nombres' => 'proj:name',
+        default => null,
+    };
+    if ($nav === null) return null;
+    return ['intent' => 'result_nav', 'confidence' => 1.0,
+            'entities' => ['nav' => $nav], 'top3' => []];
+}
+
 /** Clasificación de un solo texto.
  *  1. Fixture replay (NX_CLASSIFY_FIXTURE): snapshot JSON de respuestas del
  *     LLM — suites deterministas offline sin gastar cuota (ver
@@ -160,8 +194,14 @@ function nxClassifyCore(string $text, ?array $ctx = null): ?array {
         $rule = nxRuleClassify($norm);
         $llmOn = function_exists('nxLlmEnabled') && nxLlmEnabled()
             && !(function_exists('nxLlmCooling') && nxLlmCooling());
-        if ($rule && (($rule['intent'] ?? '') === 'security_probe' || nxIsPureNav($norm))) {
+        // Navegación pura es 100 % determinista — no gasta LLM y no depende
+        // de que el modelo entienda «el tercero» (puede confundirlo con un
+        // nombre propio). El intent result_nav + entity nav lo convierte el
+        // mapper en _nav y el dispatch mueve el cursor del set activo.
+        if (($rule['intent'] ?? '') === 'security_probe') {
             $r = $rule + ['source' => 'rules'];
+        } elseif (nxIsPureNav($norm) && ($nv = nxPureNavParse($norm))) {
+            $r = $nv + ['source' => 'nav_rule'];
         } elseif ($llmOn) {
             $r = nxLlmClassify($text, $ctx);
             if (!$r && $rule) $r = $rule + ['source' => 'rules_fallback', 'degraded' => true];
@@ -276,14 +316,19 @@ function nxClassify(string $text, ?array $ctx = null): array {
         $gg = $gradeW[preg_replace('/s$/u', '', $gg)] ?? $gg;
         if (preg_match('/^\d{1,2}$/', $gg)) { $e['grade'] = $e['grade'] ?? ltrim($gg, '0'); unset($e['group']); }
     }
+    // «llegadas/llegaron tarde» es el evento LATE_ARRIVAL, no la jornada —
+    // el parser a veces lo marca como shift=tarde y se cuela la jornada
+    if (!empty($e['shift']) && preg_match('/\b(llegad\w*|llegar|entrada\w*|marc\w+|tarde\s+a\s+clase|quedaron\s+tarde)\b.{0,12}\btarde\b|\btarde\b.{0,10}\b(llegad\w*|en\s+llegar)/u', $norm))
+        unset($e['shift']);
     if (!empty($e['nav']) && empty($e['_nav'])) {
         // 'last' no es nav directo: el DSM lo resuelve a nth:N con el conteo
         // del set activo; 'others/another' mapean al vocabulario del motor
         $navMap = ['first'=>'first','others'=>'rest','rest'=>'rest','all'=>'all',
                    'another'=>'next','next'=>'next','prev'=>'prev','table'=>'table',
-                   'count'=>'count','name'=>'name'];
+                   'count'=>'count','name'=>'name','penult'=>'penult'];
         if ($e['nav'] === 'last') { $e['position'] = 'last'; }
         elseif (preg_match('/^nth:(\d+)$/', (string)$e['nav'], $m)) $e['_nav'] = 'nth:'.$m[1];
+        elseif (preg_match('/^(sort|proj):/', (string)$e['nav'])) $e['_nav'] = $e['nav'];
         elseif (isset($navMap[$e['nav']])) $e['_nav'] = $navMap[$e['nav']];
     }
     // 'last' queda como position — chat.php lo convierte a nth:N con el
@@ -1161,7 +1206,7 @@ function nxModuleSynonyms(): array {
         'INASISTENCIA'      => ['inasistencias','inasistencia','inasistieron','inasistio','inasistió','inasiste','faltas','falta','faltado','faltando','ausencias','ausencia','no vinieron','no vino','faltaron','falto','ausentes','ausente','no llegaron','no llego','no entraron','no entro','no asistieron','no asistio','no se presentaron','no se presento','se ausentaron','se ausento'],
         'INASISTENCIA_JUSTIFICADA'    => ['inasistencias justificadas','justificadas','faltas justificadas'],
         'INASISTENCIA_NO_JUSTIFICADA' => ['inasistencias no justificadas','sin justificar','injustificadas'],
-        'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','evadiendo','evade','evaden','evadiendo clase','fugas','fuga','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono','se volaron','se volo','se la volaron','se la volo','tiraron','se tiraron','tajaron','se tajaron','caparon','se caparon','evasores','se fueron','se fueron de clase','se fueron del salon','abandonaron la clase','abandonaron el salon','abandonan','abandonan la clase','abandonan clases','abandono durante','abandonaron el aula','no regresaron','no regreso','no volvieron','no volvio',
+        'EVASION_INTERNA'   => ['evasiones internas','evasion interna','evasiones','evasion','evadiendo','evade','evaden','evadio','evadieron','evadido','evadimos','evadiste','ha evadido','han evadido','se evadio','se evadieron','evadiendo clase','fugas','fuga','fugo','fugaron','se salieron','se salio','escaparon','escapo','salio del salon','abandono la clase','abandonaron clase','abandono el aula','abandono del aula','abandono de aula','abandono aula','salio del aula','salieron del aula','salio de clase','abandono','se volaron','se volo','se la volaron','se la volo','tiraron','se tiraron','tajaron','se tajaron','caparon','se caparon','evasores','se fueron','se fueron de clase','se fueron del salon','abandonaron la clase','abandonaron el salon','abandonan','abandonan la clase','abandonan clases','abandono durante','abandonaron el aula','no regresaron','no regreso','no volvieron','no volvio',
             'salida no autorizada','salidas no autorizadas','salida sin autorizacion','salidas sin autorizacion'],
         'PERMISO'           => ['permisos','permiso','salidas autorizadas','autorizaciones','autorizacion','autorizados','autorizadas','salidas autorizadas',
             'excusa','excusas','justificacion','justificaciones','soporte medico','incapacidad','incapacidades'],
@@ -2506,8 +2551,19 @@ function nxIntentVeto(string $q0, string $intent, array $slots): ?string {
     // «los pelados del 10A que se volaron» — grupo + verbo de incidente es
     // una LISTA de eventos del grupo, ni nómina ni ranking. Va PRIMERO: el
     // verbo de incidente pesa más que la ausencia de cue de ranking.
-    $incVerb = (bool)preg_match('/\b(volaron|fugaron|evadieron|caparon|tajaron|faltaron|llegaron tarde|salieron|cometieron|acumulan|hicieron)\b/u', $q0);
+    $incVerb = (bool)preg_match('/\b(volaron|volo|fugaron|fugo|evadi\w*|caparon|tajaron|faltaron|llegaron tarde|salieron|cometieron|acumulan|hicieron|escaparon|escapo)\b/u', $q0);
     $rankCue = (bool)preg_match('/\b(mas|mayor\w*|menos|menor\w*|top|peor\w*|mejor\w*|ranking|orden\w*|compar\w*|lidera|encabeza|acumula|reinciden?|frecuent\w*)\b/u', $q0);
+    // «quién de estos es el que MÁS ha evadido / tiene más inasistencias»
+    // — ranking de PERSONAS. La interrogativa + superlativo es una cue
+    // explícita completa: corre aunque el DSM haya heredado el intent (un
+    // fragmento pasivo «y tardanzas?» no la trae). No corre si pregunta
+    // por colectivo («qué grupo acumula más») — eso es ranking de grupos.
+    if (in_array($intent, ['students_in_group','list_events','count_events','attendance_ranking',
+                         'groups_rank','attendance_today','group_summary','frequency_table',
+                         'students_count','group_student_count','day_summary'], true)
+        && preg_match('/\b(quien|quiene?s?|cual|cuale?s?|el que|la que|los que|las que)\b.{0,45}\b(mas|mayor|menos|menor|peor|top|lidera|encabeza|acumula|reinciden?)\b/u', $q0)
+        && !preg_match('/\b(grupos?|grados?|jornada|seccion|cursos?)\b/u', $q0))
+        return 'top_offenders';
     if (!$inherited) {
         if (in_array($intent, ['students_in_group','group_summary','group_student_count','attendance_ranking'], true)
             && $incVerb
@@ -2520,6 +2576,18 @@ function nxIntentVeto(string $q0, string $intent, array $slots): ?string {
         if ($intent === 'frequency_table'
             && !preg_match('/\bpor\s+(dia|día|semana|mes|estudiante|alumno|grupo|fecha|docente)\b/u', $q0))
             return preg_match('/\bcuant[oa]s?\b/u', $q0) ? 'count_events' : 'list_events';
+        // «cuántos por día/grupo» — la dirección inversa del de arriba
+        if (in_array($intent, ['count_events','list_events','attendance_today'], true)
+            && preg_match('/\bpor\s+(dia|día|semana|mes|estudiante|alumno|grupo|fecha|docente|cada)\b/u', $q0))
+            return 'frequency_table';
+        // «cómo están/van/andan» + alcance explícito → el resumen del grupo
+        // o grado, no su nómina ni un conteo suelto
+        if (in_array($intent, ['students_in_group','students_count','count_events','list_events','group_student_count','attendance_today','attendance_ranking','attendance_trend','top_offenders'], true)
+            && (!empty($slots['group']) || !empty($slots['grade']))
+            && preg_match('/\b(como|estan|van|andan|iba|iban|les fue|les ha ido|que tal)\b/u', $q0)
+            && !$incVerb && !$rankCue
+            && !preg_match('/\b(lista|nomina|nómina|cuantos|cuantas|quienes|nombres?)\b/u', $q0))
+            return 'group_summary';
         if ($intent === 'group_summary'
             && preg_match('/\b(estudiantes|alumnos|pelados|pelaos|muchachos|lista|nomina|nómina)\b/u', $q0)
             && !preg_match('/\b(como|estado|resumen|andan|van)\b/u', $q0))
@@ -2542,6 +2610,14 @@ function nxIntentVeto(string $q0, string $intent, array $slots): ?string {
             && preg_match('/\b(semana|mes|periodo|per[ií]odo|pasad[oa]|anterior|ayer|hoy)\b/u', $q0))
             return 'attendance_trend';
     }
+
+    // insulto directo al asistente — conversacional, nunca consulta de
+    // datos. El LLM a veces lo deja caer a out_of_scope; el backstop PHP
+    // lo rescata (2ª persona + insulto, o insulto a secas de 1-3 palabras).
+    if ($intent === 'out_of_scope'
+        && (preg_match('/\b(eres?|sos)\s+(un[ao]?|el|la|re|tan|muy|bastante|algo|todo|medio)?\s*(inutil|idiota|estupid\w+|pendej\w+|burr\w+|brut\w+|tont\w+|imbecil\w*|tarad\w+|mens\w+|bob\w+|torpe\w*|animal\w*|bestia|asno|zoquete\w*|porqueria|mierda|incompetente|inoperante|pesim[ao]|malisim[ao]|fracas\w+|defectuos\w+|ridicul\w+)\b/u', $q0)
+         || preg_match('/^(eres|sos|que|tan|muy|un[ao]?|el|la|de|verdad|realmente|\s)*(inutil|idiota|estupido|pendejo|burro|bruto|imbecil|incompetente|inoperante|fracasado)\b[.!? ]*(eres|sos)?[.!? ]*$/u', $q0)))
+        return 'insult';
 
     // — veto de sujeto por sustantivo inequívoco —
     // Corre siempre: si el texto nombra otro dominio con claridad, no es un
