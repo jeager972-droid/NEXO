@@ -63,6 +63,11 @@ try {
     if ($hmacSecret = getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET')) {
         $stmt = $pdo->prepare("SELECT set_config('app.nexo_hmac_secret', ?, false)");
         $stmt->execute([$hmacSecret]);
+    } else {
+        // El trigger de la cadena de auditoría aborta los INSERT a
+        // global_audit_logs sin esta GUC — y arrastra la tx entera
+        // (chat_messages incluido). Fallo silencioso aquí = contexto muerto.
+        error_log('[nexo] CONFIG: APP_NEXO_HMAC_SECRET/NEXO_HMAC_SECRET no definida — global_audit_logs rechazará INSERTs');
     }
 
     // statement_timeout para evitar que queries lentas agoten el pool.
@@ -76,5 +81,22 @@ try {
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => 'Error de conexión a la base de datos']);
     exit;
+}
+
+/**
+ * Setea app.nexo_hmac_secret DENTRO de la transacción activa (is_local=true).
+ * El pooler de Supabase (puerto 6543) corre en modo transacción: las GUC de
+ * sesión no sobreviven entre conexiones físicas — solo las de transacción.
+ * El trigger trg_audit_chain la exige en todo INSERT a global_audit_logs;
+ * sin ella, el INSERT aborta y revierte la tx entera (chat_messages incluido).
+ * Llamar tras cada BEGIN en cualquier flujo que pueda insertar auditoría.
+ */
+if (!function_exists('nxDbSetHmac')) {
+    function nxDbSetHmac(PDO $conn): void {
+        $h = getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET');
+        if ($h && $h !== 'default-secret-change-me') {
+            $conn->exec("SELECT set_config('app.nexo_hmac_secret', " . $conn->quote($h) . ", true)");
+        }
+    }
 }
 ?>

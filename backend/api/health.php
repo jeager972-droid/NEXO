@@ -12,11 +12,12 @@
 header('Content-Type: application/json; charset=utf-8');
 
 $response = [
-    'status'  => 'ok',
-    'db'      => false,
-    'redis'   => false,
-    'workers' => [],
-    'llm'     => false,
+    'status'      => 'ok',
+    'db'          => false,
+    'redis'       => false,
+    'workers'     => [],
+    'llm'         => false,
+    'audit_chain' => false,
 ];
 $allHealthy = true;
 
@@ -159,6 +160,12 @@ $llmOk = (getenv('NLU_LLM_KEY') ?: '') !== ''
     && (getenv('NLU_LLM_MODE') ?: 'on') !== 'off';
 $response['llm'] = $llmOk;
 if (!$llmOk) $allHealthy = false;
+
+// Cadena de auditoría: el secret existe en env. Sin él los INSERT a
+// global_audit_logs abortan en el trigger. Se reporta visible pero no tumba
+// el health — el chat persiste igual tras el aislamiento con savepoint.
+$auditOk = (getenv('APP_NEXO_HMAC_SECRET') ?: getenv('NEXO_HMAC_SECRET') ?: '') !== '';
+$response['audit_chain'] = $auditOk;
 
 http_response_code($allHealthy ? 200 : 503);
 echo json_encode($response, JSON_UNESCAPED_UNICODE);

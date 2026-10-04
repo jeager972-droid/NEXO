@@ -2537,9 +2537,18 @@ if ($cleanPath === '/chat/policies' && $method === 'POST') {
         http_response_code(500);
         exit(json_encode(['status'=>'error','message'=>'No se pudieron guardar las políticas. Verifica que la base de datos esté actualizada.']));
     }
-    $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,created_at)
-        VALUES (uuid_generate_v4(),?,?,'CHAT_POLICIES_UPDATED',?,NOW())")
-        ->execute([$authUser['school_id'],$authUser['id'],json_encode($policies)]);
+    // Auditoría best-effort: si aborta (trigger HMAC, política), solo ella se
+    // revierte — el UPDATE de políticas ya aplicado sobrevive.
+    try {
+        if ($conn->inTransaction()) $conn->exec("SAVEPOINT nx_audit");
+        $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,created_at)
+            VALUES (uuid_generate_v4(),?,?,'CHAT_POLICIES_UPDATED',?,NOW())")
+            ->execute([$authUser['school_id'],$authUser['id'],json_encode($policies)]);
+        if ($conn->inTransaction()) $conn->exec("RELEASE SAVEPOINT nx_audit");
+    } catch (Throwable $ae) {
+        try { if ($conn->inTransaction()) $conn->exec("ROLLBACK TO SAVEPOINT nx_audit"); } catch (Throwable $ignored) {}
+        error_log('[chat] policies audit falló: ' . $ae->getMessage());
+    }
     exit(json_encode(['status'=>'ok','data'=>['saved'=>count($policies)]]));
 }
 
@@ -2602,11 +2611,20 @@ function chatLog(PDO $conn, string $schoolId, string $userId, string $text, arra
             $conn->prepare("INSERT INTO chat_messages (school_id,user_id,role,content,payload_json) VALUES (?,?,?,'assistant',?,?)")
                 ->execute([$schoolId,$userId,$out['reply'], json_encode($out, JSON_UNESCAPED_UNICODE)]);
         }
-        $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,created_at)
-                        VALUES (uuid_generate_v4(),?,?,'CHAT_QUERY',?,NOW())")
-            ->execute([$schoolId,$userId, json_encode([
-                'text'=>mb_substr($text,0,200),'intent'=>$out['intent']??null,
-                'confidence'=>$out['confidence']??null], JSON_UNESCAPED_UNICODE)]);
+        // Auditoría best-effort: si este INSERT aborta (trigger HMAC, política),
+        // solo él se revierte — los mensajes del chat ya insertados sobreviven.
+        try {
+            if ($conn->inTransaction()) $conn->exec("SAVEPOINT nx_audit");
+            $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,created_at)
+                            VALUES (uuid_generate_v4(),?,?,'CHAT_QUERY',?,NOW())")
+                ->execute([$schoolId,$userId, json_encode([
+                    'text'=>mb_substr($text,0,200),'intent'=>$out['intent']??null,
+                    'confidence'=>$out['confidence']??null], JSON_UNESCAPED_UNICODE)]);
+            if ($conn->inTransaction()) $conn->exec("RELEASE SAVEPOINT nx_audit");
+        } catch (Throwable $ae) {
+            try { if ($conn->inTransaction()) $conn->exec("ROLLBACK TO SAVEPOINT nx_audit"); } catch (Throwable $ignored) {}
+            error_log('[chat] audit insert falló: ' . $ae->getMessage());
+        }
     } catch (Throwable $e) { /* logging no bloquea */ }
 }
 

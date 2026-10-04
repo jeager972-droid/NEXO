@@ -666,6 +666,9 @@ if (!function_exists('requireAuth')) {
             // current_role es palabra reservada de PostgreSQL.
             $conn->exec("SELECT set_config('app.current_school_id', " . $conn->quote((string)$user['school_id']) . ", true)");
             $conn->exec("SELECT set_config('app.current_role', " . $conn->quote($roleName) . ", true)");
+            // La cadena de auditoría exige esta GUC por-tx: el pooler de
+            // Supabase (transaction mode) descarta las de sesión.
+            if (function_exists('nxDbSetHmac')) nxDbSetHmac($conn);
 
             // Fetch permissions
             $permsStmt = $conn->prepare("

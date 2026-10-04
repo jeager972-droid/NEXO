@@ -109,6 +109,9 @@ function insertBatch($conn, array $rows) {
     $lastHashes = []; // Cache en memoria para el batch
 
     $conn->beginTransaction();
+    // El trigger de la cadena exige la GUC dentro de la tx (Supavisor
+    // transaction mode descarta las de sesión).
+    if (function_exists('nxDbSetHmac')) nxDbSetHmac($conn);
     try {
         $stmt = $conn->prepare("
             INSERT INTO global_audit_logs
