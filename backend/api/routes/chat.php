@@ -319,7 +319,7 @@ function chatAllowed(PDO $conn, array $u, string $intent, string $role): bool {
     }
     // smalltalk puede desactivarse globalmente por la escuela
     if ($ok && !chatPolicyEnabled($conn, $u['school_id'], 'chat.smalltalk.enabled')) {
-        $dataIntents = array_merge(array_keys(NX_CHAT_POLICY_MAP), ['count_events','list_events','permissions','notifications_unread','devices_status','audit_query','groups_list','teachers_list','schedule_info','export_data','about_me','time','date','system_incidents','sos_alerts','pending_returns','top_offenders','frequency_table','guardian_replies',
+        $dataIntents = array_merge(array_keys(NX_CHAT_POLICY_MAP), ['count_events','list_events','permissions','notifications_unread','devices_status','audit_query','groups_list','teachers_list','schedule_info','export_data','about_me','time','date','system_incidents','sos_alerts','pending_returns','top_offenders','frequency_table','guardian_replies','groups_compare',
             'risk_reason','incident_excuses','exit_detail','trip_info','school_calendar',
             'staff_contact','teacher_schedule','student_consent','tracking_detail',
             'citations_by','alert_resolution','enrollment_stats','reports_log',
@@ -1854,7 +1854,7 @@ function nxCapToIntent(?string $cap): ?string {
         'my.activity' => 'my_activity', 'day.summary' => 'day_summary',
         'birthdays.today' => 'birthdays_today', 'staff.lookup' => 'staff_lookup',
         'risk.students' => 'risk_students', 'groups.list' => 'groups_list',
-        'groups.compare' => 'attendance_ranking', 'groups.rank' => 'attendance_ranking',
+        'groups.compare' => 'groups_compare', 'groups.rank' => 'attendance_ranking',
         'system.incidents' => 'system_incidents',
         // intents derivados del modelo de datos
         'risk.reason' => 'risk_reason', 'incidents.excuses' => 'incident_excuses',
@@ -3672,6 +3672,11 @@ function chat_groups_list(PDO $conn, array $u, array $s, array $v): array {
 }
 
 function chat_teachers_list(PDO $conn, array $u, array $s, array $v): array {
+    // «docentes del 10A» → planta docente del grupo (executor con RBAC),
+    // no la lista institucional.
+    if (!empty($s['group']) && function_exists('nxExecTeachersOfGroup')) {
+        return nxExecTeachersOfGroup($conn, $u, ['capability' => 'teachers.of_group', 'filters' => ['group' => $s['group']]], $v);
+    }
     $st=$conn->prepare("SELECT u.first_name||' '||u.last_name AS name, string_agg(ag.group_name, ', ') groups
         FROM users u LEFT JOIN teacher_group_access tga ON tga.teacher_user_id=u.user_id
         LEFT JOIN academic_groups ag ON ag.group_id=tga.group_id
@@ -3684,6 +3689,11 @@ function chat_teachers_list(PDO $conn, array $u, array $s, array $v): array {
 
 function chat_schedule_info(PDO $conn, array $u, array $s, array $v): array {
     $q = (string)($v['_q'] ?? '');
+    // Grupo explícito («horario del 8A») → grid día×bloque del grupo, no la
+    // jornada institucional. El executor ya hace el chequeo de acceso docente.
+    if (!empty($s['group']) && empty($s['_all_groups']) && function_exists('nxExecGroupSchedule')) {
+        return nxExecGroupSchedule($conn, $u, ['capability' => 'schedule.of_group', 'filters' => ['group' => $s['group']]], $v);
+    }
     $st = $conn->prepare("SELECT work_shift AS shift_name, entry_time, exit_time FROM school_schedule_config WHERE school_id = ? ORDER BY work_shift LIMIT 6");
     $st->execute([$u['school_id']]); $shifts = $st->fetchAll(PDO::FETCH_ASSOC);
     $gq = $conn->prepare("SELECT ag.group_name, ag.work_shift, COUNT(sc.schedule_id) AS blocks,
@@ -4478,6 +4488,57 @@ function chat_group_student_count(PDO $conn, array $u, array $s, array $v): arra
 function chat_birthdays_today(PDO $conn, array $u, array $s, array $v): array {
     $scope = chatScope($conn, $u);
     $t = nxToday();
+    $q = (string)($v['_q'] ?? '');
+    // ── fecha explícita: «quién nació el 14 de febrero», «cumpleaños de
+    // octubre», «nacidos el 3 de mayo». Con año explícito («de 2023») la
+    // lectura es literal (birth_date dentro del rango); sin año, el m-d
+    // del nacimiento cae dentro del rango en CUALQUIER año (recurrente).
+    if (!empty($s['from']) && !empty($s['to'])) {
+        $rl = chatRangeLabel($s);
+        $yearExplicit = (bool)preg_match('/\b(19|20)\d{2}\b/u', $q);
+        if ($yearExplicit) {
+            $st = $conn->prepare("SELECT s.first_name || ' ' || s.last_name AS name, ag.group_name, s.birth_date
+                FROM students s
+                LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                WHERE s.school_id = ? AND s.deleted_at IS NULL AND s.birth_date IS NOT NULL
+                  AND s.birth_date BETWEEN ?::date AND ?::date {$scope['sql']}
+                ORDER BY s.birth_date, s.last_name LIMIT 300");
+            $st->execute(array_merge([$u['school_id'], $s['from'], $s['to']], $scope['params']));
+            $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+            if (!$rows) return ['reply' => "Ningún estudiante nació {$rl}.", '_natural' => true];
+            return ['reply' => count($rows) . ' estudiante' . (count($rows) === 1 ? '' : 's') . " nació" . (count($rows) === 1 ? '' : 'eron') . " {$rl}.",
+                '_natural' => true,
+                'cards' => [['title' => "Nacidos {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Nació'],
+                    'rows' => array_map(fn($r) => [$r['name'], $r['group_name'] ?? '—', $r['birth_date']], $rows)]],
+                '_result_set' => ['type' => 'students', 'label' => "nacidos {$rl}",
+                    'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'], 'sub' => ($r['group_name'] ?? '—') . ' · ' . $r['birth_date']], $rows),
+                    'count' => count($rows)]];
+        }
+        // recurrente — el día-mes del nacimiento dentro del rango pedido
+        $st = $conn->prepare("SELECT s.first_name || ' ' || s.last_name AS name, ag.group_name, s.birth_date
+            FROM students s
+            LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+            LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+            WHERE s.school_id = ? AND s.deleted_at IS NULL AND s.birth_date IS NOT NULL
+              AND to_char(s.birth_date, 'MM-DD') IN (
+                  SELECT to_char(d::date, 'MM-DD') FROM generate_series(?::date, ?::date, '1 day') d)
+              {$scope['sql']}
+            ORDER BY to_char(s.birth_date, 'MM-DD'), s.last_name LIMIT 300");
+        $st->execute(array_merge([$u['school_id'], $s['from'], $s['to']], $scope['params']));
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return ['reply' => "Ningún estudiante cumple años {$rl}.", '_natural' => true];
+        $yy = (int)substr($s['to'], 0, 4);
+        return ['reply' => count($rows) . ' cumpleaño' . (count($rows) === 1 ? '' : 's') . " {$rl}.",
+            '_natural' => true,
+            'cards' => [['title' => "Cumpleaños {$rl}", 'columns' => ['Estudiante', 'Grupo', 'Día', 'Cumple'],
+                'rows' => array_map(fn($r) => [$r['name'], $r['group_name'] ?? '—',
+                    (int)substr($r['birth_date'], 8, 2) . ' de ' . NX_MONTH_NAMES[(int)substr($r['birth_date'], 5, 2)],
+                    $yy - (int)substr($r['birth_date'], 0, 4) . ' años'], $rows)]],
+            '_result_set' => ['type' => 'students', 'label' => "cumpleaños {$rl}",
+                'items' => array_map(fn($r) => ['id' => null, 'label' => $r['name'], 'sub' => ($r['group_name'] ?? '—') . ' · ' . substr($r['birth_date'], 5)], $rows),
+                'count' => count($rows)]];
+    }
     $st = $conn->prepare("SELECT s.first_name || ' ' || s.last_name AS name, ag.group_name, s.birth_date
         FROM students s
         LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
@@ -4564,6 +4625,16 @@ function chat_risk_config(PDO $conn, array $u, array $s, array $v): array {
 }
 
 /** Ranking de grupos por incidentes del periodo. */
+/** comparación 1-a-1 entre dos grupos — delega en el executor semántico
+ *  (mismo chequeo de alcance que el plan: nxScopeGroupIds). */
+function chat_groups_compare(PDO $conn, array $u, array $s, array $v): array {
+    $f = ['group' => $s['group'] ?? null, 'group2' => $s['group2'] ?? null,
+          'grade' => $s['grade'] ?? null, 'grade2' => $s['grade2'] ?? null,
+          'module' => $s['module'] ?? null];
+    foreach (['days','from','to','range_label'] as $k) if (isset($s[$k])) $f[$k] = $s[$k];
+    return nxExecGroupsCompare($conn, $u, ['capability' => 'groups.compare', 'filters' => $f], $v);
+}
+
 function chat_attendance_ranking(PDO $conn, array $u, array $s, array $v): array {
     $module = $s['module'] ?? 'INASISTENCIA';
     $q = (string)($v['_q'] ?? '');

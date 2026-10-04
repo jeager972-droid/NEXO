@@ -205,7 +205,7 @@ function nxCapabilityRegistry(): array {
         'name'=>'Comparar grupos','description'=>'misma métrica en dos grupos o argmax global',
         'user_goal'=>'saber qué grupo tiene más/menos de algo','action_type'=>'compare',
         'source_entity'=>'academic_groups','target_entity'=>null,
-        'fields'=>['group','count','metric'],'filters'=>['group','group2','module','range'],
+        'fields'=>['group','count','metric'],'filters'=>['group','group2','grade','grade2','module','range'],
         'sorting'=>[],'aggregation'=>'count','pagination'=>null,'time_scope'=>'range',
         'required_context'=>[],'optional_context'=>['module','range'],'required_parameters'=>[],
         'related'=>['groups.rank'],'nearby'=>['students.count'],
@@ -858,7 +858,7 @@ function nxSemSignals(string $q0, array $slots, ?array $ds): array {
 
     // ── tiempo (slots ya calculan days/from/to) ───────────────────────────
     foreach (['group','student','module','days','from','to','range_label','field',
-              'justified','status','group_by','trend','scope','grade'] as $k)
+              'justified','status','group_by','trend','scope','grade','grade2'] as $k)
         if (isset($slots[$k]) && $slots[$k] !== '' && $slots[$k] !== null) $sig['filters'][$k]=$slots[$k];
     $gs = nxSemGroups($q0);
     if (!empty($slots['group'])) {
@@ -1364,8 +1364,10 @@ function nxPlanValidate(array $plan, int $depth = 0): array {
     foreach ($c['required_parameters'] ?? [] as $req)
         if (empty($f[$req])) return [false,"missing_parameter:$req"];
     // reglas específicas del dominio
-    if ($cap === 'groups.compare' && (empty($f['group']) || empty($f['group2'])))
-        return [false,'missing_parameter:' . (empty($f['group']) ? 'group' : 'group2')];
+    if ($cap === 'groups.compare'
+        && !((!empty($f['group']) && !empty($f['group2']))
+            || (!empty($f['grade']) && !empty($f['grade2']))))
+        return [false,'missing_parameter:' . (!empty($f['grade']) ? 'grade2' : 'group2')];
     if ($cap === 'students.of_guardian' && empty($f['student']) && empty($f['guardian']))
         return [false,'missing_parameter:guardian'];
     // posición: entero 1..500, 'last' o 'last-N'
@@ -2020,6 +2022,10 @@ function nxExecGroupSchedule(PDO $conn, array $u, array $plan, array $vars): arr
     if (preg_match('/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/u', $vars['_q'] ?? '', $mm)) {
         $days = ['lunes'=>1,'martes'=>2,'miercoles'=>3,'jueves'=>4,'viernes'=>5,'sabado'=>6,'domingo'=>7];
         $dayFilter = ' AND sch.day_of_week = ?'; $p[] = $days[$mm[1]];
+    } elseif (preg_match('/\b(hoy|ahora|este dia|a esta hora|en este momento|ahorita|en este instante)\b/u', $vars['_q'] ?? '')) {
+        // «qué clases tiene el 8A hoy/ahora» — el día de semana actual
+        $dayFilter = ' AND sch.day_of_week = ?';
+        $p[] = (int)nxTodayDt()->format('N');
     }
     $stmt = $conn->prepare("
         SELECT sch.day_of_week, sch.block_number, sch.start_time, sch.end_time,
@@ -2196,6 +2202,51 @@ function nxScopeGroupIds(PDO $conn, array $u): ?array {
 
 function nxExecGroupsCompare(PDO $conn, array $u, array $plan, array $vars): array {
     $f = $plan['filters'];
+    // ── par de GRADOS — «octavo vs noveno», «grado 8 con grado 9» — el
+    // agregado corre sobre todos los grupos del nivel, con el mismo
+    // recorte de alcance docente que el compare de grupos.
+    if (!empty($f['grade']) && !empty($f['grade2'])) {
+        [$from,$to] = nxSemRange($f);
+        $mod = $f['module'] ?? null;
+        $modSql = $mod ? ' AND ai.incident_type = ?' : '';
+        $allowed = nxScopeGroupIds($conn, $u);
+        $scopeSql = ''; $params = [$u['school_id'],(string)$f['grade'],(string)$f['grade2'],$from,$to];
+        if ($mod) $params[] = $mod;
+        if ($allowed !== null) {
+            if (!$allowed) return ['reply'=>"No tienes grupos asignados para comparar.",
+                                   'intent'=>'groups.compare','_plan'=>$plan];
+            $scopeSql = ' AND ag.group_id IN (' . implode(',', array_fill(0, count($allowed), '?')) . ')';
+            $params = array_merge($params, $allowed);
+        }
+        $st = $conn->prepare("SELECT ag.grade_level, COUNT(DISTINCT ai.incident_id) AS n,
+                COUNT(DISTINCT s.student_id) AS est
+              FROM attendance_incidents ai
+              JOIN students s ON s.student_id=ai.student_id AND s.deleted_at IS NULL
+              JOIN student_group_assignments sga ON sga.student_id=s.student_id AND sga.active=TRUE
+              JOIN academic_groups ag ON ag.group_id=sga.group_id
+              WHERE ai.school_id=? AND ag.grade_level IN (?,?)
+                AND (ai.detected_at AT TIME ZONE 'America/Bogota')::date BETWEEN ? AND ? {$modSql}{$scopeSql}
+              GROUP BY ag.grade_level");
+        $st->execute($params);
+        $cnt = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $cnt[$r['grade_level']] = [(int)$r['n'], (int)$r['est']];
+        $lbl = $mod ? (NX_MODULE_LABEL[$mod] ?? $mod) : 'incidentes';
+        $rl  = $f['range_label'] ?? (isset($f['days'])&&$f['days']>0 ? 'en el rango' : 'hoy');
+        $rl  = $rl ? ' '.ltrim($rl) : '';
+        $gA = 'grado ' . $f['grade']; $gB = 'grado ' . $f['grade2'];
+        $n1 = $cnt[$f['grade']][0] ?? 0; $n2 = $cnt[$f['grade2']][0] ?? 0;
+        $e1 = $cnt[$f['grade']][1] ?? 0; $e2 = $cnt[$f['grade2']][1] ?? 0;
+        $dif = abs($n1-$n2);
+        $win = $n1===$n2 ? 'Empate total' : ($n1>$n2 ? "{$gA} tiene más (+{$dif})" : "{$gB} tiene más (+{$dif})");
+        return ['reply'=>"Comparación {$lbl}{$rl}:
+• " . ucfirst($gA) . ": {$n1}" . ($e1 ? " ({$e1} estudiantes con eventos)" : '') . "
+• " . ucfirst($gB) . ": {$n2}" . ($e2 ? " ({$e2} estudiantes con eventos)" : '') . "
+→ {$win}.",
+                'cards'=>[['title'=>"{$lbl} — comparación de grados",'columns'=>['Grado','Eventos','Estudiantes'],
+                    'rows'=>[[ucfirst($gA),$n1,$e1],[ucfirst($gB),$n2,$e2]]]],
+                'intent'=>'groups.compare','entities'=>['grade'=>$f['grade'],'grade2'=>$f['grade2'],'module'=>$mod],
+                '_plan'=>$plan];
+    }
     $g1 = nxSemGroupId($conn, $u, $f['group'] ?? '');
     $g2 = nxSemGroupId($conn, $u, $f['group2'] ?? '');
     if (!$g1 || !$g2)

@@ -2861,11 +2861,12 @@
         "top3": []
     },
     "que grupo tiene mas evasiones internas 10a o 8c": {
-        "intent": "attendance_ranking",
+        "intent": "groups_compare",
         "confidence": 0.9,
         "entities": {
-            "group": "10a, 8c",
-            "module": "EVASION"
+            "group": "10a",
+            "group2": "8c",
+            "module": "EVASION_INTERNA"
         },
         "domain": "formal",
         "top3": []

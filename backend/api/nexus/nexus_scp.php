@@ -44,7 +44,10 @@ function nxScpTask(string $q0, array $slots, ?array $sig, ?array $ds): array {
     // — comparación: dos grupos/métricas frente a frente —
     if ($t === 'lookup'
         && (preg_match('/\b(vs|versus|contra|compar[ae]|diferencia entre)\b/u', $q0)
-            || preg_match('/\bqu[ée]\s+(grupo|curso)\s+tiene\s+m[áa]s\b[^?]*\b(o|y)\b/u', $q0))) {
+            || preg_match('/\bqu[ée]\s+(grupo|curso)\s+tiene\s+m[áa]s\b[^?]*\b(o|y)\b/u', $q0)
+            // dos operandos nombrados son comparación aunque falte el
+            // marcador léxico — «entre 10B y 10C», «octavo y noveno»
+            || !empty($slots['group2']) || !empty($slots['grade2']))) {
         $t = 'compare'; $e[] = 'lex:compare';
     }
 
@@ -444,8 +447,11 @@ function nxScpValidate(array $frame): array {
                 && empty($frame['time_range'])) return [false, 'rank_sin_contexto'];
             break;
         case 'compare':
-            if (empty($frame['filters']['group']) || empty($frame['filters']['group2']))
-                return [false, 'compare_requiere_dos_grupos'];
+            // dos operandos: par de grupos (group/group2) o par de grados
+            // (grade/grade2) — nunca un solo lado
+            if (!((!empty($frame['filters']['group']) && !empty($frame['filters']['group2']))
+                || (!empty($frame['filters']['grade']) && !empty($frame['filters']['grade2']))))
+                return [false, 'compare_requiere_dos_operandos'];
             break;
         case 'navigate':
             if (empty($frame['references']) && $frame['subject']['source'] === 'none'
@@ -480,6 +486,7 @@ function nxScpToSlots(array $frame): array {
     foreach (['group','grade','status','search','student','module'] as $k)
         if (!empty($f[$k])) $slots[$k] = $f[$k];
     if (!empty($f['group2'])) $slots['group2'] = $f['group2'];
+    if (!empty($f['grade2'])) $slots['grade2'] = $f['grade2'];
     foreach (['days','from','to','range_label'] as $k)
         if (isset($tr[$k]) && $tr[$k] !== null) $slots[$k] = $tr[$k];
 
@@ -550,13 +557,17 @@ function nxScpToSlots(array $frame): array {
  * ------------------------------------------------------------------------- */
 function nxScpToPlan(array $frame): ?array {
     $f = $frame['filters'];
-    if ($frame['task'] !== 'compare' || empty($f['group']) || empty($f['group2']))
+    // dos operandos requeridos: par de grupos o par de grados
+    if ($frame['task'] !== 'compare'
+        || !((!empty($f['group']) && !empty($f['group2']))
+            || (!empty($f['grade']) && !empty($f['grade2']))))
         return null;
     $tr = $frame['time_range'] ?? [];
     $plan = [
         'capability'=>'groups.compare', 'entity'=>'groups', 'op'=>'compare',
         'filters'=>[
-            'group'=>$f['group'], 'group2'=>$f['group2'],
+            'group'=>$f['group'] ?? null, 'group2'=>$f['group2'] ?? null,
+            'grade'=>$f['grade'] ?? null, 'grade2'=>$f['grade2'] ?? null,
             'module'=>$f['module'] ?? null,
             'days'=>$tr['days'] ?? null, 'from'=>$tr['from'] ?? null,
             'to'=>$tr['to'] ?? null, 'range_label'=>$tr['label'] ?? null,
