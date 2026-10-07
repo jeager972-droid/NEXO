@@ -32,7 +32,7 @@ exterior* se simula (módem, UPS, huella, tiempo) — igual que haría el hardwa
 | `docker-compose.test.yml` | Stack completo idéntico a prod + schema auto-aplicado |
 | `env.test` | Credenciales de prueba (JWT keys generadas, AES de prueba) |
 | `seed.sql` | Datos semilla deterministas: 1 escuela, 1 grupo, 3 estudiantes, 1 coordinador, 1 docente, 1 acudiente, 1 dispositivo edge |
-| `seed_chat_fixture.sql` | Fixture extendido para Nexus/chat: 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos, umbrales de riesgo, 8-C sin incidentes |
+| `seed_chat_fixture.sql` | Fixture extendido para Nodus/chat: 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos, umbrales de riesgo, 8-C sin incidentes |
 | `nodo/` | Panel web de pruebas del nodo (`panel_server.py` + `index.html`) — forzado manual de acciones del edge |
 | `runner.py` | CLI maestro: levanta el stack, corre escenarios, fuerza acciones, estrés |
 

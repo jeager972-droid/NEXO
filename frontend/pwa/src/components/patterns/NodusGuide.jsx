@@ -1,7 +1,7 @@
 /**
- * NexusGuide — el guía de Nexus (CMP-NEXO, patrón del sistema).
+ * NodusGuide — el guía de Nodus (CMP-NEXO, patrón del sistema).
  *
- * Nexus es el sistema y también el asistente: aparece en la esquina
+ * Nodus es el sistema y también el asistente: aparece en la esquina
  * inferior derecha y habla UNA burbuja a la vez; el usuario avanza
  * por clic. Aparece y desaparece según contexto — nunca bloquea:
  *  - al terminar el guion, el bot se retira (no queda fijo tapando UI)
@@ -22,7 +22,7 @@ import { clsx } from 'clsx';
 const EASE = [0.22, 1, 0.36, 1];
 const DISMISS_DIST = 90; // px arrastrados hacia el centro para descartar
 
-export const NexusGuide = ({ script = [], active = true, celebrate = false, onStepChange, onDismiss }) => {
+export const NodusGuide = ({ script = [], active = true, celebrate = false, onStepChange, onDismiss }) => {
   const [idx, setIdx] = useState(-1);
   const [shown, setShown] = useState('');
   const [dismissed, setDismissed] = useState(false);
@@ -63,14 +63,31 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
     return () => clearInterval(typingRef.current);
   }, [idx, msg]);
 
-  // reinicia cuando cambia el guion (nuevo paso / nuevo contexto) y
-  // levanta el descarte — un mensaje nuevo justifica reaparecer
+  // reinicia cuando cambia el CONTENIDO del guion (nuevo paso / nuevo
+  // contexto) y levanta el descarte — un mensaje nuevo justifica reaparecer.
+  // Se compara por llaves/texto, no por identidad del array: el polling de
+  // notificaciones reconstruye un array equivalente cada minuto y sin esta
+  // comparación la burbuja se reiniciaría a mitad de lectura.
+  const prevScriptKey = useRef(null);
   useEffect(() => {
+    const key = script.map((m) => m?.dismissKey || m?.text || '').join('|');
+    if (key === prevScriptKey.current) return;
+    prevScriptKey.current = key;
     setIdx(script.length ? 0 : -1);
     setDismissed(false);
   }, [script]);
 
-  useEffect(() => { onStepChange?.(idx); }, [idx, onStepChange]);
+  // Avisa qué mensaje está en pantalla — por cambio de CONTENIDO, no solo
+  // de índice: cuando un mensaje priorizado se resuelve, el siguiente entra
+  // como msg[0] sin que idx se mueva, y aun así hay que notificarlo (el
+  // anunciador marca «mostrado» desde aquí).
+  const prevMsgKey = useRef(null);
+  useEffect(() => {
+    const k = msg ? (msg.dismissKey || msg.text) : null;
+    if (k === prevMsgKey.current) return;
+    prevMsgKey.current = k;
+    onStepChange?.(idx);
+  }, [idx, msg, onStepChange]);
 
   useEffect(() => () => clearInterval(typingRef.current), []);
 
@@ -144,7 +161,7 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
               {/* cola centrada sobre el bot (80 px / sm:96 px de diámetro) */}
               <div className="absolute -bottom-[7px] right-[34px] sm:right-[42px] h-3 w-3 rotate-45 border-b border-r border-[var(--nx-border)] bg-[var(--nx-surface)]" />
               <div className="flex items-center gap-2">
-                <p className="text-caption font-semibold tracking-wide text-[var(--nx-accent)]">NEXUS</p>
+                <p className="text-caption font-semibold tracking-wide text-[var(--nx-accent)]">NODUS</p>
                 {script.length > 1 && (
                   <span className="text-[11px] tabular-nums text-[var(--nx-text-muted)]" aria-label={`Mensaje ${idx + 1} de ${script.length}`}>
                     {idx + 1} / {script.length}
@@ -211,7 +228,7 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
           {botVisible && (
             <motion.button
               type="button"
-              aria-label="Nexus, tu asistente — toca para repetir la explicación o arrastra al centro para quitarla"
+              aria-label="Nodus, tu asistente — toca para repetir la explicación o arrastra al centro para quitarla"
               drag
               dragSnapToOrigin
               onDragStart={() => setDragging(true)}
@@ -247,4 +264,4 @@ export const NexusGuide = ({ script = [], active = true, celebrate = false, onSt
   );
 };
 
-export default NexusGuide;
+export default NodusGuide;

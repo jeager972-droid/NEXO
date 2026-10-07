@@ -8,11 +8,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Activity, AlertTriangle, UserMinus, ChevronRight,
-  Search, SearchX, X, CheckCircle2, FileText, ClipboardCheck, Clock, Inbox
+  Search, SearchX, X, CheckCircle2, FileText, ClipboardCheck, Clock, Inbox, UserRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../api/dashboard';
-import { NexusInsights } from '../components/patterns/NexusInsights';
+import { NodusBrief } from '../components/patterns/NodusBrief';
 import { trackingApi } from '../api/tracking';
 import { ROLES } from '../config/roles';
 import { Skeleton, SkeletonMetrics, SkeletonRows } from '../components/ui/Skeleton';
@@ -24,7 +24,6 @@ import { Drawer } from '../components/ui/Overlay';
 import { Badge } from '../components/ui/Badge';
 import { StatCard } from '../components/patterns/StatCard';
 import { SituationLine } from '../components/patterns/SituationLine';
-import { NexoChatBubble } from '../components/patterns/NexoChat';
 import { ScheduleTask, isTaskActive, isTaskDoneToday } from '../components/patterns/ScheduleTask';
 import { formatGroupName } from '../utils/groupFormat';
 import { humanizeError } from '../utils/messages';
@@ -234,7 +233,7 @@ const AdminDashboard = ({ stats, loading, error }) => {
         </div>
       )}
 
-      <NexusInsights />
+      <NodusBrief />
 
       <AnimatePresence>
         {activeCategory && (
@@ -289,7 +288,7 @@ const SecretaryDashboard = ({ loading: parentLoading, error }) => {
     <div className="space-y-8">
       <BlockTitle>Tareas pendientes</BlockTitle>
       <TasksEmptyState loading={parentLoading} error={error} />
-      <NexusInsights />
+      <NodusBrief />
     </div>
   );
 };
@@ -317,7 +316,7 @@ const CounselorDashboard = ({ stats, loading: parentLoading, error }) => {
           <StatCard icon={<Activity size={18} strokeWidth={1.75} />} label="Seguimientos" value={0} tone="warning" />
         </div>
       )}
-      <NexusInsights />
+      <NodusBrief />
     </div>
   );
 };
@@ -521,12 +520,6 @@ const TeacherDashboard = ({ stats, loading: parentLoading, error }) => {
             />
           )}
 
-          {selectedGroup && !groupLoading && groupStats && !hasActivity && (
-            <Surface className="p-4">
-              <NexoChatBubble message={`El grupo ${formatGroupName(selectedGroup)} no tiene registros de ingreso hoy.`} />
-            </Surface>
-          )}
-
           {selectedGroup && (
             groupLoading ? (
               <SkeletonKpis5 />
@@ -589,7 +582,7 @@ const TeacherDashboard = ({ stats, loading: parentLoading, error }) => {
             )
           )}
 
-          <NexusInsights />
+          <NodusBrief groupName={selectedGroup} />
 
           <AnimatePresence>
             {activeCategory && (
@@ -649,11 +642,17 @@ const CATEGORY_SCHEMES = {
   permiso: 'accent',
 };
 
-const getInitials = (first, last) => {
-  const f = (first?.[0] || '').toUpperCase();
-  const l = (last?.[0] || '').toUpperCase();
-  return (f + l) || '?';
-};
+// Avatar por defecto: silueta de persona (como el placeholder de Facebook),
+// no iniciales — las iniciales fingen identidad que la foto no tiene.
+const StudentAvatar = ({ size = 36, iconSize = 18 }) => (
+  <div
+    className="shrink-0 rounded-full bg-[var(--nx-surface-subtle)] border border-[var(--nx-border)] flex items-center justify-center text-[var(--nx-text-muted)]"
+    style={{ width: size, height: size }}
+    aria-hidden
+  >
+    <UserRound size={iconSize} />
+  </div>
+);
 
 const getCategoryStatusText = (category) => {
   switch (category) {
@@ -666,65 +665,35 @@ const getCategoryStatusText = (category) => {
   }
 };
 
+const ProfileRow = ({ label, children }) => (
+  <div className="flex items-center gap-3 px-5 py-3.5">
+    <span className="text-body-sm text-[var(--nx-text-muted)] w-28 shrink-0">{label}</span>
+    <span className="text-body text-[var(--nx-text)] flex-1">{children}</span>
+  </div>
+);
+
 const renderProfileFields = (category, row) => {
   switch (category) {
     case 'present':
-      return (
-        <div>
-          <p className="text-caption text-[var(--nx-text-muted)]">Último ingreso</p>
-          <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.last_entry)}</p>
-        </div>
-      );
+      return <ProfileRow label="Último ingreso">{fmtDetailDate(row.last_entry)}</ProfileRow>;
     case 'absent':
-      return (
-        <div>
-          <p className="text-caption text-[var(--nx-text-muted)]">Ausente desde</p>
-          <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.absent_since)}</p>
-        </div>
-      );
+      return <ProfileRow label="Sin registro desde">{fmtDetailDate(row.absent_since)}</ProfileRow>;
     case 'late':
-      return (
-        <div>
-          <p className="text-caption text-[var(--nx-text-muted)]">Hora de llegada</p>
-          <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.late_at)}</p>
-        </div>
-      );
+      return <ProfileRow label="Hora de llegada">{fmtDetailDate(row.late_at)}</ProfileRow>;
     case 'alert':
       return (
         <>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Tipo de alerta</p>
-            <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.alert_type)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Fecha</p>
-            <p className="text-body text-[var(--nx-text)]">{fmtDetailDate(row.alert_at)}</p>
-          </div>
-          {row.classroom && (
-            <div>
-              <p className="text-caption text-[var(--nx-text-muted)]">Salón</p>
-              <p className="text-body text-[var(--nx-text)]">{row.classroom}</p>
-            </div>
-          )}
-          {row.detected_by && (
-            <div>
-              <p className="text-caption text-[var(--nx-text-muted)]">Detectado por</p>
-              <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.detected_by)}</p>
-            </div>
-          )}
+          <ProfileRow label="Tipo de alerta">{humanizeDetailVal(row.alert_type)}</ProfileRow>
+          <ProfileRow label="Fecha">{fmtDetailDate(row.alert_at)}</ProfileRow>
+          {row.classroom && <ProfileRow label="Salón">{row.classroom}</ProfileRow>}
+          {row.detected_by && <ProfileRow label="Detectado por">{humanizeDetailVal(row.detected_by)}</ProfileRow>}
         </>
       );
     case 'permiso':
       return (
         <>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Tipo</p>
-            <p className="text-body text-[var(--nx-text)]">{humanizeDetailVal(row.permiso_type)}</p>
-          </div>
-          <div>
-            <p className="text-caption text-[var(--nx-text-muted)]">Motivo</p>
-            <p className="text-body text-[var(--nx-text)]">{row.reason || '—'}</p>
-          </div>
+          <ProfileRow label="Tipo">{humanizeDetailVal(row.permiso_type)}</ProfileRow>
+          <ProfileRow label="Motivo">{row.reason || '—'}</ProfileRow>
         </>
       );
     default: return null;
@@ -843,10 +812,8 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                     borderColor: `var(--nx-${CATEGORY_SCHEMES[category]})`,
                   }}
                 >
-                  {/* Avatar circular con iniciales */}
-                  <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--nx-surface-subtle)] flex items-center justify-center text-caption font-semibold text-[var(--nx-text-muted)]">
-                    {getInitials(row.first_name, row.last_name)}
-                  </div>
+                  {/* Avatar — silueta genérica (sin foto registrada) */}
+                  <StudentAvatar size={36} iconSize={18} />
 
                   {/* Nombre y grupo */}
                   <div className="min-w-0 flex-1">
@@ -908,16 +875,14 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
 
       {profileStudent && (
         <Drawer
-          title="Detalle del estudiante"
+          title="Perfil del estudiante"
           onClose={closeStudentProfile}
           size="md"
         >
           <div className="p-6 space-y-6">
-            <BlockTitle>Datos del estudiante</BlockTitle>
+            {/* Encabezado: identidad + estado actual — lo primero que se lee */}
             <div className="flex items-center gap-4">
-              <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--nx-subtle-bg-accent)] flex items-center justify-center text-h2 font-semibold text-[var(--nx-accent)]">
-                {getInitials(profileStudent.first_name, profileStudent.last_name)}
-              </div>
+              <StudentAvatar size={64} iconSize={32} />
               <div className="min-w-0 flex-1">
                 <p className="text-h2 text-[var(--nx-text)]">
                   {profileStudent.last_name} {profileStudent.first_name}
@@ -933,6 +898,8 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
               </div>
             </div>
 
+            {/* Una sola superficie: identidad + estado — sin «información de
+                la métrica» ni etiquetas redundantes. */}
             <Surface className="divide-y divide-[var(--nx-border)]">
               {[
                 { label: 'Documento', value: profileStudent.document || profileStudent.documento || '—' },
@@ -940,19 +907,12 @@ const TeacherDetailDrawer = ({ category, groupName, scopeLabel = 'grupo', data, 
                 { label: 'Estado actual', value: getCategoryStatusText(category) },
               ].map((row) => (
                 <div key={row.label} className="flex items-center gap-3 px-5 py-3.5">
-                  <span className="text-body-sm text-[var(--nx-text-muted)] w-28">{row.label}</span>
+                  <span className="text-body-sm text-[var(--nx-text-muted)] w-28 shrink-0">{row.label}</span>
                   <span className="text-body text-[var(--nx-text)] flex-1">{row.value}</span>
                 </div>
               ))}
+              {renderProfileFields(category, profileStudent)}
             </Surface>
-
-            {/* Información específica según categoría */}
-            <div className="space-y-3">
-              <BlockTitle>Información de la métrica</BlockTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderProfileFields(category, profileStudent)}
-              </div>
-            </div>
           </div>
         </Drawer>
       )}
@@ -1021,7 +981,7 @@ const StaffDashboard = ({ loading: parentLoading, error }) => {
     <div className="space-y-8">
       <BlockTitle>Tareas pendientes</BlockTitle>
       <TasksEmptyState loading={parentLoading} error={error} />
-      <NexusInsights />
+      <NodusBrief />
     </div>
   );
 };

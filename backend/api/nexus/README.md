@@ -1,12 +1,12 @@
 # NEXUS — IA conversacional de NEXO
 
-> **Nexus** es el parser semántico + motor conversacional del chat de NEXO
+> **Nodus** es el parser semántico + motor conversacional del chat de NEXO
 > (asistente institucional escolar). Este documento describe la arquitectura
 > **vigente** verificada contra el código en `HEAD`, no contra documentos
 > históricos.
 
 **Componente:** `backend/api/nexus/` (4 librerías PHP) +
-`backend/api/routes/chat.php` (entry HTTP). Nexus **no es un servicio
+`backend/api/routes/chat.php` (entry HTTP). Nodus **no es un servicio
 independiente**: corre dentro del proceso PHP-FPM de la API y comparte su
 bootstrap, pool PostgreSQL, Redis y contexto RBAC. La única dependencia
 externa es el proveedor LLM (HTTP saliente, compatible-OpenAI).
@@ -50,7 +50,7 @@ apuntan al código leído.
 
 ## 1. Propósito
 
-Nexus da a rectoría, coordinación, secretaría, docencia, psicoorientación,
+Nodus da a rectoría, coordinación, secretaría, docencia, psicoorientación,
 portería y auxiliares un canal conversacional en español natural para:
 
 - consultar la jornada escolar (ingresos, tardanzas, inasistencias,
@@ -110,7 +110,7 @@ Presentación + estado (chatLog, chatBuildDs)
   cards/tablas deterministas · composer LLM opcional · _ds persistido
   en chat_messages.payload_json · auditoría CHAT_QUERY
   ▼
-Respuesta JSON → UI Nexus (texto, cards, actions, suggestions)
+Respuesta JSON → UI Nodus (texto, cards, actions, suggestions)
 ```
 
 Las capas deterministas conservan la autoridad sobre: normalización,
@@ -916,7 +916,7 @@ permitida. Los denegados de intent son 200 con `denied:true`.
   HTTP), `test/readonly_guard.php`, `test/resilience.php`,
   `test/scp_regression.php`, `test/harness_turn.php` (paridad con
   producción), PHPUnit `test/phpunit.xml` (`ChatNluTest`,
-  `NexusPlanInvariantTest`, …).
+  `NodusPlanInvariantTest`, …).
 - **Suites live** (gastan cuota API / requieren servicios):
   `blind_eval.php`, `op_eval.php`, `semantic_eval.php`,
   `audit_single_errors.php`, `live_battery.php`, `golden_live.php`,
@@ -940,7 +940,7 @@ permitida. Los denegados de intent son 200 con `denied:true`.
   eliminado del repo; se cita solo como historia, no como garantía
   de la versión actual.
 
-## 19. Extender Nexus: añadir una capacidad
+## 19. Extender Nodus: añadir una capacidad
 
 Añadir una consulta nueva al chat toca **cinco puntos del pipeline** (en
 orden del flujo):

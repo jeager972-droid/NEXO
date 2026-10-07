@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../backend/api/nexus/nexus_semantic.php';
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-final class NexusPlanInvariantTest extends TestCase
+final class NodusPlanInvariantTest extends TestCase
 {
     private static function students(): array
     {

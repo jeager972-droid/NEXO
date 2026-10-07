@@ -76,7 +76,7 @@ describe('Operation page (RECTOR)', () => {
       expect(screen.getByText('Citar acudiente')).toBeInTheDocument();
     });
     expect(screen.getByText('Autorizar salida')).toBeInTheDocument();
-    expect(screen.getByText('Situación Crítica')).toBeInTheDocument();
+    expect(screen.getByText('Emergencia')).toBeInTheDocument();
   });
 
   it('no muestra etiqueta de sección suelta ni comandos eliminados', async () => {

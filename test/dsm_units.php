@@ -38,17 +38,18 @@ $cases = [
     ['una citacion para el acudiente',         'Citar acudiente'],
     ['hay que convocar al acudiente',          'Citar acudiente'],
     ['citala a citacion',                      'Citar acudiente'],
-    ['quiero enviar una solicitud',            'Mandar solicitud'],
-    ['quiero mandar una solicitud al docente', 'Mandar solicitud'],
-    ['confirmo la solicitud',                  'Mandar solicitud'],
+    // «solicitud» ya no es operación — cae al default (seguimiento)
+    ['quiero enviar una solicitud',            'Solicitar seguimiento'],
+    ['quiero mandar una solicitud al docente', 'Solicitar seguimiento'],
+    ['confirmo la solicitud',                  'Solicitar seguimiento'],
     ['una autorizacion de salida',             'Autorizar salida'],
     ['quiero autorizar una salida',            'Autorizar salida'],
     ['genera un permiso',                      'Generar permiso'],
     ['genera un permiso medico',               'Generar permiso'],
     ['reporta un incidente',                   'Reportar incidente'],
     ['quiero reportar un daño',                'Reportar daño'],
-    ['situacion critica en el 8a',             'Situación Crítica'],
-    ['emergencia en el patio',                 'Situación Crítica'],
+    ['situacion critica en el 8a',             'Emergencia'],
+    ['emergencia en el patio',                 'Emergencia'],
 ];
 foreach ($cases as [$q, $want]) {
     $got = chatOperationCmd(nxNorm($q));
@@ -81,11 +82,11 @@ $t = turn('vuelve al mes', $ctx);
 chk('D1 vuelve al mes→days', ($t['slots']['days'] ?? 0) === 60, "days=" . var_export($t['slots']['days'] ?? null, true));
 
 $ctx = null;
-turn('quiero mandar una solicitud', $ctx);
+turn('quiero citar a un acudiente', $ctx);
 turn('cuantas tardanzas hubo hoy', $ctx);   // consulta intermedia
-$t = turn('vuelve a la solicitud', $ctx);
-chk('D2 vuelve a la solicitud→confirm', in_array($t['intent'], ['confirm_op'], true), "intent={$t['intent']}");
-chk('D3 _op sobrevivió consulta intermedia', $t['op'] === 'Mandar solicitud', "op=" . var_export($t['op'], true));
+$t = turn('vuelve a la citacion', $ctx);
+chk('D2 vuelve a la citacion→op', in_array($t['intent'], ['confirm_op','derive_action'], true), "intent={$t['intent']}");
+chk('D3 _op sobrevivió consulta intermedia', $t['op'] === 'Citar acudiente', "op=" . var_export($t['op'], true));
 
 /* ── E. Autonomía: consultas independientes no heredan entidades ───────── */
 $ctx = null;

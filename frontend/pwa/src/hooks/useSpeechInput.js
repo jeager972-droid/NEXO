@@ -1,6 +1,6 @@
 /**
  * useSpeechInput / NEXO Institucional
- * Dictado por voz para el chat de Nexus (Web Speech API).
+ * Dictado por voz para el chat de Nodus (Web Speech API).
  *
  * El reconocimiento lo presta el navegador del usuario — Chrome envía el
  * audio a su propio servicio de voz, Safari/iOS al de Apple. NEXO nunca

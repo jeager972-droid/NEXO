@@ -17,7 +17,7 @@ const NexoAvatar = ({ size = 40 }) => {
   return (
     <img
       src="/imagenbot.png"
-      alt="Nexus"
+      alt="Nodus"
       className="shrink-0 rounded-full object-cover"
       style={{ width: size, height: size }}
       onError={() => setFailed(true)}
@@ -26,26 +26,35 @@ const NexoAvatar = ({ size = 40 }) => {
 };
 
 export { NexoAvatar };
-export const NexoChatBubble = ({ message, timestamp = 'Ahora', action, unread }) => (
+export const NexoChatBubble = ({ message, timestamp = 'Ahora', action, unread, tone }) => (
   <div className="flex items-start gap-3" role="article">
     <NexoAvatar size={36} />
     <div className="flex-1 min-w-0">
       <div className={clsx(
         'rounded-surface rounded-tl-xs border px-4 py-3',
-        unread
-          ? 'border-[var(--nx-border-accent)] bg-[var(--nx-subtle-bg-accent)]'
-          : 'border-[var(--nx-border)] bg-[var(--nx-surface)]'
+        tone === 'critical'
+          ? 'border-[var(--nx-danger)] bg-[var(--nx-subtle-bg-danger)] border-l-[3px] shadow-[0_1px_6px_oklch(58%_.21_27/.12)]'
+          : unread
+            ? 'border-[var(--nx-border-accent)] bg-[var(--nx-subtle-bg-accent)]'
+            : 'border-[var(--nx-border)] bg-[var(--nx-surface)]'
       )}>
         {/* meta discreta dentro de la burbuja: remitente + hora; el punto
             marca lo no leído sin saturar toda la tarjeta de acento */}
         <div className="mb-1.5 flex items-center gap-2">
           <span className={clsx(
             'text-caption font-semibold tracking-wide',
-            unread ? 'text-[var(--nx-accent)]' : 'text-[var(--nx-text-muted)]'
+            tone === 'critical' ? 'text-[var(--nx-danger)]'
+              : unread ? 'text-[var(--nx-accent)]' : 'text-[var(--nx-text-muted)]'
           )}>
             NEXO
           </span>
-          {unread && <span className="h-1.5 w-1.5 rounded-full bg-[var(--nx-accent)]" title="Sin leer" />}
+          {tone === 'critical' && (
+            <span className="rounded-full bg-[var(--nx-danger)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.05em] text-white">
+              Crítica
+            </span>
+          )}
+          {unread && tone !== 'critical' && <span className="h-1.5 w-1.5 rounded-full bg-[var(--nx-accent)]" title="Sin leer" />}
+          {unread && tone === 'critical' && <span className="h-1.5 w-1.5 rounded-full bg-[var(--nx-danger)]" title="Sin leer" />}
           <span className="ml-auto text-caption tabular-nums text-[var(--nx-text-muted)]">{timestamp}</span>
         </div>
         <p className="text-body-sm text-[var(--nx-text)] leading-relaxed">{message}</p>

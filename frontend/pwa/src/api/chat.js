@@ -1,6 +1,6 @@
 /**
  * chat API / NEXO Institucional
- * Cliente de «Pregúntale a Nexus» — chatbot intent-based con NLU.
+ * Cliente de «Pregúntale a Nodus» — chatbot intent-based con NLU.
  * Dependencias: axios client.js.
  */
 import client from './client';
@@ -25,6 +25,11 @@ export const chatApi = {
   },
   savePolicies: async (policies) => {
     const { data } = await client.post('/chat/policies', { policies });
+    if (data.status === 'error') throw new Error(data.message);
+    return data.data;
+  },
+  report: async (messageId, reason = 'incorrecta', detail = '') => {
+    const { data } = await client.post('/chat/report', { message_id: messageId, reason, detail });
     if (data.status === 'error') throw new Error(data.message);
     return data.data;
   },

@@ -28,4 +28,11 @@ export const dashboardApi = {
     const response = await client.get('/dashboard/insights');
     return response.data;
   },
+  getBrief: async (groupName = '', config = {}) => {
+    const response = await client.get('/dashboard/brief', {
+      params: { group_name: groupName },
+      ...config,
+    });
+    return response.data;
+  },
 };

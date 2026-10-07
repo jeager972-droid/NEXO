@@ -34,28 +34,30 @@ beforeEach(() => {
 });
 
 describe('LegalGate', () => {
-  it('bloquea la app y muestra el aviso de cookies primero', () => {
+  it('bloquea la app y muestra los Términos primero', () => {
     renderGate({ user: baseUser, loading: false });
     expect(screen.queryByTestId('app-content')).not.toBeInTheDocument();
-    expect(screen.getByText('Uso de cookies y almacenamiento local')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Aceptar todas/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Solo necesarias/i })).toBeInTheDocument();
+    expect(screen.getByText('Términos y Condiciones de Uso')).toBeInTheDocument();
+    expect(screen.getAllByText('NODUS').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Aceptar y continuar/i })).toBeInTheDocument();
   });
 
-  it('tras decidir cookies muestra Términos con Nexus y exige aceptar', () => {
+  it('tras aceptar términos muestra el aviso de cookies compacto', async () => {
     renderGate({ user: baseUser, loading: false });
-    fireEvent.click(screen.getByRole('button', { name: /Solo necesarias/i }));
-    expect(screen.getByText('Términos y Condiciones de Uso')).toBeInTheDocument();
-    expect(screen.getAllByText('NEXUS').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Aceptar y continuar/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Aceptar y continuar/i }));
+    await vi.waitFor(() => {
+      expect(screen.getByText('Uso de cookies y almacenamiento local')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /Aceptar todas/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Solo necesarias/i })).toBeInTheDocument();
     expect(screen.queryByTestId('app-content')).not.toBeInTheDocument();
   });
 
   it('«Leer más» despliega el texto legal completo', () => {
     renderGate({ user: baseUser, loading: false });
-    expect(screen.queryByText(/Marco legal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Objeto y aceptación/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Leer más/i }));
-    expect(screen.getByText(/Marco legal/)).toBeInTheDocument();
+    expect(screen.getByText(/Objeto y aceptación/)).toBeInTheDocument();
   });
 
   it('aceptar los términos registra la versión y libera la app', async () => {

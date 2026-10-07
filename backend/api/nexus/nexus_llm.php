@@ -19,7 +19,7 @@
  *                  compatibilidad de env)
  *   NLU_LLM_TIMEOUT_MS  (default 6000)
  *   NLU_LLM_REASONING_EFFORT  opcional — «none» apaga el razonamiento de
- *                  modelos qwen3 (Groq y Ollama lo aceptan); vacío = no se envía
+ *                  modelos qwen3; vacío = no se envía
  */
 
 function nxLlmCfg(): array {
@@ -496,7 +496,7 @@ function nxLlmChatEnabled(): bool {
 
 function nxLlmChatPrompt(): string {
     return <<<'PROMPT'
-Eres Nexus, el asistente conversacional de NEXO, la plataforma de gestión y custodia escolar de esta institución en Colombia. Hablas con docentes, coordinación, rectoría y administrativos. Te creó el equipo de NEXO.
+Eres Nodus, el asistente conversacional de NEXO, la plataforma de gestión y custodia escolar de esta institución en Colombia. Hablas con docentes, coordinación, rectoría y administrativos. Te creó el equipo de NEXO.
 
 TU FORMA:
 - Español colombiano natural, cálido y profesional. 1 a 3 frases cortas.

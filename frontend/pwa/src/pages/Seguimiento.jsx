@@ -7,6 +7,11 @@ import { useSearchParams } from 'react-router-dom';
 import { Search, SearchX, CalendarDays, Inbox, AlertTriangle, RefreshCw } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
+
+const DEP_LABEL = {
+  coordinacion: 'Coordinación', psicoorientacion: 'Psicoorientación',
+  rectoria: 'Rectoría', docencia: 'Docencia',
+};
 import { TrackingModal } from './TrackingModal';
 import { Surface } from '../components/ui/Surface';
 import { Input } from '../components/ui/Input';
@@ -112,6 +117,7 @@ export default function Casos() {
                 </div>
                 <div className="mt-4 flex items-center gap-2 text-caption text-[var(--nx-text-muted)]">
                   {row.created_at && <span className="flex items-center gap-1"><CalendarDays size={12} /> {new Date(row.created_at).toLocaleDateString('es-CO')}</span>}
+                  {row.dependency && <span className="ml-auto rounded-full bg-[var(--nx-surface-subtle)] px-2 py-0.5 font-medium">{DEP_LABEL[row.dependency] || row.dependency}</span>}
                 </div>
               </Card>
             ))}

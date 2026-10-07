@@ -7,9 +7,14 @@ import { useState, useEffect } from 'react';
 import { Send, UserCheck, CalendarDays } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { trackingApi } from '../api/tracking';
+import { usersApi } from '../api/users';
+import { useAuth } from '../hooks/useAuth';
+import { ROLES } from '../config/roles';
 import { Surface, BlockTitle } from '../components/ui/Surface';
 import { Button } from '../components/ui/Button';
 import { Input, Textarea } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { Drawer, ConfirmDialog } from '../components/ui/Overlay';
@@ -29,6 +34,14 @@ const DEPENDENCY_LABELS = {
   rectoria: 'Rectoría',
   docencia: 'Docencia',
 };
+// Dependencia → rol del que se cargan los responsables elegibles
+const DEPENDENCY_ROLES = {
+  coordinacion: 'COORDINATOR',
+  psicoorientacion: 'COUNSELOR',
+  rectoria: 'RECTOR',
+  docencia: 'TEACHER',
+};
+const DEPENDENCY_OPTIONS = Object.entries(DEPENDENCY_LABELS).map(([value, label]) => ({ value, label }));
 const INCIDENT_LABELS = {
   UNAUTHORIZED_ABSENCE: 'Ausencia', INASISTENCIA: 'Ausencia',
   INASISTENCIA_NO_JUSTIFICADA: 'Ausencia', LATE_ARRIVAL: 'Llegada tarde',
@@ -36,6 +49,7 @@ const INCIDENT_LABELS = {
 };
 
 export const TrackingModal = ({ trackingId, studentId, studentName, metadata, onClose, onRefresh }) => {
+  const { user } = useAuth();
   const [details, setDetails] = useState(null);
   const [notes, setNotes] = useState([]);
   const [guardianResponses, setGuardianResponses] = useState([]);
@@ -47,6 +61,22 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
   const [showResolve, setShowResolve] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
+  // Asignación al iniciar el caso: dependencia + responsable (filtrado por
+  // la jornada del docente cuando quien inicia es DOCENTE).
+  const [startForm, setStartForm] = useState({ dependency: 'psicoorientacion', assignee: '' });
+  const [assignees, setAssignees] = useState([]);
+  const [loadingAssignees, setLoadingAssignees] = useState(false);
+
+  useEffect(() => {
+    if (activeTrackingId || !startForm.dependency) return;
+    const role = DEPENDENCY_ROLES[startForm.dependency];
+    if (!role) return;
+    setLoadingAssignees(true);
+    usersApi.getByRole(role, user?.role === ROLES.DOCENTE)
+      .then((res) => setAssignees(res.data || []))
+      .catch(() => setAssignees([]))
+      .finally(() => setLoadingAssignees(false));
+  }, [startForm.dependency, activeTrackingId, user]);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -80,9 +110,12 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
     try {
       let reason = '';
       if (metadata?.risk_score) {
-        reason = `Análisis de riesgo - Score: ${metadata.risk_score}/100`;
+        reason = `Análisis de riesgo — puntaje: ${metadata.risk_score}/100`;
       }
-      const res = await trackingApi.startTracking(studentId, reason);
+      const res = await trackingApi.startTracking(studentId, reason, {
+        dependency: startForm.dependency || null,
+        assignedToUserId: startForm.assignee || null,
+      });
       if (res.status === 'ok') {
         setActiveTrackingId(res.tracking_id);
         if (onRefresh) onRefresh();
@@ -151,12 +184,41 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
           )}
 
           {!activeTrackingId ? (
-            <EmptyState
-              icon={<UserCheck size={32} className="text-[var(--nx-accent)]" />}
-              title="Iniciar seguimiento"
-              description="Este estudiante aún no tiene un caso activo. Inicia uno para registrar intervenciones."
-              action={<Button onClick={handleStartTracking} loading={isSubmitting}>Iniciar caso</Button>}
-            />
+            <div className="space-y-4">
+              <EmptyState
+                icon={<UserCheck size={32} className="text-[var(--nx-accent)]" />}
+                title="Iniciar seguimiento"
+                description="Este estudiante aún no tiene un caso activo. Elige la dependencia y, si quieres, la persona responsable."
+              />
+              <Surface className="p-4 space-y-4">
+                <Select
+                  label="Dependencia responsable"
+                  options={DEPENDENCY_OPTIONS}
+                  value={startForm.dependency}
+                  onChange={(e) => setStartForm((f) => ({ ...f, dependency: e.target.value, assignee: '' }))}
+                />
+                {loadingAssignees ? (
+                  <div className="h-11 w-full nx-skeleton rounded-control" aria-hidden />
+                ) : (
+                  <SearchableSelect
+                    label="Persona responsable (opcional)"
+                    options={assignees.map((u) => ({
+                      value: u.user_id || u.id,
+                      label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
+                      sublabel: u.work_shift ? `Jornada ${u.work_shift}` : '',
+                    }))}
+                    value={startForm.assignee}
+                    onChange={(v) => setStartForm((f) => ({ ...f, assignee: v || '' }))}
+                    placeholder="La dependencia decide quién lo toma"
+                    searchPlaceholder="Buscar persona…"
+                    emptyText="Sin personas en esa dependencia"
+                    clearable
+                  />
+                )}
+                <Button className="w-full" onClick={handleStartTracking} loading={isSubmitting}>Iniciar caso</Button>
+                {submitStatus && <p className="text-caption text-[var(--nx-danger)]" role="alert">{submitStatus.message}</p>}
+              </Surface>
+            </div>
           ) : loading ? (
             <SkeletonRows count={3} />
           ) : (
@@ -167,7 +229,9 @@ export const TrackingModal = ({ trackingId, studentId, studentName, metadata, on
                   <div className="min-w-0 flex-1">
                     {details?.created_at && <p className="text-h3 text-[var(--nx-text)]">Iniciado {new Date(details.created_at).toLocaleDateString('es-CO')}</p>}
                     <div className="mt-1.5 space-y-0.5 text-caption text-[var(--nx-text-muted)]">
-                      {details?.origin_type && (
+                      {/* «Derivación manual» es siempre el mismo texto — solo
+                          informa cuando el origen es una alerta o incidente. */}
+                      {details?.origin_type && details.origin_type !== 'manual' && (
                         <p>Origen: <b className="font-semibold text-[var(--nx-text)]">{ORIGIN_LABELS[details.origin_type] || details.origin_type}</b></p>
                       )}
                       {details?.dependency && (

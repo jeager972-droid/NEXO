@@ -232,7 +232,7 @@ Todo el archivo exige `requireAuth()` (línea 38).
 | GET | `/dashboard/stats` | auth | Estadísticas de asistencia por rol/grupo; caché Redis `dashboard:stats:*` |
 | GET | `/dashboard/teacher-group-detail` | auth | Detalle de grupo para docente |
 | GET | `/dashboard/events` | auth | Feed de eventos operacionales (`?type=`) |
-| GET | `/dashboard/insights` | auth | Tarjetas Nexus Insights (lib/insights.php); caché 60 s |
+| GET | `/dashboard/insights` | auth | Tarjetas Nodus Insights (lib/insights.php); caché 60 s |
 
 ### `routes/operations.php` — comandos operativos
 
@@ -249,7 +249,6 @@ requiere el permiso `operations.<accion>` (`operations.php:273`).
 | POST | `/operations/citacion` | `operations.citacion` | Citación al acudiente por WhatsApp |
 | POST | `/operations/salida` | `operations.autorizar_salida` | `school_exit_authorizations` |
 | POST | `/operations/permiso` | `operations.permiso` | `class_exit_authorizations` (salida de aula) |
-| POST | `/operations/solicitud` | `operations.solicitud` | `internal_messages` a otro usuario |
 | POST | `/operations/daño` | `operations.daño` | Registro de daño institucional |
 | POST | `/operations/pedagogica` | `operations.pedagogica` | `pedagogical_trip_authorizations` |
 | POST | `/operations/horario` | `operations.horario` | Notifica cambio de horario de un grupo |
@@ -440,7 +439,7 @@ Tipos soportados (`case` en `consultations.php:119-799`): `group_students`,
 |---|---|---|---|
 | GET | `/metrics` | `METRICS_SECRET_KEY` (header `X-Metrics-Key` o `?key=`; 401 si no configurada) | Exposición Prometheus: `nexo_db_*`, `nexo_worker_*`, `nexo_queue_length`, `nexo_auth_logins_total`, `nexo_biometric_events_today`, `nexo_twilio_*`, `nexo_risk_alerts_today`, `nexo_panic_events_30d`, `nexo_disk_used_percent` |
 
-### `routes/chat.php` — entry point del asistente Nexus
+### `routes/chat.php` — entry point del asistente Nodus
 
 Solo la capa HTTP; la lógica conversacional (LLM parser, NLU, semántica, SCP)
 está documentada en [backend/api/nexus/README.md](../../backend/api/nexus/README.md) y vive en
@@ -469,7 +468,7 @@ está documentada en [backend/api/nexus/README.md](../../backend/api/nexus/READM
 | `RiskEngineV3.php` | Motor de riesgo pedagógico v3.0 (arquitectura de 7-8 capas; esta clase implementa capas 2, 4, 6 y 8): políticas versionadas configurables, combinación/correlación entre categorías, auditoría/versionado y anomalía estadística (z-score). Ontología fija: SIN_IMPORTANCIA, LEVE (4 en 7 d), MODERADA (3 en 10 d), ALTA (2 en 15 d), MUY_ALTA (1 ocurrencia = alerta inmediata). La institución configura mapeo evento→nivel, vidas medias, umbrales y cooldowns dentro de rangos protegidos; el scoring con decaimiento exponencial y la escalación (máquina de estados) viven en funciones SQL (`fn_evaluate_student_risk`, `fn_calculate_category_risk`, …) |
 | `RiskScoreEngine.php` | Motor numérico de puntaje estudiantil: pesos LATE=5, ABSENCE=15, BATHROOM=2 (baseline 3 salidas gratis), PATTERN=10 (recurrencia), OVERFLOW=0.5 (>20 eventos); techo 100. Niveles LOW/MEDIUM/HIGH/CRITICAL (30/60/80) y alertas con `ALERT_THRESHOLD=70`, cooldown 7 días. `calculateAndStore()`, `recalculateSchool()` |
 | `calculator.php` | Calculadora del chatbot: evalúa operaciones estructuradas por el parser; expresiones literales pasan por shunting-yard→RPN propio, **nunca `eval()`** |
-| `insights.php` | Nexus Insights del dashboard: media/stddev poblacional, z-score vs línea base móvil 20 días hábiles, moda por histograma deslizante 10 min, pendiente por mínimos cuadrados + r², score de prioridad `w·z + w·magnitud + w·recencia`. Emite tarjetas `{kind, severity, score, title, body, action, data}` |
+| `insights.php` | Nodus Insights del dashboard: media/stddev poblacional, z-score vs línea base móvil 20 días hábiles, moda por histograma deslizante 10 min, pendiente por mínimos cuadrados + r², score de prioridad `w·z + w·magnitud + w·recencia`. Emite tarjetas `{kind, severity, score, title, body, action, data}` |
 | `attendance_reconcile.php` | `nexoReconcileAbsence()`: si llega `INGRESO_*` con una INASISTENCIA abierta hoy, la resuelve (`resolved=TRUE` + metadata del evento/espacio) y genera incidente `REAPARICION_TARDIA`. Llamada desde el ingest síncrono de `api.php` y `worker_biometric.php` |
 | `notify_routing.php` | Enrutamiento de notificaciones por escuela: `nexoRouteUserIds()` (tabla `school_notification_routes`, event_kind→roles destino, default COORDINATOR+RECTOR) y `nexoPolicyEnabled()`/`nexoAction()` (on/off y acción por evento vía `school_action_policies`) |
 | `ota.php` | OTA de nodos edge: comparación semver con anti-rollback (`min_version`), manifiesto firmado `HMAC-SHA256("nexo-ota|ver|sha256|url")` con clave OTA por dispositivo (hex 32 B), auditoría en `ota_deployments` |
@@ -694,7 +693,7 @@ o `JWT_SECRET`).
 (`NODE_OFFLINE_SECONDS` para pruebas), `ANOMALY_MIN_ABSENCES`,
 `ANOMALY_GROUP_FRACTION`, `TELEM_*` (umbrales de telemetría de nodos).
 
-### Chat (Nexus)
+### Chat (Nodus)
 
 `NLU_LLM_KEY`, `NLU_LLM_MODE` — el parser del chat es un LLM; sin clave el
 health reporta `llm:false` y cae a 503. Detalles en
@@ -770,19 +769,19 @@ backend/api/
 │   ├── telemetry.php          telemetría del cliente
 │   ├── events.php             SSE /events/stream
 │   ├── metrics.php            /metrics Prometheus
-│   └── chat.php               entry point HTTP del asistente Nexus
+│   └── chat.php               entry point HTTP del asistente Nodus
 ├── lib/
 │   ├── RiskEngineV3.php       Motor de riesgo v3 (capas 2/4/6/8)
 │   ├── RiskScoreEngine.php    Puntaje numérico de riesgo
 │   ├── calculator.php         Calculadora segura (sin eval)
-│   ├── insights.php           Nexus Insights (estadística sobre datos reales)
+│   ├── insights.php           Nodus Insights (estadística sobre datos reales)
 │   ├── attendance_reconcile.php  Reconciliación INASISTENCIA↔INGRESO
 │   ├── notify_routing.php     Rutas de notificación y políticas por escuela
 │   ├── ota.php                OTA edge (manifiesto HMAC, semver, anti-rollback)
 │   ├── twilio.php             Helpers Twilio/WhatsApp
 │   ├── kb_colombia.php        KB estática de Colombia (chatbot)
 │   └── …
-├── nexus/                     Subsistema Nexus (IA conversacional)
+├── nexus/                     Subsistema Nodus (IA conversacional)
 │   ├── README.md              Documento maestro (~1000 líneas)
 │   ├── nexus_llm.php          Parser LLM + composer + chat informal
 │   ├── nexus_nlu.php          nxNorm, nxSlots, nxClassify, DSM, RBAC intents

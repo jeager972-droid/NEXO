@@ -32,7 +32,7 @@ describe('Chat — pending prompt y typing indicator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
-    chatApi.send.mockResolvedValue({ reply: 'Respuesta de Nexus', session_id: 'sess-1' });
+    chatApi.send.mockResolvedValue({ reply: 'Respuesta de Nodus', session_id: 'sess-1' });
   });
 
   it('envía automáticamente un pending prompt reciente al montar', async () => {
@@ -41,7 +41,7 @@ describe('Chat — pending prompt y typing indicator', () => {
     await waitFor(() =>
       expect(chatApi.send).toHaveBeenCalledWith('¿Cuántas tardanzas van hoy?', expect.any(String), null));
     expect(screen.getByText('¿Cuántas tardanzas van hoy?')).toBeInTheDocument();
-    expect(await screen.findByText('Respuesta de Nexus')).toBeInTheDocument();
+    expect(await screen.findByText('Respuesta de Nodus')).toBeInTheDocument();
     expect(sessionStorage.getItem(PENDING_KEY)).toBeNull();
     expect(chatApi.send).toHaveBeenCalledTimes(1);
   });
@@ -65,14 +65,14 @@ describe('Chat — pending prompt y typing indicator', () => {
   it('ignora un pending prompt vencido (>2 min)', async () => {
     seedPending('pregunta vieja', Date.now() - 3 * 60 * 1000);
     renderChat();
-    expect(await screen.findByText(/Hola, soy Nexus/)).toBeInTheDocument();
+    expect(await screen.findByText(/Hola, soy Nodus/)).toBeInTheDocument();
     expect(chatApi.send).not.toHaveBeenCalled();
     expect(sessionStorage.getItem(PENDING_KEY)).toBeNull();
   });
 
   it('no envía nada sin pending prompt', async () => {
     renderChat();
-    expect(await screen.findByText(/Hola, soy Nexus/)).toBeInTheDocument();
+    expect(await screen.findByText(/Hola, soy Nodus/)).toBeInTheDocument();
     expect(chatApi.send).not.toHaveBeenCalled();
   });
 
@@ -80,8 +80,8 @@ describe('Chat — pending prompt y typing indicator', () => {
     chatApi.send.mockImplementation(() => new Promise(() => {})); // nunca resuelve → thinking fijo
     const user = userEvent.setup();
     renderChat();
-    await user.type(screen.getByLabelText('Mensaje para Nexus'), 'hola{Enter}');
-    const typing = await screen.findByLabelText('Nexus está escribiendo');
+    await user.type(screen.getByLabelText('Mensaje para Nodus'), 'hola{Enter}');
+    const typing = await screen.findByLabelText('Nodus está escribiendo');
     expect(typing.querySelectorAll('.animate-bounce')).toHaveLength(3);
     expect(typing.querySelectorAll('.animate-pulse')).toHaveLength(0);
   });

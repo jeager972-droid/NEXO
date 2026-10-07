@@ -13,6 +13,7 @@ import { notificationsApi } from '../api/notifications';
 import { riskApi } from '../api/risk';
 import { trackingApi } from '../api/tracking';
 import { ROLES, getRoleDisplay } from '../config/roles';
+import { NOTIF_ACTION_TO_CMD } from '../config/operations';
 import { Surface } from '../components/ui/Surface';
 import { Drawer } from '../components/ui/Overlay';
 import { Button } from '../components/ui/Button';
@@ -140,17 +141,47 @@ const DEPENDENCIES = [
   { value: 'docencia', label: 'Docencia' },
 ];
 
+/* ── Jerarquía de severidad ──
+ * «critical» domina visualmente (borde+badge danger, arriba de la lista):
+ * todo lo que exige actuar ya — SOS, situaciones críticas, salidas marcadas
+ * como error, evasiones abiertas. El resto es warn/info ordinario.
+ */
+const CRITICAL_ACTIONS = new Set(['sos', 'situacion_critica', 'salida_no_autorizada', 'evasion_interna']);
+const CRITICAL_TYPES = new Set(['sos', 'alerts']);
+const notifSeverity = (notif) => {
+  const meta = parseMeta(notif.metadata_json);
+  if (CRITICAL_ACTIONS.has(meta?.action) || CRITICAL_TYPES.has(notif.type)) return 'critical';
+  if (meta?.action === 'reagendar_motivo' || meta?.action === 'inasistencia_no_justificada') return 'warn';
+  return 'info';
+};
+
+/* Acción de la notificación → operación ejecutable con contexto pre-llenado
+ * (mapa compartido del catálogo). Las que no mapean (sensores, resúmenes,
+ * justificaciones) abren el detalle contextual en el drawer, como antes. */
+const notifOperationLink = (notif, meta) => {
+  const cmd = NOTIF_ACTION_TO_CMD[meta?.action];
+  if (!cmd) return null;
+  const p = new URLSearchParams({ cmd });
+  if (meta?.student_id) p.set('student', meta.student_id);
+  if (meta?.group_name) p.set('group', meta.group_name);
+  const reason = meta?.reason || meta?.motivo || meta?.message || '';
+  if (reason) p.set('reason', String(reason).slice(0, 300));
+  if (meta?.dependency) p.set('dependency', meta.dependency);
+  return `/operacion?${p.toString()}`;
+};
+
 /**
- * Cada notificación es una burbuja de Nexus — el mismo NexoChatBubble del
+ * Cada notificación es una burbuja de Nodus — el mismo NexoChatBubble del
  * estado vacío del docente. Las decisiones se toman aquí mismo:
  * acciones del backend, Revisar (detalle), Derivar o Ignorar (= leída).
  */
-const NotifBubble = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRead, canDerive }) => {
+const NotifBubble = ({ notif, hasDetails, opLink, onClick, onAction, onDerive, onMarkRead, canDerive }) => {
   const meta = parseMeta(notif.metadata_json);
   const actions = meta?.actions;
   const [actionLoading, setActionLoading] = useState(false);
   const studentName = meta?.student_name;
   const canDeriveThis = canDerive && !!meta?.student_id;
+  const severity = notifSeverity(notif);
 
   const handleAction = async (actionId) => {
     const notifId = notif.id ?? notif.notification_id;
@@ -169,6 +200,7 @@ const NotifBubble = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRea
   return (
     <NexoChatBubble
       unread={!notif.read}
+      tone={severity === 'critical' ? 'critical' : undefined}
       timestamp={formatChatTime(notif.time || notif.created_at)}
       message={<>
         <b className="font-[620]">{notif.title || 'Novedad'}{studentName ? ` — ${studentName}` : ''}.</b>{' '}
@@ -194,9 +226,9 @@ const NotifBubble = ({ notif, hasDetails, onClick, onAction, onDerive, onMarkRea
             <Button variant="secondary" size="sm" onClick={() => onDerive(notif, meta)}>Derivar a seguimiento</Button>
           )}
           {!notif.read && (
-            // «Ignorar» (= marcar leída) se aparta a la derecha: quiet y
+            // «Marcar revisado» (= leída) se aparta a la derecha: quiet y
             // separado de los CTAs para que no compita con «Revisar»
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={onMarkRead}>Ignorar</Button>
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={onMarkRead}>Marcar revisado</Button>
           )}
         </>
       }
@@ -364,18 +396,32 @@ const Notifications = () => {
           <NexoChatBubble message="¡Todo está al día! No tienes notificaciones pendientes. Cuando haya novedades institucionales, aparecerán aquí." />
         </Surface>
       ) : (
-        <Surface className="space-y-5 p-4 sm:p-5" role="feed" aria-label="Notificaciones de Nexus">
-          {notifications.map((notif, i) => {
+        <Surface className="space-y-5 p-4 sm:p-5" role="feed" aria-label="Notificaciones de Nodus">
+          {[...notifications]
+            // Jerarquía: críticas sin leer primero, luego el resto sin leer,
+            // y lo ya revisado al final — cada grupo conserva su orden cronológico.
+            .sort((a, b) => {
+              const rank = (n) => (!n.read ? (notifSeverity(n) === 'critical' ? 0 : 1) : 2);
+              return rank(a) - rank(b);
+            })
+            .map((notif, i) => {
             const meta = parseMeta(notif.metadata_json);
             const action = meta?.action;
             const detailMessage = getDetailMessage(notif, meta);
             const hasDetails = !!detailMessage || ACTIONS_WITH_DETAILS.includes(action);
+            const opLink = notifOperationLink(notif, meta);
             return (
               <NotifBubble
                 key={notif.id ?? notif.notification_id ?? i}
                 notif={notif}
-                hasDetails={hasDetails}
-                onClick={() => { setDetail(notif); if (!notif.read) markRead(notif.id ?? notif.notification_id); }}
+                hasDetails={hasDetails || !opLink}
+                onClick={() => {
+                  if (!notif.read) markRead(notif.id ?? notif.notification_id);
+                  // «Revisar» abre la operación con el contexto pre-llenado
+                  // cuando la novedad mapea a una acción ejecutable; si no,
+                  // muestra el detalle en el drawer.
+                  if (opLink) navigate(opLink); else setDetail(notif);
+                }}
                 onAction={refreshNotifications}
                 onDerive={openDerive}
                 onMarkRead={() => markRead(notif.id ?? notif.notification_id)}

@@ -64,21 +64,21 @@ describe('Profile — sección «Tus criterios de aviso»', () => {
     renderProfile('TEACHER');
     await waitFor(() => expect(screen.getByText('Contacto')).toBeInTheDocument());
     expect(screen.getByText('Tus criterios de aviso')).toBeInTheDocument();
-    expect(screen.getByText('Editar con Nexus')).toBeInTheDocument();
+    expect(screen.getByText('Editar con Nodus')).toBeInTheDocument();
   });
 
   it('NO se muestra al PSICORIENTADOR (sin endpoint de reglas en backend)', async () => {
     renderProfile('COUNSELOR');
     await waitFor(() => expect(screen.getByText('Contacto')).toBeInTheDocument());
     expect(screen.queryByText('Tus criterios de aviso')).not.toBeInTheDocument();
-    expect(screen.queryByText('Editar con Nexus')).not.toBeInTheDocument();
+    expect(screen.queryByText('Editar con Nodus')).not.toBeInTheDocument();
   });
 
   it('RECTOR ve la configuración institucional pero no los criterios docentes', async () => {
     renderProfile('RECTOR');
     await waitFor(() => expect(screen.getByText('Contacto')).toBeInTheDocument());
     expect(screen.queryByText('Tus criterios de aviso')).not.toBeInTheDocument();
-    expect(screen.getByText('Asistente Nexus')).toBeInTheDocument();
+    expect(screen.getByText('Asistente Nodus')).toBeInTheDocument();
     expect(screen.getByText('Jornadas y horarios')).toBeInTheDocument();
   });
 });

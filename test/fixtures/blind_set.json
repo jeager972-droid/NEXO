@@ -1,5 +1,5 @@
 {
-  "_doc": "Blind test NLU Nexus — frases escritas a mano, NO derivadas de plantillas del corpus. Cubre follow-ups, cambios de dominio/entidad/tiempo, paráfrasis, coloquialismo, typos, ambigüedad y negaciones. expected = intent aceptable(s). No usar para entrenar.",
+  "_doc": "Blind test NLU Nodus — frases escritas a mano, NO derivadas de plantillas del corpus. Cubre follow-ups, cambios de dominio/entidad/tiempo, paráfrasis, coloquialismo, typos, ambigüedad y negaciones. expected = intent aceptable(s). No usar para entrenar.",
   "single": [
     {
       "text": "oyeeee cuantos pelados entraron hoy",

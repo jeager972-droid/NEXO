@@ -28,6 +28,10 @@ vi.mock('@/api/dashboard', () => ({
     }),
     getEvents: vi.fn().mockResolvedValue({ status: 'ok', data: [] }),
     getInsights: vi.fn().mockResolvedValue({ status: 'ok', data: { insights: [] } }),
+    getBrief: vi.fn().mockResolvedValue({
+      status: 'ok',
+      data: { brief: { tone: 'ok', text: 'Todo en orden en la institución — las métricas siguen su patrón habitual.' } },
+    }),
     getTeacherGroupDetail: vi.fn().mockResolvedValue({ status: 'ok', data: [] }),
   },
 }));
@@ -58,9 +62,9 @@ describe('Dashboard page (RECTOR)', () => {
 
   it('renders without crashing', async () => {
     renderDashboard();
-    // La lectura de la jornada de Nexus (burbujas de chat)
+    // La lectura de métricas de Nodus (burbuja del brief)
     await waitFor(() => {
-      expect(screen.getByText(/Todo dentro de lo normal/i)).toBeInTheDocument();
+      expect(screen.getByText(/Todo en orden/i)).toBeInTheDocument();
     });
   });
 

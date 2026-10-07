@@ -28,7 +28,7 @@ export const COOKIE_CATEGORIES = {
     id: 'preferences',
     label: 'Preferencias',
     required: false,
-    description: 'Recuerdan tu tema visual, tamaño de letra y las guías de Nexus que ya viste.',
+    description: 'Recuerdan tu tema visual, tamaño de letra y las guías de Nodus que ya viste.',
   },
   analytics: {
     id: 'analytics',
@@ -86,8 +86,8 @@ export const COOKIE_NOTICE = {
       bullets: [
         'darkMode — tema claro u oscuro elegido.',
         'nx-font-scale — escala tipográfica de accesibilidad configurada en tu perfil.',
-        'nx:hint:* — registro de las guías contextuales de Nexus ya mostradas en cada sección.',
-        'nx:bot-dismissed y nx:shown-insights — mensajes y lecturas de Nexus que ya descartaste o viste, ' +
+        'nx:hint:* — registro de las guías contextuales de Nodus ya mostradas en cada sección.',
+        'nx:bot-dismissed y nx:shown-insights — mensajes y lecturas de Nodus que ya descartaste o viste, ' +
           'para no repetirlos.',
       ],
     },
@@ -159,7 +159,7 @@ export const TERMS_NOTICE = {
   summaryBullets: [
     'Tu cuenta es personal e intransferible: las credenciales son tu responsabilidad.',
     'La información de estudiantes es confidencial y su uso está regulado por ley.',
-    'Nexus te asiste, pero no decide: las decisiones institucionales son siempre tuyas.',
+    'Nodus te asiste, pero no decide: las decisiones institucionales son siempre tuyas.',
     'Está prohibido usar la plataforma para fines ajenos a tu función en la institución.',
     'Aceptar estos términos es requisito indispensable para usar la aplicación.',
   ],
@@ -169,7 +169,7 @@ export const TERMS_NOTICE = {
       paragraphs: [
         'NEXO es una plataforma de custodia educativa en tiempo real que integra control de acceso ' +
           'biométrico, trazabilidad estudiantil, detección de situaciones (ausencias, tardanzas, ' +
-          'evasiones), notificaciones a acudientes y un asistente conversacional («Nexus»).',
+          'evasiones), notificaciones a acudientes y un asistente conversacional («Nodus»).',
         'El acceso está reservado al personal autorizado por las instituciones educativas que hayan ' +
           'formalizado un contrato de vinculación con NEXO S.A.S. Estos términos complementan, y no ' +
           'sustituyen, dicho contrato ni las políticas de tratamiento de datos personales.',
@@ -232,15 +232,15 @@ export const TERMS_NOTICE = {
       ],
     },
     {
-      title: '5. Nexus: alcance y límites del asistente',
+      title: '5. Nodus: alcance y límites del asistente',
       paragraphs: [
-        'Nexus es un asistente conversacional que interpreta consultas en lenguaje natural y las ' +
-          'responde con información verificable del sistema. Nexus no toma decisiones ' +
+        'Nodus es un asistente conversacional que interpreta consultas en lenguaje natural y las ' +
+          'responde con información verificable del sistema. Nodus no toma decisiones ' +
           'institucionales: las decisiones sobre estudiantes, sanciones, permisos o comunicaciones ' +
           'son siempre responsabilidad del personal autorizado.',
       ],
       bullets: [
-        'Las respuestas de Nexus provienen de datos del sistema; aun así, verifica la información ' +
+        'Las respuestas de Nodus provienen de datos del sistema; aun así, verifica la información ' +
           'crítica antes de actuar.',
         'No ingreses en el chat contraseñas, códigos de verificación ni datos sensibles ajenos a la consulta.',
         'Las conversaciones pueden ser auditadas por la institución y por NEXO con fines de seguridad y mejora.',
@@ -272,7 +272,7 @@ export const TERMS_NOTICE = {
     {
       title: '8. Propiedad intelectual',
       paragraphs: [
-        'El software, el diseño, la marca NEXO, Nexus y todos los componentes de la plataforma son ' +
+        'El software, el diseño, la marca NEXO, Nodus y todos los componentes de la plataforma son ' +
           'propiedad exclusiva de NEXO S.A.S. La institución dispone de una licencia de uso no ' +
           'exclusiva e intransferible durante la vigencia del contrato.',
         'Queda prohibida la reproducción, distribución, modificación o creación de obras derivadas ' +
@@ -336,10 +336,10 @@ export const TERMS_NOTICE = {
   ],
 };
 
-/** Guion breve de Nexus para el aviso de Términos (NexusGuide). */
-export const TERMS_NEXUS_SCRIPT = [
+/** Guion breve de Nodus para el aviso de Términos (NodusGuide). */
+export const TERMS_NODUS_SCRIPT = [
   {
-    text: 'Hola, soy <b>Nexus</b>. Antes de entrar hay un paso legal rápido.',
+    text: 'Hola, soy <b>Nodus</b>. Antes de entrar hay un paso legal rápido.',
     dismissKey: 'legal:terms-1',
   },
   {

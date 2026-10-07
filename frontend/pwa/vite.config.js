@@ -13,6 +13,32 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vitejs.dev/config/
 export default defineConfig({
   base: '/app/',
+  // Dev: con VITE_API_PROXY_TARGET el frontend llama a la API por el mismo
+  // origen (el CSP de index.html solo permite 'self' y https:). Sin definir,
+  // el dev server usa VITE_API_BASE_URL como siempre.
+  server: process.env.VITE_API_PROXY_TARGET ? {
+    proxy: {
+      '/auth': process.env.VITE_API_PROXY_TARGET,
+      '/behavior': process.env.VITE_API_PROXY_TARGET,
+      '/chat': process.env.VITE_API_PROXY_TARGET,
+      '/consultation': process.env.VITE_API_PROXY_TARGET,
+      '/consultations': process.env.VITE_API_PROXY_TARGET,
+      '/dashboard': process.env.VITE_API_PROXY_TARGET,
+      '/devices': process.env.VITE_API_PROXY_TARGET,
+      '/groups': process.env.VITE_API_PROXY_TARGET,
+      '/notifications': process.env.VITE_API_PROXY_TARGET,
+      '/operations': process.env.VITE_API_PROXY_TARGET,
+      '/reports': process.env.VITE_API_PROXY_TARGET,
+      '/risk': process.env.VITE_API_PROXY_TARGET,
+      '/school': process.env.VITE_API_PROXY_TARGET,
+      '/students': process.env.VITE_API_PROXY_TARGET,
+      '/teacher': process.env.VITE_API_PROXY_TARGET,
+      '/telemetry': process.env.VITE_API_PROXY_TARGET,
+      '/tracking': process.env.VITE_API_PROXY_TARGET,
+      '/users': process.env.VITE_API_PROXY_TARGET,
+      '/v1': process.env.VITE_API_PROXY_TARGET,
+    },
+  } : {},
   build: {
     outDir: 'dist',
     emptyOutDir: true,

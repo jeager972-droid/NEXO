@@ -94,8 +94,8 @@ $rbac = [
     ['Autorizar salida',  'SECRETARY', false],
     ['Reportar incidente','TEACHER', true],
     ['Reportar incidente','SECRETARY', false],
-    ['Situación Crítica', 'SECURITY', true],
-    ['Situación Crítica', 'AUXILIARY', true],
+    ['Emergencia', 'SECURITY', true],
+    ['Emergencia', 'AUXILIARY', true],
 ];
 $bad = [];
 foreach ($rbac as [$action, $role, $want]) {

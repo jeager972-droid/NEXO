@@ -89,7 +89,7 @@ src/
 │   │               #   EmptyState, IconButton
 │   ├── patterns/   # Patrones NEXO CMP-100+/CMP-NEXO: SituationLine, StatCard, StudentItem,
 │   │               #   RiskBadge, StatusDot, GroupSelector, ScheduleTask, OperationResult,
-│   │               #   NexoChat/NexoMessage (burbujas), NexusGuide, NexusInsights,
+│   │               #   NexoChat/NexoMessage (burbujas), NexusGuide, NexusBrief,
 │   │               #   SystemInactiveScreen
 │   ├── ErrorBoundary.jsx   # Límite de error por página
 │   ├── LogoNexo.jsx        # Logotipo (imagen + fallback)
@@ -281,7 +281,7 @@ de diseño que implementa:
 - Componentes de la «voz de Nexus» reutilizados fuera del chat:
   `NexoChatBubble`/`NexoAvatar` (`patterns/NexoChat.jsx`),
   `NexoMessage` (CMP-025), `NexusGuide` (asistente del onboarding),
-  `NexusInsights` (insights del dashboard como conversación).
+  `NexusBrief` (lectura en vivo de las métricas del home).
 
 ## Sistema de diseño
 

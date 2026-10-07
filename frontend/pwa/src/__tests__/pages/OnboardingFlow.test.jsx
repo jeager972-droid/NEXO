@@ -97,10 +97,10 @@ describe('OnboardingFlow — paso de políticas del asistente', () => {
         missing={{ chat: true }} onCancel={vi.fn()} onAllDone={vi.fn()} {...props} />
     );
 
-  it('muestra la burbuja de Nexus como en los demás pasos', async () => {
+  it('muestra la burbuja de Nodus como en los demás pasos', async () => {
     renderChatPol();
-    // La etiqueta NEXUS solo existe dentro de la burbuja del NexusGuide
-    expect(await screen.findByText('NEXUS')).toBeInTheDocument();
+    // La etiqueta NODUS solo existe dentro de la burbuja del NodusGuide
+    expect(await screen.findByText('NODUS')).toBeInTheDocument();
     expect(await screen.findByText('1 / 3')).toBeInTheDocument();
   });
 

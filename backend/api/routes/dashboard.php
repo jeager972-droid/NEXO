@@ -177,7 +177,6 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN teacher_group_access tga ON tga.group_id = ag.group_id
                           WHERE tga.teacher_user_id = ? AND sga.active = TRUE
-                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                       AND NOT EXISTS (
                           SELECT 1 FROM biometric_events be2
@@ -212,7 +211,6 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN teacher_group_access tga ON tga.group_id = ag.group_id
                           WHERE tga.teacher_user_id = ? AND sga.active = TRUE
-                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                 ),
                 alerts_cte AS (
@@ -228,7 +226,6 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN teacher_group_access tga ON tga.group_id = ag.group_id
                           WHERE tga.teacher_user_id = ? AND sga.active = TRUE
-                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                           " . ($groupName ? " AND ag.group_name = ?" : "") . "
                       )
                 ),
@@ -245,7 +242,6 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN teacher_group_access tga ON tga.group_id = ag.group_id
                           WHERE tga.teacher_user_id = ? AND sga.active = TRUE
-                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                 ),
                 late_cte AS (
@@ -261,7 +257,6 @@ if ($cleanPath === '/dashboard/stats') {
                           JOIN academic_groups ag ON ag.group_id = sga.group_id
                           JOIN teacher_group_access tga ON tga.group_id = ag.group_id
                           WHERE tga.teacher_user_id = ? AND sga.active = TRUE
-                          AND ag.work_shift = (SELECT work_shift FROM users WHERE user_id = tga.teacher_user_id)
                       )
                 )
                 SELECT
@@ -838,7 +833,7 @@ if ($cleanPath === '/dashboard/events') {
 }
 
 // ============================================================================
-// GET /dashboard/insights — Lectura inteligente de la jornada (Nexus)
+// GET /dashboard/insights — Lectura inteligente de la jornada (Nodus)
 // ============================================================================
 // Motor matemático (lib/insights.php): z-score vs línea base móvil,
 // ventana modal de clusters horarios, regresión por mínimos cuadrados,
@@ -889,6 +884,97 @@ if ($cleanPath === '/dashboard/insights') {
         securityLog('DASHBOARD_INSIGHTS_ERROR', $e->getMessage());
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Error al calcular insights']);
+    }
+    exit;
+}
+
+// ============================================================================
+// GET /dashboard/brief — Lectura breve del estado de las métricas (home).
+// ============================================================================
+// Mensaje en vivo bajo las tarjetas: hoy vs media de ~20 días hábiles,
+// rachas de días consecutivos y "grupo sin ingresos". Las novedades
+// accionables las anuncia el bot (NodusBotAnnouncer); esto es el estado.
+// Params: group_name (opcional — docente: su grupo seleccionado validado
+// contra teacher_group_access; roles globales: cualquier grupo del colegio).
+// ============================================================================
+if ($cleanPath === '/dashboard/brief') {
+    $authUser = requireAuth();
+    $schoolId = $authUser['school_id'];
+    $userRole = strtoupper($authUser['role'] ?? '');
+    requireSchoolOnboarding($conn, (string)$schoolId, $userRole);
+    $groupName = trim((string)($_GET['group_name'] ?? ''));
+
+    try {
+        require_once __DIR__ . '/../lib/insights.php';
+
+        $cacheKey = "dashboard:brief:{$schoolId}:{$userRole}:{$authUser['id']}:" . strtolower($groupName);
+        try {
+            $redis = getRedisConnection();
+            if ($redis) {
+                $cached = $redis->get($cacheKey);
+                if ($cached !== false) { header('X-Brief-Cache: HIT'); echo $cached; exit; }
+            }
+        } catch (Throwable $e) { /* sin caché */ }
+
+        $isTeacher = in_array('dashboard.teacher_view', $authUser['permissions'] ?? [])
+            && !in_array('dashboard.global_view', $authUser['permissions'] ?? []);
+        $isCoordinator = $userRole === 'COORDINATOR';
+        $coordShift = trim((string)($authUser['work_shift'] ?? ''));
+
+        $groupIds = [];
+        $scopeLabel = 'la institución';
+        if ($isTeacher) {
+            if ($groupName !== '') {
+                // Solo grupos asignados al docente — mismo check que teacher-group-detail
+                $g = $conn->prepare("
+                    SELECT ag.group_id
+                    FROM teacher_group_access tga
+                    JOIN academic_groups ag ON ag.group_id = tga.group_id
+                    WHERE tga.teacher_user_id = ? AND ag.group_name = ?
+                    LIMIT 1
+                ");
+                $g->execute([$authUser['id'], $groupName]);
+                $gid = $g->fetchColumn();
+                if (!$gid) {
+                    http_response_code(403);
+                    echo json_encode(['status' => 'error', 'message' => 'Grupo no asignado a este docente']);
+                    exit;
+                }
+                $groupIds = [$gid];
+                $scopeLabel = "el grupo {$groupName}";
+            } else {
+                $g = $conn->prepare("SELECT group_id FROM teacher_group_access WHERE teacher_user_id = ?");
+                $g->execute([$authUser['id']]);
+                $groupIds = array_column($g->fetchAll(PDO::FETCH_ASSOC), 'group_id');
+                $scopeLabel = 'tus grupos';
+            }
+        } else {
+            if ($isCoordinator && $coordShift !== '' && $coordShift !== 'completa') {
+                // Coordinador de una jornada: su universo son los grupos de esa jornada
+                $g = $conn->prepare("SELECT group_id FROM academic_groups WHERE school_id = ? AND work_shift = ?");
+                $g->execute([$schoolId, $coordShift]);
+                $groupIds = array_column($g->fetchAll(PDO::FETCH_ASSOC), 'group_id');
+                $scopeLabel = 'tu jornada';
+            }
+            if ($groupName !== '') {
+                $g = $conn->prepare("SELECT group_id FROM academic_groups WHERE school_id = ? AND group_name = ? LIMIT 1");
+                $g->execute([$schoolId, $groupName]);
+                $gid = $g->fetchColumn();
+                if ($gid) { $groupIds = [$gid]; $scopeLabel = "el grupo {$groupName}"; }
+            }
+        }
+
+        $brief = nx_compute_brief($conn, (string)$schoolId, $userRole, $groupIds, $scopeLabel);
+        $payload = json_encode([
+            'status' => 'ok',
+            'data' => ['brief' => $brief, 'computed_at' => gmdate('c'), 'role' => $userRole],
+        ]);
+        try { if ($redis) $redis->setex($cacheKey, 60, $payload); } catch (Throwable $e) { /* sin caché */ }
+        echo $payload;
+    } catch (Throwable $e) {
+        securityLog('DASHBOARD_BRIEF_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Error al calcular el resumen']);
     }
     exit;
 }

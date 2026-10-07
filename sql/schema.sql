@@ -3048,7 +3048,8 @@ INSERT INTO permissions (permission_id, permission_code, description) VALUES
     (uuid_generate_v4(), 'operations.citacion', 'Send guardian citation via WhatsApp'),
     (uuid_generate_v4(), 'operations.autorizar_salida', 'Authorize student exit'),
     (uuid_generate_v4(), 'operations.permiso', 'Generate class exit permission'),
-    (uuid_generate_v4(), 'operations.solicitud', 'Send internal request to another user'),
+    -- operations.solicitud: retirado del catálogo (mensajería interna fuera de alcance)
+
     (uuid_generate_v4(), 'operations.daño', 'Report institutional damage'),
     (uuid_generate_v4(), 'operations.pedagogica', 'Register group pedagogical exit'),
     (uuid_generate_v4(), 'operations.horario', 'Notify group schedule change'),
@@ -3096,7 +3097,6 @@ SELECT assign_permission_to_role('RECTOR', 'operations.inasistencia');
 SELECT assign_permission_to_role('RECTOR', 'operations.citacion');
 SELECT assign_permission_to_role('RECTOR', 'operations.autorizar_salida');
 SELECT assign_permission_to_role('RECTOR', 'operations.permiso');
-SELECT assign_permission_to_role('RECTOR', 'operations.solicitud');
 SELECT assign_permission_to_role('RECTOR', 'operations.daño');
 SELECT assign_permission_to_role('RECTOR', 'operations.pedagogica');
 SELECT assign_permission_to_role('RECTOR', 'operations.horario');
@@ -3126,7 +3126,6 @@ SELECT assign_permission_to_role('COORDINATOR', 'operations.inasistencia');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.citacion');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.autorizar_salida');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.permiso');
-SELECT assign_permission_to_role('COORDINATOR', 'operations.solicitud');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.daño');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.pedagogica');
 SELECT assign_permission_to_role('COORDINATOR', 'operations.horario');
@@ -3152,13 +3151,9 @@ SELECT assign_permission_to_role('TEACHER', 'dashboard.teacher_view');
 SELECT assign_permission_to_role('TEACHER', 'operations.inasistencia');
 SELECT assign_permission_to_role('TEACHER', 'operations.citacion');
 SELECT assign_permission_to_role('TEACHER', 'operations.permiso');
-SELECT assign_permission_to_role('TEACHER', 'operations.pedagogica');
-SELECT assign_permission_to_role('TEACHER', 'operations.horario');
 SELECT assign_permission_to_role('TEACHER', 'operations.incidente');
 SELECT assign_permission_to_role('TEACHER', 'operations.seguimiento');
-SELECT assign_permission_to_role('TEACHER', 'operations.solicitud');
 SELECT assign_permission_to_role('TEACHER', 'operations.fusionar_bloque');
-SELECT assign_permission_to_role('TEACHER', 'operations.extender_bloque');
 SELECT assign_permission_to_role('TEACHER', 'operations.situacion_critica');
 SELECT assign_permission_to_role('TEACHER', 'operations.registro_manual');
 SELECT assign_permission_to_role('TEACHER', 'consultations.teacher_view');
@@ -3173,7 +3168,6 @@ SELECT assign_permission_to_role('SECRETARY', 'students.view');
 SELECT assign_permission_to_role('SECRETARY', 'consultations.global_view');
 SELECT assign_permission_to_role('SECRETARY', 'reports.preview');
 SELECT assign_permission_to_role('SECRETARY', 'reports.export');
-SELECT assign_permission_to_role('SECRETARY', 'operations.solicitud');
 SELECT assign_permission_to_role('SECRETARY', 'operations.situacion_critica');
 SELECT assign_permission_to_role('SECRETARY', 'operations.registro_manual');
 SELECT assign_permission_to_role('SECRETARY', 'operations.citacion');
@@ -3186,7 +3180,6 @@ SELECT assign_permission_to_role('COUNSELOR', 'consultations.teacher_view');
 SELECT assign_permission_to_role('COUNSELOR', 'consultations.global_view');
 SELECT assign_permission_to_role('COUNSELOR', 'operations.seguimiento');
 SELECT assign_permission_to_role('COUNSELOR', 'operations.situacion_critica');
-SELECT assign_permission_to_role('COUNSELOR', 'operations.solicitud');
 SELECT assign_permission_to_role('COUNSELOR', 'operations.citacion');
 SELECT assign_permission_to_role('COUNSELOR', 'students.view');
 
@@ -3194,7 +3187,6 @@ SELECT assign_permission_to_role('COUNSELOR', 'students.view');
 SELECT assign_permission_to_role('SECURITY', 'students.view');
 SELECT assign_permission_to_role('SECURITY', 'consultations.global_view');
 SELECT assign_permission_to_role('SECURITY', 'reports.preview');
-SELECT assign_permission_to_role('SECURITY', 'operations.solicitud');
 SELECT assign_permission_to_role('SECURITY', 'operations.daño');
 SELECT assign_permission_to_role('SECURITY', 'operations.situacion_critica');
 SELECT assign_permission_to_role('SECURITY', 'operations.registro_manual');
@@ -3204,7 +3196,6 @@ SELECT assign_permission_to_role('AUXILIARY', 'dashboard.global_view');
 SELECT assign_permission_to_role('AUXILIARY', 'students.view');
 SELECT assign_permission_to_role('AUXILIARY', 'consultations.global_view');
 SELECT assign_permission_to_role('AUXILIARY', 'reports.preview');
-SELECT assign_permission_to_role('AUXILIARY', 'operations.solicitud');
 SELECT assign_permission_to_role('AUXILIARY', 'operations.daño');
 SELECT assign_permission_to_role('AUXILIARY', 'operations.situacion_critica');
 
@@ -3246,6 +3237,30 @@ CREATE TABLE IF NOT EXISTS school_chat_policies (
 );
 ALTER TABLE school_chat_policies ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- Reportes de respuestas del asistente: el usuario marca una respuesta de
+-- Nodus como errónea/inapropiada; queda ligada al mensaje y a su dueño.
+CREATE TABLE IF NOT EXISTS chat_reports (
+    report_id   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id   UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    message_id  UUID NOT NULL REFERENCES chat_messages(message_id) ON DELETE CASCADE,
+    reason      VARCHAR(40) NOT NULL DEFAULT 'incorrecta'
+                CHECK (reason IN ('incorrecta','inapropiada','datos','otra')),
+    detail      TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_reports_school ON chat_reports(school_id, created_at DESC);
+ALTER TABLE chat_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cr_insert ON chat_reports;
+DROP POLICY IF EXISTS cr_select ON chat_reports;
+-- La API inserta con el user_id del JWT (ya validado arriba); RLS acota a la escuela.
+CREATE POLICY cr_insert ON chat_reports FOR INSERT
+    WITH CHECK(school_id = get_current_school_id());
+CREATE POLICY cr_select ON chat_reports FOR SELECT
+    USING(school_id = get_current_school_id()
+          OR get_current_role() IN ('SYSTEM_WORKER','SUPER_ADMIN'));
+
 -- chat_messages: solo el dueño y administradores de su escuela ven el historial
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS cm_select ON chat_messages;
@@ -3267,8 +3282,9 @@ CREATE POLICY scp_insert ON school_chat_policies FOR INSERT
 CREATE POLICY scp_update ON school_chat_policies FOR UPDATE
     USING(school_id = get_current_school_id() OR get_current_role() IN ('SUPER_ADMIN'));
 
-COMMENT ON TABLE chat_messages IS 'Historial «Pregúntale a Nexus» — intent, confianza y payload por mensaje. Retención sugerida 90 días (worker de purga).';
-COMMENT ON TABLE school_chat_policies IS 'Interruptores del asistente Nexus por escuela — qué puede pedir cada rol (riesgo, campos de estudiante, agregados, acciones derivadas, smalltalk).';
+COMMENT ON TABLE chat_messages IS 'Historial «Pregúntale a Nodus» — intent, confianza y payload por mensaje. Retención sugerida 90 días (worker de purga).';
+COMMENT ON TABLE school_chat_policies IS 'Interruptores del asistente Nodus por escuela — qué puede pedir cada rol (riesgo, campos de estudiante, agregados, acciones derivadas, smalltalk).';
+COMMENT ON TABLE chat_reports IS 'Reportes de respuestas de Nodus marcadas por usuarios (incorrecta/inapropiada/datos). Auditoría de calidad del asistente.';
 
 -- =============================================================================
 -- COMMENTS (al final, después de crear todas las tablas)

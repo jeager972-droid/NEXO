@@ -1,5 +1,5 @@
 /**
- * OnboardingFlow — configuración inicial guiada por Nexus.
+ * OnboardingFlow — configuración inicial guiada por Nodus.
  *
  * Reemplaza los modales OnboardingSchedule/Groups/Risk: en vez de una
  * sobre-pantalla, el onboarding ES la pantalla — nada del sistema se
@@ -10,7 +10,7 @@
  *     *grupos editable solo RECTOR; COORDINATOR lo ve como pendiente.
  *   TEACHER: welcome → criterios de aviso (opcional) → listo
  *
- * Nexus habla desde la esquina SOLO después de "Comenzar" — la
+ * Nodus habla desde la esquina SOLO después de "Comenzar" — la
  * bienvenida es silenciosa. La topbar solo muestra "Paso N de M".
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -23,7 +23,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { SearchableSelect } from '../../components/ui/SearchableSelect';
-import { NexusGuide } from '../../components/patterns/NexusGuide';
+import { NodusGuide } from '../../components/patterns/NodusGuide';
 import { schoolApi } from '../../api/school';
 import { riskApi } from '../../api/risk';
 import { teacherApi } from '../../api/teacher';
@@ -42,12 +42,11 @@ const LEVEL_EDGE = { LEVE: 'var(--nx-accent)', MODERADA: 'var(--nx-warning)', AL
 const RULE_KINDS = [
   { v: 'LATE', l: 'Llegadas tarde' },
   { v: 'ABSENCE', l: 'Inasistencias' },
-  { v: 'EVASION', l: 'Salidas sin retorno' },
+  { v: 'EVASION', l: 'Evasiones' },
   { v: 'EXIT', l: 'Salidas del salón' },
-  { v: 'PERMISSION_EXPIRY', l: 'Permisos vencidos' },
 ];
 
-/* ── scripts de Nexus por paso ── */
+/* ── scripts de Nodus por paso ── */
 const SCRIPTS = {
   scheduleA: [
     { text: 'Primero dime <b>qué jornadas</b> tiene tu institución. Puedes elegir más de una.' },
@@ -216,7 +215,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   // riesgo
   const [riskCfg, setRiskCfg] = useState(null);
-  // políticas del asistente Nexus
+  // políticas del asistente Nodus
   const [chatPol, setChatPol] = useState({
     'chat.teacher.risk_students': true,
     'chat.teacher.student_fields': true,
@@ -291,7 +290,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     }).catch(() => setRiskCfg({ rules: [], mapping: [] }));
   }, [step, simulate]);
 
-  /* guion activo de Nexus */
+  /* guion activo de Nodus */
   const script = useMemo(() => {
     if (step === 'welcome' || step === 'done') return [];
     if (step === 'schedule') return schedPhase === 'pick' ? SCRIPTS.scheduleA : SCRIPTS.scheduleB;
@@ -412,8 +411,8 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
     const SECTION_META = {
       schedule: { icon: Clock,    t: 'Jornadas y horarios',       d: 'Entrada, salida, descanso y bloques por jornada', action: 'Actualizar jornadas',  lede: 'Vas a actualizar las jornadas y horarios de tu institución. Todo lo que cambies se puede volver a ajustar.' },
       groups:   { icon: Layers,   t: 'Grados, grupos y docentes', d: isRector ? 'La estructura del año con su docente asignado' : 'Lo completa rectoría — aquí revisas el avance', action: 'Actualizar grupos', lede: isRector ? 'Vas a actualizar la estructura académica del año: grados, grupos y sus docentes.' : 'Vas a revisar la estructura académica — su edición completa corresponde a rectoría.' },
-      risk:     { icon: BellRing, t: 'Umbrales de aviso',         d: 'A partir de cuántas repeticiones Nexus alerta',  action: 'Actualizar umbrales',  lede: 'Vas a ajustar desde cuándo Nexus te alerta de repeticiones.' },
-      chat:     { icon: MessageCircle, t: 'Asistente Nexus',      d: 'Qué puede consultar cada rol con el chatbot',   action: 'Actualizar asistente', lede: 'Vas a decidir qué capacidades del chatbot están activas para cada rol — se pueden apagar y encender cuando quieras.' },
+      risk:     { icon: BellRing, t: 'Umbrales de aviso',         d: 'A partir de cuántas repeticiones Nodus alerta',  action: 'Actualizar umbrales',  lede: 'Vas a ajustar desde cuándo Nodus te alerta de repeticiones.' },
+      chat:     { icon: MessageCircle, t: 'Asistente Nodus',      d: 'Qué puede consultar cada rol con el chatbot',   action: 'Actualizar asistente', lede: 'Vas a decidir qué capacidades del chatbot están activas para cada rol — se pueden apagar y encender cuando quieras.' },
     };
     const agenda = isTeacher
       ? [{ icon: BellRing, t: 'Tus criterios de aviso', d: 'Desde cuándo te aviso de repeticiones en tus clases' }]
@@ -426,8 +425,8 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
       ? (singleScope ? `Actualizar ${singleScope.t.toLowerCase()}` : 'Actualizar configuración')
       : 'Bienvenid@';
     const welcomeLede = isUpdate
-      ? (singleScope?.lede || 'Vas a actualizar los detalles de tu institución. Nexus te acompaña paso a paso — igual que la primera vez.')
-      : 'Tu institución aún no está configurada. Nexus — la voz del sistema — te acompaña paso a paso.';
+      ? (singleScope?.lede || 'Vas a actualizar los detalles de tu institución. Nodus te acompaña paso a paso — igual que la primera vez.')
+      : 'Tu institución aún no está configurada. Nodus — la voz del sistema — te acompaña paso a paso.';
     const actionLabel = isUpdate
       ? (singleScope?.action || 'Actualizar configuración')
       : 'Comenzar';
@@ -441,7 +440,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
             className="absolute -inset-6 rounded-full"
             style={{ background: 'radial-gradient(closest-side, var(--nx-subtle-bg-accent), transparent 72%)' }}
           />
-          <img src="/imagenbot.png" alt="Nexus" className="relative h-28 w-28 rounded-full object-contain drop-shadow-[0_10px_20px_oklch(30%_.08_245/.25)]"
+          <img src="/imagenbot.png" alt="Nodus" className="relative h-28 w-28 rounded-full object-contain drop-shadow-[0_10px_20px_oklch(30%_.08_245/.25)]"
             style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
           <span className="absolute -inset-2 rounded-full border-2 border-[var(--nx-border-accent)]"
             style={{ animation: 'nx-pulse 2.6s var(--nx-ease-out, ease-out) infinite' }} aria-hidden />
@@ -449,7 +448,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
         <div className="space-y-2.5">
           <span className="text-[12px] font-[650] uppercase tracking-[.06em] text-[var(--nx-accent)]">
-            {isUpdate ? 'Configuración' : 'Configuración inicial'}
+            {isUpdate ? 'Configuración' : isTeacher ? 'Tus avisos' : 'Configuración inicial'}
           </span>
           <h1 className="text-[20px] font-[680] tracking-[-.02em] text-[var(--nx-text)]">{welcomeTitle}</h1>
           <p className="mx-auto max-w-[46ch] text-[14px] leading-relaxed text-[var(--nx-text-muted)]">
@@ -536,7 +535,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
           <Switch checked={j.rotates} onChange={(v) => {
             upd({ rotates: v, blocks: v ? makeBlocks(j.entry, j.exit, j.numBlocks, j.recess || null, j.recessEnd || null) : [] });
           }} title="Los estudiantes rotan de aula por bloques"
-            help="Nexus usa los bloques para saber dónde debería estar cada grupo" />
+            help="Nodus usa los bloques para saber dónde debería estar cada grupo" />
           {j.rotates && (
             <div className="flex flex-col gap-5 rounded-surface border border-[var(--nx-border)] bg-[var(--nx-canvas)] p-4">
               <div className="flex items-center justify-between gap-4">
@@ -672,7 +671,7 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
   const renderRisk = () => (
     <>
       <StepHead kicker={`Paso ${realIdx} de ${totalReal}`} title="Cuándo quieres que te avise"
-        lede="Umbrales del motor de riesgo: a partir de cuántas repeticiones Nexus genera una alerta." />
+        lede="Umbrales del motor de riesgo: a partir de cuántas repeticiones Nodus genera una alerta." />
       <Work spotlight>
         <h2 className="text-[15px] font-[620]">Niveles de alerta</h2>
         <div className="flex flex-col gap-5">
@@ -802,17 +801,21 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   const renderDone = () => (
     <div className="flex flex-col items-center gap-5 py-10 text-center">
-      <img src="/imagenbot.png" alt="Nexus" className="h-28 w-28" style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
+      <img src="/imagenbot.png" alt="Nodus" className="h-28 w-28" style={{ animation: 'nx-float 3.2s ease-in-out infinite' }} />
       <span className="text-[13px] font-semibold tracking-wide text-[var(--nx-accent)]">
         {isUpdate ? 'Cambios guardados' : isTeacher ? 'Listo' : 'Configuración completa'}
       </span>
       <h1 className="max-w-[18ch] text-[20px] font-[650] leading-snug tracking-[-.01em] text-[var(--nx-text)]">
-        {isUpdate ? 'Tu institución quedó actualizada' : isTeacher ? 'Tu panel ya te espera' : 'Tu institución ya está operando con Nexus'}
+        {isUpdate && isTeacher
+          ? 'Tus criterios de aviso quedaron actualizados'
+          : isUpdate
+            ? 'Tu institución quedó actualizada'
+            : isTeacher ? 'Tu panel ya te espera' : 'Tu institución ya está operando con Nodus'}
       </h1>
       <p className="max-w-[46ch] text-[15px] text-[var(--nx-text-muted)]">
         {isTeacher
-          ? 'Cuando algo se repita en tus clases, Nexus te avisa con el motivo y qué puedes hacer.'
-          : 'Nexus interpreta la jornada y avisa solo cuando algo necesita atención.'}
+          ? 'Cuando algo se repita en tus clases, Nodus te avisa con el motivo y qué puedes hacer.'
+          : 'Nodus interpreta la jornada y avisa solo cuando algo necesita atención.'}
       </p>
       <Button size="lg" onClick={done}>{isUpdate ? 'Volver a Configuración' : isTeacher ? 'Entrar a Inicio' : 'Entrar a mi jornada'}</Button>
     </div>
@@ -825,16 +828,18 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
 
   return (
     <div className="min-h-screen bg-[var(--nx-canvas)] text-[var(--nx-text)]">
-      {/* Topbar: marca Nexus + paso actual con dots de progreso */}
+      {/* Topbar: marca Nodus + paso actual con dots de progreso */}
       <header className="sticky top-0 z-20 border-b border-[var(--nx-border)] bg-[var(--nx-surface)]/85 backdrop-blur">
         <div className="mx-auto flex h-[56px] max-w-[680px] items-center justify-between px-5 sm:px-6">
           <span className="flex items-center gap-2 text-[14px] font-[650] text-[var(--nx-text)]">
             <NexoAvatar size={26} />
-            Nexus
+            Nodus
           </span>
           <span className="flex items-center gap-3">
             <span className="text-[12.5px] font-[600] tabular-nums text-[var(--nx-text-muted)]">
-              {step === 'welcome' ? (isUpdate ? 'Actualizar' : 'Configuración inicial') : step === 'done' ? 'Listo' : `Paso ${realIdx} de ${totalReal}`}
+              {step === 'welcome'
+                ? (isUpdate ? 'Actualizar' : isTeacher ? 'Tus avisos' : 'Configuración inicial')
+                : step === 'done' ? 'Listo' : `Paso ${realIdx} de ${totalReal}`}
             </span>
             <span className="flex gap-1.5" aria-hidden>
               {steps.map((_, i) => (
@@ -869,8 +874,8 @@ export default function OnboardingFlow({ role, missing = {}, onAllDone, simulate
         </AnimatePresence>
       </main>
 
-      {/* Nexus habla desde la esquina — solo después de "Comenzar" */}
-      <NexusGuide script={script} active={botActive} celebrate={step === 'done'} />
+      {/* Nodus habla desde la esquina — solo después de "Comenzar" */}
+      <NodusGuide script={script} active={botActive} celebrate={step === 'done'} />
     </div>
   );
 }

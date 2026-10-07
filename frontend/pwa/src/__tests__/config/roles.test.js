@@ -27,48 +27,52 @@ describe('ROLES constants', () => {
 });
 
 describe('getOperationsForRole', () => {
-  it('returns situacion_critica and solicitud for all roles', () => {
+  it('returns situacion_critica for all roles (solicitud ya no existe)', () => {
     const roles = Object.values(ROLES);
     for (const role of roles) {
       const ops = getOperationsForRole(role);
       const ids = ops.map((o) => o.id);
       expect(ids).toContain('situacion_critica');
-      expect(ids).toContain('solicitud');
+      expect(ids).not.toContain('solicitud');
     }
   });
 
-  it('returns citacion for RECTOR, COORDINATOR, DOCENTE, PSICORIENTADOR', () => {
-    for (const role of [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR]) {
+  it('returns citar for RECTOR, COORDINATOR, DOCENTE, PSICORIENTADOR, SECRETARIA', () => {
+    for (const role of [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.SECRETARIA]) {
       const ops = getOperationsForRole(role);
-      expect(ops.some((o) => o.id === 'citacion')).toBe(true);
+      expect(ops.some((o) => o.id === 'citar')).toBe(true);
     }
   });
 
-  it('does not return citacion for SECRETARY, SECURITY, AUXILIARY', () => {
-    for (const role of [ROLES.SECRETARIA, ROLES.PORTERO, ROLES.AUXILIAR]) {
+  it('does not return citar for SECURITY, AUXILIARY', () => {
+    for (const role of [ROLES.PORTERO, ROLES.AUXILIAR]) {
       const ops = getOperationsForRole(role);
-      expect(ops.some((o) => o.id === 'citacion')).toBe(false);
+      expect(ops.some((o) => o.id === 'citar')).toBe(false);
     }
   });
 
-  it('returns salida only for RECTOR and COORDINATOR', () => {
-    expect(getOperationsForRole(ROLES.RECTOR).some((o) => o.id === 'salida')).toBe(true);
-    expect(getOperationsForRole(ROLES.COORDINADOR).some((o) => o.id === 'salida')).toBe(true);
-    expect(getOperationsForRole(ROLES.DOCENTE).some((o) => o.id === 'salida')).toBe(false);
+  it('returns autorizar only for RECTOR and COORDINATOR', () => {
+    expect(getOperationsForRole(ROLES.RECTOR).some((o) => o.id === 'autorizar')).toBe(true);
+    expect(getOperationsForRole(ROLES.COORDINADOR).some((o) => o.id === 'autorizar')).toBe(true);
+    expect(getOperationsForRole(ROLES.DOCENTE).some((o) => o.id === 'autorizar')).toBe(false);
   });
 
-  it('returns dano for SECURITY, AUXILIARY, RECTOR and COORDINATOR', () => {
-    expect(getOperationsForRole(ROLES.PORTERO).some((o) => o.id === 'dano')).toBe(true);
-    expect(getOperationsForRole(ROLES.AUXILIAR).some((o) => o.id === 'dano')).toBe(true);
-    expect(getOperationsForRole(ROLES.RECTOR).some((o) => o.id === 'dano')).toBe(true);
-    expect(getOperationsForRole(ROLES.COORDINADOR).some((o) => o.id === 'dano')).toBe(true);
-    expect(getOperationsForRole(ROLES.DOCENTE).some((o) => o.id === 'dano')).toBe(false);
+  it('returns daño for SECURITY, AUXILIARY, RECTOR and COORDINATOR', () => {
+    expect(getOperationsForRole(ROLES.PORTERO).some((o) => o.id === 'daño')).toBe(true);
+    expect(getOperationsForRole(ROLES.AUXILIAR).some((o) => o.id === 'daño')).toBe(true);
+    expect(getOperationsForRole(ROLES.RECTOR).some((o) => o.id === 'daño')).toBe(true);
+    expect(getOperationsForRole(ROLES.COORDINADOR).some((o) => o.id === 'daño')).toBe(true);
+    expect(getOperationsForRole(ROLES.DOCENTE).some((o) => o.id === 'daño')).toBe(false);
   });
 
-  it('returns enrolamiento only for SECRETARY', () => {
-    // enrolamiento is a sidebar item, not an operation — verify that SECRETARY has unique ops
-    const secOps = getOperationsForRole(ROLES.SECRETARIA);
-    expect(secOps.some((o) => o.id === 'situacion_critica')).toBe(true);
+  it('horario y pedagogica son exclusivas de RECTOR y COORDINATOR', () => {
+    for (const op of ['horario', 'pedagogica']) {
+      expect(getOperationsForRole(ROLES.RECTOR).some((o) => o.id === op)).toBe(true);
+      expect(getOperationsForRole(ROLES.COORDINADOR).some((o) => o.id === op)).toBe(true);
+      for (const role of [ROLES.DOCENTE, ROLES.SECRETARIA, ROLES.PSICORIENTADOR, ROLES.PORTERO, ROLES.AUXILIAR]) {
+        expect(getOperationsForRole(role).some((o) => o.id === op)).toBe(false);
+      }
+    }
   });
 });
 
@@ -89,14 +93,18 @@ describe('getRoleDisplay', () => {
 });
 
 describe('getPrimaryActions', () => {
-  it('returns 4 actions for RECTOR', () => {
+  it('returns 4 actions for RECTOR con insignia de operación y sin /casos', () => {
     const actions = getPrimaryActions(ROLES.RECTOR);
     expect(actions).toHaveLength(4);
     const paths = actions.map((a) => a.path);
     expect(paths).toContain('/');
-    expect(paths).toContain('/operacion');
-    expect(paths).toContain('/casos');
+    expect(paths).toContain('/operacion?cmd=Emergencia');
     expect(paths).toContain('/notificaciones');
+    // /casos vive en el sidebar, no en la barra inferior
+    expect(paths).not.toContain('/casos');
+    // el deep-link hereda título/icono del catálogo
+    const flagship = actions.find((a) => a.path.includes('cmd='));
+    expect(flagship.title).toBe('Emergencia');
   });
 
   it('returns 4 actions for SECRETARY including enrolamiento', () => {

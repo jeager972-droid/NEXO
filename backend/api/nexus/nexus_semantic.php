@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * nexus/nexus_semantic.php — Capa semántica de Nexus (IR + planner + presentación)
+ * nexus/nexus_semantic.php — Capa semántica de Nodus (IR + planner + presentación)
  * =============================================================================
  *
  * Del mensaje al resultado por composición estructural:

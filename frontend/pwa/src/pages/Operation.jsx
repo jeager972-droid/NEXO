@@ -7,16 +7,15 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
-  AlertOctagon, ShieldCheck, ShieldAlert,
-  Clock, Bus, Calendar, Wrench, Send, UserCheck,
-  ChevronRight, Loader2, FileText, Siren,
-  GitMerge, Maximize2, PenLine
+  AlertOctagon,
+  ChevronRight, Loader2,
 } from 'lucide-react';
 import { operationsApi } from '../api/operations';
 import { studentsApi } from '../api/students';
 
 import { usersApi } from '../api/users';
 import { ROLES, getRoleDisplay } from '../config/roles';
+import { OPERATIONS_CATALOG as COMMANDS_CATALOG, normalizeCmdTitle } from '../config/operations';
 import { Surface } from '../components/ui/Surface';
 import { Card } from '../components/ui/Card';
 import { Input, Textarea } from '../components/ui/Input';
@@ -30,27 +29,6 @@ import { formatGroupName } from '../utils/groupFormat';
 import { GRADO_OPTIONS } from '../config/grados';
 import { NexoChatBubble } from '../components/patterns/NexoChat';
 
-const COMMANDS_CATALOG = [
-  // ── Azul (accent) — acciones informativas/neutrales ──
-  { id: 'citar',       title: 'Citar acudiente',     icon: Calendar,   roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'date', 'time', 'message'], tone: 'accent', desc: 'Agenda llamada o visita del acudiente' },
-  { id: 'solicitud',   title: 'Mandar solicitud',    icon: Send,       roles: Object.values(ROLES), fields: ['targetRole', 'targets', 'message'], tone: 'accent', desc: 'Envía una solicitud a otro rol' },
-  { id: 'seguimiento', title: 'Solicitar seguimiento',icon: FileText,  roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'accent', desc: 'Abre un caso de seguimiento' },
-  { id: 'fusionar_bloque', title: 'Fusionar bloque', icon: GitMerge,   roles: [ROLES.DOCENTE], fields: ['grade', 'group'], tone: 'accent', desc: 'Une dos bloques consecutivos' },
-  // ── Naranja (warning) — acciones de advertencia/precaución ──
-  { id: 'autorizar',   title: 'Autorizar salida',    icon: ShieldCheck,roles: [ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning', desc: 'Salida anticipada del estudiante' },
-  { id: 'daño',        title: 'Reportar daño',       icon: Wrench,     roles: [ROLES.AUXILIAR, ROLES.PORTERO, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['location', 'description'], tone: 'warning', desc: 'Novedad en infraestructura' },
-  { id: 'pedagogica',  title: 'Salida pedagógica',   icon: Bus,        roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason'], tone: 'warning', desc: 'Autoriza la salida de todo el grupo' },
-  { id: 'horario',     title: 'Cambio de horario',   icon: Clock,      roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE], fields: ['grade', 'group', 'reason', 'time'], warning: 'Este comando avisará a todos los padres de familia del grupo elegido.', tone: 'warning', desc: 'Avisa el nuevo horario a los padres' },
-  { id: 'permiso',     title: 'Generar permiso',     icon: UserCheck,  roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason', 'timeStart', 'timeEnd'], tone: 'warning', desc: 'Salida del salón con tiempo límite' },
-  // extender_bloque afecta toda la jornada (ventanas de registro globales) —
-  // por eso solo coordinación/rectoría; el docente fusiona sus bloques.
-  { id: 'extender_bloque', title: 'Extender bloque', icon: Maximize2,  roles: [ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group'], tone: 'warning', desc: 'Prolonga la clase en curso' },
-  { id: 'registro_manual', title: 'Registro manual', icon: PenLine,    roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.SECRETARIA, ROLES.PORTERO, ROLES.RECTOR], fields: ['grade', 'group', 'student', 'reason'], tone: 'warning', desc: 'Marcar entrada sin huella' },
-  // ── Rojo (danger) — acciones críticas/emergencias ──
-  { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: Object.values(ROLES), fields: ['location', 'message'], tone: 'danger', desc: 'Emergencia — aviso inmediato' },
-  { id: 'incidente',   title: 'Reportar incidente',  icon: ShieldAlert,roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.RECTOR, ROLES.COORDINADOR], fields: ['grade', 'group', 'student', 'location', 'message', 'targets'], tone: 'danger', desc: 'Novedad disciplinaria o de salud' },
-];
-
 const CMD_TONE_STYLES = {
   accent:  { bg: 'bg-[var(--nx-surface-accent)]', icon: 'bg-[var(--nx-icon-bg-accent)] text-[color-mix(in_oklch,var(--nx-accent)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-accent)]' },
   warning: { bg: 'bg-[var(--nx-surface-warning)]', icon: 'bg-[var(--nx-icon-bg-warning)] text-[color-mix(in_oklch,var(--nx-warning)_72%,var(--nx-icon-mix))]', border: 'border-[var(--nx-warning)]' },
@@ -61,14 +39,40 @@ const FIELD_LABELS = {
   group: 'Grupo', student: 'Estudiante', grade: 'Grado', date: 'Fecha', time: 'Hora',
   timeStart: 'Hora de salida', timeEnd: 'Hora de retorno',
   message: 'Mensaje', reason: 'Motivo', location: 'Ubicación', description: 'Descripción',
-  targetRole: 'Rol destinatario', targets: 'Destinatario'
+  targetRole: 'Rol destinatario', targets: 'Destinatario',
+  dependency: 'Dependencia responsable', assignee: 'Persona responsable',
+};
+
+// Dependencia del caso → rol del que se cargan los responsables elegibles.
+const DEPENDENCY_ROLES = {
+  coordinacion: 'COORDINATOR',
+  psicoorientacion: 'COUNSELOR',
+  rectoria: 'RECTOR',
+  docencia: 'TEACHER',
+};
+const DEPENDENCY_OPTIONS = [
+  { value: 'coordinacion', label: 'Coordinación' },
+  { value: 'psicoorientacion', label: 'Psicoorientación' },
+  { value: 'rectoria', label: 'Rectoría' },
+  { value: 'docencia', label: 'Docencia' },
+];
+
+// Borrador por usuario: si sales de /operacion a mitad de formulario, al
+// volver se restaura el comando y lo ya diligenciado — no se «devuelve al
+// inicio». Se limpia al enviar con éxito o al cerrar el formulario.
+const DRAFT_KEY = (uid) => `nx:operation:draft:${uid || 'anon'}`;
+const readDraft = (uid) => {
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY(uid)) || 'null'); } catch { return null; }
 };
 
 const Operation = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeCommand, setActiveCommand] = useState(null);
-  const [preselect, setPreselect] = useState(null);
+  const uid = user?.user_id || user?.id;
+  const [draft] = useState(() => readDraft(uid));
+  const [activeCommand, setActiveCommand] = useState(() =>
+    draft?.cmdId ? (COMMANDS_CATALOG.find((c) => c.id === draft.cmdId) ?? null) : null);
+  const [preselect, setPreselect] = useState(draft?.preselect || null);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,13 +111,24 @@ const Operation = () => {
   useEffect(() => {
     const cmdTitle = searchParams.get('cmd');
     if (cmdTitle) {
-      const found = filteredCommands.find((c) => c.title === cmdTitle);
+      // match tolerante (mayúsculas/tildes) — el chat puede emitir una
+      // variante del título del catálogo; sin esto el chip caía en la
+      // sección genérica en vez de abrir el formulario.
+      const norm = normalizeCmdTitle(cmdTitle);
+      const found = filteredCommands.find((c) => normalizeCmdTitle(c.title) === norm);
       if (found) {
         // Capturar TODOS los params antes de limpiar la URL — el chip del
         // chat trae student/group pre-cargados («cita al acudiente de X»)
         const sid = searchParams.get('student');
         const grp = searchParams.get('group');
-        if (sid || grp) setPreselect({ student: sid || '', group: grp || '' });
+        // Las notificaciones llevan contexto propio (motivo/dependencia)
+        // además de estudiante y grupo — todo llega pre-llenado.
+        const reason = searchParams.get('reason');
+        const dep = searchParams.get('dependency');
+        const extra = {};
+        if (reason) { extra.reason = reason; extra.description = reason; extra.message = reason; }
+        if (dep) extra.dependency = dep;
+        if (sid || grp || reason || dep) setPreselect({ student: sid || '', group: grp || '', extra });
         setActiveCommand(found);
       }
       setSearchParams({}, { replace: true });
@@ -167,7 +182,8 @@ const Operation = () => {
           groups={groups}
           students={students}
           preselect={preselect}
-          onClose={() => { setActiveCommand(null); setPreselect(null); }}
+          uid={uid}
+          onClose={() => { setActiveCommand(null); setPreselect(null); try { localStorage.removeItem(DRAFT_KEY(uid)); } catch {} }}
           fetchError={fetchError}
         />
       )}
@@ -175,8 +191,11 @@ const Operation = () => {
   );
 };
 
-const CommandForm = ({ command, groups, students, preselect, onClose, fetchError }) => {
-  const [form, setForm] = useState({});
+const CommandForm = ({ command, groups, students, preselect, uid, onClose, fetchError }) => {
+  const [form, setForm] = useState(() => {
+    const d = readDraft(uid);
+    return d?.cmdId === command.id && d?.form ? d.form : {};
+  });
   const [targetUsers, setTargetUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -208,19 +227,38 @@ const CommandForm = ({ command, groups, students, preselect, onClose, fetchError
       } else if (preselect.group) {
         next.group = preselect.group;
       }
+      // Campos libres que la notificación pre-llena (motivo, dependencia…)
+      if (preselect.extra) {
+        for (const [k, v] of Object.entries(preselect.extra)) {
+          if (v && command.fields.includes(k) && !next[k]) next[k] = v;
+        }
+      }
       return next;
     });
-  }, [preselect, students]);
+  }, [preselect, students]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Borrador persistente: salir a otra sección no pierde lo diligenciado.
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY(uid), JSON.stringify({ cmdId: command.id, form, preselect }));
+    } catch { /* storage lleno — el borrador es best-effort */ }
+  }, [command.id, form, preselect, uid]);
 
   useEffect(() => {
-    if (command.fields.includes('targets') && form.targetRole) {
-      setLoadingUsers(true);
-      usersApi.getByRole(form.targetRole, false)
-        .then((res) => setTargetUsers(res.data || []))
-        .catch(() => setTargetUsers([]))
-        .finally(() => setLoadingUsers(false));
-    }
-  }, [form.targetRole, command.fields]);
+    const wantsUsers = command.fields.includes('targets') && form.targetRole;
+    const wantsAssignee = command.fields.includes('assignee') && form.dependency;
+    if (!wantsUsers && !wantsAssignee) return;
+    // Docente: el responsable se filtra por su jornada (colegas de su turno);
+    // otros roles ven el directorio completo de la dependencia.
+    const sameShift = user?.role === ROLES.DOCENTE;
+    const role = wantsAssignee ? DEPENDENCY_ROLES[form.dependency] : form.targetRole;
+    if (!role) return;
+    setLoadingUsers(true);
+    usersApi.getByRole(role, sameShift)
+      .then((res) => setTargetUsers(res.data || []))
+      .catch(() => setTargetUsers([]))
+      .finally(() => setLoadingUsers(false));
+  }, [form.targetRole, form.dependency, command.fields, user]);
 
   const filteredStudents = form.group
     ? students.filter((s) => (s.group_name || s.group) === form.group || `${s.group_name || ''}`.toLowerCase().includes(form.group.toLowerCase()))
@@ -267,23 +305,11 @@ const CommandForm = ({ command, groups, students, preselect, onClose, fetchError
         payload.group = form.group;
         payload.group_name = form.group;
       }
-      if (command.fields.includes('targets') && command.id !== 'solicitud') payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
+      if (command.fields.includes('targets')) payload.targets = form.targets?.split(',').map((t) => t.trim()).filter(Boolean) || [];
       if (command.fields.includes('timeStart')) payload.timeStart = form.timeStart || null;
       if (command.fields.includes('timeEnd')) payload.timeEnd = form.timeEnd || null;
-
-      if (command.id === 'solicitud') {
-        if (!form.message || !form.message.trim()) {
-          setResult({ variant: 'danger', message: 'El mensaje no puede estar vacío.' });
-          setIsSubmitting(false);
-          return;
-        }
-        if (!form.targets || !form.targets.trim()) {
-          setResult({ variant: 'danger', message: 'Debes seleccionar un destinatario.' });
-          setIsSubmitting(false);
-          return;
-        }
-        payload.recipient_id = form.targets;
-      }
+      if (command.fields.includes('dependency')) payload.dependency = form.dependency || null;
+      if (command.fields.includes('assignee')) payload.assigned_to_user_id = form.assignee || null;
 
       let result;
       switch (command.id) {
@@ -291,7 +317,6 @@ const CommandForm = ({ command, groups, students, preselect, onClose, fetchError
         case 'citar':       result = await operationsApi.citacion(payload); break;
         case 'autorizar':   result = await operationsApi.salida(payload); break;
         case 'permiso':     result = await operationsApi.permiso(payload); break;
-        case 'solicitud':   result = await operationsApi.execute('solicitud', payload, '/operations/solicitud'); break;
         case 'seguimiento': result = await operationsApi.execute('seguimiento', payload, '/operations/seguimiento'); break;
         case 'daño':        result = await operationsApi.execute('daño', payload, '/operations/daño'); break;
         case 'pedagogica':  result = await operationsApi.execute('pedagogica', payload, '/operations/pedagogica'); break;
@@ -305,6 +330,7 @@ const CommandForm = ({ command, groups, students, preselect, onClose, fetchError
 
       setResult({ variant: 'success', message: result?.message || 'Operación exitosa' });
       if (result?.message_ids?.length) pollTwilio(result.message_ids);
+      try { localStorage.removeItem(DRAFT_KEY(uid)); } catch {}
 
       // La integración edge para autorizar_salida la maneja el backend:
       // el API crea la autorización PENDING_FINGERPRINT y envía WAIT_EXIT_FINGERPRINT
@@ -341,41 +367,55 @@ const CommandForm = ({ command, groups, students, preselect, onClose, fetchError
       }));
       return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={options} value={form.student || ''} onChange={(v) => updateField('student', v)} placeholder="— Seleccionar estudiante —" searchPlaceholder="Buscar estudiante…" clearable />;
     }
-    if (field === 'targetRole') {
-      const roles = Object.entries(ROLES).map(([k, v]) => ({ value: v, label: getRoleDisplay(v) || k }));
-      return <SearchableSelect key={field} label={FIELD_LABELS[field]} options={roles} value={form.targetRole || ''} onChange={(v) => updateField('targetRole', v)} placeholder="— Seleccionar rol —" searchPlaceholder="Buscar rol…" clearable />;
+    if (field === 'dependency') {
+      return (
+        <SearchableSelect
+          key={field}
+          label={FIELD_LABELS[field]}
+          options={DEPENDENCY_OPTIONS}
+          value={form.dependency || ''}
+          onChange={(v) => { updateField('dependency', v); updateField('assignee', ''); }}
+          placeholder="— Seleccionar dependencia —"
+          clearable
+        />
+      );
+    }
+    if (field === 'assignee') {
+      if (!form.dependency) {
+        return (
+          <div key={field} className="rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">
+            Selecciona primero la dependencia para ver las personas responsables.
+          </div>
+        );
+      }
+      if (loadingUsers) return <div key={field} className="h-20 w-full nx-skeleton rounded-control" aria-hidden />;
+      const options = targetUsers.map((u) => ({
+        value: u.user_id || u.id,
+        label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id,
+        sublabel: u.work_shift ? `Jornada ${u.work_shift}` : '',
+      }));
+      return (
+        <SearchableSelect
+          key={field}
+          label={FIELD_LABELS[field]}
+          options={options}
+          value={form.assignee || ''}
+          onChange={(v) => updateField('assignee', v || '')}
+          clearable
+          placeholder="Sin responsable específico — lo recibe la dependencia"
+          searchPlaceholder="Buscar persona…"
+          emptyText="Sin personas en esa dependencia"
+        />
+      );
     }
     if (field === 'targets') {
-      const isIncident = command.id === 'incidente';
-      const isSolicitud = command.id === 'solicitud';
-      const incidentOptions = [
+      // Solo «incidente» lo usa hoy: destinatarios de la notificación
+      // (acudiente/rectoría/coordinación), no personas.
+      const options = [
         { value: 'padre', label: 'Acudiente' },
         { value: 'rector', label: 'Rectoría' },
         { value: 'coordinacion', label: 'Coordinación' },
       ];
-      let options;
-      if (isIncident) {
-        options = incidentOptions;
-      } else {
-        if (loadingUsers) return <div className="h-20 w-full nx-skeleton rounded-control" aria-hidden />;
-        if (!form.targetRole) return <div className="rounded-control bg-[var(--nx-surface-subtle)] px-4 py-3 text-body-sm text-[var(--nx-text-muted)]">Selecciona primero un rol para ver los destinatarios.</div>;
-        options = targetUsers.map((u) => ({ value: u.user_id || u.id, label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || u.user_id }));
-      }
-      if (isSolicitud) {
-        return (
-          <SearchableSelect
-            key={field}
-            label={FIELD_LABELS[field]}
-            options={options}
-            value={form.targets || ''}
-            onChange={(v) => updateField('targets', v || '')}
-            clearable
-            placeholder="Seleccionar destinatario…"
-            searchPlaceholder="Buscar destinatario…"
-            emptyText="Sin destinatarios"
-          />
-        );
-      }
       const value = (form.targets || '').split(',').filter(Boolean);
       return (
         <SearchableSelect

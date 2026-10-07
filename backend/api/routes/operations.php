@@ -8,7 +8,7 @@
  * ----------------------------
  * Recibe acciones (comandos) del frontend a través del endpoint
  * POST /operations/execute. Cada comando (sos, inasistencia, citacion, permiso,
- * autorizar_salida, pedagogica, seguimiento, incidente, solicitud, daño,
+ * autorizar_salida, pedagogica, seguimiento, incidente, daño,
  * horario) ejecuta lógica específica: inserta registros en la base de datos,
  * notifica a acudientes/teachers/coordinadores vía Twilio, y deja trazabilidad
  * en user_commands. También incluye un endpoint para consultar estado de
@@ -27,9 +27,8 @@
  *        ├── permiso        ──► INSERT class_exit_authorizations
  *        ├── autorizar_salida/salida ──► INSERT school_exit_authorizations + WhatsApp
  *        ├── pedagogica     ──► INSERT + notificar
- *        ├── seguimiento    ──► INSERT student_tracking + notificación
+ *        ├── seguimiento    ──► INSERT student_tracking (asignado) + notificación
  *        ├── incidente      ──► INSERT attendance_incidents
- *        ├── solicitud      ──► INSERT internal_messages
  *        ├── daño           ──► INSERT user_commands + notificar
  *        └── horario        ──► UPDATE schedules
  *        │
@@ -248,7 +247,6 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
         '/operations/citacion' => 'citacion',
         '/operations/salida' => 'autorizar_salida',
         '/operations/permiso' => 'permiso',
-        '/operations/solicitud' => 'solicitud',
         '/operations/daño' => 'daño',
         '/operations/pedagogica' => 'pedagogica',
         '/operations/horario' => 'horario',
@@ -283,7 +281,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
     // 'horario' no aplica aquí: es una operación de GRUPO (daily_schedule_config);
     // un cambio de jornada no depende de la presencia de un estudiante individual.
     // Excepciones permitidas para ausentes: consultas, casos activos (sos,
-    // situacion_critica, solicitud, daño), citacion, incidente, seguimiento,
+    // situacion_critica, daño), citacion, incidente, seguimiento,
     // pedagogica — estas operaciones pueden hacerse sobre estudiantes ausentes.
     $presenceRequiredActions = ['permiso', 'autorizar_salida'];
     if (in_array($action, $presenceRequiredActions)) {
@@ -355,8 +353,9 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
 
     // Dispatcher de comandos operativos. Cada case inserta/actualiza DB, notifica
     // por Twilio a acudientes/directivos y registra user_commands.
-    // Acciones: sos, inasistencia, citacion, autorizar_salida, permiso, solicitud,
-    // daño, pedagogica, horario, incidente, seguimiento.
+    // Acciones: sos, inasistencia, citacion, autorizar_salida, permiso,
+    // daño, pedagogica, horario, incidente, seguimiento, bloques, registro_manual.
+    // («solicitud» — mensajería interna — fue retirada del catálogo.)
     try {
         switch ($action) {
             case 'sos':
@@ -426,7 +425,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
 
             case 'situacion_critica':
                 $location = filter_var($params['location'] ?? 'Ubicación no definida', FILTER_SANITIZE_SPECIAL_CHARS);
-                $message = filter_var($params['message'] ?? 'Situación crítica reportada', FILTER_SANITIZE_SPECIAL_CHARS);
+                $message = filter_var($params['message'] ?? 'Emergencia reportada', FILTER_SANITIZE_SPECIAL_CHARS);
 
                 $reporterName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
                 $critMeta = json_encode([
@@ -466,7 +465,7 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                     $rows = [];
                     $notifParams = [];
                     foreach ($recipients as $r) {
-                        $rows[] = "(?, ?, 'Situación Crítica', ?, 'SOS', ?::jsonb, NOW())";
+                        $rows[] = "(?, ?, 'Emergencia', ?, 'SOS', ?::jsonb, NOW())";
                         $notifParams[] = $schoolId;
                         $notifParams[] = $r['user_id'];
                         $notifParams[] = "Se reportó una situación crítica por {$reporterName}. Ver detalles.";
@@ -476,12 +475,12 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                     try {
                         $conn->prepare($sql)->execute($notifParams);
                     } catch (Throwable $e) {
-                        error_log("[OPERATIONS] Situación crítica notification batch insert error: " . $e->getMessage());
+                        error_log("[OPERATIONS] Emergencia notification batch insert error: " . $e->getMessage());
                     }
                 }
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
-                echo json_encode(['status' => 'ok', 'message' => 'Situación crítica registrada y notificada a directivos']);
+                echo json_encode(['status' => 'ok', 'message' => 'Emergencia registrada y notificada a directivos']);
                 break;
 
             case 'inasistencia':
@@ -1229,82 +1228,122 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
             case 'seguimiento':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
                 $reason = trim((string)($params['reason'] ?? $params['message'] ?? $params['description'] ?? ''));
-                
-                if ($studentId) {
-                    $stuMetaStmt = $conn->prepare("
-                        SELECT s.first_name, s.last_name, ag.group_name
-                        FROM students s
-                        LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
-                        LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
-                        WHERE s.student_id = ?
-                        LIMIT 1
+                $dependency = trim((string)($params['dependency'] ?? 'psicoorientacion'));
+                $assignedTo = $params['assigned_to_user_id'] ?? $params['assignee'] ?? null;
+
+                if (!$studentId) {
+                    http_response_code(400);
+                    exit(json_encode(['status' => 'error', 'message' => 'El estudiante es obligatorio para solicitar seguimiento']));
+                }
+
+                // Valida dependencia contra el set que maneja /tracking
+                $validDeps = ['coordinacion', 'psicoorientacion', 'rectoria', 'docencia'];
+                if (!in_array($dependency, $validDeps, true)) $dependency = 'psicoorientacion';
+
+                // El responsable debe ser un usuario activo de la escuela
+                if ($assignedTo) {
+                    $asgStmt = $conn->prepare("SELECT 1 FROM users WHERE user_id = ? AND school_id = ? AND deleted_at IS NULL");
+                    $asgStmt->execute([$assignedTo, $schoolId]);
+                    if (!$asgStmt->fetchColumn()) $assignedTo = null;
+                }
+
+                $stuMetaStmt = $conn->prepare("
+                    SELECT s.first_name, s.last_name, ag.group_name
+                    FROM students s
+                    LEFT JOIN student_group_assignments sga ON sga.student_id = s.student_id AND sga.active = TRUE
+                    LEFT JOIN academic_groups ag ON ag.group_id = sga.group_id
+                    WHERE s.student_id = ? AND s.school_id = ?
+                    LIMIT 1
+                ");
+                $stuMetaStmt->execute([$studentId, $schoolId]);
+                $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$stuMeta) {
+                    http_response_code(404);
+                    exit(json_encode(['status' => 'error', 'message' => 'Estudiante no encontrado']));
+                }
+                $studentName = trim(($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? ''));
+                $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
+                $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
+                $senderRoleDisplay = $role === 'RECTOR' ? 'Rector' : ($role === 'COORDINATOR' ? 'Coordinador' : ($role === 'TEACHER' ? 'Docente' : $role));
+
+                // Si ya hay un caso abierto, no duplicar — se refleja en la
+                // respuesta para que el front pueda mostrar el estado real.
+                $openStmt = $conn->prepare("SELECT tracking_id FROM student_tracking WHERE student_id = ? AND school_id = ? AND status = 'en proceso' LIMIT 1");
+                $openStmt->execute([$studentId, $schoolId]);
+                $trackingId = $openStmt->fetchColumn();
+                $alreadyOpen = (bool)$trackingId;
+
+                if (!$alreadyOpen) {
+                    $trkStmt = $conn->prepare("
+                        INSERT INTO student_tracking (school_id, student_id, status, dependency, assigned_to_user_id, origin_type)
+                        VALUES (?, ?, 'en proceso', ?, ?, 'manual') RETURNING tracking_id
                     ");
-                    $stuMetaStmt->execute([$studentId]);
-                    $stuMeta = $stuMetaStmt->fetch(PDO::FETCH_ASSOC);
-                    $studentName = ($stuMeta['first_name'] ?? '') . ' ' . ($stuMeta['last_name'] ?? '');
-                    $groupName = $stuMeta['group_name'] ?? 'Sin grupo';
-                    $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
-                    $senderRoleDisplay = $role === 'RECTOR' ? 'Rector' : ($role === 'COORDINATOR' ? 'Coordinador' : ($role === 'TEACHER' ? 'Docente' : $role));
+                    $trkStmt->execute([$schoolId, $studentId, $dependency, $assignedTo]);
+                    $trackingId = $trkStmt->fetchColumn();
 
-                    $meta = json_encode([
-                        'student_id' => $studentId,
-                        'student_name' => trim($studentName),
-                        'group_name' => $groupName,
-                        'sender_name' => $senderName,
-                        'sender_role' => $senderRoleDisplay,
-                        'reason' => $reason,
-                        'action' => 'iniciar_seguimiento',
-                    ], JSON_UNESCAPED_UNICODE);
+                    if ($reason !== '') {
+                        $conn->prepare("INSERT INTO student_tracking_notes (tracking_id, user_id, note_text) VALUES (?, ?, ?)")
+                            ->execute([$trackingId, $userId, "Motivo de solicitud: " . $reason]);
+                    }
+                } elseif ($assignedTo) {
+                    // Caso ya abierto: reasignar responsable/dependencia sin duplicar
+                    $conn->prepare("UPDATE student_tracking SET assigned_to_user_id = ?, dependency = ?, updated_at = NOW() WHERE tracking_id = ?")
+                        ->execute([$assignedTo, $dependency, $trackingId]);
+                }
 
-                    $psicos = array_map(fn($uid) => ['user_id' => $uid],
-                        nexoRouteUserIds($conn, (string)$schoolId, 'SEGUIMIENTO', ['COUNSELOR']));
-                    if (!empty($psicos)) {
-                        $rows = [];
-                        $notifParams = [];
-                        foreach ($psicos as $p) {
-                            $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
-                            $notifParams[] = $schoolId;
-                            $notifParams[] = $p['user_id'];
-                            $notifParams[] = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderRoleDisplay} {$senderName}. Ver detalles.";
-                            $notifParams[] = $meta;
-                        }
-                        $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
-                        try {
-                            $conn->prepare($sql)->execute($notifParams);
-                        } catch (Throwable $e) {
-                            error_log("[OPERATIONS] Seguimiento notification batch insert error: " . $e->getMessage());
-                        }
-                    }
+                $meta = json_encode([
+                    'student_id' => $studentId,
+                    'student_name' => $studentName,
+                    'group_name' => $groupName,
+                    'sender_name' => $senderName,
+                    'sender_role' => $senderRoleDisplay,
+                    'reason' => $reason,
+                    'dependency' => $dependency,
+                    'tracking_id' => $trackingId,
+                    'action' => 'iniciar_seguimiento',
+                ], JSON_UNESCAPED_UNICODE);
 
-                    // Notificar también al RECTOR y al usuario que solicitó el seguimiento
-                    $segNotifyUsers = [$userId]; // El coordinador que lo pidió
-                    if ($role !== 'RECTOR') {
-                        foreach (nexoRouteUserIds($conn, (string)$schoolId, 'SEGUIMIENTO_RECTOR', ['RECTOR']) as $rid) {
-                            $segNotifyUsers[] = $rid;
-                        }
+                // Destinatarios: el responsable asignado, psicoorientación y
+                // rectoría (y el solicitante, para trazabilidad).
+                $segNotifyUsers = [$userId];
+                if ($assignedTo) $segNotifyUsers[] = $assignedTo;
+                foreach (nexoRouteUserIds($conn, (string)$schoolId, 'SEGUIMIENTO', ['COUNSELOR']) as $uid) {
+                    $segNotifyUsers[] = is_array($uid) ? ($uid['user_id'] ?? null) : $uid;
+                }
+                if ($role !== 'RECTOR') {
+                    foreach (nexoRouteUserIds($conn, (string)$schoolId, 'SEGUIMIENTO_RECTOR', ['RECTOR']) as $uid) {
+                        $segNotifyUsers[] = is_array($uid) ? ($uid['user_id'] ?? null) : $uid;
                     }
-                    $segMsg = "Se inició un seguimiento" . ($studentName ? " para {$studentName}" : '') . " solicitado por {$senderRoleDisplay} {$senderName}. Ver detalles.";
-                    $rows = [];
-                    $segParams = [];
-                    foreach ($segNotifyUsers as $uid) {
-                        $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
-                        $segParams[] = $schoolId;
-                        $segParams[] = $uid;
-                        $segParams[] = $segMsg;
-                        $segParams[] = $meta;
-                    }
+                }
+                $segNotifyUsers = array_values(array_unique(array_filter($segNotifyUsers)));
+
+                $segMsg = ($alreadyOpen ? "El caso de {$studentName} fue reasignado" : "Se inició un seguimiento para {$studentName}")
+                    . " — solicitado por {$senderRoleDisplay} {$senderName}. Ver detalles.";
+                $rows = [];
+                $segParams = [];
+                foreach ($segNotifyUsers as $uid) {
+                    $rows[] = "(?, ?, 'Solicitud de Seguimiento', ?, 'INFO', ?::jsonb, NOW())";
+                    $segParams[] = $schoolId;
+                    $segParams[] = $uid;
+                    $segParams[] = $segMsg;
+                    $segParams[] = $meta;
+                }
+                if ($segParams) {
                     $sql = "INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at) VALUES " . implode(',', $rows);
                     try {
                         $conn->prepare($sql)->execute($segParams);
                     } catch (Throwable $e) {
-                        error_log("[OPERATIONS] Seguimiento rector/coordinator notification batch insert error: " . $e->getMessage());
+                        error_log("[OPERATIONS] Seguimiento notification batch insert error: " . $e->getMessage());
                     }
                 }
 
                 logUserCommand($conn, $schoolId, $userId, $action, $params);
                 echo json_encode([
                     'status'  => 'ok',
-                    'message' => 'Solicitud de seguimiento enviada a psicorientación',
+                    'message' => $alreadyOpen
+                        ? 'El estudiante ya tenía un caso abierto — se actualizó la asignación'
+                        : 'Caso de seguimiento creado' . ($assignedTo ? ' y asignado' : ''),
+                    'tracking_id' => $trackingId,
                 ]);
                 break;
 
@@ -1513,7 +1552,6 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                 break;
 
             case 'incidente':
-            case 'solicitud':
             case 'daño':
             case 'horario':
                 $studentId = $params['student'] ?? $params['student_id'] ?? null;
@@ -1584,44 +1622,6 @@ if (strpos($cleanPath ?? '', '/operations/') === 0 || (isset($input['action']) &
                             if (!empty($gRow['whatsapp_phone'])) {
                                 enqueueTwilioJob($gRow['whatsapp_phone'], $horarioMsg, $schoolId, null, $gRow['guardian_id'], $userId, 'HORARIO');
                             }
-                        }
-                    }
-                }
-
-                if ($action === 'solicitud' && !empty($params['recipient_id'])) {
-                    $recStmt = $conn->prepare("SELECT phone, first_name, last_name FROM users WHERE user_id = ? AND school_id = ?");
-                    $recStmt->execute([$params['recipient_id'], $schoolId]);
-                    $recRow = $recStmt->fetch(PDO::FETCH_ASSOC);
-                    $senderName = trim(($authUser['first_name'] ?? '') . ' ' . ($authUser['last_name'] ?? '')) ?: $role;
-                    if ($recRow) {
-                        try {
-                            $msgStmt = $conn->prepare("
-                                INSERT INTO internal_messages (message_id, school_id, sender_user_id, receiver_user_id, subject, message_content, sent_at)
-                                VALUES (uuid_generate_v4(), ?, ?, ?, 'Solicitud interna', ?, NOW())
-                            ");
-                            $msgStmt->execute([$schoolId, $userId, $params['recipient_id'], $reason]);
-                        } catch (Exception $e) {
-                            securityLog('SOLICITUD_MSG_ERROR', $e->getMessage());
-                        }
-                        if (!empty($recRow['phone'])) {
-                            $solMsg = "📨 *NEXO — Solicitud interna*\n\nDe: *{$senderName}* ({$role})\nMensaje: {$reason}\n\nResponde por la plataforma.";
-                            enqueueTwilioJob($recRow['phone'], $solMsg, $schoolId, null, null, $userId, 'SOLICITUD');
-                        }
-
-                        try {
-                            $solMeta = json_encode([
-                                'sender_name' => $senderName,
-                                'sender_role' => $role,
-                                'reason' => $reason,
-                                'action' => 'solicitud',
-                            ], JSON_UNESCAPED_UNICODE);
-                            $solNotif = $conn->prepare("
-                                INSERT INTO notifications (school_id, user_id, title, message, type, metadata_json, created_at)
-                                VALUES (?, ?, 'Solicitud', ?, 'INFO', ?::jsonb, NOW())
-                            ");
-                            $solNotif->execute([$schoolId, $params['recipient_id'], "Se envió una solicitud interna de {$senderName}. Ver detalles.", $solMeta]);
-                        } catch (Throwable $e) {
-                            error_log("[OPERATIONS] Solicitud notification insert error: " . $e->getMessage());
                         }
                     }
                 }

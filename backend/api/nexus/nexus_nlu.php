@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * nexus/nexus_nlu.php — Puente NLU de Nexus.
+ * nexus/nexus_nlu.php — Puente NLU de Nodus.
  * =============================================================================
  *
  * La interpretación es del LLM (nexus/nexus_llm.php — parser semántico sobre
@@ -1431,7 +1431,7 @@ function nxSmalltalk(string $intent, array $vars = []): string {
     $dp = $vars['daypart'] ?? 'Hola';
     $responses = [
         'greeting' => [
-            "Hola{$name} — soy Nexus. Puedo contarte la jornada, buscar estudiantes, revisar avisos o simplemente charlar. ¿Qué necesitas?",
+            "Hola{$name} — soy Nodus. Puedo contarte la jornada, buscar estudiantes, revisar avisos o simplemente charlar. ¿Qué necesitas?",
             '¡Hola! Aquí estoy, con los datos del día listos. ¿Por dónde empezamos?',
             "Hola{$name}. Qué bueno verte — ¿consultamos algo o solo charlamos un rato?",
             'Hola. Todo el sistema en línea y tus datos listos. ¿Qué quieres saber?',
@@ -1452,11 +1452,11 @@ function nxSmalltalk(string $intent, array $vars = []): string {
         'joke' => [nxPickNoRepeat(NX_JOKES, $vars['_last_reply'] ?? '')],
         'fun_fact' => [nxPickNoRepeat(NX_FACTS, $vars['_last_reply'] ?? '')],
         'about_nexus' => [
-            'Soy Nexus — el sistema de la institución y tu asistente. Registro la jornada, vigilo los umbrales de riesgo, aviso cuando algo necesita decisión y respondo preguntas con datos reales. Nada de humo: si no lo sé, te lo digo.',
-            'Nexus: mitad sistema de registro, mitad asistente. Conozco la jornada, los grupos, los avisos y las reglas del colegio — y hablo contigo en normal, no en informático.',
+            'Soy Nodus — el sistema de la institución y tu asistente. Registro la jornada, vigilo los umbrales de riesgo, aviso cuando algo necesita decisión y respondo preguntas con datos reales. Nada de humo: si no lo sé, te lo digo.',
+            'Nodus: mitad sistema de registro, mitad asistente. Conozco la jornada, los grupos, los avisos y las reglas del colegio — y hablo contigo en normal, no en informático.',
         ],
         'name_meaning' => [
-            'Nexus viene de "nexo": el punto donde todo se conecta. Sensores, horarios, grupos, avisos — todo converge aquí. Bonito nombre para un sistema que une la jornada completa, ¿no?',
+            'Nodus viene de "nexo": el punto donde todo se conecta. Sensores, horarios, grupos, avisos — todo converge aquí. Bonito nombre para un sistema que une la jornada completa, ¿no?',
         ],
         'creator' => [
             'Fui construido como el sistema operativo de esta institución — por personas que querían que la escuela funcionara sin fricción. Yo soy la parte que habla contigo.',
@@ -1707,7 +1707,7 @@ const NX_GENERIC_INTENTS = ['day_summary','attendance_today','late_today','count
  *  Cuando solo hay verbo o sustantivo, el sistema infiere → derive_action. */
 function nxOpKnown(string $q0): ?string {
     $pairs = [
-        'Situación Crítica'     => '(sos|panico|emergencia|situacion critica)',
+        'Emergencia'     => '(sos|panico|emergencia|situacion critica)',
         'Mandar solicitud'      => '(manda\w*|mandar|envia\w*|enviar|eleva\w*|elevar|radica\w*|radicar|hacer|pedir|pido|solicita\w*|solicitar|quiero|necesito|hay que|presenta\w*|presentar|dirige\w*|lleva\w*).{0,35}(solicitud|peticion|tramite|requerimiento|pqrs|oficio)',
         'Citar acudiente'       => '(cita\w*|citar|citamos|convoca\w*|convocar|llamar a citacion|agenda\w*).{0,35}(acudiente|mama|papa|papas|padre|madre|padres|responsable|representante|alguien|docente|profe\w*|a\b|al\b|la\b|el\b|los\b|las\b)',
         'Generar permiso'       => '(genera\w*|generar|crea\w*|crear|hacer|haz|expide|expedir|tramita\w*|tramitar|dame|quiero|necesito|hay que).{0,30}(permiso|excusa|autorizacion)',

@@ -71,7 +71,7 @@ const visibleRows = (table = screen.getByRole('table')) => within(table).getAllB
 
   it.each([['empty', []], ['null', null], ['missing', undefined]])('handles %s row lists without phantom pages', (_label, rows) => {
     render(<DataCard card={{ columns: ['Nombre'], rows }} />);
-    expect(screen.getByRole('table', { name: 'Datos de Nexus' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Datos de Nodus' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Filas 0–0 de 0');
     expect(screen.queryAllByRole('cell')).toHaveLength(0);
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();

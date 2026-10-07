@@ -1,5 +1,5 @@
 {
-  "_doc": "Benchmark OPERATIVO Nexus — independiente del corpus de entrenamiento. 300+ frases sueltas + 50 conversaciones multi-turno. Uso: test/op_eval.php. NO usar para entrenar; cualquier frase que entre al corpus debe marcarse contaminada.",
+  "_doc": "Benchmark OPERATIVO Nodus — independiente del corpus de entrenamiento. 300+ frases sueltas + 50 conversaciones multi-turno. Uso: test/op_eval.php. NO usar para entrenar; cualquier frase que entre al corpus debe marcarse contaminada.",
   "single": [
     {
       "text": "quienes no vinieron hoy",

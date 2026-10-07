@@ -17,8 +17,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Shield, AlertTriangle, Clock, TrendingUp, Info,
-  ChevronLeft, ChevronRight, ChevronDown, Minus, Plus,
+  Shield, Info,
+  ChevronLeft, ChevronRight, Minus, Plus,
   History, XCircle, Loader2, ArrowLeft, Save,
 } from 'lucide-react';
 import { riskApi } from '../api/risk';
@@ -30,7 +30,7 @@ import { Dialog } from '../components/ui/Overlay';
 import { humanizeError } from '../utils/messages';
 
 const EASE = [0.22, 1, 0.36, 1];
-const STEPS = ['Información', 'Umbrales', 'Eventos', 'Revisión'];
+const STEPS = ['Información', 'Umbrales y eventos', 'Revisión'];
 
 const LEVELS = [
   { value: 'SIN_IMPORTANCIA', label: 'Sin importancia', scheme: 'neutral', desc: 'El evento se registra pero no activa alertas.' },
@@ -39,14 +39,6 @@ const LEVELS = [
   { value: 'ALTA', label: 'Alta', scheme: 'danger', desc: 'Se detecta reincidencia. Requiere revisión humana inmediata.' },
   { value: 'MUY_ALTA', label: 'Muy Alta', scheme: 'danger', desc: 'Activa automáticamente una alerta a coordinación al instante.' },
 ];
-
-const CATEGORIES = {
-  asistencia: { label: 'Asistencia', icon: Clock },
-  evasion: { label: 'Evasión', icon: AlertTriangle },
-  comportamiento: { label: 'Comportamiento', icon: TrendingUp },
-  sistema: { label: 'Sistema', icon: Shield },
-  administrativo: { label: 'Administrativo', icon: Info },
-};
 
 // Eventos que no deben aparecer en la configuración de riesgo.
 // La inasistencia se detecta automáticamente (worker_absence_detector) y
@@ -88,7 +80,6 @@ export default function RiskConfig() {
   const [eventTypes, setEventTypes] = useState([]);
   const [overrides, setOverrides] = useState({});
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
-  const [expandedCategory, setExpandedCategory] = useState(null);
   const [error, setError] = useState(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [changeReason, setChangeReason] = useState('');
@@ -140,14 +131,6 @@ export default function RiskConfig() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ── Derivados ───────────────────────────────────────────────────────
-  const eventsByCategory = useMemo(() => {
-    return (eventTypes || []).reduce((acc, evt) => {
-      if (!acc[evt.category]) acc[evt.category] = [];
-      acc[evt.category].push(evt);
-      return acc;
-    }, {});
-  }, [eventTypes]);
-
   const getLevelForType = (typeCode, category) => {
     if (overrides[typeCode]) return overrides[typeCode];
     const map = (config.mapping || []).find((m) => m.type_code === typeCode);
@@ -165,8 +148,6 @@ export default function RiskConfig() {
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventTypes, overrides, config.mapping]);
-
-  const hasOverrides = Object.keys(overrides).length > 0;
 
   // ── Acciones ────────────────────────────────────────────────────────
   const handleLevelChange = (typeCode, newLevel) => {
@@ -252,7 +233,7 @@ export default function RiskConfig() {
     }
   };
 
-  const canNext = step >= 1 && step <= 3;
+  const canNext = step >= 1 && step <= 2;
 
   // ── Loading ─────────────────────────────────────────────────────────
   if (loading) {
@@ -289,7 +270,7 @@ export default function RiskConfig() {
                   <h1 className="text-h2 text-[var(--nx-text)]">Análisis de Riesgo Pedagógico</h1>
                   <p className="text-body-sm text-[var(--nx-text-muted)]">
                     {policy
-                      ? `Política v${policy.version} · Activa desde ${new Date(policy.activated_at).toLocaleDateString()}`
+                      ? `Política v${policy.version} · Activa desde ${new Date(policy.activated_at).toLocaleDateString('es-CO')}`
                       : 'Sin política configurada'}
                   </p>
                 </div>
@@ -366,13 +347,15 @@ export default function RiskConfig() {
               )}
 
               {/* ════════════════════════════════════════════════════════════
-                  PASO 2: Umbrales
+                  PASO 2: Umbrales y eventos — el umbral se define junto a los
+                  eventos que lo activan (cada nivel: reincidencias + plazo +
+                  lista de eventos asignados con su selector de nivel).
                   ════════════════════════════════════════════════════════════ */}
               {step === 2 && (
-                <div className="space-y-5">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Define los umbrales de activación</p></div>
+                <div className="space-y-4">
+                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Define el umbral de cada nivel y asigna sus eventos</p></div>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
-                      Cuántas reincidencias y en cuántos días activan una alerta para cada nivel.
+                      Cuántas reincidencias y en cuántos días activan una alerta, junto a los eventos que las disparan. Valores sugeridos ya asignados.
                     </p>
 
                   <div className="rounded-control bg-[var(--nx-subtle-bg-accent)] px-4 py-3 text-body-sm text-[var(--nx-accent)] flex items-start gap-2">
@@ -381,76 +364,120 @@ export default function RiskConfig() {
                   </div>
 
                   <div className="space-y-3">
-                    {LEVELS.filter((l) => l.value !== 'SIN_IMPORTANCIA').map((lvl) => {
+                    {LEVELS.map((lvl) => {
                       const th = thresholds[lvl.value];
-                      if (!th) return null;
                       const isLocked = lvl.value === 'MUY_ALTA';
+                      const noThreshold = lvl.value === 'SIN_IMPORTANCIA';
+                      const lvlEvents = eventsByLevel[lvl.value] || [];
                       return (
                         <div key={lvl.value} className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
                           <div className="flex items-baseline gap-2 mb-3">
                             <span className="text-body-sm font-medium text-[var(--nx-text)]">{lvl.label}</span>
+                            <span className="text-caption text-[var(--nx-text-muted)]">({lvlEvents.length} evento{lvlEvents.length !== 1 ? 's' : ''})</span>
                             {isLocked && (
                               <span className="text-caption text-[var(--nx-text-muted)] ml-auto">Activación automática</span>
                             )}
+                            {noThreshold && (
+                              <span className="text-caption text-[var(--nx-text-muted)] ml-auto">Solo se registra</span>
+                            )}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            {/* Reincidencias */}
-                            <div>
-                              <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Reincidencias</p>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={isLocked || th.recurrence <= th.minRec}
-                                  onClick={() => adjustThreshold(lvl.value, 'recurrence', -1)}
-                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <Minus size={14} />
-                                </button>
-                                <span className="flex-1 text-center text-body font-semibold tabular-nums text-[var(--nx-text)]">
-                                  {th.recurrence}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={isLocked || th.recurrence >= th.maxRec}
-                                  onClick={() => adjustThreshold(lvl.value, 'recurrence', 1)}
-                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <Plus size={14} />
-                                </button>
-                              </div>
-                            </div>
+                          {th && !noThreshold && (
+                            <>
+                              <div className="grid grid-cols-2 gap-4">
+                                {/* Reincidencias */}
+                                <div>
+                                  <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Reincidencias</p>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={isLocked || th.recurrence <= th.minRec}
+                                      onClick={() => adjustThreshold(lvl.value, 'recurrence', -1)}
+                                      className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Minus size={14} />
+                                    </button>
+                                    <span className="flex-1 text-center text-body font-semibold tabular-nums text-[var(--nx-text)]">
+                                      {th.recurrence}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={isLocked || th.recurrence >= th.maxRec}
+                                      onClick={() => adjustThreshold(lvl.value, 'recurrence', 1)}
+                                      className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Plus size={14} />
+                                    </button>
+                                  </div>
+                                </div>
 
-                            {/* Plazo de días */}
-                            <div>
-                              <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Plazo (días)</p>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={isLocked || th.window <= th.minWin}
-                                  onClick={() => adjustThreshold(lvl.value, 'window', -1)}
-                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <Minus size={14} />
-                                </button>
-                                <span className="flex-1 text-center text-body font-semibold tabular-nums text-[var(--nx-text)]">
-                                  {th.window}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={isLocked || th.window >= th.maxWin}
-                                  onClick={() => adjustThreshold(lvl.value, 'window', 1)}
-                                  className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <Plus size={14} />
-                                </button>
+                                {/* Plazo de días */}
+                                <div>
+                                  <p className="text-caption text-[var(--nx-text-muted)] mb-1.5">Plazo (días)</p>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={isLocked || th.window <= th.minWin}
+                                      onClick={() => adjustThreshold(lvl.value, 'window', -1)}
+                                      className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Minus size={14} />
+                                    </button>
+                                    <span className="flex-1 text-center text-body font-semibold tabular-nums text-[var(--nx-text)]">
+                                      {th.window}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={isLocked || th.window >= th.maxWin}
+                                      onClick={() => adjustThreshold(lvl.value, 'window', 1)}
+                                      className="grid h-9 w-9 shrink-0 place-items-center rounded-control border border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Plus size={14} />
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
 
-                          <p className="text-caption text-[var(--nx-text-muted)] mt-3 leading-snug">
-                            {th.recurrence} evento{th.recurrence !== 1 ? 's' : ''} en {th.window} día{th.window !== 1 ? 's' : ''} activa alerta a coordinación
-                          </p>
+                              <p className="text-caption text-[var(--nx-text-muted)] mt-3 leading-snug">
+                                {th.recurrence} evento{th.recurrence !== 1 ? 's' : ''} en {th.window} día{th.window !== 1 ? 's' : ''} activa alerta a coordinación
+                              </p>
+                            </>
+                          )}
+
+                          {/* Eventos asignados a este nivel — se recategorizan aquí mismo */}
+                          {lvlEvents.length > 0 && (
+                            <div className="mt-3 border-t border-[var(--nx-border)] pt-3 space-y-2.5">
+                              {lvlEvents.map((evt) => {
+                                const hasOverride = overrides[evt.type_code] !== undefined;
+                                return (
+                                  <div key={evt.type_code} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-body-sm text-[var(--nx-text)] font-medium flex items-center gap-1.5">
+                                        {hasOverride && <span className="w-1.5 h-1.5 rounded-full bg-[var(--nx-accent)] shrink-0" />}
+                                        {evt.display_name}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      {LEVELS.map((target) => (
+                                        <button
+                                          key={target.value}
+                                          type="button"
+                                          onClick={() => handleLevelChange(evt.type_code, target.value)}
+                                          className={`rounded-control border px-2 py-1 text-[11px] font-medium transition-all ${
+                                            target.value === lvl.value
+                                              ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)]'
+                                              : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:bg-[var(--nx-surface-subtle)]'
+                                          }`}
+                                        >
+                                          {target.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -459,89 +486,9 @@ export default function RiskConfig() {
               )}
 
               {/* ════════════════════════════════════════════════════════════
-                  PASO 3: Clasificar eventos
+                  PASO 3: Revisión
                   ════════════════════════════════════════════════════════════ */}
               {step === 3 && (
-                <div className="space-y-4">
-                  <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Clasifica cada evento por nivel de gravedad</p></div>
-                    <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
-                      Valores sugeridos asignados. Ajusta según el contexto de tu institución.
-                    </p>
-
-                  {Object.entries(eventsByCategory).map(([catKey, events]) => {
-                    const cat = CATEGORIES[catKey] || { label: catKey, icon: Info };
-                    const Icon = cat.icon;
-                    const isExpanded = expandedCategory === catKey || hasOverrides;
-
-                    return (
-                      <div
-                        key={catKey}
-                        className="rounded-control border border-[var(--nx-border)] bg-[var(--nx-surface)] overflow-hidden"
-                      >
-                        <button
-                          type="button"
-                          className="w-full flex items-center justify-between p-4 hover:bg-[var(--nx-surface-subtle)] transition-colors"
-                          onClick={() => setExpandedCategory(isExpanded ? null : catKey)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Icon size={16} className="text-[var(--nx-text-muted)]" />
-                            <span className="text-body-sm font-medium text-[var(--nx-text)]">{cat.label}</span>
-                            <span className="text-caption text-[var(--nx-text-muted)]">({events.length})</span>
-                          </div>
-                          <ChevronDown
-                            size={16}
-                            className={`text-[var(--nx-text-muted)] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                          />
-                        </button>
-
-                        {isExpanded && (
-                          <div className="border-t border-[var(--nx-border)] divide-y divide-[var(--nx-border)]">
-                            {events.map((evt) => {
-                              const currentLevel = getLevelForType(evt.type_code, evt.category);
-                              const hasOverride = overrides[evt.type_code] !== undefined;
-                              return (
-                                <div key={evt.type_code} className="p-4">
-                                  <div className="mb-2">
-                                    <p className="text-body-sm text-[var(--nx-text)] font-medium flex items-center gap-1.5">
-                                      {hasOverride && <span className="w-1.5 h-1.5 rounded-full bg-[var(--nx-accent)] shrink-0" />}
-                                      {evt.display_name}
-                                    </p>
-                                    <p className="text-caption text-[var(--nx-text-muted)] leading-snug">{evt.description}</p>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {LEVELS.map((lvl) => {
-                                      const isActive = currentLevel === lvl.value;
-                                      return (
-                                        <button
-                                          key={lvl.value}
-                                          type="button"
-                                          onClick={() => handleLevelChange(evt.type_code, lvl.value)}
-                                          className={`rounded-control border px-3 py-1.5 text-caption font-medium transition-all ${
-                                            isActive
-                                              ? 'border-[var(--nx-accent)] bg-[var(--nx-surface-accent)] text-[var(--nx-accent)] shadow-low'
-                                              : 'border-[var(--nx-border)] text-[var(--nx-text-muted)] hover:border-[var(--nx-border-accent)] hover:bg-[var(--nx-surface-subtle)]'
-                                          }`}
-                                        >
-                                          {lvl.label}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* ════════════════════════════════════════════════════════════
-                  PASO 4: Revisión
-                  ════════════════════════════════════════════════════════════ */}
-              {step === 4 && (
                 <div className="space-y-5">
                   <div className="border-l-2 border-[var(--nx-accent)] pl-3"><p className="text-label text-[var(--nx-text)]">Revisión final</p></div>
                     <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">
@@ -610,7 +557,7 @@ export default function RiskConfig() {
                 Atrás
               </Button>
             )}
-            {step < 4 ? (
+            {step < 3 ? (
               <Button onClick={() => canNext && setStep((s) => s + 1)} disabled={!canNext} rightIcon={<ChevronRight size={16} />}>
                 Siguiente
               </Button>
@@ -677,7 +624,7 @@ export default function RiskConfig() {
                       </div>
                       <p className="text-caption text-[var(--nx-text-muted)] mt-0.5">{h.change_reason}</p>
                       <p className="text-caption text-[var(--nx-text-muted)] mt-1">
-                        {new Date(h.created_at).toLocaleString()}
+                        {new Date(h.created_at).toLocaleString('es-CO')}
                       </p>
                     </div>
                   </div>

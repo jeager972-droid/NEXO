@@ -162,7 +162,7 @@ Variables: `REDISHOST`, `REDISPORT`, `REDIS_PASSWORD`, `REDIS_TLS` (o `REDIS_URL
 
 ### Variables de entorno (Vercel)
 
-- `VITE_API_BASE_URL` — URL del backend en Render (ej. `https://nexo-80go.onrender.com`).
+- `VITE_API_BASE_URL` — URL del backend en Render (`https://nexo-a725.onrender.com`; servicio anterior suspendido: `https://nexo-80go.onrender.com`).
 
 ### Deploy
 
@@ -223,7 +223,7 @@ cd landing && vercel --prod
 
    ```json
    {
-     "api_url": "https://nexo-80go.onrender.com",
+     "api_url": "https://nexo-a725.onrender.com",
      "device_id": "<UUID v4 desde la WebApp>",
      "device_token": "<token generado al registrar el dispositivo>",
      "biometric_sensor": "uareu5300",

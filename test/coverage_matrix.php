@@ -1,5 +1,5 @@
 <?php
-/* test/coverage_matrix.php — matriz de cobertura del sistema Nexus (AGENTS.md F1).
+/* test/coverage_matrix.php — matriz de cobertura del sistema Nodus (AGENTS.md F1).
  *
  * Verifica, por cada intent de datos del sistema:
  *   1. handler:   existe chat_{intent}() en routes/chat.php (o handlerMap)

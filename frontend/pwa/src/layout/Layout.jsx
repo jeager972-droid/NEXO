@@ -3,7 +3,7 @@
  * Shell de jornada (P-01). Sidebar + topbar + contenido.
  * Título contextual, notificaciones, estado de red y cuenta.
  */
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Settings, LogOut, ChevronDown, Sun, Moon } from 'lucide-react';
@@ -12,10 +12,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getRoleDisplay, getPrimaryActions, ROLES } from '../config/roles';
+import { NOTIF_ACTION_TO_CMD } from '../config/operations';
 import { schoolApi } from '../api/school';
 import OnboardingFlow from '../pages/onboarding/OnboardingFlow';
 import { SystemInactiveScreen } from '../components/patterns/SystemInactiveScreen';
-import { NexusGuide } from '../components/patterns/NexusGuide';
+import { NodusGuide } from '../components/patterns/NodusGuide';
 import { teacherApi } from '../api/teacher';
 import { dashboardApi } from '../api/dashboard';
 import { insightPrompt, setPendingPrompt } from '../lib/chatContext';
@@ -117,10 +118,10 @@ const Layout = () => {
   const greeting = useMemo(() => getGreeting(), []);
   const primaryActions = useMemo(() => getPrimaryActions(user?.role), [user?.role]);
   const firstName = user?.nombre?.split(' ')[0] || 'directivo';
-  // Todos los roles tienen drawer lateral (allí vive Chat con Nexus);
+  // Todos los roles tienen drawer lateral (allí vive Chat con Nodus);
   // en móvil la barra inferior sigue siendo la navegación principal.
 
-  // Onboarding unificado — pantalla completa guiada por Nexus.
+  // Onboarding unificado — pantalla completa guiada por Nodus.
   // Nada del sistema se muestra hasta completar (o quedar pendiente
   // de otro rol). RECTOR/COORDINATOR: jornadas → grupos → riesgo.
   // DOCENTE: criterios de aviso. Otros roles: pantalla de espera.
@@ -257,8 +258,11 @@ const Layout = () => {
           <div className="flex items-center justify-around px-2 py-2 max-w-content mx-auto">
             {primaryActions.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-              const showDot = item.path === '/notificaciones' && notifCount > 0;
+              // Las insignias llevan query (?cmd=…): el estado activo se
+              // compara contra el pathname puro, no contra el deep-link.
+              const itemPath = item.path.split('?')[0];
+              const isActive = location.pathname === itemPath || (itemPath !== '/' && location.pathname.startsWith(itemPath));
+              const showDot = itemPath === '/notificaciones' && notifCount > 0;
               return (
                 <NavLink
                   key={item.path}
@@ -282,28 +286,40 @@ const Layout = () => {
         </nav>
       </div>
 
-      {/* Nexus proactivo — avisa cuando llegan notificaciones nuevas.
+      {/* Nodus proactivo — avisa cuando llegan notificaciones nuevas.
           No aparece en /notificaciones (ya estás viéndolas). */}
-      <NexusBotAnnouncer />
+      <NodusBotAnnouncer />
     </div>
   );
 };
 
-// Nexus proactivo — tres fuentes, una burbuja a la vez:
-//   1. notificaciones nuevas ("Llegaron N" + Revisar)
-//   2. guía contextual: primeras 3 visitas a cada sección explica qué hacer
-//   3. lectura inteligente: en Inicio muestra el insight top del motor
-//      (una vez por sesión por insight — protagonista sin ser invasivo)
+// Nodus proactivo — el canal de novedades. Cola en orden de prioridad,
+// una burbuja a la vez (NodusGuide avanza por clic):
+//   1. notificaciones nuevas ("Llegaron N" + Revisar / Marcar revisadas)
+//   2. novedad del motor de insights (una vez por sesión por tipo)
+//   3. guía contextual: primeras 3 visitas a cada sección
+// «Mostrado» se marca cuando el mensaje se renderiza (onStepChange), no
+// cuando entra a la cola — una notificación prioritaria no quema el
+// presupuesto del hint ni marca el insight como visto sin haberlo visto.
 const PAGE_HINTS = {
   '/': 'Este es tu tablero — las tarjetas cuentan la jornada en vivo y yo leo abajo lo que necesita tu decisión.',
   '/operacion': 'Cada tarjeta es un comando real — elige una y te guío en el formulario. Nada se envía sin confirmar.',
   '/consulta': 'Elige un módulo y filtra — todo lo que ves es verificable con fecha y origen.',
   '/casos': 'Cada ficha es un caso abierto con origen y responsable — el historial guarda también lo que responde el acudiente.',
   '/dispositivos': 'Desde aquí reasignas nodos sin tocar llaves — lo crítico siempre se hace en el punto físico.',
-  '/config': 'Tu cuenta y lo institucional viven aquí — «Editar con Nexus» reabre la configuración para actualizarla.',
+  '/config': 'Tu cuenta y lo institucional viven aquí — «Editar con Nodus» reabre la configuración para actualizarla.',
 };
 const HINT_LIMIT = 3;
 const hintKey = (path) => `nx:hint:${path}`;
+
+const readHintCount = (path) => {
+  try { return parseInt(localStorage.getItem(hintKey(path)) || '0', 10); } catch { return HINT_LIMIT; }
+};
+
+const readShownInsights = () => {
+  try { return new Set(JSON.parse(sessionStorage.getItem('nx:shown-insights') || '[]')); }
+  catch { return new Set(); }
+};
 
 // Mensajes descartados en esta sesión — si el usuario quita la burbuja,
 // el mismo texto no vuelve a aparecer al cambiar de sección.
@@ -315,14 +331,49 @@ const writeDismissed = (set) => {
   try { sessionStorage.setItem('nx:bot-dismissed', JSON.stringify([...set])); } catch { /* sin storage */ }
 };
 
-const NexusBotAnnouncer = () => {
-  const { notifCount, notifications } = useNotifications();
+export const NodusBotAnnouncer = () => {
+  const { notifCount, notifications, markAllRead } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [insights, setInsights] = useState(null);
   const [dismissedMsgs, setDismissedMsgs] = useState(readDismissed);
+  const [hintCount, setHintCount] = useState(() => readHintCount(location.pathname));
+  const [shownInsights, setShownInsights] = useState(readShownInsights);
+  // El insight se "fija" al mostrarse: marcarlo como visto no debe sacarlo
+  // de la cola en el mismo render (parpadearía y nadie lo lee). Solo se
+  // suelta cuando el usuario lo descarta o cuando ya no viene del motor.
+  const [pinnedInsight, setPinnedInsight] = useState(null);
+
+  // Marcado de «mostrado» — estable (useCallback + refs): NodusGuide lo
+  // llama desde un efecto dependiente de su identidad; una función nueva
+  // por render dispararía el marcado en bucle. markedRef deduplica: un
+  // mensaje se marca una vez por mount aunque se renderice dos veces.
+  const scriptRef = useRef([]);
+  const markedRef = useRef(new Set());
+  const markShown = useCallback((mk) => {
+    if (!mk || markedRef.current.has(mk)) return;
+    markedRef.current.add(mk);
+    if (mk.startsWith('hint:')) {
+      const p = mk.slice(5);
+      const next = readHintCount(p) + 1;
+      try { localStorage.setItem(hintKey(p), String(next)); } catch { /* sin storage */ }
+      setHintCount(next);
+    } else if (mk.startsWith('insight:')) {
+      const kind = mk.slice(8);
+      setPinnedInsight(kind);
+      setShownInsights((prev) => {
+        const next = new Set(prev);
+        next.add(kind);
+        try { sessionStorage.setItem('nx:shown-insights', JSON.stringify([...next])); } catch { /* sin storage */ }
+        return next;
+      });
+    }
+  }, []);
 
   const dismissMsgs = (texts) => {
+    // Descartar un hint/insight también cuenta como «visto»: si no, el
+    // mismo contenido se re-anunciaría en la próxima sesión.
+    (texts || []).forEach((t) => { if (t?.startsWith?.('hint:') || t?.startsWith?.('insight:')) markShown(t); });
     setDismissedMsgs((prev) => {
       const next = new Set(prev);
       (texts || []).forEach((t) => next.add(t));
@@ -333,9 +384,10 @@ const NexusBotAnnouncer = () => {
 
   const path = location.pathname;
   const onNotifPage = path === '/notificaciones';
-  // En /chat ya estás hablando con Nexus — un segundo bot flotante sobre el
+  // En /chat ya estás hablando con Nodus — un segundo bot flotante sobre el
   // lienzo sería redundante (misma razón por la que no aparece en /notificaciones).
   const onChatPage = path === '/chat';
+  const quietPage = onNotifPage || onChatPage;
 
   // Motor de insights — una vez por sesión, para la lectura proactiva
   useEffect(() => {
@@ -346,62 +398,72 @@ const NexusBotAnnouncer = () => {
     return () => { alive = false; };
   }, []);
 
-  // Contador de guía contextual por sección (persistente entre sesiones)
-  const hintCount = useMemo(() => {
-    try { return parseInt(localStorage.getItem(hintKey(path)) || '0', 10); } catch { return HINT_LIMIT; }
-  }, [path]);
-  const showHint = !!PAGE_HINTS[path] && hintCount < HINT_LIMIT;
-  useEffect(() => {
-    if (!showHint) return;
-    try { localStorage.setItem(hintKey(path), String(hintCount + 1)); } catch { /* sin storage */ }
-  }, [showHint, hintCount, path]);
+  // Guía contextual: contador por sección, persiste entre sesiones.
+  // Solo se consume cuando el hint realmente se muestra (ver onStepShown).
+  useEffect(() => { setHintCount(readHintCount(path)); }, [path]);
+  const showHint = !quietPage && !!PAGE_HINTS[path] && hintCount < HINT_LIMIT;
 
-  // Lectura proactiva: top insight en Inicio, una vez por sesión
+  // Novedad del motor: el insight fijado si sigue vigente; si no, el
+  // primero que aún no se ha mostrado esta sesión.
   const proactiveInsight = useMemo(() => {
-    if (path !== '/' || !insights?.length) return null;
-    const top = insights[0];
-    try {
-      const shown = JSON.parse(sessionStorage.getItem('nx:shown-insights') || '[]');
-      return shown.includes(top.kind) ? null : top;
-    } catch { return top; }
-  }, [path, insights]);
-  useEffect(() => {
-    if (!proactiveInsight) return;
-    try {
-      const shown = JSON.parse(sessionStorage.getItem('nx:shown-insights') || '[]');
-      sessionStorage.setItem('nx:shown-insights', JSON.stringify([...shown, proactiveInsight.kind]));
-    } catch { /* sin storage */ }
-  }, [proactiveInsight]);
+    if (quietPage || !insights?.length) return null;
+    if (pinnedInsight && !dismissedMsgs.has(`insight:${pinnedInsight}`)) {
+      const cur = insights.find((i) => i.kind === pinnedInsight);
+      if (cur) return cur;
+    }
+    return insights.find((ins) => !shownInsights.has(ins.kind)) ?? null;
+  }, [quietPage, insights, shownInsights, pinnedInsight, dismissedMsgs]);
 
   const script = useMemo(() => {
-    let msgs = [];
+    // Hasta que llega la primera respuesta de insights la cola está vacía:
+    // sin el panorama completo, el hint/la novedad saldrían «a medias» — se
+    // mostrarían y marcarían antes de que una novedad prioritaria pudiera
+    // antecederlos. Cuando insights resuelve (éxito o error → []) se arma.
+    if (insights === null) return [];
+    const msgs = [];
     // Prioridad 1: notificaciones nuevas.
-    // La llave es el id de la no-leída más reciente: si llegan notificaciones
-    // nuevas, el evento cambia → el bot vuelve a avisar aunque el anterior
-    // se haya descartado. Mismo evento descartado → no se repite.
-    if (notifCount > 0 && !onNotifPage && !onChatPage) {
-      const latestUnread = (notifications || []).filter((n) => !n.read)
-        .map((n) => n.id ?? n.notification_id).sort((a, b) => Number(b) - Number(a))[0];
-      const text = `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`;
-      const key = `notif:${latestUnread ?? notifCount}`;
-      msgs = [{
-        text,
+    // La llave es el id de la no-leída más reciente (la lista ya viene
+    // ordenada DESC): si llegan nuevas, el evento cambia → el bot vuelve a
+    // avisar aunque el anterior se haya descartado. Mismo evento → no repite.
+    if (notifCount > 0 && !quietPage) {
+      const unread = (notifications || []).filter((n) => !n.read);
+      const latestUnread = unread[0]?.id ?? unread[0]?.notification_id ?? notifCount;
+      const key = `notif:${latestUnread}`;
+      // Una sola no leída que mapea a una operación → «Revisar» abre el
+      // formulario con el contexto pre-llenado; si no, la bandeja.
+      let dest = '/notificaciones';
+      if (unread.length === 1) {
+        try {
+          const meta = JSON.parse(unread[0].metadata_json || 'null');
+          const cmd = meta?.action ? NOTIF_ACTION_TO_CMD[meta.action] : null;
+          if (cmd) {
+            const p = new URLSearchParams({ cmd });
+            if (meta.student_id) p.set('student', meta.student_id);
+            if (meta.group_name) p.set('group', meta.group_name);
+            const reason = meta.reason || meta.motivo || meta.message || '';
+            if (reason) p.set('reason', String(reason).slice(0, 300));
+            if (meta.dependency) p.set('dependency', meta.dependency);
+            dest = `/operacion?${p.toString()}`;
+          }
+        } catch { /* metadata no JSON → bandeja */ }
+      }
+      msgs.push({
+        text: `Llegaron <b>${notifCount} notificaci${notifCount === 1 ? 'ón' : 'ones'}</b> nuevas — revisa las que necesitan decisión.`,
         dismissKey: key,
         chips: [
-          { label: 'Revisar', action: () => navigate('/notificaciones') },
-          { label: 'Ignorar', action: () => dismissMsgs([key]) },
+          { label: 'Revisar', action: () => navigate(dest) },
+          // Ignorar = marcar leídas en el servidor: si no, siguen contando
+          // como no leídas y el aviso reaparece en la próxima sesión.
+          { label: 'Marcar revisadas', action: () => { markAllRead(); dismissMsgs([key]); } },
         ],
-      }];
+      });
     }
-    // Prioridad 2: guía contextual (primeras N visitas a la sección)
-    else if (showHint) {
-      msgs = [{ text: PAGE_HINTS[path], dismissKey: `hint:${path}` }];
-    }
-    // Prioridad 3: lectura inteligente de la jornada
-    else if (proactiveInsight) {
-      msgs = [{
+    // Prioridad 2: novedad del motor de insights
+    if (proactiveInsight) {
+      msgs.push({
         text: `<b>${proactiveInsight.title}</b> — ${proactiveInsight.body}`,
         dismissKey: `insight:${proactiveInsight.kind}`,
+        markKey: `insight:${proactiveInsight.kind}`,
         chips: proactiveInsight.action ? [{
           label: proactiveInsight.action.label,
           action: () => {
@@ -413,13 +475,22 @@ const NexusBotAnnouncer = () => {
             }
           },
         }] : undefined,
-      }];
+      });
+    }
+    // Prioridad 3: guía contextual (primeras N visitas a la sección)
+    if (showHint) {
+      msgs.push({ text: PAGE_HINTS[path], dismissKey: `hint:${path}`, markKey: `hint:${path}` });
     }
     // Un evento descartado no reaparece en esta sesión
     return msgs.filter((m) => !dismissedMsgs.has(m.dismissKey || m.text));
-  }, [notifCount, notifications, onNotifPage, onChatPage, showHint, proactiveInsight, path, navigate, dismissedMsgs]);
+  }, [notifCount, notifications, quietPage, insights, proactiveInsight, showHint, path, navigate, dismissedMsgs, markAllRead]);
 
-  return <NexusGuide script={script} active={script.length > 0} onDismiss={dismissMsgs} />;
+  scriptRef.current = script;
+  const onStepShown = useCallback((idx) => {
+    markShown(scriptRef.current[idx]?.markKey);
+  }, [markShown]);
+
+  return <NodusGuide script={script} active={script.length > 0} onDismiss={dismissMsgs} onStepChange={onStepShown} />;
 };
 
 export default Layout;

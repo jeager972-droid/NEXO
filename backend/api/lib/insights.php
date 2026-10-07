@@ -1,6 +1,6 @@
 <?php
 /**
- * lib/insights.php — Motor de inteligencia del dashboard (Nexus Insights).
+ * lib/insights.php — Motor de inteligencia del dashboard (Nodus Insights).
  *
  * NO son textos fijos ni secuencias de if: cada novedad sale de funciones
  * matemáticas sobre los datos reales de la escuela:
@@ -12,7 +12,7 @@
  *   - score de prioridad = w·z + w·magnitud + w·recencia (ranking)
  *
  * Produce tarjetas {kind, severity, score, title, body, action, data}
- * que el PWA renderiza como "lectura de la jornada" de Nexus.
+ * que el PWA renderiza como "lectura de la jornada" de Nodus.
  */
 
 // ─────────────────────────── matemáticas ───────────────────────────
@@ -234,7 +234,7 @@ function nx_compute_insights(PDO $conn, string $schoolId, string $role, array $g
             'title' => "$unreplied ausencia(s) sin respuesta del acudiente",
             'body' => "En los últimos 3 días, $unreplied ausencias siguen sin justificación"
                     . ($escalated ? " — $escalated ya escalaron. " : ' ')
-                    . "Nexus detectó y escaló; el siguiente paso es decisión institucional.",
+                    . "Nodus detectó y escaló; el siguiente paso es decisión institucional.",
             'action' => ['label' => 'Derivar a seguimiento', 'target' => 'casos'],
             'data' => ['unreplied' => $unreplied, 'escalated' => $escalated],
         ];
@@ -335,4 +335,269 @@ function nx_compute_insights(PDO $conn, string $schoolId, string $role, array $g
     );
 
     return array_slice($insights, 0, 5);
+}
+
+// ─────────────────────────── brief de métricas ───────────────────────────
+
+/**
+ * nx_compute_brief — lectura breve del estado de las métricas (home).
+ *
+ * A diferencia de nx_compute_insights (novedades que salen por el bot),
+ * aquí se resume CÓMO VA EL DÍA: cada métrica de hoy contra la media de
+ * los últimos ~20 días hábiles con actividad (un día hábil = día con al
+ * menos una señal en la institución — ingreso, incidente o alerta;
+ * fines de semana y festivos no diluyen la base).
+ *
+ * Reglas:
+ *   - |Δ%| ≥ 10% vs línea base → se reporta (con dirección semántica:
+ *     subir inasistencias es malo; subir ingresos es bueno).
+ *   - Racha ≥3 días hábiles seguidos en la misma dirección → se reporta.
+ *   - Scope de grupo sin ingresos mientras la escuela sí los tiene → aviso.
+ *   - Nada fuera de rango → "todo en orden" (honesto, no silencio).
+ *
+ * $groupIds vacío = toda la escuela; con grupos = vista acotada.
+ * Devuelve {tone, text, highlights, streaks, metrics, baseline_days}.
+ */
+function nx_compute_brief(PDO $conn, string $schoolId, string $role, array $groupIds = [], string $scopeLabel = 'la institución'): array {
+    $tz = "America/Bogota";
+    $today = (new DateTime('now', new DateTimeZone($tz)))->format('Y-m-d');
+
+    // Filtros de alcance: incidentes por group_id; ingresos por membresía
+    // de grupo (biometric_events no tiene group_id).
+    $incFilter = '';
+    $stuFilter = '';
+    $incParams = [$schoolId];
+    $stuParams = [$schoolId];
+    if ($groupIds) {
+        $ph = implode(',', array_fill(0, count($groupIds), '?'));
+        $incFilter = " AND ai.group_id IN ($ph)";
+        $incParams = array_merge($incParams, $groupIds);
+        $stuFilter = " AND be.student_id IN (
+            SELECT sga.student_id FROM student_group_assignments sga
+            WHERE sga.group_id IN ($ph) AND sga.active = TRUE
+        )";
+        $stuParams = array_merge($stuParams, $groupIds);
+    }
+
+    // Serie diaria por métrica sobre incidentes (28 días ≈ 20 hábiles).
+    $stmt = $conn->prepare("
+        SELECT (ai.detected_at AT TIME ZONE '$tz')::date AS day,
+               CASE
+                   WHEN ai.incident_type IN ('INASISTENCIA','UNAUTHORIZED_ABSENCE') THEN 'absent'
+                   WHEN ai.incident_type = 'LATE_ARRIVAL' THEN 'late'
+                   WHEN ai.incident_type IN ('PERMISO','AUTORIZAR_SALIDA') THEN 'permisos'
+                   ELSE 'alerts'
+               END AS metric,
+               COUNT(DISTINCT ai.student_id) AS c
+        FROM attendance_incidents ai
+        WHERE ai.school_id = ?
+          AND ai.detected_at >= NOW() - INTERVAL '28 days'
+          AND (ai.incident_type IN ('INASISTENCIA','UNAUTHORIZED_ABSENCE','LATE_ARRIVAL','PERMISO','AUTORIZAR_SALIDA','EVASION_INTERNA')
+               OR ai.incident_type LIKE 'RISK_ALERT%')
+          $incFilter
+        GROUP BY day, metric
+    ");
+    $stmt->execute($incParams);
+    $series = ['absent' => [], 'late' => [], 'permisos' => [], 'alerts' => []];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $series[$r['metric']][$r['day']] = (int)$r['c'];
+    }
+
+    // Las SOS son institucionales: solo suman a 'alerts' en alcance amplio
+    // (consistente con /dashboard/stats, que las cuenta sin filtro de grupo).
+    if (!$groupIds) {
+        $stmt = $conn->prepare("
+            SELECT (sa.emitted_at AT TIME ZONE '$tz')::date AS day, COUNT(*) AS c
+            FROM sos_alerts sa
+            WHERE sa.school_id = ?
+              AND sa.emitted_at >= NOW() - INTERVAL '28 days'
+              AND sa.resolved = FALSE
+            GROUP BY day
+        ");
+        $stmt->execute([$schoolId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $series['alerts'][$r['day']] = ($series['alerts'][$r['day']] ?? 0) + (int)$r['c'];
+        }
+    }
+
+    // Ingresos del alcance por día + calendario escolar (días con actividad
+    // en la institución, sin filtro de grupo).
+    $stmt = $conn->prepare("
+        SELECT (be.event_timestamp AT TIME ZONE '$tz')::date AS day,
+               COUNT(DISTINCT be.student_id) AS c
+        FROM biometric_events be
+        WHERE be.school_id = ?
+          AND be.event_type LIKE 'INGRESO_%'
+          AND be.event_timestamp >= NOW() - INTERVAL '28 days'
+          $stuFilter
+        GROUP BY day
+    ");
+    $stmt->execute($stuParams);
+    $series['present'] = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $series['present'][$r['day']] = (int)$r['c'];
+    }
+
+    // Calendario escolar: día activo = día con cualquier señal (ingresos,
+    // incidentes o alertas SOS). 'c' conserva solo el conteo de ingresos,
+    // que es lo que schoolToday necesita para detectar alcances vacíos.
+    $stmt = $conn->prepare("
+        SELECT day, SUM(ing) AS c FROM (
+            SELECT (be.event_timestamp AT TIME ZONE '$tz')::date AS day,
+                   COUNT(DISTINCT be.student_id) AS ing
+            FROM biometric_events be
+            WHERE be.school_id = ?
+              AND be.event_type LIKE 'INGRESO_%'
+              AND be.event_timestamp >= NOW() - INTERVAL '28 days'
+            GROUP BY day
+            UNION ALL
+            SELECT (ai.detected_at AT TIME ZONE '$tz')::date AS day, 0
+            FROM attendance_incidents ai
+            WHERE ai.school_id = ?
+              AND ai.detected_at >= NOW() - INTERVAL '28 days'
+            UNION ALL
+            SELECT (sa.emitted_at AT TIME ZONE '$tz')::date AS day, 0
+            FROM sos_alerts sa
+            WHERE sa.school_id = ?
+              AND sa.emitted_at >= NOW() - INTERVAL '28 days'
+        ) d
+        GROUP BY day
+    ");
+    $stmt->execute([$schoolId, $schoolId, $schoolId]);
+    $schoolDays = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $schoolDays[$r['day']] = (int)$r['c'];
+    }
+
+    // Días hábiles con datos, ordenados — excluye hoy para la línea base.
+    $activeDays = array_keys($schoolDays);
+    sort($activeDays);
+    $baseDays = array_values(array_filter($activeDays, fn($d) => $d !== $today));
+    $baselineDays = count($baseDays);
+    $schoolToday = (int)($schoolDays[$today] ?? 0);
+
+    $METRICS = [
+        'present'  => ['label' => 'ingresos',        'bad_dir' => 'down'],
+        'absent'   => ['label' => 'inasistencias',   'bad_dir' => 'up'],
+        'late'     => ['label' => 'llegadas tarde',  'bad_dir' => 'up'],
+        'alerts'   => ['label' => 'alertas',         'bad_dir' => 'up'],
+        'permisos' => ['label' => 'permisos',        'bad_dir' => null],
+    ];
+
+    $metrics = [];
+    $highlights = [];
+    $streaks = [];
+    foreach ($METRICS as $key => $cfg) {
+        $hist = $series[$key] ?? [];
+        $todayC = (int)($hist[$today] ?? 0);
+        // Línea base: media sobre días hábiles (el alcance sin evento en un
+        // día hábil cuenta 0 — es un dato real, no ausencia de dato).
+        $vals = array_map(fn($d) => (int)($hist[$d] ?? 0), $baseDays);
+        $mu = $baselineDays ? nx_mean($vals) : 0.0;
+        $delta = $mu > 0.5 ? ($todayC - $mu) / $mu : null;
+        $metrics[$key] = ['today' => $todayC, 'baseline' => round($mu, 1), 'delta_pct' => $delta !== null ? round($delta * 100) : null];
+
+        if ($baselineDays >= 3) {
+            // base ~0 y hoy aparecen varios → flag con redacción propia
+            $isNew = ($mu < 0.5 && $todayC >= 2);
+            // Un descenso a 0 sin ingresos en el alcance no es mejora:
+            // es que la jornada aún no arrancó (lo dice el texto de fondo).
+            $quietZero = ($todayC === 0 && $delta !== null && $delta < 0
+                          && $metrics['present']['today'] === 0);
+            if (!$quietZero && ($isNew || ($delta !== null && abs($delta) >= 0.10))) {
+                $dir = $isNew ? 'up' : ($delta >= 0 ? 'up' : 'down');
+                $highlights[] = [
+                    'metric' => $key, 'label' => $cfg['label'], 'dir' => $dir,
+                    'bad' => $cfg['bad_dir'] === $dir, 'is_new' => $isNew,
+                    'today' => $todayC, 'baseline' => round($mu, 1),
+                    'delta_pct' => $delta !== null ? abs(round($delta * 100)) : null,
+                ];
+            }
+        }
+
+        // Racha: días hábiles consecutivos (terminando en el último día con
+        // datos — hoy si ya hay actividad, ayer si aún no) en una dirección.
+        $run = array_values(array_filter($activeDays, fn($d) => $d <= $today));
+        $streakLen = 1; $streakDir = null;
+        for ($i = count($run) - 1; $i > 0; $i--) {
+            $cur = (int)($hist[$run[$i]] ?? 0);
+            $prev = (int)($hist[$run[$i - 1]] ?? 0);
+            $d = $cur <=> $prev;
+            if ($d === 0) break;
+            if ($streakDir === null) $streakDir = $d > 0 ? 'up' : 'down';
+            elseif (($d > 0 ? 'up' : 'down') !== $streakDir) break;
+            $streakLen++;
+        }
+        if ($streakLen >= 3 && $streakDir) {
+            $streaks[] = [
+                'metric' => $key, 'label' => $cfg['label'], 'dir' => $streakDir,
+                'days' => $streakLen, 'bad' => $cfg['bad_dir'] === $streakDir,
+            ];
+        }
+    }
+
+    // Alcance sin ingresos: el grupo no registra entradas pero la escuela sí
+    // (jornada activa → es un dato, no un festivo). Si además hay nodos
+    // caídos, puede ser falta de datos y se dice.
+    $emptyScope = false;
+    $nodesDown = 0;
+    if ($groupIds && $schoolToday > 0 && $metrics['present']['today'] === 0) {
+        $emptyScope = true;
+        $stmt = $conn->prepare("
+            SELECT COUNT(*) FROM edge_devices
+            WHERE school_id = ? AND active = TRUE AND configured = TRUE
+              AND last_seen_timestamp < NOW() - INTERVAL '15 minutes'
+        ");
+        $stmt->execute([$schoolId]);
+        $nodesDown = (int)$stmt->fetchColumn();
+    }
+
+    usort($highlights, fn($a, $b) => ($b['delta_pct'] ?? 999) <=> ($a['delta_pct'] ?? 999));
+    usort($streaks, fn($a, $b) => $b['days'] <=> $a['days']);
+
+    $parts = [];
+    foreach (array_slice($highlights, 0, 3) as $h) {
+        if ($h['is_new']) {
+            $parts[] = "{$h['today']} {$h['label']} hoy — el promedio de días hábiles era casi 0";
+        } else {
+            $dirWord = $h['dir'] === 'up' ? 'más' : 'menos';
+            $parts[] = "{$h['label']}: {$h['today']} ({$h['delta_pct']}% {$dirWord} que el promedio de ~{$h['baseline']})";
+        }
+    }
+    foreach (array_slice($streaks, 0, 2) as $s) {
+        $dirWord = $s['dir'] === 'up' ? 'subiendo' : 'bajando';
+        $parts[] = "{$s['label']} llevan {$s['days']} días seguidos {$dirWord}";
+    }
+
+    $bad = ($emptyScope && !$nodesDown)
+        || array_filter($highlights, fn($h) => $h['bad'])
+        || array_filter($streaks, fn($s) => $s['bad']);
+    $tone = $bad ? 'warn' : ($parts ? 'info' : 'ok');
+
+    if ($emptyScope) {
+        $text = $nodesDown
+            ? "{$scopeLabel} no tiene ingresos registrados hoy, pero hay nodos sin conexión — puede ser falta de datos, no de asistencia."
+            : "{$scopeLabel} aún no tiene ingresos registrados hoy, mientras el resto de la institución sí.";
+        if ($parts) $text .= ' Además: ' . implode(' · ', $parts) . '.';
+        $text = ucfirst($text);
+    } elseif ($parts) {
+        $text = 'Hoy en ' . $scopeLabel . ': ' . implode(' · ', $parts) . '.';
+    } elseif ($schoolToday === 0) {
+        $text = "Aún no hay ingresos registrados en la institución — la jornada no ha arrancado o no hay datos de nodos.";
+    } else {
+        $text = $baselineDays >= 3
+            ? "Todo en orden en {$scopeLabel} — las métricas siguen su patrón habitual."
+            : "Todo en orden en {$scopeLabel} — aún no hay historia suficiente para comparar, pero nada fuera de lo esperado.";
+    }
+
+    return [
+        'tone' => $tone,
+        'text' => $text,
+        'empty_scope' => $emptyScope,
+        'nodes_down' => $nodesDown,
+        'highlights' => array_slice($highlights, 0, 3),
+        'streaks' => array_slice($streaks, 0, 2),
+        'metrics' => $metrics,
+        'baseline_days' => $baselineDays,
+    ];
 }

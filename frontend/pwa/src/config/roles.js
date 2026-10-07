@@ -7,16 +7,13 @@
 
 /**
  * ROLES — deben coincidir exactamente entre Backend y Frontend.
+ * Definidos en rolesList.js (módulo base compartido con config/operations.js
+ * para evitar importaciones circulares); se re-exportan aquí.
  */
-export const ROLES = {
-  RECTOR: 'RECTOR',
-  COORDINADOR: 'COORDINATOR',
-  DOCENTE: 'TEACHER',
-  SECRETARIA: 'SECRETARY',
-  PORTERO: 'SECURITY',
-  AUXILIAR: 'AUXILIARY',
-  PSICORIENTADOR: 'COUNSELOR'
-};
+import { ROLES } from './rolesList';
+import { OPERATIONS_CATALOG, findCommandByTitle, getOperationsForRole } from './operations';
+export { ROLES };
+export { getOperationsForRole };
 
 import {
   LayoutDashboard,
@@ -24,18 +21,8 @@ import {
   Bell,
   FolderHeart,
   UserPlus,
-  ShieldCheck,
   Cpu,
   User,
-  ShieldAlert,
-  Calendar,
-  Wrench,
-  Send,
-  Bus,
-  Clock,
-  UserCheck,
-  FileText,
-  Siren,
   MessageCircle,
 } from 'lucide-react';
 
@@ -70,7 +57,7 @@ export const SIDEBAR_ITEMS = [
     icon: FolderHeart,
     roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR],
   },
-  // Las consultas las cubre «Pregúntale a Nexus» (chat NLU);
+  // Las consultas las cubre «Pregúntale a Nodus» (chat NLU);
   // /consulta existe como redirect a /chat.
 
   {
@@ -86,7 +73,7 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.RECTOR],
   },
   {
-    title: 'Pregúntale a Nexus',
+    title: 'Pregúntale a Nodus',
     path: '/chat',
     icon: MessageCircle,
     roles: ALL_ROLES,
@@ -101,38 +88,11 @@ export const SIDEBAR_ITEMS = [
 
 /**
  * OPERATION_COMMANDS — Operaciones disponibles por rol.
- * Autoridad: UX_DESIGN.md §Operaciones por rol.
- * Cada comando mapea a un flujo FLOW-OPS-* y endpoint /operations/execute.
+ * La fuente de verdad es OPERATIONS_CATALOG (config/operations.js): mismo
+ * catálogo que renderiza /operacion — aquí solo se re-exporta para que los
+ * consumidores existentes (tests, menús) sigan importando desde roles.
  */
-
-export const OPERATION_COMMANDS = [
-  // Citar acudiente — rector, coordinador, docente, psicoorientador
-  { id: 'citacion', title: 'Citar acudiente', icon: Calendar, roles: [ROLES.RECTOR, ROLES.COORDINADOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
-  // Autorizar salida — rector, coordinador
-  { id: 'salida', title: 'Autorizar salida', icon: ShieldCheck, roles: [ROLES.RECTOR, ROLES.COORDINADOR] },
-  // Situación Crítica — todos los roles, avisa a rector y coordinador
-  { id: 'situacion_critica', title: 'Situación Crítica', icon: Siren, roles: ALL_ROLES },
-  // Generar permiso — docente, coordinador, rector
-  { id: 'permiso', title: 'Generar permiso', icon: UserCheck, roles: [ROLES.DOCENTE, ROLES.COORDINADOR, ROLES.RECTOR] },
-  // Mandar solicitud — todos
-  { id: 'solicitud', title: 'Mandar solicitud', icon: Send, roles: ALL_ROLES },
-  // Reportar incidente — docente, psicoorientador, rector, coordinador
-  { id: 'incidente', title: 'Reportar incidente', icon: ShieldAlert, roles: [ROLES.DOCENTE, ROLES.PSICORIENTADOR, ROLES.RECTOR, ROLES.COORDINADOR] },
-  // Reportar daño — portero, auxiliar, rector, coordinador
-  { id: 'dano', title: 'Reportar daño', icon: Wrench, roles: [ROLES.PORTERO, ROLES.AUXILIAR, ROLES.RECTOR, ROLES.COORDINADOR] },
-  // Solicitar seguimiento / Caso — coordinador, rector, docente, psicoorientador
-  { id: 'seguimiento', title: 'Solicitar seguimiento', icon: FileText, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.DOCENTE, ROLES.PSICORIENTADOR] },
-  // Salida pedagógica — coordinador, rector, docente
-  { id: 'salida_pedagogica', title: 'Salida pedagógica', icon: Bus, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.DOCENTE] },
-  // Cambio de horario — coordinador, rector, docente
-  { id: 'cambio_horario', title: 'Cambio de horario', icon: Clock, roles: [ROLES.COORDINADOR, ROLES.RECTOR, ROLES.DOCENTE] },
-];
-
-/**
- * getOperationsForRole — filtra operaciones por rol.
- */
-export const getOperationsForRole = (role) =>
-  OPERATION_COMMANDS.filter(cmd => cmd.roles.includes(role));
+export const OPERATION_COMMANDS = OPERATIONS_CATALOG;
 
 export const ROLE_DISPLAY = {
   [ROLES.RECTOR]:         'Rector',
@@ -149,23 +109,42 @@ export const getRoleDisplay = (role) => ROLE_DISPLAY[role] ?? role;
 /**
  * PRIMARY_ACTIONS — 4 acciones más importantes/usadas por rol para la barra inferior.
  * Las demás quedan en el sidebar vertical.
+ *
+ * Las entradas «/operacion?cmd=<título>» son acciones insignia del rol:
+ * aterrizan directo en el formulario de esa operación (deep-link), con el
+ * icono y título del comando del catálogo — no en la sección genérica.
+ * «/casos» vive en el sidebar (sección de gestión), no en la barra.
  */
 export const PRIMARY_ACTIONS = {
-  [ROLES.RECTOR]:         ['/', '/operacion', '/casos', '/notificaciones'],
-  [ROLES.COORDINADOR]:    ['/', '/operacion', '/casos', '/notificaciones'],
-  [ROLES.DOCENTE]:        ['/', '/operacion', '/chat', '/notificaciones'],
-  [ROLES.SECRETARIA]:     ['/', '/chat', '/enrolamiento', '/notificaciones'],
-  [ROLES.PORTERO]:        ['/', '/operacion', '/notificaciones', '/perfil'],
-  [ROLES.AUXILIAR]:       ['/', '/operacion', '/notificaciones', '/perfil'],
-  [ROLES.PSICORIENTADOR]: ['/', '/chat', '/casos', '/notificaciones'],
+  [ROLES.RECTOR]:         ['/', '/operacion?cmd=Emergencia', '/chat', '/notificaciones'],
+  [ROLES.COORDINADOR]:    ['/', '/operacion?cmd=Cambio de horario', '/chat', '/notificaciones'],
+  [ROLES.DOCENTE]:        ['/', '/operacion?cmd=Reportar incidente', '/chat', '/notificaciones'],
+  [ROLES.SECRETARIA]:     ['/', '/enrolamiento', '/operacion?cmd=Citar acudiente', '/notificaciones'],
+  [ROLES.PORTERO]:        ['/', '/operacion?cmd=Registro manual', '/notificaciones', '/perfil'],
+  [ROLES.AUXILIAR]:       ['/', '/operacion?cmd=Reportar daño', '/notificaciones', '/perfil'],
+  [ROLES.PSICORIENTADOR]: ['/', '/casos', '/operacion?cmd=Solicitar seguimiento', '/notificaciones'],
+};
+
+const resolveNavEntry = (entry) => {
+  const [path, query] = entry.split('?');
+  const item = SIDEBAR_ITEMS.find((i) => i.path === path);
+  if (!item) return null;
+  if (!query) return item;
+  // Deep-link a una operación concreta — hereda icono/título del catálogo
+  // para que la barra diga «Situación crítica», no «Operaciones».
+  const cmdTitle = new URLSearchParams(query).get('cmd');
+  const cmd = cmdTitle ? findCommandByTitle(cmdTitle) : null;
+  return cmd ? { ...item, path: entry, title: cmd.title, icon: cmd.icon } : item;
 };
 
 export const getPrimaryActions = (role) => {
-  const paths = PRIMARY_ACTIONS[role] || ['/', '/operacion', '/notificaciones', '/perfil'];
-  return paths.map((p) => SIDEBAR_ITEMS.find((i) => i.path === p)).filter(Boolean);
+  const entries = PRIMARY_ACTIONS[role] || ['/', '/operacion', '/notificaciones', '/perfil'];
+  return entries.map(resolveNavEntry).filter(Boolean);
 };
 
 export const getSecondaryActions = (role) => {
-  const primaryPaths = PRIMARY_ACTIONS[role] || [];
+  // Solo las entradas «planas» excluyen del sidebar: una insignia
+  // «/operacion?cmd=…» no debe ocultar el hub /operacion del menú lateral.
+  const primaryPaths = (PRIMARY_ACTIONS[role] || []).filter((e) => !e.includes('?'));
   return SIDEBAR_ITEMS.filter((i) => i.roles.includes(role) && !primaryPaths.includes(i.path));
 };

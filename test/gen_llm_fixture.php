@@ -30,7 +30,7 @@ echo count($phrases) . " frases → lotes de 15\n";
 $formal = implode('|', NX_LLM_FORMAL);
 $informal = implode('|', NX_LLM_INFORMAL);
 $sys = <<<PROMPT
-Eres el parser semántico de Nexus, chatbot institucional de asistencia escolar en Colombia.
+Eres el parser semántico de Nodus, chatbot institucional de asistencia escolar en Colombia.
 Clasifica CADA línea numerada → intent + confidence 0-1 + entities.
 intents: {$formal} | {$informal} | out_of_scope
 entities posibles: student(nombre persona), group(ej. 8B/once), module(INASISTENCIA|EVASION|SALIDA|RETIRO|DISCIPLINARIO|PERMISO|CITACION), field(celular|telefono|email|direccion|acudiente|grupo|documento|fecha_nacimiento|edad), days(num días a atrás), person(docente|personal), grade, search

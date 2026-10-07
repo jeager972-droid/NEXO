@@ -100,7 +100,7 @@ function App() {
                   <Route path="/perfil" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                   <Route path="/chat" element={<ErrorBoundary><Chat /></ErrorBoundary>} />
 
-                  {/* Consultas fue absorbido por «Pregúntale a Nexus» */}
+                  {/* Consultas fue absorbido por «Pregúntale a Nodus» */}
                   <Route path="/consulta" element={<Navigate to="/chat" replace />} />
                   <Route path="/casos" element={<ProtectedRoute allowedRoles={[ROLES.RECTOR, ROLES.COORDINADOR, ROLES.PSICORIENTADOR]} />}>
                     <Route index element={<ErrorBoundary><Casos /></ErrorBoundary>} />

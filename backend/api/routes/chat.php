@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * routes/chat.php — Nexus Chat (intent-based NLU) · «Pregúntale a Nexus».
+ * routes/chat.php — Nodus Chat (intent-based NLU) · «Pregúntale a Nodus».
  * =============================================================================
  *
  * RESPONSABILIDAD
@@ -147,7 +147,9 @@ function chatTs(string $col): string { return "to_char({$col} AT TIME ZONE " . N
 function chatEs(string $v, string $kind): string {
     static $dep = ['coordinacion'=>'coordinación','psicoorientacion'=>'psicoorientación','rectoria'=>'rectoría','docente'=>'el docente','teacher'=>'el docente'];
     static $st  = ['ACTIVE'=>'en proceso','en proceso'=>'en proceso','OPEN'=>'abierto','PENDING'=>'pendiente','COMPLETED'=>'cerrado','CLOSED'=>'cerrado','RESOLVED'=>'resuelto','ESCALATED'=>'escalado'];
-    static $lvl = ['CRITICAL'=>'crítico','HIGH'=>'alto','MEDIUM'=>'medio','LOW'=>'bajo'];
+    static $lvl = ['CRITICAL'=>'crítico','HIGH'=>'alto','MEDIUM'=>'medio','LOW'=>'bajo',
+        'MUY_ALTA'=>'muy alta','ALTA'=>'alta','MODERADA'=>'moderada','LEVE'=>'leve',
+        'critica'=>'crítica','critico'=>'crítico','criticos'=>'críticos'];
     $m = match ($kind) { 'dep' => $dep, 'status' => $st, 'level' => $lvl, default => [] };
     $k = trim($v);
     return $m[$k] ?? $m[mb_strtolower($k)] ?? ($k === '' ? '—' : mb_strtolower($k));
@@ -335,20 +337,22 @@ function chatAllowed(PDO $conn, array $u, string $intent, string $role): bool {
 
 /** ¿Puede el rol ejecutar esta acción derivada? */
 function chatCanAction(string $action, string $role): bool {
+    // Alcance idéntico a OPERATIONS_CATALOG (frontend) y a los grants
+    // operations.* del schema: horario/pedagógica son solo de
+    // coordinación/rectoría; «Mandar solicitud» ya no existe.
     return match ($action) {
         'Solicitar seguimiento' => in_array($role, ['RECTOR','COORDINATOR','TEACHER','COUNSELOR'], true),
         'Citar acudiente'       => in_array($role, ['RECTOR','COORDINATOR','TEACHER','COUNSELOR','SECRETARY'], true),
         'Generar permiso'       => in_array($role, ['TEACHER','COORDINATOR','RECTOR'], true),
         'Reportar incidente'    => in_array($role, ['TEACHER','COUNSELOR','RECTOR','COORDINATOR'], true),
         'Reportar daño'         => in_array($role, ['RECTOR','COORDINATOR','SECURITY','AUXILIARY'], true),
-        'Mandar solicitud'      => in_array($role, ['RECTOR','COORDINATOR','SECRETARY','TEACHER','COUNSELOR','SECURITY','AUXILIARY'], true),
-        'Salida pedagógica'     => in_array($role, ['TEACHER','COORDINATOR','RECTOR'], true),
-        'Cambio de horario'     => in_array($role, ['RECTOR','COORDINATOR','SECRETARY'], true),
+        'Salida pedagógica'     => in_array($role, ['COORDINATOR','RECTOR'], true),
+        'Cambio de horario'     => in_array($role, ['RECTOR','COORDINATOR'], true),
         'Autorizar salida'      => in_array($role, ['RECTOR','COORDINATOR'], true),
         'Registro manual'       => in_array($role, ['TEACHER','COORDINATOR','SECRETARY','SECURITY','RECTOR'], true),
         'Fusionar bloque'       => $role === 'TEACHER',
         'Extender bloque'       => in_array($role, ['RECTOR','COORDINATOR'], true),
-        'Situación Crítica'     => in_array($role, ['RECTOR','COORDINATOR','SECRETARY','TEACHER','COUNSELOR','SECURITY','AUXILIARY'], true),
+        'Emergencia'     => in_array($role, ['RECTOR','COORDINATOR','SECRETARY','TEACHER','COUNSELOR','SECURITY','AUXILIARY'], true),
         default                 => false,
     };
 }
@@ -367,13 +371,13 @@ function chatCanAction(string $action, string $role): bool {
 function chatOperationCmd(string $q): string {
     return match(true) {
         // crítico primero — nada puede competir con una emergencia
-        preg_match('/\b(sos|panico|emergencia|emergencias|situacion|situaciones|critica|critico)\b/u', $q) === 1 => 'Situación Crítica',
+        preg_match('/\b(sos|panico|emergencia|emergencias|situacion|situaciones|critica|critico)\b/u', $q) === 1 => 'Emergencia',
         // salidas de largo alcance antes que permisos/salidas simples
         preg_match('/\b(salidas? pedagogicas?|paseo|paseos|excursion|excursiones)\b/u', $q) === 1 => 'Salida pedagógica',
         // autorizar salida — admite artículos entre medio
         preg_match('/\bautoriz\w*\b[^.]*\bsalid\w*\b|\bsalida anticipada\b|\bse retira temprano\b|\bretiro anticipado\b/u', $q) === 1 => 'Autorizar salida',
-        // solicitud/petición ANTES de citación — «solicitud» contiene «cit»
-        preg_match('/\b(solicitud|solicitudes|solicitar|solicito|solicite|peticion|peticiones|tramite|tramites|requerimiento|requerimientos)\b/u', $q) === 1 => 'Mandar solicitud',
+        // «solicitud/petición» ya no es una operación (retirada) — cae al
+        // default (seguimiento), que es la acción real que queda.
         // citación con boundary — formas reales incluido el imperativo «cita»
         preg_match('/\b(citar|cita|citalo|citala|cite|cito|citas|citamos|citemos|citacion|citaciones|convoque?|convocar|convoca|convoco|agenda(r|mos)? cita|llamar a citacion)\b/u', $q) === 1 => 'Citar acudiente',
         preg_match('/\b(permiso|permisos|salida de clase|salio al bano|salio del salon|permiso de salida)\b/u', $q) === 1 => 'Generar permiso',
@@ -430,24 +434,37 @@ function nxSafetyScreen(string $q): bool {
 }
 
 /** Chips de acción → navegación a /operacion con comando precargado. */
-function chatActionChip(string $cmd, string $label, ?array $student = null): array {
+function chatActionChip(string $cmd, string $label, ?array $student = null, ?string $group = null): array {
     $q = '/operacion?cmd=' . urlencode($cmd);
     if ($student) $q .= '&student=' . urlencode($student['student_id']);
+    // Operaciones cuyo alcance es un grupo llevan el grupo precargado —
+    // sin él el chip abriría el formulario vacío («solo te manda a la sección»).
+    elseif ($group) $q .= '&group=' . urlencode($group);
     return ['kind' => 'nav', 'label' => $label, 'to' => $q];
 }
 
-/** Chips derivados cuando un resultado cruza umbral. */
+/** Chips derivados cuando un resultado cruza umbral.
+ *  Solo con estudiante resuelto: en listados (riskscore, rankings) los chips
+ *  genéricos no aportan — la acción real la pide el usuario en su turno. */
 function chatDerivedActions(array $u, ?array $student, string $reason): array {
+    if (!$student) return [];
     $a = [];
-    if ($student) {
-        if (chatCanAction('Solicitar seguimiento', $u['role'])) $a[] = chatActionChip('Solicitar seguimiento', 'Derivar a seguimiento', $student);
-        if (chatCanAction('Citar acudiente', $u['role']))       $a[] = chatActionChip('Citar acudiente', 'Citar acudiente', $student);
-        if (chatCanAction('Reportar incidente', $u['role']))    $a[] = chatActionChip('Reportar incidente', 'Reportar incidente', $student);
-    } else {
-        if (chatCanAction('Solicitar seguimiento', $u['role'])) $a[] = chatActionChip('Solicitar seguimiento', 'Abrir seguimiento');
-        if (chatCanAction('Citar acudiente', $u['role']))       $a[] = chatActionChip('Citar acudiente', 'Citar acudiente');
-    }
+    if (chatCanAction('Solicitar seguimiento', $u['role'])) $a[] = chatActionChip('Solicitar seguimiento', 'Derivar a seguimiento', $student);
+    if (chatCanAction('Citar acudiente', $u['role']))       $a[] = chatActionChip('Citar acudiente', 'Citar acudiente', $student);
+    if (chatCanAction('Reportar incidente', $u['role']))    $a[] = chatActionChip('Reportar incidente', 'Reportar incidente', $student);
     return $a;
+}
+
+/** Quita chips duplicados (mismo destino) — los merges multi-intent repiten. */
+function chatDedupeActions(?array $actions): ?array {
+    if (!$actions) return $actions;
+    $seen = [];
+    return array_values(array_filter($actions, function ($a) use (&$seen) {
+        $k = ($a['kind'] ?? '') . '|' . ($a['to'] ?? '') . '|' . ($a['label'] ?? '');
+        if (isset($seen[$k])) return false;
+        $seen[$k] = true;
+        return true;
+    }));
 }
 
 /** Nombre legible de módulo (type_code → español) */
@@ -916,7 +933,7 @@ if ($cleanPath === '/chat/message' && $method === 'POST') {
         $out = [
             'reply' => implode("\n\n—\n\n", array_column($outs,'reply')),
             'cards' => array_merge(...array_map(fn($o)=>$o['cards']??[], $outs)) ?: null,
-            'actions' => array_merge(...array_map(fn($o)=>$o['actions']??[], $outs)) ?: null,
+            'actions' => chatDedupeActions(array_merge(...array_map(fn($o)=>$o['actions']??[], $outs))) ?: null,
             'intent' => implode('+', array_column($outs,'intent')),
             'confidence' => min(array_column($cls['parts'],'confidence')),
             'session_id' => $sessionId,
@@ -2434,7 +2451,7 @@ if ($cleanPath === '/chat/history' && $method === 'GET') {
     if (preg_match('/^[0-9a-f-]{36}$/i', $sessionId)) {
         // sesión: ASC directo — ya viene oldest→newest
         $stmt = $conn->prepare("
-            SELECT role, content, payload_json, created_at
+            SELECT message_id, role, content, payload_json, created_at
             FROM chat_messages WHERE user_id = ? AND session_id = ?
             ORDER BY created_at ASC LIMIT 200
         ");
@@ -2443,7 +2460,7 @@ if ($cleanPath === '/chat/history' && $method === 'GET') {
     } else {
         // sin sesión: DESC para quedarnos con los MÁS recientes, luego invertir
         $stmt = $conn->prepare("
-            SELECT role, content, payload_json, created_at
+            SELECT message_id, role, content, payload_json, created_at
             FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 60
         ");
         $stmt->execute([$authUser['id']]);
@@ -2457,6 +2474,7 @@ if ($cleanPath === '/chat/history' && $method === 'GET') {
         return [
             'from' => $r['role'] === 'user' ? 'user' : 'bot',
             'text' => $r['content'],
+            'message_id' => $r['role'] === 'assistant' ? $r['message_id'] : null,
             'cards' => ($payload['cards'] ?? null),
             'actions' => ($payload['actions'] ?? null),
             'intent' => ($payload['intent'] ?? null),
@@ -2479,6 +2497,53 @@ if ($cleanPath === '/chat/action' && $method === 'POST') {
         exit(json_encode(['status'=>'error','message'=>'Tu rol no permite esa acción.']));
     }
     echo json_encode(['status'=>'ok','data'=>['to'=>'/operacion?cmd=' . urlencode($action)]]);
+    exit;
+}
+
+/* ============================================================================
+ * POST /chat/report — el usuario reporta una respuesta de Nodus
+ * (incorrecta, inapropiada, datos erróneos). Solo mensajes 'assistant'
+ * propios del usuario; idempotente (un reporte por mensaje y usuario).
+ * ========================================================================== */
+if ($cleanPath === '/chat/report' && $method === 'POST') {
+    $authUser = requireAuth();
+    $messageId = trim((string)($input['message_id'] ?? ''));
+    $reason = strtolower(trim((string)($input['reason'] ?? 'incorrecta')));
+    $detail = mb_substr(trim((string)($input['detail'] ?? '')), 0, 500);
+    $validReasons = ['incorrecta','inapropiada','datos','otra'];
+    if (!in_array($reason, $validReasons, true)) $reason = 'otra';
+    if ($messageId === '' || !preg_match('/^[0-9a-fA-F-]{36}$/', $messageId)) {
+        http_response_code(400);
+        exit(json_encode(['status'=>'error','message'=>'message_id requerido']));
+    }
+    try {
+        // Solo mensajes 'assistant' de ESTE usuario — nadie reporta en nombre
+        // de otro ni adjunta contenido ajeno.
+        $st = $conn->prepare("SELECT 1 FROM chat_messages
+            WHERE message_id=? AND user_id=? AND school_id=? AND role='assistant'");
+        $st->execute([$messageId, $authUser['id'], $authUser['school_id']]);
+        if (!$st->fetchColumn()) {
+            http_response_code(404);
+            exit(json_encode(['status'=>'error','message'=>'Mensaje no encontrado']));
+        }
+        $conn->prepare("INSERT INTO chat_reports (school_id,user_id,message_id,reason,detail)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT (user_id, message_id) DO UPDATE SET reason=EXCLUDED.reason, detail=EXCLUDED.detail")
+            ->execute([$authUser['school_id'], $authUser['id'], $messageId, $reason, $detail ?: null]);
+        try {
+            $conn->prepare("INSERT INTO global_audit_logs (log_id,school_id,performed_by_user_id,action_type,action_details,created_at)
+                            VALUES (uuid_generate_v4(),?,?,'CHAT_RESPONSE_REPORTED',?,NOW())")
+                ->execute([$authUser['school_id'], $authUser['id'],
+                    json_encode(['message_id'=>$messageId,'reason'=>$reason], JSON_UNESCAPED_UNICODE)]);
+        } catch (Throwable $ae) { /* auditoría no bloquea */ }
+        echo json_encode(['status'=>'ok','data'=>['reported'=>true]]);
+    } catch (Throwable $e) {
+        // Tabla aún no migrada → aceptar en silencio; el reporte no se pierde
+        // del todo porque queda en el log de auditoría cuando existe.
+        securityLog('CHAT_REPORT_ERROR', $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status'=>'error','message'=>'No se pudo registrar el reporte']);
+    }
     exit;
 }
 
@@ -2565,6 +2630,9 @@ function chatNewSessionId(): string {
 function chatLog(PDO $conn, string $schoolId, string $userId, string $text, array &$out, ?string $sessionId = null): void {
     // session_id puede no existir aún en DBs sin el patch — degradar sin romper
     static $hasSession = null;
+    // Chips únicos por destino: merges multi-intent y handlers pueden repetir
+    // el mismo /operacion?cmd=… — la UI no debe mostrar dos botones iguales.
+    $out['actions'] = chatDedupeActions($out['actions'] ?? null);
     // LLM #2 — response composer: reformula el reply verificado en español
     // natural (nunca toca datos/cards). Por referencia: se persiste y se
     // devuelve ya compuesto. Falla → reply original intacto.
@@ -2603,14 +2671,18 @@ function chatLog(PDO $conn, string $schoolId, string $userId, string $text, arra
         if ($hasSession) {
             $conn->prepare("INSERT INTO chat_messages (school_id,user_id,session_id,role,content,payload_json) VALUES (?,?,?,'user',?,?)")
                 ->execute([$schoolId,$userId,$sessionId,$text, json_encode(['text'=>$text,'intent'=>$out['intent']??null], JSON_UNESCAPED_UNICODE)]);
-            $conn->prepare("INSERT INTO chat_messages (school_id,user_id,session_id,role,content,payload_json) VALUES (?,?,?,'assistant',?,?)")
-                ->execute([$schoolId,$userId,$sessionId,$out['reply'], json_encode($out, JSON_UNESCAPED_UNICODE)]);
+            // message_id de vuelta al front: es la llave de POST /chat/report
+            $insA = $conn->prepare("INSERT INTO chat_messages (school_id,user_id,session_id,role,content,payload_json) VALUES (?,?,?,'assistant',?,?) RETURNING message_id");
+            $insA->execute([$schoolId,$userId,$sessionId,$out['reply'], json_encode($out, JSON_UNESCAPED_UNICODE)]);
+            $out['message_id'] = $insA->fetchColumn() ?: null;
         } else {
             $conn->prepare("INSERT INTO chat_messages (school_id,user_id,role,content,payload_json) VALUES (?,?,?,'user',?)")
                 ->execute([$schoolId,$userId,$text, json_encode(['text'=>$text,'intent'=>$out['intent']??null], JSON_UNESCAPED_UNICODE)]);
-            $conn->prepare("INSERT INTO chat_messages (school_id,user_id,role,content,payload_json) VALUES (?,?,?,'assistant',?,?)")
-                ->execute([$schoolId,$userId,$out['reply'], json_encode($out, JSON_UNESCAPED_UNICODE)]);
+            $insA = $conn->prepare("INSERT INTO chat_messages (school_id,user_id,role,content,payload_json) VALUES (?,?,?,'assistant',?,?) RETURNING message_id");
+            $insA->execute([$schoolId,$userId,$out['reply'], json_encode($out, JSON_UNESCAPED_UNICODE)]);
+            $out['message_id'] = $insA->fetchColumn() ?: null;
         }
+        if (empty($out['message_id'])) unset($out['message_id']);
         // Auditoría best-effort: si este INSERT aborta (trigger HMAC, política),
         // solo él se revierte — los mensajes del chat ya insertados sobreviven.
         try {
@@ -3058,7 +3130,7 @@ function chat_student_summary(PDO $conn, array $u, array $s, array $v): array {
     $name="{$st['first_name']} {$st['last_name']}";
     $bits=["{$name} — {$st['group_name']} (grado {$st['grade_level']}, {$st['work_shift']})"];
     $bits[]="Últimos 30 días: " . ($counts ? implode(' · ', array_map(fn($k,$c)=>"$c ".strtolower(NX_MODULE_LABEL[$k]??$k), array_keys($counts), $counts)) : "sin incidentes");
-    if ($rk) $bits[]="Riesgo: *".chatEs((string)$rk['risk_level'],'level')."* (score {$rk['risk_score']}).";
+    if ($rk) $bits[]="Riesgo: *".chatEs((string)$rk['risk_level'],'level')."* (puntaje {$rk['risk_score']}).";
     if ($track) $bits[]="Tiene seguimiento activo (".chatEs((string)$track['dependency'],'dep').").";
     $actions = chatDerivedActions($u,$st,'resumen');
     return ['reply'=>implode(' ',$bits),'actions'=>$actions,
@@ -3253,7 +3325,7 @@ function chat_risk_students(PDO $conn, array $u, array $s, array $v): array {
     if(!$rows) return ['reply'=>"El motor de riesgo no tiene alertas activas{$gLabel} — ningún patrón supera los umbrales configurados."];
     $lv = fn($r) => chatEs((string)$r['risk_level'], 'level');
     return ['reply'=>count($rows)." estudiante(s) que superaron el umbral de alerta{$gLabel}:",
-        'cards'=>[['title'=>'Riesgo activo','columns'=>['Estudiante','Grupo','Nivel','Score'],
+        'cards'=>[['title'=>'Riesgo activo','columns'=>['Estudiante','Grupo','Nivel','Puntaje'],
         'rows'=>array_map(fn($r)=>[$r['name'],$r['group_name']??'—',$lv($r),$r['risk_score']],$rows)]],
         '_result_set'=>['type'=>'students','label'=>"en riesgo{$gLabel}",
             'items'=>array_map(fn($r)=>['id'=>$r['student_id'],'label'=>$r['name'],'sub'=>($r['group_name']??'—')." · ".$lv($r)],$rows),
@@ -3628,7 +3700,7 @@ function chat_audit(PDO $conn, array $u, array $s, array $v): array {
 }
 
 function chatAuditLabel(string $a): string {
-    return ['CHAT_QUERY' => 'Consultas a Nexus', 'LOGIN' => 'Inicios de sesión', 'TERMS_ACCEPTED' => 'Aceptación de términos',
+    return ['CHAT_QUERY' => 'Consultas a Nodus', 'LOGIN' => 'Inicios de sesión', 'TERMS_ACCEPTED' => 'Aceptación de términos',
         'OPERATION' => 'Operaciones', 'CHAT_POLICY_UPDATE' => 'Cambio de políticas del asistente'][$a] ?? ucfirst(strtolower(str_replace('_', ' ', $a)));
 }
 
@@ -4879,7 +4951,7 @@ function chat_risk_reason(PDO $conn, array $u, array $s, array $v): array {
         if ((int)$met['late_count'] > 0)    $parts[] = (int)$met['late_count'] . ' tardanzas';
         $otros = (int)$met['total_events'] - (int)$met['absence_count'] - (int)$met['late_count'];
         if ($otros > 0) $parts[] = "{$otros} eventos más";
-        $bits[] = "score " . number_format((float)$met['risk_score'], 2) . " (nivel " . chatEs((string)$met['risk_level'],'level') . ")"
+        $bits[] = "puntaje " . number_format((float)$met['risk_score'], 2) . " (nivel " . chatEs((string)$met['risk_level'],'level') . ")"
             . ($parts ? ' por ' . implode(' + ', $parts) . " en {$days} días" : '');
     }
     if ($alerts) {
@@ -4890,13 +4962,13 @@ function chat_risk_reason(PDO $conn, array $u, array $s, array $v): array {
     $cards = [];
     if ($brk) $cards[] = ['title' => "Eventos que alimentan el riesgo — últimos {$days} días", 'columns' => ['Tipo', 'Eventos'],
         'rows' => array_map(fn($r) => [$typ[$r['incident_type']] ?? $r['incident_type'], (int)$r['c']], $brk)];
-    if ($alerts) $cards[] = ['title' => 'Alertas activas', 'columns' => ['Nivel', 'Categoría', 'Regla', 'Score', 'Desde'],
+    if ($alerts) $cards[] = ['title' => 'Alertas activas', 'columns' => ['Nivel', 'Categoría', 'Regla', 'Puntaje', 'Desde'],
         'rows' => array_map(fn($r) => [chatEs((string)$r['alert_level'],'level'), $catEs($r['trigger_category'] ?? '—'),
             mb_strimwidth((string)($r['trigger_rule'] ?? '—'), 0, 50, '…'), $r['trigger_score'] ?? '—', $r['creada']], $alerts)];
     return ['reply' => "{$name} está en riesgo porque " . implode('; ', $bits) . '.', '_natural' => true,
         'cards' => $cards, 'entities' => ['student' => mb_strtolower($name)],
         '_result_set' => ['type' => 'students', 'label' => 'motivo de riesgo',
-            'items' => [['id' => $stu['student_id'], 'label' => $name, 'sub' => $met ? "score {$met['risk_score']} · " . chatEs((string)$met['risk_level'],'level') : 'sin métrica']],
+            'items' => [['id' => $stu['student_id'], 'label' => $name, 'sub' => $met ? "puntaje {$met['risk_score']} · " . chatEs((string)$met['risk_level'],'level') : 'sin métrica']],
             'count' => 1]];
 }
 

@@ -1,5 +1,5 @@
 /**
- * SCR-CHAT-01 Pregúntale a Nexus — chat puro, estilo ChatGPT.
+ * SCR-CHAT-01 Pregúntale a Nodus — chat puro, estilo ChatGPT.
  * Chatbot intent-based con NLU estadístico (TF-IDF + regresión logística en
  * backend). Cada respuesta viene del backend con intent + confianza + cards +
  * actions — el texto libre nunca ejecuta operaciones; las acciones navegan a
@@ -16,7 +16,7 @@
 import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Send, ArrowRight, RotateCcw, Mic, MicOff } from 'lucide-react';
+import { Send, ArrowRight, Mic, MicOff, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { chatApi } from '../api/chat';
 import { saveCtx, injectCtx, takePendingPrompt } from '../lib/chatContext';
@@ -86,7 +86,7 @@ export const DataCard = ({ card }) => {
   // una tarjeta reemplazada reinicia su paginación — el set cambió, la
   // posición previa dejó de tener significado
   useEffect(() => { setPage(0); }, [card]);
-  const title = card.title || 'Datos de Nexus';
+  const title = card.title || 'Datos de Nodus';
   const rows = Array.isArray(card.rows) ? card.rows : [];
   const cols = Array.isArray(card.columns) ? card.columns.length : 0;
   const total = rows.length;
@@ -157,8 +157,8 @@ export const DataCard = ({ card }) => {
   );
 };
 
-const BotBubble = ({ msg, onAction }) => (
-  <div className="flex items-start gap-3">
+const BotBubble = ({ msg, onAction, onReport }) => (
+  <div className="group flex items-start gap-3">
     <NexoAvatar size={32} />
     <div className="min-w-0 flex-1">
       <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3 shadow-[var(--nx-shadow-low)]">
@@ -179,13 +179,33 @@ const BotBubble = ({ msg, onAction }) => (
           </div>
         )}
       </div>
-      <p className="mt-1 px-1 text-caption text-[var(--nx-text-muted)]">NEXUS</p>
+      <div className="mt-1 flex items-center gap-2 px-1">
+        <p className="text-caption text-[var(--nx-text-muted)]">NODUS</p>
+        {/* Reportar respuesta: discreto, solo cuando el mensaje tiene
+            message_id (persistido) — el idempotente es UNIQUE(user,msg). */}
+        {msg.message_id && !msg.reported && (
+          <button
+            type="button"
+            onClick={() => onReport(msg)}
+            aria-label="Reportar esta respuesta"
+            title="Reportar esta respuesta"
+            className="grid h-6 w-6 place-items-center rounded-full text-[var(--nx-text-muted)] transition-all duration-fast hover:bg-[var(--nx-subtle-bg-danger)] hover:text-[var(--nx-danger)] sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
+          >
+            <Flag size={11} />
+          </button>
+        )}
+        {msg.reported && (
+          <span className="flex items-center gap-1 text-[11px] text-[var(--nx-text-muted)]">
+            <Flag size={10} /> Reportada — gracias
+          </span>
+        )}
+      </div>
     </div>
   </div>
 );
 
 const Typing = () => (
-  <div className="flex items-start gap-3" aria-label="Nexus está escribiendo">
+  <div className="flex items-start gap-3" aria-label="Nodus está escribiendo">
     <NexoAvatar size={32} />
     <div className="rounded-surface rounded-bl-xs border border-[var(--nx-border)] bg-[var(--nx-surface-subtle)] px-4 py-3">
       <span className="flex items-center gap-1" aria-hidden="true">
@@ -199,7 +219,7 @@ const Typing = () => (
 
 const WELCOME = {
   from: 'bot',
-  text: 'Hola, soy Nexus — ¿qué necesitas saber de la jornada?',
+  text: 'Hola, soy Nodus — ¿qué necesitas saber de la jornada?',
 };
 
 const newSession = () => crypto.randomUUID();
@@ -266,7 +286,7 @@ const Chat = () => {
       const res = await chatApi.send(t, sessionId, injectCtx(t));
       saveCtx(res);
       if (res.session_id && res.session_id !== sessionId) setSessionId(res.session_id);
-      setMessages((m) => [...m, { from: 'bot', text: res.reply, cards: res.cards, actions: res.actions, denied: res.denied }]);
+      setMessages((m) => [...m, { from: 'bot', text: res.reply, cards: res.cards, actions: res.actions, denied: res.denied, message_id: res.message_id }]);
     } catch {
       setMessages((m) => [...m, { from: 'bot', text: 'No pude procesar eso ahora — intenta de nuevo en un momento.' }]);
     } finally {
@@ -286,17 +306,18 @@ const Chat = () => {
     if (pending) send(pending);
   }, [send]);
 
-  const reset = () => {
-    speech.stop();
-    setInput('');
-    setMessages([WELCOME]);
-    setSessionId(newSession());
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* sin storage */ }
-  };
-
   const onAction = (a, msg) => {
     if (a.kind === 'nav' && a.to) navigate(a.to);
     if (a.kind === 'export') runExportAction(a, msg);
+  };
+
+  // Reportar respuesta de Nodus — marca local tras éxito; el backend es
+  // idempotente (un reporte por mensaje y usuario).
+  const onReport = async (msg) => {
+    try {
+      await chatApi.report(msg.message_id, 'incorrecta');
+      setMessages((m) => m.map((x) => (x.message_id === msg.message_id ? { ...x, reported: true } : x)));
+    } catch { /* el flag no se marca; el usuario puede reintentar */ }
   };
 
   const toggleMic = () => {
@@ -319,14 +340,14 @@ const Chat = () => {
       <div
         ref={scrollRef}
         role="log"
-        aria-label="Conversación con Nexus"
+        aria-label="Conversación con Nodus"
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
         <div className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:space-y-5 sm:px-4 lg:py-6">
           <AnimatePresence initial={false}>
             {messages.map((m, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: EASE }}>
-                {m.from === 'bot' ? <BotBubble msg={m} onAction={onAction} /> : <UserBubble>{m.text}</UserBubble>}
+                {m.from === 'bot' ? <BotBubble msg={m} onAction={onAction} onReport={onReport} /> : <UserBubble>{m.text}</UserBubble>}
               </motion.div>
             ))}
           </AnimatePresence>
@@ -343,10 +364,10 @@ const Chat = () => {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={speech.listening ? 'Escuchando…' : 'Pregúntale a Nexus…'}
+            placeholder={speech.listening ? 'Escuchando…' : 'Pregúntale a Nodus…'}
             maxLength={500}
             enterKeyHint="send"
-            aria-label="Mensaje para Nexus"
+            aria-label="Mensaje para Nodus"
             className="min-w-0 flex-1 bg-transparent py-2 text-body-sm text-[var(--nx-text)] placeholder:text-[var(--nx-text-muted)] focus:outline-none"
           />
           {speech.supported && (
@@ -375,22 +396,12 @@ const Chat = () => {
           </button>
         </form>
         <p className="mx-auto mt-2 w-full max-w-3xl px-2 text-center text-caption text-[var(--nx-text-muted)]">
-          Nexus responde con datos del sistema — verifica lo crítico antes de actuar.
+          Nodus responde con datos del sistema — verifica lo crítico antes de actuar.
         </p>
       </div>
 
-      {/* Nueva conversación — único control, discreto, solo cuando hay hilo */}
-      {messages.length > 1 && (
-        <button
-          type="button"
-          onClick={reset}
-          aria-label="Nueva conversación"
-          title="Nueva conversación"
-          className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-[var(--nx-border)] bg-[var(--nx-surface)] text-[var(--nx-text-muted)] shadow-[var(--nx-shadow-low)] transition-colors duration-fast hover:text-[var(--nx-text)] lg:right-5 lg:top-5"
-        >
-          <RotateCcw size={15} />
-        </button>
-      )}
+      {/* Sin botón de refrescar: el hilo vive en sessionStorage y «Nueva
+          conversación» reiniciaba sin motivo — se retiró por pedido. */}
     </div>,
     document.body
   );

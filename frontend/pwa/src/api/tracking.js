@@ -7,11 +7,11 @@
 import apiClient from './client';
 
 export const trackingApi = {
-  startTracking: async (studentId, reason = null) => {
+  startTracking: async (studentId, reason = null, opts = {}) => {
     const payload = { student_id: studentId };
-    if (reason) {
-      payload.reason = reason;
-    }
+    if (reason) payload.reason = reason;
+    if (opts.dependency) payload.dependency = opts.dependency;
+    if (opts.assignedToUserId) payload.assigned_to_user_id = opts.assignedToUserId;
     const response = await apiClient.post('/tracking/start', payload);
     return response.data;
   },

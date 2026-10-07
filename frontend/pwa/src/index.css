@@ -327,7 +327,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   .nx-blink { animation: none; }
 }
 
-/* ── Nexus (guía del onboarding): flotación y pulso de anillo ── */
+/* ── Nodus (guía del onboarding): flotación y pulso de anillo ── */
 @keyframes nx-float {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-7px); }
@@ -341,7 +341,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   .nx-bot-float, .nx-bot-ring { animation: none !important; }
 }
 
-/* Spotlight suave sobre el bloque que Nexus está explicando */
+/* Spotlight suave sobre el bloque que Nodus está explicando */
 .nx-spotlight {
   box-shadow:
     0 0 0 4px color-mix(in oklch, var(--nx-accent) 8%, transparent),

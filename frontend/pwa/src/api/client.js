@@ -22,8 +22,7 @@ const SLOW_ROUTE_PATTERNS = ['/operations/', '/reports/'];
 const CHAT_ROUTE_PATTERN = '/chat/';
 const DEFAULT_TIMEOUT = 12000;
 const SLOW_TIMEOUT = 30000;
-// VITE_CHAT_TIMEOUT_MS: override SOLO del turno de chat — necesario para
-// correr contra un LLM local (Ollama en CPU tarda 15–50 s por turno).
+// VITE_CHAT_TIMEOUT_MS: override SOLO del turno de chat por entorno.
 // Sin definir, producción usa el default. No sube el timeout del resto.
 const CHAT_TIMEOUT = Number(import.meta.env.VITE_CHAT_TIMEOUT_MS) || SLOW_TIMEOUT;
 

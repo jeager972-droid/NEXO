@@ -173,7 +173,7 @@ mundo exterior.
 | `test/e2e/docker-compose.test.yml` | Stack completo; schema auto-aplicado vía initdb (`sql/schema.sql` + `seed.sql` montados en `/docker-entrypoint-initdb.d/`); API en `:18080`; workers con intervalos acelerados (5–15 s); Twilio con credenciales dummy; `RATE_LIMIT_MAX=100000` para stress |
 | `test/e2e/env.test` | Credenciales de prueba (claves JWT de test); `NLU_LLM_*` opcional vía defaults del compose (sin key, el chat cae a `out_of_scope`) |
 | `test/e2e/seed.sql` | Seed determinista: escuela `22222222-…`, grupo 6-A mañana con 3 estudiantes, `coord@test.nexo` / `teach@test.nexo` / `guard@test.nexo` (`test1234`), dispositivo `44444444-…` token `nexo-test-device-token`, AES de prueba |
-| `test/e2e/seed_chat_fixture.sql` | Fixture extendido para Nexus/chat: 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos, umbrales de riesgo, 8-C sin incidentes |
+| `test/e2e/seed_chat_fixture.sql` | Fixture extendido para Nodus/chat: 10-A con 6 estudiantes (incl. Tomás Castaño Gutiérrez + acudiente), 10-B, docente con acceso a 3 grupos, umbrales de riesgo, 8-C sin incidentes |
 | `test/e2e/runner.py` | CLI maestro (requiere docker + compose + python3 + `cryptography`) |
 | `test/e2e/nodo/` | Panel web del nodo: `panel_server.py` sirve `index.html` + mini-API JSON que acciona los hooks reales (`/api/fingerprint`→SYNC_ATTENDANCE, `/api/register`→REGISTER_STUDENT, `/api/ping`→telemetría) — forzado manual de acciones del edge |
 
@@ -260,7 +260,7 @@ Unitarios/estáticos de la API PHP; mockean DB/Redis donde hace falta.
 | `InstallationTest.php` | Artefactos de instalación: schema/seed presentes, idempotencia (`IF NOT EXISTS`), extensiones declaradas (uuid-ossp, pgcrypto) |
 | `ManualPresenceTest.php` | F-02 bidireccional/multidimensional con `ManualPresenceSimulator`: registro manual cuenta como presencia; exención biométrica suprime incidentes sin invisibilizar |
 | `MultiFingerprintTest.php` | F-03 con `FingerprintSimulator`: 2 dedos por estudiante, revocación, slot duplicado/inválido, cola offline→sync |
-| `NexusPlanInvariantTest.php` | Invariantes del validador de planes Nexus (`nxPlanValidate`): plan válido de lectura, dependencia hacia atrás `@ref`, planes inválidos fallan antes de ejecutar |
+| `NodusPlanInvariantTest.php` | Invariantes del validador de planes Nodus (`nxPlanValidate`): plan válido de lectura, dependencia hacia atrás `@ref`, planes inválidos fallan antes de ejecutar |
 | `NodeHealthGateTest.php` | F-04/F-05 con `NodeSimulator`: caída→supresión→incidente y recuperación→resolución→restauración; umbral temporal, ping nulo, cobertura múltiple |
 | `NodeTelemetryTest.php` | Lote 5 (F-06/F-09/F-10/F-13) con Ups/Cellular/Thermal/Storage: telemetría sana→sin incidentes; violación de umbral→incidente tipado+dedup; recuperación→sin alarmas |
 | `OtaUpdateTest.php` | OTA M2M (Bloque D) con `OtaNodeSimulator` + `lib/ota.php`: firma/verificación HMAC del manifiesto, semver, anti-rollback, ciclo de estados |

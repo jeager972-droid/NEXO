@@ -1,6 +1,6 @@
 <?php
 /* test/resilience.php — §15 degradación segura ante fallos de infraestructura.
- * Cada escenario verifica que Nexus falla de forma segura:
+ * Cada escenario verifica que Nodus falla de forma segura:
  * nunca rellena huecos con suposiciones ni se cuelga.
  */
 define('ROLE', 'TEACHER');

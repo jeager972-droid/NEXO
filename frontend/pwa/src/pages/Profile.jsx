@@ -638,18 +638,18 @@ const Profile = () => {
             <div className="min-w-0">
               <p className="text-h3 text-[var(--nx-text)]">Tus criterios de aviso</p>
               <p className="mt-0.5 text-caption text-[var(--nx-text-muted)]">
-                Los casos que Nexus vigila en tus clases — ajusta umbrales o desactiva los que no quieras.
+                Los casos que Nodus vigila en tus clases — ajusta umbrales o desactiva los que no quieras.
               </p>
             </div>
             <Button size="sm" onClick={() => setOnboardingScope('rules')} leftIcon={<Settings size={15} />}>
-              Editar con Nexus
+              Editar con Nodus
             </Button>
           </div>
         </Card>
       )}
 
       {/* ── Configuración institucional — cada bloque abre el flujo
-             Nexus en modo actualización, acotado a su sección ── */}
+             Nodus en modo actualización, acotado a su sección ── */}
       {(user?.role === ROLES.RECTOR || user?.role === ROLES.COORDINADOR) && (
         <>
           {[
@@ -671,12 +671,12 @@ const Profile = () => {
               scope: 'risk',
               icon: Shield,
               title: 'Umbrales de riesgo',
-              desc: 'A partir de cuántas repeticiones Nexus alerta cada nivel.',
+              desc: 'A partir de cuántas repeticiones Nodus alerta cada nivel.',
             },
             {
               scope: 'chat',
               icon: MessageCircle,
-              title: 'Asistente Nexus',
+              title: 'Asistente Nodus',
               desc: 'Qué puede consultar y hacer cada rol con el chatbot.',
             },
           ].map(({ scope, icon: Icon, title, desc }) => (
@@ -692,7 +692,7 @@ const Profile = () => {
                   </div>
                 </div>
                 <Button size="sm" onClick={() => setOnboardingScope(scope)} leftIcon={<Settings size={15} />}>
-                  Editar con Nexus
+                  Editar con Nodus
                 </Button>
               </div>
             </Card>
